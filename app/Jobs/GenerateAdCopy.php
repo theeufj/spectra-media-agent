@@ -1,0 +1,136 @@
+<?php
+
+namespace App\Jobs;
+
+use App\Models\AdCopy;
+use App\Models\Campaign;
+use App\Models\Strategy;
+use App\Prompts\AdCopyPrompt;
+use App\Services\AdminMonitorService;
+use App\Services\GeminiService;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Log;
+
+class GenerateAdCopy implements ShouldQueue
+{
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+
+    /**
+     * The number of times the job may be attempted.
+     *
+     * @var int
+     */
+    public $tries = 3;
+
+    /**
+     * The number of seconds the job can run before timing out.
+     *
+     * @var int
+     */
+    public $timeout = 900; // 15 minutes
+
+    /**
+     * Create a new job instance.
+     *
+     * @param Campaign $campaign
+     * @param Strategy $strategy
+     * @param string $platform
+     */
+    public function __construct(
+        protected Campaign $campaign,
+        protected Strategy $strategy,
+        protected string $platform
+    ) {
+    }
+
+    /**
+     * Execute the job.
+     *
+     * @return void
+     */
+    public function handle(): void
+    {
+        try {
+            // Initialize services
+            $geminiService = new GeminiService();
+            $adminMonitorService = new AdminMonitorService($geminiService);
+
+            $strategyContent = $this->strategy->ad_copy_strategy;
+            $maxAttempts = 3;
+            $approvedAdCopyData = null;
+            $lastFeedback = null;
+
+            for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+                Log::info("Attempting to generate and review ad copy (Attempt {$attempt}/{$maxAttempts}) for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}");
+
+                // Get the platform rules to provide context to the model.
+                $rules = AdminMonitorService::getRulesForPlatform($this->platform);
+
+                // Pass feedback and rules into the prompt.
+                $adCopyPrompt = (new AdCopyPrompt($strategyContent, $this->platform, $rules, $lastFeedback))->getPrompt();
+                $generatedResponse = $geminiService->generateContent('gemini-2.5-pro', $adCopyPrompt);
+
+                if (is_null($generatedResponse)) {
+                    Log::error("Failed to get ad copy from Gemini on attempt {$attempt}.");
+                    continue;
+                }
+
+                $generatedText = $generatedResponse['text'] ?? null;
+                if (is_null($generatedText)) {
+                    Log::error("Failed to get ad copy text from Gemini response on attempt {$attempt}.");
+                    continue;
+                }
+
+                $adCopyData = [];
+                try {
+                    $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($generatedText));
+                    $adCopyData = json_decode($cleanedJson, true);
+
+                    if (json_last_error() !== JSON_ERROR_NONE || !is_array($adCopyData) || !isset($adCopyData['headlines']) || !isset($adCopyData['descriptions'])) {
+                        throw new \Exception("Gemini did not return a valid JSON object with headlines and descriptions.");
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Failed to parse Gemini's ad copy response on attempt {$attempt}: " . $e->getMessage(), ['generated_text' => $generatedText]);
+                    continue;
+                }
+
+                $tempAdCopy = new AdCopy(['strategy_id' => $this->strategy->id, 'platform' => $this->platform, 'headlines' => $adCopyData['headlines'], 'descriptions' => $adCopyData['descriptions']]);
+                $reviewResults = $adminMonitorService->reviewAdCopy($tempAdCopy);
+
+                if (is_null($reviewResults)) {
+                    Log::warning("Ad copy review failed on attempt {$attempt}. No review results.");
+                    continue;
+                }
+
+                if (($reviewResults['overall_status'] ?? 'needs_revision') === 'approved') {
+                    Log::info("Ad copy approved on attempt {$attempt}.", $reviewResults);
+                    $approvedAdCopyData = $adCopyData;
+                    break;
+                } else {
+                    Log::warning("Ad copy not approved on attempt {$attempt}. Feedback: ", $reviewResults);
+                    // Store the feedback for the next attempt.
+                    $lastFeedback = $reviewResults['programmatic_validation']['feedback'];
+                }
+            }
+
+            if (is_null($approvedAdCopyData)) {
+                throw new \Exception('Failed to generate approved ad copy after multiple attempts.');
+            }
+
+            AdCopy::updateOrCreate(
+                ['strategy_id' => $this->strategy->id, 'platform' => $this->platform],
+                ['headlines' => $approvedAdCopyData['headlines'], 'descriptions' => $approvedAdCopyData['descriptions']]
+            );
+
+            Log::info("Successfully generated and stored approved ad copy for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}");
+
+        } catch (\Exception $e) {
+            Log::error("Error in GenerateAdCopy job for Campaign {$this->campaign->id}: " . $e->getMessage());
+            $this->fail($e);
+        }
+    }
+}
