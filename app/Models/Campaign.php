@@ -27,6 +27,7 @@ class Campaign extends Model
         'end_date',
         'primary_kpi',
         'product_focus',
+        'landing_page_url',
         'exclusions',
     ];
 

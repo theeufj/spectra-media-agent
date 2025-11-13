@@ -64,6 +64,17 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | CloudFront Domain
+    |--------------------------------------------------------------------------
+    |
+    | This value is used to construct the full URL for assets stored on S3
+    | and served via AWS CloudFront. It should be set in your .env file.
+    |
+    */
+    'cloudfront_domain' => env('CLOUDFRONT_DOMAIN'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Symbolic Links
     |--------------------------------------------------------------------------
     |

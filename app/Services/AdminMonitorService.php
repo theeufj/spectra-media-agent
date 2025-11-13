@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AdCopy;
 use App\Prompts\AdCopyReviewPrompt;
+use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Log;
 
 class AdminMonitorService
@@ -23,7 +24,7 @@ class AdminMonitorService
      */
     public static function getRulesForPlatform(string $platform): ?array
     {
-        return self::getPlatformRules()[$platform] ?? null;
+        return Config::get("platform_rules.{$platform}");
     }
 
     /**
@@ -106,17 +107,27 @@ class AdminMonitorService
     {
         $isValid = true;
         $feedback = [];
+        $trimmedPrompt = trim($prompt);
 
         // Rule 1: Check for empty or very short prompts
-        if (strlen(trim($prompt)) < 10) {
+        if (strlen($trimmedPrompt) < 20) {
             $isValid = false;
-            $feedback[] = 'The image prompt is too short. It must be at least 10 characters long to generate a meaningful image.';
+            $feedback[] = 'The image prompt is too short. It must be at least 20 characters long to generate a meaningful image.';
         }
 
-        // Rule 2: Check for forbidden keywords (example)
-        $forbiddenWords = ['violence', 'hate', 'explicit']; // Add more as needed
+        // Rule 2: Check for non-descriptive or negative keywords
+        $negativeKeywords = Config::get('platform_rules.negative_keywords', []);
+        foreach ($negativeKeywords as $word) {
+            if (stripos($trimmedPrompt, $word) !== false) {
+                $isValid = false;
+                $feedback[] = "The imagery strategy ('" . substr($trimmedPrompt, 0, 50) . "...') is not a valid image prompt as it contains instructional or negative keywords like '{$word}'. Please provide a descriptive prompt of the desired image.";
+            }
+        }
+
+        // Rule 3: Check for forbidden keywords
+        $forbiddenWords = Config::get('platform_rules.forbidden_keywords', []);
         foreach ($forbiddenWords as $word) {
-            if (stripos($prompt, $word) !== false) {
+            if (stripos($trimmedPrompt, $word) !== false) {
                 $isValid = false;
                 $feedback[] = "The prompt contains a forbidden keyword: '{$word}'. Please revise the imagery strategy.";
             }
@@ -153,10 +164,7 @@ class AdminMonitorService
             'general' => [],
         ];
 
-        // Define platform-specific rules (example for Google Ads)
-        $rules = self::getPlatformRules();
-
-        $platformRules = $rules[$platform] ?? null;
+        $platformRules = self::getRulesForPlatform($platform);
 
         if (is_null($platformRules)) {
             $isValid = false;
@@ -222,76 +230,5 @@ class AdminMonitorService
 
         return ['is_valid' => $isValid, 'feedback' => $feedback];
     }
-
-    /**
-     * Defines and returns all platform-specific validation rules.
-     *
-     * @return array
-     */
-    private static function getPlatformRules(): array
-    {
-        return [
-            'Google Ads' => [
-                'headline_min_length' => 5,
-                'headline_max_length' => 30,
-                'headline_count' => 5,
-                'description_min_length' => 10,
-                'description_max_length' => 90,
-                'description_count' => 3,
-                'max_exclamations_per_element' => 1, // Google Ads policy
-                'allow_consecutive_exclamations' => false, // Google Ads policy
-            ],
-            'Google Ads (SEM)' => [
-                'headline_min_length' => 5,
-                'headline_max_length' => 30,
-                'headline_count' => 5,
-                'description_min_length' => 10,
-                'description_max_length' => 90,
-                'description_count' => 3,
-                'max_exclamations_per_element' => 1, // Google Ads policy
-                'allow_consecutive_exclamations' => false, // Google Ads policy
-            ],
-            // Add rules for other platforms here
-            'Facebook Ads' => [
-                'headline_min_length' => 5,
-                'headline_max_length' => 40,
-                'headline_count' => 3,
-                'description_min_length' => 10,
-                'description_max_length' => 125,
-                'description_count' => 2,
-                'max_exclamations_per_element' => 3, // Example for Facebook Ads (more lenient)
-                'allow_consecutive_exclamations' => true, // Example for Facebook Ads
-            ],
-            'TikTok Ads' => [
-                'headline_min_length' => 5,
-                'headline_max_length' => 30,
-                'headline_count' => 5, // Assuming similar to Google Ads for now
-                'description_min_length' => 10,
-                'description_max_length' => 90,
-                'description_count' => 3, // Assuming similar to Google Ads for now
-                'max_exclamations_per_element' => 1,
-                'allow_consecutive_exclamations' => false,
-            ],
-            'Reddit Ads' => [
-                'headline_min_length' => 5,
-                'headline_max_length' => 30,
-                'headline_count' => 5, // Assuming similar to Google Ads for now
-                'description_min_length' => 10,
-                'description_max_length' => 90,
-                'description_count' => 3, // Assuming similar to Google Ads for now
-                'max_exclamations_per_element' => 1,
-                'allow_consecutive_exclamations' => false,
-            ],
-            'Microsoft Advertising' => [
-                'headline_min_length' => 5,
-                'headline_max_length' => 30,
-                'headline_count' => 5, // Assuming similar to Google Ads for now
-                'description_min_length' => 10,
-                'description_max_length' => 90,
-                'description_count' => 3, // Assuming similar to Google Ads for now
-                'max_exclamations_per_element' => 1,
-                'allow_consecutive_exclamations' => false,
-            ],
-        ];
-    }
 }
+

@@ -3,13 +3,14 @@ import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import RefineImageModal from '@/Components/RefineImageModal';
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals }) {
     const { auth } = usePage().props;
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
     const [generatingAdCopy, setGeneratingAdCopy] = useState(false);
     const [generatingImage, setGeneratingImage] = useState(false);
+    const [generatingVideo, setGeneratingVideo] = useState(false);
     const [editingImage, setEditingImage] = useState(null);
-    const [collateral, setCollateral] = useState({ adCopy, imageCollaterals });
+    const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals });
     const [isPolling, setIsPolling] = useState(false);
 
     // Polling effect
@@ -77,6 +78,27 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 preserveScroll: true,
             });
         }
+    };
+
+    const handleGenerateVideo = (strategyId) => {
+        if (window.confirm(`Are you sure you want to generate a video for this strategy? This can take several minutes.`)) {
+            setGeneratingVideo(true);
+            router.post(route('campaigns.collateral.video.store', { campaign: campaign.id, strategy: strategyId }), {}, {
+                onSuccess: () => {
+                    setGeneratingVideo(false);
+                    setIsPolling(true); // Start polling
+                },
+                onError: (errors) => {
+                    setGeneratingVideo(false);
+                    alert('Failed to start video generation: ' + (errors.message || 'An unknown error occurred.'));
+                },
+                preserveScroll: true,
+            });
+        }
+    };
+
+    const handleRefinementStart = () => {
+        setIsPolling(true);
     };
 
     return (
@@ -178,6 +200,37 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 ))}
                                             </div>
                                         )}
+
+                                        <hr className="my-8" />
+
+                                        <h3 className="text-lg font-semibold text-gray-900 mb-4">Video Collateral</h3>
+                                        <p>Generate a unique video based on the video strategy for {strategyItem.platform}.</p>
+
+                                        <button
+                                            onClick={() => handleGenerateVideo(strategyItem.id)}
+                                            disabled={generatingVideo}
+                                            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                        >
+                                            {generatingVideo ? 'Queuing Job...' : 'Generate Video'}
+                                        </button>
+
+                                        {/* Display generated videos here */}
+                                        {collateral.videoCollaterals && collateral.videoCollaterals.length > 0 && (
+                                            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                                {collateral.videoCollaterals.map((video) => (
+                                                    <div key={video.id} className="border rounded-lg overflow-hidden shadow-md">
+                                                        {video.status === 'completed' ? (
+                                                            <video controls src={video.cloudfront_url} className="w-full h-auto"></video>
+                                                        ) : (
+                                                            <div className="p-4 text-center bg-gray-100">
+                                                                <p className="font-semibold text-gray-700">Status: {video.status}</p>
+                                                                <p className="text-sm text-gray-500">Video is processing...</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 )
                             ))}
@@ -190,6 +243,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 <RefineImageModal
                     image={editingImage}
                     onClose={() => setEditingImage(null)}
+                    onRefinementStart={handleRefinementStart}
                 />
             )}
         </AuthenticatedLayout>

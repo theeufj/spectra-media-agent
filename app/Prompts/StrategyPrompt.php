@@ -35,23 +35,39 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 **YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy".
+Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", and "bidding_strategy".
+
+**Bidding Strategy Options:**
+You MUST choose one of the following bidding strategies and format it as a JSON object for the "bidding_strategy" key.
+
+1.  `{"name": "MaximizeConversions", "parameters": {}}`
+2.  `{"name": "TargetCpa", "parameters": {"targetCpaMicros": <integer>}}` - Choose a reasonable target CPA in micros (e.g., 50000000 for $50).
 
 **Example Response Format:**
 ```json
 {
   "strategies": [
     {
-      "platform": "Facebook",
+      "platform": "Facebook Ads",
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
       "imagery_strategy": "Use bright, eye-catching images of people enjoying the product...",
-      "video_strategy": "Create short, engaging video clips (15-30 seconds) showcasing the product in action..."
+      "video_strategy": "Create short, engaging video clips...",
+      "bidding_strategy": {
+        "name": "MaximizeConversions",
+        "parameters": {}
+      }
     },
     {
       "platform": "Google Ads (SEM)",
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
-      "imagery_strategy": "N/A for text-based search ads.",
-      "video_strategy": "N/A for text-based search ads."
+      "imagery_strategy": "For Responsive Display Ads, use high-contrast infographics...",
+      "video_strategy": "N/A for text-based search ads.",
+      "bidding_strategy": {
+        "name": "TargetCpa",
+        "parameters": {
+          "targetCpaMicros": 50000000
+        }
+      }
     }
   ]
 }
@@ -80,7 +96,7 @@ This is the specific goal for the marketing campaign.
 - **Exclusions (What to avoid):** {$campaign->exclusions}
 ---
 
-Based on all the information above, generate the JSON object containing the platform-specific strategies for Facebook, Instagram, and Google Ads (SEM).
+Based on all the information above, generate the JSON object containing the platform-specific strategies for Facebook Ads, Google Ads (SEM), TikTok Ads, Reddit Ads, and Microsoft Advertising.
 PROMPT;
     }
 }

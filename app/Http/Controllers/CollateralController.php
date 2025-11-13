@@ -6,6 +6,8 @@ use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Inertia\Inertia;
 
 class CollateralController extends Controller
 {
@@ -34,16 +36,19 @@ class CollateralController extends Controller
         }
 
         // Eager load the ad copy and image collaterals for the given strategy
-        $strategy->load(['adCopies', 'imageCollaterals']);
+        $strategy->load(['adCopies', 'imageCollaterals', 'videoCollaterals']);
 
         // Get all strategies for the campaign to build the tab navigation
         $allStrategies = $campaign->strategies()->get();
 
         // Find the specific ad copy for the current strategy and platform
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
+        
+        // Find all active image collaterals for the current strategy
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
 
-        // Find all image collaterals for the current strategy
-        $imageCollaterals = $strategy->imageCollaterals;
+        // Find all active video collaterals for the current strategy
+        $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->get();
 
         return Inertia::render('Campaigns/Collateral', [
             'campaign' => $campaign,
@@ -51,6 +56,7 @@ class CollateralController extends Controller
             'allStrategies' => $allStrategies,
             'adCopy' => $adCopy,
             'imageCollaterals' => $imageCollaterals,
+            'videoCollaterals' => $videoCollaterals,
         ]);
     }
 
@@ -67,11 +73,12 @@ class CollateralController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $strategy->load(['adCopies', 'imageCollaterals']);
+        $strategy->load(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         
         return response()->json([
             'adCopy' => $strategy->adCopies->where('platform', $strategy->platform)->first(),
-            'imageCollaterals' => $strategy->imageCollaterals,
+            'imageCollaterals' => $strategy->imageCollaterals()->where('is_active', true)->get(),
+            'videoCollaterals' => $strategy->videoCollaterals()->where('is_active', true)->get(),
         ]);
     }
 }

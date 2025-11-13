@@ -24,7 +24,7 @@ class GeminiService
 
     public function __construct()
     {
-        $this->apiKey = env('GEMINI_API_KEY');
+        $this->apiKey = config('services.gemini.api_key');
     }
 
     /**
@@ -196,7 +196,7 @@ class GeminiService
      * @param int $candidateCount The number of images to generate.
      * @return array|null An array of image data arrays, or null on failure.
      */
-    public function generateImage(string $prompt, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K', int $candidateCount = 1): ?array
+    public function generateImage(string $prompt, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K'): ?array
     {
         $payload = [
             'contents' => [
@@ -207,12 +207,12 @@ class GeminiService
             ],
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => ['imageSize' => $imageSize],
-                'candidateCount' => $candidateCount,
+                'imageConfig' => ['image_size' => $imageSize], // Corrected to snake_case
             ],
         ];
 
-        return $this->sendImageRequest($model, $payload);
+        $result = $this->sendImageRequest($model, $payload);
+        return $result ? $result[0] : null; // Return the first image
     }
 
     /**
@@ -237,7 +237,7 @@ class GeminiService
             'contents' => [['role' => 'user', 'parts' => $parts]],
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => ['imageSize' => $imageSize],
+                'imageConfig' => ['image_size' => $imageSize], // Corrected to snake_case
                 'candidateCount' => 1, // Refinement should produce one image
             ],
         ];
@@ -252,6 +252,7 @@ class GeminiService
     private function sendImageRequest(string $model, array $payload): ?array
     {
         try {
+            // Use streamGenerateContent endpoint and correct the image_size key
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
             ])->timeout(300)->post("{$this->baseUrl}{$model}:streamGenerateContent?key={$this->apiKey}", $payload);
@@ -261,13 +262,14 @@ class GeminiService
                 return null;
             }
 
+            // The response is a stream (an array of JSON objects). We need to find the part with the image data.
             $responseData = $response->json();
             $images = [];
 
-            if (isset($responseData['candidates']) && is_array($responseData['candidates'])) {
-                foreach ($responseData['candidates'] as $candidate) {
-                    if (isset($candidate['content']['parts'][0]['inlineData'])) {
-                        $inlineData = $candidate['content']['parts'][0]['inlineData'];
+            if (is_array($responseData)) {
+                foreach ($responseData as $chunk) {
+                    if (isset($chunk['candidates'][0]['content']['parts'][0]['inlineData'])) {
+                        $inlineData = $chunk['candidates'][0]['content']['parts'][0]['inlineData'];
                         $images[] = [
                             'data' => $inlineData['data'] ?? null,
                             'mimeType' => $inlineData['mimeType'] ?? null,
@@ -292,78 +294,6 @@ class GeminiService
     /**
      * Starts a long-running video generation operation using a specified Gemini model.
      *
-// ... existing code ...
-        try {
-            $parts = [['text' => $prompt]];
-
-            // Add context images to the prompt if provided
-            foreach ($contextImages as $image) {
-                if (isset($image['mime_type']) && isset($image['data'])) {
-                    $parts[] = [
-                        'inline_data' => [
-                            'mime_type' => $image['mime_type'],
-                            'data' => $image['data'],
-                        ]
-                    ];
-                }
-            }
-
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-            ])->timeout(300)->post("{$this->baseUrl}{$model}:streamGenerateContent?key={$this->apiKey}", [
-                'contents' => [
-                    [
-                        'role' => 'user',
-                        'parts' => $parts,
-                    ]
-                ],
-                'generationConfig' => [
-                    'responseModalities' => ['IMAGE', 'TEXT'],
-                    'imageConfig' => [
-                        'imageSize' => $imageSize,
-                    ],
-                    'candidateCount' => $candidateCount,
-                ],
-            ]);
-
-            if ($response->failed()) {
-                Log::error("GeminiService: Failed to generate image from model {$model}: " . $response->body());
-                return null;
-            }
-
-            $responseData = $response->json();
-            $images = [];
-
-            if (isset($responseData['candidates']) && is_array($responseData['candidates'])) {
-                foreach ($responseData['candidates'] as $candidate) {
-                    if (isset($candidate['content']['parts'][0]['inlineData'])) {
-                        $inlineData = $candidate['content']['parts'][0]['inlineData'];
-                        $images[] = [
-                            'data' => $inlineData['data'] ?? null,
-                            'mimeType' => $inlineData['mimeType'] ?? null,
-                        ];
-                    }
-                }
-            }
-
-            if (empty($images)) {
-                Log::warning("GeminiService: No inlineData found in image generation response.", [
-                    'response' => $responseData,
-                ]);
-                return null;
-            }
-
-            return $images;
-
-        } catch (\Exception $e) {
-            Log::error("GeminiService: Exception during image generation from model {$model}: " . $e->getMessage(), [
-                'exception' => $e,
-            ]);
-            return null;
-        }
-    }
-
-    /**
      * Starts a long-running video generation operation using a specified Gemini model.
      *
      * @param string $prompt The prompt for video generation.

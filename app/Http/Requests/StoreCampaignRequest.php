@@ -32,9 +32,11 @@ class StoreCampaignRequest extends FormRequest
             'total_budget' => 'required|numeric|min:0',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'primary_kpi' => 'required|string|max:255',
-            'product_focus' => 'nullable|string',
+                        'primary_kpi' => 'required|string',
+            'product_focus' => 'required|string',
+            'landing_page_url' => 'nullable|url',
             'exclusions' => 'nullable|string',
         ];
     }
+
 }

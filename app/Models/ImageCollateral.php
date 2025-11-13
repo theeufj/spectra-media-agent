@@ -21,6 +21,14 @@ class ImageCollateral extends Model
         's3_path',
         'cloudfront_url',
         'parent_id',
+        'is_active',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     */
+    protected $casts = [
+        'is_active' => 'boolean',
     ];
 
     /**

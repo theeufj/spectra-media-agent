@@ -21,8 +21,16 @@ class Strategy extends Model
         'ad_copy_strategy',
         'imagery_strategy',
         'video_strategy',
-        'status',
         'signed_off_at',
+        'bidding_strategy',
+    ];
+
+    /**
+     * The attributes that should be cast.
+     */
+    protected $casts = [
+        'signed_off_at' => 'datetime',
+        'bidding_strategy' => 'array',
     ];
 
     /**
@@ -35,5 +43,21 @@ class Strategy extends Model
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);
+    }
+
+    /**
+     * Get the ad copies for the strategy.
+     */
+    public function adCopies()
+    {
+        return $this->hasMany(AdCopy::class);
+    }
+
+    /**
+     * Get the image collaterals for the strategy.
+     */
+    public function imageCollaterals()
+    {
+        return $this->hasMany(ImageCollateral::class);
     }
 }

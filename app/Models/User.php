@@ -47,6 +47,14 @@ class User extends Authenticatable
         ];
     }
 
+    /**
+     * Get the third-party connections for the user.
+     */
+    public function connections()
+    {
+        return $this->hasMany(Connection::class);
+    }
+
     public function campaigns()
     {
         return $this->hasMany(Campaign::class);
@@ -56,4 +64,6 @@ class User extends Authenticatable
     {
         return $this->hasMany(KnowledgeBase::class);
     }
+
 }
+

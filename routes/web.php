@@ -123,6 +123,10 @@ Route::middleware(['auth'])->group(function () {
     // Route to refine an existing image collateral.
     // POST /image-collaterals/{image_collateral}
     Route::post('/image-collaterals/{image_collateral}', [App\Http\Controllers\ImageCollateralController::class, 'update'])->name('image-collaterals.update');
+
+    // Route to generate and store a video for a specific campaign and strategy.
+    // POST /campaigns/{campaign}/strategies/{strategy}/video
+    Route::post('/campaigns/{campaign}/strategies/{strategy}/video', [App\Http\Controllers\VideoCollateralController::class, 'store'])->name('campaigns.collateral.video.store');
 });
 
 /*
@@ -211,6 +215,10 @@ Route::middleware(['auth'])->group(function () {
     // Route to refine an existing image collateral.
     // POST /image-collaterals/{image_collateral}
     Route::post('/image-collaterals/{image_collateral}', [App\Http\Controllers\ImageCollateralController::class, 'update'])->name('image-collaterals.update');
+
+    // Route to generate and store a video for a specific campaign and strategy.
+    // POST /campaigns/{campaign}/strategies/{strategy}/video
+    Route::post('/campaigns/{campaign}/strategies/{strategy}/video', [App\Http\Controllers\VideoCollateralController::class, 'store'])->name('campaigns.collateral.video.store');
 });
 
 /*
