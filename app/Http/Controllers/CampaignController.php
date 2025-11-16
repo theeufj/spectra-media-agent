@@ -18,7 +18,9 @@ class CampaignController extends Controller
      */
     public function index()
     {
-        $campaigns = Campaign::with(['strategies.adCopies', 'strategies.imageCollaterals', 'strategies.videoCollaterals'])->get();
+        $campaigns = Campaign::with(['strategies' => function ($query) {
+            $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
+        }])->get();
 
         return Inertia::render('Campaigns/Index', [
             'campaigns' => $campaigns,
@@ -127,5 +129,23 @@ class CampaignController extends Controller
         ]);
 
         return redirect()->route('campaigns.show', $campaign)->with('success', 'All strategies have been signed off!');
+    }
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  \App\Models\Campaign  $campaign
+     * @return \Illuminate\Http\RedirectResponse
+     */
+    public function destroy(Campaign $campaign)
+    {
+        // Ensure the campaign belongs to the authenticated user.
+        if ($campaign->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $campaign->delete();
+
+        return redirect()->route('campaigns.index')->with('success', 'Campaign deleted successfully.');
     }
 }

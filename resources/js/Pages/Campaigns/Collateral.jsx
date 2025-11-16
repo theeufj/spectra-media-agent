@@ -103,6 +103,59 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         setIsPolling(true);
     };
 
+    const handleToggleCollateral = async (type, id) => {
+        try {
+            const response = await fetch(route('api.deployment.toggle-collateral'), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify({ type, id }),
+            });
+
+            if (response.ok) {
+                // Refresh the collateral data to show the updated selection
+                router.reload({ only: ['adCopy', 'imageCollaterals', 'videoCollaterals'] });
+            } else {
+                console.error('Failed to toggle collateral status');
+            }
+        } catch (error) {
+            console.error('Error toggling collateral status:', error);
+        }
+    };
+
+    const handleDeploy = async () => {
+        if (window.confirm('Are you sure you want to deploy the selected collateral?')) {
+            try {
+                const response = await fetch(route('api.deployment.deploy'), {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    },
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert(data.message);
+                } else {
+                    if (response.status === 403 && data.redirect) {
+                        if (window.confirm(data.message)) {
+                            window.location.href = data.redirect;
+                        }
+                    } else {
+                        alert('Deployment failed: ' + (data.message || 'An unknown error occurred.'));
+                    }
+                }
+            } catch (error) {
+                console.error('Error during deployment:', error);
+                alert('An unexpected error occurred during deployment.');
+            }
+        }
+    };
+
     return (
         <AuthenticatedLayout
             user={auth.user}
@@ -110,7 +163,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 <div className="flex justify-between items-center">
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">Collateral for {campaign.name} - {currentStrategy.name}</h2>
                     <button
-                        onClick={() => setShowDeployModal(true)}
+                        onClick={handleDeploy}
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                     >
                         Deploy
@@ -126,22 +179,30 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                         {/* Tab Navigation */}
                         <div className="border-b border-gray-200">
                             <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-                                {allStrategies.map((strategyItem) => (
-                                    <Link
-                                        key={strategyItem.id}
-                                        href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategyItem.id })}
-                                        onClick={() => handleTabChange(strategyItem.platform)}
-                                        className={`
-                                            ${activeTab === strategyItem.platform
-                                                ? 'border-blue-500 text-blue-600'
-                                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                            }
-                                            whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200
-                                        `}
-                                    >
-                                        {strategyItem.platform}
-                                    </Link>
-                                ))}
+                                {allStrategies.map((strategyItem) => {
+                                    const totalCollateral = strategyItem.ad_copies_count + strategyItem.image_collaterals_count + strategyItem.video_collaterals_count;
+                                    return (
+                                        <Link
+                                            key={strategyItem.id}
+                                            href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategyItem.id })}
+                                            onClick={() => handleTabChange(strategyItem.platform)}
+                                            className={`
+                                                ${activeTab === strategyItem.platform
+                                                    ? 'border-blue-500 text-blue-600'
+                                                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                                                }
+                                                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center
+                                            `}
+                                        >
+                                            {strategyItem.platform}
+                                            {totalCollateral > 0 && (
+                                                <span className={`ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${activeTab === strategyItem.platform ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                    {totalCollateral}
+                                                </span>
+                                            )}
+                                        </Link>
+                                    );
+                                })}
                             </nav>
                         </div>
 
@@ -163,7 +224,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         {/* Display generated ad copy here */}
                                         {adCopy && adCopy.strategy_id === strategyItem.id && adCopy.platform === strategyItem.platform && (
-                                            <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                            <div 
+                                                className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer`}
+                                                onClick={() => handleToggleCollateral('ad_copy', adCopy.id)}
+                                            >
                                                 <h4 className="text-md font-semibold text-gray-800 mb-3">Generated Ad Copy:</h4>
                                                 <div className="mb-4">
                                                     <h5 className="font-medium text-gray-700">Headlines:</h5>
@@ -201,10 +265,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {collateral.imageCollaterals && collateral.imageCollaterals.length > 0 && (
                                             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.imageCollaterals.map((image) => (
-                                                    <div key={image.id} className="border rounded-lg overflow-hidden shadow-md group relative">
+                                                    <div 
+                                                        key={image.id} 
+                                                        className={`border-2 ${image.should_deploy ? 'border-green-500' : 'border-transparent'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer`}
+                                                        onClick={() => handleToggleCollateral('image', image.id)}
+                                                    >
                                                         <img src={image.cloudfront_url} alt={`Generated collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={() => setEditingImage(image)} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                                                            <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
                                                                 Edit Image
                                                             </button>
                                                         </div>
@@ -230,7 +298,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {collateral.videoCollaterals && collateral.videoCollaterals.length > 0 && (
                                             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.videoCollaterals.map((video) => (
-                                                    <div key={video.id} className="border rounded-lg overflow-hidden shadow-md">
+                                                    <div 
+                                                        key={video.id} 
+                                                        className={`border-2 ${video.should_deploy ? 'border-green-500' : 'border-transparent'} rounded-lg overflow-hidden shadow-md cursor-pointer`}
+                                                        onClick={() => handleToggleCollateral('video', video.id)}
+                                                    >
                                                         {video.status === 'completed' ? (
                                                             <video controls src={video.cloudfront_url} className="w-full h-auto"></video>
                                                         ) : (

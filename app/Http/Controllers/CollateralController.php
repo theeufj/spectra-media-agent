@@ -38,8 +38,8 @@ class CollateralController extends Controller
         // Eager load the ad copy and image collaterals for the given strategy
         $strategy->load(['adCopies', 'imageCollaterals', 'videoCollaterals']);
 
-        // Get all strategies for the campaign to build the tab navigation
-        $allStrategies = $campaign->strategies()->get();
+        // Get all strategies for the campaign to build the tab navigation, including collateral counts
+        $allStrategies = $campaign->strategies()->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals'])->get();
 
         // Find the specific ad copy for the current strategy and platform
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();

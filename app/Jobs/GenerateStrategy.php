@@ -64,9 +64,11 @@ class GenerateStrategy implements ShouldQueue
             if (empty($apiKey)) {
                 $apiKey = env('GEMINI_API_KEY');
             }
+
+            
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->timeout(300)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=AIzaSyCZDOaie5UJ6Aj5ehTBsiJdiWnD7uJaX74", [
+            ])->timeout(300)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key="+$apiKey, [
                 'systemInstruction' => [
                     'parts' => [
                         [

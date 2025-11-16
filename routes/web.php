@@ -2,13 +2,16 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\LandingController;
+use App\Http\Controllers\LegalController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::get('/', function () {
-    return redirect()->route('google.redirect');
-});
+Route::get('/', [LandingController::class, 'index'])->name('landing');
+
+Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
+Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
 
 Route::get('/dashboard', function () {
     return Inertia::render('Dashboard');
@@ -110,6 +113,10 @@ Route::middleware(['auth'])->group(function () {
     // Route to sign off on all strategies for a campaign.
     // POST /campaigns/{campaign}/sign-off-all
     Route::post('/campaigns/{campaign}/sign-off-all', [App\Http\Controllers\CampaignController::class, 'signOffAllStrategies'])->name('campaigns.sign-off-all');
+
+    // Route to delete a campaign.
+    // DELETE /campaigns/{campaign}
+    Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');
 });
 
 /*
