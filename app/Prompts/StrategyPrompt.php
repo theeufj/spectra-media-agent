@@ -25,8 +25,22 @@ class StrategyPrompt
      * @param string $knowledgeBaseContent The compiled content from the user's website.
      * @return string The fully constructed prompt.
      */
-    public static function build(Campaign $campaign, string $knowledgeBaseContent): string
+    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = []): string
     {
+        $recommendationsPrompt = "";
+        if (!empty($recommendations)) {
+            $recommendationsJson = json_encode($recommendations, JSON_PRETTY_PRINT);
+            $recommendationsPrompt = <<<PROMPT
+---
+
+**3. OPTIMIZATION RECOMMENDATIONS (Incorporate these into your strategy):**
+Based on recent performance data, the following recommendations have been generated. You MUST incorporate these into your new strategy.
+---
+{$recommendationsJson}
+---
+PROMPT;
+        }
+
         // Here, we use a HEREDOC string (`<<<PROMPT`) for a clean, multi-line prompt.
         // This is similar to using backticks for multi-line strings in Go.
         return <<<PROMPT
@@ -35,13 +49,17 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 **YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", and "bidding_strategy".
+Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "bidding_strategy", and "revenue_cpa_multiple".
+
+**Revenue CPA Multiple:**
+Based on the business type (e.g., e-commerce, lead generation), estimate a "revenue_cpa_multiple". This is a float representing how much revenue a single conversion is worth compared to its cost (CPA). For example, for an e-commerce business, this might be 2.5, meaning a conversion is worth 2.5 times the target CPA. For lead generation, it might be higher, like 5.0.
 
 **Bidding Strategy Options:**
 You MUST choose one of the following bidding strategies and format it as a JSON object for the "bidding_strategy" key.
 
 1.  `{"name": "MaximizeConversions", "parameters": {}}`
 2.  `{"name": "TargetCpa", "parameters": {"targetCpaMicros": <integer>}}` - Choose a reasonable target CPA in micros (e.g., 50000000 for $50).
+3.  `{"name": "TargetRoas", "parameters": {"targetRoas": <float>}}` - Choose a reasonable target ROAS (e.g., 3.5 for 350%).
 
 **Example Response Format:**
 ```json
@@ -55,7 +73,8 @@ You MUST choose one of the following bidding strategies and format it as a JSON 
       "bidding_strategy": {
         "name": "MaximizeConversions",
         "parameters": {}
-      }
+      },
+      "revenue_cpa_multiple": 2.5
     },
     {
       "platform": "Google Ads (SEM)",
@@ -67,7 +86,8 @@ You MUST choose one of the following bidding strategies and format it as a JSON 
         "parameters": {
           "targetCpaMicros": 50000000
         }
-      }
+      },
+      "revenue_cpa_multiple": 3.0
     }
   ]
 }
@@ -95,6 +115,7 @@ This is the specific goal for the marketing campaign.
 - **Product/Service Focus:** {$campaign->product_focus}
 - **Exclusions (What to avoid):** {$campaign->exclusions}
 ---
+{$recommendationsPrompt}
 
 Based on all the information above, generate the JSON object containing the platform-specific strategies for Facebook Ads, Google Ads (SEM), TikTok Ads, Reddit Ads, and Microsoft Advertising.
 PROMPT;

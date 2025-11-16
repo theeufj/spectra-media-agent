@@ -46,4 +46,15 @@ return [
         'gemini_api_key' => env('GOOGLE_GEMINI_API_KEY'),
     ],
 
+    'stripe' => [
+        'model' => App\Models\User::class,
+        'key' => env('STRIPE_PUBLISHABLE_KEY'),
+        'secret' => env('STRIPE_SECRET_KEY'),
+        'webhook' => [
+            'secret' => env('STRIPE_WEBHOOK_SECRET'),
+            'tolerance' => env('STRIPE_WEBHOOK_TOLERANCE', 300),
+        ],
+        'ad_spend_price_id' => env('STRIPE_AD_SPEND_PRICE_ID'),
+    ],
+
 ];

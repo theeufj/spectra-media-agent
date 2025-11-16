@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import RefineImageModal from '@/Components/RefineImageModal';
+import Modal from '@/Components/Modal';
 
 export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals }) {
     const { auth } = usePage().props;
@@ -12,6 +13,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [editingImage, setEditingImage] = useState(null);
     const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals });
     const [isPolling, setIsPolling] = useState(false);
+    const [showDeployModal, setShowDeployModal] = useState(false);
 
     // Polling effect
     useEffect(() => {
@@ -52,7 +54,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const handleGenerateAdCopy = (strategyId, platform) => {
         if (window.confirm(`Are you sure you want to generate ad copy for ${platform}? This will overwrite any existing ad copy for this platform.`)) {
             setGeneratingAdCopy(true);
-            router.post(route('campaigns.collateral.ad-copy.store', { campaign: campaign.id, strategy: strategyId }), { platform: platform }, {
+            router.post(route('campaigns.ad-copy.store', { campaign: campaign.id, strategy: strategyId }), { platform: platform }, {
                 onSuccess: () => setGeneratingAdCopy(false),
                 onError: (errors) => {
                     setGeneratingAdCopy(false);
@@ -80,10 +82,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         }
     };
 
-    const handleGenerateVideo = (strategyId) => {
+    const handleGenerateVideo = (strategyId, platform) => {
         if (window.confirm(`Are you sure you want to generate a video for this strategy? This can take several minutes.`)) {
             setGeneratingVideo(true);
-            router.post(route('campaigns.collateral.video.store', { campaign: campaign.id, strategy: strategyId }), {}, {
+            router.post(route('campaigns.collateral.video.store', { campaign: campaign.id, strategy: strategyId }), { platform }, {
                 onSuccess: () => {
                     setGeneratingVideo(false);
                     setIsPolling(true); // Start polling
@@ -104,7 +106,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     return (
         <AuthenticatedLayout
             user={auth.user}
-            header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Collateral for {campaign.name} - {currentStrategy.name}</h2>}
+            header={
+                <div className="flex justify-between items-center">
+                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">Collateral for {campaign.name} - {currentStrategy.name}</h2>
+                    <button
+                        onClick={() => setShowDeployModal(true)}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                        Deploy
+                    </button>
+                </div>
+            }
         >
             <Head title="Collateral" />
 
@@ -207,7 +219,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <p>Generate a unique video based on the video strategy for {strategyItem.platform}.</p>
 
                                         <button
-                                            onClick={() => handleGenerateVideo(strategyItem.id)}
+                                            onClick={() => handleGenerateVideo(strategyItem.id, strategyItem.platform)}
                                             disabled={generatingVideo}
                                             className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
                                         >
@@ -246,6 +258,24 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     onRefinementStart={handleRefinementStart}
                 />
             )}
+
+            <Modal show={showDeployModal} onClose={() => setShowDeployModal(false)}>
+                <h3 className="text-lg font-bold">Deploying to {currentStrategy.platform}</h3>
+                <ul className="mt-4 space-y-2">
+                    <li className="flex items-center">
+                        <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        Deploying ad copy...
+                    </li>
+                    <li className="flex items-center">
+                        <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        Deploying images...
+                    </li>
+                    <li className="flex items-center">
+                        <svg className="w-5 h-5 text-green-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                        Deploying video...
+                    </li>
+                </ul>
+            </Modal>
         </AuthenticatedLayout>
     );
 }

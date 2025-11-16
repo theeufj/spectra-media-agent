@@ -27,29 +27,18 @@ class DeployCampaign implements ShouldQueue
         Log::info("Starting deployment job for Campaign ID: {$this->campaign->id}");
 
         $user = $this->campaign->user;
+        $customer = $user->customer;
+
+        if (!$customer) {
+            Log::error("No customer found for user {$user->id}. Skipping deployment.");
+            return;
+        }
 
         foreach ($this->campaign->strategies as $strategy) {
-            $connection = $user->connections()->where('platform', $strategy->platform)->first();
-
-            if (!$connection) {
-                Log::error("No active connection found for user {$user->id} and platform {$strategy->platform}. Skipping deployment.");
-                continue;
-            }
-
-            // Here, you would add logic to refresh the access token if it has expired.
-            // For now, we'll assume it's valid.
-
-            $credentials = [
-                'access_token' => $connection->access_token,
-                'developer_token' => config('services.google_ads.developer_token'),
-                'customer_id' => $connection->account_id,
-                'login_customer_id' => config('services.google_ads.login_customer_id'),
-            ];
-
-            $deploymentStrategy = DeploymentService::getStrategy($strategy->platform, $credentials);
+            $deploymentStrategy = DeploymentService::getStrategy($strategy->platform, $customer);
 
             if ($deploymentStrategy) {
-                $success = $deploymentStrategy->deploy($this->campaign, $strategy, $connection);
+                $success = $deploymentStrategy->deploy($this->campaign, $strategy);
                 if (!$success) {
                     Log::error("Deployment failed for Strategy ID: {$strategy->id} on platform: {$strategy->platform}");
                     // Optionally, you could add more specific error handling here

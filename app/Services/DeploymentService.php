@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Customer;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
 use Illuminate\Support\Facades\Log;
@@ -12,21 +13,14 @@ class DeploymentService
      * Factory method to get the correct deployment strategy for a given platform.
      *
      * @param string $platform The name of the platform (e.g., 'Google Ads (SEM)').
-     * @param array $credentials The necessary credentials for the platform's service.
+     * @param Customer $customer The customer object containing the necessary credentials.
      * @return DeploymentStrategy|null
      */
-    public static function getStrategy(string $platform, array $credentials): ?DeploymentStrategy
+    public static function getStrategy(string $platform, Customer $customer): ?DeploymentStrategy
     {
         switch ($platform) {
             case 'Google Ads (SEM)':
-                // Here, you would fetch the real, user-specific credentials
-                $googleAdsService = new GoogleAdsService(
-                    $credentials['access_token'],
-                    $credentials['developer_token'],
-                    $credentials['customer_id'],
-                    $credentials['login_customer_id']
-                );
-                return new GoogleAdsDeploymentStrategy($googleAdsService);
+                return new GoogleAdsDeploymentStrategy($customer);
 
             // case 'Facebook Ads':
             //     $facebookService = new FacebookAdsService($credentials['access_token']);

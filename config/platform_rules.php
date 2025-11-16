@@ -12,7 +12,7 @@ return [
     |
     */
 
-    'Google Ads' => [
+    'google' => [
         'headline_min_length' => 5,
         'headline_max_length' => 30,
         'headline_count' => 5,
@@ -23,18 +23,18 @@ return [
         'allow_consecutive_exclamations' => false,
     ],
 
-    'Google Ads (SEM)' => [
+    'google.sem' => [
         'headline_min_length' => 5,
         'headline_max_length' => 30,
         'headline_count' => 5,
         'description_min_length' => 10,
-        'description_max_length' => 90,
+        'description_max_length' => 95,
         'description_count' => 3,
         'max_exclamations_per_element' => 1,
         'allow_consecutive_exclamations' => false,
     ],
 
-    'Facebook Ads' => [
+    'facebook' => [
         'headline_min_length' => 5,
         'headline_max_length' => 40,
         'headline_count' => 3,
@@ -45,7 +45,7 @@ return [
         'allow_consecutive_exclamations' => true,
     ],
 
-    'TikTok Ads' => [
+    'tiktok' => [
         'headline_min_length' => 5,
         'headline_max_length' => 30,
         'headline_count' => 5,
@@ -56,7 +56,7 @@ return [
         'allow_consecutive_exclamations' => false,
     ],
 
-    'Reddit Ads' => [
+    'reddit' => [
         'headline_min_length' => 5,
         'headline_max_length' => 30,
         'headline_count' => 5,
@@ -67,7 +67,7 @@ return [
         'allow_consecutive_exclamations' => false,
     ],
 
-    'Microsoft Advertising' => [
+    'microsoft' => [
         'headline_min_length' => 5,
         'headline_max_length' => 30,
         'headline_count' => 5,

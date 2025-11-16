@@ -17,12 +17,14 @@ class Campaign extends Model
      */
     protected $fillable = [
         'user_id',
+        'customer_id',
         'name',
         'reason',
         'goals',
         'target_market',
         'voice',
         'total_budget',
+        'daily_budget',
         'start_date',
         'end_date',
         'primary_kpi',

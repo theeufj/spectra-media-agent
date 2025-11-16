@@ -12,6 +12,20 @@ use Inertia\Inertia;
 class CampaignController extends Controller
 {
     /**
+     * Display a listing of the resource.
+     *
+     * @return \Illuminate\View\View
+     */
+    public function index()
+    {
+        $campaigns = Campaign::with(['strategies.adCopies', 'strategies.imageCollaterals', 'strategies.videoCollaterals'])->get();
+
+        return Inertia::render('Campaigns/Index', [
+            'campaigns' => $campaigns,
+        ]);
+    }
+
+    /**
      * create is the handler for showing the campaign creation form.
      *
      * @return \Inertia\Response
@@ -30,7 +44,25 @@ class CampaignController extends Controller
     public function store(StoreCampaignRequest $request)
     {
         $validatedData = $request->validated();
-        $campaign = $request->user()->campaigns()->create($validatedData);
+
+        // Get the authenticated user
+        $user = $request->user();
+
+        // This will create a Stripe customer if one doesn't exist, or retrieve the existing one.
+        $stripeCustomer = $user->createOrGetStripeCustomer();
+
+        // Manually create the local customer record if it doesn't exist.
+        // The `customer()` relationship method comes from the Billable trait.
+        $customer = $user->customer()->firstOrCreate([
+            'stripe_id' => $stripeCustomer->id,
+        ]);
+
+        // Add the customer_id to the validated data
+        $validatedData['customer_id'] = $customer->id;
+
+        // Create the campaign for the user
+        $campaign = $user->campaigns()->create($validatedData);
+
         GenerateStrategy::dispatch($campaign);
 
         // Redirect the user to the new strategy review page.
@@ -94,6 +126,6 @@ class CampaignController extends Controller
             'signed_off_at' => now(),
         ]);
 
-        return redirect()->route('collateral.show', $campaign)->with('success', 'All strategies have been signed off!');
+        return redirect()->route('campaigns.show', $campaign)->with('success', 'All strategies have been signed off!');
     }
 }

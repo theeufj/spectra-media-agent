@@ -55,6 +55,7 @@ class GenerateAdCopy implements ShouldQueue
     public function handle(): void
     {
         try {
+            Log::info("GenerateAdCopy job started for Campaign {$this->campaign->id}.");
             // Initialize services
             $geminiService = new GeminiService();
             $adminMonitorService = new AdminMonitorService($geminiService);
@@ -69,10 +70,12 @@ class GenerateAdCopy implements ShouldQueue
 
                 // Get the platform rules to provide context to the model.
                 $rules = AdminMonitorService::getRulesForPlatform($this->platform);
+                Log::info("Fetched platform rules for {$this->platform}.", ['rules' => $rules]);
 
                 // Pass feedback and rules into the prompt.
                 $adCopyPrompt = (new AdCopyPrompt($strategyContent, $this->platform, $rules, $lastFeedback))->getPrompt();
                 $generatedResponse = $geminiService->generateContent('gemini-2.5-pro', $adCopyPrompt);
+                Log::info("Received raw response from Gemini for attempt {$attempt}.", ['response' => $generatedResponse]);
 
                 if (is_null($generatedResponse)) {
                     Log::error("Failed to get ad copy from Gemini on attempt {$attempt}.");
@@ -90,8 +93,15 @@ class GenerateAdCopy implements ShouldQueue
                     $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($generatedText));
                     $adCopyData = json_decode($cleanedJson, true);
 
-                    if (json_last_error() !== JSON_ERROR_NONE || !is_array($adCopyData) || !isset($adCopyData['headlines']) || !isset($adCopyData['descriptions'])) {
-                        throw new \Exception("Gemini did not return a valid JSON object with headlines and descriptions.");
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        throw new \Exception("JSON decode error: " . json_last_error_msg());
+                    }
+
+                    Log::info("Parsed ad copy data from Gemini.", ['ad_copy_data' => $adCopyData]);
+
+                    // Ensure headlines and descriptions are arrays.
+                    if (!is_array($adCopyData['headlines'] ?? null) || !is_array($adCopyData['descriptions'] ?? null)) {
+                        throw new \Exception("Gemini did not return a valid JSON object with headlines and descriptions arrays.");
                     }
                 } catch (\Exception $e) {
                     Log::error("Failed to parse Gemini's ad copy response on attempt {$attempt}: " . $e->getMessage(), ['generated_text' => $generatedText]);
@@ -113,7 +123,7 @@ class GenerateAdCopy implements ShouldQueue
                 } else {
                     Log::warning("Ad copy not approved on attempt {$attempt}. Feedback: ", $reviewResults);
                     // Store the feedback for the next attempt.
-                    $lastFeedback = $reviewResults['programmatic_validation']['feedback'];
+                    $lastFeedback = $reviewResults['programmatic_validation']['feedback'] ?? [];
                 }
             }
 

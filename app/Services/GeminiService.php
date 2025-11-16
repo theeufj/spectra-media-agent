@@ -44,7 +44,8 @@ class GeminiService
             try {
                 $response = Http::withHeaders([
                     'Content-Type' => 'application/json',
-                ])->timeout(300)->post("{$this->baseUrl}{$model}:generateContent?key={$this->apiKey}", [
+                    'x-goog-api-key' => $this->apiKey,
+                ])->timeout(300)->post("{$this->baseUrl}{$model}:generateContent", [
                     'contents' => [
                         [
                             'parts' => [
@@ -165,7 +166,8 @@ class GeminiService
         try {
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->timeout(300)->post("{$this->baseUrl}{$model}:embedContent?key={$this->apiKey}", [
+                'x-goog-api-key' => $this->apiKey,
+            ])->timeout(300)->post("{$this->baseUrl}{$model}:embedContent", [
                 'model' => "models/{$model}",
                 'content' => [
                     'parts' => [
@@ -255,7 +257,8 @@ class GeminiService
             // Use streamGenerateContent endpoint and correct the image_size key
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->timeout(300)->post("{$this->baseUrl}{$model}:streamGenerateContent?key={$this->apiKey}", $payload);
+                'x-goog-api-key' => $this->apiKey,
+            ])->timeout(300)->post("{$this->baseUrl}{$model}:streamGenerateContent", $payload);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to generate image from model {$model}: " . $response->body());
@@ -301,7 +304,7 @@ class GeminiService
      * @param array $parameters Additional generation parameters (e.g., aspectRatio, durationSeconds).
      * @return string|null The operation name if successful, or null on failure.
      */
-    public function startVideoGeneration(string $prompt, string $model = 'veo-2.0-generate-001', array $parameters = []): ?string
+    public function startVideoGeneration(string $prompt, string $model = 'veo-3.0-generate-001', array $parameters = []): ?string
     {
         try {
             $requestBody = [
@@ -320,7 +323,8 @@ class GeminiService
 
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->timeout(300)->post("{$this->baseUrl}{$model}:predictLongRunning?key={$this->apiKey}", $requestBody);
+                'x-goog-api-key' => $this->apiKey,
+            ])->timeout(300)->post("{$this->baseUrl}{$model}:predictLongRunning", $requestBody);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to start video generation from model {$model}: " . $response->body());
@@ -345,7 +349,10 @@ class GeminiService
     public function checkVideoGenerationStatus(string $operationName): ?array
     {
         try {
-            $response = Http::timeout(300)->get("{$this->baseUrl}{$operationName}?key={$this->apiKey}");
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+                'x-goog-api-key' => $this->apiKey,
+            ])->timeout(300)->get("https://generativelanguage.googleapis.com/v1beta/{$operationName}");
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to check operation status for {$operationName}: " . $response->body());
@@ -361,6 +368,33 @@ class GeminiService
             return null; // Operation not yet done
         } catch (\Exception $e) {
             Log::error("GeminiService: Exception during operation status check for {$operationName}: " . $e->getMessage(), [
+                'exception' => $e,
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Downloads video data from a given URI.
+     *
+     * @param string $uri The URI to download the video from.
+     * @return string|null The video data as a string, or null on failure.
+     */
+    public function downloadVideo(string $uri): ?string
+    {
+        try {
+            $response = Http::withHeaders([
+                'x-goog-api-key' => $this->apiKey,
+            ])->timeout(300)->get($uri);
+
+            if ($response->failed()) {
+                Log::error("GeminiService: Failed to download video from {$uri}: " . $response->body());
+                return null;
+            }
+
+            return $response->body();
+        } catch (\Exception $e) {
+            Log::error("GeminiService: Exception during video download from {$uri}: " . $e->getMessage(), [
                 'exception' => $e,
             ]);
             return null;

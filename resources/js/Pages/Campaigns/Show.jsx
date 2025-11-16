@@ -24,7 +24,7 @@ const StrategyCard = ({ strategy, campaignId }) => {
             post(route('campaigns.strategies.sign-off', { campaign: campaignId, strategy: strategy.id }), {
                 onSuccess: () => {
                     // Redirect to the collateral page after signing off
-                    window.location.href = route('collateral.show', { campaign: campaignId });
+                    window.location.href = route('campaigns.collateral.show', { campaign: campaignId });
                 }
             });
         }

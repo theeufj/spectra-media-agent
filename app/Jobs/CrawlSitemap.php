@@ -30,6 +30,7 @@ class CrawlSitemap implements ShouldQueue
      * @var string
      */
     public $sitemapUrl;
+    public $customerId;
 
     /**
      * Create a new job instance.
@@ -37,11 +38,13 @@ class CrawlSitemap implements ShouldQueue
      *
      * @param User $user
      * @param string $sitemapUrl
+     * @param int|null $customerId
      */
-    public function __construct(User $user, string $sitemapUrl)
+    public function __construct(User $user, string $sitemapUrl, ?int $customerId = null)
     {
         $this->user = $user;
         $this->sitemapUrl = $sitemapUrl;
+        $this->customerId = $customerId;
     }
 
     /**
@@ -79,7 +82,7 @@ class CrawlSitemap implements ShouldQueue
                 foreach ($xml->sitemap as $sitemap) {
                     $url = (string)$sitemap->loc;
                     Log::info("CrawlSitemap: Dispatching new CrawlSitemap job for: {$url}");
-                    self::dispatch($this->user, $url);
+                    self::dispatch($this->user, $url, $this->customerId);
                 }
             }
             // Check if it's a regular sitemap file
@@ -89,7 +92,7 @@ class CrawlSitemap implements ShouldQueue
                 foreach ($xml->url as $url) {
                     $loc = (string)$url->loc;
                     Log::info("CrawlSitemap: Dispatching CrawlPage job for URL: {$loc}");
-                    CrawlPage::dispatch($this->user, $loc);
+                    CrawlPage::dispatch($this->user, $loc, $this->customerId);
                 }
             } else {
                 Log::warning("CrawlSitemap: Could not find <sitemap> or <url> tags in the sitemap: {$this->sitemapUrl}");

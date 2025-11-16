@@ -23,6 +23,8 @@ class Strategy extends Model
         'video_strategy',
         'signed_off_at',
         'bidding_strategy',
+        'cpa_target',
+        'revenue_cpa_multiple',
     ];
 
     /**
@@ -59,5 +61,13 @@ class Strategy extends Model
     public function imageCollaterals()
     {
         return $this->hasMany(ImageCollateral::class);
+    }
+
+    /**
+     * Get the video collaterals for the strategy.
+     */
+    public function videoCollaterals()
+    {
+        return $this->hasMany(VideoCollateral::class);
     }
 }

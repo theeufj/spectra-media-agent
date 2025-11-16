@@ -24,7 +24,34 @@ class AdminMonitorService
      */
     public static function getRulesForPlatform(string $platform): ?array
     {
-        return Config::get("platform_rules.{$platform}");
+        // Standardize the platform name to match the keys in the config file.
+        $platformKey = strtolower($platform);
+        $platformKey = str_replace(' ads (sem)', '.sem', $platformKey);
+        $platformKey = str_replace(' advertising', '', $platformKey);
+        $platformKey = str_replace(' ads', '', $platformKey);
+
+        Log::info("Standardized platform key: {$platformKey}");
+
+        $platformRules = Config::get('platform_rules');
+
+        // Ensure platformRules is an array before proceeding.
+        if (!is_array($platformRules)) {
+            return null;
+        }
+
+        // Check for an exact match first
+        if (isset($platformRules[$platformKey])) {
+            return $platformRules[$platformKey];
+        }
+
+        // If no exact match, check if the platform name starts with a configured key
+        foreach ($platformRules as $key => $rules) {
+            if (str_starts_with($platformKey, $key)) {
+                return $rules;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -36,8 +63,13 @@ class AdminMonitorService
     public function reviewAdCopy(AdCopy $adCopy): array
     {
         $platform = $adCopy->platform;
-        $headlines = $adCopy->headlines;
-        $descriptions = $adCopy->descriptions;
+        $headlines = is_string($adCopy->headlines) ? json_decode($adCopy->headlines, true) : $adCopy->headlines;
+        $descriptions = is_string($adCopy->descriptions) ? json_decode($adCopy->descriptions, true) : $adCopy->descriptions;
+
+        Log::info("AdminMonitorService: Validating ad copy for platform {$platform}.", [
+            'headlines' => $headlines,
+            'descriptions' => $descriptions,
+        ]);
 
         $validationResults = $this->validateAdCopy($platform, $headlines, $descriptions);
 
@@ -155,8 +187,12 @@ class AdminMonitorService
      * @param array $descriptions An array of descriptions.
      * @return array An array containing validation results.
      */
-    private function validateAdCopy(string $platform, array $headlines, array $descriptions): array
+    private function validateAdCopy(string $platform, ?array $headlines, ?array $descriptions): array
     {
+        // Ensure headlines and descriptions are arrays to prevent errors.
+        $headlines = $headlines ?? [];
+        $descriptions = $descriptions ?? [];
+
         $isValid = true;
         $feedback = [
             'headlines' => [],

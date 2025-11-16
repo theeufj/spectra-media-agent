@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use Laravel\Cashier\Exceptions\InvalidCustomer;
+use Illuminate\Support\Facades\Log;
 
 class SubscriptionController extends Controller
 {
@@ -27,7 +29,7 @@ class SubscriptionController extends Controller
      * It creates a Stripe Checkout session and redirects the user to Stripe's hosted payment page.
      *
      * @param Request $request The incoming HTTP request.
-     * @return \Illuminate\Http\RedirectResponse A redirect to Stripe.
+     * @return \Inertia\Response A response that instructs Inertia to redirect to Stripe.
      */
     public function checkout(Request $request)
     {
@@ -37,15 +39,25 @@ class SubscriptionController extends Controller
 
         // Get the price ID from the request body. This corresponds to a Product Price in your Stripe dashboard.
         $priceId = $request->input('price_id');
+        $adSpendPriceId = config('services.stripe.ad_spend_price_id');
 
-        // newSubscription is a method provided by the Billable trait from Laravel Cashier.
-        // It creates a new subscription checkout session for the user.
-        // The `checkout()` method returns a Stripe Checkout session object, which includes the redirect URL.
-        return $user->newSubscription('default', $priceId)
+        Log::info("Initiating checkout for User ID: {$user->id} with Price ID: {$priceId} and Ad Spend Price ID: {$adSpendPriceId}");
+
+        // Create the Stripe Checkout session.
+        $checkout = $user->newSubscription('default', $priceId)
             ->checkout([
-                'success_url' => route('dashboard'), // Redirect here on successful payment.
-                'cancel_url' => route('subscription.pricing'), // Redirect here if the user cancels.
+                'success_url' => route('dashboard'),
+                'cancel_url' => route('subscription.pricing'),
+                'line_items' => [
+                    [
+                        'price' => $adSpendPriceId,
+                        // Do NOT specify a quantity for metered items.
+                    ],
+                ],
             ]);
+
+        // Redirect to Stripe using Inertia::location.
+        return Inertia::location($checkout->url);
     }
 
     /**
@@ -58,11 +70,26 @@ class SubscriptionController extends Controller
      */
     public function portal(Request $request)
     {
-        // Get the currently authenticated user.
-        $user = Auth::user();
+        try {
+            $user = Auth::user();
 
-        // redirectToBillingPortal is a method provided by the Billable trait.
-        // It generates a secure, one-time-use URL for the user's Stripe portal session.
-        return $user->redirectToBillingPortal(route('dashboard'));
+            // Check if the user has an active subscription.
+            if (!$user->subscribed('default')) {
+                return redirect()->route('subscription.pricing')->with('flash', [
+                    'type' => 'info',
+                    'message' => 'You do not have an active subscription. Please select a plan to continue.'
+                ]);
+            }
+
+            // Generate the billing portal URL and redirect.
+            $billingPortalUrl = $user->billingPortalUrl(route('dashboard'));
+            return Inertia::location($billingPortalUrl);
+        } catch (InvalidCustomer $e) {
+            // This user is not a Stripe customer yet. Redirect them to the pricing page.
+            return redirect()->route('subscription.pricing')->with('flash', [
+                'type' => 'info',
+                'message' => 'You do not have an active subscription. Please select a plan to continue.'
+            ]);
+        }
     }
 }

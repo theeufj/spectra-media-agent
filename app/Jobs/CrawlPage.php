@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\Competitor;
 use App\Models\KnowledgeBase;
 use App\Models\User;
 use App\Prompts\ChunkingPrompt;
@@ -29,6 +30,11 @@ class CrawlPage implements ShouldQueue
     /**
      * @var string
      */
+    public $customerId;
+
+    /**
+     * @var string
+     */
     public $url;
 
     /**
@@ -36,11 +42,13 @@ class CrawlPage implements ShouldQueue
      *
      * @param User $user
      * @param string $url
+     * @param int|null $customerId
      */
-    public function __construct(User $user, string $url)
+    public function __construct(User $user, string $url, ?int $customerId = null)
     {
         $this->user = $user;
         $this->url = $url;
+        $this->customerId = $customerId;
     }
 
     /**
@@ -74,6 +82,30 @@ class CrawlPage implements ShouldQueue
                 }
             });
 
+            $title = $crawler->filter('title')->first()->text('');
+            $metaDescription = $crawler->filter('meta[name="description"]')->first()->attr('content', '');
+            $headings = [];
+            $crawler->filter('h1, h2, h3')->each(function (Crawler $node) use (&$headings) {
+                $headings[$node->nodeName()][] = $node->text();
+            });
+
+            if ($this->customerId) {
+                Competitor::updateOrCreate(
+                    [
+                        'customer_id' => $this->customerId,
+                        'url' => $this->url,
+                    ],
+                    [
+                        'title' => $title,
+                        'meta_description' => $metaDescription,
+                        'headings' => json_encode($headings),
+                        'raw_content' => $cleanedContent,
+                    ]
+                );
+                Log::info("Successfully crawled and stored competitor page: {$this->url}");
+                return; // Skip knowledge base processing for competitors
+            }
+
             // Extract text content from the body after removing irrelevant elements
             $textContent = $crawler->filter('body')->text();
             $cleanedContent = preg_replace('/\s+/', ' ', $textContent);
@@ -83,7 +115,7 @@ class CrawlPage implements ShouldQueue
             $crawler->filter('link[rel="stylesheet"]')->each(function (Crawler $node) use (&$cssContent) {
                 $stylesheetUrl = $node->link()->getUri();
                 try {
-                    $cssResponse = Http::get($stylesheetUrl);
+                    $cssResponse = Http::timeout(30)->get($stylesheetUrl);
                     if ($cssResponse->successful()) {
                         $cssContent .= $cssResponse->body() . "\n\n";
                     }

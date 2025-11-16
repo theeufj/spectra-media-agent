@@ -9,6 +9,7 @@ use App\Services\GeminiService;
 use Aws\S3\S3Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
@@ -287,7 +288,7 @@ class KnowledgeBaseController extends Controller
             // Step 3: Iterate through chunks and embeddings to find relevant ones
             foreach ($knowledgeBases as $kb) {
                 $chunks = json_decode($kb->content, true);
-                $embeddings = json_decode($kb->embedding->toJson(), true); // Convert Pgvector\Laravel\Vector to array
+                $embeddings = $kb->embedding->toArray();
 
                 if (!is_array($chunks) || !is_array($embeddings) || count($chunks) !== count($embeddings)) {
                     Log::warning("KnowledgeBase ID {$kb->id} has malformed chunks or embeddings.");

@@ -65,5 +65,28 @@ class User extends Authenticatable
         return $this->hasMany(KnowledgeBase::class);
     }
 
+    /**
+     * Get the customer record associated with the user.
+     */
+    public function customer()
+    {
+        return $this->hasOne(Customer::class);
+    }
+
+    /**
+     * Get the user's current subscription plan name.
+     *
+     * @return string
+     */
+    public function getSubscriptionPlanAttribute(): string
+    {
+        // 'default' is the name of the subscription in Cashier.
+        // You can change this if you use a different name.
+        if ($this->subscribed('default')) {
+            return 'Spectra Pro';
+        }
+
+        return 'Free';
+    }
 }
 

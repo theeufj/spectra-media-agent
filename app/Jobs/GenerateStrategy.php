@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Models\KnowledgeBase;
+use App\Models\Recommendation;
 use App\Prompts\StrategyPrompt;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -49,9 +50,13 @@ class GenerateStrategy implements ShouldQueue
                 return;
             }
 
+            // Step 1.5: Gather any pending recommendations.
+            $recommendations = Recommendation::where('campaign_id', $this->campaign->id)
+                ->where('status', 'pending')
+                ->get();
+
             // Step 2: Construct the prompt using our dedicated prompt builder class.
-            // This keeps our job clean and separates the prompt engineering logic.
-            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent);
+            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray());
 
             // Step 3: Call the Google Gemini API.
             $apiKey = config('services.google.gemini_api_key');
@@ -61,7 +66,7 @@ class GenerateStrategy implements ShouldQueue
             }
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->timeout(300)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key={$apiKey}", [
+            ])->timeout(300)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=AIzaSyCZDOaie5UJ6Aj5ehTBsiJdiWnD7uJaX74", [
                 'systemInstruction' => [
                     'parts' => [
                         [
@@ -140,6 +145,9 @@ class GenerateStrategy implements ShouldQueue
                     'ad_copy_strategy' => $strategy['ad_copy_strategy'],
                     'imagery_strategy' => $strategy['imagery_strategy'],
                     'video_strategy' => $strategy['video_strategy'],
+                    'bidding_strategy' => $strategy['bidding_strategy'],
+                    'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
+                    'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
                 ]);
             }
 

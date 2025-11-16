@@ -35,8 +35,10 @@ class RefineImage implements ShouldQueue
 
             // Add the original image as the first context
             $originalImageData = Storage::disk('s3')->get($this->originalImage->s3_path);
+            $mimeType = Storage::disk('s3')->mimeType($this->originalImage->s3_path);
+
             $contextImages[] = [
-                'mime_type' => 'image/png', // Assuming png, adjust if you store different types
+                'mime_type' => $mimeType,
                 'data' => base64_encode($originalImageData),
             ];
 

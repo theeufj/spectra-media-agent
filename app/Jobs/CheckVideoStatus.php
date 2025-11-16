@@ -25,50 +25,87 @@ class CheckVideoStatus implements ShouldQueue
 
     public function handle(GeminiService $geminiService): void
     {
-        Log::info("Checking video status for VideoCollateral ID: {$this->videoCollateral->id}");
+        Log::info("--- CheckVideoStatus Job Started ---");
+        Log::info("Attempt #{$this->attempts()} for VideoCollateral ID: {$this->videoCollateral->id}");
 
         try {
+            Log::info("Calling GeminiService to check status for operation: {$this->videoCollateral->operation_name}");
             $operation = $geminiService->checkVideoGenerationStatus($this->videoCollateral->operation_name);
 
             if (!$operation) {
-                // Not ready yet, re-dispatch with a delay
-                Log::info("Video not ready. Re-dispatching check for VideoCollateral ID: {$this->videoCollateral->id}");
-                $this->release(60); // Release back to the queue with a 60-second delay
+                Log::info("Polling... Video is not ready yet. Re-dispatching job with a 60-second delay.");
+                $this->release(60);
                 return;
             }
 
+            Log::info("Received a response from Gemini. Processing operation result.");
+            Log::info("Full Gemini Response: " . json_encode($operation, JSON_PRETTY_PRINT));
+
             if (isset($operation['error'])) {
+                $errorMessage = json_encode($operation['error']);
+                Log::error("Video generation failed according to Gemini. Error: {$errorMessage}");
                 $this->videoCollateral->update(['status' => 'failed']);
-                throw new \Exception('Video generation failed: ' . json_encode($operation['error']));
+                throw new \Exception("Video generation failed: {$errorMessage}");
             }
 
-            $videoUri = $operation['response']['videos'][0]['uri'];
-            $videoData = file_get_contents($videoUri);
+            if (!isset($operation['response']['generateVideoResponse']['generatedSamples'][0]['video']['uri'])) {
+                Log::error("Invalid response from Gemini: Video URI is missing.");
+                $this->videoCollateral->update(['status' => 'failed']);
+                throw new \Exception('Invalid response from Gemini: Video URI is missing.');
+            }
+
+            $videoUri = $operation['response']['generateVideoResponse']['generatedSamples'][0]['video']['uri'];
+            Log::info("Video is ready. Downloading from Gemini URI: {$videoUri}");
+
+            $videoData = $geminiService->downloadVideo($videoUri);
 
             if ($videoData === false) {
+                Log::error("Failed to download video data from the provided Gemini URI.");
                 $this->videoCollateral->update(['status' => 'failed']);
                 throw new \Exception('Failed to download video from Gemini URI.');
             }
 
+            Log::info("Video data downloaded successfully. Preparing to upload to S3.");
+
             $filename = uniqid('vid_', true) . '.mp4';
             $s3Path = "collateral/videos/{$this->videoCollateral->campaign_id}/{$filename}";
-            Storage::disk('s3')->put($s3Path, $videoData, 'public');
+
+            try {
+                $s3Client = Storage::disk('s3')->getClient();
+                $result = $s3Client->putObject([
+                    'Bucket' => config('filesystems.disks.s3.bucket'),
+                    'Key' => $s3Path,
+                    'Body' => $videoData,
+                    'ContentType' => 'video/mp4',
+                ]);
+
+                if (!isset($result['ETag'])) {
+                    throw new \Exception('S3 upload failed - no ETag in response.');
+                }
+            } catch (\Exception $e) {
+                throw new \Exception("Failed to upload video to S3. AWS Error: " . $e->getMessage());
+            }
+
+            Log::info("Video successfully uploaded to S3 at path: {$s3Path}");
 
             $cloudfrontDomain = config('filesystems.cloudfront_domain');
             $cloudFrontUrl = "https://{$cloudfrontDomain}/{$s3Path}";
+            Log::info("Generated CloudFront URL: {$cloudFrontUrl}");
 
+            Log::info("Updating VideoCollateral record in the database with final status and URLs.");
             $this->videoCollateral->update([
                 'status' => 'completed',
                 's3_path' => $s3Path,
                 'cloudfront_url' => $cloudFrontUrl,
             ]);
 
-            Log::info("Successfully processed and stored video for VideoCollateral ID: {$this->videoCollateral->id}");
+            Log::info("--- CheckVideoStatus Job Completed Successfully for VideoCollateral ID: {$this->videoCollateral->id} ---");
 
         } catch (\Exception $e) {
+            Log::error("An error occurred in CheckVideoStatus for VideoCollateral ID {$this->videoCollateral->id}. Error: " . $e->getMessage());
             $this->videoCollateral->update(['status' => 'failed']);
-            Log::error("Error in CheckVideoStatus job for VideoCollateral ID {$this->videoCollateral->id}: " . $e->getMessage());
             $this->fail($e);
+            Log::info("--- CheckVideoStatus Job Failed for VideoCollateral ID: {$this->videoCollateral->id} ---");
         }
     }
 }
