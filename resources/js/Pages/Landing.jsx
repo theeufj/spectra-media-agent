@@ -13,34 +13,34 @@ export default function Landing({ auth }) {
 
                 <main>
                     {/* Hero Section - Enhanced */}
-                    <div className="pt-10 bg-gradient-to-b from-indigo-50 to-white sm:pt-16 lg:pt-8 lg:pb-14 lg:overflow-hidden">
+                    <div className="pt-6 px-4 sm:pt-10 md:pt-14 lg:pt-8 lg:pb-14 lg:overflow-hidden bg-gradient-to-b from-indigo-50 to-white">
                         <div className="mx-auto max-w-7xl lg:px-8">
-                            <div className="lg:grid lg:grid-cols-2 lg:gap-8">
-                                <div className="mx-auto max-w-md px-4 sm:max-w-2xl sm:px-6 sm:text-center lg:px-0 lg:text-left lg:flex lg:items-center">
-                                    <div className="lg:py-24">
-                                        <p className="text-sm font-semibold text-indigo-600 uppercase tracking-wider">Join 500+ Marketing Teams</p>
-                                        <h1 className="mt-4 text-4xl tracking-tight font-extrabold text-gray-900 sm:mt-5 sm:text-6xl lg:mt-6 xl:text-6xl">
-                                            <span className="block">Agentic Digital Marketing</span>
-                                            <span className="block text-indigo-600">Powered by AI</span>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 lg:gap-8">
+                                <div className="mx-auto max-w-sm px-2 sm:max-w-md sm:px-4 md:max-w-none md:px-0 text-center sm:text-center md:text-left md:flex md:items-center">
+                                    <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
+                                        <p className="text-xs sm:text-sm font-semibold text-indigo-600 uppercase tracking-wider">Join 500+ Marketing Teams</p>
+                                        <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
+                                            <span className="block whitespace-normal">Agentic Digital Marketing</span>
+                                            <span className="block text-indigo-600 whitespace-normal">Powered by AI</span>
                                         </h1>
-                                        <p className="mt-3 text-base text-gray-500 sm:mt-5 sm:text-xl lg:text-lg xl:text-xl">
+                                        <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
                                             Generate ad copy, images, and videos for free. When you're ready to launch, our AI agents will deploy and manage your campaigns for a flat monthly fee. Stop paying thousands for ad management.
                                         </p>
-                                        <div className="mt-10 sm:mt-12 flex flex-col sm:flex-row gap-4">
+                                        <div className="mt-6 sm:mt-8 md:mt-10 lg:mt-10 flex flex-col xs:flex-col sm:flex-row gap-3 sm:gap-4">
                                             <a
                                                 href="/register"
-                                                className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg"
+                                                className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border border-transparent text-sm sm:text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg transition-colors w-full sm:w-auto"
                                             >
                                                 Start Generating for Free
                                             </a>
                                             <a
                                                 href="#how-it-works"
-                                                className="inline-flex items-center justify-center px-6 py-3 border-2 border-indigo-600 text-base font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50"
+                                                className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border-2 border-indigo-600 text-sm sm:text-base font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50 transition-colors w-full sm:w-auto"
                                             >
                                                 See How It Works
                                             </a>
                                         </div>
-                                        <p className="mt-6 text-sm text-gray-500">✓ No credit card required · ✓ Free forever tier · ✓ Cancel anytime</p>
+                                        <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Free forever tier · ✓ Cancel anytime</p>
                                     </div>
                                 </div>
                                 <div className="mt-12 -mb-16 sm:-mb-48 lg:m-0 lg:relative">
@@ -127,48 +127,48 @@ export default function Landing({ auth }) {
                     </div>
 
                     {/* How It Works Section */}
-                    <div id="how-it-works" className="bg-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-6 lg:px-8">
-                            <div className="mx-auto max-w-2xl lg:text-center mb-16">
-                                <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">How It Works</h2>
-                                <p className="mt-6 text-lg leading-8 text-gray-600">
+                    <div id="how-it-works" className="bg-white py-12 sm:py-16 md:py-20 lg:py-24">
+                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                            <div className="mx-auto max-w-2xl lg:text-center mb-12 sm:mb-14 md:mb-16">
+                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">How It Works</h2>
+                                <p className="mt-3 sm:mt-4 text-base sm:text-lg leading-8 text-gray-600">
                                     Three simple steps to launch your first campaign
                                 </p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
                                 <div className="relative">
-                                    <div className="flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white text-xl font-bold">1</div>
-                                    <h3 className="mt-4 text-lg font-semibold text-gray-900">Generate Creative Assets</h3>
-                                    <p className="mt-2 text-gray-600">Describe your product or service. Our AI instantly creates multiple variations of ad copy, images, and videos.</p>
+                                    <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">1</div>
+                                    <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Generate Creative Assets</h3>
+                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Describe your product or service. Our AI instantly creates multiple variations of ad copy, images, and videos.</p>
                                 </div>
                                 <div className="relative">
-                                    <div className="flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white text-xl font-bold">2</div>
-                                    <h3 className="mt-4 text-lg font-semibold text-gray-900">Connect Your Accounts</h3>
-                                    <p className="mt-2 text-gray-600">Securely link your Google Ads, Facebook, or other advertising platform accounts to Spectra.</p>
+                                    <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">2</div>
+                                    <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Connect Your Accounts</h3>
+                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Securely link your Google Ads, Facebook, or other advertising platform accounts to Spectra.</p>
                                 </div>
                                 <div className="relative">
-                                    <div className="flex items-center justify-center h-12 w-12 rounded-md bg-indigo-500 text-white text-xl font-bold">3</div>
-                                    <h3 className="mt-4 text-lg font-semibold text-gray-900">Deploy & Optimize</h3>
-                                    <p className="mt-2 text-gray-600">Our AI agents automatically deploy campaigns, test variations, and optimize performance 24/7.</p>
+                                    <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">3</div>
+                                    <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Deploy & Optimize</h3>
+                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Our AI agents automatically deploy campaigns, test variations, and optimize performance 24/7.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     {/* Features Section */}
-                    <div className="bg-gray-50 py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+                    <div className="bg-gray-50 py-12 sm:py-16 md:py-20 lg:py-24">
+                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center">
                                 <h2 className="text-base font-semibold leading-7 text-indigo-600">Deploy with Confidence</h2>
-                                <p className="mt-2 text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                                <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
                                     Everything you need to launch and optimize your ad campaigns
                                 </p>
-                                <p className="mt-6 text-lg leading-8 text-gray-600">
+                                <p className="mt-4 sm:mt-6 text-base sm:text-lg leading-8 text-gray-600">
                                     Our AI agents handle the heavy lifting, from creative generation to performance analysis, so you can focus on your business.
                                 </p>
                             </div>
-                            <div className="mx-auto mt-16 max-w-2xl sm:mt-20 lg:mt-24 lg:max-w-4xl">
-                                <dl className="grid max-w-xl grid-cols-1 gap-x-8 gap-y-10 lg:max-w-none lg:grid-cols-2 lg:gap-y-16">
+                            <div className="mx-auto mt-12 sm:mt-16 md:mt-20 lg:mt-24 max-w-2xl sm:max-w-none lg:max-w-4xl">
+                                <dl className="grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-8 sm:gap-y-10 lg:max-w-none lg:grid-cols-2 lg:gap-y-16\">
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
@@ -211,15 +211,15 @@ export default function Landing({ auth }) {
                     </div>
 
                     {/* Case Studies Section */}
-                    <div className="bg-white py-16 sm:py-24">
-                        <div className="mx-auto max-w-7xl px-6 lg:px-8">
+                    <div className="bg-white py-12 sm:py-16 md:py-20 lg:py-24">
+                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center">
-                                <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">From Our Customers</h2>
-                                <p className="mt-6 text-lg leading-8 text-gray-600">
+                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">From Our Customers</h2>
+                                <p className="mt-4 sm:mt-6 text-base sm:text-lg leading-8 text-gray-600">
                                     See how businesses like yours are succeeding with Spectra Media Agent.
                                 </p>
                             </div>
-                            <div className="mx-auto mt-16 grid max-w-2xl grid-cols-1 gap-8 text-sm leading-6 text-gray-900 sm:mt-20 sm:grid-cols-2 xl:mx-0 xl:max-w-none xl:grid-flow-col xl:grid-cols-3">
+                            <div className="mx-auto mt-12 sm:mt-16 md:mt-20 grid max-w-2xl grid-cols-1 gap-6 sm:gap-8 text-sm leading-6 text-gray-900 sm:grid-cols-2 xl:mx-0 xl:max-w-none xl:grid-cols-3\">
                                 <div className="relative rounded-2xl bg-gray-50 p-6 shadow-sm ring-1 ring-gray-900/5 hover:shadow-md transition-shadow">
                                     <div className="flex gap-1 mb-4">
                                         {[...Array(5)].map((_, i) => <span key={i} className="text-yellow-400">★</span>)}

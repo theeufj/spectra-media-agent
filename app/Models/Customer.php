@@ -22,6 +22,22 @@ class Customer extends Model
         'google_ads_customer_id',
         'facebook_ads_account_id',
         'facebook_ads_access_token',
+        'gtm_container_id',
+        'gtm_account_id',
+        'gtm_workspace_id',
+        'gtm_config',
+        'gtm_installed',
+        'gtm_last_verified',
+        'gtm_detected',
+        'gtm_detected_at',
+    ];
+
+    protected $casts = [
+        'gtm_config' => 'array',
+        'gtm_installed' => 'boolean',
+        'gtm_detected' => 'boolean',
+        'gtm_last_verified' => 'datetime',
+        'gtm_detected_at' => 'datetime',
     ];
 
     /**
