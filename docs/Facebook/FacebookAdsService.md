@@ -57,21 +57,48 @@ This is the most critical part. You will need to build a flow in your applicatio
 
 ### Step 4: Using the Service
 
-Once you have the user's Access Token, you can use the `FacebookAdsService`:
+Once you have the user's Access Token, the Facebook Ads services are **fully implemented** with real `Http::post`, `Http::get`, and `Http::put` calls to the Facebook Graph API.
 
+#### Available Services
+
+**CampaignService** - Manage campaigns:
 ```php
-// Example usage in a controller or job
-
-// 1. Retrieve the user's stored access token from your database.
-$accessToken = $user->facebook_access_token;
-$adAccountId = $user->facebook_ad_account_id; // You'll also need to get this from the user
-
-// 2. Instantiate the service with the token.
-$facebookService = new \App\Services\FacebookAdsService($accessToken);
-
-// 3. Call the methods to create the campaign.
-$campaignId = $facebookService->createCampaign($localCampaign, $adAccountId);
-// ... and so on for ad sets, creatives, and ads.
+$campaignService = new \App\Services\FacebookAds\CampaignService($customer);
+$campaigns = $campaignService->listCampaigns($accountId);
+$campaign = $campaignService->createCampaign($accountId, 'Campaign Name', 'LINK_CLICKS', 50000);
+$campaignService->pauseCampaign($accountId, $campaignId);
 ```
 
-This service is currently a placeholder. The next step in development would be to replace the placeholder logic with actual `Http::post` calls to the Facebook Graph API endpoints, using the access token for authorization.
+**AdSetService** - Manage ad sets and targeting:
+```php
+$adSetService = new \App\Services\FacebookAds\AdSetService($customer);
+$adSets = $adSetService->listAdSets($accountId);
+$adSet = $adSetService->createAdSet($accountId, $campaignId, 'Ad Set Name', $targeting, $dailyBudget);
+```
+
+**CreativeService** - Manage ad creatives:
+```php
+$creativeService = new \App\Services\FacebookAds\CreativeService($customer);
+$creative = $creativeService->createCreative($accountId, [
+    'title' => 'Ad Title',
+    'body' => 'Ad Description',
+    'image_url' => 'https://example.com/image.jpg'
+]);
+```
+
+**AdService** - Manage individual ads:
+```php
+$adService = new \App\Services\FacebookAds\AdService($customer);
+$ads = $adService->listAds($accountId);
+$ad = $adService->createAd($accountId, $adSetId, $creativeId, 'Ad Name');
+$adService->pauseAd($accountId, $adId);
+```
+
+**FacebookAdsOrchestrationService** - Complete campaign workflow:
+```php
+$orchestration = new \App\Services\FacebookAds\FacebookAdsOrchestrationService($customer);
+$result = $orchestration->createCompleteCampaign($accountId, $campaignConfig);
+// Returns: campaign_id, ad_set_id, creative_id, ad_id
+```
+
+All services include comprehensive error handling and structured logging for debugging.

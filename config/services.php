@@ -46,6 +46,12 @@ return [
         'gemini_api_key' => env('GOOGLE_GEMINI_API_KEY'),
     ],
 
+    'facebook' => [
+        'client_id' => env('FACEBOOK_APP_ID'),
+        'client_secret' => env('FACEBOOK_APP_SECRET'),
+        'redirect' => env('FACEBOOK_OAUTH_CALLBACK_URL'),
+    ],
+
     'stripe' => [
         'model' => App\Models\User::class,
         'key' => env('STRIPE_PUBLISHABLE_KEY'),

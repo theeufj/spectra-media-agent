@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Customer;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,18 @@ class RegisteredUserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($request->password),
         ]);
+
+        if ($request->invitation_token) {
+            $invitation = \App\Models\Invitation::where('token', $request->invitation_token)->first();
+            if ($invitation) {
+                $user->customers()->attach($invitation->customer_id, ['role' => $invitation->role]);
+                $invitation->delete();
+            }
+        } else {
+            // If the user is not coming from an invitation, create a new customer account for them.
+            $customer = Customer::create();
+            $user->customers()->attach($customer->id, ['role' => 'owner']);
+        }
 
         event(new Registered($user));
 

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LegalController;
 use Illuminate\Foundation\Application;
@@ -13,11 +14,9 @@ Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified', 'ensureUserHasCustomer'])->name('dashboard');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -119,6 +118,18 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');
 });
 
+Route::middleware(['auth'])->group(function () {
+    Route::post('/customers/switch/{customer}', [App\Http\Controllers\CustomerController::class, 'switch'])->name('customers.switch');
+    Route::get('/customers/create', [App\Http\Controllers\CustomerController::class, 'create'])->name('customers.create');
+    Route::post('/customers', [App\Http\Controllers\CustomerController::class, 'store'])->name('customers.store');
+});
+
+Route::middleware(['auth'])->group(function () {
+    Route::post('/customers/{customer}/invitations', [App\Http\Controllers\InvitationController::class, 'store'])->name('invitations.store');
+});
+
+Route::get('/invitations/accept/{token}', [App\Http\Controllers\InvitationController::class, 'accept'])->name('invitations.accept');
+
 /*
 |--------------------------------------------------------------------------
 | Ad Copy Routes
@@ -149,4 +160,83 @@ Route::middleware(['auth'])->group(function () {
 */
 Route::middleware(['auth:sanctum', 'verified'])->prefix('api')->group(function () {
     Route::get('/strategies/{strategy}/collateral', [App\Http\Controllers\CollateralController::class, 'getCollateralJson'])->name('api.collateral.show');
+    Route::get('/campaigns/{campaign}/performance', [App\Http\Controllers\CampaignController::class, 'performance'])->name('api.campaigns.performance');
+});
+
+Route::get('/test-email', function () {
+    Log::info('Attempting to send a test email...');
+    Log::info('Mail driver:', ['driver' => config('mail.default')]);
+    try {
+        Mail::to('theeufj@gmail.com')->send(new \App\Mail\WelcomeEmail('Josh'));
+        Log::info('Email sent successfully!');
+        return 'Email sent!';
+    } catch (Exception $e) {
+        Log::error('Failed to send email:', ['error' => $e->getMessage()]);
+        return 'Failed to send email. Check logs for details.';
+    }
+});
+
+Route::get('/test-campaign-deployed', function () {
+    $user = \App\Models\User::first();
+    $campaign = \App\Models\Campaign::first();
+
+    if (!$user || !$campaign) {
+        return 'Please create a user and a campaign first.';
+    }
+
+    Mail::to($user->email)->send(new \App\Mail\CampaignDeployed($user, $campaign));
+    return 'Campaign deployed email sent!';
+});
+
+Route::get('/test-videos-generated', function () {
+    $user = \App\Models\User::first();
+    $campaign = \App\Models\Campaign::first();
+
+    if (!$user || !$campaign) {
+        return 'Please create a user and a campaign first.';
+    }
+
+    Mail::to($user->email)->send(new \App\Mail\VideosGenerated($user, $campaign));
+    return 'Videos generated email sent!';
+});
+
+Route::get('/test-invoice-created', function () {
+    $user = \App\Models\User::first();
+
+    if (!$user) {
+        return 'Please create a user first.';
+    }
+
+    Mail::to($user->email)->send(new \App\Mail\InvoiceCreated($user, '29.99', now()->toFormattedDateString()));
+    return 'Invoice created email sent!';
+});
+
+Route::get('/test-admin-notification', function () {
+    $user = \App\Models\User::first();
+    if (!$user) {
+        return 'Please create a user first.';
+    }
+
+    $subject = 'Important Update Regarding Your Account';
+    $body = '<p>We are writing to inform you about an upcoming change to our service that will affect your account. Please log in to your dashboard to review the details.</p><p>Thank you for your understanding.</p>';
+
+    Mail::to($user->email)->send(new \App\Mail\AdminNotification($user, $subject, $body));
+    return 'Admin notification sent!';
+});
+
+/*
+|--------------------------------------------------------------------------
+| Admin Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
+    Route::get('dashboard', [App\Http\Controllers\AdminController::class, 'index'])->name('admin.dashboard');
+    Route::get('users', [App\Http\Controllers\AdminController::class, 'usersIndex'])->name('admin.users.index');
+    Route::get('customers', [App\Http\Controllers\AdminController::class, 'customersIndex'])->name('admin.customers.index');
+    Route::get('notifications', [App\Http\Controllers\AdminController::class, 'notificationsIndex'])->name('admin.notifications.index');
+    Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
+    Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
+    Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
+    Route::post('users/{user}/unban', [App\Http\Controllers\AdminController::class, 'unbanUser'])->name('admin.users.unban');
+    Route::post('notification', [App\Http\Controllers\AdminController::class, 'sendNotification'])->name('admin.notification.send');
 });

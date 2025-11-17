@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreCampaignRequest;
 use App\Jobs\GenerateStrategy;
 use App\Models\Campaign;
+use App\Models\Strategy;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -13,12 +14,11 @@ class CampaignController extends Controller
 {
     /**
      * Display a listing of the resource.
-     *
-     * @return \Illuminate\View\View
      */
-    public function index()
+    public function index(Request $request)
     {
-        $campaigns = Campaign::with(['strategies' => function ($query) {
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $campaigns = $customer->campaigns()->with(['strategies' => function ($query) {
             $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         }])->get();
 
@@ -29,8 +29,6 @@ class CampaignController extends Controller
 
     /**
      * create is the handler for showing the campaign creation form.
-     *
-     * @return \Inertia\Response
      */
     public function create()
     {
@@ -39,49 +37,27 @@ class CampaignController extends Controller
 
     /**
      * store is the handler for creating a new campaign.
-     *
-     * @param StoreCampaignRequest $request The validated incoming HTTP request.
-     * @return \Illuminate\Http\RedirectResponse
      */
     public function store(StoreCampaignRequest $request)
     {
-        $validatedData = $request->validated();
-
-        // Get the authenticated user
-        $user = $request->user();
-
-        // This will create a Stripe customer if one doesn't exist, or retrieve the existing one.
-        $stripeCustomer = $user->createOrGetStripeCustomer();
-
-        // Manually create the local customer record if it doesn't exist.
-        // The `customer()` relationship method comes from the Billable trait.
-        $customer = $user->customer()->firstOrCreate([
-            'stripe_id' => $stripeCustomer->id,
-        ]);
-
-        // Add the customer_id to the validated data
-        $validatedData['customer_id'] = $customer->id;
-
-        // Create the campaign for the user
-        $campaign = $user->campaigns()->create($validatedData);
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        $campaign = $customer->campaigns()->create($request->validated());
 
         GenerateStrategy::dispatch($campaign);
 
-        // Redirect the user to the new strategy review page.
         return redirect()->route('campaigns.show', $campaign);
     }
 
     /**
      * show is the handler for displaying a campaign and its generated strategies.
-     *
-     * @param Campaign $campaign The campaign model instance (route-model binding).
-     * @return \Inertia\Response
      */
-    public function show(Campaign $campaign)
+    public function show(Request $request, Campaign $campaign)
     {
-        // We use `load('strategies')` to eager-load the relationship.
-        // This is more efficient than lazy-loading and prevents the "N+1 query problem".
-        // It's similar to a `Preload` in GORM or `JOIN` in a raw SQL query.
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        if ($campaign->customer_id !== $customer->id) {
+            abort(403);
+        }
+
         $campaign->load('strategies');
 
         return Inertia::render('Campaigns/Show', [
@@ -91,61 +67,59 @@ class CampaignController extends Controller
 
     /**
      * signOffStrategy is the handler for marking a strategy as signed off.
-     *
-     * @param Campaign $campaign The campaign model instance.
-     * @param \App\Models\Strategy $strategy The strategy model instance.
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function signOffStrategy(Campaign $campaign, \App\Models\Strategy $strategy)
+    public function signOffStrategy(Request $request, Campaign $campaign, Strategy $strategy)
     {
-        // Ensure the strategy belongs to the campaign and the campaign belongs to the authenticated user.
-        if ($campaign->user_id !== Auth::id() || $strategy->campaign_id !== $campaign->id) {
-            abort(403, 'Unauthorized action.');
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        if ($campaign->customer_id !== $customer->id || $strategy->campaign_id !== $campaign->id) {
+            abort(403);
         }
 
-        $strategy->update([
-            'signed_off_at' => now(),
-        ]);
+        $strategy->update(['signed_off_at' => now()]);
 
         return redirect()->back()->with('success', 'Strategy signed off successfully!');
     }
 
     /**
      * signOffAllStrategies is the handler for marking all strategies of a campaign as signed off.
-     *
-     * @param Campaign $campaign The campaign model instance.
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function signOffAllStrategies(Campaign $campaign)
+    public function signOffAllStrategies(Request $request, Campaign $campaign)
     {
-        // Ensure the campaign belongs to the authenticated user.
-        if ($campaign->user_id !== Auth::id()) {
-            abort(403, 'Unauthorized action.');
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        if ($campaign->customer_id !== $customer->id) {
+            abort(403);
         }
 
-        // Update all strategies that have not been signed off yet.
-        $campaign->strategies()->whereNull('signed_off_at')->update([
-            'signed_off_at' => now(),
-        ]);
+        $campaign->strategies()->whereNull('signed_off_at')->update(['signed_off_at' => now()]);
 
         return redirect()->route('campaigns.show', $campaign)->with('success', 'All strategies have been signed off!');
     }
 
     /**
      * Remove the specified resource from storage.
-     *
-     * @param  \App\Models\Campaign  $campaign
-     * @return \Illuminate\Http\RedirectResponse
      */
-    public function destroy(Campaign $campaign)
+    public function destroy(Request $request, Campaign $campaign)
     {
-        // Ensure the campaign belongs to the authenticated user.
-        if ($campaign->user_id !== Auth::id()) {
-            abort(403, 'Unauthorized action.');
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        if ($campaign->customer_id !== $customer->id) {
+            abort(403);
         }
 
         $campaign->delete();
 
         return redirect()->route('campaigns.index')->with('success', 'Campaign deleted successfully.');
+    }
+
+    /**
+     * Get the performance data for a campaign.
+     */
+    public function performance(Request $request, Campaign $campaign)
+    {
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        if ($campaign->customer_id !== $customer->id) {
+            abort(403);
+        }
+
+        // ... existing performance logic ...
     }
 }

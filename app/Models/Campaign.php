@@ -16,7 +16,6 @@ class Campaign extends Model
      * @var array<int, string>
      */
     protected $fillable = [
-        'user_id',
         'customer_id',
         'name',
         'reason',
@@ -31,7 +30,17 @@ class Campaign extends Model
         'product_focus',
         'landing_page_url',
         'exclusions',
+        'google_ads_campaign_id',
+        'facebook_ads_campaign_id',
     ];
+
+    /**
+     * Get the customer that owns the campaign.
+     */
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
+    }
 
     /**
      * A Campaign has many Strategies.

@@ -11,8 +11,32 @@ class Customer extends Model
 
     protected $fillable = [
         'name',
-        'user_id',
+        'business_type',
+        'description',
+        'country',
+        'timezone',
+        'currency_code',
+        'website',
+        'phone',
         'google_ads_refresh_token',
         'google_ads_customer_id',
+        'facebook_ads_account_id',
+        'facebook_ads_access_token',
     ];
+
+    /**
+     * The users that belong to the customer.
+     */
+    public function users()
+    {
+        return $this->belongsToMany(User::class)->withPivot('role');
+    }
+
+    /**
+     * Get the campaigns for the customer.
+     */
+    public function campaigns()
+    {
+        return $this->hasMany(Campaign::class);
+    }
 }

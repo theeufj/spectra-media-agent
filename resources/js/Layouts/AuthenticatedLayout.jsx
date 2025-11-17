@@ -3,6 +3,7 @@ import ApplicationLogo from '@/Components/ApplicationLogo';
 import Dropdown from '@/Components/Dropdown';
 import NavLink from '@/Components/NavLink';
 import ResponsiveNavLink from '@/Components/ResponsiveNavLink';
+import CustomerSwitcher from '@/Components/CustomerSwitcher';
 import { Link, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
@@ -70,10 +71,16 @@ export default function AuthenticatedLayout({ header, children }) {
                                         </Dropdown.Content>
                                     </Dropdown>
                                 </div>
+                                {user.isAdmin && (
+                                    <NavLink href={route('admin.dashboard')} active={route().current('admin.dashboard')}>
+                                        Admin
+                                    </NavLink>
+                                )}
                             </div>
                         </div>
 
                         <div className="hidden sm:flex sm:items-center sm:ms-6">
+                            <CustomerSwitcher />
                             <div className="relative ms-3">
                                 <Dropdown>
                                     <Dropdown.Trigger>
@@ -210,6 +217,11 @@ export default function AuthenticatedLayout({ header, children }) {
                             <ResponsiveNavLink href={route('subscription.portal')}>
                                 Billing
                             </ResponsiveNavLink>
+                            {user.isAdmin && (
+                                <ResponsiveNavLink href={route('admin.dashboard')}>
+                                    Admin
+                                </ResponsiveNavLink>
+                            )}
                             <ResponsiveNavLink
                                 method="post"
                                 href={route('logout')}

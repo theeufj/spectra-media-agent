@@ -14,9 +14,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // ... existing schedule ...
-
         $schedule->command('billing:report-ad-spend')->daily();
+        $schedule->command('campaign:fetch-performance-data')->hourly();
     }
 
     /**

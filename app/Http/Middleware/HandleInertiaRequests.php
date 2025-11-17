@@ -31,6 +31,13 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
+        if ($user && !$request->session()->has('active_customer_id') && $user->customers->isNotEmpty()) {
+            $request->session()->put('active_customer_id', $user->customers->first()->id);
+        }
+
+        $activeCustomerId = $request->session()->get('active_customer_id');
+        $activeCustomer = $user ? $user->customers()->find($activeCustomerId) : null;
+
         return [
             ...parent::share($request),
             'auth' => [
@@ -39,6 +46,15 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     'subscription_plan' => $user->subscription_plan,
+                    'isAdmin' => $user->hasRole('admin'),
+                    'customers' => $user->customers->map(function ($customer) {
+                        return [
+                            'id' => $customer->id,
+                            'name' => $customer->name,
+                            'role' => $customer->pivot->role,
+                        ];
+                    }),
+                    'active_customer' => $activeCustomer,
                 ] : null,
             ],
             'flash' => [

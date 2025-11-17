@@ -6,7 +6,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Cashier\Billable; // Import the Billable trait provided by Laravel Cashier.
+use Laravel\Cashier\Billable;
+use App\Mail\InvoiceCreated;
 
 class User extends Authenticatable
 {
@@ -55,22 +56,17 @@ class User extends Authenticatable
         return $this->hasMany(Connection::class);
     }
 
-    public function campaigns()
-    {
-        return $this->hasMany(Campaign::class);
-    }
-
     public function knowledgeBases()
     {
         return $this->hasMany(KnowledgeBase::class);
     }
 
     /**
-     * Get the customer record associated with the user.
+     * The customers that the user belongs to.
      */
-    public function customer()
+    public function customers()
     {
-        return $this->hasOne(Customer::class);
+        return $this->belongsToMany(Customer::class)->withPivot('role');
     }
 
     /**
@@ -87,6 +83,41 @@ class User extends Authenticatable
         }
 
         return 'Free';
+    }
+
+    public function sendInvoice(Invoice $invoice)
+    {
+        Mail::to($this->email)->send(new InvoiceCreated($this, $invoice->total(), $invoice->date()->toFormattedDateString()));
+    }
+
+    /**
+     * The roles that belong to the user.
+     */
+    public function roles()
+    {
+        return $this->belongsToMany(Role::class);
+    }
+
+    /**
+     * Check if the user has a specific role.
+     *
+     * @param string $roleName
+     * @return bool
+     */
+    public function hasRole(string $roleName): bool
+    {
+        return $this->roles()->where('name', $roleName)->exists();
+    }
+
+    /**
+     * Check if the user is an owner of a specific customer.
+     *
+     * @param Customer $customer
+     * @return bool
+     */
+    public function isOwnerOf(Customer $customer): bool
+    {
+        return $this->customers()->where('customer_id', $customer->id)->wherePivot('role', 'owner')->exists();
     }
 }
 
