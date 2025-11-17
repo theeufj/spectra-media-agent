@@ -1,76 +1,87 @@
 import React from 'react';
-import { Head, Link } from '@inertiajs/react';
+import { Head } from '@inertiajs/react';
+import Header from '@/Components/Header';
+import Footer from '@/Components/Footer';
 
-export default function Privacy() {
+export default function Privacy({ auth }) {
     return (
         <>
             <Head title="Privacy Policy" />
-            <div className="font-sans text-gray-900 antialiased">
-                <div className="pt-4 bg-gray-100">
-                    <div className="min-h-screen flex flex-col items-center pt-6 sm:pt-0">
-                        <div className="w-full sm:max-w-4xl mt-6 p-6 bg-white shadow-md overflow-hidden sm:rounded-lg prose lg:prose-xl">
-                            <h1>Privacy Policy</h1>
-                            <p>Last updated: November 16, 2025</p>
+            <div className="min-h-screen flex flex-col bg-gray-50">
+                <Header auth={auth} />
+                
+                <div className="flex-1 font-sans text-gray-900 antialiased">
+                    <div className="pt-4 bg-gray-100">
+                        <div className="min-h-screen flex flex-col items-center pt-6 sm:pt-0">
+                            <div className="w-full sm:max-w-4xl mt-6 p-8 bg-white shadow-md overflow-hidden sm:rounded-lg">
+                                <h1 className="text-3xl lg:text-4xl font-bold text-gray-800">Privacy Policy</h1>
+                                <p className="mt-2 text-sm text-gray-500">Last updated: November 17, 2025</p>
 
-                            <p>Spectra Media Agent ("us", "we", or "our") operates the Spectra Media Agent application (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.</p>
-                            <p>We use your data to provide and improve the Service. By using the Service, you agree to the collection and use of information in accordance with this policy.</p>
-                            <p className="font-bold text-red-600">Disclaimer: This is a template and not legal advice. You should consult with a legal professional to ensure this policy meets your specific needs and complies with all applicable laws.</p>
+                                <div className="mt-8 space-y-6 text-gray-700 leading-relaxed">
+                                <p>cvseeyou ("us", "we", or "our") operates the cvseeyou application (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.</p>
+                                <p>We use your data to provide and improve the Service. By using the Service, you agree to the collection and use of information in accordance with this policy.</p>
 
-                            <h2>Information Collection and Use</h2>
-                            <p>We collect several different types of information for various purposes to provide and improve our Service to you.</p>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Information Collection and Use</h2>
+                                <p>We collect several different types of information for various purposes to provide and improve our Service to you.</p>
 
-                            <h3>Types of Data Collected</h3>
-                            <h4>Personal Data</h4>
-                            <p>While using our Service, we may ask you to provide us with certain personally identifiable information that can be used to contact or identify you ("Personal Data"). Personally identifiable information may include, but is not limited to:</p>
-                            <ul>
-                                <li>Email address</li>
-                                <li>First name and last name</li>
-                                <li>Payment information (handled by our third-party payment processor, Stripe)</li>
-                                <li>Usage Data</li>
-                            </ul>
+                                <h3 className="text-xl lg:text-2xl font-bold text-gray-800">Types of Data Collected</h3>
+                                
+                                <h4 className="text-lg lg:text-xl font-semibold text-gray-800">Personal Data</h4>
+                                <p>While using our Service, we may ask you to provide us with certain personally identifiable information that can be used to contact or identify you ("Personal Data"). Personally identifiable information may include, but is not limited to:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li>Email address</li>
+                                    <li>First name and last name</li>
+                                    <li>Payment information (handled by our third-party payment processor, Stripe)</li>
+                                    <li>Usage Data</li>
+                                </ul>
 
-                            <h4>Usage Data</h4>
-                            <p>We may also collect information on how the Service is accessed and used ("Usage Data"). This Usage Data may include information such as your computer's Internet Protocol address (e.g. IP address), browser type, browser version, the pages of our Service that you visit, the time and date of your visit, the time spent on those pages, unique device identifiers and other diagnostic data.</p>
-                            
-                            <h4>Campaign Data</h4>
-                            <p>To provide our Service, we collect and store the data you provide for your marketing campaigns, including but not limited to: campaign goals, target market information, product details, and the creative collateral (ad copy, images, videos) generated by our AI.</p>
+                                <h4 className="text-lg lg:text-xl font-semibold text-gray-800 mt-4">Usage Data</h4>
+                                <p>We may also collect information on how the Service is accessed and used ("Usage Data"). This Usage Data may include information such as your computer's Internet Protocol address (e.g. IP address), browser type, browser version, the pages of our Service that you visit, the time and date of your visit, the time spent on those pages, unique device identifiers and other diagnostic data.</p>
+                                
+                                <h4 className="text-lg lg:text-xl font-semibold text-gray-800 mt-4">Campaign Data</h4>
+                                <p>To provide our Service, we collect and store the data you provide for your marketing campaigns, including but not limited to: campaign goals, target market information, product details, and the creative collateral (ad copy, images, videos) generated by our AI.</p>
 
-                            <h2>Use of Data</h2>
-                            <p>Spectra Media Agent uses the collected data for various purposes:</p>
-                            <ul>
-                                <li>To provide and maintain the Service</li>
-                                <li>To notify you about changes to our Service</li>
-                                <li>To allow you to participate in interactive features of our Service when you choose to do so</li>
-                                <li>To provide customer care and support</li>
-                                <li>To provide analysis or valuable information so that we can improve the Service</li>
-                                <li>To monitor the usage of the Service</li>
-                                <li>To detect, prevent and address technical issues</li>
-                                <li>To process your payments and manage your subscription</li>
-                            </ul>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Use of Data</h2>
+                                <p>Spectra Media Agent uses the collected data for various purposes:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li>To provide and maintain the Service</li>
+                                    <li>To notify you about changes to our Service</li>
+                                    <li>To allow you to participate in interactive features of our Service when you choose to do so</li>
+                                    <li>To provide customer care and support</li>
+                                    <li>To provide analysis or valuable information so that we can improve the Service</li>
+                                    <li>To monitor the usage of the Service</li>
+                                    <li>To detect, prevent and address technical issues</li>
+                                    <li>To process your payments and manage your subscription</li>
+                                </ul>
 
-                            <h2>Data Storage and Security</h2>
-                            <p>The security of your data is important to us, but remember that no method of transmission over the Internet, or method of electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your Personal Data, we cannot guarantee its absolute security.</p>
-                            <p>Your campaign data and generated collateral are stored securely on our servers and on third-party cloud storage providers (e.g., Amazon S3). We take reasonable measures to protect this data from unauthorized access.</p>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Data Storage and Security</h2>
+                                <p>The security of your data is important to us, but remember that no method of transmission over the Internet, or method of electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your Personal Data, we cannot guarantee its absolute security.</p>
+                                <p>Your campaign data and generated collateral are stored securely on our servers and on third-party cloud storage providers (e.g., Amazon S3). We take reasonable measures to protect this data from unauthorized access.</p>
 
-                            <h2>Third-Party Services</h2>
-                            <p>We may employ third-party companies and individuals to facilitate our Service ("Service Providers"), to provide the Service on our behalf, to perform Service-related services or to assist us in analyzing how our Service is used.</p>
-                            <ul>
-                                <li><strong>Payment Processor:</strong> We use Stripe for payment, analytics, and other business services. Stripe collects identifying information about the devices that connect to its services. Stripe uses this information to operate and improve the services it provides to us, including for fraud detection. You can learn more about Stripe and read its privacy policy at <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">stripe.com/privacy</a>.</li>
-                                <li><strong>AI Service Providers:</strong> We use third-party AI models (e.g., Google's Gemini) to generate creative content. The prompts and strategies you provide are sent to these services for processing.</li>
-                            </ul>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Third-Party Services</h2>
+                                <p>We may employ third-party companies and individuals to facilitate our Service ("Service Providers"), to provide the Service on our behalf, to perform Service-related services or to assist us in analyzing how our Service is used.</p>
+                                <ul className="space-y-4">
+                                    <li><strong className="font-semibold text-gray-800">Payment Processor:</strong> We use Stripe for payment, analytics, and other business services. Stripe collects identifying information about the devices that connect to its services. Stripe uses this information to operate and improve the services it provides to us, including for fraud detection. You can learn more about Stripe and read its privacy policy at <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">stripe.com/privacy</a>.</li>
+                                    <li><strong className="font-semibold text-gray-800">AI Service Providers:</strong> We use third-party AI models (e.g., Google's Gemini) to generate creative content. The prompts and strategies you provide are sent to these services for processing.</li>
+                                    <li><strong className="font-semibold text-gray-800">Advertising Platforms:</strong> We integrate with advertising platforms including Google Ads, Facebook/Meta Ads, and Reddit Ads to help you manage and deploy your campaigns. Campaign data and creative assets you provide may be shared with these platforms as necessary to execute your campaigns. Please review their respective privacy policies for more information: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Privacy Policy</a>, <a href="https://www.facebook.com/privacy/explanation" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Meta Privacy Policy</a>, and <a href="https://www.reddit.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Reddit Privacy Policy</a>.</li>
+                                </ul>
 
-                            <h2>Changes to This Privacy Policy</h2>
-                            <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
-                            <p>You are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.</p>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Changes to This Privacy Policy</h2>
+                                <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
+                                <p>You are advised to review this Privacy Policy periodically for any changes. Changes to this Privacy Policy are effective when they are posted on this page.</p>
 
-                            <h2>Contact Us</h2>
-                            <p>If you have any questions about this Privacy Policy, please contact us:</p>
-                            <ul>
-                                <li>By email: [Your Contact Email]</li>
-                            </ul>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Contact Us</h2>
+                                <p>If you have any questions about this Privacy Policy, please contact us:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li>By email: support@cvseeyou.com</li>
+                                </ul>
+                            </div>
+                            </div>
                         </div>
                     </div>
                 </div>
+                
+                <Footer />
             </div>
         </>
     );

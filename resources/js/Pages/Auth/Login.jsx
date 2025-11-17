@@ -28,7 +28,7 @@ export default function Login({ status }) {
                     Here, it's styled to look like a button.
                 */}
                 <a
-                    href={route('login.google.redirect')} // `route()` is a helper function to generate URLs from named Laravel routes.
+                    href={route('google.redirect')} // `route()` is a helper function to generate URLs from named Laravel routes.
                     className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                 >
                     {/* Simple SVG for the Google logo */}
