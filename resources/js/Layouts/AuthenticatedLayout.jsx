@@ -10,6 +10,7 @@ import { useState } from 'react';
 export default function AuthenticatedLayout({ header, children }) {
     const { flash } = usePage().props;
     const user = usePage().props.auth.user;
+    const activeCustomer = user.active_customer;
 
     const [showingNavigationDropdown, setShowingNavigationDropdown] =
         useState(false);
@@ -34,6 +35,17 @@ export default function AuthenticatedLayout({ header, children }) {
                                 <NavLink href={route('knowledge-base.index')} active={route().current('knowledge-base.*')}>
                                     Knowledge Base
                                 </NavLink>
+                                <NavLink href={route('brand-guidelines.index')} active={route().current('brand-guidelines.*')}>
+                                    Brand Guidelines
+                                </NavLink>
+                                {activeCustomer && (
+                                    <NavLink 
+                                        href={route('customers.gtm.setup', activeCustomer.id)} 
+                                        active={route().current('customers.gtm.*')}
+                                    >
+                                        GTM Setup
+                                    </NavLink>
+                                )}
                                 <NavLink href={route('subscription.portal')} active={route().current('subscription.portal')}>
                                     Billing
                                 </NavLink>
@@ -113,6 +125,13 @@ export default function AuthenticatedLayout({ header, children }) {
                                         >
                                             Profile
                                         </Dropdown.Link>
+                                        {activeCustomer && (
+                                            <Dropdown.Link
+                                                href={route('customers.edit', activeCustomer.id)}
+                                            >
+                                                Customer Settings
+                                            </Dropdown.Link>
+                                        )}
                                         <Dropdown.Link
                                             href={route('subscription.pricing')}
                                         >
@@ -193,6 +212,20 @@ export default function AuthenticatedLayout({ header, children }) {
                             Knowledge Base
                         </ResponsiveNavLink>
                         <ResponsiveNavLink
+                            href={route('brand-guidelines.index')}
+                            active={route().current('brand-guidelines.*')}
+                        >
+                            Brand Guidelines
+                        </ResponsiveNavLink>
+                        {activeCustomer && (
+                            <ResponsiveNavLink
+                                href={route('customers.gtm.setup', activeCustomer.id)}
+                                active={route().current('customers.gtm.*')}
+                            >
+                                GTM Setup
+                            </ResponsiveNavLink>
+                        )}
+                        <ResponsiveNavLink
                             href={route('campaigns.create')}
                             active={route().current('campaigns.create')}
                         >
@@ -214,6 +247,11 @@ export default function AuthenticatedLayout({ header, children }) {
                             <ResponsiveNavLink href={route('profile.edit')}>
                                 Profile
                             </ResponsiveNavLink>
+                            {activeCustomer && (
+                                <ResponsiveNavLink href={route('customers.edit', activeCustomer.id)}>
+                                    Customer Settings
+                                </ResponsiveNavLink>
+                            )}
                             <ResponsiveNavLink href={route('subscription.portal')}>
                                 Billing
                             </ResponsiveNavLink>

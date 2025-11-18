@@ -55,4 +55,12 @@ class Customer extends Model
     {
         return $this->hasMany(Campaign::class);
     }
+
+    /**
+     * Get the brand guideline for the customer.
+     */
+    public function brandGuideline()
+    {
+        return $this->hasOne(BrandGuideline::class);
+    }
 }

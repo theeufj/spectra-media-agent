@@ -7,6 +7,7 @@ use App\Models\KnowledgeBase;
 use App\Models\User;
 use App\Prompts\ChunkingPrompt;
 use App\Services\GeminiService;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -20,7 +21,7 @@ use Symfony\Component\DomCrawler\Crawler;
 
 class CrawlPage implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * @var \App\Models\User
@@ -56,6 +57,12 @@ class CrawlPage implements ShouldQueue
      */
     public function handle(): void
     {
+        // Check if the batch has been cancelled
+        if ($this->batch()?->cancelled()) {
+            Log::info("CrawlPage: Batch cancelled, skipping URL: {$this->url}");
+            return;
+        }
+        
         try {
             // Step 1: Use a headless browser to get the fully rendered HTML.
             // This executes the JavaScript on the page, just like a real browser.

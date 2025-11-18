@@ -121,7 +121,7 @@ class AdminMonitorService
         $finalReview = [
             'programmatic_validation' => $validationResults,
             'gemini_feedback' => $geminiFeedback,
-            'overall_status' => ($validationResults['is_valid'] && ($geminiFeedback['overall_score'] ?? 0) > 50) ? 'approved' : 'needs_revision',
+            'overall_status' => ($validationResults['is_valid'] && ($geminiFeedback['overall_score'] ?? 0) > 75) ? 'approved' : 'needs_revision',
         ];
 
         Log::info("AdminMonitorService: Final review for AdCopy ID {$adCopy->id}.", $finalReview);

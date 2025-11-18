@@ -111,6 +111,11 @@ class ScrapeCustomerWebsite implements ShouldQueue
                     'customer_id' => $this->customer->id,
                 ]);
             }
+            
+            // Note: Brand guideline extraction will be triggered automatically
+            // after CrawlSitemap batch completes and populates the knowledge base.
+            // See CrawlSitemap job for batch completion callback.
+            
         } catch (\Exception $e) {
             Log::error('Error during website scrape and GTM detection', [
                 'customer_id' => $this->customer->id,

@@ -50,13 +50,19 @@ class GenerateStrategy implements ShouldQueue
                 return;
             }
 
+            // Step 1.25: Fetch brand guidelines if available
+            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            if (!$brandGuidelines) {
+                Log::warning("No brand guidelines found for customer ID: {$this->campaign->user->customer->id}");
+            }
+
             // Step 1.5: Gather any pending recommendations.
             $recommendations = Recommendation::where('campaign_id', $this->campaign->id)
                 ->where('status', 'pending')
                 ->get();
 
             // Step 2: Construct the prompt using our dedicated prompt builder class.
-            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray());
+            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray(), $brandGuidelines);
 
             // Step 3: Call the Google Gemini API.
             $apiKey = config('services.google.gemini_api_key');
@@ -68,7 +74,7 @@ class GenerateStrategy implements ShouldQueue
             
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
-            ])->timeout(300)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key="+$apiKey, [
+            ])->timeout(300)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=".$apiKey, [
                 'systemInstruction' => [
                     'parts' => [
                         [

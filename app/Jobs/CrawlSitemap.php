@@ -3,12 +3,15 @@
 namespace App\Jobs;
 
 // importing the relvant classes
+use App\Models\Customer;
 use App\Models\User;
+use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Spatie\Sitemap\SitemapIndex;
@@ -89,10 +92,46 @@ class CrawlSitemap implements ShouldQueue
             elseif (isset($xml->url)) {
                 Log::info("CrawlSitemap: Detected regular sitemap.");
                 Log::info("CrawlSitemap: Found " . count($xml->url) . " URLs in sitemap.");
+                
+                // Collect all CrawlPage jobs
+                $jobs = [];
                 foreach ($xml->url as $url) {
                     $loc = (string)$url->loc;
-                    Log::info("CrawlSitemap: Dispatching CrawlPage job for URL: {$loc}");
-                    CrawlPage::dispatch($this->user, $loc, $this->customerId);
+                    Log::info("CrawlSitemap: Adding CrawlPage job for URL: {$loc}");
+                    $jobs[] = new CrawlPage($this->user, $loc, $this->customerId);
+                }
+                
+                // Dispatch as a batch with completion callback
+                if (!empty($jobs)) {
+                    $customer = Customer::find($this->customerId);
+                    
+                    $batch = Bus::batch($jobs)
+                        ->name("Crawl Sitemap: {$this->sitemapUrl}")
+                        ->then(function (Batch $batch) use ($customer) {
+                            if ($customer) {
+                                Log::info("CrawlSitemap batch completed. Dispatching brand extraction.", [
+                                    'customer_id' => $customer->id,
+                                    'batch_id' => $batch->id,
+                                    'total_jobs' => $batch->totalJobs,
+                                    'processed_jobs' => $batch->processedJobs(),
+                                ]);
+                                
+                                // Dispatch brand guideline extraction now that knowledge base is populated
+                                ExtractBrandGuidelines::dispatch($customer);
+                            }
+                        })
+                        ->catch(function (Batch $batch, \Throwable $e) {
+                            Log::error("CrawlSitemap batch failed.", [
+                                'batch_id' => $batch->id,
+                                'error' => $e->getMessage(),
+                            ]);
+                        })
+                        ->allowFailures()
+                        ->dispatch();
+                    
+                    Log::info("CrawlSitemap: Dispatched batch of {$batch->totalJobs} jobs.", [
+                        'batch_id' => $batch->id,
+                    ]);
                 }
             } else {
                 Log::warning("CrawlSitemap: Could not find <sitemap> or <url> tags in the sitemap: {$this->sitemapUrl}");

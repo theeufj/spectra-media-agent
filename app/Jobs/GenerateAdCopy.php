@@ -60,6 +60,13 @@ class GenerateAdCopy implements ShouldQueue
             $geminiService = new GeminiService();
             $adminMonitorService = new AdminMonitorService($geminiService);
 
+            // Get brand guidelines for this customer
+            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            
+            if (!$brandGuidelines) {
+                Log::warning("No brand guidelines found for customer {$this->campaign->user->customer->id}. Content may lack brand consistency.");
+            }
+
             $strategyContent = $this->strategy->ad_copy_strategy;
             $maxAttempts = 3;
             $approvedAdCopyData = null;
@@ -72,8 +79,14 @@ class GenerateAdCopy implements ShouldQueue
                 $rules = AdminMonitorService::getRulesForPlatform($this->platform);
                 Log::info("Fetched platform rules for {$this->platform}.", ['rules' => $rules]);
 
-                // Pass feedback and rules into the prompt.
-                $adCopyPrompt = (new AdCopyPrompt($strategyContent, $this->platform, $rules, $lastFeedback))->getPrompt();
+                // Pass feedback, rules, and brand guidelines into the prompt.
+                $adCopyPrompt = (new AdCopyPrompt(
+                    $strategyContent,
+                    $this->platform,
+                    $rules,
+                    $lastFeedback,
+                    $brandGuidelines
+                ))->getPrompt();
                 $generatedResponse = $geminiService->generateContent('gemini-2.5-pro', $adCopyPrompt);
                 Log::info("Received raw response from Gemini for attempt {$attempt}.", ['response' => $generatedResponse]);
 

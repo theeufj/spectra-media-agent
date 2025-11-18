@@ -3,7 +3,9 @@
 namespace App\Prompts;
 
 use App\Models\Campaign;
+use App\Models\BrandGuideline;
 use App\Models\User;
+use Illuminate\Support\Facades\Log;
 
 /**
  * StrategyPrompt is a dedicated class responsible for constructing the prompt
@@ -23,10 +25,20 @@ class StrategyPrompt
      *
      * @param Campaign $campaign The campaign containing the marketing brief.
      * @param string $knowledgeBaseContent The compiled content from the user's website.
+     * @param array $recommendations Array of optimization recommendations.
+     * @param BrandGuideline|null $brandGuidelines The brand guidelines if available.
      * @return string The fully constructed prompt.
      */
-    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = []): string
+    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null): string
     {
+        $brandContext = self::formatBrandContext($brandGuidelines);
+        
+        if ($brandGuidelines) {
+            Log::info("StrategyPrompt: Using brand guidelines for customer ID: {$brandGuidelines->customer_id}");
+        } else {
+            Log::info("StrategyPrompt: No brand guidelines available - using generic approach");
+        }
+
         $recommendationsPrompt = "";
         if (!empty($recommendations)) {
             $recommendationsJson = json_encode($recommendations, JSON_PRETTY_PRINT);
@@ -44,9 +56,9 @@ PROMPT;
         // Here, we use a HEREDOC string (`<<<PROMPT`) for a clean, multi-line prompt.
         // This is similar to using backticks for multi-line strings in Go.
         return <<<PROMPT
-You are an expert digital marketing strategist. Your task is to generate a comprehensive, platform-specific marketing strategy based on the provided campaign brief and knowledge base.
+You are an expert digital marketing strategist. Your task is to generate a comprehensive, platform-specific marketing strategy based on the provided campaign brief, knowledge base, and brand guidelines.
 
-**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
+{$brandContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
 Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "bidding_strategy", and "revenue_cpa_multiple".
@@ -119,5 +131,60 @@ This is the specific goal for the marketing campaign.
 
 Based on all the information above, generate the JSON object containing the platform-specific strategies for Facebook Ads, Google Ads (SEM), TikTok Ads, Reddit Ads, and Microsoft Advertising.
 PROMPT;
+    }
+
+    /**
+     * Format brand guidelines into a context string for the prompt.
+     *
+     * @param BrandGuideline|null $brandGuidelines
+     * @return string
+     */
+    private static function formatBrandContext(?BrandGuideline $brandGuidelines): string
+    {
+        if (!$brandGuidelines) {
+            return '';
+        }
+
+        $brandVoice = $brandGuidelines->getFormattedBrandVoice();
+        $usps = $brandGuidelines->getFormattedUSPs();
+        $targetAudience = $brandGuidelines->getFormattedTargetAudience();
+        $colorPalette = $brandGuidelines->getFormattedColorPalette();
+        
+        $competitorDiff = $brandGuidelines->competitor_differentiation;
+        $diffPoints = isset($competitorDiff['differentiation_points']) 
+            ? implode("\n- ", $competitorDiff['differentiation_points']) 
+            : 'Not specified';
+        
+        $themes = $brandGuidelines->messaging_themes;
+        $primaryThemes = isset($themes['primary_themes']) 
+            ? implode(', ', $themes['primary_themes']) 
+            : 'Not specified';
+        
+        $doNotUse = $brandGuidelines->do_not_use ? implode(', ', $brandGuidelines->do_not_use) : 'None specified';
+        
+        return <<<BRAND
+**BRAND GUIDELINES - CRITICAL CONTEXT:**
+
+{$brandVoice}
+
+{$usps}
+
+{$targetAudience}
+
+{$colorPalette}
+
+**Competitor Differentiation:**
+- {$diffPoints}
+**Competitive Advantage:** {$competitorDiff['competitive_advantage']}
+
+**Key Messaging Themes:** {$primaryThemes}
+**Emotional Appeal:** {$themes['emotional_appeal']}
+**Proof Points:** {$themes['proof_points']}
+
+**DO NOT USE:** {$doNotUse}
+
+---
+
+BRAND;
     }
 }

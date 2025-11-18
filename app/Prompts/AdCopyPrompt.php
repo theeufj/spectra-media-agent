@@ -2,6 +2,7 @@
 
 namespace App\Prompts;
 
+use App\Models\BrandGuideline;
 use Illuminate\Support\Facades\Log;
 
 class AdCopyPrompt
@@ -10,20 +11,33 @@ class AdCopyPrompt
     private string $platform;
     private ?array $rules;
     private ?array $feedback;
+    private ?BrandGuideline $brandGuidelines;
 
-    public function __construct(string $strategyContent, string $platform, ?array $rules = null, ?array $feedback = null)
-    {
+    public function __construct(
+        string $strategyContent,
+        string $platform,
+        ?array $rules = null,
+        ?array $feedback = null,
+        ?BrandGuideline $brandGuidelines = null
+    ) {
         $this->strategyContent = $strategyContent;
         $this->platform = $platform;
         $this->rules = $rules ?? [];
         $this->feedback = $feedback ?? [];
+        $this->brandGuidelines = $brandGuidelines;
     }
 
     public function getPrompt(): string
     {
         $rulesString = !empty($this->rules) ? json_encode($this->rules, JSON_PRETTY_PRINT) : 'No specific rules provided.';
 
-        $basePrompt = "You are an expert copywriter. Based on the following marketing strategy and platform rules for {$this->platform}, generate dynamic ad copy.\n\n" .
+        // Include brand guidelines if available
+        $brandContext = $this->brandGuidelines
+            ? $this->formatBrandContext()
+            : "**BRAND GUIDELINES:** Not available. Use professional, engaging tone suitable for {$this->platform}.";
+
+        $basePrompt = "You are an expert copywriter specializing in {$this->platform} advertising.\n\n" .
+                      $brandContext . "\n\n" .
                       "--- PLATFORM RULES ---\n" .
                       $rulesString . "\n\n" .
                       "--- RESPONSE FORMAT ---\n" .
@@ -40,7 +54,52 @@ class AdCopyPrompt
                            "Generate a completely new and valid set of ad copy that strictly adheres to all rules and corrects these specific errors.";
         }
 
-        Log::info("Generated AdCopyPrompt.", ['prompt' => $basePrompt]);
+        Log::info("Generated AdCopyPrompt with brand guidelines.", [
+            'has_brand_guidelines' => !is_null($this->brandGuidelines),
+            'platform' => $this->platform,
+        ]);
+
         return $basePrompt;
+    }
+
+    private function formatBrandContext(): string
+    {
+        return <<<BRAND
+--- BRAND GUIDELINES ---
+
+{$this->brandGuidelines->getFormattedBrandVoice()}
+
+{$this->brandGuidelines->getFormattedTargetAudience()}
+
+**UNIQUE SELLING PROPOSITIONS:**
+{$this->brandGuidelines->getFormattedUSPs()}
+
+**MESSAGING THEMES:**
+{$this->formatMessagingThemes()}
+
+{$this->formatConstraints()}
+
+--- END BRAND GUIDELINES ---
+BRAND;
+    }
+
+    private function formatMessagingThemes(): string
+    {
+        return implode("\n", array_map(
+            fn($theme) => "- {$theme}",
+            $this->brandGuidelines->messaging_themes
+        ));
+    }
+
+    private function formatConstraints(): string
+    {
+        if (empty($this->brandGuidelines->do_not_use)) {
+            return '';
+        }
+
+        return "**DO NOT USE:**\n" . implode("\n", array_map(
+            fn($item) => "- {$item}",
+            $this->brandGuidelines->do_not_use
+        ));
     }
 }

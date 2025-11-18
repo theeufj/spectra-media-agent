@@ -82,6 +82,32 @@ Route::middleware(['auth'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
+| Brand Guidelines Routes
+|--------------------------------------------------------------------------
+|
+| Routes for viewing and managing AI-extracted brand guidelines.
+|
+*/
+Route::middleware(['auth'])->group(function () {
+    // Route to display brand guidelines.
+    // GET /brand-guidelines
+    Route::get('/brand-guidelines', [App\Http\Controllers\BrandGuidelineController::class, 'index'])->name('brand-guidelines.index');
+
+    // Route to update brand guidelines.
+    // PUT /brand-guidelines/{brandGuideline}
+    Route::put('/brand-guidelines/{brandGuideline}', [App\Http\Controllers\BrandGuidelineController::class, 'update'])->name('brand-guidelines.update');
+
+    // Route to verify brand guidelines as accurate.
+    // POST /brand-guidelines/{brandGuideline}/verify
+    Route::post('/brand-guidelines/{brandGuideline}/verify', [App\Http\Controllers\BrandGuidelineController::class, 'verify'])->name('brand-guidelines.verify');
+
+    // Route to re-extract brand guidelines from knowledge base.
+    // POST /brand-guidelines/re-extract
+    Route::post('/brand-guidelines/re-extract', [App\Http\Controllers\BrandGuidelineController::class, 'reExtract'])->name('brand-guidelines.re-extract');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Campaign Routes
 |--------------------------------------------------------------------------
 |
@@ -122,6 +148,8 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/customers/switch/{customer}', [App\Http\Controllers\CustomerController::class, 'switch'])->name('customers.switch');
     Route::get('/customers/create', [App\Http\Controllers\CustomerController::class, 'create'])->name('customers.create');
     Route::post('/customers', [App\Http\Controllers\CustomerController::class, 'store'])->name('customers.store');
+    Route::get('/customers/{customer}/edit', [App\Http\Controllers\CustomerController::class, 'edit'])->name('customers.edit');
+    Route::put('/customers/{customer}', [App\Http\Controllers\CustomerController::class, 'update'])->name('customers.update');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -129,6 +157,37 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::get('/invitations/accept/{token}', [App\Http\Controllers\InvitationController::class, 'accept'])->name('invitations.accept');
+
+/*
+|--------------------------------------------------------------------------
+| Google Tag Manager (GTM) Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->group(function () {
+    // Route to show GTM setup page with automatic Path A/B routing
+    // GET /customers/{customer}/gtm/setup
+    Route::get('/customers/{customer}/gtm/setup', [App\Http\Controllers\GTMSetupController::class, 'show'])->name('customers.gtm.setup');
+
+    // Route to link an existing GTM container (Path A)
+    // POST /customers/{customer}/gtm/link
+    Route::post('/customers/{customer}/gtm/link', [App\Http\Controllers\GTMSetupController::class, 'linkExistingContainer'])->name('customers.gtm.link');
+
+    // Route to create a new GTM container (Path B - placeholder)
+    // POST /customers/{customer}/gtm/create
+    Route::post('/customers/{customer}/gtm/create', [App\Http\Controllers\GTMSetupController::class, 'createNewContainer'])->name('customers.gtm.create');
+
+    // Route to verify GTM container access
+    // POST /customers/{customer}/gtm/verify
+    Route::post('/customers/{customer}/gtm/verify', [App\Http\Controllers\GTMSetupController::class, 'verifyAccess'])->name('customers.gtm.verify');
+
+    // Route to get current GTM status
+    // GET /customers/{customer}/gtm/status
+    Route::get('/customers/{customer}/gtm/status', [App\Http\Controllers\GTMSetupController::class, 'getStatus'])->name('customers.gtm.status');
+
+    // Route to re-scan website for GTM detection
+    // POST /customers/{customer}/gtm/rescan
+    Route::post('/customers/{customer}/gtm/rescan', [App\Http\Controllers\GTMSetupController::class, 'rescan'])->name('customers.gtm.rescan');
+});
 
 /*
 |--------------------------------------------------------------------------

@@ -52,6 +52,12 @@ class GenerateImage implements ShouldQueue
         Log::info("Starting image generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
         try {
+            // Fetch brand guidelines if available
+            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            if (!$brandGuidelines) {
+                Log::warning("No brand guidelines found for customer ID: {$this->campaign->user->customer->id}");
+            }
+
             $strategyPrompt = $this->strategy->imagery_strategy;
             $review = $adminMonitorService->reviewImagePrompt($strategyPrompt);
 
@@ -90,7 +96,7 @@ class GenerateImage implements ShouldQueue
             foreach ($prompts as $index => $prompt) {
                 Log::info("Generating image " . ($index + 1) . "/" . count($prompts) . " for Strategy ID: {$this->strategy->id}");
 
-                $imagePrompt = (new ImagePrompt($prompt))->getPrompt();
+                $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines))->getPrompt();
                 Log::info("Gemini Image Generation Prompt:", ['prompt' => $imagePrompt]);
 
                 $imageData = $geminiService->generateImage($imagePrompt);

@@ -28,7 +28,7 @@ return [
         'headline_max_length' => 30,
         'headline_count' => 5,
         'description_min_length' => 10,
-        'description_max_length' => 95,
+        'description_max_length' => 90,
         'description_count' => 3,
         'max_exclamations_per_element' => 1,
         'allow_consecutive_exclamations' => false,

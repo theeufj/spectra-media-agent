@@ -6,6 +6,8 @@ use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\VideoGeneration\VideoGenerationService;
+use App\Services\GeminiService;
+use App\Prompts\VideoScriptPrompt;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -35,8 +37,14 @@ class GenerateVideo implements ShouldQueue
 
         $videoCollateral = null;
         try {
+            // Fetch brand guidelines if available
+            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            if (!$brandGuidelines) {
+                Log::warning("No brand guidelines found for customer ID: {$this->campaign->user->customer->id}");
+            }
+
             // 1. Generate the video script
-            $scriptPrompt = (new VideoScriptPrompt($this->strategy->video_strategy))->getPrompt();
+            $scriptPrompt = (new VideoScriptPrompt($this->strategy->video_strategy, $brandGuidelines))->getPrompt();
             $scriptResponse = $geminiService->generateContent('gemini-flash-latest', $scriptPrompt);
             $script = $scriptResponse['text'] ?? 'No script generated.';
             Log::info("Generated video script: {$script}");

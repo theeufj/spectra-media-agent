@@ -44,11 +44,37 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                 'baseline_strategy' => $baselineStrategy,
             ]);
 
-            // For a real implementation, you would fetch current campaign data
+            // Fetch real campaign data from database
+            $currentStrategy = $campaign->strategies()->latest()->first();
+            
+            // Extract bidding strategy name from JSON if it exists
+            $biddingStrategyName = 'MAXIMIZE_CONVERSIONS'; // Default fallback
+            if ($currentStrategy && $currentStrategy->bidding_strategy) {
+                $biddingData = is_string($currentStrategy->bidding_strategy) 
+                    ? json_decode($currentStrategy->bidding_strategy, true) 
+                    : $currentStrategy->bidding_strategy;
+                $biddingStrategyName = $biddingData['name'] ?? 'MAXIMIZE_CONVERSIONS';
+            }
+            
+            // Fetch top performing keywords from ad copies
+            $topKeywords = $campaign->adCopies()
+                ->where('status', 'approved')
+                ->limit(10)
+                ->pluck('headlines')
+                ->flatten()
+                ->filter()
+                ->take(5)
+                ->values()
+                ->toArray();
+            
+            if (empty($topKeywords)) {
+                $topKeywords = ['brand', 'product', 'service']; // Generic fallback
+            }
+
             $campaignData = [
-                'current_budget' => 50.00, // Placeholder
-                'current_bidding_strategy' => 'MAXIMIZE_CONVERSIONS', // Placeholder
-                'top_performing_keywords' => ['keyword1', 'keyword2'], // Placeholder
+                'current_budget' => $campaign->total_budget ?? 100.00,
+                'current_bidding_strategy' => $biddingStrategyName,
+                'top_performing_keywords' => $topKeywords,
             ];
 
             $prompt = (new SeasonalStrategyPrompt($campaignData, $this->season, $baselineStrategy))->getPrompt();
