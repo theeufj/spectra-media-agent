@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
-use App\Http\Controllers\GoogleController;
+use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\FacebookOAuthController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;

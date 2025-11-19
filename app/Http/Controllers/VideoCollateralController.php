@@ -25,7 +25,9 @@ class VideoCollateralController extends Controller
         Log::info("Video generation request received for Campaign ID: {$campaign->id}, Strategy ID: {$strategy->id} with raw platform: '{$request->input('platform')}'");
 
         try {
-            if ($campaign->user_id !== Auth::id() || $strategy->campaign_id !== $campaign->id) {
+            // Ensure the campaign belongs to a customer that the authenticated user is part of.
+            $user = Auth::user();
+            if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists() || $strategy->campaign_id !== $campaign->id) {
                 Log::warning("Unauthorized attempt to generate video for Campaign ID: {$campaign->id} by User ID: " . Auth::id());
                 abort(403, 'Unauthorized action.');
             }

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
  * - gemini-2.5-flash-image | Modalities: Images and text
  * - text-embedding-004
  * - veo-2.0-generate-001 | Modalities: Video and text
+ * - gemini-3-pro-preview | Modalities: Text
  * 
  */
 
@@ -32,33 +33,101 @@ class GeminiService
      *
      * @param string $model The Gemini model to use (e.g., 'gemini-2.5-pro').
      * @param string $prompt The prompt to send to the model.
+     * @param array $config Generation configuration (temperature, maxOutputTokens, etc.).
+     * @param string|null $systemInstruction Optional system instruction.
+     * @param bool $enableThinking Enable extended thinking (HIGH level).
+     * @param bool $enableGoogleSearch Enable Google Search tool.
      * @param int $maxRetries Maximum number of retry attempts (default: 3).
-     * @return array|null The generated content as an array, or null on failure.
+     * @return array|null The generated content with 'text' key, or null on failure.
      */
-    public function generateContent(string $model, string $prompt, int $maxRetries = null): ?array
+    public function generateContent(
+        string $model, 
+        string $prompt, 
+        array $config = [],
+        ?string $systemInstruction = null,
+        bool $enableThinking = false,
+        bool $enableGoogleSearch = false,
+        int $maxRetries = null
+    ): ?array
     {
         $maxRetries = $maxRetries ?? $this->maxRetries;
         $attempt = 0;
 
         while ($attempt < $maxRetries) {
             try {
-                $response = Http::withHeaders([
-                    'Content-Type' => 'application/json',
-                    'x-goog-api-key' => $this->apiKey,
-                ])->timeout(300)->post("{$this->baseUrl}{$model}:generateContent", [
+                $payload = [
                     'contents' => [
                         [
+                            'role' => 'user',
                             'parts' => [
                                 ['text' => $prompt]
                             ]
                         ]
-                    ]
-                ]);
+                    ],
+                    'generationConfig' => array_merge([
+                        'temperature' => 1,
+                        'topP' => 0.95,
+                        'topK' => 40,
+                        'maxOutputTokens' => 8192,
+                    ], $config)
+                ];
+
+                // Add thinking config if enabled
+                if ($enableThinking) {
+                    $payload['generationConfig']['thinkingConfig'] = [
+                        'thinkingLevel' => 'HIGH'
+                    ];
+                }
+
+                // Add system instruction if provided
+                if ($systemInstruction) {
+                    $payload['systemInstruction'] = [
+                        'parts' => [
+                            ['text' => $systemInstruction]
+                        ]
+                    ];
+                }
+
+                // Add Google Search tool if enabled
+                if ($enableGoogleSearch) {
+                    $payload['tools'] = [
+                        ['googleSearch' => (object)[]]
+                    ];
+                }
+
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json',
+                    'x-goog-api-key' => $this->apiKey,
+                ])->timeout(300)->post("{$this->baseUrl}{$model}:streamGenerateContent", $payload);
 
                 // Check if response was successful
                 if ($response->successful()) {
                     $responseData = $response->json();
-                    return $responseData['candidates'][0]['content']['parts'][0] ?? null;
+                    
+                    // Handle streaming response (array of chunks)
+                    if (is_array($responseData)) {
+                        $textContent = null;
+                        
+                        // Find the last chunk with actual text content (not thoughts)
+                        foreach ($responseData as $chunk) {
+                            $parts = $chunk['candidates'][0]['content']['parts'] ?? [];
+                            foreach ($parts as $part) {
+                                if (isset($part['text']) && !isset($part['thought'])) {
+                                    $textContent = ($textContent ?? '') . $part['text'];
+                                }
+                            }
+                        }
+                        
+                        if ($textContent) {
+                            return ['text' => $textContent];
+                        }
+                    }
+                    
+                    Log::error("GeminiService: No text content found in response", [
+                        'model' => $model,
+                        'response' => $responseData
+                    ]);
+                    return null;
                 }
 
                 // Handle specific error codes
@@ -111,6 +180,31 @@ class GeminiService
         }
 
         return null;
+    }
+
+    /**
+     * Generate content with system instruction, thinking, and Google Search
+     *
+     * @param string $model
+     * @param string $systemInstruction
+     * @param string $prompt
+     * @param array $config
+     * @return array|null
+     */
+    public function generateWithThinkingAndSearch(
+        string $model,
+        string $systemInstruction,
+        string $prompt,
+        array $config = []
+    ): ?array {
+        return $this->generateContent(
+            $model, 
+            $prompt, 
+            $config, 
+            $systemInstruction, 
+            true,  // Enable thinking
+            true   // Enable Google Search
+        );
     }
 
     /**

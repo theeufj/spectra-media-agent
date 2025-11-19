@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCampaignRequest;
 use App\Jobs\GenerateStrategy;
+use App\Jobs\GenerateCampaignCollateral;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use Illuminate\Http\Request;
@@ -92,7 +93,16 @@ class CampaignController extends Controller
 
         $campaign->strategies()->whereNull('signed_off_at')->update(['signed_off_at' => now()]);
 
-        return redirect()->route('campaigns.show', $campaign)->with('success', 'All strategies have been signed off!');
+        // Dispatch collateral generation job
+        GenerateCampaignCollateral::dispatch($campaign, $request->user()->id);
+
+        // Get the first strategy to redirect to collateral page
+        $firstStrategy = $campaign->strategies()->first();
+
+        return redirect()->route('campaigns.collateral.show', [
+            'campaign' => $campaign->id,
+            'strategy' => $firstStrategy->id
+        ])->with('success', 'All strategies have been signed off! We are generating your collateral now.');
     }
 
     /**
@@ -121,5 +131,23 @@ class CampaignController extends Controller
         }
 
         // ... existing performance logic ...
+    }
+
+    /**
+     * API endpoint to get campaign data with strategies (for polling).
+     */
+    public function apiShow(Request $request, Campaign $campaign)
+    {
+        // Check if user has access to this campaign through any of their customers
+        $user = $request->user();
+        $hasAccess = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
+        
+        if (!$hasAccess) {
+            abort(403, 'You do not have access to this campaign.');
+        }
+
+        $campaign->load('strategies');
+
+        return response()->json($campaign);
     }
 }

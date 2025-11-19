@@ -15,7 +15,7 @@ export default function Terms({ auth }) {
                         <div className="min-h-screen flex flex-col items-center pt-6 sm:pt-0">
                             <div className="w-full sm:max-w-4xl mt-6 p-8 bg-white shadow-md overflow-hidden sm:rounded-lg">
                             <h1 className="text-3xl lg:text-4xl font-bold text-gray-800">Terms of Service</h1>
-                            <p className="mt-2 text-sm text-gray-500">Last updated: November 16, 2025</p>
+                            <p className="mt-2 text-sm text-gray-500">Last updated: November 19, 2025</p>
 
                             <div className="mt-8 space-y-6 text-gray-700 leading-relaxed">
                                 <p>Please read these Terms of Service ("Terms", "Terms of Service") carefully before using the cvseeyou application (the "Service") operated by cvseeyou ("us", "we", or "our").</p>
@@ -28,7 +28,7 @@ export default function Terms({ auth }) {
                                 <p>You are responsible for safeguarding the password that you use to access the Service and for any activities or actions under your password, whether your password is with our Service or a third-party service.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">2. Service Description</h2>
-                                <p>cvseeyou is an agentic digital marketing agency specializing in multi-channel advertising across Search Engine Marketing (SEM) and Social Media Advertising. Our AI-powered platform autonomously generates, manages, and optimizes advertising campaigns on your behalf across Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads. The Service includes:</p>
+                                <p>cvseeyou is an AI-powered digital marketing platform specializing in multi-channel advertising across Search Engine Marketing (SEM) and Social Media Advertising. Our AI agents autonomously generate, manage, and optimize advertising campaigns on your behalf across Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads. The Service includes:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>AI-driven campaign strategy and creation</li>
                                     <li>Automated ad copy generation and optimization</li>
@@ -43,6 +43,7 @@ export default function Terms({ auth }) {
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Authorize us to access, create, modify, and manage campaigns, ad groups, ads, keywords, targeting, and other elements within your advertising platform accounts</li>
                                     <li>Grant us permission to link your advertising platform accounts to our platform through their respective APIs</li>
+                                    <li>Authorize us to access and manage your Google Tag Manager containers for the purpose of implementing conversion tracking, analytics tags, and performance measurement tools</li>
                                     <li>Acknowledge that our AI agents will make autonomous decisions regarding campaign management, including but not limited to budget allocation, bid adjustments, ad copy modifications, keyword selection, and audience targeting</li>
                                     <li>Agree to maintain sufficient billing information and ad spend budget in each advertising platform account</li>
                                     <li>Understand that you remain ultimately responsible for all charges incurred through your advertising platform accounts</li>
@@ -85,10 +86,10 @@ export default function Terms({ auth }) {
                                 </ul>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">8. Data and Privacy</h2>
-                                <p>We collect and process data from your advertising platform accounts to provide our Service, including campaign performance data, conversion data, and account settings. This data is used to optimize your campaigns and improve our Service. Please refer to our Privacy Policy for detailed information about how we handle your data.</p>
+                                <p>We collect and process data from your advertising platform accounts to provide our Service, including campaign performance data, conversion data, and account settings. We may also access your Google Tag Manager containers to implement and manage tracking tags for conversion measurement and analytics. This data is used to optimize your campaigns and improve our Service. Please refer to our Privacy Policy for detailed information about how we handle your data.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">9. Intellectual Property</h2>
-                                <p>The Service and its original content, features, and functionality, including our AI technology, algorithms, and proprietary methods, are and will remain the exclusive property of Spectra Media Agent and its licensors. The Service is protected by copyright, trademark, and other laws.</p>
+                                <p>The Service and its original content, features, and functionality, including our AI technology, algorithms, and proprietary methods, are and will remain the exclusive property of cvseeyou and its licensors. The Service is protected by copyright, trademark, and other laws.</p>
                                 <p>Ad copy, keywords, and other campaign elements generated by our AI for your campaigns are provided to you for use in your advertising. You may continue to use these materials even after termination of the Service.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">10. Termination</h2>
@@ -104,7 +105,7 @@ export default function Terms({ auth }) {
                                 <p>You may terminate your account at any time by discontinuing use of the Service and revoking our access to your advertising platform accounts.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">11. Limitation of Liability</h2>
-                                <p>In no event shall Spectra Media Agent, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, ad spend, lost sales, or other intangible losses, resulting from:</p>
+                                <p>In no event shall cvseeyou, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, ad spend, lost sales, or other intangible losses, resulting from:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Your access to or use of or inability to access or use the Service</li>
                                     <li>Campaign performance or lack thereof</li>
@@ -118,7 +119,7 @@ export default function Terms({ auth }) {
                                 <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR THAT ANY DEFECTS WILL BE CORRECTED. WE MAKE NO WARRANTIES REGARDING CAMPAIGN PERFORMANCE, RETURN ON INVESTMENT, OR ANY SPECIFIC RESULTS.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">13. Indemnification</h2>
-                                <p>You agree to indemnify and hold harmless Spectra Media Agent and its affiliates from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from:</p>
+                                <p>You agree to indemnify and hold harmless cvseeyou and its affiliates from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Your use of the Service</li>
                                     <li>Your violation of these Terms</li>

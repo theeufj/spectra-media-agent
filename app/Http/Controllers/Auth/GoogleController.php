@@ -19,10 +19,8 @@ class GoogleController extends Controller
     {
         return Socialite::driver('google')
             ->scopes([
-                'https://www.googleapis.com/auth/adwords', // Google Ads API
-                'https://www.googleapis.com/auth/tagmanager.edit.containers', // GTM - Edit containers
-                'https://www.googleapis.com/auth/tagmanager.publish', // GTM - Publish containers
-                'https://www.googleapis.com/auth/tagmanager.readonly', // GTM - Read containers
+                'https://www.googleapis.com/auth/adwords', // Google Ads API - Full access to ads management
+                'https://www.googleapis.com/auth/tagmanager.edit.containers', // GTM - Full access (includes read, edit, and publish)
             ])
             ->with(['access_type' => 'offline', 'prompt' => 'consent'])
             ->redirect();

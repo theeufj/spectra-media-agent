@@ -26,8 +26,10 @@ class BrandGuidelineExtractorService
         try {
             Log::info("Starting brand guideline extraction for customer {$customer->id}");
 
-            // Step 1: Gather all knowledge base content
-            $websiteContent = $customer->user->knowledgeBase()
+            // Step 1: Gather all knowledge base content from all users associated with this customer
+            $userIds = $customer->users()->pluck('users.id');
+            
+            $websiteContent = \App\Models\KnowledgeBase::whereIn('user_id', $userIds)
                 ->pluck('content')
                 ->implode("\n\n---PAGE BREAK---\n\n");
 
@@ -37,7 +39,7 @@ class BrandGuidelineExtractorService
             }
 
             // Step 2: Scrape and analyze homepage for visual elements
-            $visualAnalysis = $this->analyzeVisualStyle($customer->website_url);
+            $visualAnalysis = $this->analyzeVisualStyle($customer->website);
 
             // Step 3: Build extraction prompt
             $prompt = (new BrandGuidelineExtractionPrompt(

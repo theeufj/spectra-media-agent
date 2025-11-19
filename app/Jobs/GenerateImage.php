@@ -53,9 +53,9 @@ class GenerateImage implements ShouldQueue
 
         try {
             // Fetch brand guidelines if available
-            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
             if (!$brandGuidelines) {
-                Log::warning("No brand guidelines found for customer ID: {$this->campaign->user->customer->id}");
+                Log::warning("No brand guidelines found for customer ID: {$this->campaign->customer_id}");
             }
 
             $strategyPrompt = $this->strategy->imagery_strategy;

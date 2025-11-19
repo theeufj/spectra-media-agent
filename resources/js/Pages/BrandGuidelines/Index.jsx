@@ -7,16 +7,17 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
     const [activeSection, setActiveSection] = useState('overview');
     
     const { data, setData, put, processing, errors } = useForm({
-        brand_voice: brandGuideline?.brand_voice || { primary_voice: '', voice_descriptors: [] },
-        tone_attributes: brandGuideline?.tone_attributes || { primary_tones: [], contextual_tones: {} },
-        color_palette: brandGuideline?.color_palette || { primary_colors: [], secondary_colors: [], accent_colors: [] },
-        typography: brandGuideline?.typography || { primary_font: '', secondary_font: '', font_context: '' },
-        visual_style: brandGuideline?.visual_style || { overall_aesthetic: '', imagery_style: '', description: '' },
-        messaging_themes: brandGuideline?.messaging_themes || { primary_themes: [], emotional_appeal: '', proof_points: '' },
+        brand_voice: brandGuideline?.brand_voice || { primary_tone: '', description: '', examples: [] },
+        tone_attributes: brandGuideline?.tone_attributes || [],
+        writing_patterns: brandGuideline?.writing_patterns || {},
+        color_palette: brandGuideline?.color_palette || { primary_colors: [], secondary_colors: [], description: '', usage_notes: '' },
+        typography: brandGuideline?.typography || { heading_style: '', body_style: '', fonts_detected: [], font_weights: '', letter_spacing: '' },
+        visual_style: brandGuideline?.visual_style || { overall_aesthetic: '', imagery_style: '', description: '', color_treatment: '', layout_preference: '' },
+        messaging_themes: brandGuideline?.messaging_themes || [],
         unique_selling_propositions: brandGuideline?.unique_selling_propositions || [],
-        target_audience: brandGuideline?.target_audience || { demographics: '', psychographics: '', pain_points: [], aspirations: [] },
-        brand_personality: brandGuideline?.brand_personality || { traits: [], archetype: '', communication_style: '' },
-        competitor_differentiation: brandGuideline?.competitor_differentiation || { differentiation_points: [], competitive_advantage: '' },
+        target_audience: brandGuideline?.target_audience || { primary: '', demographics: '', psychographics: '', pain_points: [], language_level: '', familiarity_assumption: '' },
+        competitor_differentiation: brandGuideline?.competitor_differentiation || [],
+        brand_personality: brandGuideline?.brand_personality || { archetype: '', characteristics: [], if_brand_were_person: '' },
         do_not_use: brandGuideline?.do_not_use || [],
     });
 
@@ -310,14 +311,14 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             <h2 className="text-2xl font-bold text-gray-900">Brand Voice & Tone</h2>
                                             
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Primary Voice</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Primary Tone</label>
                                                 {!isEditing ? (
-                                                    <p className="text-gray-900 text-lg">{data.brand_voice.primary_voice}</p>
+                                                    <p className="text-gray-900 text-lg">{data.brand_voice.primary_tone}</p>
                                                 ) : (
                                                     <input
                                                         type="text"
-                                                        value={data.brand_voice.primary_voice}
-                                                        onChange={(e) => setData('brand_voice', { ...data.brand_voice, primary_voice: e.target.value })}
+                                                        value={data.brand_voice.primary_tone}
+                                                        onChange={(e) => setData('brand_voice', { ...data.brand_voice, primary_tone: e.target.value })}
                                                         className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
                                                         placeholder="e.g., Professional yet approachable"
                                                     />
@@ -325,34 +326,47 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Voice Descriptors</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Voice Description</label>
                                                 {!isEditing ? (
-                                                    <div className="flex flex-wrap gap-2">
-                                                        {data.brand_voice.voice_descriptors?.map((descriptor, index) => (
-                                                            <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800">
-                                                                {descriptor}
-                                                            </span>
+                                                    <p className="text-gray-700">{data.brand_voice.description}</p>
+                                                ) : (
+                                                    <textarea
+                                                        rows={4}
+                                                        value={data.brand_voice.description}
+                                                        onChange={(e) => setData('brand_voice', { ...data.brand_voice, description: e.target.value })}
+                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        placeholder="Detailed description of the brand voice..."
+                                                    />
+                                                )}
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Voice Examples</label>
+                                                {!isEditing ? (
+                                                    <ul className="list-disc list-inside space-y-2">
+                                                        {data.brand_voice.examples?.map((example, index) => (
+                                                            <li key={index} className="text-gray-700 italic">"{example}"</li>
                                                         ))}
-                                                    </div>
+                                                    </ul>
                                                 ) : (
                                                     <div className="space-y-2">
-                                                        {data.brand_voice.voice_descriptors?.map((descriptor, index) => (
+                                                        {data.brand_voice.examples?.map((example, index) => (
                                                             <div key={index} className="flex gap-2">
                                                                 <input
                                                                     type="text"
-                                                                    value={descriptor}
+                                                                    value={example}
                                                                     onChange={(e) => {
-                                                                        const newDescriptors = [...data.brand_voice.voice_descriptors];
-                                                                        newDescriptors[index] = e.target.value;
-                                                                        setData('brand_voice', { ...data.brand_voice, voice_descriptors: newDescriptors });
+                                                                        const newExamples = [...data.brand_voice.examples];
+                                                                        newExamples[index] = e.target.value;
+                                                                        setData('brand_voice', { ...data.brand_voice, examples: newExamples });
                                                                     }}
                                                                     className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        const newDescriptors = data.brand_voice.voice_descriptors.filter((_, i) => i !== index);
-                                                                        setData('brand_voice', { ...data.brand_voice, voice_descriptors: newDescriptors });
+                                                                        const newExamples = data.brand_voice.examples.filter((_, i) => i !== index);
+                                                                        setData('brand_voice', { ...data.brand_voice, examples: newExamples });
                                                                     }}
                                                                     className="px-3 py-2 text-red-600 hover:text-red-800"
                                                                 >
@@ -365,22 +379,22 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                             onClick={() => {
                                                                 setData('brand_voice', { 
                                                                     ...data.brand_voice, 
-                                                                    voice_descriptors: [...(data.brand_voice.voice_descriptors || []), ''] 
+                                                                    examples: [...(data.brand_voice.examples || []), ''] 
                                                                 });
                                                             }}
                                                             className="text-sm text-blue-600 hover:text-blue-800"
                                                         >
-                                                            + Add Descriptor
+                                                            + Add Example
                                                         </button>
                                                     </div>
                                                 )}
                                             </div>
 
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Primary Tones</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Tone Attributes</label>
                                                 {!isEditing ? (
                                                     <div className="flex flex-wrap gap-2">
-                                                        {data.tone_attributes.primary_tones?.map((tone, index) => (
+                                                        {data.tone_attributes?.map((tone, index) => (
                                                             <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
                                                                 {tone}
                                                             </span>
@@ -388,23 +402,23 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-2">
-                                                        {data.tone_attributes.primary_tones?.map((tone, index) => (
+                                                        {data.tone_attributes?.map((tone, index) => (
                                                             <div key={index} className="flex gap-2">
                                                                 <input
                                                                     type="text"
                                                                     value={tone}
                                                                     onChange={(e) => {
-                                                                        const newTones = [...data.tone_attributes.primary_tones];
+                                                                        const newTones = [...data.tone_attributes];
                                                                         newTones[index] = e.target.value;
-                                                                        setData('tone_attributes', { ...data.tone_attributes, primary_tones: newTones });
+                                                                        setData('tone_attributes', newTones);
                                                                     }}
                                                                     className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        const newTones = data.tone_attributes.primary_tones.filter((_, i) => i !== index);
-                                                                        setData('tone_attributes', { ...data.tone_attributes, primary_tones: newTones });
+                                                                        const newTones = data.tone_attributes.filter((_, i) => i !== index);
+                                                                        setData('tone_attributes', newTones);
                                                                     }}
                                                                     className="px-3 py-2 text-red-600 hover:text-red-800"
                                                                 >
@@ -415,10 +429,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                setData('tone_attributes', { 
-                                                                    ...data.tone_attributes, 
-                                                                    primary_tones: [...(data.tone_attributes.primary_tones || []), ''] 
-                                                                });
+                                                                setData('tone_attributes', [...(data.tone_attributes || []), '']);
                                                             }}
                                                             className="text-sm text-blue-600 hover:text-blue-800"
                                                         >
@@ -447,19 +458,69 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Communication Style</label>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Characteristics</label>
                                                         {!isEditing ? (
-                                                            <p className="text-gray-900">{data.brand_personality.communication_style}</p>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {data.brand_personality.characteristics?.map((char, index) => (
+                                                                    <span key={index} className="inline-flex items-center px-2 py-1 rounded text-sm bg-gray-100 text-gray-800">
+                                                                        {char}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
                                                         ) : (
-                                                            <input
-                                                                type="text"
-                                                                value={data.brand_personality.communication_style}
-                                                                onChange={(e) => setData('brand_personality', { ...data.brand_personality, communication_style: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                                placeholder="e.g., Direct and action-oriented"
-                                                            />
+                                                            <div className="space-y-1">
+                                                                {data.brand_personality.characteristics?.map((char, index) => (
+                                                                    <div key={index} className="flex gap-2">
+                                                                        <input
+                                                                            type="text"
+                                                                            value={char}
+                                                                            onChange={(e) => {
+                                                                                const newChars = [...data.brand_personality.characteristics];
+                                                                                newChars[index] = e.target.value;
+                                                                                setData('brand_personality', { ...data.brand_personality, characteristics: newChars });
+                                                                            }}
+                                                                            className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm text-sm"
+                                                                        />
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => {
+                                                                                const newChars = data.brand_personality.characteristics.filter((_, i) => i !== index);
+                                                                                setData('brand_personality', { ...data.brand_personality, characteristics: newChars });
+                                                                            }}
+                                                                            className="px-2 py-1 text-red-600 hover:text-red-800 text-sm"
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    </div>
+                                                                ))}
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setData('brand_personality', { 
+                                                                            ...data.brand_personality, 
+                                                                            characteristics: [...(data.brand_personality.characteristics || []), ''] 
+                                                                        });
+                                                                    }}
+                                                                    className="text-xs text-blue-600 hover:text-blue-800"
+                                                                >
+                                                                    + Add
+                                                                </button>
+                                                            </div>
                                                         )}
                                                     </div>
+                                                </div>
+                                                <div className="mt-4">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">If Brand Were a Person</label>
+                                                    {!isEditing ? (
+                                                        <p className="text-gray-700">{data.brand_personality.if_brand_were_person}</p>
+                                                    ) : (
+                                                        <textarea
+                                                            rows={2}
+                                                            value={data.brand_personality.if_brand_were_person}
+                                                            onChange={(e) => setData('brand_personality', { ...data.brand_personality, if_brand_were_person: e.target.value })}
+                                                            className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -473,17 +534,17 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             {/* Color Palette */}
                                             <div>
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Color Palette</h3>
-                                                <div className="grid grid-cols-3 gap-4">
+                                                <div className="grid grid-cols-2 gap-4 mb-4">
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-2">Primary Colors</label>
                                                         <div className="flex flex-wrap gap-2">
                                                             {data.color_palette.primary_colors?.map((color, index) => (
-                                                                <div key={index} className="flex items-center gap-2">
+                                                                <div key={index} className="flex flex-col items-center gap-1">
                                                                     <div 
-                                                                        className="w-10 h-10 rounded border border-gray-300" 
-                                                                        style={{ backgroundColor: color.hex }}
+                                                                        className="w-12 h-12 rounded border border-gray-300" 
+                                                                        style={{ backgroundColor: color }}
                                                                     ></div>
-                                                                    {!isEditing && <span className="text-sm text-gray-600">{color.hex}</span>}
+                                                                    <span className="text-xs text-gray-600 font-mono">{color}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -492,29 +553,43 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Colors</label>
                                                         <div className="flex flex-wrap gap-2">
                                                             {data.color_palette.secondary_colors?.map((color, index) => (
-                                                                <div key={index} className="flex items-center gap-2">
+                                                                <div key={index} className="flex flex-col items-center gap-1">
                                                                     <div 
-                                                                        className="w-10 h-10 rounded border border-gray-300" 
-                                                                        style={{ backgroundColor: color.hex }}
+                                                                        className="w-12 h-12 rounded border border-gray-300" 
+                                                                        style={{ backgroundColor: color }}
                                                                     ></div>
-                                                                    {!isEditing && <span className="text-sm text-gray-600">{color.hex}</span>}
+                                                                    <span className="text-xs text-gray-600 font-mono">{color}</span>
                                                                 </div>
                                                             ))}
                                                         </div>
                                                     </div>
+                                                </div>
+                                                <div className="space-y-4">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Accent Colors</label>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {data.color_palette.accent_colors?.map((color, index) => (
-                                                                <div key={index} className="flex items-center gap-2">
-                                                                    <div 
-                                                                        className="w-10 h-10 rounded border border-gray-300" 
-                                                                        style={{ backgroundColor: color.hex }}
-                                                                    ></div>
-                                                                    {!isEditing && <span className="text-sm text-gray-600">{color.hex}</span>}
-                                                                </div>
-                                                            ))}
-                                                        </div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Color Description</label>
+                                                        {!isEditing ? (
+                                                            <p className="text-gray-700">{data.color_palette.description}</p>
+                                                        ) : (
+                                                            <textarea
+                                                                rows={3}
+                                                                value={data.color_palette.description}
+                                                                onChange={(e) => setData('color_palette', { ...data.color_palette, description: e.target.value })}
+                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Usage Notes</label>
+                                                        {!isEditing ? (
+                                                            <p className="text-gray-700">{data.color_palette.usage_notes}</p>
+                                                        ) : (
+                                                            <textarea
+                                                                rows={2}
+                                                                value={data.color_palette.usage_notes}
+                                                                onChange={(e) => setData('color_palette', { ...data.color_palette, usage_notes: e.target.value })}
+                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                            />
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
@@ -522,36 +597,80 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             {/* Typography */}
                                             <div>
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Typography</h3>
-                                                <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-4">
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Primary Font</label>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Heading Style</label>
                                                         {!isEditing ? (
-                                                            <p className="text-gray-900 text-lg" style={{ fontFamily: data.typography.primary_font }}>
-                                                                {data.typography.primary_font}
-                                                            </p>
+                                                            <p className="text-gray-900">{data.typography.heading_style}</p>
                                                         ) : (
-                                                            <input
-                                                                type="text"
-                                                                value={data.typography.primary_font}
-                                                                onChange={(e) => setData('typography', { ...data.typography, primary_font: e.target.value })}
+                                                            <textarea
+                                                                rows={2}
+                                                                value={data.typography.heading_style}
+                                                                onChange={(e) => setData('typography', { ...data.typography, heading_style: e.target.value })}
                                                                 className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
                                                             />
                                                         )}
                                                     </div>
                                                     <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Secondary Font</label>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Body Style</label>
                                                         {!isEditing ? (
-                                                            <p className="text-gray-900 text-lg" style={{ fontFamily: data.typography.secondary_font }}>
-                                                                {data.typography.secondary_font}
-                                                            </p>
+                                                            <p className="text-gray-900">{data.typography.body_style}</p>
                                                         ) : (
-                                                            <input
-                                                                type="text"
-                                                                value={data.typography.secondary_font}
-                                                                onChange={(e) => setData('typography', { ...data.typography, secondary_font: e.target.value })}
+                                                            <textarea
+                                                                rows={2}
+                                                                value={data.typography.body_style}
+                                                                onChange={(e) => setData('typography', { ...data.typography, body_style: e.target.value })}
                                                                 className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
                                                             />
                                                         )}
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Fonts Detected</label>
+                                                        {!isEditing ? (
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {data.typography.fonts_detected?.map((font, index) => (
+                                                                    <span key={index} className="inline-flex items-center px-3 py-1 rounded bg-gray-100 text-gray-800 font-mono text-sm">
+                                                                        {font}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <input
+                                                                type="text"
+                                                                value={data.typography.fonts_detected?.join(', ')}
+                                                                onChange={(e) => setData('typography', { ...data.typography, fonts_detected: e.target.value.split(',').map(f => f.trim()) })}
+                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                placeholder="Arial, Helvetica, sans-serif"
+                                                            />
+                                                        )}
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">Font Weights</label>
+                                                            {!isEditing ? (
+                                                                <p className="text-gray-900">{data.typography.font_weights}</p>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={data.typography.font_weights}
+                                                                    onChange={(e) => setData('typography', { ...data.typography, font_weights: e.target.value })}
+                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">Letter Spacing</label>
+                                                            {!isEditing ? (
+                                                                <p className="text-gray-900">{data.typography.letter_spacing}</p>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={data.typography.letter_spacing}
+                                                                    onChange={(e) => setData('typography', { ...data.typography, letter_spacing: e.target.value })}
+                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -560,31 +679,61 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             <div>
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Visual Style</h3>
                                                 <div className="space-y-4">
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Overall Aesthetic</label>
-                                                        {!isEditing ? (
-                                                            <p className="text-gray-900">{data.visual_style.overall_aesthetic}</p>
-                                                        ) : (
-                                                            <input
-                                                                type="text"
-                                                                value={data.visual_style.overall_aesthetic}
-                                                                onChange={(e) => setData('visual_style', { ...data.visual_style, overall_aesthetic: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                            />
-                                                        )}
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">Overall Aesthetic</label>
+                                                            {!isEditing ? (
+                                                                <p className="text-gray-900">{data.visual_style.overall_aesthetic}</p>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={data.visual_style.overall_aesthetic}
+                                                                    onChange={(e) => setData('visual_style', { ...data.visual_style, overall_aesthetic: e.target.value })}
+                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">Imagery Style</label>
+                                                            {!isEditing ? (
+                                                                <p className="text-gray-900">{data.visual_style.imagery_style}</p>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={data.visual_style.imagery_style}
+                                                                    onChange={(e) => setData('visual_style', { ...data.visual_style, imagery_style: e.target.value })}
+                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-sm font-medium text-gray-700 mb-2">Imagery Style</label>
-                                                        {!isEditing ? (
-                                                            <p className="text-gray-900">{data.visual_style.imagery_style}</p>
-                                                        ) : (
-                                                            <input
-                                                                type="text"
-                                                                value={data.visual_style.imagery_style}
-                                                                onChange={(e) => setData('visual_style', { ...data.visual_style, imagery_style: e.target.value })}
-                                                                className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                            />
-                                                        )}
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">Color Treatment</label>
+                                                            {!isEditing ? (
+                                                                <p className="text-gray-900">{data.visual_style.color_treatment}</p>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={data.visual_style.color_treatment}
+                                                                    onChange={(e) => setData('visual_style', { ...data.visual_style, color_treatment: e.target.value })}
+                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-sm font-medium text-gray-700 mb-2">Layout Preference</label>
+                                                            {!isEditing ? (
+                                                                <p className="text-gray-900">{data.visual_style.layout_preference}</p>
+                                                            ) : (
+                                                                <input
+                                                                    type="text"
+                                                                    value={data.visual_style.layout_preference}
+                                                                    onChange={(e) => setData('visual_style', { ...data.visual_style, layout_preference: e.target.value })}
+                                                                    className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                                />
+                                                            )}
+                                                        </div>
                                                     </div>
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
@@ -610,32 +759,33 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             <h2 className="text-2xl font-bold text-gray-900">Messaging Themes</h2>
                                             
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Primary Themes</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Core Themes</label>
+                                                <p className="text-xs text-gray-500 mb-3">Primary themes and messages the brand consistently communicates</p>
                                                 {!isEditing ? (
-                                                    <ul className="list-disc list-inside space-y-1">
-                                                        {data.messaging_themes.primary_themes?.map((theme, index) => (
+                                                    <ul className="list-disc list-inside space-y-2">
+                                                        {data.messaging_themes?.map((theme, index) => (
                                                             <li key={index} className="text-gray-700">{theme}</li>
                                                         ))}
                                                     </ul>
                                                 ) : (
                                                     <div className="space-y-2">
-                                                        {data.messaging_themes.primary_themes?.map((theme, index) => (
+                                                        {data.messaging_themes?.map((theme, index) => (
                                                             <div key={index} className="flex gap-2">
                                                                 <input
                                                                     type="text"
                                                                     value={theme}
                                                                     onChange={(e) => {
-                                                                        const newThemes = [...data.messaging_themes.primary_themes];
+                                                                        const newThemes = [...data.messaging_themes];
                                                                         newThemes[index] = e.target.value;
-                                                                        setData('messaging_themes', { ...data.messaging_themes, primary_themes: newThemes });
+                                                                        setData('messaging_themes', newThemes);
                                                                     }}
                                                                     className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        const newThemes = data.messaging_themes.primary_themes.filter((_, i) => i !== index);
-                                                                        setData('messaging_themes', { ...data.messaging_themes, primary_themes: newThemes });
+                                                                        const newThemes = data.messaging_themes.filter((_, i) => i !== index);
+                                                                        setData('messaging_themes', newThemes);
                                                                     }}
                                                                     className="px-3 py-2 text-red-600 hover:text-red-800"
                                                                 >
@@ -646,44 +796,13 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                setData('messaging_themes', { 
-                                                                    ...data.messaging_themes, 
-                                                                    primary_themes: [...(data.messaging_themes.primary_themes || []), ''] 
-                                                                });
+                                                                setData('messaging_themes', [...(data.messaging_themes || []), '']);
                                                             }}
                                                             className="text-sm text-blue-600 hover:text-blue-800"
                                                         >
                                                             + Add Theme
                                                         </button>
                                                     </div>
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Emotional Appeal</label>
-                                                {!isEditing ? (
-                                                    <p className="text-gray-900">{data.messaging_themes.emotional_appeal}</p>
-                                                ) : (
-                                                    <input
-                                                        type="text"
-                                                        value={data.messaging_themes.emotional_appeal}
-                                                        onChange={(e) => setData('messaging_themes', { ...data.messaging_themes, emotional_appeal: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                    />
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Proof Points</label>
-                                                {!isEditing ? (
-                                                    <p className="text-gray-700">{data.messaging_themes.proof_points}</p>
-                                                ) : (
-                                                    <textarea
-                                                        rows={4}
-                                                        value={data.messaging_themes.proof_points}
-                                                        onChange={(e) => setData('messaging_themes', { ...data.messaging_themes, proof_points: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                    />
                                                 )}
                                             </div>
                                         </div>
@@ -695,6 +814,21 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             <h2 className="text-2xl font-bold text-gray-900">Target Audience</h2>
                                             
                                             <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Primary Audience</label>
+                                                {!isEditing ? (
+                                                    <p className="text-gray-700">{data.target_audience.primary}</p>
+                                                ) : (
+                                                    <textarea
+                                                        rows={2}
+                                                        value={data.target_audience.primary}
+                                                        onChange={(e) => setData('target_audience', { ...data.target_audience, primary: e.target.value })}
+                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                        placeholder="Detailed description of primary target audience"
+                                                    />
+                                                )}
+                                            </div>
+
+                                            <div>
                                                 <label className="block text-sm font-medium text-gray-700 mb-2">Demographics</label>
                                                 {!isEditing ? (
                                                     <p className="text-gray-700">{data.target_audience.demographics}</p>
@@ -704,7 +838,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         value={data.target_audience.demographics}
                                                         onChange={(e) => setData('target_audience', { ...data.target_audience, demographics: e.target.value })}
                                                         className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                        placeholder="Age, gender, location, income, education..."
+                                                        placeholder="Age, gender, location, income, job titles..."
                                                     />
                                                 )}
                                             </div>
@@ -774,54 +908,35 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                 )}
                                             </div>
 
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Aspirations</label>
-                                                {!isEditing ? (
-                                                    <ul className="list-disc list-inside space-y-1">
-                                                        {data.target_audience.aspirations?.map((aspiration, index) => (
-                                                            <li key={index} className="text-gray-700">{aspiration}</li>
-                                                        ))}
-                                                    </ul>
-                                                ) : (
-                                                    <div className="space-y-2">
-                                                        {data.target_audience.aspirations?.map((aspiration, index) => (
-                                                            <div key={index} className="flex gap-2">
-                                                                <input
-                                                                    type="text"
-                                                                    value={aspiration}
-                                                                    onChange={(e) => {
-                                                                        const newAspirations = [...data.target_audience.aspirations];
-                                                                        newAspirations[index] = e.target.value;
-                                                                        setData('target_audience', { ...data.target_audience, aspirations: newAspirations });
-                                                                    }}
-                                                                    className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                                />
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => {
-                                                                        const newAspirations = data.target_audience.aspirations.filter((_, i) => i !== index);
-                                                                        setData('target_audience', { ...data.target_audience, aspirations: newAspirations });
-                                                                    }}
-                                                                    className="px-3 py-2 text-red-600 hover:text-red-800"
-                                                                >
-                                                                    ✕
-                                                                </button>
-                                                            </div>
-                                                        ))}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                setData('target_audience', { 
-                                                                    ...data.target_audience, 
-                                                                    aspirations: [...(data.target_audience.aspirations || []), ''] 
-                                                                });
-                                                            }}
-                                                            className="text-sm text-blue-600 hover:text-blue-800"
-                                                        >
-                                                            + Add Aspiration
-                                                        </button>
-                                                    </div>
-                                                )}
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Language Level</label>
+                                                    {!isEditing ? (
+                                                        <p className="text-gray-900">{data.target_audience.language_level}</p>
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            value={data.target_audience.language_level}
+                                                            onChange={(e) => setData('target_audience', { ...data.target_audience, language_level: e.target.value })}
+                                                            className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                            placeholder="e.g., professional, technical, casual"
+                                                        />
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-2">Familiarity Assumption</label>
+                                                    {!isEditing ? (
+                                                        <p className="text-gray-900">{data.target_audience.familiarity_assumption}</p>
+                                                    ) : (
+                                                        <input
+                                                            type="text"
+                                                            value={data.target_audience.familiarity_assumption}
+                                                            onChange={(e) => setData('target_audience', { ...data.target_audience, familiarity_assumption: e.target.value })}
+                                                            className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
+                                                            placeholder="e.g., beginner, intermediate, expert"
+                                                        />
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -832,32 +947,33 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             <h2 className="text-2xl font-bold text-gray-900">Competitor Differentiation</h2>
                                             
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Differentiation Points</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-2">Key Differentiators</label>
+                                                <p className="text-xs text-gray-500 mb-3">How the brand positions itself differently from competitors</p>
                                                 {!isEditing ? (
                                                     <ul className="list-disc list-inside space-y-2">
-                                                        {data.competitor_differentiation.differentiation_points?.map((point, index) => (
+                                                        {data.competitor_differentiation?.map((point, index) => (
                                                             <li key={index} className="text-gray-700">{point}</li>
                                                         ))}
                                                     </ul>
                                                 ) : (
                                                     <div className="space-y-2">
-                                                        {data.competitor_differentiation.differentiation_points?.map((point, index) => (
+                                                        {data.competitor_differentiation?.map((point, index) => (
                                                             <div key={index} className="flex gap-2">
                                                                 <input
                                                                     type="text"
                                                                     value={point}
                                                                     onChange={(e) => {
-                                                                        const newPoints = [...data.competitor_differentiation.differentiation_points];
+                                                                        const newPoints = [...data.competitor_differentiation];
                                                                         newPoints[index] = e.target.value;
-                                                                        setData('competitor_differentiation', { ...data.competitor_differentiation, differentiation_points: newPoints });
+                                                                        setData('competitor_differentiation', newPoints);
                                                                     }}
                                                                     className="flex-1 border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
                                                                 />
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        const newPoints = data.competitor_differentiation.differentiation_points.filter((_, i) => i !== index);
-                                                                        setData('competitor_differentiation', { ...data.competitor_differentiation, differentiation_points: newPoints });
+                                                                        const newPoints = data.competitor_differentiation.filter((_, i) => i !== index);
+                                                                        setData('competitor_differentiation', newPoints);
                                                                     }}
                                                                     className="px-3 py-2 text-red-600 hover:text-red-800"
                                                                 >
@@ -868,31 +984,13 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                         <button
                                                             type="button"
                                                             onClick={() => {
-                                                                setData('competitor_differentiation', { 
-                                                                    ...data.competitor_differentiation, 
-                                                                    differentiation_points: [...(data.competitor_differentiation.differentiation_points || []), ''] 
-                                                                });
+                                                                setData('competitor_differentiation', [...(data.competitor_differentiation || []), '']);
                                                             }}
                                                             className="text-sm text-blue-600 hover:text-blue-800"
                                                         >
                                                             + Add Point
                                                         </button>
                                                     </div>
-                                                )}
-                                            </div>
-
-                                            <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-2">Competitive Advantage</label>
-                                                {!isEditing ? (
-                                                    <p className="text-gray-700">{data.competitor_differentiation.competitive_advantage}</p>
-                                                ) : (
-                                                    <textarea
-                                                        rows={4}
-                                                        value={data.competitor_differentiation.competitive_advantage}
-                                                        onChange={(e) => setData('competitor_differentiation', { ...data.competitor_differentiation, competitive_advantage: e.target.value })}
-                                                        className="w-full border-gray-300 focus:border-blue-500 focus:ring-blue-500 rounded-md shadow-sm"
-                                                        placeholder="What makes your brand uniquely valuable..."
-                                                    />
                                                 )}
                                             </div>
                                         </div>

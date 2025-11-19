@@ -2,9 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import RefineImageModal from '@/Components/RefineImageModal';
+import SubscriptionRequiredModal from '@/Components/SubscriptionRequiredModal';
+import DeploymentDisabledModal from '@/Components/DeploymentDisabledModal';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 import Modal from '@/Components/Modal';
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled }) {
     const { auth } = usePage().props;
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
     const [generatingAdCopy, setGeneratingAdCopy] = useState(false);
@@ -14,6 +17,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals });
     const [isPolling, setIsPolling] = useState(false);
     const [showDeployModal, setShowDeployModal] = useState(false);
+    const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
+    const [showDeploymentDisabledModal, setShowDeploymentDisabledModal] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+
 
     // Polling effect
     useEffect(() => {
@@ -24,19 +31,41 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 const response = await fetch(route('api.collateral.show', { strategy: currentStrategy.id }));
                 if (response.ok) {
                     const data = await response.json();
-                    // Only update if there's new data to avoid unnecessary re-renders
-                    if (JSON.stringify(data.imageCollaterals) !== JSON.stringify(collateral.imageCollaterals)) {
+                    // Update all collateral data
+                    const hasNewAdCopy = data.adCopy && (!collateral.adCopy || data.adCopy.updated_at !== collateral.adCopy?.updated_at);
+                    const hasNewImages = JSON.stringify(data.imageCollaterals) !== JSON.stringify(collateral.imageCollaterals);
+                    const hasNewVideos = JSON.stringify(data.videoCollaterals) !== JSON.stringify(collateral.videoCollaterals);
+                    
+                    if (hasNewAdCopy || hasNewImages || hasNewVideos) {
                         setCollateral(data);
+                        
+                        // Stop polling for ad copy if it was generated
+                        if (hasNewAdCopy && generatingAdCopy) {
+                            setGeneratingAdCopy(false);
+                        }
+                        
+                        // Stop image generation flag if new images arrived
+                        if (hasNewImages && generatingImage) {
+                            setGeneratingImage(false);
+                        }
+                        
+                        // Stop video generation flag if new videos arrived
+                        if (hasNewVideos && generatingVideo) {
+                            setGeneratingVideo(false);
+                        }
                     }
                 }
             } catch (error) {
-                console.error('Error polling for collateral:', error);
+                console.error('Failed to generate ad copy:', error);
             }
-        }, 5000); // Poll every 5 seconds
+        }, 3000); // Poll every 3 seconds
 
         // Stop polling after a certain time to avoid infinite loops
         const timeout = setTimeout(() => {
             setIsPolling(false);
+            setGeneratingAdCopy(false);
+            setGeneratingImage(false);
+            setGeneratingVideo(false);
             clearInterval(pollInterval);
         }, 300000); // Stop after 5 minutes
 
@@ -44,7 +73,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             clearInterval(pollInterval);
             clearTimeout(timeout);
         };
-    }, [isPolling, currentStrategy.id, collateral.imageCollaterals]);
+    }, [isPolling, currentStrategy.id, collateral, generatingAdCopy, generatingImage, generatingVideo]);
 
     // Function to handle tab changes
     const handleTabChange = (platform) => {
@@ -52,51 +81,73 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
 
     const handleGenerateAdCopy = (strategyId, platform) => {
-        if (window.confirm(`Are you sure you want to generate ad copy for ${platform}? This will overwrite any existing ad copy for this platform.`)) {
-            setGeneratingAdCopy(true);
-            router.post(route('campaigns.ad-copy.store', { campaign: campaign.id, strategy: strategyId }), { platform: platform }, {
-                onSuccess: () => setGeneratingAdCopy(false),
-                onError: (errors) => {
-                    setGeneratingAdCopy(false);
-                    alert('Failed to generate ad copy: ' + (errors.platform || 'An unknown error occurred.'));
-                },
-                preserveScroll: true,
-            });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Generate Ad Copy',
+            message: `Are you sure you want to generate ad copy for ${platform}? This will overwrite any existing ad copy for this platform.`,
+            onConfirm: () => {
+                setConfirmModal({ ...confirmModal, show: false });
+                setGeneratingAdCopy(true);
+                setIsPolling(true);
+                router.post(route('campaigns.ad-copy.store', { campaign: campaign.id, strategy: strategyId }), { platform: platform }, {
+                    onError: (errors) => {
+                        setGeneratingAdCopy(false);
+                        setIsPolling(false);
+                        alert('Failed to generate ad copy: ' + (errors.platform || 'An unknown error occurred.'));
+                    },
+                    preserveScroll: true,
+                });
+            },
+            isDestructive: false
+        });
     };
 
     const handleGenerateImage = (strategyId) => {
-        if (window.confirm(`Are you sure you want to generate an image for this strategy? This will dispatch a background job.`)) {
-            setGeneratingImage(true);
-            router.post(route('campaigns.collateral.image.store', { campaign: campaign.id, strategy: strategyId }), {}, {
-                onSuccess: () => {
-                    setGeneratingImage(false);
-                    setIsPolling(true); // Start polling
-                },
-                onError: (errors) => {
-                    setGeneratingImage(false);
-                    alert('Failed to start image generation: ' + (errors.message || 'An unknown error occurred.'));
-                },
-                preserveScroll: true,
-            });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Generate Image',
+            message: 'Are you sure you want to generate an image for this strategy? This will dispatch a background job.',
+            onConfirm: () => {
+                setConfirmModal({ ...confirmModal, show: false });
+                setGeneratingImage(true);
+                router.post(route('campaigns.collateral.image.store', { campaign: campaign.id, strategy: strategyId }), {}, {
+                    onSuccess: () => {
+                        setGeneratingImage(false);
+                        setIsPolling(true);
+                    },
+                    onError: (errors) => {
+                        setGeneratingImage(false);
+                        alert('Failed to start image generation: ' + (errors.message || 'An unknown error occurred.'));
+                    },
+                    preserveScroll: true,
+                });
+            },
+            isDestructive: false
+        });
     };
 
     const handleGenerateVideo = (strategyId, platform) => {
-        if (window.confirm(`Are you sure you want to generate a video for this strategy? This can take several minutes.`)) {
-            setGeneratingVideo(true);
-            router.post(route('campaigns.collateral.video.store', { campaign: campaign.id, strategy: strategyId }), { platform }, {
-                onSuccess: () => {
-                    setGeneratingVideo(false);
-                    setIsPolling(true); // Start polling
-                },
-                onError: (errors) => {
-                    setGeneratingVideo(false);
-                    alert('Failed to start video generation: ' + (errors.message || 'An unknown error occurred.'));
-                },
-                preserveScroll: true,
-            });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Generate Video',
+            message: 'Are you sure you want to generate a video for this strategy? This can take several minutes.',
+            onConfirm: () => {
+                setConfirmModal({ ...confirmModal, show: false });
+                setGeneratingVideo(true);
+                router.post(route('campaigns.collateral.video.store', { campaign: campaign.id, strategy: strategyId }), { platform }, {
+                    onSuccess: () => {
+                        setGeneratingVideo(false);
+                        setIsPolling(true);
+                    },
+                    onError: (errors) => {
+                        setGeneratingVideo(false);
+                        alert('Failed to start video generation: ' + (errors.message || 'An unknown error occurred.'));
+                    },
+                    preserveScroll: true,
+                });
+            },
+            isDestructive: false
+        });
     };
 
     const handleRefinementStart = () => {
@@ -126,7 +177,30 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
 
     const handleDeploy = async () => {
-        if (window.confirm('Are you sure you want to deploy the selected collateral?')) {
+        // Check subscription first
+        if (!hasActiveSubscription) {
+            setShowSubscriptionModal(true);
+            return;
+        }
+
+        // Check if deployment is enabled
+        if (!deploymentEnabled) {
+            setShowDeploymentDisabledModal(true);
+            return;
+        }
+
+        setConfirmModal({
+            show: true,
+            title: 'Deploy Collateral',
+            message: 'Are you sure you want to deploy the selected collateral?',
+            onConfirm: () => confirmDeploy(),
+            confirmText: 'Deploy',
+            confirmButtonClass: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
+            isDestructive: false
+        });
+    };
+
+    const confirmDeploy = async () => {
             try {
                 const response = await fetch(route('api.deployment.deploy'), {
                     method: 'POST',
@@ -146,14 +220,13 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             window.location.href = data.redirect;
                         }
                     } else {
-                        alert('Deployment failed: ' + (data.message || 'An unknown error occurred.'));
-                    }
-                }
+                        alert('Deployment failed: ' + error.message);
+            }
+        }
             } catch (error) {
                 console.error('Error during deployment:', error);
                 alert('An unexpected error occurred during deployment.');
             }
-        }
     };
 
     return (
@@ -172,6 +245,28 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             }
         >
             <Head title="Collateral" />
+
+            <SubscriptionRequiredModal 
+                show={showSubscriptionModal} 
+                onClose={() => setShowSubscriptionModal(false)} 
+            />
+
+            <DeploymentDisabledModal 
+                show={showDeploymentDisabledModal} 
+                onClose={() => setShowDeploymentDisabledModal(false)} 
+            />
+
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal({ ...confirmModal, show: false })}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText={confirmModal.confirmText}
+                cancelText={confirmModal.cancelText}
+                confirmButtonClass={confirmModal.confirmButtonClass}
+                isDestructive={confirmModal.isDestructive}
+            />
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
@@ -217,22 +312,28 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <button
                                             onClick={() => handleGenerateAdCopy(strategyItem.id, strategyItem.platform)}
                                             disabled={generatingAdCopy}
-                                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                         >
-                                            {generatingAdCopy ? 'Generating...' : 'Generate Ad Copy'}
+                                            {generatingAdCopy && (
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            )}
+                                            {generatingAdCopy ? 'Generating Ad Copy...' : 'Generate Ad Copy'}
                                         </button>
 
                                         {/* Display generated ad copy here */}
-                                        {adCopy && adCopy.strategy_id === strategyItem.id && adCopy.platform === strategyItem.platform && (
+                                        {collateral.adCopy && collateral.adCopy.strategy_id === strategyItem.id && collateral.adCopy.platform === strategyItem.platform && (
                                             <div 
-                                                className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer`}
-                                                onClick={() => handleToggleCollateral('ad_copy', adCopy.id)}
+                                                className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer`}
+                                                onClick={() => handleToggleCollateral('ad_copy', collateral.adCopy.id)}
                                             >
                                                 <h4 className="text-md font-semibold text-gray-800 mb-3">Generated Ad Copy:</h4>
                                                 <div className="mb-4">
                                                     <h5 className="font-medium text-gray-700">Headlines:</h5>
                                                     <ul className="list-disc list-inside text-gray-600">
-                                                        {adCopy.headlines.map((headline, index) => (
+                                                        {collateral.adCopy.headlines.map((headline, index) => (
                                                             <li key={index}>{headline}</li>
                                                         ))}
                                                     </ul>
@@ -240,7 +341,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 <div>
                                                     <h5 className="font-medium text-gray-700">Descriptions:</h5>
                                                     <ul className="list-disc list-inside text-gray-600">
-                                                        {adCopy.descriptions.map((description, index) => (
+                                                        {collateral.adCopy.descriptions.map((description, index) => (
                                                             <li key={index}>{description}</li>
                                                         ))}
                                                     </ul>
@@ -256,9 +357,15 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <button
                                             onClick={() => handleGenerateImage(strategyItem.id)}
                                             disabled={generatingImage}
-                                            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                         >
-                                            {generatingImage ? 'Queuing Job...' : 'Generate Image'}
+                                            {generatingImage && (
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            )}
+                                            {generatingImage ? 'Generating Image...' : 'Generate Image'}
                                         </button>
 
                                         {/* Display generated images here */}
@@ -289,9 +396,15 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <button
                                             onClick={() => handleGenerateVideo(strategyItem.id, strategyItem.platform)}
                                             disabled={generatingVideo}
-                                            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                         >
-                                            {generatingVideo ? 'Queuing Job...' : 'Generate Video'}
+                                            {generatingVideo && (
+                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                </svg>
+                                            )}
+                                            {generatingVideo ? 'Generating Video...' : 'Generate Video'}
                                         </button>
 
                                         {/* Display generated videos here */}

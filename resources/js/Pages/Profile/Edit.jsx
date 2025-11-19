@@ -265,7 +265,7 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                                     ) : (
                                         <div>
                                             <p className="text-sm text-gray-600 mb-3">
-                                                Connect your Facebook account to manage ads through Spectra.
+                                                Connect your Facebook account to manage ads through cvseeyou.
                                             </p>
                                             <a href={route('facebook.redirect')}>
                                                 <button 

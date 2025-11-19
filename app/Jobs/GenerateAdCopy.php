@@ -61,14 +61,14 @@ class GenerateAdCopy implements ShouldQueue
             $adminMonitorService = new AdminMonitorService($geminiService);
 
             // Get brand guidelines for this customer
-            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
             
             if (!$brandGuidelines) {
-                Log::warning("No brand guidelines found for customer {$this->campaign->user->customer->id}. Content may lack brand consistency.");
+                Log::warning("No brand guidelines found for customer {$this->campaign->customer_id}. Content may lack brand consistency.");
             }
 
             $strategyContent = $this->strategy->ad_copy_strategy;
-            $maxAttempts = 3;
+            $maxAttempts = 10; // Increased to ensure compliance with rules
             $approvedAdCopyData = null;
             $lastFeedback = null;
 
@@ -134,14 +134,19 @@ class GenerateAdCopy implements ShouldQueue
                     $approvedAdCopyData = $adCopyData;
                     break;
                 } else {
-                    Log::warning("Ad copy not approved on attempt {$attempt}. Feedback: ", $reviewResults);
+                    Log::warning("Ad copy not approved on attempt {$attempt}.", [
+                        'overall_status' => $reviewResults['overall_status'] ?? 'unknown',
+                        'feedback' => $reviewResults['programmatic_validation']['feedback'] ?? [],
+                        'violations' => $reviewResults['programmatic_validation']['violations'] ?? []
+                    ]);
                     // Store the feedback for the next attempt.
                     $lastFeedback = $reviewResults['programmatic_validation']['feedback'] ?? [];
                 }
             }
 
             if (is_null($approvedAdCopyData)) {
-                throw new \Exception('Failed to generate approved ad copy after multiple attempts.');
+                Log::error("Failed to generate approved ad copy after {$maxAttempts} attempts for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}. Last feedback: ", ['feedback' => $lastFeedback]);
+                throw new \Exception("Failed to generate approved ad copy after {$maxAttempts} attempts. Last violations: " . json_encode($lastFeedback));
             }
 
             AdCopy::updateOrCreate(

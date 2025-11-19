@@ -2,6 +2,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, Link } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import PrimaryButton from '@/Components/PrimaryButton';
+import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 // A reusable component for a single strategy card
 const StrategyCard = ({ strategy, campaignId }) => {
@@ -20,14 +22,7 @@ const StrategyCard = ({ strategy, campaignId }) => {
     };
 
     const handleSignOff = () => {
-        if (window.confirm('Are you sure you want to sign off this strategy? This action cannot be undone.')) {
-            post(route('campaigns.strategies.sign-off', { campaign: campaignId, strategy: strategy.id }), {
-                onSuccess: () => {
-                    // Redirect to the collateral page after signing off
-                    window.location.href = route('campaigns.collateral.show', { campaign: campaignId });
-                }
-            });
-        }
+        // This will be handled by the parent component's modal
     };
 
     const isSignedOff = !!strategy.signed_off_at;
@@ -103,36 +98,92 @@ const StrategyCard = ({ strategy, campaignId }) => {
 
 export default function Show({ auth, campaign }) {
     const [campaigns, setCampaign] = useState(campaign);
-    const [isPolling, setIsPolling] = useState(campaigns.strategies.length === 0);
+    const [isPolling, setIsPolling] = useState(campaign.strategies.length === 0);
+    const [showGenerationModal, setShowGenerationModal] = useState(false);
+    const [pollingError, setPollingError] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
     const { post, processing } = useForm();
 
     useEffect(() => {
-        if (!isPolling) return;
+        if (!isPolling) {
+            console.log('Polling is disabled');
+            return;
+        }
 
-        const pollInterval = setInterval(async () => {
+        console.log('Starting polling for campaign:', campaigns.id);
+
+        // Poll immediately on mount
+        const pollForStrategies = async () => {
+            console.log('Polling for strategies...');
             try {
-                const apiResponse = await fetch(`/api/campaigns/${campaigns.id}`);
+                const apiResponse = await fetch(`/api/campaigns/${campaigns.id}`, {
+                    credentials: 'include',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                
+                console.log('Poll response status:', apiResponse.status);
+                
                 if (apiResponse.ok) {
                     const data = await apiResponse.json();
+                    console.log('Poll data received, strategies count:', data.strategies?.length || 0);
+                    
+                    // Update campaign data
                     setCampaign(data);
                     
                     // Stop polling if strategies are now available
                     if (data.strategies && data.strategies.length > 0) {
+                        console.log('Strategies loaded, stopping polling');
                         setIsPolling(false);
+                        return true; // Signal to stop polling
                     }
+                } else {
+                    console.error('Poll response not OK:', apiResponse.statusText);
                 }
             } catch (error) {
                 console.error('Error polling for strategies:', error);
             }
-        }, 15000); // Poll every 15 seconds
+            return false;
+        };
 
-        return () => clearInterval(pollInterval);
+        // Poll immediately
+        pollForStrategies();
+
+        // Then poll every 10 seconds
+        const pollInterval = setInterval(pollForStrategies, 10000);
+
+        // Stop polling after 5 minutes if no strategies are generated
+        const timeout = setTimeout(() => {
+            console.log('Polling timeout reached');
+            setIsPolling(false);
+            setPollingError(true);
+        }, 300000); // 5 minutes
+
+        return () => {
+            console.log('Cleaning up polling interval');
+            clearInterval(pollInterval);
+            clearTimeout(timeout);
+        };
     }, [isPolling, campaigns.id]);
 
     const handleSignOffAll = () => {
-        if (window.confirm('Are you sure you want to sign off on all strategies? This will lock them and generate ad copy for all platforms.')) {
-            post(route('campaigns.sign-off-all', { campaign: campaigns.id }));
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Sign Off All Strategies',
+            message: 'Are you sure you want to sign off on all strategies? This will lock them and start generating collateral for all platforms.',
+            onConfirm: () => {
+                setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+                post(route('campaigns.sign-off-all', { campaign: campaigns.id }), {
+                    onSuccess: () => {
+                        setShowGenerationModal(true);
+                    }
+                });
+            },
+            isDestructive: false,
+            confirmText: 'Sign Off All'
+        });
     };
 
     const allStrategiesSignedOff = campaigns.strategies.every(strategy => !!strategy.signed_off_at);
@@ -144,6 +195,22 @@ export default function Show({ auth, campaign }) {
         >
             <Head title={`Strategy for ${campaigns.name}`} />
 
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false })}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText={confirmModal.confirmText}
+                isDestructive={confirmModal.isDestructive}
+                confirmButtonClass={confirmModal.confirmButtonClass}
+            />
+
+            <CollateralGenerationModal 
+                show={showGenerationModal} 
+                onClose={() => setShowGenerationModal(false)} 
+            />
+
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {isPolling && (
@@ -154,6 +221,20 @@ export default function Show({ auth, campaign }) {
                                 </svg>
                             </div>
                             <span className="text-lg font-semibold">AI is thinking about your strategy... This may take a minute.</span>
+                        </div>
+                    )}
+
+                    {pollingError && (
+                        <div className="mb-8 p-6 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+                            <div className="flex items-center">
+                                <svg className="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <div>
+                                    <p className="font-semibold">Strategy generation is taking longer than expected</p>
+                                    <p className="text-sm mt-1">Please refresh the page in a moment or contact support if this persists.</p>
+                                </div>
+                            </div>
                         </div>
                     )}
                     

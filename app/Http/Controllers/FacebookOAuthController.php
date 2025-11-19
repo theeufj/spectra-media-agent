@@ -57,10 +57,33 @@ class FacebookOAuthController extends Controller
                 'facebook_ads_account_id' => $facebookUser->id ?? null,
             ]);
 
+            // Fetch user's Facebook Pages
+            $pages = $this->fetchPages($facebookUser->token);
+            
+            if (!empty($pages)) {
+                // Store the first page by default (or let user choose in future enhancement)
+                $firstPage = $pages[0];
+                $customer->update([
+                    'facebook_page_id' => $firstPage['id'],
+                    'facebook_page_name' => $firstPage['name'],
+                ]);
+                
+                Log::info('Facebook Page linked', [
+                    'customer_id' => $customer->id,
+                    'page_id' => $firstPage['id'],
+                    'page_name' => $firstPage['name'],
+                ]);
+            } else {
+                Log::warning('No Facebook Pages found for user', [
+                    'customer_id' => $customer->id,
+                ]);
+            }
+
             Log::info('Facebook OAuth successful', [
                 'user_id' => Auth::id(),
                 'customer_id' => $customer->id,
                 'facebook_id' => $facebookUser->id,
+                'pages_count' => count($pages),
             ]);
 
             return redirect('/profile')->with('success', 'Facebook account connected successfully!');
@@ -70,6 +93,38 @@ class FacebookOAuthController extends Controller
                 'exception' => $e,
             ]);
             return redirect('/profile')->with('error', 'Something went wrong connecting your Facebook account. Please try again.');
+        }
+    }
+
+    /**
+     * Fetch user's Facebook Pages.
+     *
+     * @param string $accessToken
+     * @return array
+     */
+    private function fetchPages(string $accessToken): array
+    {
+        try {
+            $response = \Http::get('https://graph.facebook.com/v19.0/me/accounts', [
+                'access_token' => $accessToken,
+                'fields' => 'id,name,access_token',
+            ]);
+
+            if ($response->successful()) {
+                $data = $response->json();
+                return $data['data'] ?? [];
+            }
+
+            Log::error('Failed to fetch Facebook pages', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+            ]);
+
+            return [];
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching Facebook pages: ' . $e->getMessage());
+            return [];
         }
     }
 
@@ -97,6 +152,8 @@ class FacebookOAuthController extends Controller
             $customer->update([
                 'facebook_ads_account_id' => null,
                 'facebook_ads_access_token' => null,
+                'facebook_page_id' => null,
+                'facebook_page_name' => null,
             ]);
 
             Log::info('Facebook account disconnected', [

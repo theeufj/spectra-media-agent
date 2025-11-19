@@ -15,7 +15,13 @@ class GoogleController extends Controller
     public function redirect()
     {
         return Socialite::driver('google')
-            ->scopes(['openid', 'profile', 'email', 'https://www.googleapis.com/auth/adwords'])
+            ->scopes([
+                'openid',
+                'profile', 
+                'email',
+                'https://www.googleapis.com/auth/adwords', // Google Ads API - Full access to ads management
+                'https://www.googleapis.com/auth/tagmanager.edit.containers', // GTM - Full access (includes read, edit, and publish)
+            ])
             ->with(['access_type' => 'offline', 'prompt' => 'consent'])
             ->redirect();
     }

@@ -44,6 +44,8 @@ return [
         'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
         'redirect' => env('OAUTH_CALLBACK_URL'),
         'gemini_api_key' => env('GOOGLE_GEMINI_API_KEY'),
+        'project_id' => env('GOOGLE_CLOUD_PROJECT'),
+        'location' => env('GOOGLE_CLOUD_LOCATION', 'us-central1'),
     ],
 
     'facebook' => [

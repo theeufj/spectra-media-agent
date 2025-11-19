@@ -2,11 +2,13 @@
 import React, { useState } from 'react';
 import { useForm, Link } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 // A reusable component for a single strategy card
 const StrategyCard = ({ strategy, campaignId }) => {
     const [isEditing, setIsEditing] = useState(false);
-    const { data, setData, put, processing } = useForm({
+    const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+    const { data, setData, post, put, processing } = useForm({
         ad_copy_strategy: strategy.ad_copy_strategy,
         imagery_strategy: strategy.imagery_strategy,
         video_strategy: strategy.video_strategy,
@@ -20,20 +22,39 @@ const StrategyCard = ({ strategy, campaignId }) => {
     };
 
     const handleSignOff = () => {
-        if (window.confirm('Are you sure you want to sign off this strategy? This action cannot be undone.')) {
-            post(route('campaigns.strategies.sign-off', { campaign: campaignId, strategy: strategy.id }), {
-                onSuccess: () => {
-                    // Redirect to the collateral page after signing off
-                    window.location.href = route('campaigns.collateral.show', { campaign: campaignId });
-                }
-            });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Sign Off Strategy',
+            message: 'Are you sure you want to sign off this strategy? This action cannot be undone.',
+            onConfirm: () => {
+                setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+                post(route('campaigns.strategies.sign-off', { campaign: campaignId, strategy: strategy.id }), {
+                    onSuccess: () => {
+                        // Redirect to the collateral page after signing off
+                        window.location.href = route('campaigns.collateral.show', { campaign: campaignId });
+                    }
+                });
+            },
+            isDestructive: false,
+            confirmText: 'Sign Off'
+        });
     };
 
     const isSignedOff = !!strategy.signed_off_at;
 
     return (
-        <div className={`p-6 rounded-lg shadow-md ${isSignedOff ? 'bg-gray-200' : 'bg-mint-cream'}`}>
+        <>
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false })}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText={confirmModal.confirmText}
+                isDestructive={confirmModal.isDestructive}
+                confirmButtonClass={confirmModal.confirmButtonClass}
+            />
+            <div className={`p-6 rounded-lg shadow-md ${isSignedOff ? 'bg-gray-200' : 'bg-mint-cream'}`}>
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-2xl font-bold text-delft-blue">{strategy.platform}</h3>
                 {!isSignedOff && !isEditing && (
@@ -96,7 +117,8 @@ const StrategyCard = ({ strategy, campaignId }) => {
                     </PrimaryButton>
                 </div>
             )}
-        </div>
+            </div>
+        </>
     );
 };
 

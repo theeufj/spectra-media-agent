@@ -26,8 +26,9 @@ class ImageCollateralController extends Controller
         // Log the request to generate an image.
         Log::info("Image generation requested for Campaign ID: {$campaign->id}, Strategy ID: {$strategy->id}");
 
-        // Ensure the campaign belongs to the authenticated user.
-        if ($campaign->user_id !== Auth::id()) {
+        // Ensure the campaign belongs to a customer that the authenticated user is part of.
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -60,7 +61,8 @@ class ImageCollateralController extends Controller
         ]);
 
         // Ensure the user is authorized to edit this image.
-        if ($imageCollateral->campaign->user_id !== Auth::id()) {
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $imageCollateral->campaign->customer_id)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 

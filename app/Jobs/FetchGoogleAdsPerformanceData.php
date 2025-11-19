@@ -40,7 +40,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
 
         $lock = Cache::lock('fetch-performance-data-'.$this->campaign->google_ads_campaign_id, 600);
         $circuitBreaker = new CircuitBreakerService('GoogleAdsAPI');
-        $customer = $this->campaign->user->customer;
+        $customer = $this->campaign->customer;
 
         if ($lock->get() && $circuitBreaker->isAvailable()) {
             try {

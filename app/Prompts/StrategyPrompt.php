@@ -21,15 +21,26 @@ use Illuminate\Support\Facades\Log;
 class StrategyPrompt
 {
     /**
+     * Get the system instruction for the AI model.
+     *
+     * @return string The system instruction.
+     */
+    public static function getSystemInstruction(): string
+    {
+        return 'You are an expert digital marketing strategist with deep knowledge of multi-platform marketing campaigns. Use your extended thinking capabilities to reason through complex marketing scenarios, and ground your strategies in real-world search data and market trends.';
+    }
+
+    /**
      * build constructs the final prompt string.
      *
      * @param Campaign $campaign The campaign containing the marketing brief.
      * @param string $knowledgeBaseContent The compiled content from the user's website.
      * @param array $recommendations Array of optimization recommendations.
      * @param BrandGuideline|null $brandGuidelines The brand guidelines if available.
+     * @param array $enabledPlatforms Array of enabled platform names.
      * @return string The fully constructed prompt.
      */
-    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null): string
+    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = []): string
     {
         $brandContext = self::formatBrandContext($brandGuidelines);
         
@@ -38,6 +49,13 @@ class StrategyPrompt
         } else {
             Log::info("StrategyPrompt: No brand guidelines available - using generic approach");
         }
+
+        // Format enabled platforms for the prompt
+        $platformsList = !empty($enabledPlatforms) 
+            ? implode(', ', $enabledPlatforms) 
+            : 'No platforms enabled';
+        
+        Log::info("StrategyPrompt: Building prompt for platforms: {$platformsList}");
 
         $recommendationsPrompt = "";
         if (!empty($recommendations)) {
@@ -129,7 +147,8 @@ This is the specific goal for the marketing campaign.
 ---
 {$recommendationsPrompt}
 
-Based on all the information above, generate the JSON object containing the platform-specific strategies for Facebook Ads, Google Ads (SEM), TikTok Ads, Reddit Ads, and Microsoft Advertising.
+Based on all the information above, generate the JSON object containing the platform-specific strategies for the following enabled platforms ONLY: {$platformsList}.
+Do NOT generate strategies for any platforms not listed above.
 PROMPT;
     }
 
@@ -150,20 +169,26 @@ PROMPT;
         $targetAudience = $brandGuidelines->getFormattedTargetAudience();
         $colorPalette = $brandGuidelines->getFormattedColorPalette();
         
-        $competitorDiff = $brandGuidelines->competitor_differentiation;
-        $diffPoints = isset($competitorDiff['differentiation_points']) 
-            ? implode("\n- ", $competitorDiff['differentiation_points']) 
+        // competitor_differentiation is a simple array of strings
+        $competitorDiff = $brandGuidelines->competitor_differentiation ?? [];
+        $diffPoints = !empty($competitorDiff) 
+            ? implode("\n- ", $competitorDiff) 
             : 'Not specified';
         
-        $themes = $brandGuidelines->messaging_themes;
-        $primaryThemes = isset($themes['primary_themes']) 
-            ? implode(', ', $themes['primary_themes']) 
+        // messaging_themes is an array of strings
+        $themes = $brandGuidelines->messaging_themes ?? [];
+        $primaryThemes = !empty($themes) 
+            ? implode(', ', $themes) 
             : 'Not specified';
+        
+        // Extract quality score - note the actual column name
+        $qualityScore = $brandGuidelines->extraction_quality_score ?? 'unknown';
         
         $doNotUse = $brandGuidelines->do_not_use ? implode(', ', $brandGuidelines->do_not_use) : 'None specified';
         
         return <<<BRAND
 **BRAND GUIDELINES - CRITICAL CONTEXT:**
+(Extraction Quality Score: {$qualityScore}/100)
 
 {$brandVoice}
 
@@ -175,11 +200,8 @@ PROMPT;
 
 **Competitor Differentiation:**
 - {$diffPoints}
-**Competitive Advantage:** {$competitorDiff['competitive_advantage']}
 
 **Key Messaging Themes:** {$primaryThemes}
-**Emotional Appeal:** {$themes['emotional_appeal']}
-**Proof Points:** {$themes['proof_points']}
 
 **DO NOT USE:** {$doNotUse}
 

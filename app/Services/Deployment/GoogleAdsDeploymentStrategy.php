@@ -10,6 +10,9 @@ use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
 use App\Services\GoogleAds\DisplayServices\CreateDisplayCampaign;
 use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
+use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
+use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
+use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -29,15 +32,15 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         try {
             $customerId = $this->customer->google_ads_customer_id;
 
-            // Determine if it's a Display campaign
-            $isDisplayCampaign = stripos($strategy->imagery_strategy, 'N/A') === false && !empty($strategy->imagery_strategy);
-
-            if ($isDisplayCampaign) {
-                $campaignResourceName = $this->deployDisplayCampaign($customerId, $campaign, $strategy);
-            } else {
-                // Placeholder for Search campaign deployment
-                throw new \Exception("Search campaign deployment not yet implemented in this refactor.");
-            }
+            // Use explicit campaign_type field instead of fragile detection
+            $campaignResourceName = match($strategy->campaign_type) {
+                'display' => $this->deployDisplayCampaign($customerId, $campaign, $strategy),
+                'search' => $this->deploySearchCampaign($customerId, $campaign, $strategy),
+                'video' => throw new \Exception("Video campaign deployment not yet implemented."),
+                'shopping' => throw new \Exception("Shopping campaign deployment not yet implemented."),
+                'app' => throw new \Exception("App campaign deployment not yet implemented."),
+                default => throw new \Exception("Unknown campaign type: {$strategy->campaign_type}"),
+            };
 
             if (!$campaignResourceName) {
                 throw new \Exception('Failed to create Google Ads campaign.');
@@ -60,7 +63,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             'businessName' => $campaign->name,
             'budget' => $strategy->budget,
             'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'), // Placeholder
+            'endDate' => now()->addMonth()->format('Y-m-d'),
         ];
         $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
         if (!$campaignResourceName) {
@@ -76,6 +79,9 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         if (!$adGroupResourceName) {
             throw new \Exception('Failed to create display ad group.');
         }
+
+        $strategy->google_ads_ad_group_id = $adGroupResourceName;
+        $strategy->save();
 
         // 3. Upload Assets and Create Ad
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
@@ -95,9 +101,53 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             $adData = [
                 'finalUrls' => [$campaign->landing_page_url],
                 'headlines' => $adCopy->headlines,
-                'longHeadlines' => [$adCopy->headlines[0]], // Placeholder
+                'longHeadlines' => [$adCopy->headlines[0]],
                 'descriptions' => $adCopy->descriptions,
                 'imageAssets' => $imageAssetResourceNames,
+            ];
+            ($createAdService)($customerId, $adGroupResourceName, $adData);
+        }
+
+        return $campaignResourceName;
+    }
+
+    private function deploySearchCampaign(string $customerId, Campaign $campaign, Strategy $strategy): ?string
+    {
+        // 1. Create Campaign
+        $createCampaignService = new CreateSearchCampaign($this->customer);
+        $campaignData = [
+            'businessName' => $campaign->name,
+            'budget' => $strategy->budget,
+            'startDate' => now()->format('Y-m-d'),
+            'endDate' => now()->addMonth()->format('Y-m-d'),
+        ];
+        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+        if (!$campaignResourceName) {
+            throw new \Exception('Failed to create search campaign.');
+        }
+
+        $campaign->google_ads_campaign_id = $campaignResourceName;
+        $campaign->save();
+
+        // 2. Create Ad Group
+        $createAdGroupService = new CreateSearchAdGroup($this->customer);
+        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, 'Default Ad Group');
+        if (!$adGroupResourceName) {
+            throw new \Exception('Failed to create search ad group.');
+        }
+
+        $strategy->google_ads_ad_group_id = $adGroupResourceName;
+        $strategy->save();
+
+        // 3. Create Responsive Search Ad
+        $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
+        
+        if ($adCopy) {
+            $createAdService = new CreateResponsiveSearchAd($this->customer);
+            $adData = [
+                'finalUrls' => [$campaign->landing_page_url],
+                'headlines' => $adCopy->headlines,
+                'descriptions' => $adCopy->descriptions,
             ];
             ($createAdService)($customerId, $adGroupResourceName, $adData);
         }

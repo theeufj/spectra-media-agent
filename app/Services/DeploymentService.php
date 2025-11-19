@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Customer;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
+use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use Illuminate\Support\Facades\Log;
 
 class DeploymentService
@@ -12,7 +13,7 @@ class DeploymentService
     /**
      * Factory method to get the correct deployment strategy for a given platform.
      *
-     * @param string $platform The name of the platform (e.g., 'Google Ads (SEM)').
+     * @param string $platform The name of the platform (e.g., 'Google Ads (SEM)', 'Facebook Ads').
      * @param Customer $customer The customer object containing the necessary credentials.
      * @return DeploymentStrategy|null
      */
@@ -22,9 +23,8 @@ class DeploymentService
             case 'Google Ads (SEM)':
                 return new GoogleAdsDeploymentStrategy($customer);
 
-            // case 'Facebook Ads':
-            //     $facebookService = new FacebookAdsService($credentials['access_token']);
-            //     return new FacebookAdsDeploymentStrategy($facebookService);
+            case 'Facebook Ads':
+                return new FacebookAdsDeploymentStrategy($customer);
 
             default:
                 Log::warning("No deployment strategy found for platform: {$platform}");

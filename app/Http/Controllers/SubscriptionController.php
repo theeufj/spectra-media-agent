@@ -34,7 +34,6 @@ class SubscriptionController extends Controller
     public function checkout(Request $request)
     {
         // Get the currently authenticated user.
-        // This is similar to getting a user from context in a Go middleware.
         $user = Auth::user();
 
         // Get the price ID from the request body. This corresponds to a Product Price in your Stripe dashboard.
@@ -43,18 +42,41 @@ class SubscriptionController extends Controller
 
         Log::info("Initiating checkout for User ID: {$user->id} with Price ID: {$priceId} and Ad Spend Price ID: {$adSpendPriceId}");
 
-        // Create the Stripe Checkout session.
-        $checkout = $user->newSubscription('default', $priceId)
-            ->checkout([
-                'success_url' => route('dashboard'),
-                'cancel_url' => route('subscription.pricing'),
-                'line_items' => [
-                    [
-                        'price' => $adSpendPriceId,
-                        // Do NOT specify a quantity for metered items.
+        // Check if deployment is enabled to determine checkout mode
+        $deploymentEnabled = \App\Models\Setting::get('deployment_enabled', true);
+
+        // Ensure user is a Stripe customer
+        if (!$user->hasStripeId()) {
+            $user->createAsStripeCustomer();
+        }
+
+        if ($deploymentEnabled) {
+            // Full subscription flow - charge immediately
+            $checkout = $user->newSubscription('default', $priceId)
+                ->checkout([
+                    'success_url' => route('dashboard'),
+                    'cancel_url' => route('subscription.pricing'),
+                    'line_items' => [
+                        [
+                            'price' => $adSpendPriceId,
+                        ],
                     ],
+                ]);
+        } else {
+            // Testing mode - only collect payment method without charging
+            // Use Stripe Checkout in setup mode
+            $checkout = \Stripe\Checkout\Session::create([
+                'customer' => $user->stripe_id,
+                'mode' => 'setup',
+                'payment_method_types' => ['card'],
+                'success_url' => route('dashboard') . '?setup=success',
+                'cancel_url' => route('subscription.pricing'),
+                'customer_update' => [
+                    'name' => 'auto',
+                    'address' => 'auto',
                 ],
             ]);
+        }
 
         // Redirect to Stripe using Inertia::location.
         return Inertia::location($checkout->url);

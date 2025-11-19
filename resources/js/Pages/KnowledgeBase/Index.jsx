@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
     const { props } = usePage();
@@ -11,6 +12,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
     const [searchResults, setSearchResults] = useState(null);
     const [searching, setSearching] = useState(false);
     const [selectedResult, setSelectedResult] = useState(null);
+    const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
     // Extract data from paginated response
     const knowledgeBases = paginatedData?.data || [];
@@ -25,24 +27,33 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
     };
 
     const handleDelete = (id) => {
-        if (window.confirm('Are you sure you want to delete this knowledge base entry? This action cannot be undone.')) {
-            setDeleting(id);
-            setLoading(true);
-            
-            router.delete(route('knowledge-base.destroy', id), {
-                onSuccess: () => {
-                    setDeleting(null);
-                    setLoading(false);
-                    // Redirect to the current page after deletion
-                    router.visit(route('knowledge-base.index', { page: pagination.current_page }), { preserveScroll: true });
-                },
-                onError: () => {
-                    alert('Failed to delete knowledge base entry');
-                    setDeleting(null);
-                    setLoading(false);
-                },
-            });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Delete Knowledge Base Entry',
+            message: 'Are you sure you want to delete this knowledge base entry? This action cannot be undone.',
+            onConfirm: () => {
+                setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+                setDeleting(id);
+                setLoading(true);
+                
+                router.delete(route('knowledge-base.destroy', id), {
+                    onSuccess: () => {
+                        setDeleting(null);
+                        setLoading(false);
+                        // Redirect to the current page after deletion
+                        router.visit(route('knowledge-base.index', { page: pagination.current_page }), { preserveScroll: true });
+                    },
+                    onError: () => {
+                        alert('Failed to delete knowledge base entry');
+                        setDeleting(null);
+                        setLoading(false);
+                    },
+                });
+            },
+            isDestructive: true,
+            confirmText: 'Delete',
+            confirmButtonClass: 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
+        });
     };
 
     const handleSearch = (e) => {
@@ -124,6 +135,17 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
             }
         >
             <Head title="Knowledge Base" />
+
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false })}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText={confirmModal.confirmText}
+                isDestructive={confirmModal.isDestructive}
+                confirmButtonClass={confirmModal.confirmButtonClass}
+            />
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Strategy;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -20,8 +21,9 @@ class CollateralController extends Controller
      */
     public function show(Campaign $campaign, Strategy $strategy)
     {
-        // Ensure the campaign belongs to the authenticated user.
-        if ($campaign->user_id !== Auth::id()) {
+        // Ensure the campaign belongs to a customer that the authenticated user is part of.
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -57,6 +59,8 @@ class CollateralController extends Controller
             'adCopy' => $adCopy,
             'imageCollaterals' => $imageCollaterals,
             'videoCollaterals' => $videoCollaterals,
+            'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod(),
+            'deploymentEnabled' => Setting::get('deployment_enabled', true),
         ]);
     }
 
@@ -69,7 +73,8 @@ class CollateralController extends Controller
     public function getCollateralJson(Strategy $strategy)
     {
         // Ensure the user is authorized to view this collateral.
-        if ($strategy->campaign->user_id !== Auth::id()) {
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $strategy->campaign->customer_id)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 

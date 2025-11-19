@@ -25,16 +25,34 @@ class VideoScriptPrompt
         $brandVoice = $this->brandGuidelines->getFormattedBrandVoice();
         $personality = $this->brandGuidelines->brand_personality;
         $usps = $this->brandGuidelines->getFormattedUSPs();
-        $themes = $this->brandGuidelines->messaging_themes;
+        $themes = $this->brandGuidelines->messaging_themes ?? [];
         
-        return "**BRAND VOICE & PERSONALITY:**\n" .
-               $brandVoice . "\n" .
-               "**Brand Personality:** " . implode(', ', $personality['traits'] ?? []) . "\n" .
-               "**Communication Style:** {$personality['communication_style']}\n\n" .
-               $usps . "\n\n" .
-               "**Key Messaging Themes:** " . implode(', ', $themes['primary_themes'] ?? []) . "\n" .
-               "**Emotional Appeal:** {$themes['emotional_appeal']}\n\n" .
-               "**DO NOT USE:** " . implode(', ', $this->brandGuidelines->do_not_use ?? []) . "\n\n";
+        $context = "**BRAND VOICE & PERSONALITY:**\n" . $brandVoice . "\n";
+        
+        // Add personality archetype and characteristics
+        if (isset($personality['archetype'])) {
+            $context .= "**Brand Archetype:** {$personality['archetype']}\n";
+        }
+        if (isset($personality['characteristics'])) {
+            $context .= "**Personality Traits:** " . implode(', ', $personality['characteristics']) . "\n";
+        }
+        if (isset($personality['if_brand_were_person'])) {
+            $context .= "**Brand Essence:** {$personality['if_brand_were_person']}\n";
+        }
+        
+        $context .= "\n" . $usps . "\n\n";
+        
+        // Add messaging themes if available (simple array)
+        if (!empty($themes)) {
+            $context .= "**Key Messaging Themes:** " . implode(', ', $themes) . "\n\n";
+        }
+        
+        // Add do-not-use list
+        if (!empty($this->brandGuidelines->do_not_use)) {
+            $context .= "**DO NOT USE:** " . implode(', ', $this->brandGuidelines->do_not_use) . "\n\n";
+        }
+        
+        return $context;
     }
 
     public function getPrompt(): string
@@ -77,11 +95,17 @@ PROMPT;
 
     private function getBrandTone(): string
     {
-        if (!$this->brandGuidelines || !isset($this->brandGuidelines->tone_attributes['primary_tones'])) {
+        if (!$this->brandGuidelines) {
             return "Engaging and professional";
         }
 
-        $tones = $this->brandGuidelines->tone_attributes['primary_tones'];
+        // tone_attributes is a simple array of strings, not nested
+        $tones = $this->brandGuidelines->tone_attributes ?? [];
+        
+        if (empty($tones)) {
+            return "Engaging and professional";
+        }
+        
         return implode(', ', array_slice($tones, 0, 3));
     }
 }

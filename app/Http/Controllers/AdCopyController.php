@@ -24,8 +24,9 @@ class AdCopyController extends Controller
         // Log the start of the ad copy generation process.
         Log::info("Ad copy generation requested for Campaign ID: {$campaign->id}, Strategy ID: {$strategy->id}, Platform: {$request->input('platform')}");
 
-        // Ensure the campaign belongs to the authenticated user.
-        if ($campaign->user_id !== Auth::id()) {
+        // Ensure the campaign belongs to a customer that the authenticated user is part of.
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 

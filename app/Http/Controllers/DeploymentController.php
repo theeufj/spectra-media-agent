@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Setting;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class DeploymentController extends Controller
 {
@@ -55,12 +57,24 @@ class DeploymentController extends Controller
     {
         $user = $request->user();
 
-        // 1. Subscription Check
-        if (!$user->subscribed('default')) {
+        // 1. Subscription Check (or payment method in testing mode)
+        $hasAccess = $user->subscribed('default') || $user->hasDefaultPaymentMethod();
+        
+        if (!$hasAccess) {
             return response()->json([
                 'message' => 'You must have an active subscription to deploy campaigns.',
                 'redirect' => route('subscription.pricing'),
             ], 403);
+        }
+
+        // 2. Deployment Enabled Check
+        $deploymentEnabled = Setting::get('deployment_enabled', true);
+        
+        if (!$deploymentEnabled) {
+            return response()->json([
+                'message' => 'We\'re currently enhancing our deployment system to serve you better. Campaign deployment will be available soon! Your subscription remains active and you can continue creating campaigns.',
+                'type' => 'maintenance',
+            ], 503);
         }
 
         // In a real application, this is where you would dispatch jobs

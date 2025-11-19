@@ -1,14 +1,25 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 import React from 'react';
 
 export default function Index({ auth, campaigns = [] }) {
     const [expandedCampaign, setExpandedCampaign] = React.useState(null);
+    const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
     const handleDelete = (campaignId) => {
-        if (window.confirm('Are you sure you want to delete this campaign? This action cannot be undone.')) {
-            router.delete(route('campaigns.destroy', campaignId));
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Delete Campaign',
+            message: 'Are you sure you want to delete this campaign? This action cannot be undone.',
+            onConfirm: () => {
+                setConfirmModal({ ...confirmModal, show: false });
+                router.delete(route('campaigns.destroy', campaignId));
+            },
+            confirmText: 'Delete',
+            confirmButtonClass: 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800',
+            isDestructive: true
+        });
     };
 
     const getCollateralSummary = (strategy) => {
@@ -26,6 +37,17 @@ export default function Index({ auth, campaigns = [] }) {
             header={<h2 className="font-semibold text-xl text-gray-800 leading-tight">Campaigns</h2>}
         >
             <Head title="Campaigns" />
+
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal({ ...confirmModal, show: false })}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText={confirmModal.confirmText}
+                confirmButtonClass={confirmModal.confirmButtonClass}
+                isDestructive={confirmModal.isDestructive}
+            />
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">

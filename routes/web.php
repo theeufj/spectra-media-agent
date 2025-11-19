@@ -144,6 +144,16 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Admin Platform Management Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+    Route::resource('platforms', App\Http\Controllers\Admin\EnabledPlatformController::class);
+    Route::post('/platforms/{platform}/toggle', [App\Http\Controllers\Admin\EnabledPlatformController::class, 'toggle'])->name('platforms.toggle');
+});
+
 Route::middleware(['auth'])->group(function () {
     Route::post('/customers/switch/{customer}', [App\Http\Controllers\CustomerController::class, 'switch'])->name('customers.switch');
     Route::get('/customers/create', [App\Http\Controllers\CustomerController::class, 'create'])->name('customers.create');
@@ -293,6 +303,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('users', [App\Http\Controllers\AdminController::class, 'usersIndex'])->name('admin.users.index');
     Route::get('customers', [App\Http\Controllers\AdminController::class, 'customersIndex'])->name('admin.customers.index');
     Route::get('notifications', [App\Http\Controllers\AdminController::class, 'notificationsIndex'])->name('admin.notifications.index');
+    Route::get('settings', [App\Http\Controllers\AdminController::class, 'settingsIndex'])->name('admin.settings.index');
+    Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');
     Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
     Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
     Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');

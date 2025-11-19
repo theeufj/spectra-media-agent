@@ -139,12 +139,12 @@ export default function Landing({ auth }) {
                                 <div className="relative">
                                     <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">1</div>
                                     <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Generate Creative Assets</h3>
-                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Describe your product or service. Our AI instantly creates multiple variations of ad copy, images, and videos.</p>
+                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Add your website and describe your goals. Our AI learns your brand, then creates multiple variations of on-brand ad copy, images, and videos.</p>
                                 </div>
                                 <div className="relative">
                                     <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">2</div>
                                     <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Connect Your Accounts</h3>
-                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Securely link your Google Ads, Facebook, or other advertising platform accounts to Spectra.</p>
+                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Securely link your Google Ads, Facebook, or other advertising platform accounts to cvseeyou.</p>
                                 </div>
                                 <div className="relative">
                                     <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">3</div>
@@ -172,11 +172,20 @@ export default function Landing({ auth }) {
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+                                            </div>
+                                            Brand-Aware AI
+                                        </dt>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Our AI learns your brand voice, colors, and messaging from your website—so every ad feels authentically you, not generic.</dd>
+                                    </div>
+                                    <div className="relative pl-16">
+                                        <dt className="text-base font-semibold leading-7 text-gray-900">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                                             </div>
                                             AI-Powered Optimization
                                         </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">Our agents continuously tweak and improve your ad copy, images, and video content to maximize sales and ROI.</dd>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Our agents continuously test and improve your ad copy, images, and video content to maximize sales and ROI.</dd>
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
@@ -216,7 +225,7 @@ export default function Landing({ auth }) {
                             <div className="mx-auto max-w-2xl lg:text-center">
                                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">From Our Customers</h2>
                                 <p className="mt-4 sm:mt-6 text-base sm:text-lg leading-8 text-gray-600">
-                                    See how businesses like yours are succeeding with Spectra Media Agent.
+                                    See how businesses like yours are succeeding with cvseeyou.
                                 </p>
                             </div>
                             <div className="mx-auto mt-12 sm:mt-16 md:mt-20 grid max-w-2xl grid-cols-1 gap-6 sm:gap-8 text-sm leading-6 text-gray-900 sm:grid-cols-2 xl:mx-0 xl:max-w-none xl:grid-cols-3\">
@@ -225,7 +234,7 @@ export default function Landing({ auth }) {
                                         {[...Array(5)].map((_, i) => <span key={i} className="text-yellow-400">★</span>)}
                                     </div>
                                     <div className="text-lg font-medium">
-                                        <p>"Spectra has been a game-changer for our marketing. We've seen a 30% increase in conversions since we started using their AI agents."</p>
+                                        <p>"cvseeyou has been a game-changer for our marketing. We've seen a 30% increase in conversions since we started using their AI agents."</p>
                                     </div>
                                     <div className="mt-6 font-semibold">Sarah L.</div>
                                     <div className="text-sm text-gray-600">CEO, Growing e-commerce brand</div>
@@ -245,7 +254,7 @@ export default function Landing({ auth }) {
                                         {[...Array(5)].map((_, i) => <span key={i} className="text-yellow-400">★</span>)}
                                     </div>
                                     <div className="text-lg font-medium">
-                                        <p>"As a small business owner, I don't have time to manage campaigns. Spectra's AI agents do it all, and results have been fantastic."</p>
+                                        <p>"As a small business owner, I don't have time to manage campaigns. cvseeyou's AI agents do it all, and results have been fantastic."</p>
                                     </div>
                                     <div className="mt-6 font-semibold">Jessica B.</div>
                                     <div className="text-sm text-gray-600">Owner, Local service business</div>
@@ -369,7 +378,7 @@ export default function Landing({ auth }) {
                                     Frequently Asked Questions
                                 </h2>
                                 <p className="mt-4 text-lg text-gray-500">
-                                    Get answers to common questions about how MediaAgent works.
+                                    Get answers to common questions about how cvseeyou works.
                                 </p>
                             </div>
 

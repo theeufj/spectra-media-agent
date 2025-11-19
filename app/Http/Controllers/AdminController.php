@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Customer;
+use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
@@ -35,6 +36,28 @@ class AdminController extends Controller
     public function notificationsIndex()
     {
         return Inertia::render('Admin/Notifications');
+    }
+
+    public function settingsIndex()
+    {
+        $settings = Setting::all();
+        return Inertia::render('Admin/Settings', [
+            'settings' => $settings,
+        ]);
+    }
+
+    public function updateSettings(Request $request)
+    {
+        $request->validate([
+            'deployment_enabled' => 'required|boolean',
+        ]);
+
+        Setting::set('deployment_enabled', $request->deployment_enabled, 'boolean');
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => 'Settings updated successfully.'
+        ]);
     }
 
     public function promoteToAdmin(User $user)

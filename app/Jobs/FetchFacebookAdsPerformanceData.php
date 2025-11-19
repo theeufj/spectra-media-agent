@@ -39,7 +39,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
 
         $lock = Cache::lock('fetch-facebook-performance-data-'.$this->campaign->facebook_ads_campaign_id, 600);
         $circuitBreaker = new CircuitBreakerService('FacebookAdsAPI');
-        $customer = $this->campaign->user->customer;
+        $customer = $this->campaign->customer;
 
         if (!$customer || empty($customer->facebook_ads_access_token)) {
             Log::warning("Customer {$customer->id} does not have Facebook Ads credentials. Skipping performance fetch.");

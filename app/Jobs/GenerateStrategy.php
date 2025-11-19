@@ -3,15 +3,16 @@
 namespace App\Jobs;
 
 use App\Models\Campaign;
+use App\Models\EnabledPlatform;
 use App\Models\KnowledgeBase;
 use App\Models\Recommendation;
 use App\Prompts\StrategyPrompt;
+use App\Services\GeminiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class GenerateStrategy implements ShouldQueue
@@ -38,131 +39,144 @@ class GenerateStrategy implements ShouldQueue
      */
     public function handle(): void
     {
+        Log::info("Starting strategy generation for campaign {$this->campaign->id} (customer: {$this->campaign->customer_id})");
+        
         try {
             // Step 1: Gather all the user's knowledge base content.
-            // We retrieve all entries for the user who owns the campaign and concatenate them.
-            $knowledgeBaseContent = KnowledgeBase::where('user_id', $this->campaign->user_id)
+            // Since campaigns belong to customers and knowledge bases belong to users,
+            // we need to get all knowledge bases from all users associated with this customer
+            Log::info("Fetching knowledge base content for customer {$this->campaign->customer_id}");
+            
+            $customerUserIds = $this->campaign->customer->users()->pluck('users.id');
+            Log::info("Found " . $customerUserIds->count() . " users for customer {$this->campaign->customer_id}");
+            
+            $knowledgeBaseContent = KnowledgeBase::whereIn('user_id', $customerUserIds)
                 ->pluck('content')
                 ->implode("\n\n---\n\n");
+            
+            Log::info("Knowledge base content length: " . strlen($knowledgeBaseContent) . " characters");
 
             if (empty($knowledgeBaseContent)) {
-                Log::warning("No knowledge base content found for user {$this->campaign->user_id} to generate strategy for campaign {$this->campaign->id}.");
+                Log::warning("No knowledge base content found for customer {$this->campaign->customer_id} to generate strategy for campaign {$this->campaign->id}.");
                 return;
             }
 
             // Step 1.25: Fetch brand guidelines if available
-            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            Log::info("Checking for brand guidelines for customer ID: {$this->campaign->customer_id}");
+            $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
             if (!$brandGuidelines) {
-                Log::warning("No brand guidelines found for customer ID: {$this->campaign->user->customer->id}");
+                Log::warning("No brand guidelines found for customer ID: {$this->campaign->customer_id}");
+            } else {
+                Log::info("Brand guidelines found with quality score: {$brandGuidelines->extraction_quality_score}");
             }
 
             // Step 1.5: Gather any pending recommendations.
+            Log::info("Fetching pending recommendations for campaign {$this->campaign->id}");
             $recommendations = Recommendation::where('campaign_id', $this->campaign->id)
                 ->where('status', 'pending')
                 ->get();
+            Log::info("Found {$recommendations->count()} pending recommendations");
 
-            // Step 2: Construct the prompt using our dedicated prompt builder class.
-            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray(), $brandGuidelines);
+            // Step 1.75: Get enabled platforms
+            Log::info("Fetching enabled platforms for campaign {$this->campaign->id}");
+            $enabledPlatforms = EnabledPlatform::getEnabledPlatformNames();
+            Log::info("Found " . count($enabledPlatforms) . " enabled platforms: " . implode(', ', $enabledPlatforms));
 
-            // Step 3: Call the Google Gemini API.
-            $apiKey = config('services.google.gemini_api_key');
-            //fallback to env variable if config is not set
-            if (empty($apiKey)) {
-                $apiKey = env('GEMINI_API_KEY');
+            if (empty($enabledPlatforms)) {
+                Log::error("No enabled platforms found for campaign {$this->campaign->id}. Cannot generate strategy.");
+                return;
             }
 
+            // Step 2: Construct the prompt using our dedicated prompt builder class.
+            Log::info("Building strategy prompt for campaign {$this->campaign->id}");
+            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray(), $brandGuidelines, $enabledPlatforms);
+            Log::info("Generated prompt length: " . strlen($prompt) . " characters");
+
+            // Step 3: Call Gemini API with Gemini 3 Pro Preview with extended thinking and Google Search.
+            Log::info("Preparing API call to Gemini 3 Pro Preview for campaign {$this->campaign->id}");
             
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-            ])->timeout(300)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=".$apiKey, [
-                'systemInstruction' => [
-                    'parts' => [
-                        [
-                            'text' => 'You are an expert digital marketing strategist with deep knowledge of multi-platform marketing campaigns. Use your extended thinking capabilities to reason through complex marketing scenarios, and ground your strategies in real-world search data and market trends.'
-                        ]
-                    ]
-                ],
-                'contents' => [
-                    [
-                        'parts' => [
-                            ['text' => $prompt]
-                        ]
-                    ]
-                ],
-                'generationConfig' => [
+            $gemini = app(GeminiService::class);
+            $systemInstruction = StrategyPrompt::getSystemInstruction();
+            
+            Log::info("Making API request to Gemini with thinking and search enabled for campaign {$this->campaign->id}");
+            $result = $gemini->generateWithThinkingAndSearch(
+                'gemini-3-pro-preview',
+                $systemInstruction,
+                $prompt,
+                [
                     'temperature' => 1,
                     'topP' => 0.95,
                     'topK' => 40,
-                    'maxOutputTokens' => 16000,
-                    'thinkingConfig' => [
-                        'includeThoughts' => true,
-                        'thinkingBudget' => 5000
-                    ]
+                    'maxOutputTokens' => 65535
                 ]
-            ]);
-            if ($response->failed()) {
-                Log::error("Failed to generate strategy for campaign {$this->campaign->id}: " . $response->body());
+            );
+            
+            Log::info("Received API response from Vertex AI for campaign {$this->campaign->id}");
+            
+            if (!$result) {
+                Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No response from Vertex AI");
                 return;
             }
 
-            // The response from Gemini may contain multiple parts:
-            // - thoughts (from extended thinking)
-            // - text with the actual JSON strategy
-            // We need to find the text part that contains the JSON, not the thinking part
-            $responseData = $response->json();
-            $candidates = $responseData['candidates'] ?? [];
-            
-            if (empty($candidates)) {
-                Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No candidates in response");
-                return;
-            }
-
-            $parts = $candidates[0]['content']['parts'] ?? [];
-            $jsonText = null;
-            
-            // Find the text part that contains JSON (skip thinking parts)
-            foreach ($parts as $part) {
-                if (isset($part['text']) && !isset($part['thought'])) {
-                    $jsonText = $part['text'];
-                    break;
-                }
-            }
+            $jsonText = $result['text'] ?? null;
             
             if (!$jsonText) {
-                Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No JSON text content in response parts");
+                Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No text content in response");
                 return;
             }
 
+            Log::info("Found JSON text content for campaign {$this->campaign->id}, length: " . strlen($jsonText));
+            
             // Clean up the JSON response (remove markdown code blocks if present)
             $cleanedJson = trim($jsonText);
             $cleanedJson = preg_replace('/^```json\s*/', '', $cleanedJson);
             $cleanedJson = preg_replace('/\s*```$/', '', $cleanedJson);
             $cleanedJson = trim($cleanedJson);
             
+            Log::info("Attempting to decode JSON for campaign {$this->campaign->id}");
             $strategyData = json_decode($cleanedJson, true);
 
             if (json_last_error() !== JSON_ERROR_NONE || !isset($strategyData['strategies'])) {
                 Log::error("Failed to parse JSON response for campaign {$this->campaign->id}: " . json_last_error_msg());
+                Log::debug("Raw JSON for campaign {$this->campaign->id}: " . substr($cleanedJson, 0, 500) . '...');
                 return;
             }
+            
+            Log::info("Successfully parsed strategy data for campaign {$this->campaign->id}, found " . count($strategyData['strategies']) . " strategies");
 
             // Step 4: Parse the response and save the platform-specific strategies.
-            foreach ($strategyData['strategies'] as $strategy) {
-                $this->campaign->strategies()->create([
-                    'platform' => $strategy['platform'],
-                    'ad_copy_strategy' => $strategy['ad_copy_strategy'],
-                    'imagery_strategy' => $strategy['imagery_strategy'],
-                    'video_strategy' => $strategy['video_strategy'],
-                    'bidding_strategy' => $strategy['bidding_strategy'],
-                    'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
-                    'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
-                ]);
+            Log::info("Creating strategy records for campaign {$this->campaign->id}");
+            foreach ($strategyData['strategies'] as $index => $strategy) {
+                Log::info("Creating strategy #{$index} for platform '{$strategy['platform']}' on campaign {$this->campaign->id}");
+                try {
+                    $this->campaign->strategies()->create([
+                        'platform' => $strategy['platform'],
+                        'ad_copy_strategy' => $strategy['ad_copy_strategy'],
+                        'imagery_strategy' => $strategy['imagery_strategy'],
+                        'video_strategy' => $strategy['video_strategy'],
+                        'bidding_strategy' => $strategy['bidding_strategy'],
+                        'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
+                        'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
+                    ]);
+                    Log::info("Successfully created strategy #{$index} for campaign {$this->campaign->id}");
+                } catch (\Exception $e) {
+                    Log::error("Failed to create strategy #{$index} for campaign {$this->campaign->id}: " . $e->getMessage());
+                    throw $e;
+                }
             }
 
             Log::info("Successfully generated and saved strategies for campaign {$this->campaign->id}");
 
         } catch (\Exception $e) {
-            Log::error("Error generating strategy for campaign {$this->campaign->id}: " . $e->getMessage());
+            Log::error("Error generating strategy for campaign {$this->campaign->id}: " . $e->getMessage(), [
+                'campaign_id' => $this->campaign->id,
+                'customer_id' => $this->campaign->customer_id,
+                'exception' => get_class($e),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            throw $e;
         }
     }
 }

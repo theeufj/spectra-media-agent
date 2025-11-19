@@ -31,6 +31,83 @@ class GenerateVideo implements ShouldQueue
     ) {
     }
 
+    /**
+     * Extract actionable video content from strategy text.
+     * Handles cases where strategy mentions "N/A" but provides alternative scenarios.
+     * 
+     * @param string $videoStrategy
+     * @return string|null Returns actionable content or null if no video should be generated
+     */
+    private function extractActionableVideoContent(string $videoStrategy): ?string
+    {
+        // Trim whitespace
+        $content = trim($videoStrategy);
+        
+        // If empty, return null
+        if (empty($content)) {
+            return null;
+        }
+        
+        // Convert to lowercase for case-insensitive checking
+        $lowerContent = strtolower($content);
+        
+        // Check if it's purely "N/A" or "Not Applicable" with no additional content
+        if (preg_match('/^(n\/a|not applicable|none)\.?$/i', $content)) {
+            return null;
+        }
+        
+        // If content starts with "N/A" but contains conditional statements (however, if, when, for, etc.)
+        // extract everything after the conditional indicator
+        if (preg_match('/^n\/a[^.]*\.\s*(however|but|if|when|for|in cases where|alternatively)/i', $content, $matches)) {
+            // Find the position of the conditional word
+            $pos = stripos($content, $matches[1]);
+            if ($pos !== false) {
+                $actionableContent = substr($content, $pos);
+                Log::info("Extracted conditional video content after N/A: {$actionableContent}");
+                return trim($actionableContent);
+            }
+        }
+        
+        // If the content mentions both "N/A" and actionable scenarios, extract the actionable part
+        if (stripos($lowerContent, 'n/a') !== false && 
+            (stripos($lowerContent, 'however') !== false || 
+             stripos($lowerContent, 'but') !== false || 
+             stripos($lowerContent, 'if') !== false)) {
+            // Split by common transition words and take the actionable part
+            $transitions = ['however', 'but', 'if', 'when', 'for', 'in cases where', 'alternatively'];
+            foreach ($transitions as $transition) {
+                $pos = stripos($content, $transition);
+                if ($pos !== false) {
+                    $actionableContent = substr($content, $pos);
+                    Log::info("Extracted actionable content after '{$transition}': {$actionableContent}");
+                    return trim($actionableContent);
+                }
+            }
+        }
+        
+        // If "N/A" is mentioned but there's substantial content (more than just "N/A for X"),
+        // check if there's actionable content in the rest of the text
+        if (stripos($lowerContent, 'n/a') !== false && strlen($content) > 50) {
+            // The content is long enough that it likely contains actionable information
+            Log::info("Video strategy mentions N/A but contains substantial content ({strlen($content)} chars). Using full content.");
+            return $content;
+        }
+        
+        // If content doesn't start with "N/A", use the full content
+        if (!preg_match('/^n\/a/i', $content)) {
+            return $content;
+        }
+        
+        // If we get here, content is likely just "N/A for [reason]" with no alternatives
+        if (strlen($content) < 100 && !preg_match('/\b(use|create|generate|show|feature|include|video should)\b/i', $content)) {
+            Log::info("Video strategy appears to be N/A without actionable alternatives: {$content}");
+            return null;
+        }
+        
+        // Default: use the full content if we're unsure
+        return $content;
+    }
+
     public function handle(VideoGenerationService $videoGenerationService, GeminiService $geminiService): void
     {
         Log::info("Starting video generation job for Strategy ID: {$this->strategy->id} on platform {$this->platform}");
@@ -38,13 +115,24 @@ class GenerateVideo implements ShouldQueue
         $videoCollateral = null;
         try {
             // Fetch brand guidelines if available
-            $brandGuidelines = $this->campaign->user->customer->brandGuideline ?? null;
+            $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
             if (!$brandGuidelines) {
-                Log::warning("No brand guidelines found for customer ID: {$this->campaign->user->customer->id}");
+                Log::warning("No brand guidelines found for customer ID: {$this->campaign->customer_id}");
             }
 
-            // 1. Generate the video script
-            $scriptPrompt = (new VideoScriptPrompt($this->strategy->video_strategy, $brandGuidelines))->getPrompt();
+            // Check if video strategy contains actionable content
+            $videoStrategy = $this->strategy->video_strategy;
+            $actionableContent = $this->extractActionableVideoContent($videoStrategy);
+            
+            if (!$actionableContent) {
+                Log::info("No actionable video content found for Strategy ID: {$this->strategy->id}. Skipping video generation.");
+                return;
+            }
+            
+            Log::info("Using actionable video strategy: {$actionableContent}");
+
+            // 1. Generate the video script using the actionable content
+            $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines))->getPrompt();
             $scriptResponse = $geminiService->generateContent('gemini-flash-latest', $scriptPrompt);
             $script = $scriptResponse['text'] ?? 'No script generated.';
             Log::info("Generated video script: {$script}");
@@ -58,8 +146,8 @@ class GenerateVideo implements ShouldQueue
                 'is_active' => true,
             ]);
 
-            // 3. Generate the final video prompt using the dedicated prompt class
-            $videoPrompt = (new VideoFromScriptPrompt($this->strategy->video_strategy, $script))->getPrompt();
+            // 3. Generate the final video prompt using the dedicated prompt class with actionable content
+            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $script))->getPrompt();
             Log::info("Combined video prompt: {$videoPrompt}");
 
             // 4. Start the video generation and get the operation name

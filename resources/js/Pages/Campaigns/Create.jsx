@@ -31,13 +31,13 @@ export default function Create({ auth }) {
         name: 'Localhost Test Campaign',
         reason: 'This is a test campaign created on localhost for development purposes.',
         goals: 'To test the campaign creation flow and strategy generation.',
-        target_market: 'Developers and testers working on the MediaAgent project.',
+        target_market: 'Developers and testers working on the cvseeyou project.',
         voice: 'Informative and technical.',
         total_budget: 1000,
         start_date: '2025-11-12',
         end_date: '2025-12-12',
         primary_kpi: 'Successful strategy generation.',
-        product_focus: 'MediaAgent platform features.',
+        product_focus: 'cvseeyou platform features.',
         exclusions: 'Avoid real client data.',
     };
 
