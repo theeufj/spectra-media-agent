@@ -308,6 +308,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
     Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
     Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
+    
+    // Execution Metrics Dashboard (Admin Only)
+    Route::get('execution-metrics', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'index'])->name('admin.execution.metrics');
+    Route::get('execution-metrics/{strategy}', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'show'])->name('admin.execution.detail');
     Route::post('users/{user}/unban', [App\Http\Controllers\AdminController::class, 'unbanUser'])->name('admin.users.unban');
     Route::post('notification', [App\Http\Controllers\AdminController::class, 'sendNotification'])->name('admin.notification.send');
 });

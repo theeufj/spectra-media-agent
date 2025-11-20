@@ -73,6 +73,9 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         $campaign->google_ads_campaign_id = $campaignResourceName;
         $campaign->save();
 
+        // Apply targeting criteria if configured
+        $this->applyCampaignTargeting($customerId, $campaignResourceName, $strategy);
+
         // 2. Create Ad Group
         $createAdGroupService = new CreateDisplayAdGroup($this->customer);
         $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, 'Default Ad Group');
@@ -129,6 +132,9 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         $campaign->google_ads_campaign_id = $campaignResourceName;
         $campaign->save();
 
+        // Apply targeting criteria if configured
+        $this->applyCampaignTargeting($customerId, $campaignResourceName, $strategy);
+
         // 2. Create Ad Group
         $createAdGroupService = new CreateSearchAdGroup($this->customer);
         $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, 'Default Ad Group');
@@ -153,5 +159,64 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         }
 
         return $campaignResourceName;
+    }
+
+    /**
+     * Apply targeting criteria to a Google Ads campaign from TargetingConfig.
+     *
+     * @param string $customerId Google Ads customer ID
+     * @param string $campaignResourceName Campaign resource name
+     * @param Strategy $strategy Strategy with targeting config
+     * @return void
+     */
+    private function applyCampaignTargeting(string $customerId, string $campaignResourceName, Strategy $strategy): void
+    {
+        $targetingConfig = $strategy->targetingConfig;
+        
+        if (!$targetingConfig || !$targetingConfig->isCompatibleWith('google')) {
+            Log::info("No targeting config found for strategy {$strategy->id}, using defaults");
+            return;
+        }
+
+        try {
+            // For production, you would use Google Ads Campaign Criterion Service
+            // to add geo, age, gender, and other targeting criteria
+            // Example structure (not implemented):
+            // 
+            // $criterionService = $this->client->getCampaignCriterionServiceClient();
+            // 
+            // // Add geo targeting
+            // $geoTargets = $targetingConfig->getGoogleGeoTargeting();
+            // foreach ($geoTargets as $geoId) {
+            //     $criterion = new CampaignCriterion([...]);
+            //     $criterionService->mutateCampaignCriteria($customerId, [$operation]);
+            // }
+            //
+            // // Add age targeting
+            // $ageRanges = $targetingConfig->getGoogleAgeTargeting();
+            // foreach ($ageRanges as $ageRangeId) { ... }
+            //
+            // // Add gender targeting
+            // $genders = $targetingConfig->getGoogleGenderTargeting();
+            // foreach ($genders as $genderId) { ... }
+
+            Log::info("Targeting config found for strategy {$strategy->id}", [
+                'geo_locations' => $targetingConfig->geo_locations,
+                'age_range' => [$targetingConfig->age_min, $targetingConfig->age_max],
+                'genders' => $targetingConfig->genders,
+            ]);
+
+            // TODO: Implement actual campaign criteria creation using Google Ads API
+            // This would require creating CampaignCriterion resources for:
+            // - Location (geo_locations)
+            // - Age range (age_min/age_max)
+            // - Gender (genders)
+            // - Language (languages)
+            // - Device types (device_types)
+
+        } catch (\Exception $e) {
+            Log::warning("Failed to apply targeting criteria: " . $e->getMessage());
+            // Don't fail deployment if targeting application fails
+        }
     }
 }

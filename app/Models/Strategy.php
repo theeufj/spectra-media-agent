@@ -25,6 +25,10 @@ class Strategy extends Model
         'bidding_strategy',
         'cpa_target',
         'revenue_cpa_multiple',
+        'execution_plan',
+        'execution_result',
+        'execution_time',
+        'execution_errors',
     ];
 
     /**
@@ -33,6 +37,10 @@ class Strategy extends Model
     protected $casts = [
         'signed_off_at' => 'datetime',
         'bidding_strategy' => 'array',
+        'execution_plan' => 'array',
+        'execution_result' => 'array',
+        'execution_errors' => 'array',
+        'execution_time' => 'float',
     ];
 
     /**
@@ -69,5 +77,13 @@ class Strategy extends Model
     public function videoCollaterals()
     {
         return $this->hasMany(VideoCollateral::class);
+    }
+
+    /**
+     * Get the targeting configuration for the strategy.
+     */
+    public function targetingConfig()
+    {
+        return $this->hasOne(TargetingConfig::class);
     }
 }

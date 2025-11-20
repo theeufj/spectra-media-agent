@@ -2,9 +2,14 @@
 
 ## Current Status
 
-✅ **Production Ready for Display Campaigns** - Google Ads deployment is fully functional and working.
+✅ **Production Ready** - Google Ads deployment is fully functional for both Display and Search campaigns.
 
-❌ **Search Campaigns Not Implemented** - Throws exception when attempting to deploy search campaigns.
+### Supported Campaign Types:
+- ✅ **Display Campaigns** - Responsive Display Ads with image assets
+- ✅ **Search Campaigns** - Responsive Search Ads with multiple headlines/descriptions
+- ❌ **Video Campaigns** - Not yet implemented
+- ❌ **Shopping Campaigns** - Not yet implemented
+- ❌ **App Campaigns** - Not yet implemented
 
 ## What's Implemented
 
@@ -243,6 +248,94 @@ foreach ($this->campaign->strategies as $strategy) {
 - Automatic retries (3 attempts)
 - Multi-strategy support
 - Multi-platform support via factory pattern
+
+## Search Campaign Implementation
+
+### Status: ✅ Fully Implemented (November 19, 2025)
+
+Search campaigns are now production-ready with Responsive Search Ads (RSA) support.
+
+### Implementation Details
+
+**Services Created:**
+1. `app/Services/GoogleAds/SearchServices/CreateSearchCampaign.php`
+2. `app/Services/GoogleAds/SearchServices/CreateSearchAdGroup.php`
+3. `app/Services/GoogleAds/SearchServices/CreateResponsiveSearchAd.php`
+
+**Deployment Flow:**
+```
+GoogleAdsDeploymentStrategy::deploySearchCampaign()
+    ↓
+1. CreateSearchCampaign
+   - Channel: SEARCH
+   - Bidding: MaximizeConversions
+   - Budget in micros
+    ↓
+2. CreateSearchAdGroup
+   - Type: SEARCH_STANDARD
+   - Status: ENABLED
+    ↓
+3. CreateResponsiveSearchAd
+   - Min 3 headlines (30 chars each)
+   - Min 2 descriptions (90 chars each)
+   - Final URLs array
+    ↓
+Strategy updated with:
+- google_ads_ad_group_id
+```
+
+### Responsive Search Ad Requirements
+
+**Headlines:**
+- Minimum: 3 required
+- Maximum: 15 allowed
+- Character limit: 30 characters per headline
+- Google dynamically tests combinations
+
+**Descriptions:**
+- Minimum: 2 required
+- Maximum: 4 allowed
+- Character limit: 90 characters per description
+
+**Ad Copy Validation:**
+Use `AdCopyValidator` to validate before deployment:
+```php
+$validator = new \App\Services\Validators\AdCopyValidator();
+$errors = $validator->validateGoogleRSA($headlines, $descriptions);
+
+if (!empty($errors)) {
+    throw new ValidationException(implode(', ', $errors));
+}
+```
+
+### Campaign Type Detection
+
+**Database Field:** `strategies.campaign_type` enum
+- Values: 'display', 'search', 'video', 'shopping', 'app'
+- Migration: `2025_11_19_194718_add_campaign_type_and_tracking_to_strategies_table.php`
+
+**Deployment Strategy Selection:**
+```php
+// In GoogleAdsDeploymentStrategy::deploy()
+$campaignResourceName = match($strategy->campaign_type) {
+    'display' => $this->deployDisplayCampaign($customerId, $campaign, $strategy),
+    'search' => $this->deploySearchCampaign($customerId, $campaign, $strategy),
+    'video' => throw new \Exception("Video campaign deployment not yet implemented."),
+    'shopping' => throw new \Exception("Shopping campaign deployment not yet implemented."),
+    'app' => throw new \Exception("App campaign deployment not yet implemented."),
+    default => throw new \Exception("Unknown campaign type: {$strategy->campaign_type}"),
+};
+```
+
+### Tracking Fields Added
+
+New fields in `strategies` table for deployment tracking:
+- `campaign_type` - Enum field for explicit campaign type
+- `google_ads_ad_group_id` - Stores ad group resource name
+- `facebook_campaign_id` - Facebook campaign ID
+- `facebook_adset_id` - Facebook ad set ID
+- `facebook_ad_id` - Facebook ad ID
+- `facebook_creative_id` - Facebook creative ID
 - Long-running task support (20 min timeout)
 
 ### 10. Service Architecture

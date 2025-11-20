@@ -244,14 +244,70 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
     private function buildTargeting(Strategy $strategy): array
     {
-        // Default targeting - can be enhanced with targeting_configs table
-        return [
-            'geo_locations' => [
-                'countries' => ['US'], // Default to US, should come from targeting config
-            ],
-            'age_min' => 18,
-            'age_max' => 65,
-            'genders' => [0], // 0 = all genders
-        ];
+        // Load targeting config if available
+        $targetingConfig = $strategy->targetingConfig;
+        
+        if (!$targetingConfig || !$targetingConfig->isCompatibleWith('facebook')) {
+            // Return default targeting
+            return [
+                'geo_locations' => [
+                    'countries' => ['US'],
+                ],
+                'age_min' => 18,
+                'age_max' => 65,
+                'genders' => [0], // 0 = all genders
+            ];
+        }
+
+        // Build targeting from config
+        $targeting = [];
+
+        // Geographic targeting
+        $geoTargeting = $targetingConfig->getFacebookGeoTargeting();
+        if (!empty($geoTargeting)) {
+            $targeting['geo_locations'] = $geoTargeting[0]; // Facebook expects single object with arrays
+        }
+
+        // Age and gender targeting
+        $ageTargeting = $targetingConfig->getFacebookAgeTargeting();
+        $targeting['age_min'] = $ageTargeting['age_min'];
+        $targeting['age_max'] = $ageTargeting['age_max'];
+        
+        $genderTargeting = $targetingConfig->getFacebookGenderTargeting();
+        if (!empty($genderTargeting)) {
+            $targeting['genders'] = $genderTargeting;
+        }
+
+        // Language targeting
+        if ($targetingConfig->languages) {
+            $targeting['locales'] = $targetingConfig->languages;
+        }
+
+        // Audience targeting
+        if ($targetingConfig->custom_audiences) {
+            $targeting['custom_audiences'] = array_map(
+                fn($id) => ['id' => $id],
+                $targetingConfig->custom_audiences
+            );
+        }
+
+        if ($targetingConfig->interests) {
+            $targeting['interests'] = array_map(
+                fn($id) => ['id' => $id],
+                $targetingConfig->interests
+            );
+        }
+
+        // Device targeting
+        if ($targetingConfig->device_types) {
+            $targeting['device_platforms'] = $targetingConfig->device_types;
+        }
+
+        // Platform-specific options
+        if ($targetingConfig->facebook_options) {
+            $targeting = array_merge($targeting, $targetingConfig->facebook_options);
+        }
+
+        return $targeting;
     }
 }

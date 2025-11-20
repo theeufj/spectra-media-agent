@@ -76,14 +76,28 @@ $adSets = $adSetService->listAdSets($accountId);
 $adSet = $adSetService->createAdSet($accountId, $campaignId, 'Ad Set Name', $targeting, $dailyBudget);
 ```
 
-**CreativeService** - Manage ad creatives:
+**CreativeService** - Manage ad creatives with S3 integration:
 ```php
 $creativeService = new \App\Services\FacebookAds\CreativeService($customer);
-$creative = $creativeService->createCreative($accountId, [
-    'title' => 'Ad Title',
-    'body' => 'Ad Description',
-    'image_url' => 'https://example.com/image.jpg'
-]);
+
+// Create image creative (automatically uploads from S3)
+$creative = $creativeService->createImageCreative(
+    $accountId,
+    'Creative Name',
+    's3://bucket/image.jpg', // S3 URL or public URL
+    'Headline',
+    'Description',
+    'LEARN_MORE'
+);
+
+// Create video creative (supports resumable upload for large files)
+$creative = $creativeService->createVideoCreative(
+    $accountId,
+    'Video Creative Name',
+    's3://bucket/video.mp4', // S3 URL or public URL
+    'Headline',
+    'VIDEO_VIEWS'
+);
 ```
 
 **AdService** - Manage individual ads:

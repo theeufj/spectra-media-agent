@@ -134,4 +134,16 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Execution Agents Feature Flag
+    |--------------------------------------------------------------------------
+    |
+    | Enable AI-powered execution agents for campaign deployment instead of
+    | hardcoded deployment strategies. Set to false to use legacy strategies.
+    |
+    */
+
+    'use_execution_agents' => env('USE_EXECUTION_AGENTS', true),
+
 ];

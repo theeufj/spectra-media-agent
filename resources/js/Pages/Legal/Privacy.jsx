@@ -58,14 +58,75 @@ export default function Privacy({ auth }) {
                                 <p>The security of your data is important to us, but remember that no method of transmission over the Internet, or method of electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your Personal Data, we cannot guarantee its absolute security.</p>
                                 <p>Your campaign data and generated collateral are stored securely on our servers and on third-party cloud storage providers (e.g., Amazon S3). We take reasonable measures to protect this data from unauthorized access.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Third-Party Services</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Google User Data and OAuth Scopes</h2>
+                                <p>Our application integrates with Google services to provide advertising campaign management and analytics features. When you grant us permission through Google OAuth authentication, we access specific Google user data according to the following scopes:</p>
+                                
+                                <h3 className="text-xl lg:text-2xl font-bold text-gray-800 mt-6">Requested OAuth Scopes</h3>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li><strong className="font-semibold">openid, userinfo.email, userinfo.profile:</strong> Basic account information to authenticate you and associate your Google services with your cvseeyou account.</li>
+                                    <li><strong className="font-semibold">adwords (https://www.googleapis.com/auth/adwords):</strong> Full access to your Google Ads accounts to create, manage, and optimize advertising campaigns on your behalf.</li>
+                                    <li><strong className="font-semibold">tagmanager.edit.containers:</strong> Edit access to your Google Tag Manager containers to configure tracking tags for campaign performance measurement.</li>
+                                    <li><strong className="font-semibold">tagmanager.edit.containerversions:</strong> Create and edit Google Tag Manager container versions to implement and version control tracking configurations.</li>
+                                    <li><strong className="font-semibold">tagmanager.publish:</strong> Publish Google Tag Manager container versions to activate tracking configurations for your campaigns.</li>
+                                </ul>
+
+                                <h3 className="text-xl lg:text-2xl font-bold text-gray-800 mt-6">How We Use Google User Data</h3>
+                                <p>We use the data accessed through these scopes exclusively to provide our core service functionality:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li><strong>Campaign Management:</strong> Create, deploy, and optimize Google Ads campaigns based on your marketing objectives and strategy inputs.</li>
+                                    <li><strong>Conversion Tracking:</strong> Set up and manage Google Tag Manager containers to track campaign conversions and measure advertising performance.</li>
+                                    <li><strong>Performance Analytics:</strong> Monitor campaign metrics to provide insights and recommendations for optimization.</li>
+                                    <li><strong>Budget Management:</strong> Allocate and manage advertising budgets across campaigns according to your specifications.</li>
+                                </ul>
+                                <p className="mt-4 font-semibold text-gray-800">We do NOT:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li>Transfer your Google user data to third parties except as necessary to provide the Service (e.g., to Google's own services)</li>
+                                    <li>Use your Google user data for serving advertisements</li>
+                                    <li>Allow humans to read your Google user data, except with your explicit consent for customer support purposes, when necessary for security purposes (e.g., investigating abuse), or to comply with applicable law</li>
+                                    <li>Use or transfer your Google user data for purposes unrelated to our core functionality of advertising campaign management</li>
+                                    <li>Use or transfer your Google user data to determine creditworthiness or for lending purposes</li>
+                                </ul>
+
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Data Retention and Deletion</h2>
+                                <p>We retain your data only as long as necessary to provide our Service and fulfill the purposes described in this Privacy Policy. Specifically:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li><strong>Account Data:</strong> Retained for the duration of your active subscription and up to 24 months after account closure or subscription cancellation for legal compliance and dispute resolution purposes.</li>
+                                    <li><strong>Campaign Data:</strong> Retained for up to 24 months to provide historical performance analysis and reporting. After this period, campaign data is automatically deleted unless required for legal purposes.</li>
+                                    <li><strong>Google User Data:</strong> OAuth access tokens are stored securely and used only for authorized API calls. You may revoke our access to your Google account at any time through your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Account Permissions page</a>.</li>
+                                    <li><strong>Generated Content:</strong> AI-generated ad copy, images, and videos are retained as long as the associated campaign is active, plus 24 months for historical reference.</li>
+                                </ul>
+                                
+                                <h3 className="text-xl lg:text-2xl font-bold text-gray-800 mt-6">Your Right to Delete Data</h3>
+                                <p>You have the right to request deletion of your personal data at any time. To exercise this right:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li><strong>Account Deletion:</strong> You may delete your account through your profile settings, which will initiate deletion of your personal data within 30 days.</li>
+                                    <li><strong>Google Data Access Revocation:</strong> You may revoke our access to your Google data at any time through your Google Account settings. This will immediately terminate our ability to access your Google Ads and Tag Manager accounts.</li>
+                                    <li><strong>Data Export:</strong> Before deletion, you may request an export of your data by contacting support@cvseeyou.com.</li>
+                                    <li><strong>Complete Deletion Request:</strong> To request immediate and complete deletion of all your data, contact us at support@cvseeyou.com. We will process your request within 30 days.</li>
+                                </ul>
+                                <p className="mt-4">Please note that some data may be retained for legal compliance purposes even after a deletion request, including transaction records required for tax purposes and records necessary for ongoing dispute resolution.</p>
+
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Third-Party Services and Data Sharing</h2>
                                 <p>We may employ third-party companies and individuals to facilitate our Service ("Service Providers"), to provide the Service on our behalf, to perform Service-related services or to assist us in analyzing how our Service is used.</p>
+                                
+                                <h3 className="text-xl lg:text-2xl font-bold text-gray-800 mt-6">Third-Party Service Providers</h3>
                                 <ul className="space-y-4">
                                     <li><strong className="font-semibold text-gray-800">Payment Processor:</strong> We use Stripe for payment, analytics, and other business services. Stripe collects identifying information about the devices that connect to its services. Stripe uses this information to operate and improve the services it provides to us, including for fraud detection. You can learn more about Stripe and read its privacy policy at <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">stripe.com/privacy</a>.</li>
-                                    <li><strong className="font-semibold text-gray-800">AI Service Providers:</strong> We use third-party AI models (e.g., Google's Gemini) to generate creative content. The prompts and strategies you provide are sent to these services for processing.</li>
-                                    <li><strong className="font-semibold text-gray-800">Advertising Platforms:</strong> We integrate with advertising platforms including Google Ads, Facebook/Meta Ads, and Reddit Ads to help you manage and deploy your campaigns. Campaign data and creative assets you provide may be shared with these platforms as necessary to execute your campaigns. Please review their respective privacy policies for more information: <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google Privacy Policy</a>, <a href="https://www.facebook.com/privacy/explanation" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Meta Privacy Policy</a>, and <a href="https://www.reddit.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Reddit Privacy Policy</a>.</li>
-                                    <li><strong className="font-semibold text-gray-800">Analytics and Tracking:</strong> We may access and manage your Google Tag Manager containers to set up conversion tracking and analytics for your advertising campaigns. This allows us to properly measure campaign performance and optimize your ad spend. We only access GTM containers when you grant us permission through Google OAuth authentication.</li>
+                                    <li><strong className="font-semibold text-gray-800">AI Service Providers:</strong> We use third-party AI models (e.g., Google's Gemini) to generate creative content. The prompts and strategies you provide are sent to these services for processing. These services process data according to their own privacy policies and do not retain your data beyond the immediate processing request.</li>
+                                    <li><strong className="font-semibold text-gray-800">Cloud Storage:</strong> We use Amazon Web Services (AWS) S3 for secure storage of generated creative assets (images, videos). Data is encrypted at rest and in transit.</li>
                                 </ul>
+
+                                <h3 className="text-xl lg:text-2xl font-bold text-gray-800 mt-6">Advertising Platform Integrations</h3>
+                                <p>We integrate with advertising platforms to help you manage and deploy your campaigns. When you use these integrations, campaign data and creative assets are shared with these platforms as necessary to execute your campaigns:</p>
+                                <ul className="space-y-4">
+                                    <li><strong className="font-semibold text-gray-800">Google Ads:</strong> Campaign configurations, ad copy, targeting parameters, and budget information are sent to Google Ads to create and manage your advertising campaigns. Review <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google's Privacy Policy</a>.</li>
+                                    <li><strong className="font-semibold text-gray-800">Google Tag Manager:</strong> We configure tracking tags and conversion pixels to measure campaign performance. Review <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google's Privacy Policy</a>.</li>
+                                    <li><strong className="font-semibold text-gray-800">Facebook/Meta Ads:</strong> Campaign data and creative assets are shared with Meta to deploy and manage Facebook and Instagram advertising campaigns. Review <a href="https://www.facebook.com/privacy/explanation" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Meta's Privacy Policy</a>.</li>
+                                    <li><strong className="font-semibold text-gray-800">Reddit Ads:</strong> Campaign information is shared with Reddit to manage advertising campaigns on the Reddit platform. Review <a href="https://www.reddit.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Reddit's Privacy Policy</a>.</li>
+                                </ul>
+                                
+                                <p className="mt-4 font-semibold text-gray-800">Important:</p>
+                                <p>Except for the advertising platform integrations described above (which are necessary to provide our core service), we do not sell, trade, or transfer your personal data to third parties. Your Google user data is never shared with any third party except Google's own services.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Changes to This Privacy Policy</h2>
                                 <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
