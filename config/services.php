@@ -42,7 +42,7 @@ return [
     'google' => [
         'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
         'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
-        'redirect' => env('OAUTH_CALLBACK_URL'),
+        'redirect' => '/auth/google/callback',
         'gemini_api_key' => env('GOOGLE_GEMINI_API_KEY'),
         'project_id' => env('GOOGLE_CLOUD_PROJECT'),
         'location' => env('GOOGLE_CLOUD_LOCATION', 'us-central1'),
@@ -51,7 +51,8 @@ return [
     'facebook' => [
         'client_id' => env('FACEBOOK_APP_ID'),
         'client_secret' => env('FACEBOOK_APP_SECRET'),
-        'redirect' => env('FACEBOOK_OAUTH_CALLBACK_URL'),
+        'redirect' => env('APP_URL') . '/auth/facebook/callback',
+        'config_id' => env('FACEBOOK_CONFIG_ID'),
     ],
 
     'stripe' => [

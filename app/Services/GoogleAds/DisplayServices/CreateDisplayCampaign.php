@@ -3,20 +3,22 @@
 namespace App\Services\GoogleAds\DisplayServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\Campaign;
-use Google\Ads\GoogleAds\V15\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V15\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V15\Enums\BudgetTypeEnum\BudgetType;
-use Google\Ads\GoogleAds\V15\Services\CampaignBudgetService;
-use Google\Ads\GoogleAds\V15\Services\CampaignService;
-use Google\Ads\GoogleAds\V15\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V15\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V15\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V15\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
-use Google\Ads\GoogleAds\V15\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V15\Common\TargetCpa;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Campaign;
+use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V22\Services\CampaignBudgetService;
+use Google\Ads\GoogleAds\V22\Services\CampaignService;
+use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V22\Enums\BiddingStrategyTypeEnum\BiddingStrategyType;
+use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V22\Common\TargetCpa;
+use Google\Ads\GoogleAds\V22\Common\ManualCpc;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
 
 class CreateDisplayCampaign extends BaseGoogleAdsService
 {
@@ -57,7 +59,8 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             'status' => CampaignStatus::PAUSED, // Start paused to allow further configuration
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
-            'maximize_conversions' => new MaximizeConversions(), // Default for display campaigns
+            'manual_cpc' => new ManualCpc(), // Default for display campaigns
+            'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
         ]);
 
         // Apply bidding strategy (example: TargetCpa)
@@ -72,7 +75,12 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
 
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
-            $response = $campaignServiceClient->mutateCampaigns($customerId, [$campaignOperation]);
+            // Fix: Use MutateCampaignsRequest object
+            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$campaignOperation],
+            ]);
+            $response = $campaignServiceClient->mutateCampaigns($request);
             $newCampaignResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Display campaign: " . $newCampaignResourceName);
             return $newCampaignResourceName;
@@ -103,7 +111,12 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
 
         try {
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
-            $response = $campaignBudgetServiceClient->mutateCampaignBudgets($customerId, [$campaignBudgetOperation]);
+            // Fix: Use MutateCampaignBudgetsRequest object
+            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$campaignBudgetOperation],
+            ]);
+            $response = $campaignBudgetServiceClient->mutateCampaignBudgets($request);
             $newBudgetResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created campaign budget: " . $newBudgetResourceName);
             return $newBudgetResourceName;
@@ -118,7 +131,12 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
         $query = "SELECT campaign.resource_name, campaign.name FROM campaign WHERE campaign.name = '{$campaignName}'";
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $response = $googleAdsServiceClient->search($customerId, $query);
+            // Fix: Use SearchGoogleAdsRequest object instead of passing arguments directly
+            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => $query,
+            ]);
+            $response = $googleAdsServiceClient->search($request);
 
             foreach ($response->getIterator() as $googleAdsRow) {
                 return $googleAdsRow->getCampaign();

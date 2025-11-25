@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
  * Currently AvaliABle Models:
  * - gemini-flash-latest | Modalities Text 
  * - gemini-2.5-pro | Modalities Text
- * - gemini-2.5-flash-image | Modalities: Images and text
+ * - gemini-3-pro-image-preview | Modalities: Images and text
  * - text-embedding-004
  * - veo-2.0-generate-001 | Modalities: Video and text
  * - gemini-3-pro-preview | Modalities: Text
@@ -47,7 +47,9 @@ class GeminiService
         ?string $systemInstruction = null,
         bool $enableThinking = false,
         bool $enableGoogleSearch = false,
-        int $maxRetries = null
+        int $maxRetries = null,
+        ?string $imageBase64 = null,
+        string $imageMimeType = 'image/jpeg'
     ): ?array
     {
         $maxRetries = $maxRetries ?? $this->maxRetries;
@@ -55,13 +57,25 @@ class GeminiService
 
         while ($attempt < $maxRetries) {
             try {
+                $parts = [['text' => $prompt]];
+
+                if ($imageBase64) {
+                    // Ensure base64 string is clean
+                    $cleanBase64 = preg_replace('#^data:image/\w+;base64,#i', '', $imageBase64);
+                    
+                    $parts[] = [
+                        'inlineData' => [
+                            'mimeType' => $imageMimeType,
+                            'data' => $cleanBase64
+                        ]
+                    ];
+                }
+
                 $payload = [
                     'contents' => [
                         [
                             'role' => 'user',
-                            'parts' => [
-                                ['text' => $prompt]
-                            ]
+                            'parts' => $parts
                         ]
                     ],
                     'generationConfig' => array_merge([
@@ -292,7 +306,7 @@ class GeminiService
      * @param int $candidateCount The number of images to generate.
      * @return array|null An array of image data arrays, or null on failure.
      */
-    public function generateImage(string $prompt, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K'): ?array
+    public function generateImage(string $prompt, string $model = 'gemini-3-pro-image-preview', string $imageSize = '1K'): ?array
     {
         $payload = [
             'contents' => [
@@ -320,7 +334,7 @@ class GeminiService
      * @param string $imageSize The desired image size.
      * @return array|null A single generated image data array, or null on failure.
      */
-    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K'): ?array
+    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-3-pro-image-preview', string $imageSize = '1K'): ?array
     {
         $parts = [['text' => $prompt]];
         foreach ($contextImages as $image) {
@@ -355,7 +369,24 @@ class GeminiService
             ])->timeout(300)->post("{$this->baseUrl}{$model}:streamGenerateContent", $payload);
 
             if ($response->failed()) {
-                Log::error("GeminiService: Failed to generate image from model {$model}: " . $response->body());
+                $errorBody = $response->json();
+                $errorCode = $errorBody[0]['error']['code'] ?? $response->status();
+                $errorMessage = $errorBody[0]['error']['message'] ?? $response->body();
+                $errorStatus = $errorBody[0]['error']['status'] ?? 'UNKNOWN';
+                
+                Log::error("GeminiService: Failed to generate image from model {$model}", [
+                    'status_code' => $response->status(),
+                    'error_code' => $errorCode,
+                    'error_status' => $errorStatus,
+                    'error_message' => $errorMessage,
+                    'full_response' => $response->body()
+                ]);
+                
+                // Check if this is a retryable error (500, 503, etc.)
+                if (in_array($response->status(), [500, 502, 503, 504]) || $errorStatus === 'INTERNAL') {
+                    Log::warning("GeminiService: Retryable error detected for model {$model}");
+                }
+                
                 return null;
             }
 
@@ -398,7 +429,7 @@ class GeminiService
      * @param array $parameters Additional generation parameters (e.g., aspectRatio, durationSeconds).
      * @return string|null The operation name if successful, or null on failure.
      */
-    public function startVideoGeneration(string $prompt, string $model = 'veo-3.0-generate-001', array $parameters = []): ?string
+    public function startVideoGeneration(string $prompt, string $model = 'veo-3.1-generate-preview', array $parameters = []): ?string
     {
         try {
             $requestBody = [
@@ -493,5 +524,101 @@ class GeminiService
             ]);
             return null;
         }
+    }
+
+    /**
+     * Extend a Veo-generated video by up to 7 seconds using Veo 3.1.
+     * 
+     * Requirements:
+     * - Input video must be Veo-generated (from a previous operation response)
+     * - Video must be 141 seconds or less
+     * - Aspect ratio: 9:16 or 16:9
+     * - Resolution: 720p
+     * - Can extend up to 20 times (cumulative 148 seconds max)
+     * 
+     * @param string $videoUri The URI of the Veo-generated video to extend (e.g., from operation.response.generated_videos[0].video)
+     * @param string $prompt The prompt describing how to extend the video
+     * @param array $parameters Additional parameters (aspectRatio, durationSeconds, etc.)
+     * @return string|null The operation name if successful, or null on failure.
+     */
+    public function extendVideo(string $videoUri, string $prompt, array $parameters = []): ?string
+    {
+        try {
+            // Extract file name from URI for the video parameter
+            // The videoUri should be in the format returned by Gemini (e.g., files/xyz)
+            $videoFileName = $this->extractFileNameFromUri($videoUri);
+            
+            if (!$videoFileName) {
+                Log::error("GeminiService: Invalid video URI format for extension: {$videoUri}");
+                return null;
+            }
+
+            $requestBody = [
+                'instances' => [
+                    [
+                        'prompt' => $prompt,
+                        'video' => [
+                            'fileUri' => $videoFileName
+                        ]
+                    ]
+                ],
+                'parameters' => array_merge([
+                    'aspectRatio' => '16:9',
+                    'sampleCount' => 1,
+                    'durationSeconds' => 7, // Extension duration (up to 7 seconds)
+                    'personGeneration' => 'ALLOW_ALL',
+                ], $parameters),
+            ];
+
+            Log::info("GeminiService: Extending video with URI: {$videoFileName}");
+            Log::info("GeminiService: Extension prompt: {$prompt}");
+
+            $response = Http::withHeaders([
+                'Content-Type' => 'application/json',
+                'x-goog-api-key' => $this->apiKey,
+            ])->timeout(300)->post("{$this->baseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
+
+            if ($response->failed()) {
+                Log::error("GeminiService: Failed to extend video: " . $response->body());
+                return null;
+            }
+
+            $operationName = $response->json()['name'] ?? null;
+            Log::info("GeminiService: Video extension started successfully. Operation: {$operationName}");
+
+            return $operationName;
+        } catch (\Exception $e) {
+            Log::error("GeminiService: Exception during video extension: " . $e->getMessage(), [
+                'exception' => $e,
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Extract the file name/identifier from a Gemini video URI.
+     * Handles both full URIs and file identifiers.
+     * 
+     * @param string $uri The video URI
+     * @return string|null The extracted file identifier
+     */
+    private function extractFileNameFromUri(string $uri): ?string
+    {
+        // If already in correct format (files/xyz or just the ID)
+        if (preg_match('#^files/[a-zA-Z0-9]+$#', $uri)) {
+            return $uri;
+        }
+
+        // Extract from full download URI (e.g., https://generativelanguage.googleapis.com/v1beta/files/xyz:download?alt=media)
+        if (preg_match('#/files/([a-zA-Z0-9]+)(?::|/)#', $uri, $matches)) {
+            return 'files/' . $matches[1];
+        }
+
+        // If it's just an ID
+        if (preg_match('#^[a-zA-Z0-9]+$#', $uri)) {
+            return 'files/' . $uri;
+        }
+
+        return null;
     }
 }

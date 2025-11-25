@@ -7,9 +7,9 @@ import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
 import DangerButton from '@/Components/DangerButton';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function Edit({ auth, mustVerifyEmail, status }) {
+export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
     const { customers } = usePage().props;
     const [formData, setFormData] = useState({
         name: '',
@@ -22,6 +22,28 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
         phone: '',
     });
     const [isCreating, setIsCreating] = useState(false);
+
+    useEffect(() => {
+        if (!facebookAppId) return;
+
+        window.fbAsyncInit = function() {
+            window.FB.init({
+                appId      : facebookAppId,
+                cookie     : true,
+                xfbml      : true,
+                version    : 'v19.0'
+            });
+            window.FB.AppEvents.logPageView();
+        };
+
+        (function(d, s, id){
+            var js, fjs = d.getElementsByTagName(s)[0];
+            if (d.getElementById(id)) {return;}
+            js = d.createElement(s); js.id = id;
+            js.src = "https://connect.facebook.net/en_US/sdk.js";
+            fjs.parentNode.insertBefore(js, fjs);
+        }(document, 'script', 'facebook-jssdk'));
+    }, [facebookAppId]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -253,7 +275,7 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                                             <form 
                                                 onSubmit={(e) => {
                                                     e.preventDefault();
-                                                    router.post(route('facebook.disconnect'), {});
+                                                    router.post(route('facebook-ads.disconnect'), {});
                                                 }}
                                                 className="inline"
                                             >
@@ -267,7 +289,7 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                                             <p className="text-sm text-gray-600 mb-3">
                                                 Connect your Facebook account to manage ads through cvseeyou.
                                             </p>
-                                            <a href={route('facebook.redirect')}>
+                                            <a href={route('facebook-ads.redirect')}>
                                                 <button 
                                                     type="button"
                                                     className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition duration-150 ease-in-out hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:bg-blue-800"

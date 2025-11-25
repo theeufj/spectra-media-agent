@@ -67,6 +67,22 @@ class GenerateAdCopy implements ShouldQueue
                 Log::warning("No brand guidelines found for customer {$this->campaign->customer_id}. Content may lack brand consistency.");
             }
 
+            // Fetch selected product pages
+            $productContext = [];
+            $selectedPages = $this->campaign->pages; // Assuming relationship is defined
+            if ($selectedPages->isNotEmpty()) {
+                $productContext = $selectedPages->map(function ($page) {
+                    return [
+                        'title' => $page->title,
+                        'url' => $page->url,
+                        'price' => $page->metadata['price'] ?? null,
+                        'description' => $page->meta_description,
+                        'features' => $page->metadata['features'] ?? [], // Assuming features might be in metadata
+                    ];
+                })->toArray();
+                Log::info("Found " . count($productContext) . " selected product pages for ad copy generation.");
+            }
+
             $strategyContent = $this->strategy->ad_copy_strategy;
             $maxAttempts = 10; // Increased to ensure compliance with rules
             $approvedAdCopyData = null;
@@ -85,7 +101,8 @@ class GenerateAdCopy implements ShouldQueue
                     $this->platform,
                     $rules,
                     $lastFeedback,
-                    $brandGuidelines
+                    $brandGuidelines,
+                    $productContext
                 ))->getPrompt();
                 $generatedResponse = $geminiService->generateContent('gemini-2.5-pro', $adCopyPrompt);
                 Log::info("Received raw response from Gemini for attempt {$attempt}.", ['response' => $generatedResponse]);

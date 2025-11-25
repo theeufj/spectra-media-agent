@@ -15,6 +15,9 @@ use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
 use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
 use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
+use App\Services\GoogleAds\CreateAndLinkManagedAccount;
+use App\Services\GoogleAds\CreateManagedAccount;
+use App\Services\GoogleAds\CreateCustomerClientLink;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -37,6 +40,43 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     protected string $platform = 'google';
     
     /**
+     * Execute the deployment with ExecutionContext
+     */
+    public function execute(ExecutionContext $context): ExecutionResult
+    {
+        Log::info("GoogleAdsExecutionAgent: Starting execution", [
+            'campaign_id' => $context->campaign->id,
+            'strategy_id' => $context->strategy->id,
+        ]);
+        
+        // Validate prerequisites
+        $validation = $this->validatePrerequisites($context);
+        if (!$validation->passes()) {
+            Log::error("GoogleAdsExecutionAgent: Prerequisites validation failed", [
+                'errors' => $validation->errors
+            ]);
+            return ExecutionResult::failure($validation->errors);
+        }
+        
+        // Analyze optimization opportunities
+        $optimization = $this->analyzeOptimizationOpportunities($context);
+        
+        // Generate execution plan
+        $plan = $this->generateExecutionPlan($context);
+        
+        // Execute the plan
+        $result = $this->executePlan($plan, $context);
+        
+        Log::info("GoogleAdsExecutionAgent: Execution completed", [
+            'campaign_id' => $context->campaign->id,
+            'success' => $result->success,
+            'execution_time' => $result->executionTime
+        ]);
+        
+        return $result;
+    }
+    
+    /**
      * Validate prerequisites before deployment
      * 
      * Checks:
@@ -49,17 +89,30 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function validatePrerequisites(ExecutionContext $context): ValidationResult
     {
-        $result = new ValidationResult();
+        $result = new ValidationResult(true);
         
-        // Check Google Ads account connection
-        if (!$this->customer->google_ads_customer_id) {
-            $result->addError('google_ads_not_connected', 'Google Ads account not connected');
+        // Check if customer has Google Ads refresh token (OAuth authorization)
+        if (!$this->customer->google_ads_refresh_token) {
+            $result->addError('google_ads_not_authorized', 'Google Ads account not authorized - please connect your Google Ads account');
             return $result;
         }
         
-        if (!$this->customer->google_ads_refresh_token) {
-            $result->addError('google_ads_not_authorized', 'Google Ads account not authorized');
-            return $result;
+        // Auto-create sub-account if customer doesn't have one
+        if (!$this->customer->google_ads_customer_id) {
+            Log::info("GoogleAdsExecutionAgent: Customer has no Google Ads account, attempting to create sub-account", [
+                'customer_id' => $this->customer->id,
+            ]);
+            
+            $created = $this->createSubAccount();
+            if (!$created) {
+                $result->addError('google_ads_subaccount_creation_failed', 'Failed to create Google Ads sub-account - please check MCC configuration');
+                return $result;
+            }
+            
+            Log::info("GoogleAdsExecutionAgent: Successfully created sub-account", [
+                'customer_id' => $this->customer->id,
+                'google_ads_customer_id' => $this->customer->google_ads_customer_id,
+            ]);
         }
         
         // Check conversion tracking (warning only - campaigns can run without it)
@@ -70,7 +123,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         // Validate creative assets
         $strategy = $context->strategy;
         $hasImages = $strategy->imageCollaterals()->where('is_active', true)->exists();
-        $hasAdCopy = $strategy->adCopies()->where('platform', 'google')->exists();
+        $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) = ?', ['google'])->exists();
         
         if (!$hasAdCopy) {
             $result->addError('no_ad_copy', 'No ad copy available for Google Ads');
@@ -205,7 +258,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         try {
             // Use Google Search grounding for real-time API documentation access
-            $response = $this->geminiService->generateContent(
+            $response = $this->gemini->generateContent(
                 model: 'gemini-2.5-pro',
                 prompt: $prompt,
                 config: [
@@ -213,13 +266,18 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                     'maxOutputTokens' => 8192,
                 ],
                 systemInstruction: $systemInstruction,
-                enableThinking: true,
                 enableGoogleSearch: true // Enable real-time grounding for current API best practices
             );
             
             if (!$response || !isset($response['text'])) {
                 throw new \Exception('Empty response from AI model');
             }
+            
+            // Log the raw response for debugging
+            Log::debug("GoogleAdsExecutionAgent: Raw AI response", [
+                'response_length' => strlen($response['text']),
+                'response_preview' => substr($response['text'], 0, 500)
+            ]);
             
             $plan = ExecutionPlan::fromJson($response['text']);
             
@@ -243,7 +301,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     protected function executePlan(ExecutionPlan $plan, ExecutionContext $context): ExecutionResult
     {
         $startTime = microtime(true);
-        $result = ExecutionResult::success($plan);
+        $result = ExecutionResult::success(platformIds: [], executionTime: 0.0, plan: $plan);
         $customerId = $this->customer->google_ads_customer_id;
         $strategy = $context->strategy;
         $campaign = $context->campaign;
@@ -475,8 +533,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $recoveryPrompt = $this->buildRecoveryPrompt($error, $context);
         
         try {
-            $response = $this->geminiService->generateContent(
-                model: 'gemini-2.5-flash',
+            $response = $this->gemini->generateContent(
+                model: 'gemini-3-pro-preview',
                 prompt: $recoveryPrompt,
                 config: ['temperature' => 0.3, 'maxOutputTokens' => 2048],
                 systemInstruction: 'You are an expert at diagnosing and recovering from Google Ads API errors. Provide specific, actionable recovery steps.'
@@ -548,5 +606,73 @@ PROMPT;
         // TODO: Implement actual conversion count retrieval via Google Ads API
         // For now, return 0
         return 0;
+    }
+    
+    /**
+     * Get the platform name for this agent
+     */
+    protected function getPlatformName(): string
+    {
+        return 'Google Ads';
+    }
+    
+    /**
+     * Create a Google Ads sub-account under the MCC
+     * 
+     * @return bool True if account created successfully, false otherwise
+     */
+    protected function createSubAccount(): bool
+    {
+        try {
+            $mccCustomerId = config('googleads.mcc_customer_id');
+            
+            if (!$mccCustomerId) {
+                Log::error("GoogleAdsExecutionAgent: MCC Customer ID not configured");
+                return false;
+            }
+            
+            $accountName = $this->customer->name . ' - Google Ads';
+            
+            // Use dependency injection to create the service
+            $createService = new CreateAndLinkManagedAccount(
+                $this->customer,
+                app(CreateManagedAccount::class, ['customer' => $this->customer]),
+                app(CreateCustomerClientLink::class, ['customer' => $this->customer])
+            );
+            
+            $result = $createService(
+                $mccCustomerId,
+                $accountName,
+                'USD',  // TODO: Get from customer's preferred currency
+                'America/New_York'  // TODO: Get from customer's timezone
+            );
+            
+            if (!$result) {
+                Log::error("GoogleAdsExecutionAgent: Failed to create sub-account", [
+                    'customer_id' => $this->customer->id,
+                    'mcc_customer_id' => $mccCustomerId,
+                ]);
+                return false;
+            }
+            
+            // Update customer record with new Google Ads customer ID
+            $this->customer->google_ads_customer_id = $result['customer_id'];
+            $this->customer->save();
+            
+            Log::info("GoogleAdsExecutionAgent: Created Google Ads sub-account", [
+                'customer_id' => $this->customer->id,
+                'google_ads_customer_id' => $result['customer_id'],
+                'resource_name' => $result['resource_name'],
+            ]);
+            
+            return true;
+        } catch (\Exception $e) {
+            Log::error("GoogleAdsExecutionAgent: Exception creating sub-account: " . $e->getMessage(), [
+                'customer_id' => $this->customer->id,
+                'exception' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return false;
+        }
     }
 }

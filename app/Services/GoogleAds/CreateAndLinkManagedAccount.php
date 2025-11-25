@@ -10,16 +10,13 @@ use App\Models\Customer as CustomerModel;
 class CreateAndLinkManagedAccount extends BaseGoogleAdsService
 {
     private CreateManagedAccount $createManagedAccount;
-    private CreateCustomerClientLink $createCustomerClientLink;
 
     public function __construct(
         CustomerModel $customer,
-        CreateManagedAccount $createManagedAccount,
-        CreateCustomerClientLink $createCustomerClientLink
+        CreateManagedAccount $createManagedAccount
     ) {
         parent::__construct($customer);
         $this->createManagedAccount = $createManagedAccount;
-        $this->createCustomerClientLink = $createCustomerClientLink;
     }
 
     /**
@@ -66,25 +63,13 @@ class CreateAndLinkManagedAccount extends BaseGoogleAdsService
                 return null;
             }
 
-            // Step 2: Link the managed account to the MCC
-            $linkResult = ($this->createCustomerClientLink)(
-                $managerCustomerId,
-                $newCustomerId
-            );
-
-            if (!$linkResult) {
-                Log::warning("Managed account created but linking failed", [
-                    'resource_name' => $resourceName,
-                    'new_customer_id' => $newCustomerId,
-                ]);
-                // Even if linking fails, we still return the created account
-            }
-
-            Log::info("Successfully created and linked managed account", [
+            // Note: In Google Ads API v22, createCustomerClient() automatically links the account to MCC
+            // No separate linking step is needed
+            
+            Log::info("Successfully created managed account (automatically linked via API)", [
                 'manager_customer_id' => $managerCustomerId,
                 'new_customer_id' => $newCustomerId,
                 'resource_name' => $resourceName,
-                'link_result' => $linkResult,
             ]);
 
             return [

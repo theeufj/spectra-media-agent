@@ -44,6 +44,13 @@ class CampaignController extends Controller
         $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
         $campaign = $customer->campaigns()->create($request->validated());
 
+        if ($request->has('selected_pages')) {
+            $campaign->pages()->attach($request->input('selected_pages'));
+        }
+
+        // Mark that we're about to start generating strategies
+        $campaign->update(['strategy_generation_started_at' => now()]);
+        
         GenerateStrategy::dispatch($campaign);
 
         return redirect()->route('campaigns.show', $campaign);
@@ -60,9 +67,13 @@ class CampaignController extends Controller
         }
 
         $campaign->load('strategies');
+        
+        // Add generation status
+        $campaignData = $campaign->toArray();
+        $campaignData['is_generating_strategies'] = $campaign->isGeneratingStrategies();
 
         return Inertia::render('Campaigns/Show', [
-            'campaign' => $campaign,
+            'campaign' => $campaignData,
         ]);
     }
 
@@ -77,8 +88,13 @@ class CampaignController extends Controller
         }
 
         $strategy->update(['signed_off_at' => now()]);
+        
+        // Reload campaign with strategies to get fresh data
+        $campaign->load('strategies');
+        $campaignData = $campaign->toArray();
+        $campaignData['is_generating_strategies'] = $campaign->isGeneratingStrategies();
 
-        return redirect()->back()->with('success', 'Strategy signed off successfully!');
+        return back()->with('success', 'Strategy signed off successfully!');
     }
 
     /**
@@ -96,13 +112,7 @@ class CampaignController extends Controller
         // Dispatch collateral generation job
         GenerateCampaignCollateral::dispatch($campaign, $request->user()->id);
 
-        // Get the first strategy to redirect to collateral page
-        $firstStrategy = $campaign->strategies()->first();
-
-        return redirect()->route('campaigns.collateral.show', [
-            'campaign' => $campaign->id,
-            'strategy' => $firstStrategy->id
-        ])->with('success', 'All strategies have been signed off! We are generating your collateral now.');
+        return back()->with('success', 'All strategies have been signed off! We are generating your collateral now.');
     }
 
     /**
@@ -147,7 +157,11 @@ class CampaignController extends Controller
         }
 
         $campaign->load('strategies');
+        
+        // Add generation status to response
+        $campaignData = $campaign->toArray();
+        $campaignData['is_generating_strategies'] = $campaign->isGeneratingStrategies();
 
-        return response()->json($campaign);
+        return response()->json($campaignData);
     }
 }

@@ -2,22 +2,27 @@
 
 namespace App\Jobs;
 
-use App\Models\Competitor;
+use App\Models\CustomerPage;
 use App\Models\KnowledgeBase;
 use App\Models\User;
+use App\Models\Customer;
 use App\Prompts\ChunkingPrompt;
 use App\Services\GeminiService;
+use App\Services\LandingPageCROAuditService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Pgvector\Laravel\Vector;
 use Spatie\Browsershot\Browsershot;
+use Spatie\Robots\RobotsTxt;
 use Symfony\Component\DomCrawler\Crawler;
+use App\Models\LandingPageAudit;
 
 class CrawlPage implements ShouldQueue
 {
@@ -39,19 +44,47 @@ class CrawlPage implements ShouldQueue
     public $url;
 
     /**
+     * @var array
+     */
+    public $metadata;
+
+    /**
      * Create a new job instance.
      *
      * @param User $user
      * @param string $url
      * @param int|null $customerId
+     * @param array $metadata
      */
-    public function __construct(User $user, string $url, ?int $customerId = null)
+    public function __construct(User $user, string $url, ?int $customerId = null, array $metadata = [])
     {
         $this->user = $user;
         $this->url = $url;
         $this->customerId = $customerId;
+        $this->metadata = $metadata;
     }
 
+    /**
+     * Check if customer can run CRO audit (subscription-based limit)
+     */
+    protected function canRunCROAudit(Customer $customer): bool
+    {
+        // Get first user associated with customer to check subscription
+        $user = $customer->users()->first();
+        
+        if (!$user) {
+            return false;
+        }
+        
+        // Pro users have unlimited audits
+        if ($user->subscribed('default') || $user->subscription_status === 'active') {
+            return true;
+        }
+        
+        // Free users limited to 3 CRO audits
+        return $customer->cro_audits_used < 3;
+    }
+    
     /**
      * Execute the job.
      */
@@ -62,8 +95,39 @@ class CrawlPage implements ShouldQueue
             Log::info("CrawlPage: Batch cancelled, skipping URL: {$this->url}");
             return;
         }
+
+        // Check robots.txt
+        $parsedUrl = parse_url($this->url);
+        if (isset($parsedUrl['scheme']) && isset($parsedUrl['host'])) {
+            $baseUrl = $parsedUrl['scheme'] . '://' . $parsedUrl['host'];
+            $robotsUrl = $baseUrl . '/robots.txt';
+
+            $robotsTxtContent = Cache::remember("robots_txt_{$parsedUrl['host']}", 3600, function () use ($robotsUrl) {
+                try {
+                    $response = Http::get($robotsUrl);
+                    return $response->successful() ? $response->body() : '';
+                } catch (\Exception $e) {
+                    Log::warning("CrawlPage: Could not fetch robots.txt for {$this->url}: " . $e->getMessage());
+                    return '';
+                }
+            });
+
+            if (!empty($robotsTxtContent)) {
+                $robots = new RobotsTxt($robotsTxtContent);
+                // Use a default user agent if not configured
+                $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+                
+                if (!$robots->allows($this->url, $userAgent)) {
+                    Log::warning("CrawlPage: URL disallowed by robots.txt: {$this->url}");
+                    return;
+                }
+            }
+        }
         
         try {
+            // Ethical scraping delay
+            sleep(rand(5, 10));
+
             // Step 1: Use a headless browser to get the fully rendered HTML.
             // This executes the JavaScript on the page, just like a real browser.
             $html = Browsershot::url($this->url)
@@ -96,8 +160,24 @@ class CrawlPage implements ShouldQueue
                 $headings[$node->nodeName()][] = $node->text();
             });
 
+            // Extract text content from the body after removing irrelevant elements
+            $textContent = $crawler->filter('body')->text();
+            $cleanedContent = preg_replace('/\s+/', ' ', $textContent);
+
+            // Detect page type (Product/Money page)
+            $pageType = $this->detectPageType($crawler);
+            Log::info("CrawlPage: Detected page type: {$pageType} for URL: {$this->url}");
+
             if ($this->customerId) {
-                Competitor::updateOrCreate(
+                $metadata = $this->metadata ?? [];
+                $metadata['headings'] = $headings;
+
+                // Initialize Gemini Service for embedding
+                $geminiService = new GeminiService();
+                $embeddingText = substr($title . "\n" . $metaDescription . "\n" . $cleanedContent, 0, 8000); // Limit context
+                $embedding = $geminiService->embedContent('text-embedding-004', $embeddingText);
+
+                CustomerPage::updateOrCreate(
                     [
                         'customer_id' => $this->customerId,
                         'url' => $this->url,
@@ -105,17 +185,58 @@ class CrawlPage implements ShouldQueue
                     [
                         'title' => $title,
                         'meta_description' => $metaDescription,
-                        'headings' => json_encode($headings),
-                        'raw_content' => $cleanedContent,
+                        'page_type' => $pageType,
+                        'metadata' => $metadata,
+                        'content' => $cleanedContent,
+                        'embedding' => $embedding ? new Vector($embedding) : null,
                     ]
                 );
-                Log::info("Successfully crawled and stored competitor page: {$this->url}");
-                return; // Skip knowledge base processing for competitors
+                
+                Log::info("Successfully crawled and stored customer page: {$this->url}");
+                
+                // Run CRO Audit for customer pages (product/money pages)
+                if (in_array($pageType, ['product', 'money', 'landing'])) {
+                    try {
+                        $customer = Customer::find($this->customerId);
+                        
+                        // Check subscription limits for CRO audits
+                        if (!$this->canRunCROAudit($customer)) {
+                            Log::info("CRO audit skipped - limit reached for free users", [
+                                'customer_id' => $this->customerId,
+                                'url' => $this->url,
+                            ]);
+                            return;
+                        }
+                        
+                        Log::info("Running CRO audit for page", [
+                            'customer_id' => $this->customerId,
+                            'url' => $this->url,
+                            'page_type' => $pageType,
+                        ]);
+                        
+                        $croAuditService = new LandingPageCROAuditService(new GeminiService());
+                        $audit = $croAuditService->auditPage($customer, $this->url, $html);
+                        
+                        // Increment usage counter
+                        $customer->increment('cro_audits_used');
+                        
+                        Log::info("CRO audit completed", [
+                            'customer_id' => $this->customerId,
+                            'url' => $this->url,
+                            'score' => $audit->overall_score,
+                            'issues_count' => count($audit->issues ?? []),
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::warning("CRO audit failed for page", [
+                            'customer_id' => $this->customerId,
+                            'url' => $this->url,
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+                
+                return; // Skip knowledge base processing for customer pages
             }
-
-            // Extract text content from the body after removing irrelevant elements
-            $textContent = $crawler->filter('body')->text();
-            $cleanedContent = preg_replace('/\s+/', ' ', $textContent);
 
             // Step 2.5: Extract, fetch, and combine all CSS content.
             $cssContent = '';
@@ -227,5 +348,34 @@ class CrawlPage implements ShouldQueue
         } catch (\Exception $e) {
             Log::error("Error processing page {$this->url}: " . $e->getMessage());
         }
+    }
+
+    /**
+     * Detect if the page is a product or money page.
+     */
+    private function detectPageType(Crawler $crawler): string
+    {
+        // Check for Schema.org Product
+        try {
+            $jsonLd = $crawler->filter('script[type="application/ld+json"]')->each(function (Crawler $node) {
+                return $node->text();
+            });
+            
+            foreach ($jsonLd as $json) {
+                if (str_contains($json, '"@type":"Product"') || str_contains($json, '"@type": "Product"')) {
+                    return 'product';
+                }
+            }
+        } catch (\Exception $e) {
+            // Ignore parsing errors
+        }
+
+        // Check for common e-commerce elements in HTML
+        $html = $crawler->html();
+        if (preg_match('/add to cart|buy now|checkout/i', $html) && preg_match('/\$\d+(\.\d{2})?/', $html)) {
+            return 'product';
+        }
+
+        return 'general';
     }
 }

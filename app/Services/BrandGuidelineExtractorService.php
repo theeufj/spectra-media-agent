@@ -17,6 +17,31 @@ class BrandGuidelineExtractorService
     {
         $this->geminiService = $geminiService;
     }
+    
+    /**
+     * Check if customer can extract brand guidelines (subscription-based limit)
+     */
+    protected function canExtractGuidelines(Customer $customer): bool
+    {
+        // Get first user associated with customer to check subscription
+        $user = $customer->users()->first();
+        
+        if (!$user) {
+            return false;
+        }
+        
+        // Pro users have unlimited extractions
+        if ($user->subscribed('default')) {
+            return true;
+        }
+        
+        // Free users limited to 3 brand guideline extractions (check if already exists)
+        $existingGuideline = BrandGuideline::where('customer_id', $customer->id)->first();
+        
+        // If guideline already exists, allow re-extraction (same limit)
+        // Free users get 1 brand guideline extraction per customer
+        return !$existingGuideline;
+    }
 
     /**
      * Extract brand guidelines from customer's website and knowledge base
@@ -25,6 +50,14 @@ class BrandGuidelineExtractorService
     {
         try {
             Log::info("Starting brand guideline extraction for customer {$customer->id}");
+            
+            // Check subscription limits
+            if (!$this->canExtractGuidelines($customer)) {
+                Log::info("Brand guideline extraction skipped - limit reached for free users", [
+                    'customer_id' => $customer->id,
+                ]);
+                return null;
+            }
 
             // Step 1: Gather all knowledge base content from all users associated with this customer
             $userIds = $customer->users()->pluck('users.id');
@@ -132,14 +165,53 @@ class BrandGuidelineExtractorService
         try {
             Log::info("Analyzing visual style for: {$websiteUrl}");
 
-            // Try Browsershot first for JavaScript-rendered sites
+            // Try Browsershot with Screenshot for Vision AI
+            try {
+                $screenshot = Browsershot::url($websiteUrl)
+                    ->waitUntilNetworkIdle()
+                    ->windowSize(1920, 1080)
+                    ->timeout(60)
+                    ->base64Screenshot();
+
+                Log::info("Screenshot captured, sending to Gemini Vision AI");
+
+                // Call Gemini Vision
+                $prompt = "Analyze this website screenshot. Extract the visual brand identity. Return a JSON object with these keys: 'primary_colors' (array of hex codes), 'fonts' (array of font descriptions or names), 'image_style' (string description), 'layout_style' (string description).";
+                
+                $response = $this->geminiService->generateContent(
+                    'gemini-flash-latest', 
+                    $prompt,
+                    ['responseMimeType' => 'application/json'],
+                    null,
+                    false,
+                    false,
+                    3,
+                    $screenshot,
+                    'image/png'
+                );
+
+                if ($response && isset($response['text'])) {
+                     $analysis = json_decode($this->cleanJsonResponse($response['text']), true);
+                     if ($analysis) {
+                         Log::info("Visual analysis completed via Vision AI");
+                         return $analysis;
+                     }
+                }
+
+            } catch (\Exception $e) {
+                Log::warning("Vision AI analysis failed, falling back to HTML scraping", [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            // Fallback to HTML scraping if Vision AI fails
             try {
                 $html = Browsershot::url($websiteUrl)
                     ->waitUntilNetworkIdle()
                     ->timeout(30)
                     ->bodyHtml();
             } catch (\Exception $e) {
-                Log::warning("Browsershot failed, falling back to HTTP", [
+                Log::warning("Browsershot HTML fetch failed, falling back to HTTP", [
                     'error' => $e->getMessage(),
                 ]);
                 // Fallback to simple HTTP request

@@ -3,12 +3,12 @@
 namespace App\Services\GoogleAds\SearchServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\AdGroup;
-use Google\Ads\GoogleAds\V15\Services\AdGroupService;
-use Google\Ads\GoogleAds\V15\Services\AdGroupOperation;
-use Google\Ads\GoogleAds\V15\Enums\AdGroupStatusEnum\AdGroupStatus;
-use Google\Ads\GoogleAds\V15\Enums\AdGroupTypeEnum\AdGroupType;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\AdGroup;
+use Google\Ads\GoogleAds\V22\Services\AdGroupService;
+use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class CreateSearchAdGroup extends BaseGoogleAdsService
@@ -28,6 +28,8 @@ class CreateSearchAdGroup extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $campaignResourceName, string $adGroupName): ?string
     {
+        $this->ensureClient();
+        
         $adGroup = new AdGroup([
             'name' => $adGroupName,
             'campaign' => $campaignResourceName,
@@ -40,7 +42,12 @@ class CreateSearchAdGroup extends BaseGoogleAdsService
 
         try {
             $adGroupServiceClient = $this->client->getAdGroupServiceClient();
-            $response = $adGroupServiceClient->mutateAdGroups($customerId, [$adGroupOperation]);
+            // Fix: Use MutateAdGroupsRequest object
+            $request = new \Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$adGroupOperation],
+            ]);
+            $response = $adGroupServiceClient->mutateAdGroups($request);
             $newAdGroupResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Search ad group: " . $newAdGroupResourceName);
             return $newAdGroupResourceName;

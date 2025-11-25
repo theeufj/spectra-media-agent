@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\Cache;
  * Available Veo Models (Video):
  * - veo-3.1-generate-001 | State-of-the-art video generation with native audio
  * - veo-3.1-fast-generate-001 | Higher quality with lower latency
- * - veo-3.0-generate-001 | Previous generation
+ * - veo-3.1-generate-preview | Previous generation
  * - veo-3.0-fast-generate-001 | Previous generation with lower latency
  * - veo-2.0-generate-001 | Earlier generation
  * 

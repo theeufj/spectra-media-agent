@@ -1,9 +1,10 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, useForm } from '@inertiajs/react';
+import { Head, useForm, usePage } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
+import ProductSelection from './ProductSelection';
 
 // A simple component for a form section with a title and description
 const FormSection = ({ title, description, children }) => (
@@ -53,7 +54,12 @@ export default function Create({ auth }) {
         primary_kpi: '',
         product_focus: '',
         exclusions: '',
+        selected_pages: [],
     });
+
+    // Get the current customer ID from the auth user (assuming single customer context for now)
+    // In a real multi-tenant app, this might come from a route param or a selector.
+    const customerId = auth.user?.customer_id; // Ensure your User model appends this or it's available via relationship
 
     const submit = (e) => {
         e.preventDefault();
@@ -137,6 +143,18 @@ export default function Create({ auth }) {
                             <TextArea id="product_focus" className="mt-1 block w-full" value={data.product_focus} onChange={(e) => setData('product_focus', e.target.value)} />
                             <InputError message={errors.product_focus} className="mt-2" />
                         </div>
+                        
+                        {/* Product Selection Component */}
+                        {customerId && (
+                            <div className="col-span-1 md:col-span-2">
+                                <ProductSelection 
+                                    customerId={customerId}
+                                    selectedPages={data.selected_pages || []}
+                                    onSelectionChange={(pages) => setData('selected_pages', pages)}
+                                />
+                            </div>
+                        )}
+
                         <div>
                             <InputLabel htmlFor="exclusions" value="Exclusions / What to Avoid (Optional)" />
                             <TextArea id="exclusions" className="mt-1 block w-full" value={data.exclusions} onChange={(e) => setData('exclusions', e.target.value)} />

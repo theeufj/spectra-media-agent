@@ -69,7 +69,7 @@ class DeploymentService
             }
             
             // Create execution context
-            $context = ExecutionContext::create($campaign, $strategy, $customer);
+            $context = ExecutionContext::create($strategy, $campaign, $customer);
             
             // Execute with agent
             $result = $agent->execute($context);
@@ -109,9 +109,11 @@ class DeploymentService
                     'errors' => $result->errors
                 ]);
                 
+                $errorMessages = array_map(fn($error) => $error['message'] ?? $error, $result->errors);
+                
                 return [
                     'success' => false,
-                    'error' => implode(', ', $result->errors),
+                    'error' => implode(', ', $errorMessages),
                     'result' => $result
                 ];
             }
@@ -198,8 +200,8 @@ class DeploymentService
     protected static function getAgent(string $platform, Customer $customer): mixed
     {
         return match ($platform) {
-            'Google Ads (SEM)' => new GoogleAdsExecutionAgent($customer, app(GeminiService::class)),
-            'Facebook Ads' => new FacebookAdsExecutionAgent($customer, app(GeminiService::class)),
+            'Google Ads (SEM)', 'Google', 'Google Ads' => new GoogleAdsExecutionAgent($customer, app(GeminiService::class)),
+            'Facebook Ads', 'Facebook' => new FacebookAdsExecutionAgent($customer, app(GeminiService::class)),
             default => null
         };
     }

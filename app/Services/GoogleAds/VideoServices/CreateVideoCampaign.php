@@ -3,18 +3,18 @@
 namespace App\Services\GoogleAds\VideoServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\Campaign;
-use Google\Ads\GoogleAds\V15\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V15\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V15\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
-use Google\Ads\GoogleAds\V15\Enums\BudgetTypeEnum\BudgetType;
-use Google\Ads\GoogleAds\V15\Services\CampaignBudgetService;
-use Google\Ads\GoogleAds\V15\Services\CampaignService;
-use Google\Ads\GoogleAds\V15\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V15\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V15\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V15\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Campaign;
+use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
+use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V22\Services\CampaignBudgetService;
+use Google\Ads\GoogleAds\V22\Services\CampaignService;
+use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class CreateVideoCampaign extends BaseGoogleAdsService

@@ -7,7 +7,7 @@ export default function Landing({ auth }) {
     const [openFAQ, setOpenFAQ] = React.useState(null);
     return (
         <>
-            <Head title="cvseeyou - AI-Powered Digital Marketing" />
+            <Head title="sitetospend - AI-Powered Digital Marketing" />
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />
 
@@ -18,13 +18,13 @@ export default function Landing({ auth }) {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 lg:gap-8">
                                 <div className="mx-auto max-w-sm px-2 sm:max-w-md sm:px-4 md:max-w-none md:px-0 text-center sm:text-center md:text-left md:flex md:items-center">
                                     <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
-                                        <p className="text-xs sm:text-sm font-semibold text-indigo-600 uppercase tracking-wider">Join 500+ Marketing Teams</p>
+                                        <p className="text-xs sm:text-sm font-semibold text-indigo-600 uppercase tracking-wider">AI That Understands Your Brand</p>
                                         <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
-                                            <span className="block whitespace-normal">Agentic Digital Marketing</span>
-                                            <span className="block text-indigo-600 whitespace-normal">Powered by AI</span>
+                                            <span className="block whitespace-normal">The results of a top-tier agency.</span>
+                                            <span className="block text-indigo-600 whitespace-normal">The cost of a utility bill.</span>
                                         </h1>
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
-                                            Generate ad copy, images, and videos for free. When you're ready to launch, our AI agents will deploy and manage your campaigns for a flat monthly fee. Stop paying thousands for ad management.
+                                            Stop paying thousands in retainer fees. Spectra gives you an autonomous marketing team that never sleeps, never takes sick days, and optimizes your campaigns 24/7.
                                         </p>
                                         <div className="mt-6 sm:mt-8 md:mt-10 lg:mt-10 flex flex-col xs:flex-col sm:flex-row gap-3 sm:gap-4">
                                             <a
@@ -130,26 +130,46 @@ export default function Landing({ auth }) {
                     <div id="how-it-works" className="bg-white py-12 sm:py-16 md:py-20 lg:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center mb-12 sm:mb-14 md:mb-16">
-                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">How It Works</h2>
+                                <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">From URL to ROI in 3 Steps</h2>
                                 <p className="mt-3 sm:mt-4 text-base sm:text-lg leading-8 text-gray-600">
-                                    Three simple steps to launch your first campaign
+                                    Our autonomous agents handle the complex backend workflow so you don't have to.
                                 </p>
                             </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-                                <div className="relative">
-                                    <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">1</div>
-                                    <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Generate Creative Assets</h3>
-                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Add your website and describe your goals. Our AI learns your brand, then creates multiple variations of on-brand ad copy, images, and videos.</p>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
+                                {/* Connecting Line (Desktop only) */}
+                                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-indigo-100 -z-10"></div>
+
+                                {/* Step 1 */}
+                                <div className="relative flex flex-col items-center text-center">
+                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
+                                        <span className="text-4xl">👁️</span>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-3">1. Vision AI Extraction</h3>
+                                    <p className="text-gray-600 leading-relaxed">
+                                        Enter your URL. Our <strong>Crawler</strong> takes a high-res screenshot, and <strong>Gemini Vision AI</strong> instantly extracts your hex codes, fonts, and brand voice. No manual setup required.
+                                    </p>
                                 </div>
-                                <div className="relative">
-                                    <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">2</div>
-                                    <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Connect Your Accounts</h3>
-                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Securely link your Google Ads, Facebook, or other advertising platform accounts to cvseeyou.</p>
+
+                                {/* Step 2 */}
+                                <div className="relative flex flex-col items-center text-center">
+                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
+                                        <span className="text-4xl">🧠</span>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-3">2. Strategic Generation</h3>
+                                    <p className="text-gray-600 leading-relaxed">
+                                        The <strong>Strategy Agent</strong> analyzes your competitors. Then, the <strong>Creative Agent</strong> generates dozens of high-converting ad variations (Copy + Image) tailored to your audience.
+                                    </p>
                                 </div>
-                                <div className="relative">
-                                    <div className="flex items-center justify-center h-10 w-10 sm:h-12 sm:w-12 rounded-md bg-indigo-500 text-white text-lg sm:text-xl font-bold">3</div>
-                                    <h3 className="mt-3 sm:mt-4 text-base sm:text-lg font-semibold text-gray-900">Deploy & Optimize</h3>
-                                    <p className="mt-2 text-sm sm:text-base text-gray-600">Our AI agents automatically deploy campaigns, test variations, and optimize performance 24/7.</p>
+
+                                {/* Step 3 */}
+                                <div className="relative flex flex-col items-center text-center">
+                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
+                                        <span className="text-4xl">🚀</span>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-3">3. Deploy & Optimize</h3>
+                                    <p className="text-gray-600 leading-relaxed">
+                                        One-click launch to Google & Meta. The <strong>Optimization Agent</strong> monitors performance 24/7, automatically killing losing ads and scaling the winners.
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -174,9 +194,9 @@ export default function Landing({ auth }) {
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
                                             </div>
-                                            Brand-Aware AI
+                                            Vision AI Brand Extraction
                                         </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">Our AI learns your brand voice, colors, and messaging from your website—so every ad feels authentically you, not generic.</dd>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">AI screenshots your website and automatically extracts colors, fonts, visual style, and brand voice. No manual input needed—every ad stays perfectly on-brand.</dd>
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
@@ -208,6 +228,15 @@ export default function Landing({ auth }) {
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            </div>
+                                            Automatic Landing Page Audits
+                                        </dt>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">AI analyzes your landing pages for page speed, CTA placement, and message match—ensuring high conversion rates before you spend a dollar on ads.</dd>
+                                    </div>
+                                    <div className="relative pl-16">
+                                        <dt className="text-base font-semibold leading-7 text-gray-900">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6" /></svg>
                                             </div>
                                             Generate for Free
@@ -225,7 +254,7 @@ export default function Landing({ auth }) {
                             <div className="mx-auto max-w-2xl lg:text-center">
                                 <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">From Our Customers</h2>
                                 <p className="mt-4 sm:mt-6 text-base sm:text-lg leading-8 text-gray-600">
-                                    See how businesses like yours are succeeding with cvseeyou.
+                                    See how businesses like yours are succeeding with sitetospend.
                                 </p>
                             </div>
                             <div className="mx-auto mt-12 sm:mt-16 md:mt-20 grid max-w-2xl grid-cols-1 gap-6 sm:gap-8 text-sm leading-6 text-gray-900 sm:grid-cols-2 xl:mx-0 xl:max-w-none xl:grid-cols-3\">
@@ -234,7 +263,7 @@ export default function Landing({ auth }) {
                                         {[...Array(5)].map((_, i) => <span key={i} className="text-yellow-400">★</span>)}
                                     </div>
                                     <div className="text-lg font-medium">
-                                        <p>"cvseeyou has been a game-changer for our marketing. We've seen a 30% increase in conversions since we started using their AI agents."</p>
+                                        <p>"sitetospend has been a game-changer for our marketing. We've seen a 30% increase in conversions since we started using their AI agents."</p>
                                     </div>
                                     <div className="mt-6 font-semibold">Sarah L.</div>
                                     <div className="text-sm text-gray-600">CEO, Growing e-commerce brand</div>
@@ -254,7 +283,7 @@ export default function Landing({ auth }) {
                                         {[...Array(5)].map((_, i) => <span key={i} className="text-yellow-400">★</span>)}
                                     </div>
                                     <div className="text-lg font-medium">
-                                        <p>"As a small business owner, I don't have time to manage campaigns. cvseeyou's AI agents do it all, and results have been fantastic."</p>
+                                        <p>"As a small business owner, I don't have time to manage campaigns. sitetospend's AI agents do it all, and results have been fantastic."</p>
                                     </div>
                                     <div className="mt-6 font-semibold">Jessica B.</div>
                                     <div className="text-sm text-gray-600">Owner, Local service business</div>
@@ -275,33 +304,93 @@ export default function Landing({ auth }) {
                                 </p>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-                                {/* Free Tier */}
+                            {/* Comparison Table */}
+                            <div className="max-w-4xl mx-auto mb-16 overflow-hidden rounded-lg border border-gray-200 shadow-sm">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Traditional Agency</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">Spectra AI</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="bg-white divide-y divide-gray-200">
+                                        <tr>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Cost</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$2,500 - $5,000 / month</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">From $99 / month</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Setup Time</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2-4 Weeks</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">&lt; 5 Minutes</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Brand Guidelines</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Manual PDF creation (billed extra)</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Instant Vision AI Extraction</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Creatives</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Limited revisions</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Unlimited AI Generation</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Optimization</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Weekly manual checks</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">24/7 Real-time Agent adjustments</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
+                                {/* Starter Tier */}
                                 <div className="rounded-lg border border-gray-200 p-8 bg-white flex flex-col">
-                                    <h3 className="text-2xl font-bold text-gray-900">Free</h3>
+                                    <h3 className="text-2xl font-bold text-gray-900">Starter</h3>
+                                    <p className="mt-2 text-sm text-gray-500">For local businesses and early-stage startups.</p>
                                     <div className="mt-4 text-gray-900">
-                                        <span className="text-4xl font-extrabold">$0</span>
+                                        <span className="text-4xl font-extrabold">$99</span>
                                         <span className="text-xl font-medium">/month</span>
                                     </div>
-                                    <p className="mt-4 text-sm text-gray-500">Forever free</p>
+                                    <p className="mt-4 text-sm text-gray-500">7-day free trial. Cancel anytime.</p>
+                                    <p className="mt-2 text-xs text-gray-400">Perfect for: Spending up to $3,000/mo on ads.</p>
                                     <ul className="mt-8 space-y-4 flex-grow">
                                         <li className="flex items-start">
                                             <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">Unlimited creative generation</p>
+                                            <p className="text-gray-700">1 Brand Identity (Vision AI Extraction)</p>
                                         </li>
                                         <li className="flex items-start">
                                             <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">Ad copy variations</p>
+                                            <p className="text-gray-700">Google & Facebook Deployment</p>
                                         </li>
                                         <li className="flex items-start">
                                             <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">Basic image generation</p>
+                                            <p className="text-gray-700">3 Landing Page CRO Audits</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Standard AI Copy & Image Generation</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Weekly Performance Optimization</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Basic Email Support</p>
                                         </li>
                                     </ul>
                                     <div className="mt-10">
@@ -309,52 +398,66 @@ export default function Landing({ auth }) {
                                             href="/register"
                                             className="block w-full text-center rounded-lg border-2 border-gray-300 px-6 py-3 text-base font-medium text-gray-900 hover:border-gray-400"
                                         >
-                                            Get Started
+                                            Start Free Trial
                                         </a>
                                     </div>
                                 </div>
 
-                                {/* Pro Tier */}
+                                {/* Growth Tier */}
                                 <div className="rounded-lg border-2 border-indigo-600 p-8 bg-indigo-50 shadow-lg relative flex flex-col">
                                     <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 text-xs font-semibold rounded-full">
-                                        Most Popular
+                                        MOST POPULAR
                                     </div>
-                                    <h3 className="text-2xl font-bold text-gray-900">Pro Plan</h3>
+                                    <h3 className="text-2xl font-bold text-gray-900">Growth</h3>
+                                    <p className="mt-2 text-sm text-gray-500">For e-commerce brands ready to scale.</p>
                                     <div className="mt-4 text-gray-900">
-                                        <span className="text-5xl font-extrabold">$200</span>
+                                        <span className="text-4xl font-extrabold">$249</span>
                                         <span className="text-xl font-medium">/month</span>
                                     </div>
-                                    <p className="mt-4 text-sm text-gray-600">+ ad spend, billed daily.</p>
+                                    <p className="mt-4 text-sm text-gray-600">7-day free trial. Cancel anytime.</p>
+                                    <p className="mt-2 text-xs text-gray-500">Perfect for: Spending up to $25,000/mo on ads.</p>
                                     <ul className="mt-8 space-y-4 flex-grow">
                                         <li className="flex items-start">
                                             <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">Everything in Free</p>
+                                            <p className="text-gray-700">Everything in Starter, plus:</p>
                                         </li>
                                         <li className="flex items-start">
                                             <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">Automated campaign setup</p>
+                                            <p className="text-gray-700">Unlimited Brand Identities</p>
                                         </li>
                                         <li className="flex items-start">
                                             <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">24/7 AI optimization</p>
+                                            <p className="text-gray-700">Unlimited Landing Page CRO Audits</p>
                                         </li>
                                         <li className="flex items-start">
                                             <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">Performance analytics</p>
+                                            <p className="text-gray-700">Advanced Creative Suite (Video & Carousel)</p>
                                         </li>
                                         <li className="flex items-start">
-                                            <svg className="h-6 w-6 text-gray-400 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
                                             </svg>
-                                            <p className="text-gray-700">Multi-platform support (Coming Soon)</p>
+                                            <p className="text-gray-700">Daily Performance Optimization</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Strategy Agent "War Room" Access</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Priority Support</p>
                                         </li>
                                     </ul>
                                     <div className="mt-10">
@@ -362,9 +465,80 @@ export default function Landing({ auth }) {
                                             href="/register"
                                             className="block w-full text-center rounded-lg bg-indigo-600 px-6 py-3 text-base font-medium text-white hover:bg-indigo-700 shadow-lg"
                                         >
-                                            Deploy Your Campaign
+                                            Start Scaling Now
                                         </a>
                                     </div>
+                                </div>
+
+                                {/* Agency Tier */}
+                                <div className="rounded-lg border border-gray-200 p-8 bg-white flex flex-col">
+                                    <h3 className="text-2xl font-bold text-gray-900">Agency</h3>
+                                    <p className="mt-2 text-sm text-gray-500">For high-volume advertisers and marketing agencies.</p>
+                                    <div className="mt-4 text-gray-900">
+                                        <span className="text-4xl font-extrabold">$499</span>
+                                        <span className="text-xl font-medium">/month</span>
+                                    </div>
+                                    <p className="mt-4 text-sm text-gray-500">No contracts.</p>
+                                    <p className="mt-2 text-xs text-gray-400">Perfect for: Unlimited Ad Spend.</p>
+                                    <ul className="mt-8 space-y-4 flex-grow">
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Everything in Growth, plus:</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Multi-Client Management (10 sub-accounts)</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">White-Label Reports</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Real-Time Bidding</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Dedicated Account Success Manager</p>
+                                        </li>
+                                        <li className="flex items-start">
+                                            <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            <p className="text-gray-700">Early Access to Beta Features</p>
+                                        </li>
+                                    </ul>
+                                    <div className="mt-10">
+                                        <a
+                                            href="/contact"
+                                            className="block w-full text-center rounded-lg border-2 border-gray-300 px-6 py-3 text-base font-medium text-gray-900 hover:border-gray-400"
+                                        >
+                                            Contact Sales
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Trust Seals */}
+                            <div className="mt-12 flex justify-center gap-8 text-sm text-gray-500">
+                                <div className="flex items-center gap-2">
+                                    <span>🔒</span> Secure Stripe Payment
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span>⚡</span> Approved Google Partner
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span>🛡️</span> Data Encrypted & Private
                                 </div>
                             </div>
                         </div>
@@ -378,35 +552,23 @@ export default function Landing({ auth }) {
                                     Frequently Asked Questions
                                 </h2>
                                 <p className="mt-4 text-lg text-gray-500">
-                                    Get answers to common questions about how cvseeyou works.
+                                    Get answers to common questions about how sitetospend works.
                                 </p>
                             </div>
 
                             <div className="space-y-4">
                                 {[
                                     {
-                                        question: "Do I need a credit card to get started?",
-                                        answer: "No! You can generate unlimited creative collateral with our Free plan—no credit card required. Only when you're ready to deploy campaigns to Google Ads do you need to add a payment method."
+                                        question: "Does the subscription price include my ad budget?",
+                                        answer: "No. Your subscription covers the Spectra AI platform, the creative generation, and the autonomous management agents. You will connect your own credit card to Google/Facebook, so you pay the ad networks directly for your media spend. This ensures total transparency—we never mark up your ad costs."
                                     },
                                     {
-                                        question: "What advertising platforms do you support?",
-                                        answer: "Currently, we support Google Ads (available now). We're actively building integrations with Meta Ads, Microsoft Advertising, and Reddit Ads—coming soon. All of these will be available at no extra cost with your Pro plan."
+                                        question: "Can I switch plans later?",
+                                        answer: "Absolutely. You can upgrade or downgrade at any time from your dashboard. If you exceed the ad spend limit of your tier, we'll simply notify you to upgrade to keep your campaigns running at peak performance."
                                     },
                                     {
-                                        question: "Can I cancel my plan anytime?",
-                                        answer: "Absolutely. Cancel anytime, no questions asked. Your campaigns will continue running until the end of your billing cycle, and we'll stop charging you immediately. You keep your account data and creative assets."
-                                    },
-                                    {
-                                        question: "How much will my actual ad spend be?",
-                                        answer: "You control your ad spend completely. The $200/month is our platform fee. Your ad spend depends on your budget, industry, and campaign settings—you set the limits, and we optimize what you spend daily to maximize ROI."
-                                    },
-                                    {
-                                        question: "Is my data and campaign data safe?",
-                                        answer: "Yes. We encrypt all data in transit and at rest. We only access your ad accounts to create and optimize campaigns on your behalf—we never store credentials locally. Check out our Privacy Policy and Terms of Service for full details."
-                                    },
-                                    {
-                                        question: "How does the AI optimization work?",
-                                        answer: "Our AI continuously monitors your campaign performance and tests variations of your ad copy and creative automatically. We identify top performers and allocate more budget to what works—24/7, without your intervention."
+                                        question: "How does the \"Vision AI\" know my brand?",
+                                        answer: "We use Gemini Pro Vision to analyze screenshots of your website. It instantly extracts your hex codes, fonts, tone of voice, and visual style to ensure every ad we generate looks exactly like it came from your internal design team."
                                     }
                                 ].map((faq, index) => (
                                     <div key={index} className="border border-gray-200 rounded-lg">

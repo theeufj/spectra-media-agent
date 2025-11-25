@@ -3,15 +3,15 @@
 namespace App\Services\GoogleAds\DisplayServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\Ad;
-use Google\Ads\GoogleAds\V15\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V15\Common\ResponsiveDisplayAdInfo;
-use Google\Ads\GoogleAds\V15\Common\AdTextAsset;
-use Google\Ads\GoogleAds\V15\Common\AdImageAsset;
-use Google\Ads\GoogleAds\V15\Services\AdGroupAdService;
-use Google\Ads\GoogleAds\V15\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V15\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Ad;
+use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V22\Common\ResponsiveDisplayAdInfo;
+use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V22\Common\AdImageAsset;
+use Google\Ads\GoogleAds\V22\Services\AdGroupAdService;
+use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class CreateResponsiveDisplayAd extends BaseGoogleAdsService

@@ -3,18 +3,18 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\AdGroupCriterion;
-use Google\Ads\GoogleAds\V15\Services\AdGroupCriterionService;
-use Google\Ads\GoogleAds\V15\Services\AdGroupCriterionOperation;
-use Google\Ads\GoogleAds\V15\Enums\CriterionTypeEnum\CriterionType;
-use Google\Ads\GoogleAds\V15\Common\AudienceInfo;
-use Google\Ads\GoogleAds\V15\Common\TopicInfo;
-use Google\Ads\GoogleAds\V15\Common\PlacementInfo;
-use Google\Ads\GoogleAds\V15\Common\GenderInfo;
-use Google\Ads\GoogleAds\V15\Common\AgeRangeInfo;
-use Google\Ads\GoogleAds\V15\Common\ParentalStatusInfo;
-use Google\Ads\GoogleAds\V15\Common\IncomeRangeInfo;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
+use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionService;
+use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
+use Google\Ads\GoogleAds\V22\Enums\CriterionTypeEnum\CriterionType;
+use Google\Ads\GoogleAds\V22\Common\AudienceInfo;
+use Google\Ads\GoogleAds\V22\Common\TopicInfo;
+use Google\Ads\GoogleAds\V22\Common\PlacementInfo;
+use Google\Ads\GoogleAds\V22\Common\GenderInfo;
+use Google\Ads\GoogleAds\V22\Common\AgeRangeInfo;
+use Google\Ads\GoogleAds\V22\Common\ParentalStatusInfo;
+use Google\Ads\GoogleAds\V22\Common\IncomeRangeInfo;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class AddAdGroupCriterion extends BaseGoogleAdsService
@@ -34,6 +34,8 @@ class AddAdGroupCriterion extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $adGroupResourceName, array $criterionData): ?string
     {
+        $this->ensureClient();
+        
         $adGroupCriterion = new AdGroupCriterion([
             'ad_group' => $adGroupResourceName,
             // Common settings, e.g., 'status'

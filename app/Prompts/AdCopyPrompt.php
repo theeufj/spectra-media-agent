@@ -12,19 +12,22 @@ class AdCopyPrompt
     private ?array $rules;
     private ?array $feedback;
     private ?BrandGuideline $brandGuidelines;
+    private ?array $productContext;
 
     public function __construct(
         string $strategyContent,
         string $platform,
         ?array $rules = null,
         ?array $feedback = null,
-        ?BrandGuideline $brandGuidelines = null
+        ?BrandGuideline $brandGuidelines = null,
+        ?array $productContext = null
     ) {
         $this->strategyContent = $strategyContent;
         $this->platform = $platform;
         $this->rules = $rules ?? [];
         $this->feedback = $feedback ?? [];
         $this->brandGuidelines = $brandGuidelines;
+        $this->productContext = $productContext;
     }
 
     public function getPrompt(): string
@@ -36,10 +39,19 @@ class AdCopyPrompt
             ? $this->formatBrandContext()
             : "**BRAND GUIDELINES:** Not available. Use professional, engaging tone suitable for {$this->platform}.";
 
+        // Include product context if available
+        $productContextString = '';
+        if (!empty($this->productContext)) {
+            $productContextString = "\n\n--- SELECTED PRODUCTS ---\n" .
+                "The user has selected specific products to advertise. You MUST incorporate their details (Price, Title, Features) into the ad copy where appropriate.\n" .
+                json_encode($this->productContext, JSON_PRETTY_PRINT);
+        }
+
         $basePrompt = "You are an expert copywriter specializing in {$this->platform} advertising.\n\n" .
                       $brandContext . "\n\n" .
                       "--- PLATFORM RULES ---\n" .
-                      $rulesString . "\n\n" .
+                      $rulesString . 
+                      $productContextString . "\n\n" .
                       "--- RESPONSE FORMAT ---\n" .
                       "Return the output as a JSON object with two keys: 'headlines' (an array of strings) and 'descriptions' (an array of strings). " .
                       "Do NOT include any conversational text, explanations, or additional formatting outside the JSON object. " .

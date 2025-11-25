@@ -110,7 +110,7 @@ class GenerateVideo implements ShouldQueue
 
     public function handle(VideoGenerationService $videoGenerationService, GeminiService $geminiService): void
     {
-        Log::info("Starting video generation job for Strategy ID: {$this->strategy->id} on platform {$this->platform}");
+        Log::info("Starting video generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
         $videoCollateral = null;
         try {
@@ -120,37 +120,58 @@ class GenerateVideo implements ShouldQueue
                 Log::warning("No brand guidelines found for customer ID: {$this->campaign->customer_id}");
             }
 
-            // Check if video strategy contains actionable content
+            // Fetch selected product pages
+            $productContext = [];
+            $selectedPages = $this->campaign->pages; // Assuming relationship is defined
+            if ($selectedPages->isNotEmpty()) {
+                $productContext = $selectedPages->map(function ($page) {
+                    return [
+                        'title' => $page->title,
+                        'description' => $page->meta_description,
+                        'features' => $page->metadata['features'] ?? [],
+                    ];
+                })->toArray();
+            }
+
             $videoStrategy = $this->strategy->video_strategy;
+            
+            // Extract actionable content from strategy
             $actionableContent = $this->extractActionableVideoContent($videoStrategy);
             
             if (!$actionableContent) {
-                Log::info("No actionable video content found for Strategy ID: {$this->strategy->id}. Skipping video generation.");
+                Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content found.");
                 return;
             }
-            
-            Log::info("Using actionable video strategy: {$actionableContent}");
 
-            // 1. Generate the video script using the actionable content
-            $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines))->getPrompt();
-            $scriptResponse = $geminiService->generateContent('gemini-flash-latest', $scriptPrompt);
-            $script = $scriptResponse['text'] ?? 'No script generated.';
+            // Step 1: Generate Video Script using Gemini
+            Log::info("Generating video script for Strategy ID: {$this->strategy->id}");
+            $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines, $productContext))->getPrompt();
+            $scriptResponse = $geminiService->generateContent('gemini-2.5-pro', $scriptPrompt);
+            
+            $script = $scriptResponse['text'] ?? null;
+            if (empty($script)) {
+                throw new \Exception("Failed to generate video script from Gemini.");
+            }
+            
             Log::info("Generated video script: {$script}");
 
-            // 2. Create a placeholder VideoCollateral record
+            // Step 2: Create a placeholder VideoCollateral record
             $videoCollateral = VideoCollateral::create([
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => $this->strategy->id,
                 'platform' => $this->platform,
+                'script' => $script,
                 'status' => 'pending',
                 'is_active' => true,
             ]);
 
-            // 3. Generate the final video prompt using the dedicated prompt class with actionable content
+            // Step 3: Generate the final video prompt using the dedicated prompt class with actionable content
+            // Note: VideoFromScriptPrompt might need update if we want to pass product context there too, 
+            // but usually the script is enough.
             $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $script))->getPrompt();
             Log::info("Combined video prompt: {$videoPrompt}");
 
-            // 4. Start the video generation and get the operation name
+            // Step 4: Start the video generation and get the operation name
             $operationName = $videoGenerationService->startGeneration($videoPrompt);
 
             if (!$operationName) {
@@ -158,7 +179,7 @@ class GenerateVideo implements ShouldQueue
                 throw new \Exception('Failed to start video generation.');
             }
 
-            // 5. Update the record with the operation name and set status to 'generating'
+            // Step 5: Update the record with the operation name and set status to 'generating'
             $videoCollateral->update([
                 'operation_name' => $operationName,
                 'status' => 'generating',
@@ -166,14 +187,14 @@ class GenerateVideo implements ShouldQueue
 
             Log::info("Video generation initiated for Strategy ID: {$this->strategy->id}. Operation Name: {$operationName}");
 
-            // 6. Dispatch the job to check the video status.
+            // Step 6: Dispatch the job to check the video status.
             CheckVideoStatus::dispatch($videoCollateral)->delay(now()->addMinutes(1));
 
         } catch (\Exception $e) {
             if ($videoCollateral) {
                 $videoCollateral->update(['status' => 'failed']);
             }
-            Log::error("Error in GenerateVideo job for Strategy ID {$this->strategy->id}: " . $e->getMessage());
+            Log::error("Error in GenerateVideo job for Campaign ID {$this->campaign->id}: " . $e->getMessage());
             $this->fail($e);
         }
     }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import RefineImageModal from '@/Components/RefineImageModal';
+import ExtendVideoModal from '@/Components/ExtendVideoModal';
 import SubscriptionRequiredModal from '@/Components/SubscriptionRequiredModal';
 import DeploymentDisabledModal from '@/Components/DeploymentDisabledModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
@@ -9,11 +10,13 @@ import Modal from '@/Components/Modal';
 
 export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled }) {
     const { auth } = usePage().props;
+    const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
     const [generatingAdCopy, setGeneratingAdCopy] = useState(false);
     const [generatingImage, setGeneratingImage] = useState(false);
     const [generatingVideo, setGeneratingVideo] = useState(false);
     const [editingImage, setEditingImage] = useState(null);
+    const [extendingVideo, setExtendingVideo] = useState(null);
     const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals });
     const [isPolling, setIsPolling] = useState(false);
     const [showDeployModal, setShowDeployModal] = useState(false);
@@ -154,26 +157,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         setIsPolling(true);
     };
 
-    const handleToggleCollateral = async (type, id) => {
-        try {
-            const response = await fetch(route('api.deployment.toggle-collateral'), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                },
-                body: JSON.stringify({ type, id }),
-            });
-
-            if (response.ok) {
-                // Refresh the collateral data to show the updated selection
-                router.reload({ only: ['adCopy', 'imageCollaterals', 'videoCollaterals'] });
-            } else {
-                console.error('Failed to toggle collateral status');
-            }
-        } catch (error) {
-            console.error('Error toggling collateral status:', error);
-        }
+    const handleToggleCollateral = (type, id) => {
+        router.post(route('deployment.toggle-collateral'), {
+            type,
+            id,
+        }, {
+            preserveScroll: true,
+            only: ['adCopy', 'imageCollaterals', 'videoCollaterals'],
+            onError: (errors) => {
+                console.error('Failed to toggle collateral status:', errors);
+            },
+        });
     };
 
     const handleDeploy = async () => {
@@ -200,33 +194,23 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
 
-    const confirmDeploy = async () => {
-            try {
-                const response = await fetch(route('api.deployment.deploy'), {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
-                    },
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    alert(data.message);
+    const confirmDeploy = () => {
+        router.post(route('deployment.deploy'), {
+            campaign_id: campaign.id,
+        }, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                alert('Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.');
+            },
+            onError: (errors) => {
+                console.error('Deployment errors:', errors);
+                if (errors.message) {
+                    alert(errors.message);
                 } else {
-                    if (response.status === 403 && data.redirect) {
-                        if (window.confirm(data.message)) {
-                            window.location.href = data.redirect;
-                        }
-                    } else {
-                        alert('Deployment failed: ' + error.message);
-            }
-        }
-            } catch (error) {
-                console.error('Error during deployment:', error);
-                alert('An unexpected error occurred during deployment.');
-            }
+                    alert('Deployment failed. Please check the console for details.');
+                }
+            },
+        });
     };
 
     return (
@@ -326,10 +310,33 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {/* Display generated ad copy here */}
                                         {collateral.adCopy && collateral.adCopy.strategy_id === strategyItem.id && collateral.adCopy.platform === strategyItem.platform && (
                                             <div 
-                                                className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer`}
+                                                className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer relative`}
                                                 onClick={() => handleToggleCollateral('ad_copy', collateral.adCopy.id)}
                                             >
-                                                <h4 className="text-md font-semibold text-gray-800 mb-3">Generated Ad Copy:</h4>
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <h4 className="text-md font-semibold text-gray-800">Generated Ad Copy:</h4>
+                                                    {isSubscribed ? (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                const copyText = `Headlines:\n${collateral.adCopy.headlines.join('\n')}\n\nDescriptions:\n${collateral.adCopy.descriptions.join('\n')}`;
+                                                                navigator.clipboard.writeText(copyText);
+                                                                alert('Ad copy copied to clipboard!');
+                                                            }}
+                                                            className="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100"
+                                                        >
+                                                            📋 Copy All
+                                                        </button>
+                                                    ) : (
+                                                        <a
+                                                            href={route('subscription.pricing')}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            className="px-3 py-1 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                                                        >
+                                                            🔒 Upgrade to Export
+                                                        </a>
+                                                    )}
+                                                </div>
                                                 <div className="mb-4">
                                                     <h5 className="font-medium text-gray-700">Headlines:</h5>
                                                     <ul className="list-disc list-inside text-gray-600">
@@ -378,10 +385,35 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         onClick={() => handleToggleCollateral('image', image.id)}
                                                     >
                                                         <img src={image.cloudfront_url} alt={`Generated collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
+                                                        {!isSubscribed && (
+                                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
+                                                                <p className="text-white text-xs font-medium">Spectra Preview - Upgrade to download</p>
+                                                            </div>
+                                                        )}
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
-                                                                Edit Image
-                                                            </button>
+                                                            {isSubscribed ? (
+                                                                <>
+                                                                    <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 mr-2">
+                                                                        Edit Image
+                                                                    </button>
+                                                                    <a 
+                                                                        href={image.cloudfront_url} 
+                                                                        download 
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                                                                    >
+                                                                        Download
+                                                                    </a>
+                                                                </>
+                                                            ) : (
+                                                                <a 
+                                                                    href={route('subscription.pricing')}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                                                                >
+                                                                    🔒 Upgrade to Download
+                                                                </a>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 ))}
@@ -413,15 +445,43 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 {collateral.videoCollaterals.map((video) => (
                                                     <div 
                                                         key={video.id} 
-                                                        className={`border-2 ${video.should_deploy ? 'border-green-500' : 'border-transparent'} rounded-lg overflow-hidden shadow-md cursor-pointer`}
-                                                        onClick={() => handleToggleCollateral('video', video.id)}
+                                                        className="relative group"
                                                     >
-                                                        {video.status === 'completed' ? (
-                                                            <video controls src={video.cloudfront_url} className="w-full h-auto"></video>
-                                                        ) : (
-                                                            <div className="p-4 text-center bg-gray-100">
-                                                                <p className="font-semibold text-gray-700">Status: {video.status}</p>
-                                                                <p className="text-sm text-gray-500">Video is processing...</p>
+                                                        <div 
+                                                            className={`border-2 ${video.should_deploy ? 'border-green-500' : 'border-transparent'} rounded-lg overflow-hidden shadow-md cursor-pointer`}
+                                                            onClick={() => handleToggleCollateral('video', video.id)}
+                                                        >
+                                                            {video.status === 'completed' ? (
+                                                                <video controls src={video.cloudfront_url} className="w-full h-auto"></video>
+                                                            ) : (
+                                                                <div className="p-4 text-center bg-gray-100">
+                                                                    <p className="font-semibold text-gray-700">Status: {video.status}</p>
+                                                                    <p className="text-sm text-gray-500">Video is processing...</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {/* Extend Video Button - Only show for completed Veo videos */}
+                                                        {video.status === 'completed' && video.gemini_video_uri && (video.extension_count || 0) < 20 && (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setExtendingVideo(video);
+                                                                }}
+                                                                className="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                title={`Extend video by 7 seconds (${20 - (video.extension_count || 0)} extensions remaining)`}
+                                                            >
+                                                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                                                </svg>
+                                                                <span>Extend</span>
+                                                            </button>
+                                                        )}
+
+                                                        {/* Extension Count Badge */}
+                                                        {(video.extension_count || 0) > 0 && (
+                                                            <div className="absolute top-2 left-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full shadow-lg">
+                                                                Extended {video.extension_count}x
                                                             </div>
                                                         )}
                                                     </div>
@@ -441,6 +501,20 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     image={editingImage}
                     onClose={() => setEditingImage(null)}
                     onRefinementStart={handleRefinementStart}
+                />
+            )}
+
+            {extendingVideo && (
+                <ExtendVideoModal
+                    video={extendingVideo}
+                    onClose={() => setExtendingVideo(null)}
+                    onExtensionStart={() => {
+                        setIsPolling(true);
+                        // Show success message
+                        setTimeout(() => {
+                            setIsPolling(false);
+                        }, 180000); // Stop polling after 3 minutes
+                    }}
                 />
             )}
 

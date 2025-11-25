@@ -5,23 +5,23 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title inertia>CVSEEYOU - Agentic Digital Marketing</title>
+        <title inertia>SiteToSpend - Agentic Digital Marketing</title>
 
         <!-- SEO Meta Tags -->
-        <meta name="description" content="CVSEEYOU offers agentic digital marketing services, leveraging AI to create and manage ad campaigns across platforms like Google, Facebook, and more.">
+        <meta name="description" content="SiteToSpend offers agentic digital marketing services, leveraging AI to create and manage ad campaigns across platforms like Google, Facebook, and more.">
         <meta name="keywords" content="AI marketing, digital marketing, ad campaign management, Google Ads, Facebook Ads, automated advertising, agentic marketing">
-        <meta name="author" content="CVSEEYOU">
+        <meta name="author" content="SiteToSpend">
 
         <!-- Open Graph Meta Tags (for social sharing) -->
-        <meta property="og:title" content="CVSEEYOU - Agentic Digital Marketing">
-        <meta property="og:description" content="Automated ad campaigns powered by AI. CVSEEYOU creates, manages, and optimizes your digital advertising across all major platforms.">
+        <meta property="og:title" content="SiteToSpend - Agentic Digital Marketing">
+        <meta property="og:description" content="Automated ad campaigns powered by AI. SiteToSpend creates, manages, and optimizes your digital advertising across all major platforms.">
         <meta property="og:image" content="{{ url('/og-image.png') }}">
         <meta property="og:url" content="{{ url()->current() }}">
         <meta property="og:type" content="website">
 
         <!-- Twitter Card Meta Tags -->
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="CVSEEYOU - Agentic Digital Marketing">
+        <meta name="twitter:title" content="SiteToSpend - Agentic Digital Marketing">
         <meta name="twitter:description" content="Leverage the power of AI for your ad campaigns. CVSEEYOU offers a fully autonomous digital marketing solution.">
         <meta name="twitter:image" content="{{ url('/twitter-image.png') }}">
 

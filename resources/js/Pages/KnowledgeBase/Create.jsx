@@ -6,9 +6,11 @@ import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import FindSitemapInstructions from '@/Components/FindSitemapInstructions';
+import SitemapProcessingModal from '@/Components/SitemapProcessingModal';
 
 export default function Create({ auth }) {
     const [uploadMode, setUploadMode] = useState('sitemap'); // 'sitemap' or 'file'
+    const [showModal, setShowModal] = useState(false);
     const { data, setData, post, processing, errors } = useForm({
         sitemap_url: '',
         document: null,
@@ -16,7 +18,11 @@ export default function Create({ auth }) {
 
     const handleSitemapSubmit = (e) => {
         e.preventDefault();
-        post(route('knowledge-base.store'));
+        post(route('knowledge-base.store'), {
+            onSuccess: () => {
+                setShowModal(true);
+            }
+        });
     };
 
     const handleFileSubmit = (e) => {
@@ -164,6 +170,11 @@ export default function Create({ auth }) {
                     )}
                 </div>
             </div>
+
+            <SitemapProcessingModal 
+                show={showModal} 
+                onClose={() => setShowModal(false)} 
+            />
         </AuthenticatedLayout>
     );
 }

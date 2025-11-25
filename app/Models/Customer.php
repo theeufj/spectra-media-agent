@@ -28,6 +28,7 @@ class Customer extends Model
         'gtm_config',
         'gtm_installed',
         'gtm_last_verified',
+        'cro_audits_used',
         'gtm_detected',
         'gtm_detected_at',
     ];
@@ -46,6 +47,14 @@ class Customer extends Model
     public function users()
     {
         return $this->belongsToMany(User::class)->withPivot('role');
+    }
+
+    /**
+     * Get the pages for the customer.
+     */
+    public function pages()
+    {
+        return $this->hasMany(CustomerPage::class);
     }
 
     /**

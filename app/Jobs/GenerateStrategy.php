@@ -41,6 +41,13 @@ class GenerateStrategy implements ShouldQueue
     {
         Log::info("Starting strategy generation for campaign {$this->campaign->id} (customer: {$this->campaign->customer_id})");
         
+        // Mark strategy generation as started
+        $this->campaign->update([
+            'strategy_generation_started_at' => now(),
+            'strategy_generation_completed_at' => null,
+            'strategy_generation_error' => null,
+        ]);
+        
         try {
             // Step 1: Gather all the user's knowledge base content.
             // Since campaigns belong to customers and knowledge bases belong to users,
@@ -166,6 +173,11 @@ class GenerateStrategy implements ShouldQueue
             }
 
             Log::info("Successfully generated and saved strategies for campaign {$this->campaign->id}");
+            
+            // Mark strategy generation as completed
+            $this->campaign->update([
+                'strategy_generation_completed_at' => now(),
+            ]);
 
         } catch (\Exception $e) {
             Log::error("Error generating strategy for campaign {$this->campaign->id}: " . $e->getMessage(), [
@@ -176,6 +188,13 @@ class GenerateStrategy implements ShouldQueue
                 'line' => $e->getLine(),
                 'trace' => $e->getTraceAsString()
             ]);
+            
+            // Mark strategy generation as failed
+            $this->campaign->update([
+                'strategy_generation_completed_at' => now(),
+                'strategy_generation_error' => $e->getMessage(),
+            ]);
+            
             throw $e;
         }
     }

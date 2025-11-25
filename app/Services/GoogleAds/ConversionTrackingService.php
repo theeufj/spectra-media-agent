@@ -2,7 +2,7 @@
 
 namespace App\Services\GoogleAds;
 
-use Google\Ads\GoogleAds\V15\Services\GoogleAdsServiceClient;
+use Google\Ads\GoogleAds\V22\Services\GoogleAdsServiceClient;
 use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
 

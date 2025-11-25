@@ -19,7 +19,10 @@ return new class extends Migration
          * to enable a database extension. Here, we use the DB facade for that.
          * This ensures the 'vector' type is available before we create the table.
          */
-        DB::statement('CREATE EXTENSION IF NOT EXISTS vector');
+        // throw new \Exception('Driver: ' . DB::connection()->getDriverName());
+        // if (DB::connection()->getDriverName() === 'pgsql') {
+        //    DB::statement('CREATE EXTENSION IF NOT EXISTS vector');
+        // }
 
         // Schema::create is a static method that initiates the creation of a new table.
         Schema::create('knowledge_bases', function (Blueprint $table) {
@@ -43,7 +46,11 @@ return new class extends Migration
              * output dimension of the embedding model we'll use (e.g., Google's text-embedding-004).
              * We'll make it nullable for now.
              */
-            $table->vector('embedding', 768)->nullable();
+            if (DB::connection()->getDriverName() === 'pgsql') {
+                $table->vector('embedding', 768)->nullable();
+            } else {
+                $table->json('embedding')->nullable();
+            }
 
             // $table->timestamps() is a helper that creates two TIMESTAMP columns: `created_at` and `updated_at`.
             $table->timestamps();

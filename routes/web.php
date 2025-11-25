@@ -69,7 +69,9 @@ Route::middleware(['auth'])->group(function () {
 
     // Route to handle the form submission and dispatch the crawling job.
     // POST /knowledge-base
-    Route::post('/knowledge-base', [App\Http\Controllers\KnowledgeBaseController::class, 'store'])->name('knowledge-base.store');
+    Route::post('/knowledge-base', [App\Http\Controllers\KnowledgeBaseController::class, 'store'])
+        ->middleware(['throttle:3,1', 'verified'])
+        ->name('knowledge-base.store');
 
     // Route to delete a knowledge base entry.
     // DELETE /knowledge-base/{knowledgeBase}
@@ -104,6 +106,10 @@ Route::middleware(['auth'])->group(function () {
     // Route to re-extract brand guidelines from knowledge base.
     // POST /brand-guidelines/re-extract
     Route::post('/brand-guidelines/re-extract', [App\Http\Controllers\BrandGuidelineController::class, 'reExtract'])->name('brand-guidelines.re-extract');
+
+    // Route to export brand guidelines as PDF.
+    // GET /brand-guidelines/export-pdf
+    Route::get('/brand-guidelines/export-pdf', [App\Http\Controllers\BrandGuidelineController::class, 'exportPdf'])->name('brand-guidelines.export-pdf');
 });
 
 /*
@@ -142,6 +148,14 @@ Route::middleware(['auth'])->group(function () {
     // Route to delete a campaign.
     // DELETE /campaigns/{campaign}
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');
+
+    // Deployment routes
+    Route::middleware(['subscribed'])->group(function () {
+        Route::post('/deployment/toggle-collateral', [\App\Http\Controllers\DeploymentController::class, 'toggleCollateral'])
+            ->name('deployment.toggle-collateral');
+        Route::post('/deployment/deploy', [\App\Http\Controllers\DeploymentController::class, 'deploy'])
+            ->name('deployment.deploy');
+    });
 });
 
 /*
@@ -207,11 +221,15 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth'])->group(function () {
     // Route to generate and store ad copy for a specific campaign and strategy.
     // POST /campaigns/{campaign}/strategies/{strategy}/ad-copy
-    Route::post('/campaigns/{campaign}/strategies/{strategy}/ad-copy', [App\Http\Controllers\AdCopyController::class, 'store'])->name('campaigns.ad-copy.store');
+    Route::post('/campaigns/{campaign}/strategies/{strategy}/ad-copy', [App\Http\Controllers\AdCopyController::class, 'store'])
+        ->middleware('throttle:10,1')
+        ->name('campaigns.ad-copy.store');
 
     // Route to generate and store an image for a specific campaign and strategy.
     // POST /campaigns/{campaign}/strategies/{strategy}/image
-    Route::post('/campaigns/{campaign}/strategies/{strategy}/image', [App\Http\Controllers\ImageCollateralController::class, 'store'])->name('campaigns.collateral.image.store');
+    Route::post('/campaigns/{campaign}/strategies/{strategy}/image', [App\Http\Controllers\ImageCollateralController::class, 'store'])
+        ->middleware(['throttle:10,1', 'verified'])
+        ->name('campaigns.collateral.image.store');
 
     // Route to refine an existing image collateral.
     // POST /image-collaterals/{image_collateral}
@@ -220,6 +238,10 @@ Route::middleware(['auth'])->group(function () {
     // Route to generate and store a video for a specific campaign and strategy.
     // POST /campaigns/{campaign}/strategies/{strategy}/video
     Route::post('/campaigns/{campaign}/strategies/{strategy}/video', [App\Http\Controllers\VideoCollateralController::class, 'store'])->name('campaigns.collateral.video.store');
+    
+    // Route to extend an existing Veo-generated video by up to 7 seconds
+    // POST /video-collaterals/{video}/extend
+    Route::post('/video-collaterals/{video}/extend', [App\Http\Controllers\VideoCollateralController::class, 'extend'])->name('video-collaterals.extend');
 });
 
 /*

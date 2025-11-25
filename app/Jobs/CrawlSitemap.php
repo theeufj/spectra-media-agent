@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 // importing the relvant classes
+use App\Mail\SitemapCrawlCompleted;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Bus\Batch;
@@ -14,6 +15,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Spatie\Sitemap\SitemapIndex;
 use Spatie\Sitemap\Sitemap;
 
@@ -70,6 +72,17 @@ class CrawlSitemap implements ShouldQueue
             Log::info("CrawlSitemap: Successfully fetched sitemap with status " . $response->status());
             $content = $response->body();
 
+            // Check for Gzip compression
+            if (str_ends_with($this->sitemapUrl, '.gz') || (substr($content, 0, 2) === "\x1f\x8b")) {
+                Log::info("CrawlSitemap: Detected Gzip compression. Decompressing...");
+                $decoded = @gzdecode($content);
+                if ($decoded === false) {
+                    Log::error("CrawlSitemap: Failed to decompress Gzip content for URL: {$this->sitemapUrl}");
+                    return;
+                }
+                $content = $decoded;
+            }
+
             if (empty($content)) {
                 Log::warning("CrawlSitemap: Sitemap content is empty for URL: {$this->sitemapUrl}");
                 return;
@@ -93,21 +106,63 @@ class CrawlSitemap implements ShouldQueue
                 Log::info("CrawlSitemap: Detected regular sitemap.");
                 Log::info("CrawlSitemap: Found " . count($xml->url) . " URLs in sitemap.");
                 
+                // Register namespaces
+                $namespaces = $xml->getNamespaces(true);
+
                 // Collect all CrawlPage jobs
                 $jobs = [];
                 foreach ($xml->url as $url) {
                     $loc = (string)$url->loc;
+                    $metadata = [];
+
+                    // Extract Video Metadata
+                    if (isset($namespaces['video'])) {
+                        $video = $url->children($namespaces['video']);
+                        if (isset($video->video)) {
+                            $metadata['video'] = [
+                                'title' => (string)$video->video->title,
+                                'description' => (string)$video->video->description,
+                                'thumbnail_loc' => (string)$video->video->thumbnail_loc,
+                            ];
+                        }
+                    }
+
+                    // Extract News Metadata
+                    if (isset($namespaces['news'])) {
+                        $news = $url->children($namespaces['news']);
+                        if (isset($news->news)) {
+                            $metadata['news'] = [
+                                'publication' => (string)$news->news->publication->name,
+                                'publication_date' => (string)$news->news->publication_date,
+                                'title' => (string)$news->news->title,
+                            ];
+                        }
+                    }
+
+                    // Extract Image Metadata
+                    if (isset($namespaces['image'])) {
+                        $image = $url->children($namespaces['image']);
+                        if (isset($image->image)) {
+                            $metadata['image'] = [
+                                'loc' => (string)$image->image->loc,
+                                'caption' => (string)$image->image->caption,
+                            ];
+                        }
+                    }
+
                     Log::info("CrawlSitemap: Adding CrawlPage job for URL: {$loc}");
-                    $jobs[] = new CrawlPage($this->user, $loc, $this->customerId);
+                    $jobs[] = new CrawlPage($this->user, $loc, $this->customerId, $metadata);
                 }
                 
                 // Dispatch as a batch with completion callback
                 if (!empty($jobs)) {
                     $customer = Customer::find($this->customerId);
+                    $sitemapUrl = $this->sitemapUrl;
+                    $user = $this->user;
                     
                     $batch = Bus::batch($jobs)
                         ->name("Crawl Sitemap: {$this->sitemapUrl}")
-                        ->then(function (Batch $batch) use ($customer) {
+                        ->then(function (Batch $batch) use ($customer, $sitemapUrl, $user) {
                             if ($customer) {
                                 Log::info("CrawlSitemap batch completed. Dispatching brand extraction.", [
                                     'customer_id' => $customer->id,
@@ -118,6 +173,17 @@ class CrawlSitemap implements ShouldQueue
                                 
                                 // Dispatch brand guideline extraction now that knowledge base is populated
                                 ExtractBrandGuidelines::dispatch($customer);
+                                
+                                // Send completion email to user
+                                Mail::to($user->email)->send(
+                                    new SitemapCrawlCompleted(
+                                        $sitemapUrl,
+                                        $batch->totalJobs,
+                                        $user->name
+                                    )
+                                );
+                                
+                                Log::info("CrawlSitemap completion email sent to {$user->email}");
                             }
                         })
                         ->catch(function (Batch $batch, \Throwable $e) {

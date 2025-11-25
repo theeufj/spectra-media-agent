@@ -6,7 +6,7 @@ export default function Header({ auth }) {
         <header className="bg-white shadow-sm">
             <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
                 <Link href="/">
-                    <h1 className="text-2xl font-bold text-indigo-600">cvseeyou</h1>
+                    <h1 className="text-2xl font-bold text-indigo-600">sitetospend</h1>
                 </Link>
                 <div>
                     {auth && auth.user ? (

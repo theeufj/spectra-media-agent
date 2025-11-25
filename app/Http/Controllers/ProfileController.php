@@ -25,6 +25,7 @@ class ProfileController extends Controller
             'mustVerifyEmail' => $user instanceof MustVerifyEmail,
             'status' => session('status'),
             'customers' => $customers,
+            'facebookAppId' => config('services.facebook.client_id'),
         ]);
     }
 

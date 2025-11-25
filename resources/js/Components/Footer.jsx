@@ -13,7 +13,7 @@ export default function Footer() {
                         Privacy Policy
                     </Link>
                 </div>
-                <p className="mt-8 text-center text-base text-gray-400">&copy; 2025 cvseeyou. All rights reserved.</p>
+                <p className="mt-8 text-center text-base text-gray-400">&copy; 2025 sitetospend. All rights reserved.</p>
             </div>
         </footer>
     );

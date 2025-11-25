@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\DeployCampaign;
+use App\Models\Campaign;
 use App\Models\Setting;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -16,6 +18,11 @@ class DeploymentController extends Controller
      */
     public function toggleCollateral(Request $request)
     {
+        Log::info('🔄 Toggle collateral called', [
+            'user_id' => auth()->id(),
+            'request_data' => $request->all(),
+        ]);
+
         $validated = $request->validate([
             'type' => 'required|string|in:ad_copy,image,video',
             'id' => 'required|integer',
@@ -57,6 +64,28 @@ class DeploymentController extends Controller
     {
         $user = $request->user();
 
+        Log::info('🚀 Deploy endpoint called', [
+            'user_id' => $user->id,
+            'user_email' => $user->email,
+            'request_data' => $request->all(),
+            'active_customer_id' => session('active_customer_id'),
+        ]);
+
+        // Validate campaign ID
+        $validated = $request->validate([
+            'campaign_id' => 'required|integer|exists:campaigns,id',
+        ]);
+
+        // Get campaign and verify ownership
+        $campaign = Campaign::findOrFail($validated['campaign_id']);
+        $customer = $user->customers()->findOrFail(session('active_customer_id'));
+        
+        if ($campaign->customer_id !== $customer->id) {
+            return response()->json([
+                'message' => 'Unauthorized access to this campaign.',
+            ], 403);
+        }
+
         // 1. Subscription Check (or payment method in testing mode)
         $hasAccess = $user->subscribed('default') || $user->hasDefaultPaymentMethod();
         
@@ -67,7 +96,7 @@ class DeploymentController extends Controller
             ], 403);
         }
 
-        // 2. Deployment Enabled Check
+        // 2. Deployment Enabled Check (Admin Setting)
         $deploymentEnabled = Setting::get('deployment_enabled', true);
         
         if (!$deploymentEnabled) {
@@ -77,20 +106,37 @@ class DeploymentController extends Controller
             ], 503);
         }
 
-        // In a real application, this is where you would dispatch jobs
-        // to deploy the collateral to the various ad platforms.
-        // For now, we will just log a message.
+        // 3. Check if campaign has strategies
+        if ($campaign->strategies()->count() === 0) {
+            return response()->json([
+                'message' => 'This campaign has no strategies to deploy.',
+            ], 400);
+        }
 
-        Log::info("Deployment initiated by User ID: {$user->id}");
+        // 4. Check if at least one strategy is signed off
+        $signedOffCount = $campaign->strategies()->whereNotNull('signed_off_at')->count();
+        if ($signedOffCount === 0) {
+            return response()->json([
+                'message' => 'Please sign off at least one strategy before deploying.',
+            ], 400);
+        }
 
-        // Here you would find all the collateral with should_deploy = true and
-        // dispatch jobs to deploy them.
-        // Example:
-        // $adCopiesToDeploy = AdCopy::where('should_deploy', true)->whereHas('campaign', fn($q) => $q->where('user_id', $user->id))->get();
-        // foreach($adCopiesToDeploy as $adCopy) {
-        //     DeployAdCopy::dispatch($adCopy);
-        // }
+        Log::info("✅ Deployment initiated by User ID: {$user->id} for Campaign ID: {$campaign->id}", [
+            'campaign_name' => $campaign->name,
+            'customer_id' => $customer->id,
+            'signed_off_strategies' => $signedOffCount,
+            'has_subscription' => $user->subscribed('default'),
+            'has_payment_method' => $user->hasDefaultPaymentMethod(),
+        ]);
+
+        // Dispatch the deployment job with execution agents enabled
+        DeployCampaign::dispatch($campaign, useAgents: true);
         
-        return response()->json(['message' => 'Deployment has been initiated.']);
+        Log::info("📤 DeployCampaign job dispatched for Campaign ID: {$campaign->id}");
+        
+        return response()->json([
+            'message' => 'Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.',
+            'campaign_id' => $campaign->id,
+        ]);
     }
 }

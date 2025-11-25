@@ -16,6 +16,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Intervention\Image\Laravel\Facades\Image;
 
 class GenerateImage implements ShouldQueue
 {
@@ -58,6 +59,19 @@ class GenerateImage implements ShouldQueue
                 Log::warning("No brand guidelines found for customer ID: {$this->campaign->customer_id}");
             }
 
+            // Fetch selected product pages
+            $productContext = [];
+            $selectedPages = $this->campaign->pages; // Assuming relationship is defined
+            if ($selectedPages->isNotEmpty()) {
+                $productContext = $selectedPages->map(function ($page) {
+                    return [
+                        'title' => $page->title,
+                        'description' => $page->meta_description,
+                        'image_url' => $page->metadata['image'] ?? null, // Pass image URL if available
+                    ];
+                })->toArray();
+            }
+
             $strategyPrompt = $this->strategy->imagery_strategy;
             $review = $adminMonitorService->reviewImagePrompt($strategyPrompt);
 
@@ -96,13 +110,32 @@ class GenerateImage implements ShouldQueue
             foreach ($prompts as $index => $prompt) {
                 Log::info("Generating image " . ($index + 1) . "/" . count($prompts) . " for Strategy ID: {$this->strategy->id}");
 
-                $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines))->getPrompt();
+                $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext))->getPrompt();
                 Log::info("Gemini Image Generation Prompt:", ['prompt' => $imagePrompt]);
 
-                $imageData = $geminiService->generateImage($imagePrompt);
+                // Retry logic with exponential backoff
+                $maxRetries = 3;
+                $imageData = null;
+                
+                for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+                    if ($attempt > 1) {
+                        $waitTime = pow(2, $attempt - 1); // Exponential backoff: 2, 4, 8 seconds
+                        Log::info("Retrying image generation after {$waitTime} seconds (attempt {$attempt}/{$maxRetries})");
+                        sleep($waitTime);
+                    }
+                    
+                    $imageData = $geminiService->generateImage($imagePrompt);
+                    
+                    if ($imageData && isset($imageData['data']) && isset($imageData['mimeType'])) {
+                        Log::info("Successfully generated image on attempt {$attempt}");
+                        break;
+                    }
+                    
+                    Log::warning("Failed to generate image data from Gemini on attempt {$attempt}/{$maxRetries}");
+                }
 
                 if (!$imageData || !isset($imageData['data']) || !isset($imageData['mimeType'])) {
-                    Log::warning('Failed to generate image data from Gemini on attempt ' . ($index + 1));
+                    Log::error("Failed to generate image after {$maxRetries} attempts for prompt index " . ($index + 1));
                     continue;
                 }
 
@@ -110,6 +143,34 @@ class GenerateImage implements ShouldQueue
                 if ($decodedImage === false) {
                     Log::warning('Failed to decode a base64 image candidate on attempt ' . ($index + 1));
                     continue;
+                }
+
+                // Check if user is subscribed - if not, add watermark
+                $user = $this->campaign->customer->users()->first();
+                $isSubscribed = $user && ($user->subscribed('default') || $user->subscription_status === 'active');
+                
+                if (!$isSubscribed) {
+                    try {
+                        // Apply watermark to free tier images
+                        $image = Image::read($decodedImage);
+                        
+                        // Add semi-transparent watermark in bottom right
+                        $image->text('Spectra Preview', $image->width() - 20, $image->height() - 20, function($font) {
+                            $font->filename(public_path('fonts/Arial.ttf')); // Use system font as fallback
+                            $font->size(24);
+                            $font->color('ffffff');
+                            $font->align('right');
+                            $font->valign('bottom');
+                        });
+                        
+                        // Encode back to binary
+                        $decodedImage = (string) $image->encode();
+                        
+                        Log::info("Watermark applied to free tier image for Campaign ID: {$this->campaign->id}");
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to apply watermark: " . $e->getMessage());
+                        // Continue without watermark if it fails
+                    }
                 }
 
                 // Store the image in S3

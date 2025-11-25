@@ -12,7 +12,7 @@ import WaitingForData from '@/Components/WaitingForData';
 import DateRangePicker from '@/Components/DateRangePicker';
 
 export default function Dashboard({ auth }) {
-    const { campaigns, defaultCampaign } = usePage().props;
+    const { campaigns, defaultCampaign, usageStats } = usePage().props;
     const [selectedCampaign, setSelectedCampaign] = useState(defaultCampaign);
     const [performanceData, setPerformanceData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -90,6 +90,40 @@ export default function Dashboard({ auth }) {
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    {/* Usage Meters for Free Tier */}
+                    {usageStats && usageStats.subscription_status !== 'active' && (
+                        <div className="mb-6 bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                            <h3 className="text-lg font-medium text-gray-900 mb-4">Free Tier Usage</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Image Generations Meter */}
+                                <div>
+                                    <div className="flex justify-between mb-1">
+                                        <span className="text-sm font-medium text-gray-700">Image Generations</span>
+                                        <span className="text-sm font-medium text-gray-700">{usageStats.free_generations_used} / 5</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                        <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.free_generations_used / 5) * 100, 100)}%` }}></div>
+                                    </div>
+                                </div>
+                                {/* CRO Audits Meter */}
+                                <div>
+                                    <div className="flex justify-between mb-1">
+                                        <span className="text-sm font-medium text-gray-700">CRO Audits</span>
+                                        <span className="text-sm font-medium text-gray-700">{usageStats.cro_audits_used} / 3</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                        <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.cro_audits_used / 3) * 100, 100)}%` }}></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="mt-4 text-center">
+                                <a href={route('subscription.pricing')} className="text-indigo-600 hover:text-indigo-900 font-medium text-sm">
+                                    Upgrade to Unlimited &rarr;
+                                </a>
+                            </div>
+                        </div>
+                    )}
+
                     {renderContent()}
                 </div>
             </div>

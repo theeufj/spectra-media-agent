@@ -37,14 +37,16 @@ class BudgetValidation
      * Create a valid budget validation result.
      * 
      * @param float $allocatedBudget The allocated budget
+     * @param array $platformMinimums Platform minimum requirements
      * @param array $warnings Any warnings
      * @return self
      */
-    public static function valid(float $allocatedBudget, array $warnings = []): self
+    public static function valid(float $allocatedBudget, array $platformMinimums = [], array $warnings = []): self
     {
         return new self(
             isValid: true,
             allocatedBudget: $allocatedBudget,
+            platformMinimums: $platformMinimums,
             warnings: $warnings
         );
     }
@@ -53,14 +55,14 @@ class BudgetValidation
      * Create an invalid budget validation result.
      * 
      * @param float $allocatedBudget The allocated budget
-     * @param array $errors Validation errors
      * @param array $platformMinimums Platform minimum requirements
+     * @param array $errors Validation errors
      * @return self
      */
     public static function invalid(
         float $allocatedBudget,
-        array $errors,
-        array $platformMinimums = []
+        array $platformMinimums = [],
+        array $errors = []
     ): self {
         return new self(
             isValid: false,

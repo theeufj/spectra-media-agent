@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Customer;
+use App\Models\EnabledPlatform;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,7 +22,21 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Auth/Register');
+        // Only include platforms that have implemented login logic
+        $supportedProviders = ['google', 'facebook'];
+
+        return Inertia::render('Auth/Register', [
+            'enabledPlatforms' => EnabledPlatform::where('is_enabled', true)
+                ->whereIn('slug', $supportedProviders)
+                ->orderBy('sort_order')
+                ->get()
+                ->map(function ($platform) {
+                    return [
+                        'name' => $platform->name,
+                        'slug' => $platform->slug,
+                    ];
+                })->values()->toArray(),
+        ]);
     }
 
     /**

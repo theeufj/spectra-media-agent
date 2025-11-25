@@ -32,6 +32,16 @@ class ValidationResult
     }
 
     /**
+     * Check if validation passed (alias for isValid).
+     * 
+     * @return bool True if validation passed
+     */
+    public function passes(): bool
+    {
+        return $this->passed;
+    }
+
+    /**
      * Check if validation failed.
      * 
      * @return bool True if validation failed
@@ -44,12 +54,16 @@ class ValidationResult
     /**
      * Add an error to the validation result.
      * 
-     * @param string $error Error message
+     * @param string $code Error code
+     * @param string $message Error message
      * @return self
      */
-    public function addError(string $error): self
+    public function addError(string $code, string $message = ''): self
     {
-        $this->errors[] = $error;
+        $this->errors[] = [
+            'code' => $code,
+            'message' => $message ?: $code
+        ];
         $this->passed = false;
         return $this;
     }
@@ -57,12 +71,16 @@ class ValidationResult
     /**
      * Add a warning to the validation result.
      * 
-     * @param string $warning Warning message
+     * @param string $code Warning code
+     * @param string $message Warning message
      * @return self
      */
-    public function addWarning(string $warning): self
+    public function addWarning(string $code, string $message = ''): self
     {
-        $this->warnings[] = $warning;
+        $this->warnings[] = [
+            'code' => $code,
+            'message' => $message ?: $code
+        ];
         return $this;
     }
 

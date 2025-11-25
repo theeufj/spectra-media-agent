@@ -3,7 +3,7 @@
 namespace App\Services\GoogleAds;
 
 use Google\Ads\GoogleAds\V22\Resources\Customer;
-use Google\Ads\GoogleAds\V22\Services\CustomerOperation;
+use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
 use Google\Ads\GoogleAds\V22\Services\CustomerServiceClient;
 use Illuminate\Support\Facades\Log;
 use App\Models\Customer as CustomerModel;
@@ -12,7 +12,8 @@ class CreateManagedAccount extends BaseGoogleAdsService
 {
     public function __construct(CustomerModel $customer)
     {
-        parent::__construct($customer);
+        // Use MCC credentials for creating sub-accounts
+        parent::__construct($customer, true);
     }
 
     /**
@@ -37,18 +38,17 @@ class CreateManagedAccount extends BaseGoogleAdsService
                 'time_zone' => $timeZone,
             ]);
 
-            $customerOperation = new CustomerOperation();
-            $customerOperation->setCreate($newCustomer);
+            $request = new CreateCustomerClientRequest([
+                'customer_id' => $managerCustomerId,
+                'customer_client' => $newCustomer,
+            ]);
 
             /** @var CustomerServiceClient $customerServiceClient */
-            $customerServiceClient = $this->googleAdsClient->getCustomerServiceClient();
-            $response = $customerServiceClient->mutateCustomer(
-                $managerCustomerId,
-                $customerOperation
-            );
+            $customerServiceClient = $this->client->getCustomerServiceClient();
+            $response = $customerServiceClient->createCustomerClient($request);
 
-            if ($response->getResult()) {
-                $resourceName = $response->getResult()->getResourceName();
+            if ($response->getResourceName()) {
+                $resourceName = $response->getResourceName();
                 Log::info("Created new managed account under MCC", [
                     'manager_customer_id' => $managerCustomerId,
                     'account_name' => $accountName,

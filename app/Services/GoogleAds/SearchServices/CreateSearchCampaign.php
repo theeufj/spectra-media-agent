@@ -3,19 +3,21 @@
 namespace App\Services\GoogleAds\SearchServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\Campaign;
-use Google\Ads\GoogleAds\V15\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V15\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V15\Enums\BudgetTypeEnum\BudgetType;
-use Google\Ads\GoogleAds\V15\Services\CampaignBudgetService;
-use Google\Ads\GoogleAds\V15\Services\CampaignService;
-use Google\Ads\GoogleAds\V15\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V15\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V15\Enums\CampaignStatusEnum\CampaignStatus;
-use Google\Ads\GoogleAds\V15\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V15\Common\TargetCpa;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Campaign;
+use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V22\Services\CampaignBudgetService;
+use Google\Ads\GoogleAds\V22\Services\CampaignService;
+use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V22\Common\TargetCpa;
+use Google\Ads\GoogleAds\V22\Common\ManualCpc;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
 
 class CreateSearchCampaign extends BaseGoogleAdsService
 {
@@ -33,6 +35,9 @@ class CreateSearchCampaign extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, array $campaignData): ?string
     {
+        // Ensure client is initialized before proceeding
+        $this->ensureClient();
+        
         // Check if a campaign with the same name already exists.
         $campaignName = $campaignData['businessName'] . ' Search Campaign';
         $existingCampaign = $this->getCampaignByName($customerId, $campaignName);
@@ -56,7 +61,8 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             'status' => CampaignStatus::PAUSED, // Start paused to allow further configuration
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
-            'maximize_conversions' => new MaximizeConversions(), // Default for search campaigns
+            'manual_cpc' => new ManualCpc(), // Default for search campaigns
+            'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
         ]);
 
         // Apply bidding strategy (example: TargetCpa)
@@ -71,7 +77,12 @@ class CreateSearchCampaign extends BaseGoogleAdsService
 
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
-            $response = $campaignServiceClient->mutateCampaigns($customerId, [$campaignOperation]);
+            // Fix: Use MutateCampaignsRequest object
+            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$campaignOperation],
+            ]);
+            $response = $campaignServiceClient->mutateCampaigns($request);
             $newCampaignResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Search campaign: " . $newCampaignResourceName);
             return $newCampaignResourceName;
@@ -90,6 +101,8 @@ class CreateSearchCampaign extends BaseGoogleAdsService
      */
     private function createCampaignBudget(string $customerId, float $budgetAmount): ?string
     {
+        $this->ensureClient();
+        
         $campaignBudget = new CampaignBudget([
             'name' => 'Search Budget - ' . uniqid(),
             'amount_micros' => (int) ($budgetAmount * 1_000_000), // Convert to micros
@@ -102,7 +115,12 @@ class CreateSearchCampaign extends BaseGoogleAdsService
 
         try {
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
-            $response = $campaignBudgetServiceClient->mutateCampaignBudgets($customerId, [$campaignBudgetOperation]);
+            // Fix: Use MutateCampaignBudgetsRequest object
+            $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$campaignBudgetOperation],
+            ]);
+            $response = $campaignBudgetServiceClient->mutateCampaignBudgets($request);
             $newBudgetResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created campaign budget: " . $newBudgetResourceName);
             return $newBudgetResourceName;
@@ -110,5 +128,32 @@ class CreateSearchCampaign extends BaseGoogleAdsService
             $this->logError("Error creating campaign budget for customer $customerId: " . $e->getMessage(), $e);
             return null;
         }
+    }
+
+    /**
+     * Check if a campaign with the given name already exists
+     */
+    private function getCampaignByName(string $customerId, string $campaignName): ?Campaign
+    {
+        $this->ensureClient();
+        
+        $query = "SELECT campaign.resource_name, campaign.name FROM campaign WHERE campaign.name = '{$campaignName}'";
+        try {
+            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
+            // Fix: Use SearchGoogleAdsRequest object instead of passing arguments directly
+            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => $query,
+            ]);
+            $response = $googleAdsServiceClient->search($request);
+
+            foreach ($response->getIterator() as $googleAdsRow) {
+                return $googleAdsRow->getCampaign();
+            }
+        } catch (GoogleAdsException $e) {
+            $this->logError("Error fetching campaign by name for customer $customerId: " . $e->getMessage(), $e);
+        }
+
+        return null;
     }
 }

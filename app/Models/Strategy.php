@@ -18,6 +18,7 @@ class Strategy extends Model
     protected $fillable = [
         'campaign_id',
         'platform',
+        'campaign_type',
         'ad_copy_strategy',
         'imagery_strategy',
         'video_strategy',
@@ -29,6 +30,8 @@ class Strategy extends Model
         'execution_result',
         'execution_time',
         'execution_errors',
+        'google_ads_ad_group_id',
+        'status',
     ];
 
     /**

@@ -97,6 +97,7 @@ class CheckVideoStatus implements ShouldQueue
                 'status' => 'completed',
                 's3_path' => $s3Path,
                 'cloudfront_url' => $cloudFrontUrl,
+                'gemini_video_uri' => $videoUri, // Store Gemini URI for potential extensions
             ]);
 
             Log::info("--- CheckVideoStatus Job Completed Successfully for VideoCollateral ID: {$this->videoCollateral->id} ---");

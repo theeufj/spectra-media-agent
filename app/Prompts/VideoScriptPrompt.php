@@ -9,11 +9,13 @@ class VideoScriptPrompt
 {
     private string $strategy;
     private ?BrandGuideline $brandGuidelines;
+    private ?array $productContext;
 
-    public function __construct(string $strategy, ?BrandGuideline $brandGuidelines = null)
+    public function __construct(string $strategy, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null)
     {
         $this->strategy = $strategy;
         $this->brandGuidelines = $brandGuidelines;
+        $this->productContext = $productContext;
     }
 
     private function formatBrandContext(): string
@@ -65,10 +67,19 @@ class VideoScriptPrompt
             Log::info("VideoScriptPrompt: No brand guidelines available - using generic approach");
         }
 
+        $productContextString = '';
+        if (!empty($this->productContext)) {
+            $productContextString = "\n\n**PRODUCT DETAILS:**\n" .
+                "The video script MUST feature or relate to the following product(s):\n" .
+                json_encode($this->productContext, JSON_PRETTY_PRINT);
+        }
+
         return <<<PROMPT
 You are a creative and concise scriptwriter for short marketing videos.
 
-{$brandContext}Based on the following creative strategy, write a short, engaging voiceover script for a video that is approximately 8-15 seconds long.
+{$brandContext}
+{$productContextString}
+Based on the following creative strategy, write a short, engaging voiceover script for a video that is approximately 8-15 seconds long.
 
 **SCRIPT REQUIREMENTS:**
 - **Length:** 8-15 seconds of spoken content (approximately 20-40 words)

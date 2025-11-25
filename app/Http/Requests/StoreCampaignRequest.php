@@ -36,6 +36,8 @@ class StoreCampaignRequest extends FormRequest
             'product_focus' => 'required|string',
             'landing_page_url' => 'nullable|url',
             'exclusions' => 'nullable|string',
+            'selected_pages' => 'nullable|array',
+            'selected_pages.*' => 'exists:customer_pages,id',
         ];
     }
 

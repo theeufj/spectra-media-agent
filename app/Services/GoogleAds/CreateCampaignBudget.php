@@ -5,6 +5,7 @@ namespace App\Services\GoogleAds;
 use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
 use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
 use Google\Ads\GoogleAds\V22\Services\CampaignBudgetServiceClient;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest;
 use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
 
@@ -29,7 +30,11 @@ class CreateCampaignBudget extends BaseGoogleAdsService
 
         /** @var CampaignBudgetServiceClient $campaignBudgetServiceClient */
         $campaignBudgetServiceClient = $this->googleAdsClient->getCampaignBudgetServiceClient();
-        $response = $campaignBudgetServiceClient->mutateCampaignBudgets($customerId, [$campaignBudgetOperation]);
+        $request = new MutateCampaignBudgetsRequest([
+            'customer_id' => $customerId,
+            'operations' => [$campaignBudgetOperation],
+        ]);
+        $response = $campaignBudgetServiceClient->mutateCampaignBudgets($request);
 
         return $response->getResults() ? $response->getResults()[0]->getResourceName() : null;
     }

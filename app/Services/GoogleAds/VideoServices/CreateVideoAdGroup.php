@@ -3,12 +3,12 @@
 namespace App\Services\GoogleAds\VideoServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\AdGroup;
-use Google\Ads\GoogleAds\V15\Services\AdGroupService;
-use Google\Ads\GoogleAds\V15\Services\AdGroupOperation;
-use Google\Ads\GoogleAds\V15\Enums\AdGroupStatusEnum\AdGroupStatus;
-use Google\Ads\GoogleAds\V15\Enums\AdGroupTypeEnum\AdGroupType;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\AdGroup;
+use Google\Ads\GoogleAds\V22\Services\AdGroupService;
+use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class CreateVideoAdGroup extends BaseGoogleAdsService

@@ -32,7 +32,29 @@ class Campaign extends Model
         'exclusions',
         'google_ads_campaign_id',
         'facebook_ads_campaign_id',
+        'strategy_generation_started_at',
+        'strategy_generation_completed_at',
+        'strategy_generation_error',
     ];
+
+    /**
+     * The attributes that should be cast.
+     *
+     * @var array
+     */
+    protected $casts = [
+        'strategy_generation_started_at' => 'datetime',
+        'strategy_generation_completed_at' => 'datetime',
+    ];
+
+    /**
+     * Check if strategy generation is currently in progress.
+     */
+    public function isGeneratingStrategies(): bool
+    {
+        return $this->strategy_generation_started_at !== null 
+            && $this->strategy_generation_completed_at === null;
+    }
 
     /**
      * Get the customer that owns the campaign.
@@ -52,5 +74,13 @@ class Campaign extends Model
     public function strategies(): HasMany
     {
         return $this->hasMany(Strategy::class);
+    }
+
+    /**
+     * The pages selected for this campaign.
+     */
+    public function pages()
+    {
+        return $this->belongsToMany(CustomerPage::class, 'campaign_pages');
     }
 }

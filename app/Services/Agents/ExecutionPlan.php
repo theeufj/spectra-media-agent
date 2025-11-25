@@ -59,16 +59,38 @@ class ExecutionPlan
      */
     public static function fromJson(string $json): self
     {
+        // Strip markdown code blocks if present (e.g., ```json ... ```)
+        $json = preg_replace('/^```(?:json)?\s*\n/m', '', $json);
+        $json = preg_replace('/\n```\s*$/m', '', $json);
+        $json = trim($json);
+        
         $data = json_decode($json, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
+            \Illuminate\Support\Facades\Log::error('ExecutionPlan JSON parse error', [
+                'error' => json_last_error_msg(),
+                'json_preview' => substr($json, 0, 500)
+            ]);
             throw new \Exception('Invalid JSON in execution plan: ' . json_last_error_msg());
         }
 
-        // Extract execution sequence
-        $steps = Arr::get($data, 'execution_sequence', []);
+        // Log the structure we received
+        \Illuminate\Support\Facades\Log::debug('ExecutionPlan parsed data structure', [
+            'top_level_keys' => array_keys($data),
+            'has_execution_sequence' => isset($data['execution_sequence']),
+            'has_steps' => isset($data['steps']),
+            'data_preview' => array_map(function($v) { 
+                return is_array($v) ? '[array:'.count($v).']' : (is_string($v) ? substr($v, 0, 50) : gettype($v)); 
+            }, $data)
+        ]);
+
+        // Extract execution sequence (try both 'execution_sequence' and 'steps')
+        $steps = Arr::get($data, 'execution_sequence', Arr::get($data, 'steps', []));
         if (empty($steps)) {
-            throw new \Exception('Execution plan missing execution_sequence');
+            \Illuminate\Support\Facades\Log::error('ExecutionPlan missing execution steps', [
+                'available_keys' => array_keys($data)
+            ]);
+            throw new \Exception('Execution plan missing execution_sequence or steps. Available keys: ' . implode(', ', array_keys($data)));
         }
 
         // Extract budget allocation

@@ -3,12 +3,12 @@
 namespace App\Services\GoogleAds\DisplayServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\AdGroup;
-use Google\Ads\GoogleAds\V15\Services\AdGroupService;
-use Google\Ads\GoogleAds\V15\Services\AdGroupOperation;
-use Google\Ads\GoogleAds\V15\Enums\AdGroupStatusEnum\AdGroupStatus;
-use Google\Ads\GoogleAds\V15\Enums\AdGroupTypeEnum\AdGroupType;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\AdGroup;
+use Google\Ads\GoogleAds\V22\Services\AdGroupService;
+use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class CreateDisplayAdGroup extends BaseGoogleAdsService
@@ -40,7 +40,12 @@ class CreateDisplayAdGroup extends BaseGoogleAdsService
 
         try {
             $adGroupServiceClient = $this->client->getAdGroupServiceClient();
-            $response = $adGroupServiceClient->mutateAdGroups($customerId, [$adGroupOperation]);
+            // Fix: Use MutateAdGroupsRequest object
+            $request = new \Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$adGroupOperation],
+            ]);
+            $response = $adGroupServiceClient->mutateAdGroups($request);
             $newAdGroupResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Display ad group: " . $newAdGroupResourceName);
             return $newAdGroupResourceName;

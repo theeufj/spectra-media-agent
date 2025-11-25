@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use Spatie\Browsershot\Browsershot;
 
 class BrandGuidelineController extends Controller
 {
@@ -165,5 +166,62 @@ class BrandGuidelineController extends Controller
         ]);
         
         return back()->with('success', 'Brand guideline extraction started! This may take a few minutes.');
+    }
+
+    /**
+     * Export brand guidelines as PDF.
+     */
+    public function exportPdf(Request $request)
+    {
+        $user = $request->user();
+        $activeCustomerId = session('active_customer_id');
+        
+        if (!$activeCustomerId) {
+            return redirect()->route('dashboard')->with('error', 'No active customer selected.');
+        }
+        
+        // Ensure user has access to this customer
+        $customer = $user->customers()->findOrFail($activeCustomerId);
+        $brandGuideline = $customer->brandGuideline;
+        
+        if (!$brandGuideline) {
+            return redirect()->route('brand-guidelines.index')->with('error', 'No brand guidelines available to export.');
+        }
+        
+        // Generate HTML view
+        $html = view('brand-guidelines-pdf', [
+            'brandGuideline' => $brandGuideline,
+            'customer' => $customer,
+        ])->render();
+        
+        // Generate filename
+        $filename = str_replace(' ', '-', strtolower($customer->name)) . '-brand-guidelines-' . date('Y-m-d') . '.pdf';
+        
+        try {
+            // Generate PDF using Browsershot
+            $pdf = Browsershot::html($html)
+                ->setOption('landscape', false)
+                ->margins(10, 10, 10, 10)
+                ->format('A4')
+                ->showBackground()
+                ->pdf();
+            
+            Log::info('Brand guidelines PDF exported', [
+                'user_id' => $user->id,
+                'customer_id' => $customer->id,
+                'brand_guideline_id' => $brandGuideline->id,
+            ]);
+            
+            return response($pdf, 200)
+                ->header('Content-Type', 'application/pdf')
+                ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        } catch (\Exception $e) {
+            Log::error('Failed to generate brand guidelines PDF', [
+                'error' => $e->getMessage(),
+                'customer_id' => $customer->id,
+            ]);
+            
+            return redirect()->route('brand-guidelines.index')->with('error', 'Failed to generate PDF. Please try again.');
+        }
     }
 }

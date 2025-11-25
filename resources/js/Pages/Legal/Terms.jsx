@@ -15,10 +15,10 @@ export default function Terms({ auth }) {
                         <div className="min-h-screen flex flex-col items-center pt-6 sm:pt-0">
                             <div className="w-full sm:max-w-4xl mt-6 p-8 bg-white shadow-md overflow-hidden sm:rounded-lg">
                             <h1 className="text-3xl lg:text-4xl font-bold text-gray-800">Terms of Service</h1>
-                            <p className="mt-2 text-sm text-gray-500">Last updated: November 19, 2025</p>
+                            <p className="mt-2 text-sm text-gray-500">Last updated: November 23, 2025</p>
 
                             <div className="mt-8 space-y-6 text-gray-700 leading-relaxed">
-                                <p>Please read these Terms of Service ("Terms", "Terms of Service") carefully before using the cvseeyou application (the "Service") operated by cvseeyou ("us", "we", or "our").</p>
+                                <p>Please read these Terms of Service ("Terms", "Terms of Service") carefully before using the sitetospend application (the "Service") operated by sitetospend ("us", "we", or "our").</p>
                                 <p>Your access to and use of the Service is conditioned on your acceptance of and compliance with these Terms. These Terms apply to all visitors, users, and others who access or use the Service.</p>
                             </div>
 
@@ -28,7 +28,7 @@ export default function Terms({ auth }) {
                                 <p>You are responsible for safeguarding the password that you use to access the Service and for any activities or actions under your password, whether your password is with our Service or a third-party service.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">2. Service Description</h2>
-                                <p>cvseeyou is an AI-powered digital marketing platform specializing in multi-channel advertising across Search Engine Marketing (SEM) and Social Media Advertising. Our AI agents autonomously generate, manage, and optimize advertising campaigns on your behalf across Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads. The Service includes:</p>
+                                <p>sitetospend is an AI-powered digital marketing platform specializing in multi-channel advertising across Search Engine Marketing (SEM) and Social Media Advertising. Our AI agents autonomously generate, manage, and optimize advertising campaigns on your behalf across Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads. The Service includes:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>AI-driven campaign strategy and creation</li>
                                     <li>Automated ad copy generation and optimization</li>
@@ -105,7 +105,7 @@ export default function Terms({ auth }) {
                                 <p>You may terminate your account at any time by discontinuing use of the Service and revoking our access to your advertising platform accounts.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">11. Limitation of Liability</h2>
-                                <p>In no event shall cvseeyou, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, ad spend, lost sales, or other intangible losses, resulting from:</p>
+                                <p>In no event shall sitetospend, nor its directors, employees, partners, agents, suppliers, or affiliates, be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, ad spend, lost sales, or other intangible losses, resulting from:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Your access to or use of or inability to access or use the Service</li>
                                     <li>Campaign performance or lack thereof</li>
@@ -119,7 +119,7 @@ export default function Terms({ auth }) {
                                 <p>THE SERVICE IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTIES OF ANY KIND, EITHER EXPRESS OR IMPLIED. WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR THAT ANY DEFECTS WILL BE CORRECTED. WE MAKE NO WARRANTIES REGARDING CAMPAIGN PERFORMANCE, RETURN ON INVESTMENT, OR ANY SPECIFIC RESULTS.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">13. Indemnification</h2>
-                                <p>You agree to indemnify and hold harmless cvseeyou and its affiliates from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from:</p>
+                                <p>You agree to indemnify and hold harmless sitetospend and its affiliates from any claims, damages, losses, liabilities, and expenses (including legal fees) arising from:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Your use of the Service</li>
                                     <li>Your violation of these Terms</li>
@@ -136,7 +136,7 @@ export default function Terms({ auth }) {
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Contact Us</h2>
                                 <p>If you have any questions about these Terms, please contact us:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
-                                    <li>By email: support@cvseeyou.com</li>
+                                    <li>By email: support@sitetospend.com</li>
                                 </ul>
                             </div>
                             </div>

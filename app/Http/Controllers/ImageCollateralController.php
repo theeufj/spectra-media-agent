@@ -37,6 +37,17 @@ class ImageCollateralController extends Controller
             abort(403, 'Strategy does not belong to this campaign.');
         }
 
+        // Check free tier limits
+        if (!$user->subscribed('default') && $user->subscription_status !== 'active') {
+            $imageCount = ImageCollateral::where('campaign_id', $campaign->id)->count();
+            if ($imageCount >= 4) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'Free tier limit reached (4 images per campaign). Please upgrade to generate more.'
+                ]);
+            }
+        }
+
         // Dispatch the job to handle the image generation in the background.
         GenerateImage::dispatch($campaign, $strategy);
 

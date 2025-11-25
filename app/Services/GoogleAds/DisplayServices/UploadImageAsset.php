@@ -3,12 +3,13 @@
 namespace App\Services\GoogleAds\DisplayServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V15\Resources\Asset;
-use Google\Ads\GoogleAds\V15\Common\ImageAsset;
-use Google\Ads\GoogleAds\V15\Enums\AssetTypeEnum\AssetType;
-use Google\Ads\GoogleAds\V15\Services\AssetService;
-use Google\Ads\GoogleAds\V15\Services\AssetOperation;
-use Google\Ads\GoogleAds\V15\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Asset;
+use Google\Ads\GoogleAds\V22\Common\ImageAsset;
+use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
+use Google\Ads\GoogleAds\V22\Services\AssetService;
+use Google\Ads\GoogleAds\V22\Services\AssetOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class UploadImageAsset extends BaseGoogleAdsService
@@ -52,7 +53,11 @@ class UploadImageAsset extends BaseGoogleAdsService
 
         try {
             $assetServiceClient = $this->client->getAssetServiceClient();
-            $response = $assetServiceClient->mutateAssets($customerId, [$assetOperation]);
+            $request = new MutateAssetsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$assetOperation],
+            ]);
+            $response = $assetServiceClient->mutateAssets($request);
             $newAssetResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully uploaded image asset: " . $newAssetResourceName);
             return $newAssetResourceName;

@@ -61,7 +61,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         $createCampaignService = new CreateDisplayCampaign($this->customer);
         $campaignData = [
             'businessName' => $campaign->name,
-            'budget' => $strategy->budget,
+            'budget' => $campaign->daily_budget,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
         ];
@@ -120,7 +120,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         $createCampaignService = new CreateSearchCampaign($this->customer);
         $campaignData = [
             'businessName' => $campaign->name,
-            'budget' => $strategy->budget,
+            'budget' => $campaign->daily_budget,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
         ];

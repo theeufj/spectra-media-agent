@@ -18,8 +18,14 @@ class FacebookOAuthController extends Controller
      */
     public function redirect()
     {
+        Log::info('Redirecting to Facebook OAuth with config_id', ['config_id' => config('services.facebook.config_id')]);
+        
         return Socialite::driver('facebook')
-            ->scopes(['ads_management', 'business_management', 'email'])
+            ->scopes([]) // Clear scopes to rely on config_id
+            ->with([
+                'config_id' => config('services.facebook.config_id'),
+                'scope' => null, // Explicitly remove scope parameter from URL
+            ])
             ->redirect();
     }
 

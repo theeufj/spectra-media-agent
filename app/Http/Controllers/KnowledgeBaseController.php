@@ -53,6 +53,15 @@ class KnowledgeBaseController extends Controller
     {
         $user = Auth::user();
 
+        // Check limits for free users
+        if (!$user->subscribed('default') && $user->subscription_status !== 'active') {
+             // Limit to 3 Knowledge Base entries (URLs/Files)
+             $count = $user->knowledgeBases()->count();
+             if ($count >= 3) {
+                 return redirect()->back()->with('error', 'Free tier limit reached (3 URLs/Files). Please upgrade to add more sources.');
+             }
+        }
+
         // Check if a file is being uploaded
         if ($request->hasFile('document')) {
             return $this->handleFileUpload($request, $user);

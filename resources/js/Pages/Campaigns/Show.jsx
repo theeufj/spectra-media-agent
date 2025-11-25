@@ -6,9 +6,9 @@ import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 
 // A reusable component for a single strategy card
-const StrategyCard = ({ strategy, campaignId }) => {
+const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
     const [isEditing, setIsEditing] = useState(false);
-    const { data, setData, post, put, processing } = useForm({
+    const { data, setData, put, processing } = useForm({
         ad_copy_strategy: strategy.ad_copy_strategy,
         imagery_strategy: strategy.imagery_strategy,
         video_strategy: strategy.video_strategy,
@@ -22,7 +22,7 @@ const StrategyCard = ({ strategy, campaignId }) => {
     };
 
     const handleSignOff = () => {
-        // This will be handled by the parent component's modal
+        onSignOff(strategy);
     };
 
     const isSignedOff = !!strategy.signed_off_at;
@@ -98,7 +98,10 @@ const StrategyCard = ({ strategy, campaignId }) => {
 
 export default function Show({ auth, campaign }) {
     const [campaigns, setCampaign] = useState(campaign);
-    const [isPolling, setIsPolling] = useState(campaign.strategies.length === 0);
+    const [isPolling, setIsPolling] = useState(
+        campaign.is_generating_strategies || 
+        (campaign.strategies.length === 0 && campaign.strategy_generation_started_at)
+    );
     const [showGenerationModal, setShowGenerationModal] = useState(false);
     const [pollingError, setPollingError] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
@@ -129,15 +132,31 @@ export default function Show({ auth, campaign }) {
                 if (apiResponse.ok) {
                     const data = await apiResponse.json();
                     console.log('Poll data received, strategies count:', data.strategies?.length || 0);
+                    console.log('Is generating:', data.is_generating_strategies);
+                    console.log('Generation error:', data.strategy_generation_error);
                     
                     // Update campaign data
                     setCampaign(data);
                     
-                    // Stop polling if strategies are now available
-                    if (data.strategies && data.strategies.length > 0) {
-                        console.log('Strategies loaded, stopping polling');
+                    // Check if generation failed
+                    if (data.strategy_generation_error) {
+                        console.log('Strategy generation failed, stopping polling');
+                        setIsPolling(false);
+                        setPollingError(true);
+                        return true;
+                    }
+                    
+                    // Stop polling if strategies are available and generation is complete
+                    if (data.strategies && data.strategies.length > 0 && !data.is_generating_strategies) {
+                        console.log('Strategies loaded and generation complete, stopping polling');
                         setIsPolling(false);
                         return true; // Signal to stop polling
+                    }
+                    
+                    // Continue polling if generation is still in progress
+                    if (data.is_generating_strategies) {
+                        console.log('Generation still in progress, continuing to poll');
+                        return false;
                     }
                 } else {
                     console.error('Poll response not OK:', apiResponse.statusText);
@@ -168,6 +187,26 @@ export default function Show({ auth, campaign }) {
         };
     }, [isPolling, campaigns.id]);
 
+    const handleSignOffStrategy = (strategy) => {
+        setConfirmModal({
+            show: true,
+            title: 'Sign Off Strategy',
+            message: `Are you sure you want to sign off on the ${strategy.platform} strategy? This will lock it and you won't be able to edit it anymore.`,
+            onConfirm: () => {
+                setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+                post(route('campaigns.strategies.sign-off', { campaign: campaigns.id, strategy: strategy.id }), {
+                    preserveScroll: true,
+                    onSuccess: (page) => {
+                        // Update local state with fresh data from server
+                        setCampaign(page.props.campaign);
+                    }
+                });
+            },
+            isDestructive: false,
+            confirmText: 'Sign Off Strategy'
+        });
+    };
+
     const handleSignOffAll = () => {
         setConfirmModal({
             show: true,
@@ -176,8 +215,11 @@ export default function Show({ auth, campaign }) {
             onConfirm: () => {
                 setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
                 post(route('campaigns.sign-off-all', { campaign: campaigns.id }), {
-                    onSuccess: () => {
+                    preserveScroll: true,
+                    onSuccess: (page) => {
                         setShowGenerationModal(true);
+                        // Update local state with fresh data
+                        setCampaign(page.props.campaign);
                     }
                 });
             },
@@ -220,7 +262,14 @@ export default function Show({ auth, campaign }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                             </div>
-                            <span className="text-lg font-semibold">AI is thinking about your strategy... This may take a minute.</span>
+                            <div>
+                                <span className="text-lg font-semibold">AI is generating your advertising strategies...</span>
+                                {campaigns.strategy_generation_started_at && (
+                                    <p className="text-sm text-blue-200 mt-1">
+                                        Started {new Date(campaigns.strategy_generation_started_at).toLocaleTimeString()}
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     )}
 
@@ -231,8 +280,16 @@ export default function Show({ auth, campaign }) {
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <div>
-                                    <p className="font-semibold">Strategy generation is taking longer than expected</p>
-                                    <p className="text-sm mt-1">Please refresh the page in a moment or contact support if this persists.</p>
+                                    <p className="font-semibold">
+                                        {campaigns.strategy_generation_error 
+                                            ? 'Strategy generation failed' 
+                                            : 'Strategy generation is taking longer than expected'}
+                                    </p>
+                                    <p className="text-sm mt-1">
+                                        {campaigns.strategy_generation_error 
+                                            ? campaigns.strategy_generation_error
+                                            : 'Please refresh the page in a moment or contact support if this persists.'}
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -249,7 +306,12 @@ export default function Show({ auth, campaign }) {
                     {campaigns.strategies && campaigns.strategies.length > 0 ? (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             {campaigns.strategies.map(strategy => (
-                                <StrategyCard key={strategy.id} strategy={strategy} campaignId={campaigns.id} />
+                                <StrategyCard 
+                                    key={strategy.id} 
+                                    strategy={strategy} 
+                                    campaignId={campaigns.id}
+                                    onSignOff={handleSignOffStrategy}
+                                />
                             ))}
                         </div>
                     ) : (

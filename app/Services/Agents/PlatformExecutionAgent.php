@@ -27,7 +27,7 @@ abstract class PlatformExecutionAgent
     }
 
     /**
-     * Execute the deployment for the given strategy and campaign.
+     * Execute the deployment for the given execution context.
      * 
      * This is the main entry point that orchestrates the entire execution flow:
      * 1. Validates prerequisites
@@ -36,14 +36,13 @@ abstract class PlatformExecutionAgent
      * 4. Executes the plan
      * 5. Handles errors and recovery
      * 
-     * @param Strategy $strategy The platform-specific strategy to execute
-     * @param Campaign $campaign The parent campaign
+     * @param ExecutionContext $context The execution context containing strategy, campaign, and customer
      * @return ExecutionResult Result of the execution with success/failure details
      */
-    abstract public function execute(Strategy $strategy, Campaign $campaign): ExecutionResult;
+    abstract public function execute(ExecutionContext $context): ExecutionResult;
 
     /**
-     * Generate an AI-powered execution plan based on strategy and context.
+     * Generate an AI-powered execution plan based on execution context.
      * 
      * The execution plan includes:
      * - Step-by-step deployment actions
@@ -52,16 +51,10 @@ abstract class PlatformExecutionAgent
      * - Fallback strategies for common errors
      * - Reasoning for all decisions
      * 
-     * @param Strategy $strategy The strategy containing ad copy, imagery, and targeting guidance
-     * @param Campaign $campaign The campaign with budget and business context
-     * @param OptimizationAnalysis $optimization Available optimization opportunities
+     * @param ExecutionContext $context The execution context containing all necessary data
      * @return ExecutionPlan Structured plan for deployment
      */
-    abstract protected function generateExecutionPlan(
-        Strategy $strategy,
-        Campaign $campaign,
-        OptimizationAnalysis $optimization
-    ): ExecutionPlan;
+    abstract protected function generateExecutionPlan(ExecutionContext $context): ExecutionPlan;
 
     /**
      * Validate all prerequisites before attempting deployment.
@@ -73,13 +66,11 @@ abstract class PlatformExecutionAgent
      * - Budget minimums
      * - Payment method validity
      * 
-     * @param Strategy $strategy The strategy to validate
-     * @param Campaign $campaign The campaign to validate
+     * @param ExecutionContext $context The execution context containing strategy, campaign, and customer
      * @return ValidationResult Result indicating if prerequisites are met
      */
     abstract protected function validatePrerequisites(
-        Strategy $strategy,
-        Campaign $campaign
+        ExecutionContext $context
     ): ValidationResult;
 
     /**
@@ -92,13 +83,11 @@ abstract class PlatformExecutionAgent
      * - Creative optimizations (Dynamic Creative, Responsive Ads)
      * - Audience targeting enhancements
      * 
-     * @param Strategy $strategy The strategy with available assets
-     * @param Campaign $campaign The campaign with budget and goals
+     * @param ExecutionContext $context The execution context containing strategy, campaign, and customer
      * @return OptimizationAnalysis Analysis of available opportunities
      */
     abstract protected function analyzeOptimizationOpportunities(
-        Strategy $strategy,
-        Campaign $campaign
+        ExecutionContext $context
     ): OptimizationAnalysis;
 
     /**
@@ -123,14 +112,12 @@ abstract class PlatformExecutionAgent
      * Execute the generated plan step by step.
      * 
      * @param ExecutionPlan $plan The plan to execute
-     * @param Strategy $strategy The strategy being deployed
-     * @param Campaign $campaign The campaign being deployed
+     * @param ExecutionContext $context The execution context containing strategy, campaign, and customer
      * @return ExecutionResult Result of the execution
      */
     abstract protected function executePlan(
         ExecutionPlan $plan,
-        Strategy $strategy,
-        Campaign $campaign
+        ExecutionContext $context
     ): ExecutionResult;
 
     /**

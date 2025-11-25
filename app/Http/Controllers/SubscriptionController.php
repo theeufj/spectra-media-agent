@@ -75,6 +75,8 @@ class SubscriptionController extends Controller
                     'name' => 'auto',
                     'address' => 'auto',
                 ],
+            ], [
+                'api_key' => config('services.stripe.secret'),
             ]);
         }
 
