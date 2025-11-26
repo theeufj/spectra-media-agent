@@ -20,7 +20,9 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::delete('/profile/connections/{connection}', [ProfileController::class, 'disconnectAccount'])->name('profile.disconnect');
     Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'page'])->name('notifications.index');
 });
 
 require __DIR__.'/auth.php';
@@ -125,6 +127,14 @@ Route::middleware(['auth'])->group(function () {
     // GET /campaigns/create
     Route::get('/campaigns/create', [App\Http\Controllers\CampaignController::class, 'create'])->name('campaigns.create');
 
+    // Route to display the new campaign creation wizard.
+    // GET /campaigns/wizard
+    Route::get('/campaigns/wizard', [App\Http\Controllers\CampaignController::class, 'wizard'])->name('campaigns.wizard');
+    
+    // Route for AI-assisted campaign creation chat.
+    // POST /api/campaigns/ai-assist
+    Route::post('/api/campaigns/ai-assist', [App\Http\Controllers\CampaignController::class, 'aiAssist'])->name('campaigns.ai-assist');
+
     // Route to handle the form submission, create the campaign, and dispatch the strategy generation job.
     // POST /campaigns
     Route::post('/campaigns', [App\Http\Controllers\CampaignController::class, 'store'])->name('campaigns.store');
@@ -132,6 +142,10 @@ Route::middleware(['auth'])->group(function () {
     // Route to display the strategies for a specific campaign.
     // GET /campaigns/{campaign}/strategies
     Route::get('/campaigns/{campaign}/strategies', [App\Http\Controllers\CampaignController::class, 'show'])->name('campaigns.show');
+
+    // Route to display deployment status for a campaign.
+    // GET /campaigns/{campaign}/deployment-status
+    Route::get('/campaigns/{campaign}/deployment-status', [App\Http\Controllers\CampaignController::class, 'deploymentStatus'])->name('campaigns.deployment-status');
 
     // Route to display the collateral generation page for a specific campaign strategy.
     // GET /campaigns/{campaign}/{strategy}/collateral
@@ -175,6 +189,8 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/billing/ad-spend/transactions', [App\Http\Controllers\AdSpendBillingController::class, 'getTransactions'])->name('billing.ad-spend.transactions');
     Route::post('/billing/ad-spend/add-credit', [App\Http\Controllers\AdSpendBillingController::class, 'addCredit'])->name('billing.ad-spend.add-credit');
     Route::post('/billing/ad-spend/retry-payment', [App\Http\Controllers\AdSpendBillingController::class, 'retryPayment'])->name('billing.ad-spend.retry');
+    Route::post('/billing/ad-spend/update-payment-method', [App\Http\Controllers\AdSpendBillingController::class, 'updatePaymentMethod'])->name('billing.ad-spend.update-payment-method');
+    Route::post('/billing/ad-spend/setup-for-deployment', [App\Http\Controllers\AdSpendBillingController::class, 'setupForDeployment'])->name('billing.ad-spend.setup-for-deployment');
 });
 
 /*
@@ -287,6 +303,30 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
 
     Route::get('/customers/{customer}/pages', [\App\Http\Controllers\CustomerPageController::class, 'index'])
         ->name('api.customers.pages.index');
+
+    // Notification routes
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index'])
+        ->name('api.notifications.index');
+    Route::post('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead'])
+        ->name('api.notifications.read');
+    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead'])
+        ->name('api.notifications.read-all');
+    Route::delete('/notifications/{notification}', [\App\Http\Controllers\NotificationController::class, 'destroy'])
+        ->name('api.notifications.destroy');
+    Route::get('/notifications/preferences', [\App\Http\Controllers\NotificationController::class, 'preferences'])
+        ->name('api.notifications.preferences');
+    Route::post('/notifications/preferences', [\App\Http\Controllers\NotificationController::class, 'updatePreferences'])
+        ->name('api.notifications.preferences.update');
+
+    // Setup progress routes
+    Route::get('/setup-progress', [\App\Http\Controllers\SetupProgressController::class, 'index'])
+        ->name('api.setup-progress.index');
+    Route::post('/setup-progress/{step}/skip', [\App\Http\Controllers\SetupProgressController::class, 'skipStep'])
+        ->name('api.setup-progress.skip');
+
+    // Deployment status polling
+    Route::get('/campaigns/{campaign}/deployment-status', [\App\Http\Controllers\CampaignController::class, 'apiDeploymentStatus'])
+        ->name('api.campaigns.deployment-status');
 });
 
 Route::get('/test-email', function () {
@@ -359,6 +399,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('dashboard', [App\Http\Controllers\AdminController::class, 'index'])->name('admin.dashboard');
     Route::get('users', [App\Http\Controllers\AdminController::class, 'usersIndex'])->name('admin.users.index');
     Route::get('customers', [App\Http\Controllers\AdminController::class, 'customersIndex'])->name('admin.customers.index');
+    Route::get('customers/{customer}', [App\Http\Controllers\AdminController::class, 'customerShow'])->name('admin.customers.show');
+    Route::get('customers/{customer}/dashboard', [App\Http\Controllers\AdminController::class, 'customerDashboard'])->name('admin.customers.dashboard');
+    Route::get('campaigns/{campaign}', [App\Http\Controllers\AdminController::class, 'campaignShow'])->name('admin.campaigns.show');
+    Route::get('campaigns/{campaign}/performance', [App\Http\Controllers\AdminController::class, 'campaignPerformance'])->name('admin.campaigns.performance');
+    Route::post('campaigns/{campaign}/pause', [App\Http\Controllers\AdminController::class, 'pauseCampaign'])->name('admin.campaigns.pause');
+    Route::post('campaigns/{campaign}/start', [App\Http\Controllers\AdminController::class, 'startCampaign'])->name('admin.campaigns.start');
+    Route::put('campaigns/{campaign}', [App\Http\Controllers\AdminController::class, 'updateCampaign'])->name('admin.campaigns.update');
     Route::get('notifications', [App\Http\Controllers\AdminController::class, 'notificationsIndex'])->name('admin.notifications.index');
     Route::get('settings', [App\Http\Controllers\AdminController::class, 'settingsIndex'])->name('admin.settings.index');
     Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');
@@ -371,6 +418,26 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('execution-metrics/{strategy}', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'show'])->name('admin.execution.detail');
     Route::post('users/{user}/unban', [App\Http\Controllers\AdminController::class, 'unbanUser'])->name('admin.users.unban');
     Route::post('notification', [App\Http\Controllers\AdminController::class, 'sendNotification'])->name('admin.notification.send');
+    
+    // Impersonation
+    Route::post('impersonate/{user}', [App\Http\Controllers\Admin\ImpersonationController::class, 'start'])->name('admin.impersonation.start');
+    Route::post('impersonate/stop', [App\Http\Controllers\Admin\ImpersonationController::class, 'stop'])->name('admin.impersonation.stop');
+    
+    // System Health Dashboard
+    Route::get('system-health', [App\Http\Controllers\Admin\SystemHealthController::class, 'index'])->name('admin.health.index');
+    Route::get('system-health/check', [App\Http\Controllers\Admin\SystemHealthController::class, 'check'])->name('admin.health.check');
+    Route::post('system-health/retry-job/{id}', [App\Http\Controllers\Admin\SystemHealthController::class, 'retryJob'])->name('admin.health.retry-job');
+    Route::delete('system-health/delete-job/{id}', [App\Http\Controllers\Admin\SystemHealthController::class, 'deleteJob'])->name('admin.health.delete-job');
+    Route::post('system-health/flush-jobs', [App\Http\Controllers\Admin\SystemHealthController::class, 'flushFailedJobs'])->name('admin.health.flush-jobs');
+    
+    // Revenue Dashboard
+    Route::get('revenue', [App\Http\Controllers\Admin\RevenueController::class, 'index'])->name('admin.revenue.index');
+    Route::post('revenue/refund/{chargeId}', [App\Http\Controllers\Admin\RevenueController::class, 'refund'])->name('admin.revenue.refund');
+    
+    // Activity Logs
+    Route::get('activity-logs', [App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('admin.activity.index');
+    Route::get('activity-logs/stats', [App\Http\Controllers\Admin\ActivityLogController::class, 'stats'])->name('admin.activity.stats');
+    Route::get('activity-logs/export', [App\Http\Controllers\Admin\ActivityLogController::class, 'export'])->name('admin.activity.export');
 });
 
 /*

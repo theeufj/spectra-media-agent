@@ -3,6 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import ConfirmationModal from '@/Components/ConfirmationModal';
+import SideNav from '../SideNav';
 
 export default function Index({ auth, platforms }) {
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
@@ -57,13 +58,15 @@ export default function Index({ auth, platforms }) {
                 confirmButtonClass={confirmModal.confirmButtonClass}
             />
 
-            <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div className="mb-6 flex justify-end">
-                        <Link href={route('admin.platforms.create')}>
-                            <PrimaryButton>Add New Platform</PrimaryButton>
-                        </Link>
-                    </div>
+            <div className="flex">
+                <SideNav />
+                <div className="flex-1 py-12">
+                    <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                        <div className="mb-6 flex justify-end">
+                            <Link href={route('admin.platforms.create')}>
+                                <PrimaryButton>Add New Platform</PrimaryButton>
+                            </Link>
+                        </div>
 
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div className="p-6">
@@ -151,6 +154,7 @@ export default function Index({ auth, platforms }) {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </AuthenticatedLayout>
     );

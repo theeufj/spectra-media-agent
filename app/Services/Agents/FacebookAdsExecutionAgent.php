@@ -11,6 +11,7 @@ use App\Services\FacebookAds\CampaignService;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CreativeService;
 use App\Services\FacebookAds\AdService;
+use App\Services\Agents\Traits\RetryableApiOperation;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -31,6 +32,8 @@ use Illuminate\Support\Facades\Storage;
  */
 class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 {
+    use RetryableApiOperation;
+    
     protected string $platform = 'facebook';
     
     protected CampaignService $campaignService;
@@ -618,7 +621,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $targeting = $creativeStrategy['targeting'] ?? [];
         
         // Default targeting if not specified in plan
-        return [
+        $targetingConfig = [
             'geo_locations' => $targeting['geo_locations'] ?? [
                 'countries' => ['US'],
             ],
@@ -629,6 +632,134 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             'behaviors' => $targeting['behaviors'] ?? [],
             'custom_audiences' => $targeting['custom_audiences'] ?? [],
         ];
+        
+        // Add placement targeting based on AI strategy
+        $placementStrategy = $this->determinePlacementStrategy($plan, $creativeStrategy);
+        if (!empty($placementStrategy)) {
+            $targetingConfig['publisher_platforms'] = $placementStrategy['platforms'];
+            if (!empty($placementStrategy['positions'])) {
+                $targetingConfig['facebook_positions'] = $placementStrategy['positions']['facebook'] ?? [];
+                $targetingConfig['instagram_positions'] = $placementStrategy['positions']['instagram'] ?? [];
+            }
+        }
+        
+        return $targetingConfig;
+    }
+    
+    /**
+     * Determine optimal placement strategy based on creative format and campaign objective.
+     * AI-driven placement optimization for Facebook, Instagram, Messenger, and Audience Network.
+     *
+     * @param ExecutionPlan $plan
+     * @param array $creativeStrategy
+     * @return array
+     */
+    protected function determinePlacementStrategy(ExecutionPlan $plan, array $creativeStrategy): array
+    {
+        $adFormat = $creativeStrategy['ad_format'] ?? 'single_image';
+        $objective = $plan->getCampaignStructure()['objective'] ?? 'LINK_CLICKS';
+        
+        // Default: Advantage+ Placements (let Meta optimize)
+        // This is recommended for most campaigns as Meta's algorithm can optimize delivery
+        $useAutomaticPlacements = $creativeStrategy['use_automatic_placements'] ?? true;
+        
+        if ($useAutomaticPlacements) {
+            return [
+                'platforms' => ['facebook', 'instagram', 'audience_network', 'messenger'],
+                'automatic' => true,
+                'positions' => [], // Let Meta optimize
+            ];
+        }
+        
+        // Manual placement selection based on creative format
+        $placements = [
+            'platforms' => [],
+            'automatic' => false,
+            'positions' => [
+                'facebook' => [],
+                'instagram' => [],
+            ],
+        ];
+        
+        switch ($adFormat) {
+            case 'video':
+                // Video ads perform best on:
+                // - Facebook Feed, In-Stream, Stories, Reels
+                // - Instagram Feed, Stories, Reels, Explore
+                $placements['platforms'] = ['facebook', 'instagram'];
+                $placements['positions'] = [
+                    'facebook' => ['feed', 'video_feeds', 'story', 'reels'],
+                    'instagram' => ['stream', 'story', 'reels', 'explore'],
+                ];
+                break;
+                
+            case 'carousel':
+                // Carousel ads work well on:
+                // - Facebook Feed
+                // - Instagram Feed
+                // - Marketplace (for e-commerce)
+                $placements['platforms'] = ['facebook', 'instagram'];
+                $placements['positions'] = [
+                    'facebook' => ['feed', 'marketplace'],
+                    'instagram' => ['stream', 'explore'],
+                ];
+                break;
+                
+            case 'stories':
+                // Stories-specific creative
+                $placements['platforms'] = ['facebook', 'instagram'];
+                $placements['positions'] = [
+                    'facebook' => ['story'],
+                    'instagram' => ['story', 'reels'],
+                ];
+                break;
+                
+            case 'reels':
+                // Reels-specific creative
+                $placements['platforms'] = ['facebook', 'instagram'];
+                $placements['positions'] = [
+                    'facebook' => ['reels'],
+                    'instagram' => ['reels'],
+                ];
+                break;
+                
+            case 'single_image':
+            default:
+                // Single image works across all placements
+                // Optimize based on objective
+                $placements['platforms'] = ['facebook', 'instagram'];
+                
+                if (in_array($objective, ['CONVERSIONS', 'SALES'])) {
+                    // Conversions: Focus on Feed for higher intent
+                    $placements['positions'] = [
+                        'facebook' => ['feed', 'marketplace', 'right_hand_column'],
+                        'instagram' => ['stream', 'explore'],
+                    ];
+                } elseif (in_array($objective, ['REACH', 'BRAND_AWARENESS'])) {
+                    // Reach/Awareness: Broader placements
+                    $placements['platforms'][] = 'audience_network';
+                    $placements['positions'] = [
+                        'facebook' => ['feed', 'story', 'video_feeds'],
+                        'instagram' => ['stream', 'story', 'explore'],
+                    ];
+                } else {
+                    // Default: Feed-focused for traffic/engagement
+                    $placements['positions'] = [
+                        'facebook' => ['feed'],
+                        'instagram' => ['stream'],
+                    ];
+                }
+                break;
+        }
+        
+        Log::info('FacebookAdsExecutionAgent: Determined placement strategy', [
+            'ad_format' => $adFormat,
+            'objective' => $objective,
+            'platforms' => $placements['platforms'],
+            'automatic' => $placements['automatic'],
+        ]);
+        
+        return $placements;
     }
     
     /**

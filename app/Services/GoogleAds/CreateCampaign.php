@@ -8,6 +8,7 @@ use Google\Ads\GoogleAds\V22\Services\CampaignServiceClient;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
 use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use App\Services\CampaignStatusHelper;
 
 class CreateCampaign extends BaseGoogleAdsService
 {
@@ -37,7 +38,7 @@ class CreateCampaign extends BaseGoogleAdsService
         $campaign = new Campaign([
             'name' => $campaignData['businessName'],
             'advertising_channel_type' => \Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType::SEARCH,
-            'status' => \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::PAUSED,
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(),
             'campaign_budget' => $budgetResourceName,
         ]);
 

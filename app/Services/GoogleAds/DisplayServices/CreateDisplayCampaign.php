@@ -19,6 +19,7 @@ use Google\Ads\GoogleAds\V22\Common\ManualCpc;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use App\Services\CampaignStatusHelper;
 
 class CreateDisplayCampaign extends BaseGoogleAdsService
 {
@@ -56,7 +57,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             'name' => $campaignName,
             'advertising_channel_type' => AdvertisingChannelType::DISPLAY,
             'campaign_budget' => $campaignBudgetResourceName,
-            'status' => CampaignStatus::PAUSED, // Start paused to allow further configuration
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(), // Status based on testing mode config
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'manual_cpc' => new ManualCpc(), // Default for display campaigns

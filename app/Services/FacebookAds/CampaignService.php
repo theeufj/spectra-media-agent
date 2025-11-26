@@ -4,6 +4,7 @@ namespace App\Services\FacebookAds;
 
 use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use App\Services\CampaignStatusHelper;
 
 class CampaignService extends BaseFacebookAdsService
 {
@@ -51,7 +52,7 @@ class CampaignService extends BaseFacebookAdsService
      * @param string $campaignName Campaign name
      * @param string $objective Campaign objective (e.g., 'LINK_CLICKS', 'CONVERSIONS', 'REACH')
      * @param int $dailyBudget Daily budget in cents (e.g., 50000 for $500)
-     * @param string $status Campaign status ('ACTIVE', 'PAUSED')
+     * @param string|null $status Campaign status ('ACTIVE', 'PAUSED'). If null, uses config.
      * @return ?array
      */
     public function createCampaign(
@@ -59,14 +60,17 @@ class CampaignService extends BaseFacebookAdsService
         string $campaignName,
         string $objective = 'LINK_CLICKS',
         int $dailyBudget = 50000,
-        string $status = 'PAUSED'
+        ?string $status = null
     ): ?array {
+        // Use CampaignStatusHelper to determine the appropriate status
+        $finalStatus = CampaignStatusHelper::getFacebookAdsStatus($status);
+        
         try {
             $response = $this->post("/act_{$accountId}/campaigns", [
                 'name' => $campaignName,
                 'objective' => $objective,
                 'daily_budget' => $dailyBudget,
-                'status' => $status,
+                'status' => $finalStatus,
             ]);
 
             if ($response && isset($response['id'])) {

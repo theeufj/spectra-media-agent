@@ -74,6 +74,7 @@ class RegisteredUserController extends Controller
 
         Auth::login($user);
 
-        return redirect(route('dashboard', absolute: false));
+        // Redirect to email verification page for email/password signups
+        return redirect(route('verification.notice'));
     }
 }

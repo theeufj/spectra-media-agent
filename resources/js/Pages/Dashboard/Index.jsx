@@ -3,16 +3,18 @@ import { Head, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-// We'll create these components in the next steps
+// Dashboard components
 import CampaignSelector from '@/Components/CampaignSelector';
 import PerformanceStats from '@/Components/PerformanceStats';
 import PerformanceChart from '@/Components/PerformanceChart';
 import NoCampaigns from '@/Components/NoCampaigns';
 import WaitingForData from '@/Components/WaitingForData';
 import DateRangePicker from '@/Components/DateRangePicker';
+import SetupProgressNav from '@/Components/SetupProgressNav';
+import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/QuickActions';
 
 export default function Dashboard({ auth }) {
-    const { campaigns, defaultCampaign, usageStats } = usePage().props;
+    const { campaigns, defaultCampaign, usageStats, pendingTasks, healthAlerts } = usePage().props;
     const [selectedCampaign, setSelectedCampaign] = useState(defaultCampaign);
     const [performanceData, setPerformanceData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -37,14 +39,12 @@ export default function Dashboard({ auth }) {
                     console.error("Error fetching performance data:", error);
                     setLoading(false);
                 });
+        } else {
+            setLoading(false);
         }
     }, [selectedCampaign, dateRange]);
 
-    const renderContent = () => {
-        if (campaigns.length === 0) {
-            return <NoCampaigns />;
-        }
-
+    const renderPerformanceContent = () => {
         if (loading) {
             return <div className="p-6 bg-white rounded-lg shadow-md text-center">Loading performance data...</div>;
         }
@@ -90,6 +90,9 @@ export default function Dashboard({ auth }) {
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    {/* Setup Progress for New Users */}
+                    <SetupProgressNav />
+                    
                     {/* Usage Meters for Free Tier */}
                     {usageStats && usageStats.subscription_status !== 'active' && (
                         <div className="mb-6 bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
@@ -124,7 +127,24 @@ export default function Dashboard({ auth }) {
                         </div>
                     )}
 
-                    {renderContent()}
+                    {/* Main Dashboard Grid */}
+                    {campaigns.length === 0 ? (
+                        <NoCampaigns />
+                    ) : (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            {/* Left Column: Performance Data */}
+                            <div className="lg:col-span-2 space-y-6">
+                                {renderPerformanceContent()}
+                            </div>
+                            
+                            {/* Right Column: Actions & Alerts */}
+                            <div className="space-y-6">
+                                <QuickActions />
+                                <PendingTasks tasks={pendingTasks || []} />
+                                <CampaignHealthAlerts alerts={healthAlerts || []} />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </AuthenticatedLayout>

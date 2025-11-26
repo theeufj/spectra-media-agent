@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Services\FacebookAds\TokenService;
+use App\Services\FacebookAds\PageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Laravel\Socialite\Facades\Socialite;
+use Carbon\Carbon;
 
 class FacebookOAuthController extends Controller
 {
@@ -57,28 +60,58 @@ class FacebookOAuthController extends Controller
                 return redirect('/profile')->with('error', 'You do not have access to this customer account.');
             }
 
-            // Store the access token (encrypted)
-            $customer->update([
-                'facebook_ads_access_token' => Crypt::encryptString($facebookUser->token),
-                'facebook_ads_account_id' => $facebookUser->id ?? null,
-            ]);
-
-            // Fetch user's Facebook Pages
-            $pages = $this->fetchPages($facebookUser->token);
+            // Exchange short-lived token for long-lived token
+            $tokenService = new TokenService();
+            $tokenResult = $tokenService->storeAsLongLivedToken($customer, $facebookUser->token);
             
-            if (!empty($pages)) {
-                // Store the first page by default (or let user choose in future enhancement)
-                $firstPage = $pages[0];
-                $customer->update([
-                    'facebook_page_id' => $firstPage['id'],
-                    'facebook_page_name' => $firstPage['name'],
+            if (!$tokenResult['success']) {
+                // Fall back to short-lived token if exchange fails
+                Log::warning('Failed to exchange for long-lived token, using short-lived', [
+                    'customer_id' => $customer->id,
+                    'error' => $tokenResult['error'] ?? 'Unknown error',
                 ]);
                 
-                Log::info('Facebook Page linked', [
-                    'customer_id' => $customer->id,
-                    'page_id' => $firstPage['id'],
-                    'page_name' => $firstPage['name'],
+                $customer->update([
+                    'facebook_ads_access_token' => Crypt::encryptString($facebookUser->token),
+                    'facebook_ads_account_id' => $facebookUser->id ?? null,
+                    'facebook_token_expires_at' => Carbon::now()->addHours(2), // Short-lived tokens expire in ~2 hours
+                    'facebook_token_is_long_lived' => false,
                 ]);
+            } else {
+                // Long-lived token stored successfully, just update the account ID
+                $customer->update([
+                    'facebook_ads_account_id' => $facebookUser->id ?? null,
+                ]);
+            }
+
+            // Fetch user's Facebook Pages
+            $pageService = new PageService($customer->fresh());
+            $pages = $pageService->getPages();
+            
+            if (!empty($pages)) {
+                // If only one page, auto-select it
+                if (count($pages) === 1) {
+                    $firstPage = $pages[0];
+                    $pageService->setSelectedPage($firstPage['id'], $firstPage['name']);
+                    
+                    Log::info('Facebook Page auto-selected (single page)', [
+                        'customer_id' => $customer->id,
+                        'page_id' => $firstPage['id'],
+                        'page_name' => $firstPage['name'],
+                    ]);
+                } else {
+                    // Multiple pages - user needs to select
+                    // Store pages in session for selection UI
+                    session(['facebook_pages' => $pages]);
+                    
+                    Log::info('Multiple Facebook Pages found, user needs to select', [
+                        'customer_id' => $customer->id,
+                        'page_count' => count($pages),
+                    ]);
+                    
+                    return redirect('/profile?select_facebook_page=true')
+                        ->with('success', 'Facebook account connected! Please select which Page to use for ads.');
+                }
             } else {
                 Log::warning('No Facebook Pages found for user', [
                     'customer_id' => $customer->id,
@@ -90,6 +123,7 @@ class FacebookOAuthController extends Controller
                 'customer_id' => $customer->id,
                 'facebook_id' => $facebookUser->id,
                 'pages_count' => count($pages),
+                'long_lived_token' => $tokenResult['success'] ?? false,
             ]);
 
             return redirect('/profile')->with('success', 'Facebook account connected successfully!');
@@ -103,34 +137,141 @@ class FacebookOAuthController extends Controller
     }
 
     /**
-     * Fetch user's Facebook Pages.
+     * List available Facebook Pages for selection.
      *
-     * @param string $accessToken
-     * @return array
+     * @return \Illuminate\Http\JsonResponse
      */
-    private function fetchPages(string $accessToken): array
+    public function listPages()
     {
         try {
-            $response = \Http::get('https://graph.facebook.com/v19.0/me/accounts', [
-                'access_token' => $accessToken,
-                'fields' => 'id,name,access_token',
-            ]);
-
-            if ($response->successful()) {
-                $data = $response->json();
-                return $data['data'] ?? [];
+            $activeCustomerId = session('active_customer_id');
+            if (!$activeCustomerId) {
+                return response()->json(['error' => 'No active customer'], 400);
             }
 
-            Log::error('Failed to fetch Facebook pages', [
-                'status' => $response->status(),
-                'body' => $response->body(),
+            $customer = Customer::findOrFail($activeCustomerId);
+
+            // Verify access
+            if (!Auth::user()->customers->contains($customer)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            // Check if we have cached pages from OAuth
+            $cachedPages = session('facebook_pages');
+            if ($cachedPages) {
+                session()->forget('facebook_pages');
+                return response()->json([
+                    'pages' => $cachedPages,
+                    'selected' => $customer->facebook_page_id,
+                ]);
+            }
+
+            // Otherwise fetch from API
+            if (empty($customer->facebook_ads_access_token)) {
+                return response()->json(['error' => 'Facebook not connected'], 400);
+            }
+
+            $pageService = new PageService($customer);
+            $pages = $pageService->getPages();
+
+            return response()->json([
+                'pages' => $pages,
+                'selected' => $customer->facebook_page_id,
             ]);
 
-            return [];
+        } catch (\Exception $e) {
+            Log::error('Error listing Facebook pages: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to fetch pages'], 500);
+        }
+    }
+
+    /**
+     * Select a Facebook Page for the customer.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function selectPage(Request $request)
+    {
+        $request->validate([
+            'page_id' => 'required|string',
+            'page_name' => 'required|string',
+        ]);
+
+        try {
+            $activeCustomerId = session('active_customer_id');
+            if (!$activeCustomerId) {
+                return response()->json(['error' => 'No active customer'], 400);
+            }
+
+            $customer = Customer::findOrFail($activeCustomerId);
+
+            // Verify access
+            if (!Auth::user()->customers->contains($customer)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            $pageService = new PageService($customer);
+            $success = $pageService->setSelectedPage($request->page_id, $request->page_name);
+
+            if ($success) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Page selected successfully',
+                ]);
+            }
+
+            return response()->json(['error' => 'Failed to select page'], 500);
 
         } catch (\Exception $e) {
-            Log::error('Error fetching Facebook pages: ' . $e->getMessage());
-            return [];
+            Log::error('Error selecting Facebook page: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to select page'], 500);
+        }
+    }
+
+    /**
+     * Get the Facebook token status for the customer.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function tokenStatus()
+    {
+        try {
+            $activeCustomerId = session('active_customer_id');
+            if (!$activeCustomerId) {
+                return response()->json(['error' => 'No active customer'], 400);
+            }
+
+            $customer = Customer::findOrFail($activeCustomerId);
+
+            // Verify access
+            if (!Auth::user()->customers->contains($customer)) {
+                return response()->json(['error' => 'Access denied'], 403);
+            }
+
+            if (empty($customer->facebook_ads_access_token)) {
+                return response()->json([
+                    'connected' => false,
+                ]);
+            }
+
+            $tokenService = new TokenService();
+            $status = $tokenService->checkTokenStatus($customer);
+
+            return response()->json([
+                'connected' => true,
+                'valid' => $status['valid'],
+                'expires_at' => $status['expires_at'] ?? null,
+                'expires_in_days' => $status['expires_in_days'] ?? null,
+                'needs_refresh' => $status['needs_refresh'],
+                'is_long_lived' => $customer->facebook_token_is_long_lived ?? false,
+                'page_id' => $customer->facebook_page_id,
+                'page_name' => $customer->facebook_page_name,
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Error getting token status: ' . $e->getMessage());
+            return response()->json(['error' => 'Failed to get token status'], 500);
         }
     }
 
@@ -160,6 +301,9 @@ class FacebookOAuthController extends Controller
                 'facebook_ads_access_token' => null,
                 'facebook_page_id' => null,
                 'facebook_page_name' => null,
+                'facebook_token_expires_at' => null,
+                'facebook_token_refreshed_at' => null,
+                'facebook_token_is_long_lived' => false,
             ]);
 
             Log::info('Facebook account disconnected', [

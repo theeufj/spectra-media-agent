@@ -43,9 +43,10 @@ return [
         'client_id' => env('GOOGLE_OAUTH_CLIENT_ID'),
         'client_secret' => env('GOOGLE_OAUTH_CLIENT_SECRET'),
         'redirect' => '/auth/google/callback',
-        'gemini_api_key' => env('GOOGLE_GEMINI_API_KEY'),
+        'gemini_api_key' => env('GOOGLE_GEMINI_API_KEY', env('GEMINI_API_KEY')),
         'project_id' => env('GOOGLE_CLOUD_PROJECT'),
         'location' => env('GOOGLE_CLOUD_LOCATION', 'us-central1'),
+        'credentials_path' => env('GOOGLE_APPLICATION_CREDENTIALS'), // Service account JSON key path for production
         // Custom Search API for competitor discovery
         'search_api_key' => env('GOOGLE_SEARCH_API_KEY'),
         'search_engine_id' => env('GOOGLE_SEARCH_ENGINE_ID'),

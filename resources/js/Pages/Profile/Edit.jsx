@@ -3,13 +3,15 @@ import { Head, usePage, router } from '@inertiajs/react';
 import DeleteUserForm from './Partials/DeleteUserForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
+import ConnectedAccountsForm from './Partials/ConnectedAccountsForm';
 import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
 import DangerButton from '@/Components/DangerButton';
+import FacebookPageSelector from '@/Components/FacebookPageSelector';
 import { useState, useEffect } from 'react';
 
-export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
+export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, connections = [] }) {
     const { customers } = usePage().props;
     const [formData, setFormData] = useState({
         name: '',
@@ -22,6 +24,43 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
         phone: '',
     });
     const [isCreating, setIsCreating] = useState(false);
+    const [showPageSelector, setShowPageSelector] = useState(false);
+    const [tokenStatus, setTokenStatus] = useState(null);
+
+    // Check if we need to show page selector (from URL param)
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('select_facebook_page') === 'true') {
+            setShowPageSelector(true);
+            // Clean up URL
+            window.history.replaceState({}, '', window.location.pathname);
+        }
+    }, []);
+
+    // Fetch token status for connected customers
+    useEffect(() => {
+        const fetchTokenStatus = async () => {
+            try {
+                const response = await fetch('/facebook/token-status', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    credentials: 'same-origin',
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    setTokenStatus(data);
+                }
+            } catch (err) {
+                console.error('Failed to fetch token status:', err);
+            }
+        };
+
+        if (customers.some(c => c.facebook_ads_account_id)) {
+            fetchTokenStatus();
+        }
+    }, [customers]);
 
     useEffect(() => {
         if (!facebookAppId) return;
@@ -90,6 +129,11 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
 
             <div className="py-12">
                 <div className="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
+                    {/* Connected Accounts - Most Important for email/password users */}
+                    <div id="connections" className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                        <ConnectedAccountsForm connections={connections} />
+                    </div>
+
                     <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
                         <UpdateProfileInformationForm
                             mustVerifyEmail={mustVerifyEmail}
@@ -269,9 +313,54 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
                                     <h3 className="text-md font-medium text-gray-900 mb-3">Facebook Ads Integration</h3>
                                     {customer.facebook_ads_account_id ? (
                                         <div>
-                                            <p className="text-sm text-gray-600 mb-3">
+                                            <p className="text-sm text-gray-600 mb-2">
                                                 <span className="text-green-600 font-semibold">✓ Connected</span> - Facebook Ads account ID: <code className="bg-white px-2 py-1 rounded text-xs font-mono">{customer.facebook_ads_account_id}</code>
                                             </p>
+                                            
+                                            {/* Facebook Page Info */}
+                                            {customer.facebook_page_id ? (
+                                                <p className="text-sm text-gray-600 mb-2">
+                                                    <span className="text-green-600 font-semibold">✓ Page:</span> {customer.facebook_page_name || customer.facebook_page_id}
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowPageSelector(true)}
+                                                        className="ml-2 text-blue-600 hover:text-blue-800 text-xs underline"
+                                                    >
+                                                        Change
+                                                    </button>
+                                                </p>
+                                            ) : (
+                                                <p className="text-sm text-yellow-600 mb-2">
+                                                    ⚠ No Facebook Page selected.
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowPageSelector(true)}
+                                                        className="ml-2 text-blue-600 hover:text-blue-800 underline"
+                                                    >
+                                                        Select a Page
+                                                    </button>
+                                                </p>
+                                            )}
+                                            
+                                            {/* Token Status Warning */}
+                                            {tokenStatus && tokenStatus.needs_refresh && (
+                                                <div className="mb-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-sm text-yellow-800">
+                                                    ⚠ Your Facebook connection expires in {tokenStatus.expires_in_days} days.
+                                                    <a href={route('facebook-ads.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline">
+                                                        Reconnect now
+                                                    </a>
+                                                </div>
+                                            )}
+                                            
+                                            {tokenStatus && !tokenStatus.valid && (
+                                                <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded text-sm text-red-800">
+                                                    ✕ Your Facebook connection has expired.
+                                                    <a href={route('facebook-ads.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline font-semibold">
+                                                        Reconnect now
+                                                    </a>
+                                                </div>
+                                            )}
+                                            
                                             <form 
                                                 onSubmit={(e) => {
                                                     e.preventDefault();
@@ -350,6 +439,16 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
                     </div>
                 </div>
             </div>
+            
+            {/* Facebook Page Selector Modal */}
+            <FacebookPageSelector
+                isOpen={showPageSelector}
+                onClose={() => setShowPageSelector(false)}
+                onSelect={(page) => {
+                    // Refresh the page to show updated data
+                    router.reload({ only: ['customers'] });
+                }}
+            />
         </AuthenticatedLayout>
     );
 }

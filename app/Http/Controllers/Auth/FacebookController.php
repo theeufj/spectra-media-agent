@@ -36,12 +36,18 @@ class FacebookController extends Controller
                 return redirect()->route('login')->with('error', 'Unable to retrieve email from Facebook. Please use a different login method.');
             }
 
-            $user = User::updateOrCreate([
+            $user = User::firstOrCreate([
                 'email' => $email,
             ], [
                 'name' => $facebookUser->getName(),
                 'password' => Hash::make(Str::random(24)),
             ]);
+
+            // Always mark email as verified when signing in via Facebook (Facebook has verified it)
+            if (!$user->email_verified_at) {
+                $user->email_verified_at = now();
+                $user->save();
+            }
 
             // Store the Facebook OAuth token for API access
             $accessToken = $facebookUser->token;

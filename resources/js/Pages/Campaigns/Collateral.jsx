@@ -5,10 +5,12 @@ import RefineImageModal from '@/Components/RefineImageModal';
 import ExtendVideoModal from '@/Components/ExtendVideoModal';
 import SubscriptionRequiredModal from '@/Components/SubscriptionRequiredModal';
 import DeploymentDisabledModal from '@/Components/DeploymentDisabledModal';
+import AdSpendSetupModal from '@/Components/AdSpendSetupModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import Modal from '@/Components/Modal';
+import AdPreviewPanel from '@/Components/AdPreview';
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, adSpendCredit }) {
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
@@ -22,6 +24,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [showDeployModal, setShowDeployModal] = useState(false);
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
     const [showDeploymentDisabledModal, setShowDeploymentDisabledModal] = useState(false);
+    const [showAdSpendSetupModal, setShowAdSpendSetupModal] = useState(false);
+    const [showPreview, setShowPreview] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
 
@@ -183,12 +187,38 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             return;
         }
 
+        // Check if ad spend billing is set up
+        if (!adSpendCredit || adSpendCredit.status === 'pending') {
+            setShowAdSpendSetupModal(true);
+            return;
+        }
+
+        // Check if account is paused due to payment failure
+        if (adSpendCredit.status === 'paused') {
+            alert('Your ad spend billing is paused due to a payment issue. Please update your payment method in Billing → Ad Spend before deploying.');
+            return;
+        }
+
         setConfirmModal({
             show: true,
             title: 'Deploy Collateral',
             message: 'Are you sure you want to deploy the selected collateral?',
             onConfirm: () => confirmDeploy(),
             confirmText: 'Deploy',
+            confirmButtonClass: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
+            isDestructive: false
+        });
+    };
+
+    const handleAdSpendSetupSuccess = (result) => {
+        setShowAdSpendSetupModal(false);
+        // After successful setup, proceed to deploy
+        setConfirmModal({
+            show: true,
+            title: 'Deploy Collateral',
+            message: `Payment successful! Your ad spend credit of $${result.credit_amount?.toFixed(2) || '0.00'} has been set up. Ready to deploy?`,
+            onConfirm: () => confirmDeploy(),
+            confirmText: 'Deploy Now',
             confirmButtonClass: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
             isDestructive: false
         });
@@ -238,6 +268,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             <DeploymentDisabledModal 
                 show={showDeploymentDisabledModal} 
                 onClose={() => setShowDeploymentDisabledModal(false)} 
+            />
+
+            <AdSpendSetupModal
+                show={showAdSpendSetupModal}
+                onClose={() => setShowAdSpendSetupModal(false)}
+                onSuccess={handleAdSpendSetupSuccess}
+                campaign={campaign}
+                campaignName={campaign.name}
             />
 
             <ConfirmationModal
@@ -309,51 +347,80 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         {/* Display generated ad copy here */}
                                         {collateral.adCopy && collateral.adCopy.strategy_id === strategyItem.id && collateral.adCopy.platform === strategyItem.platform && (
-                                            <div 
-                                                className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer relative`}
-                                                onClick={() => handleToggleCollateral('ad_copy', collateral.adCopy.id)}
-                                            >
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <h4 className="text-md font-semibold text-gray-800">Generated Ad Copy:</h4>
-                                                    {isSubscribed ? (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                const copyText = `Headlines:\n${collateral.adCopy.headlines.join('\n')}\n\nDescriptions:\n${collateral.adCopy.descriptions.join('\n')}`;
-                                                                navigator.clipboard.writeText(copyText);
-                                                                alert('Ad copy copied to clipboard!');
-                                                            }}
-                                                            className="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100"
-                                                        >
-                                                            📋 Copy All
-                                                        </button>
+                                            <>
+                                                <div 
+                                                    className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer relative`}
+                                                    onClick={() => handleToggleCollateral('ad_copy', collateral.adCopy.id)}
+                                                >
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <h4 className="text-md font-semibold text-gray-800">Generated Ad Copy:</h4>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setShowPreview(!showPreview);
+                                                                }}
+                                                                className="px-3 py-1 text-xs font-medium text-purple-600 bg-purple-50 rounded-md hover:bg-purple-100"
+                                                            >
+                                                                {showPreview ? '📝 Show List' : '👁️ Preview Ad'}
+                                                            </button>
+                                                            {isSubscribed ? (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const copyText = `Headlines:\n${collateral.adCopy.headlines.join('\n')}\n\nDescriptions:\n${collateral.adCopy.descriptions.join('\n')}`;
+                                                                        navigator.clipboard.writeText(copyText);
+                                                                        alert('Ad copy copied to clipboard!');
+                                                                    }}
+                                                                    className="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100"
+                                                                >
+                                                                    📋 Copy All
+                                                                </button>
+                                                            ) : (
+                                                                <a
+                                                                    href={route('subscription.pricing')}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    className="px-3 py-1 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                                                                >
+                                                                    🔒 Upgrade to Export
+                                                                </a>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    
+                                                    {!showPreview ? (
+                                                        <>
+                                                            <div className="mb-4">
+                                                                <h5 className="font-medium text-gray-700">Headlines:</h5>
+                                                                <ul className="list-disc list-inside text-gray-600">
+                                                                    {collateral.adCopy.headlines.map((headline, index) => (
+                                                                        <li key={index}>{headline}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                            <div>
+                                                                <h5 className="font-medium text-gray-700">Descriptions:</h5>
+                                                                <ul className="list-disc list-inside text-gray-600">
+                                                                    {collateral.adCopy.descriptions.map((description, index) => (
+                                                                        <li key={index}>{description}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            </div>
+                                                        </>
                                                     ) : (
-                                                        <a
-                                                            href={route('subscription.pricing')}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                            className="px-3 py-1 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
-                                                        >
-                                                            🔒 Upgrade to Export
-                                                        </a>
+                                                        <div onClick={(e) => e.stopPropagation()}>
+                                                            <AdPreviewPanel
+                                                                platform={strategyItem.platform.toLowerCase()}
+                                                                headlines={collateral.adCopy.headlines}
+                                                                descriptions={collateral.adCopy.descriptions}
+                                                                businessName={campaign.name}
+                                                                displayUrl={campaign.target_url || 'example.com'}
+                                                                imageUrl={collateral.imageCollaterals?.[0]?.cloudfront_url}
+                                                            />
+                                                        </div>
                                                     )}
                                                 </div>
-                                                <div className="mb-4">
-                                                    <h5 className="font-medium text-gray-700">Headlines:</h5>
-                                                    <ul className="list-disc list-inside text-gray-600">
-                                                        {collateral.adCopy.headlines.map((headline, index) => (
-                                                            <li key={index}>{headline}</li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                                <div>
-                                                    <h5 className="font-medium text-gray-700">Descriptions:</h5>
-                                                    <ul className="list-disc list-inside text-gray-600">
-                                                        {collateral.adCopy.descriptions.map((description, index) => (
-                                                            <li key={index}>{description}</li>
-                                                        ))}
-                                                    </ul>
-                                                </div>
-                                            </div>
+                                            </>
                                         )}
 
                                         <hr className="my-8" />

@@ -24,6 +24,8 @@
     },
     "dependencies": {
         "@heroicons/react": "^2.2.0",
+        "@stripe/react-stripe-js": "^5.4.1",
+        "@stripe/stripe-js": "^8.5.3",
         "chart.js": "^4.5.1",
         "puppeteer": "^24.29.1",
         "react-chartjs-2": "^5.3.1"

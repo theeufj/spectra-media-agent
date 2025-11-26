@@ -27,6 +27,11 @@ class Customer extends Model
         'google_ads_customer_id',
         'facebook_ads_account_id',
         'facebook_ads_access_token',
+        'facebook_page_id',
+        'facebook_page_name',
+        'facebook_token_expires_at',
+        'facebook_token_refreshed_at',
+        'facebook_token_is_long_lived',
         'gtm_container_id',
         'gtm_account_id',
         'gtm_workspace_id',
@@ -47,6 +52,9 @@ class Customer extends Model
         'competitive_strategy' => 'array',
         'competitive_strategy_updated_at' => 'datetime',
         'competitor_analysis_at' => 'datetime',
+        'facebook_token_expires_at' => 'datetime',
+        'facebook_token_refreshed_at' => 'datetime',
+        'facebook_token_is_long_lived' => 'boolean',
     ];
 
     /**

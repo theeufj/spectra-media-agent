@@ -42,7 +42,15 @@ class DeploymentController extends Controller
         $collateral = $modelClass::findOrFail($validated['id']);
 
         // Authorization check: Ensure the user owns the campaign this collateral belongs to.
-        if ($collateral->campaign->user_id !== auth()->id()) {
+        // Campaign belongs to Customer, which belongs to User
+        $campaign = $collateral->campaign ?? $collateral->strategy?->campaign;
+        
+        if (!$campaign) {
+            return response()->json(['message' => 'Campaign not found for this collateral.'], 404);
+        }
+
+        $customer = $campaign->customer;
+        if (!$customer || $customer->user_id !== auth()->id()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

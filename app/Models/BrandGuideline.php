@@ -22,6 +22,7 @@ class BrandGuideline extends Model
         'brand_personality',
         'do_not_use',
         'extraction_quality_score',
+        'user_verified',
         'extracted_at',
         'last_verified_at',
     ];
@@ -39,6 +40,7 @@ class BrandGuideline extends Model
         'competitor_differentiation' => 'array',
         'brand_personality' => 'array',
         'do_not_use' => 'array',
+        'user_verified' => 'boolean',
         'extracted_at' => 'datetime',
         'last_verified_at' => 'datetime',
     ];

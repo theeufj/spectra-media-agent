@@ -40,7 +40,7 @@ export default function Landing({ auth }) {
                                                 See How It Works
                                             </a>
                                         </div>
-                                        <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Free forever tier · ✓ Cancel anytime</p>
+                                        <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Generous free tier · ✓ Cancel anytime</p>
                                     </div>
                                 </div>
                                 <div className="mt-12 -mb-16 sm:-mb-48 lg:m-0 lg:relative">
@@ -388,9 +388,9 @@ export default function Landing({ auth }) {
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6" /></svg>
                                             </div>
-                                            Generate for Free
+                                            Try Before You Buy
                                         </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">Sign up free and generate unlimited ad copy, images, and videos. Only pay when you're ready to deploy campaigns.</dd>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Sign up free and test our platform with 3 brand sources, 4 images per campaign (watermarked), and unlimited ad copy. Upgrade when you're ready to deploy live campaigns.</dd>
                                     </div>
                                 </dl>
                             </div>
@@ -449,7 +449,7 @@ export default function Landing({ auth }) {
                                     Simple, Transparent Pricing
                                 </h2>
                                 <p className="mt-4 text-xl text-gray-500">
-                                    Generate unlimited collateral. Only pay when you're ready to publish.
+                                    Try free with generous limits. Upgrade when you're ready to deploy.
                                 </p>
                             </div>
 
@@ -718,6 +718,10 @@ export default function Landing({ auth }) {
                             <div className="space-y-4">
                                 {[
                                     {
+                                        question: "What's included in the free tier?",
+                                        answer: "Our free tier lets you explore the platform before committing. You get: 3 brand sources (URLs or files) for brand extraction, 4 AI-generated images per campaign (with watermark), 3 landing page CRO audits, and unlimited ad copy generation. Deployment to Google/Facebook requires a subscription. Upgrade anytime to unlock unlimited generation, watermark-free images, and live campaign deployment."
+                                    },
+                                    {
                                         question: "Does the subscription price include my ad budget?",
                                         answer: "No. Your subscription covers the Spectra AI platform, the creative generation, and the autonomous management agents. You will connect your own credit card to Google/Facebook, so you pay the ad networks directly for your media spend. This ensures total transparency—we never mark up your ad costs."
                                     },
@@ -807,7 +811,7 @@ export default function Landing({ auth }) {
                                 </a>
                             </div>
                             <p className="mt-8 text-indigo-100">
-                                ✓ Free forever tier · ✓ No credit card required · ✓ Deploy in minutes
+                                ✓ Generous free tier · ✓ No credit card required · ✓ Deploy in minutes
                             </p>
                         </div>
                     </div>

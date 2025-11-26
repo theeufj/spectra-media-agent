@@ -61,6 +61,7 @@ class HandleInertiaRequests extends Middleware
                 'type' => $request->session()->get('flash.type'),
                 'message' => $request->session()->get('flash.message'),
             ],
+            'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
         ];
     }
 }

@@ -113,9 +113,11 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             ✓ Verified
                                         </span>
                                     )}
-                                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                        Quality: {brandGuideline.quality_score}/100
-                                    </span>
+                                    {brandGuideline.extraction_quality_score && (
+                                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            Quality: {brandGuideline.extraction_quality_score}/100
+                                        </span>
+                                    )}
                                 </p>
                             </div>
                             <div className="flex space-x-3">

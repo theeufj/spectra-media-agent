@@ -18,6 +18,7 @@ use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
+use App\Services\CampaignStatusHelper;
 
 class CreateVideoCampaign extends BaseGoogleAdsService
 {
@@ -48,7 +49,7 @@ class CreateVideoCampaign extends BaseGoogleAdsService
             'advertising_channel_type' => AdvertisingChannelType::VIDEO,
             'advertising_channel_sub_type' => AdvertisingChannelSubType::VIDEO_RESPONSIVE,
             'campaign_budget' => $campaignBudgetResourceName,
-            'status' => CampaignStatus::PAUSED, // Start paused to allow further configuration
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(), // Status based on testing mode config
             'start_date' => $campaignData['startDate'],
             'end_date' => $campaignData['endDate'],
             'maximize_conversions' => new MaximizeConversions(), // Default for video campaigns

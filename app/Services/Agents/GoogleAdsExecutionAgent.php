@@ -35,6 +35,7 @@ use App\Services\GoogleAds\VideoServices\CreateVideoAdGroup;
 use App\Services\GoogleAds\VideoServices\CreateResponsiveVideoAd;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
+use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
 use Illuminate\Support\Facades\Log;
@@ -56,6 +57,8 @@ use Illuminate\Support\Facades\Storage;
  */
 class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 {
+    use RetryableApiOperation;
+    
     protected string $platform = 'google';
     
     /**

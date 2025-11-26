@@ -20,7 +20,9 @@ class GoogleController extends Controller
                 'profile', 
                 'email',
                 'https://www.googleapis.com/auth/adwords', // Google Ads API - Full access to ads management
-                'https://www.googleapis.com/auth/tagmanager.edit.containers', // GTM - Full access (includes read, edit, and publish)
+                'https://www.googleapis.com/auth/tagmanager.edit.containers', // GTM - Edit containers
+                'https://www.googleapis.com/auth/tagmanager.edit.containerversions', // GTM - Edit container versions
+                'https://www.googleapis.com/auth/tagmanager.publish', // GTM - Publish containers
             ])
             ->with(['access_type' => 'offline', 'prompt' => 'consent'])
             ->redirect();

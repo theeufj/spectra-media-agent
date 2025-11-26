@@ -32,6 +32,9 @@ class Strategy extends Model
         'execution_errors',
         'google_ads_ad_group_id',
         'status',
+        'deployed_at',
+        'deployment_status',
+        'deployment_error',
     ];
 
     /**
@@ -39,6 +42,7 @@ class Strategy extends Model
      */
     protected $casts = [
         'signed_off_at' => 'datetime',
+        'deployed_at' => 'datetime',
         'bidding_strategy' => 'array',
         'execution_plan' => 'array',
         'execution_result' => 'array',

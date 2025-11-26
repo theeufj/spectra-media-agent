@@ -52,6 +52,10 @@ class CollateralController extends Controller
         // Find all active video collaterals for the current strategy
         $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->get();
 
+        // Get the customer's ad spend credit status
+        $customer = $campaign->customer;
+        $adSpendCredit = $customer->adSpendCredit;
+
         return Inertia::render('Campaigns/Collateral', [
             'campaign' => $campaign,
             'currentStrategy' => $strategy,
@@ -61,6 +65,12 @@ class CollateralController extends Controller
             'videoCollaterals' => $videoCollaterals,
             'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod(),
             'deploymentEnabled' => Setting::get('deployment_enabled', true),
+            'adSpendCredit' => $adSpendCredit ? [
+                'id' => $adSpendCredit->id,
+                'status' => $adSpendCredit->status,
+                'current_balance' => $adSpendCredit->current_balance,
+                'payment_status' => $adSpendCredit->payment_status,
+            ] : null,
         ]);
     }
 

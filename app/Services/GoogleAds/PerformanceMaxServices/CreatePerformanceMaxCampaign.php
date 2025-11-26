@@ -14,6 +14,7 @@ use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
 use App\Services\GoogleAds\CreateCampaignBudget;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
+use App\Services\CampaignStatusHelper;
 
 class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
 {
@@ -43,7 +44,7 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
         // 2. Create Campaign
         $campaign = new Campaign([
             'name' => $campaignData['businessName'],
-            'status' => CampaignStatus::PAUSED, // Always create as paused
+            'status' => CampaignStatusHelper::getGoogleAdsStatus(), // Status based on testing mode config
             'advertising_channel_type' => AdvertisingChannelType::PERFORMANCE_MAX,
             // 'advertising_channel_sub_type' => AdvertisingChannelSubType::UNKNOWN, // Removed as it causes INVALID_ENUM_VALUE
             'campaign_budget' => $budgetResourceName,

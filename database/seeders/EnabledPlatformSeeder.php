@@ -21,6 +21,13 @@ class EnabledPlatformSeeder extends Seeder
                 'is_enabled' => true,
                 'sort_order' => 1,
             ],
+            [
+                'name' => 'Facebook',
+                'slug' => 'facebook',
+                'description' => 'Facebook/Meta Ads platform',
+                'is_enabled' => true,
+                'sort_order' => 2,
+            ],
         ];
 
         foreach ($platforms as $platform) {

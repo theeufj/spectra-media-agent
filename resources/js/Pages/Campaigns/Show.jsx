@@ -5,6 +5,72 @@ import PrimaryButton from '@/Components/PrimaryButton';
 import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 
+// Collateral Summary Card Component
+const CollateralSummaryCard = ({ campaign }) => {
+    const summary = campaign.collateral_summary || { ad_copies: 0, images: 0, videos: 0, total: 0 };
+    const hasCollateral = summary.total > 0;
+    const hasSignedOffStrategies = campaign.strategies?.some(s => s.signed_off_at);
+    
+    if (!hasSignedOffStrategies) return null;
+
+    return (
+        <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4">
+                <h3 className="text-lg font-semibold text-white flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                    Campaign Collateral
+                </h3>
+            </div>
+            <div className="p-6">
+                {hasCollateral ? (
+                    <>
+                        <div className="grid grid-cols-3 gap-4 mb-6">
+                            <div className="text-center p-4 bg-blue-50 rounded-lg">
+                                <div className="text-3xl font-bold text-blue-600">{summary.ad_copies}</div>
+                                <div className="text-sm text-gray-600">Ad Copies</div>
+                            </div>
+                            <div className="text-center p-4 bg-green-50 rounded-lg">
+                                <div className="text-3xl font-bold text-green-600">{summary.images}</div>
+                                <div className="text-sm text-gray-600">Images</div>
+                            </div>
+                            <div className="text-center p-4 bg-purple-50 rounded-lg">
+                                <div className="text-3xl font-bold text-purple-600">{summary.videos}</div>
+                                <div className="text-sm text-gray-600">Videos</div>
+                            </div>
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                            {campaign.strategies?.filter(s => s.signed_off_at).map(strategy => (
+                                <Link
+                                    key={strategy.id}
+                                    href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })}
+                                    className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                                >
+                                    <span className="mr-2">{strategy.platform}</span>
+                                    <span className="bg-indigo-500 px-2 py-0.5 rounded text-xs">
+                                        {(strategy.ad_copies_count || 0) + (strategy.image_collaterals_count || 0) + (strategy.video_collaterals_count || 0)} items
+                                    </span>
+                                </Link>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <div className="text-center py-6">
+                        <div className="animate-pulse flex flex-col items-center">
+                            <svg className="w-12 h-12 text-indigo-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            <p className="text-gray-600 font-medium">Generating your collateral...</p>
+                            <p className="text-sm text-gray-500 mt-1">This usually takes 1-2 minutes</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // A reusable component for a single strategy card
 const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -75,14 +141,30 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
             )}
 
             {isSignedOff ? (
-                <div className="mt-6 p-2 text-center bg-green-100 text-green-800 rounded-lg">
-                    Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
-                    <Link
-                        href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.id })}
-                        className="ml-4 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                    >
-                        View Collateral
-                    </Link>
+                <div className="mt-6 space-y-3">
+                    {/* Collateral counts */}
+                    {(strategy.ad_copies_count > 0 || strategy.image_collaterals_count > 0 || strategy.video_collaterals_count > 0) && (
+                        <div className="flex gap-2 justify-center text-sm">
+                            {strategy.ad_copies_count > 0 && (
+                                <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">{strategy.ad_copies_count} Ad Copies</span>
+                            )}
+                            {strategy.image_collaterals_count > 0 && (
+                                <span className="px-2 py-1 bg-green-100 text-green-700 rounded">{strategy.image_collaterals_count} Images</span>
+                            )}
+                            {strategy.video_collaterals_count > 0 && (
+                                <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded">{strategy.video_collaterals_count} Videos</span>
+                            )}
+                        </div>
+                    )}
+                    <div className="p-2 text-center bg-green-100 text-green-800 rounded-lg">
+                        Strategy Signed Off on {new Date(strategy.signed_off_at).toLocaleString()}
+                        <Link
+                            href={route('campaigns.collateral.show', { campaign: strategy.campaign_id, strategy: strategy.id })}
+                            className="ml-4 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        >
+                            View Collateral
+                        </Link>
+                    </div>
                 </div>
             ) : (
                 <div className="mt-6">
@@ -294,6 +376,9 @@ export default function Show({ auth, campaign }) {
                             </div>
                         </div>
                     )}
+
+                    {/* Collateral Summary */}
+                    <CollateralSummaryCard campaign={campaigns} />
                     
                     {campaigns.strategies && campaigns.strategies.length > 0 && (
                         <div className="mb-8 flex justify-end">

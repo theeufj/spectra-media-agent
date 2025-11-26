@@ -430,8 +430,51 @@ class AdSpendBillingService
      */
     protected function getFacebookAdsSpend(Customer $customer, Campaign $campaign): float
     {
-        // TODO: Implement Facebook Ads spend retrieval
-        return 0;
+        // Check if customer has Facebook access token
+        if (empty($customer->facebook_access_token)) {
+            return 0;
+        }
+        
+        // Check if campaign has Facebook campaign ID
+        if (empty($campaign->facebook_ads_campaign_id)) {
+            return 0;
+        }
+        
+        try {
+            $insightService = new \App\Services\FacebookAds\InsightService($customer);
+            
+            // Get yesterday's spend
+            $yesterday = now()->subDay()->format('Y-m-d');
+            
+            $insights = $insightService->getCampaignInsights(
+                $campaign->facebook_ads_campaign_id,
+                $yesterday,
+                $yesterday,
+                ['spend']
+            );
+            
+            if (!empty($insights) && isset($insights[0]['spend'])) {
+                $spend = (float) $insights[0]['spend'];
+                
+                Log::info('AdSpendBilling: Retrieved Facebook Ads spend', [
+                    'campaign_id' => $campaign->id,
+                    'facebook_campaign_id' => $campaign->facebook_ads_campaign_id,
+                    'date' => $yesterday,
+                    'spend' => $spend,
+                ]);
+                
+                return $spend;
+            }
+            
+            return 0;
+        } catch (\Exception $e) {
+            Log::warning('AdSpendBilling: Failed to get Facebook Ads spend', [
+                'campaign_id' => $campaign->id,
+                'facebook_campaign_id' => $campaign->facebook_ads_campaign_id,
+                'error' => $e->getMessage(),
+            ]);
+            return 0;
+        }
     }
 
     /**
@@ -473,13 +516,23 @@ class AdSpendBillingService
     {
         $campaigns = $customer->campaigns()
             ->where('status', 'active')
-            ->whereNotNull('external_campaign_id')
             ->get();
 
         foreach ($campaigns as $campaign) {
             try {
-                // TODO: Call Google Ads / Facebook Ads API to pause campaign
-                // For now, just mark as paused in our database
+                // Pause Google Ads campaign
+                if (!empty($campaign->google_ads_campaign_id) && !empty($customer->google_ads_customer_id)) {
+                    $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
+                    $resourceName = "customers/{$customer->google_ads_customer_id}/campaigns/{$campaign->google_ads_campaign_id}";
+                    $updateStatusService->pause($resourceName);
+                }
+                
+                // Pause Facebook Ads campaign
+                if (!empty($campaign->facebook_ads_campaign_id)) {
+                    $this->pauseFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
+                }
+                
+                // Mark as paused in our database
                 $campaign->update([
                     'status' => 'paused',
                     'paused_reason' => 'Payment failure',
@@ -488,6 +541,8 @@ class AdSpendBillingService
 
                 Log::info('AdSpendBilling: Paused campaign', [
                     'campaign_id' => $campaign->id,
+                    'google_ads_id' => $campaign->google_ads_campaign_id,
+                    'facebook_ads_id' => $campaign->facebook_ads_campaign_id,
                     'reason' => 'payment_failure',
                 ]);
 
@@ -512,7 +567,18 @@ class AdSpendBillingService
 
         foreach ($campaigns as $campaign) {
             try {
-                // TODO: Call Google Ads / Facebook Ads API to enable campaign
+                // Resume Google Ads campaign
+                if (!empty($campaign->google_ads_campaign_id) && !empty($customer->google_ads_customer_id)) {
+                    $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
+                    $resourceName = "customers/{$customer->google_ads_customer_id}/campaigns/{$campaign->google_ads_campaign_id}";
+                    $updateStatusService->enable($resourceName);
+                }
+                
+                // Resume Facebook Ads campaign
+                if (!empty($campaign->facebook_ads_campaign_id)) {
+                    $this->resumeFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
+                }
+                
                 $campaign->update([
                     'status' => 'active',
                     'paused_reason' => null,
@@ -521,6 +587,8 @@ class AdSpendBillingService
 
                 Log::info('AdSpendBilling: Resumed campaign', [
                     'campaign_id' => $campaign->id,
+                    'google_ads_id' => $campaign->google_ads_campaign_id,
+                    'facebook_ads_id' => $campaign->facebook_ads_campaign_id,
                 ]);
 
             } catch (\Exception $e) {
@@ -530,6 +598,32 @@ class AdSpendBillingService
                 ]);
             }
         }
+    }
+    
+    /**
+     * Pause a Facebook Ads campaign.
+     */
+    protected function pauseFacebookCampaign(Customer $customer, string $campaignId): void
+    {
+        if (empty($customer->facebook_access_token)) {
+            return;
+        }
+        
+        $campaignService = new \App\Services\FacebookAds\CampaignService($customer);
+        $campaignService->updateCampaign($campaignId, ['status' => 'PAUSED']);
+    }
+    
+    /**
+     * Resume a Facebook Ads campaign.
+     */
+    protected function resumeFacebookCampaign(Customer $customer, string $campaignId): void
+    {
+        if (empty($customer->facebook_access_token)) {
+            return;
+        }
+        
+        $campaignService = new \App\Services\FacebookAds\CampaignService($customer);
+        $campaignService->updateCampaign($campaignId, ['status' => 'ACTIVE']);
     }
 
     /**

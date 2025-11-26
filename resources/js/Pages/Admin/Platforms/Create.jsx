@@ -4,6 +4,7 @@ import InputError from '@/Components/InputError';
 import InputLabel from '@/Components/InputLabel';
 import PrimaryButton from '@/Components/PrimaryButton';
 import TextInput from '@/Components/TextInput';
+import SideNav from '../SideNav';
 
 export default function Create({ auth }) {
     const { data, setData, post, processing, errors } = useForm({
@@ -26,11 +27,13 @@ export default function Create({ auth }) {
         >
             <Head title="Create Platform" />
 
-            <div className="py-12">
-                <div className="max-w-3xl mx-auto sm:px-6 lg:px-8">
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                        <div className="p-6">
-                            <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="flex">
+                <SideNav />
+                <div className="flex-1 py-12">
+                    <div className="max-w-3xl mx-auto sm:px-6 lg:px-8">
+                        <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                            <div className="p-6">
+                                <form onSubmit={handleSubmit} className="space-y-6">
                                 <div>
                                     <InputLabel htmlFor="name" value="Platform Name" />
                                     <TextInput
@@ -105,6 +108,7 @@ export default function Create({ auth }) {
                         </div>
                     </div>
                 </div>
+            </div>
             </div>
         </AuthenticatedLayout>
     );

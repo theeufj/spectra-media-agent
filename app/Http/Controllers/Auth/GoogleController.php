@@ -20,7 +20,9 @@ class GoogleController extends Controller
         return Socialite::driver('google')
             ->scopes([
                 'https://www.googleapis.com/auth/adwords', // Google Ads API - Full access to ads management
-                'https://www.googleapis.com/auth/tagmanager.edit.containers', // GTM - Full access (includes read, edit, and publish)
+                'https://www.googleapis.com/auth/tagmanager.edit.containers', // GTM - Edit containers
+                'https://www.googleapis.com/auth/tagmanager.edit.containerversions', // GTM - Edit container versions
+                'https://www.googleapis.com/auth/tagmanager.publish', // GTM - Publish containers
             ])
             ->with(['access_type' => 'offline', 'prompt' => 'consent'])
             ->redirect();
@@ -30,12 +32,18 @@ class GoogleController extends Controller
     {
         $googleUser = Socialite::driver('google')->user();
 
-        $user = User::updateOrCreate([
+        $user = User::firstOrCreate([
             'email' => $googleUser->getEmail(),
         ], [
             'name' => $googleUser->getName(),
             'password' => Hash::make(Str::random(24)),
         ]);
+
+        // Always mark email as verified when signing in via Google (Google has verified it)
+        if (!$user->email_verified_at) {
+            $user->email_verified_at = now();
+            $user->save();
+        }
 
         // Store the Google OAuth refresh token for API access
         $refreshToken = $googleUser->refreshToken;

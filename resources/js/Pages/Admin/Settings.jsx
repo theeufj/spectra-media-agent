@@ -3,11 +3,13 @@ import { Head, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SideNav from './SideNav';
 
-export default function Settings({ settings }) {
+export default function Settings({ settings, campaignModeDescription }) {
     const deploymentSetting = settings.find(s => s.key === 'deployment_enabled');
+    const campaignTestingModeSetting = settings.find(s => s.key === 'campaign_testing_mode');
     
     const { data, setData, post, processing } = useForm({
         deployment_enabled: deploymentSetting ? deploymentSetting.value === '1' : false,
+        campaign_testing_mode: campaignTestingModeSetting ? campaignTestingModeSetting.value === '1' : false,
     });
 
     const handleSubmit = (e) => {
@@ -101,6 +103,79 @@ export default function Settings({ settings }) {
                                                         <h5 className="text-sm font-medium text-yellow-800">Deployment Disabled</h5>
                                                         <p className="text-sm text-yellow-700 mt-1">
                                                             Users will see a maintenance message when attempting to deploy. This is useful for testing subscription conversion without affecting live campaigns.
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Campaign Testing Mode Section */}
+                                <div className="border-b border-gray-200 pb-6">
+                                    <h4 className="text-lg font-medium text-gray-900 mb-4">Campaign Testing Mode</h4>
+                                    
+                                    <div className="flex items-start">
+                                        <div className="flex-1">
+                                            <label className="flex items-center cursor-pointer">
+                                                <div className="relative">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={data.campaign_testing_mode}
+                                                        onChange={(e) => setData('campaign_testing_mode', e.target.checked)}
+                                                        className="sr-only"
+                                                    />
+                                                    <div className={`block w-14 h-8 rounded-full transition ${
+                                                        data.campaign_testing_mode 
+                                                            ? 'bg-yellow-500' 
+                                                            : 'bg-green-500'
+                                                    }`}></div>
+                                                    <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${
+                                                        data.campaign_testing_mode 
+                                                            ? 'transform translate-x-6' 
+                                                            : ''
+                                                    }`}></div>
+                                                </div>
+                                                <div className="ml-4">
+                                                    <span className="text-sm font-medium text-gray-900">
+                                                        Campaign Testing Mode
+                                                    </span>
+                                                    <p className="text-sm text-gray-500 mt-1">
+                                                        When enabled, all campaigns will be created as <strong>PAUSED/Draft</strong> regardless of environment. When disabled, campaigns will be created as <strong>ENABLED/Active</strong> (production mode).
+                                                    </p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    {/* Testing Mode Status Banner */}
+                                    <div className={`mt-4 p-4 rounded-lg ${
+                                        data.campaign_testing_mode 
+                                            ? 'bg-yellow-50 border border-yellow-200' 
+                                            : 'bg-green-50 border border-green-200'
+                                    }`}>
+                                        <div className="flex items-start">
+                                            {data.campaign_testing_mode ? (
+                                                <>
+                                                    <svg className="w-5 h-5 text-yellow-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                                    </svg>
+                                                    <div className="ml-3">
+                                                        <h5 className="text-sm font-medium text-yellow-800">Testing Mode Active</h5>
+                                                        <p className="text-sm text-yellow-700 mt-1">
+                                                            Campaigns will be created as <strong>PAUSED</strong>. This is ideal for local development and testing without spending money.
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-5 h-5 text-green-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                    </svg>
+                                                    <div className="ml-3">
+                                                        <h5 className="text-sm font-medium text-green-800">Production Mode Active</h5>
+                                                        <p className="text-sm text-green-700 mt-1">
+                                                            Campaigns will be created as <strong>ENABLED</strong> and will go live immediately after deployment.
                                                         </p>
                                                     </div>
                                                 </>

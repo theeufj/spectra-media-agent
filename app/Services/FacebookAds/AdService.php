@@ -4,6 +4,7 @@ namespace App\Services\FacebookAds;
 
 use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use App\Services\CampaignStatusHelper;
 
 class AdService extends BaseFacebookAdsService
 {
@@ -50,21 +51,24 @@ class AdService extends BaseFacebookAdsService
      * @param string $adSetId Ad set ID
      * @param string $adName Ad name
      * @param string $creativeId Creative ID
-     * @param string $status Ad status ('ACTIVE', 'PAUSED')
+     * @param string|null $status Ad status ('ACTIVE', 'PAUSED'). If null, uses config.
      * @return ?array
      */
     public function createAd(
         string $adSetId,
         string $adName,
         string $creativeId,
-        string $status = 'PAUSED'
+        ?string $status = null
     ): ?array {
+        // Use CampaignStatusHelper to determine the appropriate status
+        $finalStatus = CampaignStatusHelper::getFacebookAdsStatus($status);
+        
         try {
             $response = $this->post("/{$adSetId}/ads", [
                 'name' => $adName,
                 'adset_id' => $adSetId,
                 'creative' => ['creative_id' => $creativeId],
-                'status' => $status,
+                'status' => $finalStatus,
             ]);
 
             if ($response && isset($response['id'])) {

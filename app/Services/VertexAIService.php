@@ -52,7 +52,8 @@ class VertexAIService
     }
 
     /**
-     * Get access token for Vertex AI API using Application Default Credentials
+     * Get access token for Vertex AI API
+     * Priority: 1) GCE Metadata (VM), 2) Service Account File, 3) gcloud CLI (local dev)
      * Caches the token until it expires
      *
      * @return string|null
@@ -66,7 +67,20 @@ class VertexAIService
         }
 
         try {
-            // Use gcloud auth application-default print-access-token
+            // 1. Try GCE Metadata Server first (for Google Cloud VMs)
+            $metadataToken = $this->getAccessTokenFromMetadata();
+            if ($metadataToken) {
+                return $metadataToken;
+            }
+            
+            // 2. Check for service account credentials file
+            $credentialsPath = config('services.google.credentials_path') ?? env('GOOGLE_APPLICATION_CREDENTIALS');
+            
+            if ($credentialsPath && file_exists($credentialsPath)) {
+                return $this->getAccessTokenFromServiceAccount($credentialsPath);
+            }
+            
+            // 3. Fall back to gcloud CLI (local development)
             $accessToken = trim(shell_exec('gcloud auth application-default print-access-token 2>&1'));
             
             if (empty($accessToken) || str_contains($accessToken, 'ERROR')) {
@@ -80,6 +94,98 @@ class VertexAIService
             return $accessToken;
         } catch (\Exception $e) {
             Log::error("VertexAIService: Exception getting access token: " . $e->getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * Get access token from GCE Metadata Server (for Google Cloud VMs)
+     *
+     * @return string|null
+     */
+    private function getAccessTokenFromMetadata(): ?string
+    {
+        try {
+            $response = Http::timeout(2)
+                ->withHeaders(['Metadata-Flavor' => 'Google'])
+                ->get('http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token');
+            
+            if ($response->successful()) {
+                $tokenData = $response->json();
+                $accessToken = $tokenData['access_token'] ?? null;
+                
+                if ($accessToken) {
+                    // Cache based on expires_in (usually 3600s), minus buffer
+                    $expiresIn = ($tokenData['expires_in'] ?? 3600) - 300;
+                    Cache::put('vertex_ai_access_token', $accessToken, now()->addSeconds($expiresIn));
+                    Log::debug("VertexAIService: Got token from GCE metadata server");
+                    return $accessToken;
+                }
+            }
+        } catch (\Exception $e) {
+            // Not on GCE, silently continue to other methods
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get access token using a Service Account JSON key file
+     *
+     * @param string $credentialsPath Path to the service account JSON key file
+     * @return string|null
+     */
+    private function getAccessTokenFromServiceAccount(string $credentialsPath): ?string
+    {
+        try {
+            $credentials = json_decode(file_get_contents($credentialsPath), true);
+            
+            if (!$credentials) {
+                Log::error("VertexAIService: Invalid credentials file");
+                return null;
+            }
+            
+            // Create JWT for token request
+            $now = time();
+            $header = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
+            $payload = base64_encode(json_encode([
+                'iss' => $credentials['client_email'],
+                'scope' => 'https://www.googleapis.com/auth/cloud-platform',
+                'aud' => 'https://oauth2.googleapis.com/token',
+                'iat' => $now,
+                'exp' => $now + 3600,
+            ]));
+            
+            // Sign the JWT
+            $signatureInput = $header . '.' . $payload;
+            openssl_sign($signatureInput, $signature, $credentials['private_key'], 'SHA256');
+            $jwt = $signatureInput . '.' . base64_encode($signature);
+            
+            // Exchange JWT for access token
+            $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
+                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+                'assertion' => $jwt,
+            ]);
+            
+            if ($response->successful()) {
+                $tokenData = $response->json();
+                $accessToken = $tokenData['access_token'] ?? null;
+                
+                if ($accessToken) {
+                    // Cache for 55 minutes
+                    Cache::put('vertex_ai_access_token', $accessToken, now()->addMinutes(55));
+                    return $accessToken;
+                }
+            }
+            
+            Log::error("VertexAIService: Failed to get token from service account", [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+            return null;
+            
+        } catch (\Exception $e) {
+            Log::error("VertexAIService: Service account token error: " . $e->getMessage());
             return null;
         }
     }
