@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Services\DeploymentService;
+use App\Services\AdSpendBillingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,7 +25,7 @@ class DeployCampaign implements ShouldQueue
     ) {
     }
 
-    public function handle(): void
+    public function handle(AdSpendBillingService $billingService): void
     {
         Log::info("Starting deployment job for Campaign ID: {$this->campaign->id}", [
             'campaign_name' => $this->campaign->name,
@@ -37,6 +38,46 @@ class DeployCampaign implements ShouldQueue
         if (!$customer) {
             Log::error("No customer found for campaign {$this->campaign->id}. Skipping deployment.");
             return;
+        }
+
+        // Initialize ad spend credit if this is the customer's first campaign
+        try {
+            $credit = $customer->adSpendCredit;
+            
+            if (!$credit) {
+                Log::info("Initializing ad spend credit for customer", [
+                    'customer_id' => $customer->id,
+                    'daily_budget' => $this->campaign->daily_budget,
+                ]);
+                
+                $credit = $billingService->initializeCreditAccount(
+                    $customer, 
+                    $this->campaign->daily_budget ?? 50 // Default $50/day if not set
+                );
+                
+                Log::info("Ad spend credit initialized", [
+                    'customer_id' => $customer->id,
+                    'initial_credit' => $credit->initial_credit_amount,
+                ]);
+            }
+
+            // Check if customer can run campaigns (payment status OK)
+            if (!$credit->canRunCampaigns()) {
+                Log::warning("Customer cannot run campaigns - payment issue", [
+                    'customer_id' => $customer->id,
+                    'status' => $credit->status,
+                    'payment_status' => $credit->payment_status,
+                ]);
+                
+                // Fail the job with a message
+                throw new \Exception("Cannot deploy campaign: Payment issue. Status: {$credit->payment_status}");
+            }
+        } catch (\Exception $e) {
+            Log::error("Ad spend credit initialization failed", [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e; // Re-throw to fail the job
         }
 
         $deploymentResults = [];

@@ -43,6 +43,10 @@ class Campaign extends Model
         'keywords',
         'latest_optimization_analysis',
         'last_optimized_at',
+        'healing_actions',
+        'keyword_actions',
+        'budget_adjustments',
+        'last_maintenance_at',
     ];
 
     /**
@@ -62,6 +66,10 @@ class Campaign extends Model
         'strategy_generation_completed_at' => 'datetime',
         'latest_optimization_analysis' => 'array',
         'last_optimized_at' => 'datetime',
+        'healing_actions' => 'array',
+        'keyword_actions' => 'array',
+        'budget_adjustments' => 'array',
+        'last_maintenance_at' => 'datetime',
     ];
 
     /**

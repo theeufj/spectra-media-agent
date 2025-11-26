@@ -160,6 +160,25 @@ Route::middleware(['auth'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
+| Ad Spend Billing Routes
+|--------------------------------------------------------------------------
+|
+| Routes for managing ad spend credits and billing.
+|
+*/
+Route::middleware(['auth'])->group(function () {
+    // Dashboard view for ad spend billing
+    Route::get('/billing/ad-spend', [App\Http\Controllers\AdSpendBillingController::class, 'index'])->name('billing.ad-spend');
+    
+    // API endpoints
+    Route::get('/billing/ad-spend/balance', [App\Http\Controllers\AdSpendBillingController::class, 'getBalance'])->name('billing.ad-spend.balance');
+    Route::get('/billing/ad-spend/transactions', [App\Http\Controllers\AdSpendBillingController::class, 'getTransactions'])->name('billing.ad-spend.transactions');
+    Route::post('/billing/ad-spend/add-credit', [App\Http\Controllers\AdSpendBillingController::class, 'addCredit'])->name('billing.ad-spend.add-credit');
+    Route::post('/billing/ad-spend/retry-payment', [App\Http\Controllers\AdSpendBillingController::class, 'retryPayment'])->name('billing.ad-spend.retry');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Admin Platform Management Routes
 |--------------------------------------------------------------------------
 */

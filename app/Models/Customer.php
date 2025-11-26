@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
@@ -13,6 +14,10 @@ class Customer extends Model
         'name',
         'business_type',
         'description',
+        'industry',
+        'competitive_strategy',
+        'competitive_strategy_updated_at',
+        'competitor_analysis_at',
         'country',
         'timezone',
         'currency_code',
@@ -39,6 +44,9 @@ class Customer extends Model
         'gtm_detected' => 'boolean',
         'gtm_last_verified' => 'datetime',
         'gtm_detected_at' => 'datetime',
+        'competitive_strategy' => 'array',
+        'competitive_strategy_updated_at' => 'datetime',
+        'competitor_analysis_at' => 'datetime',
     ];
 
     /**
@@ -71,5 +79,21 @@ class Customer extends Model
     public function brandGuideline()
     {
         return $this->hasOne(BrandGuideline::class);
+    }
+
+    /**
+     * Get the competitors for the customer.
+     */
+    public function competitors(): HasMany
+    {
+        return $this->hasMany(Competitor::class);
+    }
+
+    /**
+     * Get the ad spend credit account for the customer.
+     */
+    public function adSpendCredit()
+    {
+        return $this->hasOne(AdSpendCredit::class);
     }
 }

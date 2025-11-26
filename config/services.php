@@ -46,6 +46,9 @@ return [
         'gemini_api_key' => env('GOOGLE_GEMINI_API_KEY'),
         'project_id' => env('GOOGLE_CLOUD_PROJECT'),
         'location' => env('GOOGLE_CLOUD_LOCATION', 'us-central1'),
+        // Custom Search API for competitor discovery
+        'search_api_key' => env('GOOGLE_SEARCH_API_KEY'),
+        'search_engine_id' => env('GOOGLE_SEARCH_ENGINE_ID'),
     ],
 
     'facebook' => [

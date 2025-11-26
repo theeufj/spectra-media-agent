@@ -24,7 +24,7 @@ export default function Landing({ auth }) {
                                             <span className="block text-indigo-600 whitespace-normal">The cost of a utility bill.</span>
                                         </h1>
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
-                                            Stop paying thousands in retainer fees. Spectra gives you an autonomous marketing team that never sleeps, never takes sick days, and optimizes your campaigns 24/7.
+                                            Stop paying thousands in retainer fees. Our AI agents discover your competitors, heal broken campaigns automatically, optimize budgets in real-time, and A/B test creatives 24/7—all while you sleep.
                                         </p>
                                         <div className="mt-6 sm:mt-8 md:mt-10 lg:mt-10 flex flex-col xs:flex-col sm:flex-row gap-3 sm:gap-4">
                                             <a
@@ -155,9 +155,9 @@ export default function Landing({ auth }) {
                                     <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
                                         <span className="text-4xl">🧠</span>
                                     </div>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-3">2. Strategic Generation</h3>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-3">2. Competitive Intelligence</h3>
                                     <p className="text-gray-600 leading-relaxed">
-                                        The <strong>Strategy Agent</strong> analyzes your competitors. Then, the <strong>Creative Agent</strong> generates dozens of high-converting ad variations (Copy + Image) tailored to your audience.
+                                        Our <strong>Competitor Discovery Agent</strong> uses Google Search to find your real competitors. The <strong>Analysis Agent</strong> scrapes their sites, extracts their messaging, and generates counter-strategies.
                                     </p>
                                 </div>
 
@@ -166,11 +166,133 @@ export default function Landing({ auth }) {
                                     <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
                                         <span className="text-4xl">🚀</span>
                                     </div>
-                                    <h3 className="text-xl font-bold text-gray-900 mb-3">3. Deploy & Optimize</h3>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-3">3. Autonomous Optimization</h3>
                                     <p className="text-gray-600 leading-relaxed">
-                                        One-click launch to Google & Meta. The <strong>Optimization Agent</strong> monitors performance 24/7, automatically killing losing ads and scaling the winners.
+                                        Deploy with one click. <strong>Self-Healing Agents</strong> fix disapproved ads automatically. <strong>Budget Intelligence</strong> shifts spend to peak hours. <strong>Creative Testing</strong> identifies winners and generates new variations.
                                     </p>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* AI Agents Showcase Section - NEW */}
+                    <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 py-16 sm:py-24">
+                        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                            <div className="mx-auto max-w-2xl lg:text-center mb-12">
+                                <p className="text-indigo-300 font-semibold text-sm uppercase tracking-wider">Autonomous AI Agents</p>
+                                <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">
+                                    Your 24/7 Marketing Team
+                                </h2>
+                                <p className="mt-4 text-lg text-indigo-200">
+                                    Six specialized AI agents work around the clock to optimize every aspect of your campaigns.
+                                </p>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* Agent 1: Competitor Discovery */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/30">
+                                            <span className="text-2xl">🔍</span>
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white">Competitor Discovery Agent</h3>
+                                    </div>
+                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                        Uses Google Search AI to find your real competitors based on your website content. Identifies direct and indirect competitors you might not know about.
+                                    </p>
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <span className="text-xs text-indigo-300">Runs: Weekly</span>
+                                    </div>
+                                </div>
+
+                                {/* Agent 2: Competitor Analysis */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/30">
+                                            <span className="text-2xl">📊</span>
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white">Competitor Analysis Agent</h3>
+                                    </div>
+                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                        Scrapes competitor websites, extracts their messaging, value propositions, pricing, and ad copy. Generates counter-strategies for your campaigns.
+                                    </p>
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <span className="text-xs text-indigo-300">Runs: Weekly</span>
+                                    </div>
+                                </div>
+
+                                {/* Agent 3: Self-Healing */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-green-500/30">
+                                            <span className="text-2xl">🩹</span>
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white">Self-Healing Agent</h3>
+                                    </div>
+                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                        Monitors for disapproved ads and automatically rewrites them to be policy-compliant. Pauses underperforming ads before they waste budget.
+                                    </p>
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <span className="text-xs text-green-300">Runs: Every 4 Hours</span>
+                                    </div>
+                                </div>
+
+                                {/* Agent 4: Budget Intelligence */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-yellow-500/30">
+                                            <span className="text-2xl">💰</span>
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white">Budget Intelligence Agent</h3>
+                                    </div>
+                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                        Dynamically adjusts budgets based on time-of-day and day-of-week performance. Reduces spend at 3am, increases during peak buying hours.
+                                    </p>
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <span className="text-xs text-yellow-300">Runs: Hourly</span>
+                                    </div>
+                                </div>
+
+                                {/* Agent 5: Creative Intelligence */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-pink-500/30">
+                                            <span className="text-2xl">🎨</span>
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white">Creative Intelligence Agent</h3>
+                                    </div>
+                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                        Tracks A/B test performance at headline, description, and image level. Identifies winners, kills losers, and generates new variations.
+                                    </p>
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <span className="text-xs text-pink-300">Runs: Daily</span>
+                                    </div>
+                                </div>
+
+                                {/* Agent 6: Audience Intelligence */}
+                                <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-purple-500/30">
+                                            <span className="text-2xl">👥</span>
+                                        </div>
+                                        <h3 className="text-lg font-bold text-white">Audience Intelligence Agent</h3>
+                                    </div>
+                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                        Manages Customer Match lists, segments your audience, and recommends lookalike audiences for expansion. Maximizes your first-party data.
+                                    </p>
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <span className="text-xs text-purple-300">Runs: On-Demand</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="mt-12 text-center">
+                                <a
+                                    href="/register"
+                                    className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-indigo-900 bg-white hover:bg-indigo-50 shadow-lg transition-colors"
+                                >
+                                    Put These Agents to Work →
+                                </a>
                             </div>
                         </div>
                     </div>
@@ -187,8 +309,53 @@ export default function Landing({ auth }) {
                                     Our AI agents handle the heavy lifting, from creative generation to performance analysis, so you can focus on your business.
                                 </p>
                             </div>
-                            <div className="mx-auto mt-12 sm:mt-16 md:mt-20 lg:mt-24 max-w-2xl sm:max-w-none lg:max-w-4xl">
-                                <dl className="grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-8 sm:gap-y-10 lg:max-w-none lg:grid-cols-2 lg:gap-y-16\">
+                            <div className="mx-auto mt-12 sm:mt-16 md:mt-20 lg:mt-24 max-w-2xl sm:max-w-none lg:max-w-5xl">
+                                <dl className="grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-8 sm:gap-y-10 lg:max-w-none lg:grid-cols-3 lg:gap-y-16">
+                                    <div className="relative pl-16">
+                                        <dt className="text-base font-semibold leading-7 text-gray-900">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                                            </div>
+                                            Competitive Intelligence
+                                        </dt>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">AI agents discover your competitors using Google Search, scrape their websites, analyze their messaging, and generate counter-strategies to help you win.</dd>
+                                    </div>
+                                    <div className="relative pl-16">
+                                        <dt className="text-base font-semibold leading-7 text-gray-900">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                                            </div>
+                                            Self-Healing Campaigns
+                                        </dt>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Disapproved ad? Our AI automatically rewrites it to be policy-compliant and resubmits. Underperforming ads are paused before they waste your budget.</dd>
+                                    </div>
+                                    <div className="relative pl-16">
+                                        <dt className="text-base font-semibold leading-7 text-gray-900">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                            </div>
+                                            Budget Intelligence
+                                        </dt>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Smart budget shifting based on time-of-day and day-of-week performance. Reduce spend at 3am, increase during peak buying hours—automatically.</dd>
+                                    </div>
+                                    <div className="relative pl-16">
+                                        <dt className="text-base font-semibold leading-7 text-gray-900">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                                            </div>
+                                            Creative A/B Testing
+                                        </dt>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Track performance at the headline, description, and image level. AI identifies winners, kills losers, and generates new variations based on what's working.</dd>
+                                    </div>
+                                    <div className="relative pl-16">
+                                        <dt className="text-base font-semibold leading-7 text-gray-900">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                            </div>
+                                            Audience Intelligence
+                                        </dt>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Upload your customer emails for Customer Match targeting. AI segments your audience and recommends lookalike audiences for expansion.</dd>
+                                    </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
@@ -196,43 +363,25 @@ export default function Landing({ auth }) {
                                             </div>
                                             Vision AI Brand Extraction
                                         </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">AI screenshots your website and automatically extracts colors, fonts, visual style, and brand voice. No manual input needed—every ad stays perfectly on-brand.</dd>
-                                    </div>
-                                    <div className="relative pl-16">
-                                        <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
-                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                            </div>
-                                            AI-Powered Optimization
-                                        </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">Our agents continuously test and improve your ad copy, images, and video content to maximize sales and ROI.</dd>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">AI screenshots your website and extracts colors, fonts, and brand voice. Every ad stays perfectly on-brand without manual input.</dd>
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                             </div>
-                                            Multi-Platform Support
+                                            Search, Display, Video, PMax
                                         </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">Deploy to Google Ads instantly. Facebook, Instagram, Reddit, and Microsoft support coming soon for unified marketing.</dd>
-                                    </div>
-                                    <div className="relative pl-16">
-                                        <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
-                                                <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            </div>
-                                            Transparent Pricing
-                                        </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">$200 flat fee per month plus your ad spend. No hidden costs, no surprises. Ad spend billed daily to your card.</dd>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Full Google Ads support including Search campaigns, Display ads, Video campaigns, and Performance Max with AI-generated assets.</dd>
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
                                             <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                             </div>
-                                            Automatic Landing Page Audits
+                                            Conversion Tracking & GTM
                                         </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">AI analyzes your landing pages for page speed, CTA placement, and message match—ensuring high conversion rates before you spend a dollar on ads.</dd>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Automatic conversion tracking setup with Google Tag Manager integration. We create and deploy tags so you can measure ROI from day one.</dd>
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
@@ -241,7 +390,7 @@ export default function Landing({ auth }) {
                                             </div>
                                             Generate for Free
                                         </dt>
-                                        <dd className="mt-2 text-base leading-7 text-gray-600">Sign up free and generate unlimited ad copy, images, and videos. Only pay when deploying campaigns.</dd>
+                                        <dd className="mt-2 text-base leading-7 text-gray-600">Sign up free and generate unlimited ad copy, images, and videos. Only pay when you're ready to deploy campaigns.</dd>
                                     </div>
                                 </dl>
                             </div>
@@ -339,6 +488,16 @@ export default function Landing({ auth }) {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Optimization</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Weekly manual checks</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">24/7 Real-time Agent adjustments</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Competitor Analysis</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Manual research (extra hours)</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Automatic AI Discovery & Counter-Strategy</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Campaign Fixes</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Wait for account manager response</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Self-Healing AI (instant fixes)</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -563,12 +722,36 @@ export default function Landing({ auth }) {
                                         answer: "No. Your subscription covers the Spectra AI platform, the creative generation, and the autonomous management agents. You will connect your own credit card to Google/Facebook, so you pay the ad networks directly for your media spend. This ensures total transparency—we never mark up your ad costs."
                                     },
                                     {
-                                        question: "Can I switch plans later?",
-                                        answer: "Absolutely. You can upgrade or downgrade at any time from your dashboard. If you exceed the ad spend limit of your tier, we'll simply notify you to upgrade to keep your campaigns running at peak performance."
+                                        question: "How does ad spend billing work?",
+                                        answer: "When you launch your first campaign, we charge 7 days of estimated ad spend upfront as credit. This ensures your campaigns have guaranteed funding from day one. We then bill your actual daily spend each morning at 6 AM, deducting from your credit balance. When your balance gets low (less than 3 days remaining), we automatically top it up to keep your campaigns running smoothly."
+                                    },
+                                    {
+                                        question: "What happens if a payment fails?",
+                                        answer: "We give you a 24-hour grace period to update your payment method. If the payment still fails after Day 1, we reduce campaign budgets by 50% to minimize spend. If payment hasn't been resolved by Day 2, we pause all campaigns to protect both parties. Once payment is successful, campaigns are automatically resumed at full budget—no action needed from you."
+                                    },
+                                    {
+                                        question: "How do I update my payment method?",
+                                        answer: "You can update your payment method anytime in your dashboard under Billing → Ad Spend. If a payment has failed, you'll see a 'Retry Payment' button that will immediately attempt to charge your new card and resume your campaigns if successful."
+                                    },
+                                    {
+                                        question: "What do the AI agents actually do?",
+                                        answer: "Our 6 autonomous agents work 24/7: The Competitor Discovery Agent finds your competitors via Google Search, the Analysis Agent scrapes their websites for messaging insights, the Self-Healing Agent fixes disapproved ads automatically, the Budget Intelligence Agent optimizes spend by time-of-day, the Creative Intelligence Agent A/B tests your ads and generates new variations, and the Audience Intelligence Agent manages your customer lists."
+                                    },
+                                    {
+                                        question: "How does competitor analysis work?",
+                                        answer: "Every week, our AI reads your website content to understand your business, then uses Google Search to discover real competitors in your space. It scrapes their websites, extracts their messaging, value propositions, and pricing, then generates counter-strategies with specific ad copy recommendations to help you win."
+                                    },
+                                    {
+                                        question: "What happens if my ad gets disapproved?",
+                                        answer: "Our Self-Healing Agent automatically detects disapproved ads and rewrites the copy to be policy-compliant while maintaining your brand voice. It then resubmits the ad—all without any action needed from you. Underperforming ads are also automatically paused to protect your budget."
                                     },
                                     {
                                         question: "How does the \"Vision AI\" know my brand?",
                                         answer: "We use Gemini Pro Vision to analyze screenshots of your website. It instantly extracts your hex codes, fonts, tone of voice, and visual style to ensure every ad we generate looks exactly like it came from your internal design team."
+                                    },
+                                    {
+                                        question: "Can I switch plans later?",
+                                        answer: "Absolutely. You can upgrade or downgrade at any time from your dashboard. If you exceed the ad spend limit of your tier, we'll simply notify you to upgrade to keep your campaigns running at peak performance."
                                     }
                                 ].map((faq, index) => (
                                     <div key={index} className="border border-gray-200 rounded-lg">
