@@ -16,9 +16,9 @@ use App\Models\Customer;
 
 class CreateResponsiveSearchAd extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer)
+    public function __construct(Customer $customer, bool $useMccCredentials = false)
     {
-        parent::__construct($customer);
+        parent::__construct($customer, $useMccCredentials);
     }
 
     /**

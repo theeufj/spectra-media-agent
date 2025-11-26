@@ -71,6 +71,19 @@ Based on recent performance data, the following recommendations have been genera
 PROMPT;
         }
 
+        $selectedPagesPrompt = "";
+        if ($campaign->pages->isNotEmpty()) {
+            $pagesList = $campaign->pages->map(function ($page) {
+                return "- URL: {$page->url} (Title: {$page->title}, Type: {$page->page_type})";
+            })->implode("\n");
+
+            $selectedPagesPrompt = <<<PROMPT
+**SELECTED LANDING PAGES:**
+The user has explicitly selected the following pages for this campaign. You SHOULD prioritize using one of these URLs as the `landing_page_url` if appropriate.
+{$pagesList}
+PROMPT;
+        }
+
         // Here, we use a HEREDOC string (`<<<PROMPT`) for a clean, multi-line prompt.
         // This is similar to using backticks for multi-line strings in Go.
         return <<<PROMPT
@@ -79,7 +92,38 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 {$brandContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "bidding_strategy", and "revenue_cpa_multiple".
+Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+
+**Targeting Configuration:**
+You MUST include a "targeting" object for each strategy that defines the audience targeting.
+The "targeting" object should have the following keys:
+- "interests": Array of strings (e.g., ["Shoppers", "Technology Enthusiasts"]).
+- "behaviors": Array of strings (e.g., ["Frequent Travelers", "Mobile Device Users"]).
+- "age_min": Integer (e.g., 18).
+- "age_max": Integer (e.g., 65).
+- "genders": Array of strings (e.g., ["male", "female"] or ["all"]).
+- "geo_locations": Array of strings (e.g., ["United States", "Canada"]).
+
+**Ad Extensions:**
+You MUST include an "ad_extensions" object to improve ad visibility and CTR.
+- "sitelinks": Array of objects, each with "text" (max 25 chars), "description1" (max 35 chars), and "description2" (max 35 chars). Provide at least 4 sitelinks.
+- "callouts": Array of strings (max 25 chars each). Provide at least 4 callouts highlighting key selling points (e.g., "Free Shipping", "24/7 Support").
+
+**Conversion Goals:**
+You MUST include a "conversion_goals" object to guide optimization.
+- "primary_goal": String (e.g., "Purchase", "Lead", "Sign-up"). This helps the system configure the correct conversion action.
+
+**Video Strategy (For Video/YouTube Platforms):**
+If the platform is "Video" or "YouTube", the "video_strategy" object MUST include:
+- "youtube_video_id": A placeholder string (e.g., "INSERT_VIDEO_ID") or a real ID if known.
+- "video_ad_format": String (e.g., "Skippable In-Stream", "In-Feed").
+
+**Landing Page URL:**
+You MUST identify the most appropriate landing page URL for this campaign strategy.
+- Look for specific product pages or "money pages" in the **KNOWLEDGE BASE** content provided below.
+- If a specific product page matches the campaign goal better than the generic home page, use that URL.
+- If no specific URL is found in the knowledge base, use the campaign's main URL (if provided in the brief) or a placeholder that clearly indicates what the page should be (e.g., "https://example.com/product-page").
+{$selectedPagesPrompt}
 
 **Revenue CPA Multiple:**
 Based on the business type (e.g., e-commerce, lead generation), estimate a "revenue_cpa_multiple". This is a float representing how much revenue a single conversion is worth compared to its cost (CPA). For example, for an e-commerce business, this might be 2.5, meaning a conversion is worth 2.5 times the target CPA. For lead generation, it might be higher, like 5.0.
@@ -90,6 +134,12 @@ You MUST choose one of the following bidding strategies and format it as a JSON 
 1.  `{"name": "MaximizeConversions", "parameters": {}}`
 2.  `{"name": "TargetCpa", "parameters": {"targetCpaMicros": <integer>}}` - Choose a reasonable target CPA in micros (e.g., 50000000 for $50).
 3.  `{"name": "TargetRoas", "parameters": {"targetRoas": <float>}}` - Choose a reasonable target ROAS (e.g., 3.5 for 350%).
+
+**Keywords (For Search Platforms):**
+Inside the "bidding_strategy" object, you MUST include a "keywords" array if the platform supports search (e.g., Google Ads).
+Each item in the "keywords" array must be an object with:
+- "text": The keyword string.
+- "match_type": One of "BROAD", "PHRASE", or "EXACT".
 
 **Example Response Format:**
 ```json
@@ -104,7 +154,26 @@ You MUST choose one of the following bidding strategies and format it as a JSON 
         "name": "MaximizeConversions",
         "parameters": {}
       },
-      "revenue_cpa_multiple": 2.5
+      "revenue_cpa_multiple": 2.5,
+      "landing_page_url": "https://example.com/summer-sale",
+      "targeting": {
+        "interests": ["Summer Fashion", "Beachwear"],
+        "behaviors": ["Online Shoppers"],
+        "age_min": 18,
+        "age_max": 45,
+        "genders": ["female"],
+        "geo_locations": ["United States"]
+      },
+      "ad_extensions": {
+        "sitelinks": [
+            {"text": "Shop Summer", "description1": "New arrivals are here", "description2": "Get ready for the sun"},
+            {"text": "Best Sellers", "description1": "Customer favorites", "description2": "Top rated items"}
+        ],
+        "callouts": ["Free Shipping", "Easy Returns", "Summer Sale"]
+      },
+      "conversion_goals": {
+        "primary_goal": "Purchase"
+      }
     },
     {
       "platform": "Google Ads (SEM)",
@@ -115,9 +184,35 @@ You MUST choose one of the following bidding strategies and format it as a JSON 
         "name": "TargetCpa",
         "parameters": {
           "targetCpaMicros": 50000000
-        }
+        },
+        "keywords": [
+            {"text": "buy running shoes", "match_type": "BROAD"},
+            {"text": "best running shoes", "match_type": "PHRASE"},
+            {"text": "nike running shoes", "match_type": "EXACT"}
+        ]
       },
-      "revenue_cpa_multiple": 3.0
+      "revenue_cpa_multiple": 3.0,
+      "landing_page_url": "https://example.com/running-shoes",
+      "targeting": {
+        "interests": ["Running", "Marathon Training"],
+        "behaviors": [],
+        "age_min": 25,
+        "age_max": 55,
+        "genders": ["all"],
+        "geo_locations": ["United States", "United Kingdom"]
+      },
+      "ad_extensions": {
+        "sitelinks": [
+            {"text": "Men's Running", "description1": "Shop men's shoes", "description2": "Built for speed"},
+            {"text": "Women's Running", "description1": "Shop women's shoes", "description2": "Comfort and style"},
+            {"text": "Sale Items", "description1": "Discounted gear", "description2": "Limited time offers"},
+            {"text": "Store Locator", "description1": "Find a store near you", "description2": "Visit us today"}
+        ],
+        "callouts": ["Free Shipping > $50", "30-Day Returns", "Price Match", "Expert Advice"]
+      },
+      "conversion_goals": {
+        "primary_goal": "Purchase"
+      }
     }
   ]
 }

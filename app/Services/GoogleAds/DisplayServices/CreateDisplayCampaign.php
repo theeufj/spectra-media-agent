@@ -22,9 +22,9 @@ use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalA
 
 class CreateDisplayCampaign extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer)
+    public function __construct(Customer $customer, bool $useMccCredentials = false)
     {
-        parent::__construct($customer);
+        parent::__construct($customer, $useMccCredentials);
     }
 
     /**
@@ -71,7 +71,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
         }
 
         $campaignOperation = new CampaignOperation();
-        $campaignOperation->create = $campaign;
+        $campaignOperation->setCreate($campaign);
 
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
@@ -107,7 +107,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
         ]);
 
         $campaignBudgetOperation = new CampaignBudgetOperation();
-        $campaignBudgetOperation->create = $campaignBudget;
+        $campaignBudgetOperation->setCreate($campaignBudget);
 
         try {
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();

@@ -21,9 +21,9 @@ use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalA
 
 class CreateSearchCampaign extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer)
+    public function __construct(Customer $customer, bool $useMccCredentials = false)
     {
-        parent::__construct($customer);
+        parent::__construct($customer, $useMccCredentials);
     }
 
     /**

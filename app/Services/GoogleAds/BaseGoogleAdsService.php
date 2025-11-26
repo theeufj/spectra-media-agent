@@ -52,19 +52,22 @@ abstract class BaseGoogleAdsService
 
             $oAuth2Credential = $oAuth2CredentialBuilder->build();
 
-            // Use MCC ID as login-customer-id, required for MCC operations
-            $loginCustomerId = config('googleads.mcc_customer_id');
-            
-            if (!$loginCustomerId) {
-                Log::error("MCC Customer ID not configured for Google Ads client");
-                return null;
+            $builder = (new GoogleAdsClientBuilder())
+                ->fromFile(storage_path('app/google_ads_php.ini'))
+                ->withOAuth2Credential($oAuth2Credential);
+
+            // Use MCC ID as login-customer-id ONLY if we are using MCC credentials
+            if ($this->useMccCredentials) {
+                $loginCustomerId = config('googleads.mcc_customer_id');
+                
+                if (!$loginCustomerId) {
+                    Log::error("MCC Customer ID not configured for Google Ads client");
+                    return null;
+                }
+                $builder->withLoginCustomerId($loginCustomerId);
             }
 
-            return (new GoogleAdsClientBuilder())
-                ->fromFile(storage_path('app/google_ads_php.ini'))
-                ->withOAuth2Credential($oAuth2Credential)
-                ->withLoginCustomerId($loginCustomerId)
-                ->build();
+            return $builder->build();
         } catch (\Exception $e) {
             Log::error("Failed to build Google Ads client for customer {$this->customer->id}: " . $e->getMessage(), [
                 'customer_id' => $this->customer->id,

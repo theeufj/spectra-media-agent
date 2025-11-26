@@ -73,6 +73,13 @@ class GenerateImage implements ShouldQueue
             }
 
             $strategyPrompt = $this->strategy->imagery_strategy;
+
+            // Skip generation if the strategy is explicitly "N/A" or similar, without treating it as an error
+            if (strlen(trim($strategyPrompt)) < 50 && (stripos($strategyPrompt, 'N/A') !== false || stripos($strategyPrompt, 'Not Applicable') !== false)) {
+                Log::info("Skipping image generation for Strategy ID: {$this->strategy->id} due to N/A strategy.");
+                return;
+            }
+
             $review = $adminMonitorService->reviewImagePrompt($strategyPrompt);
 
             if (!$review['is_valid']) {

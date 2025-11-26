@@ -8,6 +8,7 @@ use Google\Ads\GoogleAds\V22\Common\VideoAsset;
 use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
 use Google\Ads\GoogleAds\V22\Services\AssetService;
 use Google\Ads\GoogleAds\V22\Services\AssetOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
@@ -41,11 +42,15 @@ class UploadVideoAsset extends BaseGoogleAdsService
 
         // Create AssetOperation
         $assetOperation = new AssetOperation();
-        $assetOperation->create = $asset;
+        $assetOperation->setCreate($asset);
 
         try {
             $assetServiceClient = $this->client->getAssetServiceClient();
-            $response = $assetServiceClient->mutateAssets($customerId, [$assetOperation]);
+            $request = new MutateAssetsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$assetOperation],
+            ]);
+            $response = $assetServiceClient->mutateAssets($request);
             $newAssetResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created video asset: " . $newAssetResourceName);
             return $newAssetResourceName;

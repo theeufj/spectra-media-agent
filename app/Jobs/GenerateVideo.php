@@ -139,7 +139,7 @@ class GenerateVideo implements ShouldQueue
             $actionableContent = $this->extractActionableVideoContent($videoStrategy);
             
             if (!$actionableContent) {
-                Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content found.");
+                Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content found. Original strategy: '{$videoStrategy}'");
                 return;
             }
 

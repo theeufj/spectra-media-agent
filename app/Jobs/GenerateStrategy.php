@@ -155,8 +155,14 @@ class GenerateStrategy implements ShouldQueue
             Log::info("Creating strategy records for campaign {$this->campaign->id}");
             foreach ($strategyData['strategies'] as $index => $strategy) {
                 Log::info("Creating strategy #{$index} for platform '{$strategy['platform']}' on campaign {$this->campaign->id}");
+                
+                // Inject landing_page_url into bidding_strategy to avoid schema changes
+                if (isset($strategy['landing_page_url'])) {
+                    $strategy['bidding_strategy']['landing_page_url'] = $strategy['landing_page_url'];
+                }
+
                 try {
-                    $this->campaign->strategies()->create([
+                    $newStrategy = $this->campaign->strategies()->create([
                         'platform' => $strategy['platform'],
                         'ad_copy_strategy' => $strategy['ad_copy_strategy'],
                         'imagery_strategy' => $strategy['imagery_strategy'],
@@ -165,6 +171,22 @@ class GenerateStrategy implements ShouldQueue
                         'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
                         'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
                     ]);
+
+                    // Create TargetingConfig if targeting data is present
+                    if (isset($strategy['targeting'])) {
+                        $targeting = $strategy['targeting'];
+                        $newStrategy->targetingConfig()->create([
+                            'interests' => $targeting['interests'] ?? [],
+                            'behaviors' => $targeting['behaviors'] ?? [],
+                            'age_min' => $targeting['age_min'] ?? 18,
+                            'age_max' => $targeting['age_max'] ?? 65,
+                            'genders' => $targeting['genders'] ?? ['all'],
+                            'geo_locations' => $targeting['geo_locations'] ?? [],
+                            'platform' => $strategy['platform'],
+                        ]);
+                        Log::info("Created targeting config for strategy {$newStrategy->id}");
+                    }
+
                     Log::info("Successfully created strategy #{$index} for campaign {$this->campaign->id}");
                 } catch (\Exception $e) {
                     Log::error("Failed to create strategy #{$index} for campaign {$this->campaign->id}: " . $e->getMessage());

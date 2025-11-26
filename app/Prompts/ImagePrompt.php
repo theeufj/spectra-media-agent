@@ -34,6 +34,7 @@ class ImagePrompt
                "**TECHNICAL SPECIFICATIONS:**\n" .
                "- Style: Professional, modern, high-resolution\n" .
                "- Format: Suitable for digital advertising\n" .
+               "- Aspect Ratio: 1:1 (Square) - 1024x1024 pixels\n" .
                "- Composition: Clear focal point, mobile-friendly, high contrast\n\n" .
                "**CREATIVE STRATEGY:**\n" .
                $this->strategyContent . "\n\n" .

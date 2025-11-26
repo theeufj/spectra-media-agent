@@ -254,6 +254,22 @@ Route::middleware(['auth:sanctum', 'verified'])->prefix('api')->group(function (
     Route::get('/campaigns/{campaign}/performance', [App\Http\Controllers\CampaignController::class, 'performance'])->name('api.campaigns.performance');
 });
 
+/*
+|--------------------------------------------------------------------------
+| Internal API Routes (Session Auth)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->prefix('api')->group(function () {
+    Route::get('/strategies/{strategy}/collateral', [\App\Http\Controllers\CollateralController::class, 'getCollateralJson'])
+        ->name('api.collateral.show');
+
+    Route::get('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'apiShow'])
+        ->name('api.campaigns.show');
+
+    Route::get('/customers/{customer}/pages', [\App\Http\Controllers\CustomerPageController::class, 'index'])
+        ->name('api.customers.pages.index');
+});
+
 Route::get('/test-email', function () {
     Log::info('Attempting to send a test email...');
     Log::info('Mail driver:', ['driver' => config('mail.default')]);
@@ -336,4 +352,34 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('execution-metrics/{strategy}', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'show'])->name('admin.execution.detail');
     Route::post('users/{user}/unban', [App\Http\Controllers\AdminController::class, 'unbanUser'])->name('admin.users.unban');
     Route::post('notification', [App\Http\Controllers\AdminController::class, 'sendNotification'])->name('admin.notification.send');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Strategy Routes
+|--------------------------------------------------------------------------
+|
+| Routes for managing marketing strategies.
+|
+*/
+Route::middleware(['auth'])->group(function () {
+    // Route to display the strategy creation form.
+    // GET /strategies/create
+    Route::get('/strategies/create', [App\Http\Controllers\StrategyController::class, 'create'])->name('strategies.create');
+
+    // Route to handle the form submission and create a new strategy.
+    // POST /strategies
+    Route::post('/strategies', [App\Http\Controllers\StrategyController::class, 'store'])->name('strategies.store');
+
+    // Route to display a specific strategy for editing.
+    // GET /strategies/{strategy}/edit
+    Route::get('/strategies/{strategy}/edit', [App\Http\Controllers\StrategyController::class, 'edit'])->name('strategies.edit');
+
+    // Route to update a strategy.
+    // PUT /strategies/{strategy}
+    Route::put('/strategies/{strategy}', [App\Http\Controllers\StrategyController::class, 'update'])->name('strategies.update');
+
+    // Route to delete a strategy.
+    // DELETE /strategies/{strategy}
+    Route::delete('/strategies/{strategy}', [App\Http\Controllers\StrategyController::class, 'destroy'])->name('strategies.destroy');
 });

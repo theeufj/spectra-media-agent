@@ -12,6 +12,8 @@ use Google\Ads\GoogleAds\V22\Services\CampaignBudgetService;
 use Google\Ads\GoogleAds\V22\Services\CampaignService;
 use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest;
 use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
@@ -53,11 +55,15 @@ class CreateVideoCampaign extends BaseGoogleAdsService
         ]);
 
         $campaignOperation = new CampaignOperation();
-        $campaignOperation->create = $campaign;
+        $campaignOperation->setCreate($campaign);
 
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
-            $response = $campaignServiceClient->mutateCampaigns($customerId, [$campaignOperation]);
+            $request = new MutateCampaignsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$campaignOperation],
+            ]);
+            $response = $campaignServiceClient->mutateCampaigns($request);
             $newCampaignResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Video campaign: " . $newCampaignResourceName);
             return $newCampaignResourceName;
@@ -84,11 +90,15 @@ class CreateVideoCampaign extends BaseGoogleAdsService
         ]);
 
         $campaignBudgetOperation = new CampaignBudgetOperation();
-        $campaignBudgetOperation->create = $campaignBudget;
+        $campaignBudgetOperation->setCreate($campaignBudget);
 
         try {
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
-            $response = $campaignBudgetServiceClient->mutateCampaignBudgets($customerId, [$campaignBudgetOperation]);
+            $request = new MutateCampaignBudgetsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$campaignBudgetOperation],
+            ]);
+            $response = $campaignBudgetServiceClient->mutateCampaignBudgets($request);
             $newBudgetResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created campaign budget: " . $newBudgetResourceName);
             return $newBudgetResourceName;

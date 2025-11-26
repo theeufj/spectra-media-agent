@@ -5,6 +5,7 @@ namespace App\Services\GoogleAds;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V22\Services\CampaignServiceClient;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
 use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
 
@@ -45,7 +46,11 @@ class CreateCampaign extends BaseGoogleAdsService
 
         /** @var CampaignServiceClient $campaignServiceClient */
         $campaignServiceClient = $this->googleAdsClient->getCampaignServiceClient();
-        $response = $campaignServiceClient->mutateCampaigns($customerId, [$campaignOperation]);
+        $request = new MutateCampaignsRequest([
+            'customer_id' => $customerId,
+            'operations' => [$campaignOperation],
+        ]);
+        $response = $campaignServiceClient->mutateCampaigns($request);
 
         return $response->getResults() ? $response->getResults()[0]->getResourceName() : null;
     }

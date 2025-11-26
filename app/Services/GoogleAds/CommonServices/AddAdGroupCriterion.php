@@ -6,22 +6,26 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionService;
 use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;
 use Google\Ads\GoogleAds\V22\Enums\CriterionTypeEnum\CriterionType;
 use Google\Ads\GoogleAds\V22\Common\AudienceInfo;
 use Google\Ads\GoogleAds\V22\Common\TopicInfo;
 use Google\Ads\GoogleAds\V22\Common\PlacementInfo;
 use Google\Ads\GoogleAds\V22\Common\GenderInfo;
 use Google\Ads\GoogleAds\V22\Common\AgeRangeInfo;
+use Google\Ads\GoogleAds\V22\Common\UserInterestInfo;
 use Google\Ads\GoogleAds\V22\Common\ParentalStatusInfo;
 use Google\Ads\GoogleAds\V22\Common\IncomeRangeInfo;
+use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
 
 class AddAdGroupCriterion extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer)
+    public function __construct(Customer $customer, bool $useMccCredentials = false)
     {
-        parent::__construct($customer);
+        parent::__construct($customer, $useMccCredentials);
     }
 
     /**
@@ -111,6 +115,41 @@ class AddAdGroupCriterion extends BaseGoogleAdsService
                     'type' => $criterionData['incomeRangeType'],
                 ]));
                 break;
+            case 'USER_INTEREST':
+                if (!isset($criterionData['userInterestId'])) {
+                    $this->logError("User Interest ID is missing for USER_INTEREST criterion type.");
+                    return null;
+                }
+                $adGroupCriterion->setUserInterest(new UserInterestInfo([
+                    'user_interest_category' => $criterionData['userInterestId'],
+                ]));
+                break;
+            case 'KEYWORD':
+                if (!isset($criterionData['text'])) {
+                    $this->logError("Text is missing for KEYWORD criterion type.");
+                    return null;
+                }
+                $matchType = $criterionData['matchType'] ?? KeywordMatchType::BROAD;
+                // If matchType is a string (e.g. 'BROAD', 'PHRASE', 'EXACT'), convert to enum value if needed
+                // But usually the client library expects the integer value or the constant from the Enum class.
+                // Let's assume the caller passes the correct value or we map it.
+                
+                // Simple mapping if string is passed
+                if (is_string($matchType)) {
+                    $matchTypeUpper = strtoupper($matchType);
+                    $matchType = match($matchTypeUpper) {
+                        'EXACT' => KeywordMatchType::EXACT,
+                        'PHRASE' => KeywordMatchType::PHRASE,
+                        'BROAD' => KeywordMatchType::BROAD,
+                        default => KeywordMatchType::BROAD
+                    };
+                }
+
+                $adGroupCriterion->setKeyword(new KeywordInfo([
+                    'text' => $criterionData['text'],
+                    'match_type' => $matchType
+                ]));
+                break;
             // Add more criterion types as needed
             default:
                 $this->logError("Unsupported criterion type: " . $criterionData['type']);
@@ -118,11 +157,15 @@ class AddAdGroupCriterion extends BaseGoogleAdsService
         }
 
         $adGroupCriterionOperation = new AdGroupCriterionOperation();
-        $adGroupCriterionOperation->create = $adGroupCriterion;
+        $adGroupCriterionOperation->setCreate($adGroupCriterion);
 
         try {
             $adGroupCriterionServiceClient = $this->client->getAdGroupCriterionServiceClient();
-            $response = $adGroupCriterionServiceClient->mutateAdGroupCriteria($customerId, [$adGroupCriterionOperation]);
+            $request = new MutateAdGroupCriteriaRequest([
+                'customer_id' => $customerId,
+                'operations' => [$adGroupCriterionOperation],
+            ]);
+            $response = $adGroupCriterionServiceClient->mutateAdGroupCriteria($request);
             $newAdGroupCriterionResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully added ad group criterion: " . $newAdGroupCriterionResourceName);
             return $newAdGroupCriterionResourceName;

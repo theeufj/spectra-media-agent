@@ -151,6 +151,11 @@ class AdminMonitorService
         $negativeKeywords = Config::get('platform_rules.negative_keywords', []);
         foreach ($negativeKeywords as $word) {
             if (stripos($trimmedPrompt, $word) !== false) {
+                // Allow mixed content if the prompt is sufficiently long (e.g., "N/A for Search. Use X for Display...")
+                if (strlen($trimmedPrompt) > 50) {
+                    continue;
+                }
+
                 $isValid = false;
                 $feedback[] = "The imagery strategy ('" . substr($trimmedPrompt, 0, 50) . "...') is not a valid image prompt as it contains instructional or negative keywords like '{$word}'. Please provide a descriptive prompt of the desired image.";
             }

@@ -109,7 +109,15 @@ class DeploymentService
                     'errors' => $result->errors
                 ]);
                 
-                $errorMessages = array_map(fn($error) => $error['message'] ?? $error, $result->errors);
+                $errorMessages = array_map(function($error) {
+                    if (is_array($error)) {
+                        return $error['message'] ?? json_encode($error);
+                    }
+                    if (is_object($error)) {
+                        return method_exists($error, '__toString') ? (string)$error : get_class($error);
+                    }
+                    return (string)$error;
+                }, $result->errors);
                 
                 return [
                     'success' => false,

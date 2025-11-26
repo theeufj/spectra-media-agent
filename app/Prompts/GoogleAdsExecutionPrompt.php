@@ -166,7 +166,7 @@ Create a detailed, step-by-step execution plan for deploying this campaign to Go
 
 - **Strategy Integration:**
   - Your execution plan must align with the Strategy Agent's recommendations
-  - If Strategy Agent recommends specific keywords, incorporate them
+  - If Strategy Agent recommends specific keywords in the `bidding_strategy` section, you MUST include them in the `creative_strategy.keywords` array of your output, preserving their `match_type`.
   - If Strategy Agent suggests specific ad copy approaches, implement them
 
 # OUTPUT FORMAT

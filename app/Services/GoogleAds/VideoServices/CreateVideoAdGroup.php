@@ -6,6 +6,7 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Resources\AdGroup;
 use Google\Ads\GoogleAds\V22\Services\AdGroupService;
 use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
@@ -36,11 +37,15 @@ class CreateVideoAdGroup extends BaseGoogleAdsService
         ]);
 
         $adGroupOperation = new AdGroupOperation();
-        $adGroupOperation->create = $adGroup;
+        $adGroupOperation->setCreate($adGroup);
 
         try {
             $adGroupServiceClient = $this->client->getAdGroupServiceClient();
-            $response = $adGroupServiceClient->mutateAdGroups($customerId, [$adGroupOperation]);
+            $request = new MutateAdGroupsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$adGroupOperation],
+            ]);
+            $response = $adGroupServiceClient->mutateAdGroups($request);
             $newAdGroupResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Video ad group: " . $newAdGroupResourceName);
             return $newAdGroupResourceName;

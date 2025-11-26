@@ -11,25 +11,26 @@ use App\Models\Customer;
 
 class CreateCampaignBudget extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer)
+    public function __construct(Customer $customer, bool $useMccCredentials = false)
     {
-        parent::__construct($customer);
+        parent::__construct($customer, $useMccCredentials);
     }
 
-    public function __invoke(string $customerId, string $budgetName, int $dailyBudgetMicros = 5000000): ?string
+    public function __invoke(string $customerId, string $budgetName, int $dailyBudgetMicros = 5000000, bool $explicitlyShared = true): ?string
     {
         $campaignBudget = new CampaignBudget([
             'name' => $budgetName,
             'amount_micros' => $dailyBudgetMicros,
             'delivery_method' => \Google\Ads\GoogleAds\V22\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod::STANDARD,
-            'explicitly_shared' => true
+            'explicitly_shared' => $explicitlyShared
         ]);
 
         $campaignBudgetOperation = new CampaignBudgetOperation();
         $campaignBudgetOperation->setCreate($campaignBudget);
 
         /** @var CampaignBudgetServiceClient $campaignBudgetServiceClient */
-        $campaignBudgetServiceClient = $this->googleAdsClient->getCampaignBudgetServiceClient();
+        $this->ensureClient();
+        $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
         $request = new MutateCampaignBudgetsRequest([
             'customer_id' => $customerId,
             'operations' => [$campaignBudgetOperation],

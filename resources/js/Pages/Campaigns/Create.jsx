@@ -59,7 +59,7 @@ export default function Create({ auth }) {
 
     // Get the current customer ID from the auth user (assuming single customer context for now)
     // In a real multi-tenant app, this might come from a route param or a selector.
-    const customerId = auth.user?.customer_id; // Ensure your User model appends this or it's available via relationship
+    const customerId = auth.user?.active_customer?.id; // Ensure your User model appends this or it's available via relationship
 
     const submit = (e) => {
         e.preventDefault();

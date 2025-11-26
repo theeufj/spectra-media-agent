@@ -122,7 +122,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $strategy = $context->strategy;
         $hasImages = $strategy->imageCollaterals()->where('is_active', true)->exists();
         $hasVideos = $strategy->videoCollaterals()->where('is_active', true)->exists();
-        $hasAdCopy = $strategy->adCopies()->where('platform', 'facebook')->exists();
+        $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->exists();
         
         if (!$hasAdCopy) {
             $result->addError('no_ad_copy', 'No ad copy available for Facebook Ads');
@@ -455,7 +455,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): void {
         $imageCollateral = $strategy->imageCollaterals()->where('is_active', true)->first();
-        $adCopy = $strategy->adCopies()->where('platform', 'facebook')->first();
+        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
         
         if (!$imageCollateral || !$adCopy) {
             throw new \Exception('No image or ad copy available for Facebook ad');
@@ -508,7 +508,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): void {
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->take(10)->get();
-        $adCopy = $strategy->adCopies()->where('platform', 'facebook')->first();
+        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
         
         if ($imageCollaterals->count() < 2 || !$adCopy) {
             throw new \Exception('Need at least 2 images and ad copy for carousel ad');
@@ -568,7 +568,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): void {
         $videoCollateral = $strategy->videoCollaterals()->where('is_active', true)->first();
-        $adCopy = $strategy->adCopies()->where('platform', 'facebook')->first();
+        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
         
         if (!$videoCollateral || !$adCopy) {
             throw new \Exception('No video or ad copy available for Facebook video ad');

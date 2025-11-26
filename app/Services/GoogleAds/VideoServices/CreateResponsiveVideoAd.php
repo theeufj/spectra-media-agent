@@ -11,6 +11,7 @@ use Google\Ads\GoogleAds\V22\Common\AdImageAsset;
 use Google\Ads\GoogleAds\V22\Common\AdVideoAsset;
 use Google\Ads\GoogleAds\V22\Services\AdGroupAdService;
 use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
@@ -75,11 +76,15 @@ class CreateResponsiveVideoAd extends BaseGoogleAdsService
 
         // Create AdGroupAdOperation
         $adGroupAdOperation = new AdGroupAdOperation();
-        $adGroupAdOperation->create = $adGroupAd;
+        $adGroupAdOperation->setCreate($adGroupAd);
 
         try {
             $adGroupAdServiceClient = $this->client->getAdGroupAdServiceClient();
-            $response = $adGroupAdServiceClient->mutateAdGroupAds($customerId, [$adGroupAdOperation]);
+            $request = new MutateAdGroupAdsRequest([
+                'customer_id' => $customerId,
+                'operations' => [$adGroupAdOperation],
+            ]);
+            $response = $adGroupAdServiceClient->mutateAdGroupAds($request);
             $newAdGroupAdResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Responsive Video Ad: " . $newAdGroupAdResourceName);
             return $newAdGroupAdResourceName;

@@ -1,25 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import InputLabel from '@/Components/InputLabel';
+import { Combobox, ComboboxInput, ComboboxButton, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 
 export default function ProductSelection({ customerId, selectedPages, onSelectionChange }) {
     const [pages, setPages] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [query, setQuery] = useState('');
+    const [selectedPageObject, setSelectedPageObject] = useState(null);
 
     useEffect(() => {
         if (customerId) {
-            fetchPages();
+            const timer = setTimeout(() => {
+                fetchPages(query);
+            }, 300);
+            return () => clearTimeout(timer);
         }
-    }, [customerId, search]);
+    }, [customerId, query]);
 
-    const fetchPages = async () => {
+    const fetchPages = async (searchQuery) => {
         setLoading(true);
         try {
             const response = await axios.get(route('api.customers.pages.index', { 
                 customer: customerId,
-                type: 'product',
-                search: search
+                search: searchQuery
             }));
             setPages(response.data.data);
         } catch (error) {
@@ -29,74 +33,75 @@ export default function ProductSelection({ customerId, selectedPages, onSelectio
         }
     };
 
-    const togglePage = (pageId) => {
-        const newSelection = selectedPages.includes(pageId)
-            ? selectedPages.filter(id => id !== pageId)
-            : [...selectedPages, pageId];
-        onSelectionChange(newSelection);
+    const handleSelection = (page) => {
+        setSelectedPageObject(page);
+        onSelectionChange(page ? [page.id] : []);
     };
 
     return (
-        <div className="space-y-4">
-            <div className="flex justify-between items-center">
-                <InputLabel value="Select Products to Advertise" />
-                <input 
-                    type="text" 
-                    placeholder="Search products..." 
-                    className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                />
-            </div>
-
-            {loading ? (
-                <div className="text-sm text-gray-500">Loading products...</div>
-            ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-h-96 overflow-y-auto p-2 border rounded-md bg-gray-50">
-                    {pages.length > 0 ? (
-                        pages.map(page => (
-                            <div 
-                                key={page.id} 
-                                className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                                    selectedPages.includes(page.id) 
-                                        ? 'border-indigo-500 bg-indigo-50' 
-                                        : 'border-gray-200 bg-white hover:border-indigo-300'
-                                }`}
-                                onClick={() => togglePage(page.id)}
-                            >
-                                <div className="flex items-start space-x-3">
-                                    <input 
-                                        type="checkbox" 
-                                        checked={selectedPages.includes(page.id)}
-                                        onChange={() => {}} // Handled by parent div click
-                                        className="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50"
-                                    />
-                                    <div className="flex-1 min-w-0">
-                                        <h4 className="text-sm font-medium text-gray-900 truncate" title={page.title}>
-                                            {page.title || 'Untitled Product'}
-                                        </h4>
-                                        <p className="text-xs text-gray-500 truncate" title={page.url}>
-                                            {page.url}
-                                        </p>
-                                        {page.metadata?.price && (
-                                            <p className="text-xs font-semibold text-green-600 mt-1">
-                                                {page.metadata.price}
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
+        <div className="space-y-1">
+            <InputLabel value="Campaign Destination (Landing Page)" />
+            <Combobox value={selectedPageObject} onChange={handleSelection}>
+                <div className="relative mt-1">
+                    <div className="relative w-full cursor-default overflow-hidden rounded-md bg-white text-left shadow-sm focus:outline-none sm:text-sm">
+                        <ComboboxInput
+                            className="w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm py-2 pl-3 pr-10 text-sm leading-5 text-gray-900"
+                            displayValue={(page) => page?.title || ''}
+                            onChange={(event) => setQuery(event.target.value)}
+                            placeholder="Search for a product page..."
+                        />
+                        <ComboboxButton className="absolute inset-y-0 right-0 flex items-center pr-2">
+                            <svg className="h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L10 5.414 7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 0L10 14.586l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                            </svg>
+                        </ComboboxButton>
+                    </div>
+                    <ComboboxOptions className="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-md bg-white py-1 text-base shadow-lg ring-1 ring-black/5 focus:outline-none sm:text-sm">
+                        {loading ? (
+                            <div className="relative cursor-default select-none px-4 py-2 text-gray-700">Loading...</div>
+                        ) : pages.length === 0 ? (
+                            <div className="relative cursor-default select-none px-4 py-2 text-gray-700">
+                                {query !== '' ? 'Nothing found.' : 'No pages available.'}
                             </div>
-                        ))
-                    ) : (
-                        <div className="col-span-2 text-center py-4 text-gray-500 text-sm">
-                            No product pages found. Try crawling your site first.
-                        </div>
-                    )}
+                        ) : (
+                            pages.map((page) => (
+                                <ComboboxOption
+                                    key={page.id}
+                                    className={({ active }) =>
+                                        `relative cursor-default select-none py-2 pl-10 pr-4 ${
+                                            active ? 'bg-indigo-600 text-white' : 'text-gray-900'
+                                        }`
+                                    }
+                                    value={page}
+                                >
+                                    {({ selected, active }) => (
+                                        <>
+                                            <span className={`block truncate ${selected ? 'font-medium' : 'font-normal'}`}>
+                                                {page.title || 'Untitled Page'}
+                                            </span>
+                                            {selected ? (
+                                                <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${active ? 'text-white' : 'text-indigo-600'}`}>
+                                                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                    </svg>
+                                                </span>
+                                            ) : null}
+                                            <span className={`block truncate text-xs ${active ? 'text-indigo-200' : 'text-gray-500'}`}>
+                                                {page.url}
+                                            </span>
+                                        </>
+                                    )}
+                                </ComboboxOption>
+                            ))
+                        )}
+                    </ComboboxOptions>
+                </div>
+            </Combobox>
+            {selectedPageObject && (
+                <div className="text-xs text-gray-500">
+                    Selected: {selectedPageObject.url}
                 </div>
             )}
-            <div className="text-xs text-gray-500 text-right">
-                {selectedPages.length} products selected
-            </div>
         </div>
     );
 }

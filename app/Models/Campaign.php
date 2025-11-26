@@ -31,10 +31,18 @@ class Campaign extends Model
         'landing_page_url',
         'exclusions',
         'google_ads_campaign_id',
+        'platform_status',
+        'primary_status',
+        'primary_status_reasons',
+        'last_checked_at',
         'facebook_ads_campaign_id',
         'strategy_generation_started_at',
         'strategy_generation_completed_at',
         'strategy_generation_error',
+        'geographic_targeting',
+        'keywords',
+        'latest_optimization_analysis',
+        'last_optimized_at',
     ];
 
     /**
@@ -43,8 +51,17 @@ class Campaign extends Model
      * @var array
      */
     protected $casts = [
+        'goals' => 'array',
+        'start_date' => 'date',
+        'end_date' => 'date',
+        'primary_status_reasons' => 'array',
+        'last_checked_at' => 'datetime',
+        'geographic_targeting' => 'array',
+        'keywords' => 'array',
         'strategy_generation_started_at' => 'datetime',
         'strategy_generation_completed_at' => 'datetime',
+        'latest_optimization_analysis' => 'array',
+        'last_optimized_at' => 'datetime',
     ];
 
     /**

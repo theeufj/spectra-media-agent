@@ -14,31 +14,30 @@ use App\Models\Customer;
 
 class UploadImageAsset extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer)
+    public function __construct(Customer $customer, bool $useMccCredentials = false)
     {
-        parent::__construct($customer);
+        parent::__construct($customer, $useMccCredentials);
     }
 
     /**
      * Uploads an image file to be used as an asset in Responsive Display Ads.
      *
      * @param string $customerId The Google Ads customer ID.
-     * @param string $imageFilePath The absolute path to the image file.
+     * @param string $imageData The raw image data.
      * @param string $imageFileName The name of the image file (e.g., 'my_image.png').
      * @return string|null The resource name of the uploaded image asset, or null on failure.
      */
-    public function __invoke(string $customerId, string $imageFilePath, string $imageFileName): ?string
+    public function __invoke(string $customerId, string $imageData, string $imageFileName): ?string
     {
-        // Read image data and base64 encode it
-        $imageData = @file_get_contents($imageFilePath);
-        if ($imageData === false) {
-            $this->logError("Could not read image file from path: {$imageFilePath}");
-            return null;
+        // Check if asset with this name already exists
+        $existingAsset = $this->getAssetByName($customerId, $imageFileName);
+        if ($existingAsset) {
+            $this->logInfo("Asset '{$imageFileName}' already exists. Skipping upload.");
+            return $existingAsset->getResourceName();
         }
-        $base64ImageData = base64_encode($imageData);
 
         // Create ImageAsset
-        $imageAsset = new ImageAsset(['data' => $base64ImageData]);
+        $imageAsset = new ImageAsset(['data' => $imageData]);
 
         // Create Asset
         $asset = new Asset([
@@ -49,7 +48,7 @@ class UploadImageAsset extends BaseGoogleAdsService
 
         // Create AssetOperation
         $assetOperation = new AssetOperation();
-        $assetOperation->create = $asset;
+        $assetOperation->setCreate($asset);
 
         try {
             $assetServiceClient = $this->client->getAssetServiceClient();
@@ -65,5 +64,29 @@ class UploadImageAsset extends BaseGoogleAdsService
             $this->logError("Error uploading image asset for customer $customerId: " . $e->getMessage(), $e);
             return null;
         }
+    }
+
+    /**
+     * Check if an asset with the given name already exists
+     */
+    private function getAssetByName(string $customerId, string $assetName): ?Asset
+    {
+        $query = "SELECT asset.resource_name, asset.name FROM asset WHERE asset.name = '{$assetName}' AND asset.type = 'IMAGE'";
+        try {
+            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
+            $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => $query,
+            ]);
+            $response = $googleAdsServiceClient->search($request);
+
+            foreach ($response->getIterator() as $googleAdsRow) {
+                return $googleAdsRow->getAsset();
+            }
+        } catch (GoogleAdsException $e) {
+            $this->logError("Error fetching asset by name for customer $customerId: " . $e->getMessage(), $e);
+        }
+
+        return null;
     }
 }
