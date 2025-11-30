@@ -34,7 +34,7 @@ class InvoiceCreated extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Your Invoice from CVSEEYOU',
+            subject: 'Your Invoice from Site to Spend',
         );
     }
 

@@ -55,11 +55,11 @@ class KnowledgeBaseController extends Controller
 
         // Check limits for free users
         if (!$user->subscribed('default') && $user->subscription_status !== 'active') {
-             // Limit to 3 Knowledge Base entries (URLs/Files)
-             $count = $user->knowledgeBases()->count();
-             if ($count >= 3) {
-                 return redirect()->back()->with('error', 'Free tier limit reached (3 URLs/Files). Please upgrade to add more sources.');
-             }
+            // Limit to 3 Knowledge Base entries (URLs/Files)
+            $count = $user->knowledgeBases()->count();
+            if ($count >= 3) {
+                return redirect()->back()->with('error', 'Free tier limit reached (3 URLs/Files). Please upgrade to add more sources.');
+            }
         }
 
         // Check if a file is being uploaded
@@ -74,7 +74,7 @@ class KnowledgeBaseController extends Controller
 
         CrawlSitemap::dispatch($user, $validated['sitemap_url']);
 
-        return redirect()->route('dashboard')->with('success', 'Sitemap submitted! We will start crawling your site shortly.');
+        return redirect()->route('dashboard')->with('sitemap_submitted', true);
     }
 
     /**
@@ -123,12 +123,12 @@ class KnowledgeBaseController extends Controller
             try {
                 // Get AWS S3 client directly for better error handling
                 $s3Client = Storage::disk('s3')->getClient();
-                
+
                 \Log::info('S3 Client created', [
                     'user_id' => $user->id,
                 ]);
 
-                                // Upload using putObject (without ACL since bucket disables them)
+                // Upload using putObject (without ACL since bucket disables them)
                 $result = $s3Client->putObject([
                     'Bucket' => env('AWS_BUCKET') ?: env('S3_BUCKET'),
                     'Key' => $s3Path,
@@ -309,7 +309,7 @@ class KnowledgeBaseController extends Controller
 
                     // Calculate cosine similarity
                     $similarity = $this->cosineSimilarity($queryEmbedding, $chunkEmbedding);
-                    
+
                     if ($similarity > 0.7) { // Threshold for relevance (adjust as needed)
                         $results[] = [
                             'chunk' => trim($chunk),

@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
+use App\Rules\CloudflareTurnstile;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -46,11 +47,18 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
-        $request->validate([
+        $rules = [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
+            'email' => 'required|string|lowercase|email|max:255|unique:' . User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
-        ]);
+        ];
+
+        // Add Turnstile validation if configured
+        if (config('services.cloudflare.turnstile_secret_key')) {
+            $rules['cf_turnstile_response'] = ['required', new CloudflareTurnstile];
+        }
+
+        $request->validate($rules);
 
         $user = User::create([
             'name' => $request->name,
@@ -65,9 +73,8 @@ class RegisteredUserController extends Controller
                 $invitation->delete();
             }
         } else {
-            // If the user is not coming from an invitation, create a new customer account for them.
-            $customer = Customer::create();
-            $user->customers()->attach($customer->id, ['role' => 'owner']);
+            // If the user is not coming from an invitation, they will be prompted to create a customer
+            // after email verification.
         }
 
         event(new Registered($user));

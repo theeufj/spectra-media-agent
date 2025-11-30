@@ -10,5 +10,4 @@
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
         <a href="{{ route('campaigns.show', $campaign) }}" style="background-color: #4a5568; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Your Campaign</a>
     </p>
-    <p>Best,<br>The CVSEEYOU Team</p>
 @endsection

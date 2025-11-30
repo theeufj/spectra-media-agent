@@ -51,13 +51,13 @@ Route::middleware('auth')->group(function () {
             'status' => session('status'),
         ]);
     })->name('verification.notice');
-    
+
     // Handle the email verification link
     Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
         $request->fulfill();
-        return redirect()->intended(route('dashboard'))->with('status', 'Your email has been verified!');
+        return redirect()->intended(route('customers.create'))->with('status', 'Your email has been verified! Please set up your customer profile.');
     })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
-    
+
     // Resend verification email
     Route::post('/email/verification-notification', function (Request $request) {
         $request->user()->sendEmailVerificationNotification();
@@ -67,7 +67,7 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
-                ->name('logout');
+        ->name('logout');
 
     /*
     |--------------------------------------------------------------------------
@@ -77,7 +77,7 @@ Route::middleware('auth')->group(function () {
     Route::get('auth/facebook-ads/redirect', [FacebookOAuthController::class, 'redirect'])->name('facebook-ads.redirect');
     Route::get('auth/facebook-ads/callback', [FacebookOAuthController::class, 'callback'])->name('facebook-ads.callback');
     Route::post('auth/facebook-ads/disconnect', [FacebookOAuthController::class, 'disconnect'])->name('facebook-ads.disconnect');
-    
+
     /*
     |--------------------------------------------------------------------------
     | Facebook Page Selection Routes

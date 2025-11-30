@@ -70,4 +70,9 @@ return [
         'ad_spend_price_id' => env('STRIPE_AD_SPEND_PRICE_ID'),
     ],
 
+    'cloudflare' => [
+        'turnstile_site_key' => env('CLOUDFLARE_TURNSTILE_SITE_KEY'),
+        'turnstile_secret_key' => env('CLOUDFLARE_TURNSTILE_SECRET_KEY'),
+    ],
+
 ];

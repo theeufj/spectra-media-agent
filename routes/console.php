@@ -55,3 +55,11 @@ Schedule::call(function () {
         RunCompetitorIntelligence::dispatch($customer);
     });
 })->weekly()->sundays()->at('02:00'); // Run Sunday nights
+
+// ============================================================
+// SEO & MAINTENANCE
+// ============================================================
+
+// Generate sitemap daily
+Schedule::command('sitemap:generate')->daily();
+

@@ -1,12 +1,16 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import GuestLayout from '@/Layouts/GuestLayout';
 import PlatformIcon from '@/Components/PlatformIcon';
+import CloudflareTurnstile from '@/Components/CloudflareTurnstile';
 
 export default function Login({ status, enabledPlatforms = [], canResetPassword = false }) {
+    const { turnstileSiteKey } = usePage().props;
+    
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
         remember: false,
+        cf_turnstile_response: '',
     });
 
     const submit = (e) => {
@@ -89,6 +93,20 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                             </Link>
                         )}
                     </div>
+
+                    {/* Cloudflare Turnstile Bot Detection */}
+                    {turnstileSiteKey && (
+                        <div className="flex justify-center">
+                            <CloudflareTurnstile
+                                siteKey={turnstileSiteKey}
+                                onVerify={(token) => setData('cf_turnstile_response', token)}
+                                onExpire={() => setData('cf_turnstile_response', '')}
+                            />
+                        </div>
+                    )}
+                    {errors.cf_turnstile_response && (
+                        <p className="text-sm text-red-600 text-center">{errors.cf_turnstile_response}</p>
+                    )}
 
                     <button
                         type="submit"

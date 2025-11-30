@@ -62,6 +62,7 @@ class HandleInertiaRequests extends Middleware
                 'message' => $request->session()->get('flash.message'),
             ],
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
+            'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),
         ];
     }
 }

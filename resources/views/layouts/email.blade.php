@@ -55,13 +55,13 @@
 <body>
     <div class="wrapper">
         <div class="header">
-            <h1>CVSEEYOU</h1>
+            <h1>Site to Spend</h1>
         </div>
         <div class="content">
             @yield('content')
         </div>
         <div class="footer">
-            <p>&copy; {{ date('Y') }} CVSEEYOU. All rights reserved.</p>
+            <p>&copy; {{ date('Y') }} Site to Spend. All rights reserved.</p>
         </div>
     </div>
 </body>

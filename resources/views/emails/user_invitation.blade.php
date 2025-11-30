@@ -4,7 +4,7 @@
 
 @section('content')
     <h1>You've Been Invited!</h1>
-    <p>You have been invited to join the <strong>{{ $invitation->customer->name }}</strong> customer account on CVSEEYOU.</p>
+    <p>You have been invited to join the <strong>{{ $invitation->customer->name }}</strong> customer account on Site to Spend.</p>
     <p>Your role will be: <strong>{{ $invitation->role }}</strong>.</p>
     <p>To accept this invitation, please click the button below:</p>
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">

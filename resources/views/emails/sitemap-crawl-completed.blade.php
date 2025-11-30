@@ -24,6 +24,4 @@
     </p>
     
     <p>Ready to create your first campaign with this knowledge? Head to your dashboard to get started.</p>
-    
-    <p>Best,<br>The CVSEEYOU Team</p>
 @endsection

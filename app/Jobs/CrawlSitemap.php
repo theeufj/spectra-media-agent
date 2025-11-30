@@ -88,8 +88,39 @@ class CrawlSitemap implements ShouldQueue
                 return;
             }
 
+            // Validate that we actually received XML content, not HTML
+            $trimmedContent = trim($content);
+            if (!str_starts_with($trimmedContent, '<?xml') && !str_starts_with($trimmedContent, '<urlset') && !str_starts_with($trimmedContent, '<sitemapindex')) {
+                // Check if it looks like HTML
+                if (str_contains(strtolower($trimmedContent), '<!doctype html') || str_contains(strtolower($trimmedContent), '<html')) {
+                    Log::error("CrawlSitemap: Received HTML instead of XML for URL: {$this->sitemapUrl}. The site may be returning a login page or error page.");
+                    return;
+                }
+                Log::warning("CrawlSitemap: Content doesn't appear to be valid XML for URL: {$this->sitemapUrl}");
+            }
+
+            // Check Content-Type header
+            $contentType = $response->header('Content-Type') ?? '';
+            if (!empty($contentType) && !str_contains($contentType, 'xml') && !str_contains($contentType, 'text/plain')) {
+                Log::warning("CrawlSitemap: Unexpected Content-Type '{$contentType}' for URL: {$this->sitemapUrl}");
+            }
+
             // Use PHP's built-in SimpleXMLElement for robust XML parsing.
-            $xml = new \SimpleXMLElement($content);
+            // Suppress errors and handle them gracefully
+            libxml_use_internal_errors(true);
+            try {
+                $xml = new \SimpleXMLElement($content);
+            } catch (\Exception $xmlException) {
+                $errors = libxml_get_errors();
+                libxml_clear_errors();
+                $errorMessages = array_map(fn($e) => trim($e->message), $errors);
+                Log::error("CrawlSitemap: Failed to parse XML for URL: {$this->sitemapUrl}", [
+                    'xml_errors' => $errorMessages,
+                    'content_preview' => substr($trimmedContent, 0, 500),
+                ]);
+                return;
+            }
+            libxml_use_internal_errors(false);
 
             // Check if it's a sitemap index file
             if (isset($xml->sitemap)) {
@@ -111,8 +142,36 @@ class CrawlSitemap implements ShouldQueue
 
                 // Collect all CrawlPage jobs
                 $jobs = [];
+                
+                // URLs to skip (auth pages, admin pages, etc.)
+                $skipPatterns = [
+                    '/login',
+                    '/register',
+                    '/password',
+                    '/logout',
+                    '/admin',
+                    '/auth/',
+                    '/verify-email',
+                    '/forgot-password',
+                    '/reset-password',
+                ];
+                
                 foreach ($xml->url as $url) {
                     $loc = (string)$url->loc;
+                    
+                    // Skip auth and admin pages
+                    $shouldSkip = false;
+                    foreach ($skipPatterns as $pattern) {
+                        if (str_contains(strtolower($loc), $pattern)) {
+                            Log::info("CrawlSitemap: Skipping auth/admin page: {$loc}");
+                            $shouldSkip = true;
+                            break;
+                        }
+                    }
+                    if ($shouldSkip) {
+                        continue;
+                    }
+                    
                     $metadata = [];
 
                     // Extract Video Metadata

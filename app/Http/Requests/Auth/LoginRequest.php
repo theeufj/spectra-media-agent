@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Rules\CloudflareTurnstile;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Auth;
@@ -26,10 +27,17 @@ class LoginRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $rules = [
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
         ];
+
+        // Add Turnstile validation if configured
+        if (config('services.cloudflare.turnstile_secret_key')) {
+            $rules['cf_turnstile_response'] = ['required', new CloudflareTurnstile];
+        }
+
+        return $rules;
     }
 
     /**

@@ -5,24 +5,32 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title inertia>SiteToSpend - Agentic Digital Marketing</title>
+        <title inertia>Site to Spend - Agentic Digital Marketing</title>
+
+        <!-- Favicons -->
+        <link rel="icon" type="image/x-icon" href="/favicon.ico">
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+        <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+        <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
+        <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
 
         <!-- SEO Meta Tags -->
-        <meta name="description" content="SiteToSpend offers agentic digital marketing services, leveraging AI to create and manage ad campaigns across platforms like Google, Facebook, and more.">
+        <meta name="description" content="Site to Spend offers agentic digital marketing services, leveraging AI to create and manage ad campaigns across platforms like Google, Facebook, and more.">
         <meta name="keywords" content="AI marketing, digital marketing, ad campaign management, Google Ads, Facebook Ads, automated advertising, agentic marketing">
-        <meta name="author" content="SiteToSpend">
+        <meta name="author" content="Site to Spend">
 
         <!-- Open Graph Meta Tags (for social sharing) -->
-        <meta property="og:title" content="SiteToSpend - Agentic Digital Marketing">
-        <meta property="og:description" content="Automated ad campaigns powered by AI. SiteToSpend creates, manages, and optimizes your digital advertising across all major platforms.">
+        <meta property="og:title" content="Site to Spend - Agentic Digital Marketing">
+        <meta property="og:description" content="Automated ad campaigns powered by AI. Site to Spend creates, manages, and optimizes your digital advertising across all major platforms.">
         <meta property="og:image" content="{{ url('/og-image.png') }}">
         <meta property="og:url" content="{{ url()->current() }}">
         <meta property="og:type" content="website">
 
         <!-- Twitter Card Meta Tags -->
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="SiteToSpend - Agentic Digital Marketing">
-        <meta name="twitter:description" content="Leverage the power of AI for your ad campaigns. CVSEEYOU offers a fully autonomous digital marketing solution.">
+        <meta name="twitter:title" content="Site to Spend - Agentic Digital Marketing">
+        <meta name="twitter:description" content="Leverage the power of AI for your ad campaigns. Site to Spend offers a fully autonomous digital marketing solution.">
         <meta name="twitter:image" content="{{ url('/twitter-image.png') }}">
 
         <!-- Fonts -->

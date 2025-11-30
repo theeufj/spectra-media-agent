@@ -51,12 +51,10 @@ class FacebookController extends Controller
 
             // Store the Facebook OAuth token for API access
             $accessToken = $facebookUser->token;
-            
+
             if ($user->wasRecentlyCreated) {
-                $customer = Customer::create([
-                    'facebook_ads_access_token' => $accessToken,
-                ]);
-                $user->customers()->attach($customer->id, ['role' => 'owner']);
+                // Store the access token in the session to be used when creating the customer
+                session(['facebook_ads_access_token' => $accessToken]);
 
                 Mail::to($user->email)->send(new WelcomeEmail($user->name));
             } else {
@@ -70,6 +68,10 @@ class FacebookController extends Controller
             }
 
             Auth::login($user, true);
+
+            if ($user->customers()->doesntExist()) {
+                return redirect()->route('customers.create');
+            }
 
             return redirect()->route('dashboard');
         } catch (\Exception $e) {

@@ -23,8 +23,8 @@ class CustomerController extends Controller
             'name' => 'required|string|max:255',
             'business_type' => 'nullable|string|max:255',
             'description' => 'nullable|string|max:1000',
-            'country' => 'nullable|string|size:2', // ISO 3166-1 alpha-2 country code
-            'timezone' => 'nullable|string|max:255|timezone', // Valid IANA timezone
+            'country' => 'required|string|size:2', // ISO 3166-1 alpha-2 country code
+            'timezone' => 'required|string|max:255|timezone', // Valid IANA timezone
             'currency_code' => 'nullable|string|size:3|uppercase', // ISO 4217 currency code
             'website' => 'nullable|url|max:255',
             'phone' => 'nullable|string|max:20',
@@ -38,7 +38,7 @@ class CustomerController extends Controller
         // Attempt to create a Google Ads managed account
         try {
             $managerCustomerId = config('googleads.mcc_customer_id');
-            
+
             if ($managerCustomerId) {
                 $createAndLink = app(CreateAndLinkManagedAccount::class);
                 $result = $createAndLink(

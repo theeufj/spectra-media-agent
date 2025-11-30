@@ -47,12 +47,10 @@ class GoogleController extends Controller
 
         // Store the Google OAuth refresh token for API access
         $refreshToken = $googleUser->refreshToken;
-        
+
         if ($user->wasRecentlyCreated) {
-            $customer = Customer::create([
-                'google_ads_refresh_token' => $refreshToken, // Used for both Google Ads and GTM APIs
-            ]);
-            $user->customers()->attach($customer->id, ['role' => 'owner']);
+            // Store the refresh token in the session to be used when creating the customer
+            session(['google_ads_refresh_token' => $refreshToken]);
 
             Mail::to($user->email)->send(new WelcomeEmail($user->name));
         } else {
@@ -67,6 +65,10 @@ class GoogleController extends Controller
 
         Auth::login($user, true);
 
-        return redirect()->route('dashboard');
+        if ($user->customers()->doesntExist()) {
+            return redirect()->route('customers.create');
+        }
+
+        return redirect()->intended(route('dashboard'));
     }
 }
