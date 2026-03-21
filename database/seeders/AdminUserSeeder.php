@@ -29,8 +29,7 @@ class AdminUserSeeder extends Seeder
 
         // Assign admin role
         $adminRole = Role::firstOrCreate(
-            ['name' => 'admin'],
-            ['description' => 'Administrator role with full access']
+            ['name' => 'admin']
         );
 
         if (!$user->hasRole('admin')) {
