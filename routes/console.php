@@ -9,6 +9,7 @@ use App\Jobs\AutomatedCampaignMaintenance;
 use App\Jobs\RunCompetitorIntelligence;
 use App\Jobs\ProcessDailyAdSpendBilling;
 use App\Jobs\RunHealthChecks;
+use App\Jobs\CheckCampaignPolicyViolations;
 use App\Models\Customer;
 
 Artisan::command('inspire', function () {
@@ -38,6 +39,9 @@ Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00'); // Run during
 
 // Daily ad spend billing - bills customers for yesterday's spend, handles failures
 Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00'); // Run after ad networks finalize spend
+
+// Policy compliance checks - detects disapprovals and policy violations
+Schedule::job(new CheckCampaignPolicyViolations)->daily();
 
 // ============================================================
 // WEEKLY OPERATIONS

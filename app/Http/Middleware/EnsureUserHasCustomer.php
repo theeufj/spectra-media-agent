@@ -15,7 +15,7 @@ class EnsureUserHasCustomer
      */
     public function handle(Request $request, Closure $next): Response
     {
-        if ($request->user() && $request->user()->customers()->doesntExist() && !$request->routeIs('customers.create') && !$request->routeIs('customers.store')) {
+        if ($request->user() && $request->user()->customers()->doesntExist() && !$request->routeIs('customers.create') && !$request->routeIs('customers.store') && !$request->routeIs('quick-start') && !$request->routeIs('quick-start.process')) {
             return redirect()->route('customers.create');
         }
 

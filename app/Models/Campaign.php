@@ -47,6 +47,7 @@ class Campaign extends Model
         'keyword_actions',
         'budget_adjustments',
         'last_maintenance_at',
+        'last_maintenance_results',
     ];
 
     /**
@@ -70,6 +71,7 @@ class Campaign extends Model
         'keyword_actions' => 'array',
         'budget_adjustments' => 'array',
         'last_maintenance_at' => 'datetime',
+        'last_maintenance_results' => 'array',
     ];
 
     /**
