@@ -3,8 +3,6 @@
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use App\Http\Controllers\Auth\GoogleController;
-use App\Http\Controllers\Auth\FacebookController;
-use App\Http\Controllers\FacebookOAuthController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -29,14 +27,6 @@ Route::middleware('guest')->group(function () {
     */
     Route::get('auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
     Route::get('auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Facebook OAuth Routes (Authentication)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('auth/facebook/redirect', [FacebookController::class, 'redirect'])->name('facebook.redirect');
-    Route::get('auth/facebook/callback', [FacebookController::class, 'callback'])->name('facebook.callback');
 });
 
 /*
@@ -68,22 +58,4 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Facebook Ads OAuth Routes (For connecting ad accounts)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('auth/facebook-ads/redirect', [FacebookOAuthController::class, 'redirect'])->name('facebook-ads.redirect');
-    Route::get('auth/facebook-ads/callback', [FacebookOAuthController::class, 'callback'])->name('facebook-ads.callback');
-    Route::post('auth/facebook-ads/disconnect', [FacebookOAuthController::class, 'disconnect'])->name('facebook-ads.disconnect');
-
-    /*
-    |--------------------------------------------------------------------------
-    | Facebook Page Selection Routes
-    |--------------------------------------------------------------------------
-    */
-    Route::get('facebook/pages', [FacebookOAuthController::class, 'listPages'])->name('facebook.pages.index');
-    Route::post('facebook/pages/select', [FacebookOAuthController::class, 'selectPage'])->name('facebook.pages.select');
-    Route::get('facebook/token-status', [FacebookOAuthController::class, 'tokenStatus'])->name('facebook.token-status');
 });

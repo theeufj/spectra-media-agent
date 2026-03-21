@@ -17,7 +17,7 @@ class ListAccessibleCustomers extends BaseGoogleAdsService
     public function __invoke(): ?array
     {
         /** @var CustomerServiceClient $customerServiceClient */
-        $customerServiceClient = $this->googleAdsClient->getCustomerServiceClient();
+        $customerServiceClient = $this->client->getCustomerServiceClient();
         $response = $customerServiceClient->listAccessibleCustomers(new ListAccessibleCustomersRequest());
 
         $customerResourceNames = [];

@@ -379,8 +379,6 @@ class AdSpendBillingService
             foreach ($activeCampaigns as $campaign) {
                 if ($campaign->platform === 'google') {
                     $spend = $this->getGoogleAdsSpend($customer, $campaign);
-                } elseif ($campaign->platform === 'facebook') {
-                    $spend = $this->getFacebookAdsSpend($customer, $campaign);
                 } else {
                     continue;
                 }

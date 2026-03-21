@@ -318,25 +318,36 @@ class CampaignController extends Controller
         $startDate = $request->input('start_date', now()->subDays(30)->format('Y-m-d'));
         $endDate = $request->input('end_date', now()->format('Y-m-d'));
 
+        $emptyResponse = [
+            'summary' => [
+                'total_spend' => 0,
+                'total_clicks' => 0,
+                'impressions' => 0,
+                'conversions' => 0,
+                'average_ctr' => 0,
+                'average_cpc' => 0,
+                'average_cpa' => 0,
+            ],
+            'daily_data' => [],
+        ];
+
         // Get Google Ads connection
         $connection = $campaign->customer->users()->first()?->connections()
             ->where('platform', 'google_ads')
             ->first();
 
         if (!$connection || !$campaign->google_ads_campaign_id) {
-            return response()->json([
-                'summary' => [
-                    'impressions' => 0,
-                    'clicks' => 0,
-                    'cost' => 0,
-                    'conversions' => 0,
-                    'ctr' => 0,
-                    'cpc' => 0,
-                    'cpa' => 0,
-                ],
-                'daily_data' => [],
+            // Fall back to stored performance data if available
+            $dailyData = $this->getStoredDailyData($campaign, $startDate, $endDate);
+            if ($dailyData->isNotEmpty()) {
+                return response()->json([
+                    'summary' => $this->summarizeStoredData($dailyData),
+                    'daily_data' => $this->formatDailyData($dailyData),
+                ]);
+            }
+            return response()->json(array_merge($emptyResponse, [
                 'message' => 'No Google Ads connection or campaign not deployed',
-            ]);
+            ]));
         }
 
         try {
@@ -349,51 +360,100 @@ class CampaignController extends Controller
             $resourceName = "customers/{$connection->platform_user_id}/campaigns/{$campaign->google_ads_campaign_id}";
             $metrics = $service($connection->platform_user_id, $resourceName, 'LAST_30_DAYS');
 
+            // Get daily data from stored records
+            $dailyData = $this->getStoredDailyData($campaign, $startDate, $endDate);
+
             if (!$metrics) {
-                return response()->json([
-                    'summary' => [
-                        'impressions' => 0,
-                        'clicks' => 0,
-                        'cost' => 0,
-                        'conversions' => 0,
-                        'ctr' => 0,
-                        'cpc' => 0,
-                        'cpa' => 0,
-                    ],
-                    'daily_data' => [],
+                if ($dailyData->isNotEmpty()) {
+                    return response()->json([
+                        'summary' => $this->summarizeStoredData($dailyData),
+                        'daily_data' => $this->formatDailyData($dailyData),
+                    ]);
+                }
+                return response()->json(array_merge($emptyResponse, [
                     'message' => 'No performance data available yet',
-                ]);
+                ]));
             }
 
             return response()->json([
                 'summary' => [
+                    'total_spend' => round($metrics['cost_micros'] / 1000000, 2),
+                    'total_clicks' => $metrics['clicks'],
                     'impressions' => $metrics['impressions'],
-                    'clicks' => $metrics['clicks'],
-                    'cost' => $metrics['cost_micros'] / 1000000,
                     'conversions' => $metrics['conversions'],
-                    'ctr' => round($metrics['ctr'] * 100, 2),
-                    'cpc' => $metrics['average_cpc'] / 1000000,
-                    'cpa' => $metrics['cost_per_conversion'] / 1000000,
+                    'average_ctr' => round($metrics['ctr'] * 100, 2),
+                    'average_cpc' => round($metrics['average_cpc'] / 1000000, 2),
+                    'average_cpa' => round($metrics['cost_per_conversion'] / 1000000, 2),
                 ],
-                'daily_data' => [], // Could be expanded to include daily breakdown
+                'daily_data' => $this->formatDailyData($dailyData),
             ]);
 
         } catch (\Exception $e) {
             \Log::error("Failed to fetch performance for campaign {$campaign->id}: " . $e->getMessage());
-            return response()->json([
-                'summary' => [
-                    'impressions' => 0,
-                    'clicks' => 0,
-                    'cost' => 0,
-                    'conversions' => 0,
-                    'ctr' => 0,
-                    'cpc' => 0,
-                    'cpa' => 0,
-                ],
-                'daily_data' => [],
+
+            // Fall back to stored data on API error
+            $dailyData = $this->getStoredDailyData($campaign, $startDate, $endDate);
+            if ($dailyData->isNotEmpty()) {
+                return response()->json([
+                    'summary' => $this->summarizeStoredData($dailyData),
+                    'daily_data' => $this->formatDailyData($dailyData),
+                    'error' => 'Live data unavailable, showing cached data',
+                ]);
+            }
+
+            return response()->json(array_merge($emptyResponse, [
                 'error' => 'Failed to fetch performance data',
-            ]);
+            ]));
         }
+    }
+
+    /**
+     * Get stored daily performance data from the database.
+     */
+    private function getStoredDailyData(Campaign $campaign, string $startDate, string $endDate)
+    {
+        return \App\Models\GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->whereBetween('date', [$startDate, $endDate])
+            ->orderBy('date')
+            ->get();
+    }
+
+    /**
+     * Summarize stored daily data into aggregate stats.
+     */
+    private function summarizeStoredData($dailyData): array
+    {
+        $totalClicks = $dailyData->sum('clicks');
+        $totalImpressions = $dailyData->sum('impressions');
+        $totalCost = $dailyData->sum('cost');
+        $totalConversions = $dailyData->sum('conversions');
+
+        return [
+            'total_spend' => round($totalCost, 2),
+            'total_clicks' => $totalClicks,
+            'impressions' => $totalImpressions,
+            'conversions' => $totalConversions,
+            'average_ctr' => $totalImpressions > 0 ? round(($totalClicks / $totalImpressions) * 100, 2) : 0,
+            'average_cpc' => $totalClicks > 0 ? round($totalCost / $totalClicks, 2) : 0,
+            'average_cpa' => $totalConversions > 0 ? round($totalCost / $totalConversions, 2) : 0,
+        ];
+    }
+
+    /**
+     * Format daily data as date-keyed object for the chart.
+     */
+    private function formatDailyData($dailyData): array
+    {
+        $formatted = [];
+        foreach ($dailyData as $row) {
+            $formatted[$row->date] = [
+                'impressions' => $row->impressions,
+                'clicks' => $row->clicks,
+                'cost' => $row->cost,
+                'conversions' => $row->conversions,
+            ];
+        }
+        return (object) $formatted;
     }
 
     /**

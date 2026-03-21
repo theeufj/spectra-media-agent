@@ -22,9 +22,6 @@ use App\Services\GoogleAds\CommonServices\CreateTextAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\CreatePerformanceMaxCampaign;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroup;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
-use App\Services\GoogleAds\CreateAndLinkManagedAccount;
-use App\Services\GoogleAds\CreateManagedAccount;
-use App\Services\GoogleAds\CreateCustomerClientLink;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroupWithAssets;
 use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
 use App\Services\GoogleAds\CommonServices\CreateCalloutAsset;
@@ -115,26 +112,14 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         // Check if customer has Google Ads refresh token (OAuth authorization)
         if (!$this->customer->google_ads_refresh_token) {
-            $result->addError('google_ads_not_authorized', 'Google Ads account not authorized - please connect your Google Ads account');
+            $result->addError('google_ads_not_authorized', 'Google Ads account not authorized - please connect your Google Ads account via OAuth');
             return $result;
         }
         
-        // Auto-create sub-account if customer doesn't have one
+        // Customer must have connected their Google Ads account
         if (!$this->customer->google_ads_customer_id) {
-            Log::info("GoogleAdsExecutionAgent: Customer has no Google Ads account, attempting to create sub-account", [
-                'customer_id' => $this->customer->id,
-            ]);
-            
-            $created = $this->createSubAccount();
-            if (!$created) {
-                $result->addError('google_ads_subaccount_creation_failed', 'Failed to create Google Ads sub-account - please check MCC configuration');
-                return $result;
-            }
-            
-            Log::info("GoogleAdsExecutionAgent: Successfully created sub-account", [
-                'customer_id' => $this->customer->id,
-                'google_ads_customer_id' => $this->customer->google_ads_customer_id,
-            ]);
+            $result->addError('google_ads_no_account', 'No Google Ads account found - please connect your Google Ads account via Settings');
+            return $result;
         }
         
         // Check conversion tracking (warning only - campaigns can run without it)
@@ -390,21 +375,21 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        // Verify we are targeting the correct sub-account
+        // Verify we are targeting the correct account
         if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored sub-account ID", [
+            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID", [
                 'provided_id' => $customerId,
                 'stored_id' => $this->customer->google_ads_customer_id
             ]);
             $customerId = $this->customer->google_ads_customer_id;
         }
 
-        Log::info("GoogleAdsExecutionAgent: Creating Search Campaign in sub-account", [
+        Log::info("GoogleAdsExecutionAgent: Creating Search Campaign in account", [
             'customer_id' => $customerId
         ]);
 
         // 1. Create Campaign
-        $createCampaignService = new CreateSearchCampaign($this->customer, true);
+        $createCampaignService = new CreateSearchCampaign($this->customer);
         $campaignStructure = $plan->getCampaignStructure();
         
         $timestamp = now()->format('Ymd_His');
@@ -430,7 +415,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
         
         // 2. Create Ad Group
-        $createAdGroupService = new CreateSearchAdGroup($this->customer, true);
+        $createAdGroupService = new CreateSearchAdGroup($this->customer);
         $adGroupName = 'Default Ad Group - ' . $timestamp;
         $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
         if (!$adGroupResourceName) {
@@ -454,8 +439,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $imageAssetResourceNames = [];
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->limit(15)->get();
         if ($imageCollaterals->isNotEmpty()) {
-            $uploadImageAssetService = new UploadImageAsset($this->customer, true);
-            $linkAdGroupAssetService = new LinkAdGroupAsset($this->customer, true);
+            $uploadImageAssetService = new UploadImageAsset($this->customer);
+            $linkAdGroupAssetService = new LinkAdGroupAsset($this->customer);
 
             foreach ($imageCollaterals as $image) {
                 try {
@@ -489,7 +474,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             if (!$finalUrl) {
                 $result->addWarning('No landing page URL found for ad creation. Skipping ad creation.');
             } else {
-                $createAdService = new CreateResponsiveSearchAd($this->customer, true);
+                $createAdService = new CreateResponsiveSearchAd($this->customer);
                 $adData = [
                     'finalUrls' => [$finalUrl],
                     'headlines' => $adCopy->headlines ?? [],
@@ -518,21 +503,21 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        // Verify we are targeting the correct sub-account
+        // Verify we are targeting the correct account
         if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored sub-account ID", [
+            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID", [
                 'provided_id' => $customerId,
                 'stored_id' => $this->customer->google_ads_customer_id
             ]);
             $customerId = $this->customer->google_ads_customer_id;
         }
 
-        Log::info("GoogleAdsExecutionAgent: Creating Display Campaign in sub-account", [
+        Log::info("GoogleAdsExecutionAgent: Creating Display Campaign in account", [
             'customer_id' => $customerId
         ]);
 
         // 1. Create Campaign
-        $createCampaignService = new CreateDisplayCampaign($this->customer, true);
+        $createCampaignService = new CreateDisplayCampaign($this->customer);
         $campaignStructure = $plan->getCampaignStructure();
         
         $timestamp = now()->format('Ymd_His');
@@ -558,7 +543,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
         
         // 2. Create Ad Group
-        $createAdGroupService = new CreateDisplayAdGroup($this->customer, true);
+        $createAdGroupService = new CreateDisplayAdGroup($this->customer);
         $adGroupName = 'Default Ad Group - ' . $timestamp;
         $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
         if (!$adGroupResourceName) {
@@ -574,7 +559,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $imageAssetResourceNames = [];
         
         if ($imageCollaterals->isNotEmpty()) {
-            $uploadImageAssetService = new UploadImageAsset($this->customer, true);
+            $uploadImageAssetService = new UploadImageAsset($this->customer);
             foreach ($imageCollaterals as $image) {
                 try {
                     $imageData = Storage::disk('s3')->get($image->s3_path);
@@ -597,7 +582,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             if (!$finalUrl) {
                 $result->addWarning('No landing page URL found for display ad creation. Skipping ad creation.');
             } else {
-                $createAdService = new CreateResponsiveDisplayAd($this->customer, true);
+                $createAdService = new CreateResponsiveDisplayAd($this->customer);
                 $adData = [
                     'finalUrls' => [$finalUrl],
                     'headlines' => $adCopy->headlines ?? [],
@@ -628,21 +613,21 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        // Verify we are targeting the correct sub-account
+        // Verify we are targeting the correct account
         if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored sub-account ID", [
+            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID", [
                 'provided_id' => $customerId,
                 'stored_id' => $this->customer->google_ads_customer_id
             ]);
             $customerId = $this->customer->google_ads_customer_id;
         }
 
-        Log::info("GoogleAdsExecutionAgent: Creating Performance Max Campaign in sub-account", [
+        Log::info("GoogleAdsExecutionAgent: Creating Performance Max Campaign in account", [
             'customer_id' => $customerId
         ]);
 
         // 1. Create Campaign
-        $createCampaignService = new CreatePerformanceMaxCampaign($this->customer, true);
+        $createCampaignService = new CreatePerformanceMaxCampaign($this->customer);
         $timestamp = now()->format('Ymd_His');
         $campaignName = $campaign->name . ' - PMax - ' . $timestamp;
 
@@ -668,8 +653,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
         // 2. Prepare Assets
         $assets = [];
-        $createTextAssetService = new CreateTextAsset($this->customer, true);
-        $uploadImageService = new UploadImageAsset($this->customer, true);
+        $createTextAssetService = new CreateTextAsset($this->customer);
+        $uploadImageService = new UploadImageAsset($this->customer);
 
         // 2.1 Text Assets
         $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
@@ -745,7 +730,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         }
 
         // 3. Create Asset Group with Assets
-        $createAssetGroupService = new CreateAssetGroupWithAssets($this->customer, true);
+        $createAssetGroupService = new CreateAssetGroupWithAssets($this->customer);
         $assetGroupName = 'Asset Group - ' . $timestamp;
         $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
         
@@ -774,12 +759,12 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        // Verify we are targeting the correct sub-account
+        // Verify we are targeting the correct account
         if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
             $customerId = $this->customer->google_ads_customer_id;
         }
 
-        Log::info("GoogleAdsExecutionAgent: Creating Video Campaign in sub-account", [
+        Log::info("GoogleAdsExecutionAgent: Creating Video Campaign in account", [
             'customer_id' => $customerId
         ]);
 
@@ -899,7 +884,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function addKeywords(string $customerId, string $adGroupResourceName, array $keywords, ExecutionResult $result): void
     {
-        $addCriterionService = new AddAdGroupCriterion($this->customer, true);
+        $addCriterionService = new AddAdGroupCriterion($this->customer);
         
         foreach ($keywords as $keyword) {
             try {
@@ -936,8 +921,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             return;
         }
 
-        $searchAudienceService = new SearchAudience($this->customer, true);
-        $addCriterionService = new AddAdGroupCriterion($this->customer, true);
+        $searchAudienceService = new SearchAudience($this->customer);
+        $addCriterionService = new AddAdGroupCriterion($this->customer);
 
         $audiences = [];
         // Merge interests and behaviors
@@ -1115,66 +1100,6 @@ PROMPT;
     }
     
     /**
-     * Create a Google Ads sub-account under the MCC
-     * 
-     * @return bool True if account created successfully, false otherwise
-     */
-    protected function createSubAccount(): bool
-    {
-        try {
-            $mccCustomerId = config('googleads.mcc_customer_id');
-            
-            if (!$mccCustomerId) {
-                Log::error("GoogleAdsExecutionAgent: MCC Customer ID not configured");
-                return false;
-            }
-            
-            $accountName = $this->customer->name . ' - Google Ads';
-            
-            // Use dependency injection to create the service
-            $createService = new CreateAndLinkManagedAccount(
-                $this->customer,
-                app(CreateManagedAccount::class, ['customer' => $this->customer]),
-                app(CreateCustomerClientLink::class, ['customer' => $this->customer])
-            );
-            
-            $result = $createService(
-                $mccCustomerId,
-                $accountName,
-                'USD',  // TODO: Get from customer's preferred currency
-                'America/New_York'  // TODO: Get from customer's timezone
-            );
-            
-            if (!$result) {
-                Log::error("GoogleAdsExecutionAgent: Failed to create sub-account", [
-                    'customer_id' => $this->customer->id,
-                    'mcc_customer_id' => $mccCustomerId,
-                ]);
-                return false;
-            }
-            
-            // Update customer record with new Google Ads customer ID
-            $this->customer->google_ads_customer_id = $result['customer_id'];
-            $this->customer->save();
-            
-            Log::info("GoogleAdsExecutionAgent: Created Google Ads sub-account", [
-                'customer_id' => $this->customer->id,
-                'google_ads_customer_id' => $result['customer_id'],
-                'resource_name' => $result['resource_name'],
-            ]);
-            
-            return true;
-        } catch (\Exception $e) {
-            Log::error("GoogleAdsExecutionAgent: Exception creating sub-account: " . $e->getMessage(), [
-                'customer_id' => $this->customer->id,
-                'exception' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return false;
-        }
-    }
-    
-    /**
      * Add location targeting to campaign
      */
     protected function addLocationTargeting(
@@ -1211,7 +1136,7 @@ PROMPT;
             return;
         }
 
-        $addCriterionService = new AddCampaignCriterion($this->customer, true);
+        $addCriterionService = new AddCampaignCriterion($this->customer);
 
         foreach ($locations as $location) {
             try {
@@ -1245,7 +1170,7 @@ PROMPT;
         // For now, we'll attempt to create a default "Purchase" conversion action.
         
         try {
-            $createConversionService = new CreateConversionAction($this->customer, true);
+            $createConversionService = new CreateConversionAction($this->customer);
             $conversionName = "Default Purchase Conversion";
             
             $resourceName = ($createConversionService)($customerId, $conversionName, ConversionActionCategory::PURCHASE);
@@ -1256,7 +1181,7 @@ PROMPT;
 
                 // GTM Integration
                 try {
-                    $getDetails = new GetConversionActionDetails($this->customer, true);
+                    $getDetails = new GetConversionActionDetails($this->customer);
                     $details = ($getDetails)($customerId, $resourceName);
                     
                     if ($details && isset($details['conversion_id'], $details['conversion_label'])) {
@@ -1295,9 +1220,9 @@ PROMPT;
         Strategy $strategy, 
         ExecutionResult $result
     ): void {
-        $createSitelinkService = new CreateSitelinkAsset($this->customer, true);
-        $createCalloutService = new CreateCalloutAsset($this->customer, true);
-        $linkAssetService = new LinkCampaignAsset($this->customer, true);
+        $createSitelinkService = new CreateSitelinkAsset($this->customer);
+        $createCalloutService = new CreateCalloutAsset($this->customer);
+        $linkAssetService = new LinkCampaignAsset($this->customer);
 
         // 1. Sitelinks
         // In a real app, these would come from the Strategy or AdCopy model.

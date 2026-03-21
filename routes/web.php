@@ -209,6 +209,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/customers', [App\Http\Controllers\CustomerController::class, 'store'])->name('customers.store');
     Route::get('/customers/{customer}/edit', [App\Http\Controllers\CustomerController::class, 'edit'])->name('customers.edit');
     Route::put('/customers/{customer}', [App\Http\Controllers\CustomerController::class, 'update'])->name('customers.update');
+
+    // URL-first quick start onboarding
+    Route::get('/quick-start', [App\Http\Controllers\QuickStartController::class, 'show'])->name('quick-start');
+    Route::post('/quick-start', [App\Http\Controllers\QuickStartController::class, 'process'])->name('quick-start.process');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -327,6 +331,10 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
     // Deployment status polling
     Route::get('/campaigns/{campaign}/deployment-status', [\App\Http\Controllers\CampaignController::class, 'apiDeploymentStatus'])
         ->name('api.campaigns.deployment-status');
+
+    // Agent activity feed
+    Route::get('/agent-activities', [\App\Http\Controllers\AgentActivityController::class, 'index'])
+        ->name('api.agent-activities.index');
 });
 
 Route::get('/test-email', function () {

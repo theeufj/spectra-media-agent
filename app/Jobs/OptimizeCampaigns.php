@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\Agents\CampaignOptimizationAgent;
 use Illuminate\Bus\Queueable;
@@ -24,10 +25,7 @@ class OptimizeCampaigns implements ShouldQueue
         // We only optimize campaigns that are 'ELIGIBLE' (primary status)
         // This covers both Google (ENABLED/ELIGIBLE) and Facebook (ACTIVE)
         $campaigns = Campaign::where('primary_status', 'ELIGIBLE')
-            ->where(function ($query) {
-                $query->whereNotNull('google_ads_campaign_id')
-                      ->orWhereNotNull('facebook_ads_campaign_id');
-            })
+            ->whereNotNull('google_ads_campaign_id')
             ->where(function ($query) {
                 $query->whereNull('last_optimized_at')
                       ->orWhere('last_optimized_at', '<=', now()->subHours(24));
@@ -55,10 +53,23 @@ class OptimizeCampaigns implements ShouldQueue
                     ]);
 
                     Log::info("Optimization analysis completed for campaign {$campaign->id}");
+
+                    AgentActivity::record(
+                        'optimization',
+                        'analyzed_campaign',
+                        "Analyzed \"{$campaign->name}\" and generated optimization recommendations",
+                        $campaign->customer_id,
+                        $campaign->id,
+                        ['recommendations_count' => is_array($recommendations) ? count($recommendations) : 0]
+                    );
                 }
 
             } catch (\Exception $e) {
-                Log::error("Failed to optimize campaign {$campaign->id}: " . $e->getMessage());
+                Log::error("Failed to optimize campaign {$campaign->id}: " . $e->getMessage(), [
+                    'campaign_id' => $campaign->id,
+                    'exception' => get_class($e),
+                ]);
+                // Continue to next campaign — don't let one failure block others
             }
         }
     }

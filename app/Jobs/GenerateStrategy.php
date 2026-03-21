@@ -2,10 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\EnabledPlatform;
 use App\Models\KnowledgeBase;
 use App\Models\Recommendation;
+use App\Notifications\StrategyGenerationFailed;
 use App\Prompts\StrategyPrompt;
 use App\Services\GeminiService;
 use Illuminate\Bus\Queueable;
@@ -65,6 +67,7 @@ class GenerateStrategy implements ShouldQueue
 
             if (empty($knowledgeBaseContent)) {
                 Log::warning("No knowledge base content found for customer {$this->campaign->customer_id} to generate strategy for campaign {$this->campaign->id}.");
+                $this->failWithError('No knowledge base content found. Please add content to your knowledge base before generating strategies.');
                 return;
             }
 
@@ -91,6 +94,7 @@ class GenerateStrategy implements ShouldQueue
 
             if (empty($enabledPlatforms)) {
                 Log::error("No enabled platforms found for campaign {$this->campaign->id}. Cannot generate strategy.");
+                $this->failWithError('No advertising platforms are currently enabled. Please contact support.');
                 return;
             }
 
@@ -122,6 +126,7 @@ class GenerateStrategy implements ShouldQueue
             
             if (!$result) {
                 Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No response from Vertex AI");
+                $this->failWithError('AI service did not return a response. Please try again.');
                 return;
             }
 
@@ -129,6 +134,7 @@ class GenerateStrategy implements ShouldQueue
             
             if (!$jsonText) {
                 Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No text content in response");
+                $this->failWithError('AI service returned an empty response. Please try again.');
                 return;
             }
 
@@ -146,6 +152,7 @@ class GenerateStrategy implements ShouldQueue
             if (json_last_error() !== JSON_ERROR_NONE || !isset($strategyData['strategies'])) {
                 Log::error("Failed to parse JSON response for campaign {$this->campaign->id}: " . json_last_error_msg());
                 Log::debug("Raw JSON for campaign {$this->campaign->id}: " . substr($cleanedJson, 0, 500) . '...');
+                $this->failWithError('Failed to parse AI response. Please try again.');
                 return;
             }
             
@@ -201,6 +208,16 @@ class GenerateStrategy implements ShouldQueue
                 'strategy_generation_completed_at' => now(),
             ]);
 
+            $strategyCount = count($strategyData['strategies']);
+            AgentActivity::record(
+                'strategy',
+                'generated_strategies',
+                "Generated {$strategyCount} " . ($strategyCount === 1 ? 'strategy' : 'strategies') . " for \"{$this->campaign->name}\"",
+                $this->campaign->customer_id,
+                $this->campaign->id,
+                ['strategy_count' => $strategyCount]
+            );
+
         } catch (\Exception $e) {
             Log::error("Error generating strategy for campaign {$this->campaign->id}: " . $e->getMessage(), [
                 'campaign_id' => $this->campaign->id,
@@ -218,6 +235,24 @@ class GenerateStrategy implements ShouldQueue
             ]);
             
             throw $e;
+        }
+    }
+
+    /**
+     * Record the error and notify the campaign's users.
+     */
+    protected function failWithError(string $message): void
+    {
+        $this->campaign->update([
+            'strategy_generation_completed_at' => now(),
+            'strategy_generation_error' => $message,
+        ]);
+
+        $customer = $this->campaign->customer;
+        if ($customer) {
+            foreach ($customer->users as $user) {
+                $user->notify(new StrategyGenerationFailed($this->campaign, $message));
+            }
         }
     }
 }

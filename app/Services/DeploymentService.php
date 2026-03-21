@@ -8,10 +8,8 @@ use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\GoogleAdsExecutionAgent;
-use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
-use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use Illuminate\Support\Facades\Log;
 
 class DeploymentService
@@ -209,7 +207,6 @@ class DeploymentService
     {
         return match ($platform) {
             'Google Ads (SEM)', 'Google', 'Google Ads' => new GoogleAdsExecutionAgent($customer, app(GeminiService::class)),
-            'Facebook Ads', 'Facebook' => new FacebookAdsExecutionAgent($customer, app(GeminiService::class)),
             default => null
         };
     }
@@ -225,7 +222,6 @@ class DeploymentService
     {
         return match ($platform) {
             'Google Ads (SEM)' => new GoogleAdsDeploymentStrategy($customer),
-            'Facebook Ads' => new FacebookAdsDeploymentStrategy($customer),
             default => null
         };
     }

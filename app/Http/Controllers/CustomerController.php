@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Services\GoogleAds\CreateAndLinkManagedAccount;
-use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -35,78 +33,10 @@ class CustomerController extends Controller
         $user = $request->user();
         $user->customers()->attach($customer->id, ['role' => 'owner']);
 
-        // Attempt to create a Google Ads managed account
-        try {
-            $managerCustomerId = config('googleads.mcc_customer_id');
+        // Google Ads account connection happens via OAuth when the user connects
+        // their Google Ads account. No MCC sub-account creation needed.
 
-            if ($managerCustomerId) {
-                $createAndLink = app(CreateAndLinkManagedAccount::class);
-                $result = $createAndLink(
-                    $managerCustomerId,
-                    $customer->name,
-                    $validated['currency_code'] ?? 'USD',
-                    $validated['timezone'] ?? 'America/New_York'
-                );
-
-                if ($result) {
-                    // Update customer with Google Ads customer ID
-                    $customer->update([
-                        'google_ads_customer_id' => $result['customer_id']
-                    ]);
-                    Log::info("Google Ads managed account created for customer", [
-                        'customer_id' => $customer->id,
-                        'google_ads_customer_id' => $result['customer_id'],
-                    ]);
-                } else {
-                    Log::warning("Failed to create Google Ads managed account for customer", [
-                        'customer_id' => $customer->id,
-                        'customer_name' => $customer->name,
-                    ]);
-                }
-            } else {
-                Log::warning("MCC customer ID not configured, skipping Google Ads account creation", [
-                    'customer_id' => $customer->id,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error("Error creating Google Ads managed account: " . $e->getMessage(), [
-                'exception' => $e,
-                'customer_id' => $customer->id,
-            ]);
-            // Don't fail the customer creation if Google Ads account creation fails
-        }
-
-        // Attempt to create a Facebook Ads account
-        try {
-            $createFacebookAccount = new CreateFacebookAdsAccount($customer);
-            $facebookResult = $createFacebookAccount->getOrCreate(
-                $customer->name,
-                $validated['currency_code'] ?? 'USD',
-                $validated['timezone'] ?? 'America/New_York'
-            );
-
-            if ($facebookResult && isset($facebookResult['account_id'])) {
-                // Update customer with Facebook Ads account ID
-                $customer->update([
-                    'facebook_ads_account_id' => $facebookResult['account_id']
-                ]);
-                Log::info("Facebook Ads account linked for customer", [
-                    'customer_id' => $customer->id,
-                    'facebook_ads_account_id' => $facebookResult['account_id'],
-                ]);
-            } else {
-                Log::warning("Failed to create or link Facebook Ads account for customer", [
-                    'customer_id' => $customer->id,
-                    'customer_name' => $customer->name,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::error("Error creating Facebook Ads account: " . $e->getMessage(), [
-                'exception' => $e,
-                'customer_id' => $customer->id,
-            ]);
-            // Don't fail the customer creation if Facebook Ads account creation fails
-        }
+        // Facebook Ads integration is currently disabled.
 
         session(['active_customer_id' => $customer->id]);
 

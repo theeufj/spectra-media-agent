@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\SearchTermMiningAgent;
@@ -30,16 +31,12 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         // Get all active campaigns (both Google and Facebook)
         $campaigns = Campaign::with('customer')
             ->where('primary_status', 'ELIGIBLE')
-            ->where(function ($query) {
-                $query->whereNotNull('google_ads_campaign_id')
-                      ->orWhereNotNull('facebook_ads_campaign_id');
-            })
+            ->whereNotNull('google_ads_campaign_id')
             ->get();
 
         $summary = [
             'campaigns_processed' => 0,
             'google_campaigns' => 0,
-            'facebook_campaigns' => 0,
             'healing_actions' => 0,
             'healing_warnings' => 0,
             'keywords_added' => 0,
@@ -60,9 +57,6 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 // Track platform
                 if ($campaign->google_ads_campaign_id) {
                     $summary['google_campaigns']++;
-                }
-                if ($campaign->facebook_ads_campaign_id) {
-                    $summary['facebook_campaigns']++;
                 }
 
                 // 1. Run Self-Healing Agent (now supports both Google and Facebook)
@@ -99,6 +93,22 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                         'budget' => $budgetResults,
                     ],
                 ]);
+
+                // Log agent activities for user visibility
+                $healingActionCount = count($healingResults['actions_taken'] ?? []);
+                $keywordsAdded = count($miningResults['keywords_added'] ?? []);
+                $negativesAdded = count($miningResults['negatives_added'] ?? []);
+                $budgetChangeCount = count(array_filter($budgetResults['adjustments'] ?? [], fn($a) => $a['type'] === 'budget_updated'));
+
+                if ($healingActionCount > 0) {
+                    AgentActivity::record('maintenance', 'self_healed', "Fixed {$healingActionCount} issue(s) in \"{$campaign->name}\"", $campaign->customer_id, $campaign->id, ['actions' => $healingResults['actions_taken'] ?? []]);
+                }
+                if ($keywordsAdded > 0 || $negativesAdded > 0) {
+                    AgentActivity::record('keyword', 'mined_search_terms', "Added {$keywordsAdded} keyword(s) and {$negativesAdded} negative(s) for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id);
+                }
+                if ($budgetChangeCount > 0) {
+                    AgentActivity::record('budget', 'adjusted_budget', "Made {$budgetChangeCount} budget adjustment(s) for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id, ['adjustments' => $budgetResults['adjustments'] ?? []]);
+                }
 
             } catch (\Exception $e) {
                 $summary['errors']++;

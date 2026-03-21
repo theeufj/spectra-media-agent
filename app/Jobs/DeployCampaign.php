@@ -2,7 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Notifications\DeploymentCompleted;
+use App\Notifications\DeploymentFailed;
 use App\Services\DeploymentService;
 use App\Services\AdSpendBillingService;
 use Illuminate\Bus\Queueable;
@@ -128,13 +131,39 @@ class DeployCampaign implements ShouldQueue
         // Optionally: Update campaign status or send notifications based on results
         if ($failureCount > 0 && $successCount === 0) {
             Log::critical("All deployments failed for Campaign ID: {$this->campaign->id}");
-            // TODO: Send notification to user about complete failure
+            $this->notifyUsers(new DeploymentFailed($this->campaign, 'All platform deployments failed.'));
         } elseif ($failureCount > 0) {
             Log::warning("Partial deployment failure for Campaign ID: {$this->campaign->id}");
-            // TODO: Send notification to user about partial failure
+            $this->notifyUsers(new DeploymentCompleted($this->campaign, $successCount, $failureCount));
         } else {
             Log::info("All deployments successful for Campaign ID: {$this->campaign->id}");
-            // TODO: Send success notification to user
+            $this->notifyUsers(new DeploymentCompleted($this->campaign, $successCount, $failureCount));
+        }
+
+        AgentActivity::record(
+            'deployment',
+            $failureCount === 0 ? 'deployed_campaign' : 'deployment_partial',
+            $failureCount === 0
+                ? "Successfully deployed \"{$this->campaign->name}\" to Google Ads"
+                : "Deployed \"{$this->campaign->name}\" with {$failureCount} failure(s)",
+            $this->campaign->customer_id,
+            $this->campaign->id,
+            ['successful' => $successCount, 'failed' => $failureCount],
+            $failureCount === 0 ? 'completed' : 'failed'
+        );
+    }
+
+    /**
+     * Notify all users associated with this campaign's customer.
+     */
+    protected function notifyUsers($notification): void
+    {
+        $customer = $this->campaign->customer;
+
+        if ($customer) {
+            foreach ($customer->users as $user) {
+                $user->notify($notification);
+            }
         }
     }
 }

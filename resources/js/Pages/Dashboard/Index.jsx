@@ -12,9 +12,10 @@ import WaitingForData from '@/Components/WaitingForData';
 import DateRangePicker from '@/Components/DateRangePicker';
 import SetupProgressNav from '@/Components/SetupProgressNav';
 import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/QuickActions';
+import AgentActivityFeed from '@/Components/AgentActivityFeed';
 
 export default function Dashboard({ auth }) {
-    const { campaigns, defaultCampaign, usageStats, pendingTasks, healthAlerts } = usePage().props;
+    const { campaigns, defaultCampaign, usageStats, pendingTasks, healthAlerts, agentActivities } = usePage().props;
     const [selectedCampaign, setSelectedCampaign] = useState(defaultCampaign);
     const [performanceData, setPerformanceData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -140,6 +141,10 @@ export default function Dashboard({ auth }) {
                             {/* Right Column: Actions & Alerts */}
                             <div className="space-y-6">
                                 <QuickActions />
+                                <AgentActivityFeed
+                                    initialActivities={agentActivities || []}
+                                    campaignId={selectedCampaign?.id}
+                                />
                                 <PendingTasks tasks={pendingTasks || []} />
                                 <CampaignHealthAlerts alerts={healthAlerts || []} />
                             </div>

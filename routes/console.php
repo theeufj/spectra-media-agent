@@ -8,7 +8,6 @@ use App\Jobs\OptimizeCampaigns;
 use App\Jobs\AutomatedCampaignMaintenance;
 use App\Jobs\RunCompetitorIntelligence;
 use App\Jobs\ProcessDailyAdSpendBilling;
-use App\Jobs\RefreshFacebookTokens;
 use App\Jobs\RunHealthChecks;
 use App\Models\Customer;
 
@@ -39,9 +38,6 @@ Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00'); // Run during
 
 // Daily ad spend billing - bills customers for yesterday's spend, handles failures
 Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00'); // Run after ad networks finalize spend
-
-// Facebook token refresh - checks and refreshes expiring tokens
-Schedule::job(new RefreshFacebookTokens)->dailyAt('03:00'); // Run before maintenance jobs
 
 // ============================================================
 // WEEKLY OPERATIONS

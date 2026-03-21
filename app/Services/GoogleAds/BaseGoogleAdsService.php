@@ -31,8 +31,8 @@ abstract class BaseGoogleAdsService
         if ($this->client === null) {
             throw new \Exception(
                 "Google Ads client not initialized for customer {$this->customer->id}. " .
-                "Please check: 1) MCC Customer ID is configured, 2) OAuth credentials are valid, " .
-                "3) Customer has valid refresh token (if not using MCC credentials)"
+                "Please check: 1) OAuth credentials are valid, " .
+                "2) Customer has connected their Google Ads account via OAuth"
             );
         }
     }

@@ -8,11 +8,17 @@ class StoreCampaignRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
-     * For now, we'll allow any authenticated user to create a campaign.
+     * Ensures the user belongs to the active customer.
      */
     public function authorize(): bool
     {
-        return true;
+        $customerId = session('active_customer_id');
+
+        if (!$customerId) {
+            return false;
+        }
+
+        return $this->user()->customers()->where('customers.id', $customerId)->exists();
     }
 
     /**
