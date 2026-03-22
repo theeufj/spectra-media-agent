@@ -140,6 +140,8 @@ class ScrapeCustomerWebsite implements ShouldQueue
             // Try using Browsershot for JavaScript-heavy sites
             try {
                 $htmlContent = Browsershot::url($url)
+                    ->setNodeBinary(config('browsershot.node_binary_path'))
+                    ->addChromiumArguments(config('browsershot.chrome_args', []))
                     ->timeout($this->timeout)
                     ->bodyHtml();
 

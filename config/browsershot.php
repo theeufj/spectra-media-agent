@@ -12,4 +12,19 @@ return [
     |
     */
     'node_binary_path' => env('NODE_BINARY_PATH', '/usr/bin/node'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Chrome Arguments
+    |--------------------------------------------------------------------------
+    |
+    | Additional arguments to pass to the Chrome instance. The --no-sandbox 
+    | argument is often required in headless environments like Linux servers.
+    |
+    */
+    'chrome_args' => [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+    ],
 ];
