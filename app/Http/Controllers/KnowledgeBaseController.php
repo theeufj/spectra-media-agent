@@ -279,7 +279,7 @@ class KnowledgeBaseController extends Controller
             $geminiService = new GeminiService();
 
             // Step 1: Generate embedding for the search query
-            $queryEmbedding = $geminiService->embedContent('gemini-embedding-001', $query);
+            $queryEmbedding = $geminiService->embedContent('gemini-embedding-2-preview', $query);
 
             if (is_null($queryEmbedding)) {
                 Log::error("Failed to get embedding for search query: Query embedding was null.");

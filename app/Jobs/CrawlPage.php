@@ -176,7 +176,7 @@ class CrawlPage implements ShouldQueue
                 // Initialize Gemini Service for embedding
                 $geminiService = new GeminiService();
                 $embeddingText = substr($title . "\n" . $metaDescription . "\n" . $cleanedContent, 0, 8000); // Limit context
-                $embedding = $geminiService->embedContent('gemini-embedding-001', $embeddingText);
+                $embedding = $geminiService->embedContent('gemini-embedding-2-preview', $embeddingText);
 
                 CustomerPage::updateOrCreate(
                     [
@@ -312,7 +312,7 @@ class CrawlPage implements ShouldQueue
                     continue;
                 }
 
-                $embedding = $geminiService->embedContent('gemini-embedding-001', $chunk);
+                $embedding = $geminiService->embedContent('gemini-embedding-2-preview', $chunk);
 
                 if (is_null($embedding)) {
                     Log::warning("Failed to get embedding for a chunk from {$this->url}. Skipping chunk.", [

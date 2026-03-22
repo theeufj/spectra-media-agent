@@ -22,8 +22,8 @@ use Illuminate\Support\Facades\Log;
  * - gemini-2.5-flash-image      | Nano Banana - Native image generation & editing
  *
  * --- EMBEDDING ---
- * - gemini-embedding-001         | Text embeddings for semantic search & RAG
- * - gemini-embedding-2-preview   | Multimodal embeddings (text/image/video/audio/PDF)
+ * - gemini-embedding-2-preview   | Multimodal embeddings (text/image/video/audio/PDF) - 3072 dims
+ * - gemini-embedding-001         | Text embeddings for semantic search & RAG - 768 dims (legacy)
  *
  * --- VIDEO ---
  * - veo-3.1-generate-preview     | State-of-the-art cinematic video with synced audio
@@ -32,7 +32,7 @@ use Illuminate\Support\Facades\Log;
  * - gemini-2.0-flash             | Deprecated - use gemini-2.5-flash
  * - gemini-2.0-flash-lite        | Deprecated - use gemini-2.5-flash-lite
  * - gemini-3-pro-preview         | Shut down March 9, 2026 - use gemini-3.1-pro-preview or gemini-2.5-pro
- * - text-embedding-004           | Legacy - use gemini-embedding-001
+ * - text-embedding-004           | Legacy - use gemini-embedding-2-preview
  */
 
 class GeminiService
@@ -285,7 +285,7 @@ class GeminiService
     /**
      * Generates embeddings for a given text using a specified Gemini embedding model.
      *
-     * @param string $model The Gemini embedding model to use (e.g., 'gemini-embedding-001').
+     * @param string $model The Gemini embedding model to use (e.g., 'gemini-embedding-2-preview').
      * @param string $text The text to embed.
      * @return array|null The embedding values as an array, or null on failure.
      */

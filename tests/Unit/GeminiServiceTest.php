@@ -115,7 +115,7 @@ class GeminiServiceTest extends TestCase
             'https://generativelanguage.googleapis.com/*' => Http::response($mockResponse, 200)
         ]);
 
-        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-2-preview', 'Test text');
 
         $this->assertIsArray($result);
         $this->assertEquals([0.1, 0.2, 0.3, 0.4], $result);
@@ -135,7 +135,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-2-preview', 'Test text');
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
@@ -150,7 +150,7 @@ class GeminiServiceTest extends TestCase
             'https://generativelanguage.googleapis.com/*' => Http::response(['embedding' => []], 200)
         ]);
 
-        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-2-preview', 'Test text');
 
         $this->assertNull($result);
     }
@@ -167,7 +167,7 @@ class GeminiServiceTest extends TestCase
         Log::spy();
 
         // Since the actual exception occurs inside the try-catch, we'll test with a failed response
-        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-2-preview', 'Test text');
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
