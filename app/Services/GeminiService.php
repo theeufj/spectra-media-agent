@@ -20,6 +20,7 @@ class GeminiService
 {
     private string $apiKey;
     private string $baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
+    private string $stableBaseUrl = 'https://generativelanguage.googleapis.com/v1/models/';
     private int $maxRetries = 3;
     private int $initialRetryDelayMs = 1000;
 
@@ -272,10 +273,13 @@ class GeminiService
     public function embedContent(string $model, string $text): ?array
     {
         try {
+            // Use the stable v1 endpoint for embedding models like text-embedding-004
+            $url = "{$this->stableBaseUrl}{$model}:embedContent";
+            
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
                 'x-goog-api-key' => $this->apiKey,
-            ])->timeout(300)->post("{$this->baseUrl}{$model}:embedContent", [
+            ])->timeout(300)->post($url, [
                 'model' => "models/{$model}",
                 'content' => [
                     'parts' => [
