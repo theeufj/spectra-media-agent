@@ -41,7 +41,11 @@ Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00'); // Run during
 Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00'); // Run after ad networks finalize spend
 
 // Policy compliance checks - detects disapprovals and policy violations
-Schedule::job(new CheckCampaignPolicyViolations)->daily();
+Schedule::call(function () {
+    \App\Models\Campaign::where('platform_status', 'ENABLED')->each(function ($campaign) {
+        CheckCampaignPolicyViolations::dispatch($campaign->id);
+    });
+})->daily();
 
 // ============================================================
 // WEEKLY OPERATIONS
