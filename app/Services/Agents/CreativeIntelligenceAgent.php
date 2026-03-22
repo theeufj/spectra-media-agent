@@ -288,7 +288,7 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                'gemini-2.5-flash-lite',
+                'gemini-3.1-flash-lite-preview',
                 $prompt,
                 ['responseMimeType' => 'application/json']
             );
@@ -340,7 +340,7 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                'gemini-2.5-flash-lite',
+                'gemini-3.1-flash-lite-preview',
                 $prompt,
                 ['responseMimeType' => 'application/json']
             );

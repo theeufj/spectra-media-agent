@@ -41,7 +41,7 @@ class GeminiServiceTest extends TestCase
             'https://generativelanguage.googleapis.com/*' => Http::response($mockResponse, 200)
         ]);
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt');
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt');
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('text', $result);
@@ -62,7 +62,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt');
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt');
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
@@ -77,7 +77,7 @@ class GeminiServiceTest extends TestCase
             'https://generativelanguage.googleapis.com/*' => Http::response(['data' => 'incomplete'], 200)
         ]);
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt');
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt');
 
         $this->assertNull($result);
     }
@@ -94,7 +94,7 @@ class GeminiServiceTest extends TestCase
         Log::spy();
 
         // Since the actual exception occurs inside the try-catch, we'll test with a failed response
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt');
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt');
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
@@ -469,7 +469,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt', 3);
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt', 3);
 
         $this->assertIsArray($result);
         $this->assertArrayHasKey('text', $result);
@@ -502,7 +502,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt', 3);
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt', 3);
 
         $this->assertIsArray($result);
         $this->assertEquals('Generated text', $result['text']);
@@ -535,7 +535,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt', 4);
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt', 4);
 
         $this->assertIsArray($result);
         $this->assertEquals('Generated text', $result['text']);
@@ -556,7 +556,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt', 3);
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt', 3);
 
         $this->assertNull($result);
         Log::shouldHaveReceived('warning')->twice(); // Two warnings for retries
@@ -574,7 +574,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt', 3);
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt', 3);
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
@@ -592,7 +592,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt', 3);
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt', 3);
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
@@ -612,7 +612,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->generateContent('gemini-2.5-pro', 'Test prompt', 2);
+        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt', 2);
 
         $this->assertNull($result);
         Log::shouldHaveReceived('warning')->once(); // One warning for the one retry

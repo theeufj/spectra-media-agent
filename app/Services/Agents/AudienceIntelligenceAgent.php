@@ -169,7 +169,7 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                'gemini-2.5-pro',
+                'gemini-3.1-pro-preview',
                 $prompt,
                 ['responseMimeType' => 'application/json'],
                 'You are an expert digital advertising strategist specializing in audience targeting and segmentation.',

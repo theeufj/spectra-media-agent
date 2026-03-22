@@ -19,7 +19,7 @@ class BrandSafetyValidationService
         try {
             $prompt = "You are a brand safety expert. Analyze the following ad copy to determine if it violates any common brand safety guidelines (e.g., hate speech, violence, adult content, etc.). Respond with 'true' if the ad copy is safe, and 'false' if it is not.\n\nAd Copy: \"{$adCopy}\"";
 
-            $response = $this->geminiService->generateContent('gemini-2.5-pro', $prompt);
+            $response = $this->geminiService->generateContent('gemini-3.1-pro-preview', $prompt);
 
             if (is_null($response) || !isset($response['text'])) {
                 Log::error("Brand safety validation failed: LLM response was null or missing.");

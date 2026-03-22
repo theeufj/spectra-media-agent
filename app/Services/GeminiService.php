@@ -51,7 +51,7 @@ class GeminiService
     /**
      * Generates content using a specified Gemini model with retry mechanism.
      *
-     * @param string $model The Gemini model to use (e.g., 'gemini-2.5-flash').
+     * @param string $model The Gemini model to use (e.g., 'gemini-3-flash-preview').
      * @param string $prompt The prompt to send to the model.
      * @param array $config Generation configuration (temperature, maxOutputTokens, etc.).
      * @param string|null $systemInstruction Optional system instruction.

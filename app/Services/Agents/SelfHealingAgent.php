@@ -196,7 +196,7 @@ class SelfHealingAgent
 
         try {
             $response = $this->gemini->generateContent(
-                model: 'gemini-2.5-pro',
+                model: 'gemini-3.1-pro-preview',
                 prompt: $prompt,
                 config: ['temperature' => 0.7]
             );
@@ -398,7 +398,7 @@ class SelfHealingAgent
 
         try {
             $response = $this->gemini->generateContent(
-                model: 'gemini-2.5-pro',
+                model: 'gemini-3.1-pro-preview',
                 prompt: $prompt,
                 config: ['temperature' => 0.7]
             );

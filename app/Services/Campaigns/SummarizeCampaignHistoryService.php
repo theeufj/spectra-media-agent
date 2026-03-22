@@ -29,7 +29,7 @@ class SummarizeCampaignHistoryService
 
             $prompt = "You are a marketing analyst. Summarize the following campaign history into a concise overview that can be used to inform future optimizations.\n\n{$history}";
 
-            $response = $this->geminiService->generateContent('gemini-2.5-pro', $prompt);
+            $response = $this->geminiService->generateContent('gemini-3.1-pro-preview', $prompt);
 
             if (is_null($response) || !isset($response['text'])) {
                 Log::error("Failed to summarize campaign history: LLM response was null or missing.");

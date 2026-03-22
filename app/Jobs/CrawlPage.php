@@ -263,7 +263,7 @@ class CrawlPage implements ShouldQueue
 
             // Step 3: Use Gemini's Generative Content API to break content into semantically meaningful chunks.
             $chunkingPrompt = (new ChunkingPrompt($cleanedContent))->getPrompt();
-            $generatedResponse = $geminiService->generateContent('gemini-2.5-pro', $chunkingPrompt);
+            $generatedResponse = $geminiService->generateContent('gemini-3.1-pro-preview', $chunkingPrompt);
 
             if (is_null($generatedResponse)) {
                 Log::error("Failed to get chunks from Gemini for {$this->url}: Generated text was null.");

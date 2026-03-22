@@ -35,7 +35,7 @@ class CompetitorDiscoveryAgent
         $this->searchService = $searchService ?? new GoogleSearchService();
         $this->config = config('competitive_intelligence', [
             'max_competitors' => 10,
-            'discovery_model' => 'gemini-2.5-pro',
+            'discovery_model' => 'gemini-3.1-pro-preview',
         ]);
     }
 
@@ -186,7 +186,7 @@ class CompetitorDiscoveryAgent
             // Use Gemini with Google Search grounding enabled
             $response = $this->gemini->generateContent(
                 $prompt,
-                $this->config['discovery_model'] ?? 'gemini-2.5-pro',
+                $this->config['discovery_model'] ?? 'gemini-3.1-pro-preview',
                 [
                     'enableGoogleSearch' => true, // Enable Google Search grounding
                     'temperature' => 0.3, // Lower temperature for more focused results
