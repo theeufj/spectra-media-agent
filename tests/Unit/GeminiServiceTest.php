@@ -115,7 +115,7 @@ class GeminiServiceTest extends TestCase
             'https://generativelanguage.googleapis.com/*' => Http::response($mockResponse, 200)
         ]);
 
-        $result = $this->service->embedContent('text-embedding-004', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
 
         $this->assertIsArray($result);
         $this->assertEquals([0.1, 0.2, 0.3, 0.4], $result);
@@ -135,7 +135,7 @@ class GeminiServiceTest extends TestCase
 
         Log::spy();
 
-        $result = $this->service->embedContent('text-embedding-004', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
@@ -150,7 +150,7 @@ class GeminiServiceTest extends TestCase
             'https://generativelanguage.googleapis.com/*' => Http::response(['embedding' => []], 200)
         ]);
 
-        $result = $this->service->embedContent('text-embedding-004', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
 
         $this->assertNull($result);
     }
@@ -167,7 +167,7 @@ class GeminiServiceTest extends TestCase
         Log::spy();
 
         // Since the actual exception occurs inside the try-catch, we'll test with a failed response
-        $result = $this->service->embedContent('text-embedding-004', 'Test text');
+        $result = $this->service->embedContent('gemini-embedding-001', 'Test text');
 
         $this->assertNull($result);
         Log::shouldHaveReceived('error')->once();
@@ -332,7 +332,7 @@ class GeminiServiceTest extends TestCase
             'durationSeconds' => 15,
         ];
 
-        $result = $this->service->startVideoGeneration('Generate a video', 'veo-2.0-generate-001', $customParams);
+        $result = $this->service->startVideoGeneration('Generate a video', 'veo-3.1-generate-preview', $customParams);
 
         $this->assertIsString($result);
         Http::assertSent(function ($request) use ($customParams) {

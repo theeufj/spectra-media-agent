@@ -6,14 +6,33 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Currently AvaliABle Models:
- * - gemini-flash-latest | Modalities Text 
- * - gemini-2.5-pro | Modalities Text
- * - gemini-3-pro-image-preview | Modalities: Images and text
- * - text-embedding-004
- * - veo-2.0-generate-001 | Modalities: Video and text
- * - gemini-3-pro-preview | Modalities: Text
- * 
+ * Currently Available Models (Verified March 2026 from ai.google.dev/gemini-api/docs/models):
+ *
+ * --- GEMINI 3 SERIES (Preview) ---
+ * - gemini-3.1-pro-preview        | Advanced intelligence, agentic & vibe coding (replaces shut-down gemini-3-pro-preview)
+ * - gemini-3-flash-preview        | Frontier-class performance at low cost
+ * - gemini-3.1-flash-lite-preview | Budget / Ultra-low latency
+ * - gemini-3-pro-image-preview    | Nano Banana Pro - Studio-quality 4K image generation
+ * - gemini-3.1-flash-image-preview| Nano Banana 2 - High-efficiency image generation
+ *
+ * --- GEMINI 2.5 SERIES (Stable) ---
+ * - gemini-2.5-pro              | Deep reasoning & coding (stable)
+ * - gemini-2.5-flash            | Best price-performance with reasoning (stable)
+ * - gemini-2.5-flash-lite       | Fastest, most budget-friendly multimodal
+ * - gemini-2.5-flash-image      | Nano Banana - Native image generation & editing
+ *
+ * --- EMBEDDING ---
+ * - gemini-embedding-001         | Text embeddings for semantic search & RAG
+ * - gemini-embedding-2-preview   | Multimodal embeddings (text/image/video/audio/PDF)
+ *
+ * --- VIDEO ---
+ * - veo-3.1-generate-preview     | State-of-the-art cinematic video with synced audio
+ *
+ * --- DEPRECATED (migrate away) ---
+ * - gemini-2.0-flash             | Deprecated - use gemini-2.5-flash
+ * - gemini-2.0-flash-lite        | Deprecated - use gemini-2.5-flash-lite
+ * - gemini-3-pro-preview         | Shut down March 9, 2026 - use gemini-3.1-pro-preview or gemini-2.5-pro
+ * - text-embedding-004           | Legacy - use gemini-embedding-001
  */
 
 class GeminiService
@@ -32,7 +51,7 @@ class GeminiService
     /**
      * Generates content using a specified Gemini model with retry mechanism.
      *
-     * @param string $model The Gemini model to use (e.g., 'gemini-2.5-pro').
+     * @param string $model The Gemini model to use (e.g., 'gemini-2.5-flash').
      * @param string $prompt The prompt to send to the model.
      * @param array $config Generation configuration (temperature, maxOutputTokens, etc.).
      * @param string|null $systemInstruction Optional system instruction.
@@ -266,7 +285,7 @@ class GeminiService
     /**
      * Generates embeddings for a given text using a specified Gemini embedding model.
      *
-     * @param string $model The Gemini embedding model to use (e.g., 'text-embedding-004').
+     * @param string $model The Gemini embedding model to use (e.g., 'gemini-embedding-001').
      * @param string $text The text to embed.
      * @return array|null The embedding values as an array, or null on failure.
      */
@@ -306,7 +325,7 @@ class GeminiService
      * Generates an image based on a prompt using a specified Gemini image generation model.
      *
      * @param string $prompt The prompt for image generation.
-     * @param string $model The Gemini image generation model to use (e.g., 'gemini-2.5-flash-image').
+     * @param string $model The Gemini image generation model to use (e.g., 'gemini-3-pro-image-preview').
      * @param int $candidateCount The number of images to generate.
      * @return array|null An array of image data arrays, or null on failure.
      */
@@ -429,7 +448,7 @@ class GeminiService
      * Starts a long-running video generation operation using a specified Gemini model.
      *
      * @param string $prompt The prompt for video generation.
-     * @param string $model The Gemini video generation model to use (e.g., 'veo-2.0-generate-001').
+     * @param string $model The Gemini video generation model to use (e.g., 'veo-3.1-generate-preview').
      * @param array $parameters Additional generation parameters (e.g., aspectRatio, durationSeconds).
      * @return string|null The operation name if successful, or null on failure.
      */

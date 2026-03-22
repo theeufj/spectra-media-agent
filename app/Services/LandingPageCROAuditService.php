@@ -260,7 +260,7 @@ class LandingPageCROAuditService
                       "3. Top 5 keywords/phrases detected\n\n" .
                       "Format as JSON with keys: score, analysis, keywords";
 
-            $response = $this->geminiService->generateContent('gemini-2.0-flash-lite', $prompt);
+            $response = $this->geminiService->generateContent('gemini-2.5-flash-lite', $prompt);
             $text = $response['text'] ?? '';
 
             // Try to parse JSON response

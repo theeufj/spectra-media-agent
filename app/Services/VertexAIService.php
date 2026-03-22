@@ -9,29 +9,29 @@ use Illuminate\Support\Facades\Cache;
 /**
  * Vertex AI Service for Google Cloud Platform
  * 
- * Available Gemini Models (Generally Available):
- * - gemini-3-pro-preview | Most intelligent model, best in the world for multimodal understanding
- * - gemini-2.5-pro | Powerful reasoning model, excels at coding and complex reasoning
- * - gemini-2.5-flash | Most balanced model with 1M token context window
- * - gemini-2.5-flash-lite | Fastest and most cost-efficient for high-frequency tasks
- * - gemini-2.5-flash-image | State-of-the-art image generation and editing (Nano Banana)
- * - gemini-2.0-flash | Price-performance model
- * - gemini-2.0-flash-lite | Optimized for cost and low latency
+ * Available Gemini Models (Verified March 2026 from ai.google.dev/gemini-api/docs/models):
+ * - gemini-3.1-pro-preview | Advanced intelligence, agentic & vibe coding (replaces shut-down gemini-3-pro-preview)
+ * - gemini-3-flash-preview | Frontier-class performance at low cost
+ * - gemini-3.1-flash-lite-preview | Budget / Ultra-low latency
+ * - gemini-2.5-pro | Deep reasoning & coding (stable)
+ * - gemini-2.5-flash | Best price-performance with reasoning (stable)
+ * - gemini-2.5-flash-lite | Fastest, most budget-friendly multimodal (stable)
+ * - gemini-2.5-flash-image | Nano Banana - Native image generation & editing
  * 
  * Available Imagen Models:
  * - imagen-4.0-generate-001 | Highest quality image generation
  * - imagen-4.0-fast-generate-001 | Higher quality with lower latency
  * - imagen-4.0-ultra-generate-001 | Highest quality with best prompt adherence
- * - imagen-3.0-generate-002 | Previous generation
- * - imagen-3.0-generate-001 | Previous generation
- * - imagen-3.0-fast-generate-001 | Lower latency generation
  * 
  * Available Veo Models (Video):
  * - veo-3.1-generate-001 | State-of-the-art video generation with native audio
  * - veo-3.1-fast-generate-001 | Higher quality with lower latency
- * - veo-3.1-generate-preview | Previous generation
- * - veo-3.0-fast-generate-001 | Previous generation with lower latency
- * - veo-2.0-generate-001 | Earlier generation
+ * - veo-3.1-generate-preview | Preview version
+ * 
+ * Deprecated (migrate away):
+ * - gemini-2.0-flash | Use gemini-2.5-flash
+ * - gemini-2.0-flash-lite | Use gemini-2.5-flash-lite
+ * - gemini-3-pro-preview | Shut down March 9, 2026 - use gemini-3.1-pro-preview or gemini-2.5-pro
  * 
  * Note: Model availability varies by region. Use us-central1 for widest selection.
  */

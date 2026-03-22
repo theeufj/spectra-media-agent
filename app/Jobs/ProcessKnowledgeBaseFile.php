@@ -115,7 +115,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                         continue;
                     }
 
-                    $embedding = $geminiService->embedContent('text-embedding-004', $chunk);
+                    $embedding = $geminiService->embedContent('gemini-embedding-001', $chunk);
 
                     if (is_null($embedding)) {
                         Log::warning("Failed to get embedding for a chunk from KB ID {$this->knowledgeBase->id}. Skipping chunk.", [

@@ -89,7 +89,7 @@ class GenerateImage implements ShouldQueue
 
             // --- AI-Powered Prompt Splitting ---
             $splitterPrompt = (new ImagePromptSplitterPrompt($strategyPrompt))->getPrompt();
-            $splitterResponse = $geminiService->generateContent('gemini-flash-latest', $splitterPrompt);
+            $splitterResponse = $geminiService->generateContent('gemini-2.5-flash', $splitterPrompt);
             
             $prompts = [];
             try {

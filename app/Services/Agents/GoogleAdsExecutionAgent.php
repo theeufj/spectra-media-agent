@@ -1017,7 +1017,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         try {
             $response = $this->gemini->generateContent(
-                model: 'gemini-3-pro-preview',
+                model: 'gemini-2.5-pro',
                 prompt: $recoveryPrompt,
                 config: ['temperature' => 0.3, 'maxOutputTokens' => 2048],
                 systemInstruction: 'You are an expert at diagnosing and recovering from Google Ads API errors. Provide specific, actionable recovery steps.'
