@@ -23,8 +23,8 @@ return [
     |
     */
     'chrome_args' => [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
+        'no-sandbox',
+        'disable-setuid-sandbox',
+        'disable-dev-shm-usage',
     ],
 ];
