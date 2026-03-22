@@ -292,8 +292,9 @@ class GeminiService
     public function embedContent(string $model, string $text): ?array
     {
         try {
-            // Use the stable v1 endpoint for embedding models like text-embedding-004
-            $url = "{$this->stableBaseUrl}{$model}:embedContent";
+            // Preview models need v1beta, stable models use v1
+            $baseUrl = str_contains($model, 'preview') ? $this->baseUrl : $this->stableBaseUrl;
+            $url = "{$baseUrl}{$model}:embedContent";
             
             $response = Http::withHeaders([
                 'Content-Type' => 'application/json',
