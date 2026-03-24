@@ -40,8 +40,15 @@ abstract class BaseGoogleAdsService
     protected function buildClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
     {
         try {
+            $configPath = storage_path('app/google_ads_php.ini');
+
+            if (!file_exists($configPath)) {
+                Log::warning("Google Ads config file not found at {$configPath}. Skipping client build.");
+                return null;
+            }
+
             $oAuth2CredentialBuilder = (new OAuth2TokenBuilder())
-                ->fromFile(storage_path('app/google_ads_php.ini'));
+                ->fromFile($configPath);
 
             // For MCC operations (creating sub-accounts), use MCC credentials from ini file
             // For customer operations, use customer's refresh token
@@ -53,7 +60,7 @@ abstract class BaseGoogleAdsService
             $oAuth2Credential = $oAuth2CredentialBuilder->build();
 
             $builder = (new GoogleAdsClientBuilder())
-                ->fromFile(storage_path('app/google_ads_php.ini'))
+                ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2Credential);
 
             // Use MCC ID as login-customer-id ONLY if we are using MCC credentials

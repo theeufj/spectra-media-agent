@@ -85,6 +85,8 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                 try {
                     // Clean the JSON string by removing markdown fences and trimming whitespace
                     $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($generatedText));
+                    // Remove control characters that break json_decode (tabs, newlines, etc. inside JSON string values)
+                    $cleanedJson = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $cleanedJson);
                     $chunks = json_decode($cleanedJson, true);
 
                     if (json_last_error() !== JSON_ERROR_NONE) {

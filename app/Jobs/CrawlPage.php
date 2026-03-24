@@ -28,6 +28,9 @@ class CrawlPage implements ShouldQueue
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public int $tries = 2;
+    public int $timeout = 300; // 5 minutes max per page
+
     /**
      * @var \App\Models\User
      */
@@ -131,8 +134,10 @@ class CrawlPage implements ShouldQueue
             // Step 1: Use a headless browser to get the fully rendered HTML.
             // This executes the JavaScript on the page, just like a real browser.
             $html = Browsershot::url($this->url)
-                ->setNodeBinary(config('browsershot.node_binary_path')) // Use the new config value
+                ->setNodeBinary(config('browsershot.node_binary_path'))
                 ->addChromiumArguments(config('browsershot.chrome_args', []))
+                ->timeout(60)
+                ->waitUntilNetworkIdle()
                 ->bodyHtml();
 
             // Step 2: Extract meaningful text from the HTML.
@@ -282,6 +287,8 @@ class CrawlPage implements ShouldQueue
             try {
                 // Clean the JSON string by removing markdown fences and trimming whitespace
                 $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($generatedText));
+                // Remove control characters that break json_decode (tabs, newlines, etc. inside JSON string values)
+                $cleanedJson = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $cleanedJson);
                 $chunks = json_decode($cleanedJson, true);
 
                 if (json_last_error() !== JSON_ERROR_NONE) {

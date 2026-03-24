@@ -56,13 +56,8 @@ class RunHealthChecks implements ShouldQueue
 
         // Get all customers with active subscriptions or active campaigns
         $customers = Customer::query()
-            ->where(function ($query) {
-                $query->whereHas('subscription', function ($q) {
-                    $q->whereIn('stripe_status', ['active', 'trialing', 'past_due']);
-                })
-                ->orWhereHas('campaigns', function ($q) {
-                    $q->where('status', 'active');
-                });
+            ->whereHas('campaigns', function ($q) {
+                $q->where('status', 'active');
             })
             ->get();
 

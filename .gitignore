@@ -23,6 +23,7 @@ Homestead.json
 Homestead.yaml
 Thumbs.db
 /storage/app/google-ads-credentials.json
+/storage/app/google_ads_php.ini
 GOOGLE_ADS_API_TESTING_GUIDE.md
 scripts/generate_google_ads_refresh_token.php
 scripts/generate_google_ads_token_simple.php
