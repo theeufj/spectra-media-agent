@@ -15,9 +15,10 @@ import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/Q
 import AgentActivityFeed from '@/Components/AgentActivityFeed';
 
 export default function Dashboard({ auth }) {
-    const { campaigns, defaultCampaign, usageStats, pendingTasks, healthAlerts, agentActivities } = usePage().props;
+    const { campaigns, defaultCampaign, usageStats, pendingTasks, healthAlerts, agentActivities, flash } = usePage().props;
     const [selectedCampaign, setSelectedCampaign] = useState(defaultCampaign);
     const [performanceData, setPerformanceData] = useState(null);
+    const [showFlash, setShowFlash] = useState(!!flash?.success);
     const [loading, setLoading] = useState(true);
     const [dateRange, setDateRange] = useState({
         start: new Date(new Date().setDate(new Date().getDate() - 30)),
@@ -93,6 +94,23 @@ export default function Dashboard({ auth }) {
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {/* Setup Progress for New Users */}
                     <SetupProgressNav />
+
+                    {/* Flash Message */}
+                    {showFlash && flash?.success && (
+                        <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
+                            <div className="flex items-center">
+                                <svg className="w-5 h-5 text-green-500 mr-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                <p className="text-sm font-medium text-green-800">{flash.success}</p>
+                            </div>
+                            <button onClick={() => setShowFlash(false)} className="text-green-500 hover:text-green-700">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                </svg>
+                            </button>
+                        </div>
+                    )}
                     
                     {/* Usage Meters for Free Tier */}
                     {usageStats && usageStats.subscription_status !== 'active' && (

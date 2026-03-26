@@ -74,7 +74,7 @@ class KnowledgeBaseController extends Controller
 
         CrawlSitemap::dispatch($user, $validated['sitemap_url']);
 
-        return redirect()->route('dashboard')->with('sitemap_submitted', true);
+        return redirect()->back()->with('success', 'Crawl started! We\'re scanning your sitemap now. This may take a few minutes depending on the number of pages.');
     }
 
     /**
