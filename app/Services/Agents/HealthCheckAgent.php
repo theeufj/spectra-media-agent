@@ -789,7 +789,7 @@ class HealthCheckAgent
         
         try {
             $response = $this->gemini->generateContent(
-                model: 'gemini-3.1-pro-preview',
+                model: 'gemini-3-flash-preview',
                 prompt: $prompt,
                 config: ['temperature' => 0.7, 'maxOutputTokens' => 2048],
             );

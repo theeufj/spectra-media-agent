@@ -21,7 +21,7 @@ class PromptTestingService
 
         foreach ($promptVersions as $promptVersion) {
             $prompt = $this->hydratePrompt($promptVersion->prompt_text, $promptInputs);
-            $response = $this->geminiService->generateContent('gemini-3.1-pro-preview', $prompt);
+            $response = $this->geminiService->generateContent('gemini-3-flash-preview', $prompt);
             $results[$promptVersion->version_number] = $response;
         }
 

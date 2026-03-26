@@ -281,7 +281,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         try {
             // Use Google Search grounding for real-time API documentation access
             $response = $this->geminiService->generateContent(
-                model: 'gemini-3.1-pro-preview',
+                model: 'gemini-3-flash-preview',
                 prompt: $prompt,
                 config: [
                     'temperature' => 0.7,

@@ -146,7 +146,7 @@ class GenerateVideo implements ShouldQueue
             // Step 1: Generate Video Script using Gemini
             Log::info("Generating video script for Strategy ID: {$this->strategy->id}");
             $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines, $productContext))->getPrompt();
-            $scriptResponse = $geminiService->generateContent('gemini-3.1-pro-preview', $scriptPrompt);
+            $scriptResponse = $geminiService->generateContent('gemini-3-flash-preview', $scriptPrompt);
             
             $script = $scriptResponse['text'] ?? null;
             if (empty($script)) {

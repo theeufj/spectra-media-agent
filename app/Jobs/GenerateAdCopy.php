@@ -104,7 +104,7 @@ class GenerateAdCopy implements ShouldQueue
                     $brandGuidelines,
                     $productContext
                 ))->getPrompt();
-                $generatedResponse = $geminiService->generateContent('gemini-3.1-pro-preview', $adCopyPrompt);
+                $generatedResponse = $geminiService->generateContent('gemini-3-flash-preview', $adCopyPrompt);
                 Log::info("Received raw response from Gemini for attempt {$attempt}.", ['response' => $generatedResponse]);
 
                 if (is_null($generatedResponse)) {

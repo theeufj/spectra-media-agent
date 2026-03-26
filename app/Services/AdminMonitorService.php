@@ -82,7 +82,7 @@ class AdminMonitorService
 
             $reviewPrompt = (new AdCopyReviewPrompt($platform, $headlinesString, $descriptionsString))->getPrompt();
 
-            $generatedResponse = $this->geminiService->generateContent('gemini-3.1-pro-preview', $reviewPrompt);
+            $generatedResponse = $this->geminiService->generateContent('gemini-3-flash-preview', $reviewPrompt);
 
             if (is_null($generatedResponse)) {
                 Log::error("AdminMonitorService: Failed to get ad copy review from Gemini for AdCopy ID {$adCopy->id}.");

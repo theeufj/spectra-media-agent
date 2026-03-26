@@ -111,7 +111,7 @@ class GenerateStrategy implements ShouldQueue
             
             Log::info("Making API request to Gemini with thinking and search enabled for campaign {$this->campaign->id}");
             $result = $gemini->generateWithThinkingAndSearch(
-                'gemini-3.1-pro-preview',
+                'gemini-3-flash-preview',
                 $systemInstruction,
                 $prompt,
                 [

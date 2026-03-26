@@ -268,7 +268,7 @@ class CrawlPage implements ShouldQueue
 
             // Step 3: Use Gemini's Generative Content API to break content into semantically meaningful chunks.
             $chunkingPrompt = (new ChunkingPrompt($cleanedContent))->getPrompt();
-            $generatedResponse = $geminiService->generateContent('gemini-3.1-pro-preview', $chunkingPrompt);
+            $generatedResponse = $geminiService->generateContent('gemini-3-flash-preview', $chunkingPrompt);
 
             if (is_null($generatedResponse)) {
                 Log::error("Failed to get chunks from Gemini for {$this->url}: Generated text was null.");
@@ -287,9 +287,19 @@ class CrawlPage implements ShouldQueue
             try {
                 // Clean the JSON string by removing markdown fences and trimming whitespace
                 $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($generatedText));
-                // Remove control characters that break json_decode (tabs, newlines, etc. inside JSON string values)
-                $cleanedJson = preg_replace('/[\x00-\x1F\x7F]/u', ' ', $cleanedJson);
+                // Ensure valid UTF-8 encoding before cleaning
+                $cleanedJson = mb_convert_encoding($cleanedJson, 'UTF-8', 'UTF-8');
+                // Remove control characters that break json_decode
+                $cleanedJson = preg_replace('/[\x00-\x1F\x7F]/', ' ', $cleanedJson);
                 $chunks = json_decode($cleanedJson, true);
+
+                // If JSON is truncated, try to salvage by closing the structure
+                if (json_last_error() !== JSON_ERROR_NONE) {
+                    // Try closing unclosed JSON object: find last complete value
+                    $repaired = preg_replace('/,\s*"[^"]*"\s*:\s*"[^"]*$/', '', $cleanedJson);
+                    $repaired = rtrim($repaired, ', ') . '}';
+                    $chunks = json_decode($repaired, true);
+                }
 
                 if (json_last_error() !== JSON_ERROR_NONE) {
                     throw new \Exception("JSON decode error: " . json_last_error_msg());

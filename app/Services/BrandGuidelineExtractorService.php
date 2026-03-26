@@ -87,7 +87,7 @@ class BrandGuidelineExtractorService
             ]);
 
             // Step 4: Call Gemini with extended thinking for deep analysis
-            $response = $this->geminiService->generateContent('gemini-3.1-pro-preview', $prompt);
+            $response = $this->geminiService->generateContent('gemini-3-flash-preview', $prompt);
 
             if (!$response || !isset($response['text'])) {
                 Log::error("Failed to generate brand guidelines from Gemini", [
