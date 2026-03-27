@@ -3,7 +3,7 @@ import { Link, usePage } from '@inertiajs/react';
 
 /**
  * SetupProgressNav - Shows setup progress for new users
- * Guides them through Knowledge Base → Brand Guidelines → Platform Connection → Campaign
+ * Guides them through Knowledge Base → Brand Guidelines → Campaign
  */
 export default function SetupProgressNav() {
     const { auth } = usePage().props;
@@ -83,11 +83,6 @@ export default function SetupProgressNav() {
                         </span>
                         <div className="min-w-0">
                             <p className="font-medium truncate">{step.title}</p>
-                            {step.connected_platforms?.length > 0 && (
-                                <p className="text-[10px] opacity-75 truncate">
-                                    {step.connected_platforms.join(', ')}
-                                </p>
-                            )}
                         </div>
                     </Link>
                 ))}
@@ -100,7 +95,6 @@ function getStepIcon(stepKey) {
     const icons = {
         knowledge_base: '📚',
         brand_guidelines: '🎨',
-        platform_connection: '🔗',
         first_campaign: '🚀',
     };
     return icons[stepKey] || '📋';

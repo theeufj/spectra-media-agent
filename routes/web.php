@@ -31,11 +31,8 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['au
 
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::get('/profile/google-ads/accounts', [ProfileController::class, 'googleAdsAccounts'])->name('profile.google-ads.accounts');
-    Route::put('/profile/google-ads/accounts', [ProfileController::class, 'updateGoogleAdsAccount'])->name('profile.google-ads.accounts.update');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-    Route::delete('/profile/connections/{connection}', [ProfileController::class, 'disconnectAccount'])->name('profile.disconnect');
     Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'page'])->name('notifications.index');
 });
@@ -379,8 +376,6 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
     // Setup progress routes
     Route::get('/setup-progress', [\App\Http\Controllers\SetupProgressController::class, 'index'])
         ->name('api.setup-progress.index');
-    Route::post('/setup-progress/{step}/skip', [\App\Http\Controllers\SetupProgressController::class, 'skipStep'])
-        ->name('api.setup-progress.skip');
 
     // Deployment status polling
     Route::get('/campaigns/{campaign}/deployment-status', [\App\Http\Controllers\CampaignController::class, 'apiDeploymentStatus'])

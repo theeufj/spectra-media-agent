@@ -3,7 +3,6 @@ import { Head, usePage, router } from '@inertiajs/react';
 import DeleteUserForm from './Partials/DeleteUserForm';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
-import ConnectedAccountsForm from './Partials/ConnectedAccountsForm';
 import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -11,7 +10,7 @@ import DangerButton from '@/Components/DangerButton';
 import FacebookPageSelector from '@/Components/FacebookPageSelector';
 import { useState, useEffect } from 'react';
 
-export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, connections = [] }) {
+export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
     const { customers } = usePage().props;
     const [formData, setFormData] = useState({
         name: '',
@@ -129,11 +128,6 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
 
             <div className="py-12">
                 <div className="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
-                    {/* Connected Accounts - Most Important for email/password users */}
-                    <div id="connections" className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
-                        <ConnectedAccountsForm connections={connections} />
-                    </div>
-
                     <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
                         <UpdateProfileInformationForm
                             mustVerifyEmail={mustVerifyEmail}

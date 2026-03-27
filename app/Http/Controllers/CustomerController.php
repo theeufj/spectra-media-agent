@@ -50,10 +50,6 @@ class CustomerController extends Controller
 
         session(['active_customer_id' => $customer->id]);
 
-        if ($refreshToken && isset($accounts) && count($accounts) > 1) {
-            return redirect()->route('profile.google-ads.accounts')->with('status', 'Select the Google Ads account you want Spectra to use.');
-        }
-
         if ($request->wantsJson()) {
             return response()->json(['message' => 'Customer created successfully', 'customer' => $customer]);
         }
