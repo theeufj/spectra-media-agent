@@ -568,33 +568,27 @@ class GeminiService
     public function extendVideo(string $videoUri, string $prompt, array $parameters = []): ?string
     {
         try {
-            // Extract file name from URI for the video parameter
-            // The videoUri should be in the format returned by Gemini (e.g., files/xyz)
-            $videoFileName = $this->extractFileNameFromUri($videoUri);
-            
-            if (!$videoFileName) {
-                Log::error("GeminiService: Invalid video URI format for extension: {$videoUri}");
-                return null;
-            }
-
+            // Pass the video URI exactly as received from the generation response.
+            // The Veo API expects the video object with "uri" key (not "fileUri").
             $requestBody = [
                 'instances' => [
                     [
                         'prompt' => $prompt,
                         'video' => [
-                            'fileUri' => $videoFileName
+                            'uri' => $videoFileName
                         ]
                     ]
                 ],
                 'parameters' => array_merge([
                     'aspectRatio' => '16:9',
                     'sampleCount' => 1,
-                    'durationSeconds' => 7, // Extension duration (up to 7 seconds)
+                    'durationSeconds' => 8, // Must be 8 when using extension
                     'personGeneration' => 'ALLOW_ALL',
+                    'resolution' => '720p', // Extension only supports 720p
                 ], $parameters),
             ];
 
-            Log::info("GeminiService: Extending video with URI: {$videoFileName}");
+            Log::info("GeminiService: Extending video with URI: {$videoUri}");
             Log::info("GeminiService: Extension prompt: {$prompt}");
 
             $response = Http::withHeaders([
@@ -619,30 +613,4 @@ class GeminiService
         }
     }
 
-    /**
-     * Extract the file name/identifier from a Gemini video URI.
-     * Handles both full URIs and file identifiers.
-     * 
-     * @param string $uri The video URI
-     * @return string|null The extracted file identifier
-     */
-    private function extractFileNameFromUri(string $uri): ?string
-    {
-        // If already in correct format (files/xyz or just the ID)
-        if (preg_match('#^files/[a-zA-Z0-9]+$#', $uri)) {
-            return $uri;
-        }
-
-        // Extract from full download URI (e.g., https://generativelanguage.googleapis.com/v1beta/files/xyz:download?alt=media)
-        if (preg_match('#/files/([a-zA-Z0-9]+)(?::|/)#', $uri, $matches)) {
-            return 'files/' . $matches[1];
-        }
-
-        // If it's just an ID
-        if (preg_match('#^[a-zA-Z0-9]+$#', $uri)) {
-            return 'files/' . $uri;
-        }
-
-        return null;
-    }
 }

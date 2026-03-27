@@ -89,44 +89,47 @@ class DeploymentController extends Controller
         $customer = $user->customers()->findOrFail(session('active_customer_id'));
         
         if ($campaign->customer_id !== $customer->id) {
-            return response()->json([
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
                 'message' => 'Unauthorized access to this campaign.',
-            ], 403);
+            ]);
         }
 
         // 1. Subscription Check (or payment method in testing mode)
         $hasAccess = $user->subscribed('default') || $user->hasDefaultPaymentMethod();
         
         if (!$hasAccess) {
-            return response()->json([
+            return redirect()->route('subscription.pricing')->with('flash', [
+                'type' => 'error',
                 'message' => 'You must have an active subscription to deploy campaigns.',
-                'redirect' => route('subscription.pricing'),
-            ], 403);
+            ]);
         }
 
         // 2. Deployment Enabled Check (Admin Setting)
         $deploymentEnabled = Setting::get('deployment_enabled', true);
         
         if (!$deploymentEnabled) {
-            return response()->json([
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
                 'message' => 'We\'re currently enhancing our deployment system to serve you better. Campaign deployment will be available soon! Your subscription remains active and you can continue creating campaigns.',
-                'type' => 'maintenance',
-            ], 503);
+            ]);
         }
 
         // 3. Check if campaign has strategies
         if ($campaign->strategies()->count() === 0) {
-            return response()->json([
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
                 'message' => 'This campaign has no strategies to deploy.',
-            ], 400);
+            ]);
         }
 
         // 4. Check if at least one strategy is signed off
         $signedOffCount = $campaign->strategies()->whereNotNull('signed_off_at')->count();
         if ($signedOffCount === 0) {
-            return response()->json([
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
                 'message' => 'Please sign off at least one strategy before deploying.',
-            ], 400);
+            ]);
         }
 
         Log::info("✅ Deployment initiated by User ID: {$user->id} for Campaign ID: {$campaign->id}", [
@@ -142,9 +145,9 @@ class DeploymentController extends Controller
         
         Log::info("📤 DeployCampaign job dispatched for Campaign ID: {$campaign->id}");
         
-        return response()->json([
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
             'message' => 'Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.',
-            'campaign_id' => $campaign->id,
         ]);
     }
 }

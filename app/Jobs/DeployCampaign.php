@@ -13,6 +13,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Log;
 
 class DeployCampaign implements ShouldQueue
@@ -43,44 +44,52 @@ class DeployCampaign implements ShouldQueue
             return;
         }
 
-        // Initialize ad spend credit if this is the customer's first campaign
-        try {
-            $credit = $customer->adSpendCredit;
-            
-            if (!$credit) {
-                Log::info("Initializing ad spend credit for customer", [
-                    'customer_id' => $customer->id,
-                    'daily_budget' => $this->campaign->daily_budget,
-                ]);
+        // Initialize ad spend credit if managed billing is enabled
+        $managedBillingEnabled = Setting::get('managed_billing_enabled', true);
+        
+        if ($managedBillingEnabled) {
+            try {
+                $credit = $customer->adSpendCredit;
                 
-                $credit = $billingService->initializeCreditAccount(
-                    $customer, 
-                    $this->campaign->daily_budget ?? 50 // Default $50/day if not set
-                );
-                
-                Log::info("Ad spend credit initialized", [
-                    'customer_id' => $customer->id,
-                    'initial_credit' => $credit->initial_credit_amount,
-                ]);
-            }
+                if (!$credit) {
+                    Log::info("Initializing ad spend credit for customer", [
+                        'customer_id' => $customer->id,
+                        'daily_budget' => $this->campaign->daily_budget,
+                    ]);
+                    
+                    $credit = $billingService->initializeCreditAccount(
+                        $customer, 
+                        $this->campaign->daily_budget ?? 50 // Default $50/day if not set
+                    );
+                    
+                    Log::info("Ad spend credit initialized", [
+                        'customer_id' => $customer->id,
+                        'initial_credit' => $credit->initial_credit_amount,
+                    ]);
+                }
 
-            // Check if customer can run campaigns (payment status OK)
-            if (!$credit->canRunCampaigns()) {
-                Log::warning("Customer cannot run campaigns - payment issue", [
+                // Check if customer can run campaigns (payment status OK)
+                if (!$credit->canRunCampaigns()) {
+                    Log::warning("Customer cannot run campaigns - payment issue", [
+                        'customer_id' => $customer->id,
+                        'status' => $credit->status,
+                        'payment_status' => $credit->payment_status,
+                    ]);
+                    
+                    // Fail the job with a message
+                    throw new \Exception("Cannot deploy campaign: Payment issue. Status: {$credit->payment_status}");
+                }
+            } catch (\Exception $e) {
+                Log::error("Ad spend credit initialization failed", [
                     'customer_id' => $customer->id,
-                    'status' => $credit->status,
-                    'payment_status' => $credit->payment_status,
+                    'error' => $e->getMessage(),
                 ]);
-                
-                // Fail the job with a message
-                throw new \Exception("Cannot deploy campaign: Payment issue. Status: {$credit->payment_status}");
+                throw $e; // Re-throw to fail the job
             }
-        } catch (\Exception $e) {
-            Log::error("Ad spend credit initialization failed", [
+        } else {
+            Log::info("Managed billing is disabled - skipping ad spend credit initialization", [
                 'customer_id' => $customer->id,
-                'error' => $e->getMessage(),
             ]);
-            throw $e; // Re-throw to fail the job
         }
 
         $deploymentResults = [];
