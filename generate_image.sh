@@ -13,8 +13,8 @@
 set -e # Exit immediately if a command exits with a non-zero status.
 
 # --- Configuration ---
-MODEL_ID="gemini-2.5-flash-image"
-API_ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:streamGenerateContent"
+MODEL_ID="gemini-3.1-flash-image-preview"
+API_ENDPOINT="https://generativelanguage.googleapis.com/v1beta/models/${MODEL_ID}:generateContent"
 PROMPT="$1"
 
 # --- Validation ---
@@ -61,9 +61,34 @@ echo "Generated request.json with your prompt."
 echo "Sending request to Gemini API..."
 
 curl \
--X POST \
+-s -X POST \
 -H "Content-Type: application/json" \
 "${API_ENDPOINT}?key=${GEMINI_API_KEY}" -d '@request.json' -o response.json
 
 echo "Response saved to response.json"
+
+# --- Extract Image ---
+OUTPUT_FILE="${2:-generated_image.png}"
+if command -v python3 &> /dev/null; then
+    python3 -c "
+import json, base64, sys
+with open('response.json') as f:
+    data = json.load(f)
+candidates = data.get('candidates', [])
+for c in candidates:
+    for part in c.get('content', {}).get('parts', []):
+        if 'inlineData' in part:
+            img_data = base64.b64decode(part['inlineData']['data'])
+            with open('$OUTPUT_FILE', 'wb') as out:
+                out.write(img_data)
+            print(f'Image saved to $OUTPUT_FILE ({len(img_data)} bytes)')
+            sys.exit(0)
+        if 'text' in part:
+            print('Text response:', part['text'])
+print('No image found in response')
+"
+else
+    echo "python3 not found - image is base64 encoded in response.json"
+fi
+
 echo "Done."

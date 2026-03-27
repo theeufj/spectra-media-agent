@@ -227,6 +227,35 @@ class CampaignController extends Controller
     }
 
     /**
+     * regenerateStrategies deletes existing strategies and re-dispatches the generation job.
+     */
+    public function regenerateStrategies(Request $request, Campaign $campaign)
+    {
+        $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
+        if ($campaign->customer_id !== $customer->id) {
+            abort(403);
+        }
+
+        // Only allow regeneration if no strategies are signed off
+        if ($campaign->strategies()->whereNotNull('signed_off_at')->exists()) {
+            return back()->with('error', 'Cannot regenerate strategies that have already been signed off.');
+        }
+
+        // Delete existing strategies
+        $campaign->strategies()->delete();
+
+        // Reset generation state and re-dispatch
+        $campaign->update([
+            'strategy_generation_started_at' => now(),
+            'strategy_generation_error' => null,
+        ]);
+
+        GenerateStrategy::dispatch($campaign);
+
+        return back()->with('success', 'Regenerating strategies...');
+    }
+
+    /**
      * aiAssist provides AI-powered assistance for campaign creation through a chat interface.
      * Uses Google Gemini API directly for simplicity.
      */

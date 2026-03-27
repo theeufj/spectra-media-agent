@@ -177,6 +177,10 @@ Route::middleware(['auth'])->group(function () {
     // POST /campaigns/{campaign}/sign-off-all
     Route::post('/campaigns/{campaign}/sign-off-all', [App\Http\Controllers\CampaignController::class, 'signOffAllStrategies'])->name('campaigns.sign-off-all');
 
+    // Route to regenerate strategies for a campaign.
+    // POST /campaigns/{campaign}/regenerate-strategies
+    Route::post('/campaigns/{campaign}/regenerate-strategies', [App\Http\Controllers\CampaignController::class, 'regenerateStrategies'])->name('campaigns.regenerate-strategies');
+
     // Route to delete a campaign.
     // DELETE /campaigns/{campaign}
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');

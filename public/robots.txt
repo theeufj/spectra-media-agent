@@ -1,2 +1,8 @@
 User-agent: *
-Disallow:
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+Sitemap: https://sitetospend.com/sitemap.xml

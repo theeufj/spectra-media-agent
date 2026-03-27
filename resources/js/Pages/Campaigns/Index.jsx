@@ -78,7 +78,7 @@ export default function Index({ auth, campaigns = [] }) {
                                             }`}>
                                                 {campaign.status}
                                             </span>
-                                            <span className="text-sm font-semibold text-flame-orange-600 bg-flame-orange-50 px-3 py-1 rounded">{campaign.strategies?.length || 0} strategies</span>
+                                            <span className="text-sm font-semibold text-flame-orange-600 bg-flame-orange-50 px-3 py-1 rounded">{campaign.strategies?.length || 0} {(campaign.strategies?.length || 0) === 1 ? 'strategy' : 'strategies'}</span>
                                         </div>
                                     </div>
 
@@ -93,11 +93,11 @@ export default function Index({ auth, campaigns = [] }) {
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 uppercase">Start Date</p>
-                                                    <p className="font-semibold">{campaign.start_date}</p>
+                                                    <p className="font-semibold">{campaign.start_date ? new Date(campaign.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 uppercase">End Date</p>
-                                                    <p className="font-semibold">{campaign.end_date}</p>
+                                                    <p className="font-semibold">{campaign.end_date ? new Date(campaign.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</p>
                                                 </div>
                                                 <div>
                                                     <p className="text-xs text-gray-500 uppercase">Primary KPI</p>
