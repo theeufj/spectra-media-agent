@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, Fragment } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
+import { Dialog, Transition } from '@headlessui/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
 export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit }) {

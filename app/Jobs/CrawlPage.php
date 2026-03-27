@@ -199,7 +199,20 @@ class CrawlPage implements ShouldQueue
                 );
                 
                 Log::info("Successfully crawled and stored customer page: {$this->url}");
-                
+
+                // Also store to KnowledgeBase for brand guideline extraction
+                KnowledgeBase::updateOrCreate(
+                    [
+                        'user_id' => $this->user->id,
+                        'url' => $this->url,
+                    ],
+                    [
+                        'content' => $cleanedContent,
+                        'css_content' => '',
+                        'embedding' => $embedding ? new Vector($embedding) : null,
+                    ]
+                );
+
                 // Run CRO Audit for customer pages (product/money pages)
                 if (in_array($pageType, ['product', 'money', 'landing'])) {
                     try {

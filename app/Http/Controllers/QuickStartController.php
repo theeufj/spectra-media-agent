@@ -49,7 +49,7 @@ class QuickStartController extends Controller
         session(['active_customer_id' => $customer->id]);
 
         // Dispatch crawl to populate knowledge base
-        CrawlSitemap::dispatch($user, $sitemapUrl);
+        CrawlSitemap::dispatch($user, $sitemapUrl, $customer->id);
 
         // Dispatch brand guideline extraction (will run after crawl has data)
         ExtractBrandGuidelines::dispatch($customer)->delay(now()->addMinutes(3));

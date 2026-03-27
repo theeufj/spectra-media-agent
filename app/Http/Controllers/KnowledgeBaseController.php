@@ -72,7 +72,8 @@ class KnowledgeBaseController extends Controller
             'sitemap_url' => 'required|url',
         ]);
 
-        CrawlSitemap::dispatch($user, $validated['sitemap_url']);
+        $customerId = session('active_customer_id');
+        CrawlSitemap::dispatch($user, $validated['sitemap_url'], $customerId);
 
         return redirect()->back()->with('success', 'Crawl started! We\'re scanning your sitemap now. This may take a few minutes depending on the number of pages.');
     }

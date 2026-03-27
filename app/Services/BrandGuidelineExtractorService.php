@@ -59,12 +59,20 @@ class BrandGuidelineExtractorService
                 return null;
             }
 
-            // Step 1: Gather all knowledge base content from all users associated with this customer
-            $userIds = $customer->users()->pluck('users.id');
-            
-            $websiteContent = \App\Models\KnowledgeBase::whereIn('user_id', $userIds)
+            // Step 1: Gather content from CustomerPage (primary) and KnowledgeBase (fallback)
+            $customerPageContent = \App\Models\CustomerPage::where('customer_id', $customer->id)
                 ->pluck('content')
                 ->implode("\n\n---PAGE BREAK---\n\n");
+
+            $websiteContent = $customerPageContent;
+
+            // Fallback to KnowledgeBase if no CustomerPage data
+            if (empty($websiteContent)) {
+                $userIds = $customer->users()->pluck('users.id');
+                $websiteContent = \App\Models\KnowledgeBase::whereIn('user_id', $userIds)
+                    ->pluck('content')
+                    ->implode("\n\n---PAGE BREAK---\n\n");
+            }
 
             if (empty($websiteContent)) {
                 Log::warning("No knowledge base content found for customer {$customer->id}");
