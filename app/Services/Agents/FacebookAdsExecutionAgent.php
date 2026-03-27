@@ -106,7 +106,9 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             return $result;
         }
         
-        if (!$this->customer->facebook_ads_access_token) {
+        // For BM-owned accounts (Path A) the platform System User token is used —
+        // no per-client OAuth token is required.
+        if (!$this->customer->facebook_bm_owned && !$this->customer->facebook_ads_access_token) {
             $result->addError('facebook_ads_not_authorized', 'Facebook Ads account not authorized');
             return $result;
         }

@@ -34,6 +34,7 @@ class Customer extends Model
         'facebook_token_expires_at',
         'facebook_token_refreshed_at',
         'facebook_token_is_long_lived',
+        'facebook_bm_owned',
         'gtm_container_id',
         'gtm_account_id',
         'gtm_workspace_id',
@@ -57,6 +58,7 @@ class Customer extends Model
         'facebook_token_expires_at' => 'datetime',
         'facebook_token_refreshed_at' => 'datetime',
         'facebook_token_is_long_lived' => 'boolean',
+        'facebook_bm_owned' => 'boolean',
         'google_ads_customer_is_manager' => 'boolean',
     ];
 

@@ -247,6 +247,19 @@ Route::middleware(['auth'])->group(function () {
 
 /*
 |--------------------------------------------------------------------------
+| Facebook Ad Account Routes (Path A — Platform Business Manager)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->group(function () {
+    // Show the Facebook ad account setup page for a customer
+    Route::get('/customers/{customer}/facebook/setup', [App\Http\Controllers\FacebookAdAccountController::class, 'show'])->name('customers.facebook.setup');
+
+    // Provision a BM-owned Facebook ad account (no client OAuth required)
+    Route::post('/customers/{customer}/facebook/provision', [App\Http\Controllers\FacebookAdAccountController::class, 'provision'])->name('customers.facebook.provision');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Ad Copy Routes
 |--------------------------------------------------------------------------
 */

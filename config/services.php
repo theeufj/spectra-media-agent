@@ -66,6 +66,11 @@ return [
         'client_secret' => env('FACEBOOK_APP_SECRET'),
         'redirect' => env('APP_URL') . '/auth/facebook/callback',
         'config_id' => env('FACEBOOK_CONFIG_ID'),
+
+        // Platform Business Manager (Path A — zero OAuth for new clients)
+        // Create at business.facebook.com → System Users → Generate Token
+        'business_manager_id' => env('FACEBOOK_BUSINESS_MANAGER_ID'),
+        'system_user_token'   => env('FACEBOOK_SYSTEM_USER_TOKEN'),
     ],
 
     'stripe' => [

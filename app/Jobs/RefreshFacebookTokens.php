@@ -39,8 +39,10 @@ class RefreshFacebookTokens implements ShouldQueue
 
         $tokenService = new TokenService();
         
-        // Get all customers with Facebook tokens
-        $customers = Customer::whereNotNull('facebook_ads_access_token')->get();
+        // Get all customers with Facebook tokens (skip BM-owned — they use System User token)
+        $customers = Customer::whereNotNull('facebook_ads_access_token')
+            ->where('facebook_bm_owned', false)
+            ->get();
         
         $stats = [
             'total' => $customers->count(),
