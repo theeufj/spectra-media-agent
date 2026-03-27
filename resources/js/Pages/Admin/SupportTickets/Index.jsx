@@ -25,11 +25,18 @@ const statusLabels = {
 };
 
 export default function Index({ tickets, stats, filters }) {
+    const [searchInput, setSearchInput] = React.useState(filters.search || '');
+
     const applyFilter = (key, value) => {
         router.get(route('admin.support-tickets.index'), {
             ...filters,
             [key]: value || undefined,
         }, { preserveState: true });
+    };
+
+    const handleSearch = (e) => {
+        e.preventDefault();
+        applyFilter('search', searchInput);
     };
 
     return (
@@ -66,8 +73,23 @@ export default function Index({ tickets, stats, filters }) {
                         ))}
                     </div>
 
-                    {/* Filters */}
-                    <div className="flex items-center gap-3 mb-4">
+                    {/* Search & Filters */}
+                    <div className="flex items-center gap-3 mb-4 flex-wrap">
+                        <form onSubmit={handleSearch} className="flex items-center gap-2">
+                            <input
+                                type="text"
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                placeholder="Search tickets by subject, user, email, or #ID..."
+                                className="rounded-md border-gray-300 text-sm w-80"
+                            />
+                            <button
+                                type="submit"
+                                className="px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+                            >
+                                Search
+                            </button>
+                        </form>
                         <select
                             value={filters.priority || ''}
                             onChange={(e) => applyFilter('priority', e.target.value)}
@@ -79,9 +101,23 @@ export default function Index({ tickets, stats, filters }) {
                             <option value="normal">Normal</option>
                             <option value="low">Low</option>
                         </select>
-                        {(filters.status || filters.priority) && (
+                        <select
+                            value={filters.category || ''}
+                            onChange={(e) => applyFilter('category', e.target.value)}
+                            className="rounded-md border-gray-300 text-sm"
+                        >
+                            <option value="">All Categories</option>
+                            <option value="billing">Billing</option>
+                            <option value="technical">Technical</option>
+                            <option value="campaign">Campaign</option>
+                            <option value="general">General</option>
+                        </select>
+                        {(filters.status || filters.priority || filters.search || filters.category) && (
                             <button
-                                onClick={() => router.get(route('admin.support-tickets.index'))}
+                                onClick={() => {
+                                    setSearchInput('');
+                                    router.get(route('admin.support-tickets.index'));
+                                }}
                                 className="text-sm text-gray-500 hover:text-gray-700"
                             >
                                 Clear filters

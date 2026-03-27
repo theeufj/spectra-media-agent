@@ -19,12 +19,29 @@ class SupportTicketController extends Controller
             ->orderByRaw("CASE priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 WHEN 'low' THEN 3 END")
             ->orderByDesc('created_at');
 
+        if ($request->filled('search')) {
+            $search = $request->search;
+            $query->where(function ($q) use ($search) {
+                $q->where('subject', 'ilike', "%{$search}%")
+                  ->orWhere('description', 'ilike', "%{$search}%")
+                  ->orWhere('id', '=', is_numeric($search) ? (int) $search : 0)
+                  ->orWhereHas('user', function ($uq) use ($search) {
+                      $uq->where('name', 'ilike', "%{$search}%")
+                         ->orWhere('email', 'ilike', "%{$search}%");
+                  });
+            });
+        }
+
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         if ($request->filled('priority')) {
             $query->where('priority', $request->priority);
+        }
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->category);
         }
 
         $tickets = $query->paginate(25)->withQueryString();
@@ -39,7 +56,7 @@ class SupportTicketController extends Controller
         return Inertia::render('Admin/SupportTickets/Index', [
             'tickets' => $tickets,
             'stats' => $stats,
-            'filters' => $request->only(['status', 'priority']),
+            'filters' => $request->only(['status', 'priority', 'search', 'category']),
         ]);
     }
 
