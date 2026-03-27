@@ -163,7 +163,7 @@ class SystemHealthController extends Controller
     private function checkStripe(): array
     {
         try {
-            $hasCredentials = !empty(config('cashier.secret'));
+            $hasCredentials = !empty(config('services.stripe.secret'));
             
             if (!$hasCredentials) {
                 return [
@@ -175,7 +175,7 @@ class SystemHealthController extends Controller
             }
 
             // Quick balance check to verify connectivity
-            \Stripe\Stripe::setApiKey(config('cashier.secret'));
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             $balance = \Stripe\Balance::retrieve();
             
             return [

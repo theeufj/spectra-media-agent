@@ -27,11 +27,10 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
         $query = "SELECT campaign.campaign_budget FROM campaign WHERE campaign.resource_name = '$campaignResourceName'";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             $budgetResourceName = null;
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $budgetResourceName = $googleAdsRow->getCampaign()->getCampaignBudget();
                 break;
             }

@@ -4,7 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Services\GoogleAds\GoogleAdsService;
-use Google\Ads\GoogleAds\V15\Services\GoogleAdsServiceClient;
+use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -39,7 +39,10 @@ class GetKeywordQualityScore implements ShouldQueue
 
             $query = "SELECT ad_group_criterion.keyword.text, ad_group_criterion.quality_info.quality_score FROM keyword_view WHERE campaign.id = {$campaign->google_ads_campaign_id}";
 
-            $response = $googleAdsServiceClient->search($campaign->customer->google_ads_customer_id, $query);
+            $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
+                'customer_id' => $campaign->customer->google_ads_customer_id,
+                'query' => $query,
+            ]));
 
             foreach ($response->getIterator() as $googleAdsRow) {
                 $keyword = $googleAdsRow->getAdGroupCriterion()->getKeyword()->getText();

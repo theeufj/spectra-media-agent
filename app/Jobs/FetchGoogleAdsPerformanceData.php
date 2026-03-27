@@ -8,7 +8,7 @@ use App\Models\Recommendation;
 use App\Services\CircuitBreaker\CircuitBreakerService;
 use App\Services\GoogleAds\GoogleAdsService;
 use App\Services\GoogleAds\RecommendationGenerationService;
-use Google\Ads\GoogleAds\V15\Services\GoogleAdsServiceClient;
+use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -54,7 +54,10 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                        . "WHERE campaign.resource_name = '{$this->campaign->google_ads_campaign_id}' "
                        . "AND segments.date BETWEEN '" . now()->subDays(3)->format('Y-m-d') . "' AND '" . now()->format('Y-m-d') . "'";
 
-                $response = $googleAdsServiceClient->search($customer->google_ads_customer_id, $query);
+                $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
+                    'customer_id' => $customer->google_ads_customer_id,
+                    'query' => $query,
+                ]));
                 $circuitBreaker->recordSuccess();
 
                 $performanceData = [];

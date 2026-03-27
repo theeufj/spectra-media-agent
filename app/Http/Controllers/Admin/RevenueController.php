@@ -30,7 +30,7 @@ class RevenueController extends Controller
     private function getRevenueMetrics(): array
     {
         try {
-            \Stripe\Stripe::setApiKey(config('cashier.secret'));
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
             // Get balance
             $balance = \Stripe\Balance::retrieve();
@@ -133,7 +133,7 @@ class RevenueController extends Controller
     private function getRecentTransactions(): array
     {
         try {
-            \Stripe\Stripe::setApiKey(config('cashier.secret'));
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
             $charges = \Stripe\Charge::all([
                 'limit' => 20,
@@ -167,7 +167,7 @@ class RevenueController extends Controller
     private function getSubscriptionBreakdown(): array
     {
         try {
-            \Stripe\Stripe::setApiKey(config('cashier.secret'));
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
             $subscriptions = \Stripe\Subscription::all([
                 'status' => 'active',
@@ -206,7 +206,7 @@ class RevenueController extends Controller
     private function getMonthlyRevenue(): array
     {
         try {
-            \Stripe\Stripe::setApiKey(config('cashier.secret'));
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
             $monthlyData = [];
             
@@ -260,7 +260,7 @@ class RevenueController extends Controller
         ]);
 
         try {
-            \Stripe\Stripe::setApiKey(config('cashier.secret'));
+            \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
             $refundParams = ['charge' => $chargeId];
             

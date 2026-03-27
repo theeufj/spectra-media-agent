@@ -192,10 +192,9 @@ class CustomerMatchService extends BaseGoogleAdsService
                      "FROM offline_user_data_job " .
                      "WHERE offline_user_data_job.resource_name = '$jobResourceName'";
 
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $job = $googleAdsRow->getOfflineUserDataJob();
                 
                 return [
@@ -231,11 +230,10 @@ class CustomerMatchService extends BaseGoogleAdsService
                      "FROM user_list " .
                      "WHERE user_list.type = 'CRM_BASED'";
 
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             $lists = [];
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $userList = $googleAdsRow->getUserList();
                 
                 $lists[] = [

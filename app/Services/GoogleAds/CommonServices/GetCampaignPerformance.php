@@ -33,8 +33,7 @@ class GetCampaignPerformance extends BaseGoogleAdsService
                  "AND segments.date DURING $dateRange";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             // Aggregating metrics if multiple rows returned (though for campaign level without other segments, should be one row)
             $metrics = [
@@ -48,7 +47,7 @@ class GetCampaignPerformance extends BaseGoogleAdsService
             ];
 
             $count = 0;
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 /** @var GoogleAdsRow $googleAdsRow */
                 $rowMetrics = $googleAdsRow->getMetrics();
                 

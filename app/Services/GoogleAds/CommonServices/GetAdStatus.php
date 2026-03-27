@@ -39,11 +39,10 @@ class GetAdStatus extends BaseGoogleAdsService
                  $whereClause;
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             $ads = [];
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $adGroupAd = $googleAdsRow->getAdGroupAd();
                 $policySummary = $adGroupAd->getPolicySummary();
                 

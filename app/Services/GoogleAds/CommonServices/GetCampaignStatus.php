@@ -25,10 +25,9 @@ class GetCampaignStatus extends BaseGoogleAdsService
                  "WHERE campaign.resource_name = '$campaignResourceName'";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 /** @var Campaign $campaign */
                 $campaign = $googleAdsRow->getCampaign();
                 

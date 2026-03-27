@@ -54,15 +54,14 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
                  "AND ad_group_ad_asset_view.field_type IN ('HEADLINE', 'DESCRIPTION')";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             $assets = [
                 'headlines' => [],
                 'descriptions' => [],
             ];
 
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $assetView = $googleAdsRow->getAdGroupAdAssetView();
                 $asset = $googleAdsRow->getAsset();
                 $metrics = $googleAdsRow->getMetrics();
@@ -138,12 +137,11 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
                  "AND asset.type = 'IMAGE'";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             $images = [];
 
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $asset = $googleAdsRow->getAsset();
                 $campaignAsset = $googleAdsRow->getCampaignAsset();
                 $metrics = $googleAdsRow->getMetrics();

@@ -144,4 +144,18 @@ abstract class BaseGoogleAdsService
         }
         Log::error("[GoogleAds] " . $message, $context);
     }
+
+    /**
+     * Execute a GAQL search query using the V22 SearchGoogleAdsRequest pattern.
+     */
+    protected function searchQuery(string $customerId, string $query): \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsResponse
+    {
+        $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
+        return $googleAdsServiceClient->search(
+            new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => $query,
+            ])
+        );
+    }
 }

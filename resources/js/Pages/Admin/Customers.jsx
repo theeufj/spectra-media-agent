@@ -4,7 +4,7 @@ import SideNav from './SideNav';
 import CustomerTable from './CustomerTable';
 
 export default function Customers({ auth }) {
-    const { customers } = usePage().props;
+    const { customers, plans } = usePage().props;
 
     return (
         <AuthenticatedLayout
@@ -17,7 +17,7 @@ export default function Customers({ auth }) {
                 <SideNav />
                 <div className="flex-1 py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                        <CustomerTable customers={customers} />
+                        <CustomerTable customers={customers} plans={plans} />
                     </div>
                 </div>
             </div>

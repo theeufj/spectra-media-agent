@@ -35,11 +35,10 @@ class GetSearchTermsReport extends BaseGoogleAdsService
                  "ORDER BY metrics.cost_micros DESC";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             $searchTerms = [];
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $searchTermView = $googleAdsRow->getSearchTermView();
                 $metrics = $googleAdsRow->getMetrics();
 

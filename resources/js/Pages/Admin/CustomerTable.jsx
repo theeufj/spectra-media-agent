@@ -2,18 +2,40 @@ import React from 'react';
 import { router, Link } from '@inertiajs/react';
 import DataTable from '@/Components/DataTable';
 
-const CustomerTable = ({ customers }) => {
+const CustomerTable = ({ customers, plans = [] }) => {
     const handleDeleteCustomer = (customerId) => {
         if (confirm('Are you sure you want to delete this customer?')) {
             router.delete(route('admin.customers.delete', customerId), { preserveScroll: true });
         }
     };
 
-    const customerHeaders = ['Business Name', 'Owner', 'Email', 'Campaigns', 'Created At', 'Actions'];
-    const customerData = customers.map(customer => [
+    const handleAssignPlan = (userId, planId) => {
+        router.post(route('admin.users.assign-plan', userId), {
+            plan_id: planId || null,
+        }, { preserveScroll: true });
+    };
+
+    const customerHeaders = ['Business Name', 'Owner', 'Email', 'Plan', 'Campaigns', 'Created At', 'Actions'];
+    const customerData = customers.map(customer => {
+        const owner = customer.users?.[0];
+        return [
         customer.business_name || 'Unnamed',
-        customer.users?.[0]?.name || 'N/A',
-        customer.users?.[0]?.email || 'N/A',
+        owner?.name || 'N/A',
+        owner?.email || 'N/A',
+        owner ? (
+            <select
+                value={owner.assigned_plan_id || ''}
+                onChange={(e) => handleAssignPlan(owner.id, e.target.value)}
+                className="text-sm border border-gray-300 rounded px-2 py-1"
+            >
+                <option value="">— No plan —</option>
+                {plans.map(plan => (
+                    <option key={plan.id} value={plan.id}>
+                        {plan.name} ({plan.formatted_price})
+                    </option>
+                ))}
+            </select>
+        ) : 'N/A',
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
             {customer.campaigns_count || 0} campaigns
         </span>,
@@ -32,7 +54,7 @@ const CustomerTable = ({ customers }) => {
                 Delete
             </button>
         </div>
-    ]);
+    ];});
 
     return (
         <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">

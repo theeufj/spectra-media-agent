@@ -16,14 +16,12 @@ class AccountStructureService extends BaseGoogleAdsService
     public function getAccountStructureLimits(string $customerId): array
     {
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-
             $campaignQuery = "SELECT campaign.id FROM campaign";
-            $campaignResponse = $googleAdsServiceClient->search($customerId, $campaignQuery);
+            $campaignResponse = $this->searchQuery($customerId, $campaignQuery);
             $campaignCount = count(iterator_to_array($campaignResponse->getIterator()));
 
             $adGroupQuery = "SELECT ad_group.id FROM ad_group";
-            $adGroupResponse = $googleAdsServiceClient->search($customerId, $adGroupQuery);
+            $adGroupResponse = $this->searchQuery($customerId, $adGroupQuery);
             $adGroupCount = count(iterator_to_array($adGroupResponse->getIterator()));
 
             return [

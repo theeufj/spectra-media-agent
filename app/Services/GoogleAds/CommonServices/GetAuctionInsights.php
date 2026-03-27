@@ -45,8 +45,7 @@ class GetAuctionInsights extends BaseGoogleAdsService
                  "AND segments.date DURING $dateRange";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
 
             $insights = [
                 'campaign_name' => null,
@@ -55,7 +54,7 @@ class GetAuctionInsights extends BaseGoogleAdsService
                 'competitors' => [],
             ];
 
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $auctionInsight = $googleAdsRow->getAuctionInsight();
                 $campaign = $googleAdsRow->getCampaign();
                 
@@ -145,10 +144,9 @@ class GetAuctionInsights extends BaseGoogleAdsService
                         "AND campaign.advertising_channel_type IN ('SEARCH', 'SHOPPING')";
 
         try {
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $campaignQuery);
+            $response = $this->searchQuery($customerId, $campaignQuery);
 
-            foreach ($stream->iterateAllElements() as $googleAdsRow) {
+            foreach ($response->getIterator() as $googleAdsRow) {
                 $campaignResourceName = $googleAdsRow->getCampaign()->getResourceName();
                 $insights = $this($customerId, $campaignResourceName, $dateRange);
                 

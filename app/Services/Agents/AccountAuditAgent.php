@@ -127,7 +127,6 @@ class AccountAuditAgent
             public function getCampaignOverview(string $customerId): array
             {
                 $this->ensureClient();
-                $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
                 $query = "SELECT " .
                     "campaign.id, " .
@@ -146,8 +145,8 @@ class AccountAuditAgent
                     "AND campaign.status != 'REMOVED'";
 
                 $results = [];
-                $stream = $googleAdsServiceClient->search($customerId, $query);
-                foreach ($stream->iterateAllElements() as $row) {
+                $response = $this->searchQuery($customerId, $query);
+                foreach ($response->getIterator() as $row) {
                     $campaign = $row->getCampaign();
                     $metrics = $row->getMetrics();
                     $results[] = [
@@ -222,7 +221,6 @@ class AccountAuditAgent
             public function getAdApprovalStatus(string $customerId): array
             {
                 $this->ensureClient();
-                $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
                 $query = "SELECT " .
                     "ad_group_ad.status, " .
@@ -233,8 +231,8 @@ class AccountAuditAgent
                     "WHERE ad_group_ad.status != 'REMOVED'";
 
                 $results = ['total' => 0, 'disapproved' => 0, 'limited' => 0, 'ad_types' => []];
-                $stream = $googleAdsServiceClient->search($customerId, $query);
-                foreach ($stream->iterateAllElements() as $row) {
+                $response = $this->searchQuery($customerId, $query);
+                foreach ($response->getIterator() as $row) {
                     $ad = $row->getAdGroupAd();
                     $results['total']++;
 
@@ -322,7 +320,6 @@ class AccountAuditAgent
             public function getAdGroupAdCounts(string $customerId): array
             {
                 $this->ensureClient();
-                $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
                 $query = "SELECT " .
                     "ad_group.id, " .
@@ -333,8 +330,8 @@ class AccountAuditAgent
                     "AND ad_group_ad.status = 'ENABLED'";
 
                 $adGroupCounts = [];
-                $stream = $googleAdsServiceClient->search($customerId, $query);
-                foreach ($stream->iterateAllElements() as $row) {
+                $response = $this->searchQuery($customerId, $query);
+                foreach ($response->getIterator() as $row) {
                     $adGroup = $row->getAdGroup();
                     $id = $adGroup->getId();
                     if (!isset($adGroupCounts[$id])) {
@@ -380,7 +377,6 @@ class AccountAuditAgent
             public function getKeywordAnalysis(string $customerId): array
             {
                 $this->ensureClient();
-                $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
                 // Check keyword match types
                 $query = "SELECT " .
@@ -395,8 +391,8 @@ class AccountAuditAgent
                     "AND ad_group_criterion.status = 'ENABLED'";
 
                 $keywords = ['broad' => 0, 'phrase' => 0, 'exact' => 0, 'total_spend' => 0, 'broad_no_convert' => 0];
-                $stream = $googleAdsServiceClient->search($customerId, $query);
-                foreach ($stream->iterateAllElements() as $row) {
+                $response = $this->searchQuery($customerId, $query);
+                foreach ($response->getIterator() as $row) {
                     $matchType = $row->getAdGroupCriterion()->getKeyword()->getMatchType();
                     $cost = $row->getMetrics()->getCostMicros() / 1_000_000;
                     $conversions = $row->getMetrics()->getConversions();
@@ -419,8 +415,8 @@ class AccountAuditAgent
                 $negQuery = "SELECT shared_set.name FROM shared_set WHERE shared_set.type = 'NEGATIVE_KEYWORDS'";
                 $keywords['negative_lists'] = 0;
                 try {
-                    $stream = $googleAdsServiceClient->search($customerId, $negQuery);
-                    foreach ($stream->iterateAllElements() as $row) {
+                    $response = $this->searchQuery($customerId, $negQuery);
+                    foreach ($response->getIterator() as $row) {
                         $keywords['negative_lists']++;
                     }
                 } catch (\Exception $e) {
@@ -471,7 +467,6 @@ class AccountAuditAgent
             public function getExtensions(string $customerId): array
             {
                 $this->ensureClient();
-                $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
                 $query = "SELECT " .
                     "asset.type " .
@@ -480,8 +475,8 @@ class AccountAuditAgent
 
                 $extensions = [];
                 try {
-                    $stream = $googleAdsServiceClient->search($customerId, $query);
-                    foreach ($stream->iterateAllElements() as $row) {
+                    $response = $this->searchQuery($customerId, $query);
+                    foreach ($response->getIterator() as $row) {
                         $type = $row->getAsset()->getType();
                         $extensions[$type] = ($extensions[$type] ?? 0) + 1;
                     }

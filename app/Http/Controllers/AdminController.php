@@ -53,9 +53,11 @@ class AdminController extends Controller
 
     public function customersIndex()
     {
-        $customers = Customer::with(['users', 'campaigns'])->withCount('campaigns')->get();
+        $customers = Customer::with(['users.assignedPlan', 'campaigns'])->withCount('campaigns')->get();
+        $plans = \App\Models\Plan::active()->ordered()->get();
         return Inertia::render('Admin/Customers', [
             'customers' => $customers,
+            'plans' => $plans,
         ]);
     }
 
