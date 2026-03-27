@@ -20,7 +20,7 @@ export default function Index({ proposals }) {
                     </div>
                     <Link
                         href={route('proposals.create')}
-                        className="inline-flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md"
+                        className="inline-flex items-center px-5 py-2.5 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 transition font-medium shadow-md"
                     >
                         <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -40,7 +40,7 @@ export default function Index({ proposals }) {
                         </p>
                         <Link
                             href={route('proposals.create')}
-                            className="mt-6 inline-flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                            className="mt-6 inline-flex items-center px-5 py-2.5 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 transition font-medium"
                         >
                             Create Proposal
                         </Link>
@@ -55,11 +55,11 @@ export default function Index({ proposals }) {
                                     href={route('proposals.show', proposal.id)}
                                     className="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden group"
                                 >
-                                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4">
+                                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-4">
                                         <h3 className="text-lg font-semibold text-white truncate group-hover:underline">
                                             {proposal.client_name}
                                         </h3>
-                                        <p className="text-indigo-200 text-sm">{proposal.industry || 'General'}</p>
+                                        <p className="text-flame-orange-200 text-sm">{proposal.industry || 'General'}</p>
                                     </div>
                                     <div className="p-6">
                                         <div className="flex items-center justify-between mb-3">
@@ -81,7 +81,7 @@ export default function Index({ proposals }) {
                                         {proposal.platforms && (
                                             <div className="flex flex-wrap gap-1.5 mb-3">
                                                 {proposal.platforms.map((p) => (
-                                                    <span key={p} className="inline-block bg-indigo-50 text-indigo-700 text-xs px-2 py-0.5 rounded">
+                                                    <span key={p} className="inline-block bg-flame-orange-50 text-flame-orange-700 text-xs px-2 py-0.5 rounded">
                                                         {p}
                                                     </span>
                                                 ))}

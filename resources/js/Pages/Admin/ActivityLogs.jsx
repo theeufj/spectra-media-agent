@@ -175,7 +175,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                         value={localFilters.search || ''}
                                         onChange={(e) => setLocalFilters({ ...localFilters, search: e.target.value })}
                                         placeholder="Search description, email..."
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
                                     />
                                 </div>
                                 <div>
@@ -183,7 +183,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                     <select
                                         value={localFilters.action || ''}
                                         onChange={(e) => setLocalFilters({ ...localFilters, action: e.target.value })}
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
                                     >
                                         <option value="">All actions</option>
                                         {actionTypes.map((action) => (
@@ -196,7 +196,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                     <select
                                         value={localFilters.user_id || ''}
                                         onChange={(e) => setLocalFilters({ ...localFilters, user_id: e.target.value })}
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
                                     >
                                         <option value="">All users</option>
                                         {recentUsers.map((user) => (
@@ -212,7 +212,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                         type="date"
                                         value={localFilters.from || ''}
                                         onChange={(e) => setLocalFilters({ ...localFilters, from: e.target.value })}
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
                                     />
                                 </div>
                                 <div>
@@ -221,7 +221,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                         type="date"
                                         value={localFilters.to || ''}
                                         onChange={(e) => setLocalFilters({ ...localFilters, to: e.target.value })}
-                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm"
+                                        className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
                                     />
                                 </div>
                             </div>
@@ -229,7 +229,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                 <div className="flex space-x-2">
                                     <button
                                         onClick={applyFilters}
-                                        className="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700"
+                                        className="px-4 py-2 bg-flame-orange-600 text-white text-sm rounded-md hover:bg-flame-orange-700"
                                     >
                                         Apply Filters
                                     </button>
@@ -283,7 +283,7 @@ export default function ActivityLogs({ logs, actionTypes, recentUsers, filters }
                                                 href={link.url || '#'}
                                                 className={`px-3 py-1 text-sm rounded ${
                                                     link.active 
-                                                        ? 'bg-indigo-600 text-white' 
+                                                        ? 'bg-flame-orange-600 text-white' 
                                                         : link.url 
                                                             ? 'bg-gray-100 text-gray-700 hover:bg-gray-200' 
                                                             : 'bg-gray-50 text-gray-400 cursor-not-allowed'

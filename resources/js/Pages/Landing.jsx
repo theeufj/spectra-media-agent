@@ -13,15 +13,15 @@ export default function Landing({ auth }) {
 
                 <main>
                     {/* Hero Section - Enhanced */}
-                    <div className="pt-6 px-4 sm:pt-10 md:pt-14 lg:pt-8 lg:pb-14 lg:overflow-hidden bg-gradient-to-b from-indigo-50 to-white">
+                    <div className="pt-6 px-4 sm:pt-10 md:pt-14 lg:pt-8 lg:pb-14 lg:overflow-hidden bg-gradient-to-b from-flame-orange-50 to-white">
                         <div className="mx-auto max-w-7xl lg:px-8">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 lg:gap-8">
                                 <div className="mx-auto max-w-sm px-2 sm:max-w-md sm:px-4 md:max-w-none md:px-0 text-center sm:text-center md:text-left md:flex md:items-center">
                                     <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
-                                        <p className="text-xs sm:text-sm font-semibold text-indigo-600 uppercase tracking-wider">AI That Understands Your Brand</p>
+                                        <p className="text-xs sm:text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">AI That Understands Your Brand</p>
                                         <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
                                             <span className="block whitespace-normal">The results of a top-tier agency.</span>
-                                            <span className="block text-indigo-600 whitespace-normal">The cost of a utility bill.</span>
+                                            <span className="block text-flame-orange-600 whitespace-normal">The cost of a utility bill.</span>
                                         </h1>
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
                                             Stop paying thousands in retainer fees. Our AI agents discover your competitors, heal broken campaigns automatically, optimize budgets in real-time, and A/B test creatives 24/7—all while you sleep.
@@ -29,13 +29,13 @@ export default function Landing({ auth }) {
                                         <div className="mt-6 sm:mt-8 md:mt-10 lg:mt-10 flex flex-col xs:flex-col sm:flex-row gap-3 sm:gap-4">
                                             <a
                                                 href="/register"
-                                                className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border border-transparent text-sm sm:text-base font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 shadow-lg transition-colors w-full sm:w-auto"
+                                                className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border border-transparent text-sm sm:text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg transition-colors w-full sm:w-auto"
                                             >
                                                 Start Generating for Free
                                             </a>
                                             <a
                                                 href="/free-audit"
-                                                className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border-2 border-indigo-600 text-sm sm:text-base font-medium rounded-md text-indigo-600 bg-white hover:bg-indigo-50 transition-colors w-full sm:w-auto"
+                                                className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border-2 border-flame-orange-600 text-sm sm:text-base font-medium rounded-md text-flame-orange-600 bg-white hover:bg-flame-orange-50 transition-colors w-full sm:w-auto"
                                             >
                                                 Free Ad Account Audit
                                             </a>
@@ -46,7 +46,7 @@ export default function Landing({ auth }) {
                                 <div className="mt-12 -mb-16 sm:-mb-48 lg:m-0 lg:relative">
                                     <div className="mx-auto max-w-md px-4 sm:max-w-2xl sm:px-6 lg:max-w-none lg:px-0">
                                         {/* Replace with a relevant image or illustration */}
-                                        <img className="w-full lg:absolute lg:inset-y-0 lg:left-0 lg:h-full lg:w-auto lg:max-w-none" src="https://tailwindui.com/img/component-images/cloud-illustration-indigo-400.svg" alt="" />
+                                        <img className="w-full lg:absolute lg:inset-y-0 lg:left-0 lg:h-full lg:w-auto lg:max-w-none" src="https://tailwindui.com/img/component-images/cloud-illustration-flame-orange-400.svg" alt="" />
                                     </div>
                                 </div>
                             </div>
@@ -137,11 +137,11 @@ export default function Landing({ auth }) {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
                                 {/* Connecting Line (Desktop only) */}
-                                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-indigo-100 -z-10"></div>
+                                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-flame-orange-100 -z-10"></div>
 
                                 {/* Step 1 */}
                                 <div className="relative flex flex-col items-center text-center">
-                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
+                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-flame-orange-50 border-4 border-white shadow-lg mb-6">
                                         <span className="text-4xl">👁️</span>
                                     </div>
                                     <h3 className="text-xl font-bold text-gray-900 mb-3">1. Vision AI Extraction</h3>
@@ -152,7 +152,7 @@ export default function Landing({ auth }) {
 
                                 {/* Step 2 */}
                                 <div className="relative flex flex-col items-center text-center">
-                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
+                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-flame-orange-50 border-4 border-white shadow-lg mb-6">
                                         <span className="text-4xl">🧠</span>
                                     </div>
                                     <h3 className="text-xl font-bold text-gray-900 mb-3">2. Competitive Intelligence</h3>
@@ -163,7 +163,7 @@ export default function Landing({ auth }) {
 
                                 {/* Step 3 */}
                                 <div className="relative flex flex-col items-center text-center">
-                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-indigo-50 border-4 border-white shadow-lg mb-6">
+                                    <div className="flex items-center justify-center h-24 w-24 rounded-full bg-flame-orange-50 border-4 border-white shadow-lg mb-6">
                                         <span className="text-4xl">🚀</span>
                                     </div>
                                     <h3 className="text-xl font-bold text-gray-900 mb-3">3. Autonomous Optimization</h3>
@@ -176,14 +176,14 @@ export default function Landing({ auth }) {
                     </div>
 
                     {/* AI Agents Showcase Section - NEW */}
-                    <div className="bg-gradient-to-br from-indigo-900 via-indigo-800 to-purple-900 py-16 sm:py-24">
+                    <div className="bg-gradient-to-br from-flame-orange-900 via-flame-orange-800 to-purple-900 py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center mb-12">
-                                <p className="text-indigo-300 font-semibold text-sm uppercase tracking-wider">Autonomous AI Agents</p>
+                                <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Autonomous AI Agents</p>
                                 <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">
                                     Your 24/7 Marketing Team
                                 </h2>
-                                <p className="mt-4 text-lg text-indigo-200">
+                                <p className="mt-4 text-lg text-flame-orange-200">
                                     Six specialized AI agents work around the clock to optimize every aspect of your campaigns.
                                 </p>
                             </div>
@@ -192,32 +192,32 @@ export default function Landing({ auth }) {
                                 {/* Agent 1: Competitor Discovery */}
                                 <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
                                     <div className="flex items-center gap-3 mb-4">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/30">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-flame-orange-500/30">
                                             <span className="text-2xl">🔍</span>
                                         </div>
                                         <h3 className="text-lg font-bold text-white">Competitor Discovery Agent</h3>
                                     </div>
-                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                    <p className="text-flame-orange-200 text-sm leading-relaxed">
                                         Uses Google Search AI to find your real competitors based on your website content. Identifies direct and indirect competitors you might not know about.
                                     </p>
                                     <div className="mt-4 pt-4 border-t border-white/10">
-                                        <span className="text-xs text-indigo-300">Runs: Weekly</span>
+                                        <span className="text-xs text-flame-orange-300">Runs: Weekly</span>
                                     </div>
                                 </div>
 
                                 {/* Agent 2: Competitor Analysis */}
                                 <div className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
                                     <div className="flex items-center gap-3 mb-4">
-                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-indigo-500/30">
+                                        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-flame-orange-500/30">
                                             <span className="text-2xl">📊</span>
                                         </div>
                                         <h3 className="text-lg font-bold text-white">Competitor Analysis Agent</h3>
                                     </div>
-                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                    <p className="text-flame-orange-200 text-sm leading-relaxed">
                                         Scrapes competitor websites, extracts their messaging, value propositions, pricing, and ad copy. Generates counter-strategies for your campaigns.
                                     </p>
                                     <div className="mt-4 pt-4 border-t border-white/10">
-                                        <span className="text-xs text-indigo-300">Runs: Weekly</span>
+                                        <span className="text-xs text-flame-orange-300">Runs: Weekly</span>
                                     </div>
                                 </div>
 
@@ -229,7 +229,7 @@ export default function Landing({ auth }) {
                                         </div>
                                         <h3 className="text-lg font-bold text-white">Self-Healing Agent</h3>
                                     </div>
-                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                    <p className="text-flame-orange-200 text-sm leading-relaxed">
                                         Monitors for disapproved ads and automatically rewrites them to be policy-compliant. Pauses underperforming ads before they waste budget.
                                     </p>
                                     <div className="mt-4 pt-4 border-t border-white/10">
@@ -245,7 +245,7 @@ export default function Landing({ auth }) {
                                         </div>
                                         <h3 className="text-lg font-bold text-white">Budget Intelligence Agent</h3>
                                     </div>
-                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                    <p className="text-flame-orange-200 text-sm leading-relaxed">
                                         Dynamically adjusts budgets based on time-of-day and day-of-week performance. Reduces spend at 3am, increases during peak buying hours.
                                     </p>
                                     <div className="mt-4 pt-4 border-t border-white/10">
@@ -261,7 +261,7 @@ export default function Landing({ auth }) {
                                         </div>
                                         <h3 className="text-lg font-bold text-white">Creative Intelligence Agent</h3>
                                     </div>
-                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                    <p className="text-flame-orange-200 text-sm leading-relaxed">
                                         Tracks A/B test performance at headline, description, and image level. Identifies winners, kills losers, and generates new variations.
                                     </p>
                                     <div className="mt-4 pt-4 border-t border-white/10">
@@ -277,7 +277,7 @@ export default function Landing({ auth }) {
                                         </div>
                                         <h3 className="text-lg font-bold text-white">Audience Intelligence Agent</h3>
                                     </div>
-                                    <p className="text-indigo-200 text-sm leading-relaxed">
+                                    <p className="text-flame-orange-200 text-sm leading-relaxed">
                                         Manages Customer Match lists, segments your audience, and recommends lookalike audiences for expansion. Maximizes your first-party data.
                                     </p>
                                     <div className="mt-4 pt-4 border-t border-white/10">
@@ -289,7 +289,7 @@ export default function Landing({ auth }) {
                             <div className="mt-12 text-center">
                                 <a
                                     href="/register"
-                                    className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-indigo-900 bg-white hover:bg-indigo-50 shadow-lg transition-colors"
+                                    className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-900 bg-white hover:bg-flame-orange-50 shadow-lg transition-colors"
                                 >
                                     Put These Agents to Work →
                                 </a>
@@ -301,7 +301,7 @@ export default function Landing({ auth }) {
                     <div className="bg-gray-50 py-12 sm:py-16 md:py-20 lg:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center">
-                                <h2 className="text-base font-semibold leading-7 text-indigo-600">Deploy with Confidence</h2>
+                                <h2 className="text-base font-semibold leading-7 text-flame-orange-600">Deploy with Confidence</h2>
                                 <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
                                     Everything you need to launch and optimize your ad campaigns
                                 </p>
@@ -313,7 +313,7 @@ export default function Landing({ auth }) {
                                 <dl className="grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-8 sm:gap-y-10 lg:max-w-none lg:grid-cols-3 lg:gap-y-16">
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                                             </div>
                                             Competitive Intelligence
@@ -322,7 +322,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
                                             </div>
                                             Self-Healing Campaigns
@@ -331,7 +331,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                             </div>
                                             Budget Intelligence
@@ -340,7 +340,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
                                             </div>
                                             Creative A/B Testing
@@ -349,7 +349,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                                             </div>
                                             Audience Intelligence
@@ -358,7 +358,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
                                             </div>
                                             Vision AI Brand Extraction
@@ -367,7 +367,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
                                             </div>
                                             Search, Display, Video, PMax
@@ -376,7 +376,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                             </div>
                                             Conversion Tracking & GTM
@@ -385,7 +385,7 @@ export default function Landing({ auth }) {
                                     </div>
                                     <div className="relative pl-16">
                                         <dt className="text-base font-semibold leading-7 text-gray-900">
-                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600">
+                                            <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
                                                 <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6" /></svg>
                                             </div>
                                             Try Before You Buy
@@ -460,44 +460,44 @@ export default function Landing({ auth }) {
                                         <tr>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Traditional Agency</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-indigo-600 uppercase tracking-wider">Spectra AI</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-flame-orange-600 uppercase tracking-wider">Spectra AI</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
                                         <tr>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Cost</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$2,500 - $5,000 / month</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">From $99 / month</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">From $99 / month</td>
                                         </tr>
                                         <tr>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Setup Time</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">2-4 Weeks</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">&lt; 5 Minutes</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">&lt; 5 Minutes</td>
                                         </tr>
                                         <tr>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Brand Guidelines</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Manual PDF creation (billed extra)</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Instant Vision AI Extraction</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">Instant Vision AI Extraction</td>
                                         </tr>
                                         <tr>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Creatives</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Limited revisions</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Unlimited AI Generation</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">Unlimited AI Generation</td>
                                         </tr>
                                         <tr>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Optimization</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Weekly manual checks</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">24/7 Real-time Agent adjustments</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">24/7 Real-time Agent adjustments</td>
                                         </tr>
                                         <tr>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Competitor Analysis</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Manual research (extra hours)</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Automatic AI Discovery & Counter-Strategy</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">Automatic AI Discovery & Counter-Strategy</td>
                                         </tr>
                                         <tr>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">Campaign Fixes</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">Wait for account manager response</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-indigo-600">Self-Healing AI (instant fixes)</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">Self-Healing AI (instant fixes)</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -563,8 +563,8 @@ export default function Landing({ auth }) {
                                 </div>
 
                                 {/* Growth Tier */}
-                                <div className="rounded-lg border-2 border-indigo-600 p-8 bg-indigo-50 shadow-lg relative flex flex-col">
-                                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-indigo-600 text-white px-3 py-1 text-xs font-semibold rounded-full">
+                                <div className="rounded-lg border-2 border-flame-orange-600 p-8 bg-flame-orange-50 shadow-lg relative flex flex-col">
+                                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-flame-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full">
                                         MOST POPULAR
                                     </div>
                                     <h3 className="text-2xl font-bold text-gray-900">Growth</h3>
@@ -622,7 +622,7 @@ export default function Landing({ auth }) {
                                     <div className="mt-10">
                                         <a
                                             href="/register"
-                                            className="block w-full text-center rounded-lg bg-indigo-600 px-6 py-3 text-base font-medium text-white hover:bg-indigo-700 shadow-lg"
+                                            className="block w-full text-center rounded-lg bg-flame-orange-600 px-6 py-3 text-base font-medium text-white hover:bg-flame-orange-700 shadow-lg"
                                         >
                                             Start Scaling Now
                                         </a>
@@ -765,7 +765,7 @@ export default function Landing({ auth }) {
                                         >
                                             <h3 className="text-lg font-bold text-gray-900">{faq.question}</h3>
                                             <svg
-                                                className={`h-6 w-6 text-indigo-600 flex-shrink-0 transition-transform ${
+                                                className={`h-6 w-6 text-flame-orange-600 flex-shrink-0 transition-transform ${
                                                     openFAQ === index ? 'rotate-180' : ''
                                                 }`}
                                                 xmlns="http://www.w3.org/2000/svg"
@@ -788,29 +788,29 @@ export default function Landing({ auth }) {
                     </div>
 
                     {/* Final CTA Section */}
-                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-800 py-16 sm:py-24">
+                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-800 py-16 sm:py-24">
                         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 Ready to transform your marketing?
                             </h2>
-                            <p className="mt-6 text-xl text-indigo-100">
+                            <p className="mt-6 text-xl text-flame-orange-100">
                                 Join hundreds of marketing teams creating smarter, faster campaigns with AI-powered optimization.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
                                 <a
                                     href="/register"
-                                    className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-indigo-600 bg-white hover:bg-gray-50 shadow-lg"
+                                    className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg"
                                 >
                                     Get Started Free
                                 </a>
                                 <a
                                     href="/login"
-                                    className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-indigo-700"
+                                    className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700"
                                 >
                                     Sign In
                                 </a>
                             </div>
-                            <p className="mt-8 text-indigo-100">
+                            <p className="mt-8 text-flame-orange-100">
                                 ✓ Generous free tier · ✓ No credit card required · ✓ Deploy in minutes
                             </p>
                         </div>

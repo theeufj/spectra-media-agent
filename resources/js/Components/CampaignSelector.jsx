@@ -6,7 +6,7 @@ const CampaignSelector = ({ campaigns, selectedCampaign, setSelectedCampaign }) 
             <label htmlFor="campaign" className="sr-only">Select Campaign</label>
             <select
                 id="campaign"
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-flame-orange-500 focus:border-flame-orange-500 sm:text-sm rounded-md"
                 value={selectedCampaign ? selectedCampaign.id : ''}
                 onChange={(e) => {
                     const campaignId = parseInt(e.target.value);

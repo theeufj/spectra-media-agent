@@ -26,7 +26,7 @@ const PerformanceStats = ({ stats, loading }) => {
         { label: 'Clicks', value: stats.clicks?.toLocaleString() || '0', color: 'text-green-600', bg: 'bg-green-50' },
         { label: 'Cost', value: `$${(stats.cost || 0).toFixed(2)}`, color: 'text-red-600', bg: 'bg-red-50' },
         { label: 'Conversions', value: (stats.conversions || 0).toFixed(1), color: 'text-purple-600', bg: 'bg-purple-50' },
-        { label: 'CTR', value: `${(stats.ctr || 0).toFixed(2)}%`, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+        { label: 'CTR', value: `${(stats.ctr || 0).toFixed(2)}%`, color: 'text-flame-orange-600', bg: 'bg-flame-orange-50' },
         { label: 'CPC', value: `$${(stats.cpc || 0).toFixed(2)}`, color: 'text-orange-600', bg: 'bg-orange-50' },
         { label: 'CPA', value: stats.cpa > 0 ? `$${stats.cpa.toFixed(2)}` : '-', color: 'text-pink-600', bg: 'bg-pink-50' },
     ];
@@ -185,7 +185,7 @@ export default function CampaignDetail({ auth }) {
                                                     type="text"
                                                     value={data.name}
                                                     onChange={(e) => setData('name', e.target.value)}
-                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                                 />
                                             </div>
                                             <div>
@@ -194,7 +194,7 @@ export default function CampaignDetail({ auth }) {
                                                     type="number"
                                                     value={data.daily_budget}
                                                     onChange={(e) => setData('daily_budget', e.target.value)}
-                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                                 />
                                             </div>
                                             <div>
@@ -203,7 +203,7 @@ export default function CampaignDetail({ auth }) {
                                                     type="number"
                                                     value={data.total_budget}
                                                     onChange={(e) => setData('total_budget', e.target.value)}
-                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                                 />
                                             </div>
                                         </div>
@@ -211,7 +211,7 @@ export default function CampaignDetail({ auth }) {
                                             <button
                                                 type="submit"
                                                 disabled={processing}
-                                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                                className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50"
                                             >
                                                 {processing ? 'Saving...' : 'Save Changes'}
                                             </button>
@@ -248,7 +248,7 @@ export default function CampaignDetail({ auth }) {
                                 {!isEditing && (
                                     <button
                                         onClick={() => setIsEditing(true)}
-                                        className="mt-4 text-sm text-indigo-600 hover:text-indigo-900"
+                                        className="mt-4 text-sm text-flame-orange-600 hover:text-flame-orange-900"
                                     >
                                         Edit Campaign Settings
                                     </button>

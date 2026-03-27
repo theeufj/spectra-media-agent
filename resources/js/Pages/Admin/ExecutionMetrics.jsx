@@ -40,7 +40,7 @@ const MetricCard = ({ title, value, subtitle, icon, trend }) => (
                 {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
             </div>
             {icon && (
-                <div className="text-indigo-600">
+                <div className="text-flame-orange-600">
                     {icon}
                 </div>
             )}

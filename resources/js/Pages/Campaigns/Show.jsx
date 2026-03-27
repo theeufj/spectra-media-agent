@@ -16,7 +16,7 @@ const CollateralSummaryCard = ({ campaign }) => {
 
     return (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4">
+            <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-4">
                 <h3 className="text-lg font-semibold text-white flex items-center">
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -46,10 +46,10 @@ const CollateralSummaryCard = ({ campaign }) => {
                                 <Link
                                     key={strategy.id}
                                     href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })}
-                                    className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition text-sm"
+                                    className="inline-flex items-center px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 transition text-sm"
                                 >
                                     <span className="mr-2">{strategy.platform}</span>
-                                    <span className="bg-indigo-500 px-2 py-0.5 rounded text-xs">
+                                    <span className="bg-flame-orange-500 px-2 py-0.5 rounded text-xs">
                                         {(strategy.ad_copies_count || 0) + (strategy.image_collaterals_count || 0) + (strategy.video_collaterals_count || 0)} items
                                     </span>
                                 </Link>
@@ -59,7 +59,7 @@ const CollateralSummaryCard = ({ campaign }) => {
                 ) : (
                     <div className="text-center py-6">
                         <div className="animate-pulse flex flex-col items-center">
-                            <svg className="w-12 h-12 text-indigo-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-12 h-12 text-flame-orange-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <p className="text-gray-600 font-medium">Generating your collateral...</p>
@@ -209,20 +209,20 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
         <div className="mb-8">
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 px-8 py-6">
+                <div className="bg-gradient-to-r from-flame-orange-600 via-flame-orange-700 to-purple-700 px-8 py-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <h3 className="text-xl font-bold text-white">Building your strategy</h3>
-                            <p className="text-indigo-200 text-sm mt-1">for {campaignName}</p>
+                            <p className="text-flame-orange-200 text-sm mt-1">for {campaignName}</p>
                         </div>
                         <div className="text-right">
                             <div className="text-2xl font-mono font-bold text-white">{formatTime(elapsedSeconds)}</div>
-                            <p className="text-indigo-200 text-xs">elapsed</p>
+                            <p className="text-flame-orange-200 text-xs">elapsed</p>
                         </div>
                     </div>
-                    <div className="mt-4 h-2 bg-indigo-900/30 rounded-full overflow-hidden">
+                    <div className="mt-4 h-2 bg-flame-orange-900/30 rounded-full overflow-hidden">
                         <div 
-                            className="h-full bg-gradient-to-r from-indigo-300 to-white rounded-full transition-all duration-1000 ease-out"
+                            className="h-full bg-gradient-to-r from-flame-orange-300 to-white rounded-full transition-all duration-1000 ease-out"
                             style={{ width: `${overallProgress}%` }}
                         />
                     </div>
@@ -239,7 +239,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                                 <div 
                                     key={idx} 
                                     className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-all duration-500 ${
-                                        isActive ? 'bg-indigo-50 border border-indigo-200' : 
+                                        isActive ? 'bg-flame-orange-50 border border-flame-orange-200' : 
                                         isComplete ? 'opacity-60' : 'opacity-40'
                                     }`}
                                 >
@@ -249,14 +249,14 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                             </svg>
                                         ) : isActive ? (
-                                            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                            <div className="w-6 h-6 border-2 border-flame-orange-500 border-t-transparent rounded-full animate-spin" />
                                         ) : (
                                             <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
                                         )}
                                     </div>
                                     <span className="text-lg">{step.icon}</span>
                                     <span className={`text-sm font-medium ${
-                                        isActive ? 'text-indigo-700' : 
+                                        isActive ? 'text-flame-orange-700' : 
                                         isComplete ? 'text-gray-500' : 'text-gray-400'
                                     }`}>
                                         {step.label}
@@ -524,7 +524,7 @@ export default function Show({ auth, campaign }) {
             {!copilotOpen && (
                 <button
                     onClick={() => setCopilotOpen(true)}
-                    className="fixed bottom-6 right-6 z-40 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all group"
+                    className="fixed bottom-6 right-6 z-40 bg-flame-orange-600 text-white p-4 rounded-full shadow-lg hover:bg-flame-orange-700 hover:scale-105 transition-all group"
                     title="Ask Campaign Copilot"
                 >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -163,7 +163,7 @@ export default function Create({ auth }) {
                                                 id="description"
                                                 name="description"
                                                 value={data.description}
-                                                className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                                 rows="3"
                                                 placeholder="Briefly describe what your business does..."
                                                 onChange={(e) => setData('description', e.target.value)}
@@ -220,7 +220,7 @@ export default function Create({ auth }) {
                                                 id="country"
                                                 name="country"
                                                 value={data.country}
-                                                className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                                 onChange={(e) => setData('country', e.target.value)}
                                                 required
                                             >
@@ -240,7 +240,7 @@ export default function Create({ auth }) {
                                                 id="timezone"
                                                 name="timezone"
                                                 value={data.timezone}
-                                                className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                                 onChange={(e) => setData('timezone', e.target.value)}
                                                 required
                                             >

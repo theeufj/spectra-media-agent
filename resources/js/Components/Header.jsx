@@ -6,7 +6,7 @@ export default function Header({ auth }) {
         <header className="bg-white shadow-sm">
             <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
                 <Link href="/">
-                    <h1 className="text-2xl font-bold text-indigo-600">sitetospend</h1>
+                    <h1 className="text-2xl font-bold text-flame-orange-600">sitetospend</h1>
                 </Link>
                 <div>
                     {auth && auth.user ? (
@@ -20,7 +20,7 @@ export default function Header({ auth }) {
                             </a>
                             <a
                                 href="/register"
-                                className="ml-8 inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                                className="ml-8 inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-flame-orange-600 hover:bg-flame-orange-700"
                             >
                                 Sign up
                             </a>

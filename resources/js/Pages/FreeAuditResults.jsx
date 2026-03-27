@@ -45,14 +45,14 @@ function LoadingState() {
     return (
         <div className="flex flex-col items-center justify-center py-20">
             <div className="relative w-20 h-20">
-                <div className="absolute inset-0 rounded-full border-4 border-indigo-200 animate-ping opacity-25"></div>
-                <div className="relative w-20 h-20 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+                <div className="absolute inset-0 rounded-full border-4 border-flame-orange-200 animate-ping opacity-25"></div>
+                <div className="relative w-20 h-20 rounded-full border-4 border-flame-orange-500 border-t-transparent animate-spin"></div>
             </div>
             <h2 className="mt-8 text-2xl font-bold text-gray-900">Analyzing your account...</h2>
             <p className="mt-2 text-gray-500">Our AI is scanning campaigns, ads, keywords, and more.</p>
             <div className="mt-6 flex gap-2">
                 {['Campaigns', 'Ad Copy', 'Keywords', 'Extensions', 'Conversions'].map((item, i) => (
-                    <span key={i} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800 animate-pulse" style={{ animationDelay: `${i * 200}ms` }}>
+                    <span key={i} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-flame-orange-100 text-flame-orange-800 animate-pulse" style={{ animationDelay: `${i * 200}ms` }}>
                         {item}
                     </span>
                 ))}
@@ -109,7 +109,7 @@ export default function FreeAuditResults({ auth, audit }) {
                             <div className="text-5xl">😔</div>
                             <h2 className="mt-4 text-2xl font-bold text-gray-900">Audit Failed</h2>
                             <p className="mt-2 text-gray-500">We couldn't complete the audit. This may be due to API access issues.</p>
-                            <a href="/free-audit" className="mt-6 inline-flex items-center px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors">
+                            <a href="/free-audit" className="mt-6 inline-flex items-center px-6 py-3 bg-flame-orange-600 text-white font-medium rounded-lg hover:bg-flame-orange-700 transition-colors">
                                 Try Again
                             </a>
                         </div>
@@ -168,18 +168,18 @@ export default function FreeAuditResults({ auth, audit }) {
                                 {/* Recommendations Sidebar */}
                                 <div className="space-y-6">
                                     {/* CTA Card */}
-                                    <div className="bg-indigo-600 rounded-xl p-6 text-white">
+                                    <div className="bg-flame-orange-600 rounded-xl p-6 text-white">
                                         <h3 className="text-lg font-bold">Let Spectra Fix These Automatically</h3>
-                                        <p className="mt-2 text-sm text-indigo-100">
+                                        <p className="mt-2 text-sm text-flame-orange-100">
                                             Our AI agents can deploy optimized campaigns, fix policy violations, and manage your budget 24/7.
                                         </p>
                                         <a
                                             href={`/register?audit=${currentAudit.token}`}
-                                            className="mt-4 w-full inline-flex items-center justify-center px-4 py-3 bg-white text-indigo-600 font-semibold rounded-lg hover:bg-indigo-50 transition-colors"
+                                            className="mt-4 w-full inline-flex items-center justify-center px-4 py-3 bg-white text-flame-orange-600 font-semibold rounded-lg hover:bg-flame-orange-50 transition-colors"
                                         >
                                             Sign Up Free
                                         </a>
-                                        <p className="mt-2 text-xs text-indigo-200 text-center">No credit card required</p>
+                                        <p className="mt-2 text-xs text-flame-orange-200 text-center">No credit card required</p>
                                     </div>
 
                                     {/* Recommendations */}
@@ -190,7 +190,7 @@ export default function FreeAuditResults({ auth, audit }) {
                                                 {recommendations.map((rec, i) => (
                                                     <div key={i} className="bg-white border border-gray-200 rounded-lg p-4">
                                                         <div className="flex items-center gap-2">
-                                                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 text-xs font-bold flex items-center justify-center">
+                                                            <span className="flex-shrink-0 w-6 h-6 rounded-full bg-flame-orange-100 text-flame-orange-700 text-xs font-bold flex items-center justify-center">
                                                                 {i + 1}
                                                             </span>
                                                             <h3 className="font-semibold text-gray-900 text-sm">{rec.title}</h3>

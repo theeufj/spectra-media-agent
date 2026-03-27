@@ -20,7 +20,7 @@ function CopyBlock({ label, code }) {
                 <span className="text-sm font-medium text-gray-700">{label}</span>
                 <button
                     onClick={copy}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    className="text-xs text-flame-orange-600 hover:text-flame-orange-800 font-medium"
                 >
                     {copied ? '✓ Copied' : 'Copy'}
                 </button>

@@ -45,7 +45,7 @@ export default function ProductSelection({ customerId, selectedPages, onSelectio
                 <div className="relative mt-1">
                     <div className="relative w-full cursor-default overflow-hidden rounded-md bg-white text-left shadow-sm focus:outline-none sm:text-sm">
                         <ComboboxInput
-                            className="w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm py-2 pl-3 pr-10 text-sm leading-5 text-gray-900"
+                            className="w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm py-2 pl-3 pr-10 text-sm leading-5 text-gray-900"
                             displayValue={(page) => page?.title || ''}
                             onChange={(event) => setQuery(event.target.value)}
                             placeholder="Search for a product page..."
@@ -69,7 +69,7 @@ export default function ProductSelection({ customerId, selectedPages, onSelectio
                                     key={page.id}
                                     className={({ active }) =>
                                         `relative cursor-default select-none py-2 pl-10 pr-4 ${
-                                            active ? 'bg-indigo-600 text-white' : 'text-gray-900'
+                                            active ? 'bg-flame-orange-600 text-white' : 'text-gray-900'
                                         }`
                                     }
                                     value={page}
@@ -80,13 +80,13 @@ export default function ProductSelection({ customerId, selectedPages, onSelectio
                                                 {page.title || 'Untitled Page'}
                                             </span>
                                             {selected ? (
-                                                <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${active ? 'text-white' : 'text-indigo-600'}`}>
+                                                <span className={`absolute inset-y-0 left-0 flex items-center pl-3 ${active ? 'text-white' : 'text-flame-orange-600'}`}>
                                                     <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                                                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                                     </svg>
                                                 </span>
                                             ) : null}
-                                            <span className={`block truncate text-xs ${active ? 'text-indigo-200' : 'text-gray-500'}`}>
+                                            <span className={`block truncate text-xs ${active ? 'text-flame-orange-200' : 'text-gray-500'}`}>
                                                 {page.url}
                                             </span>
                                         </>

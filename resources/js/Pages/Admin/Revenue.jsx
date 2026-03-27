@@ -3,9 +3,9 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import SideNav from './SideNav';
 
-const MetricCard = ({ title, value, subtitle, icon, trend, color = 'indigo' }) => {
+const MetricCard = ({ title, value, subtitle, icon, trend, color = 'flame' }) => {
     const colors = {
-        indigo: 'bg-indigo-500',
+        flame: 'bg-flame-orange-500',
         green: 'bg-green-500',
         blue: 'bg-blue-500',
         purple: 'bg-purple-500',
@@ -44,7 +44,7 @@ const RevenueChart = ({ data }) => {
                 {data.map((item, index) => (
                     <div key={index} className="flex flex-col items-center flex-1">
                         <div 
-                            className="w-full bg-indigo-500 rounded-t transition-all duration-300 hover:bg-indigo-600"
+                            className="w-full bg-flame-orange-500 rounded-t transition-all duration-300 hover:bg-flame-orange-600"
                             style={{ height: `${(item.revenue / maxRevenue) * 100}%`, minHeight: item.revenue > 0 ? '4px' : '0' }}
                             title={`$${item.revenue.toLocaleString()}`}
                         />
@@ -90,7 +90,7 @@ const TransactionRow = ({ transaction, onRefund }) => (
                     href={transaction.receipt_url} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-indigo-600 hover:text-indigo-900 mr-3"
+                    className="text-flame-orange-600 hover:text-flame-orange-900 mr-3"
                 >
                     Receipt
                 </a>
@@ -144,7 +144,7 @@ export default function Revenue({ metrics, recentTransactions, subscriptionBreak
                                 title="Monthly Recurring Revenue"
                                 value={`$${metrics.mrr?.toLocaleString() || 0}`}
                                 subtitle={`ARR: $${metrics.arr?.toLocaleString() || 0}`}
-                                color="indigo"
+                                color="flame"
                                 icon={
                                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -216,7 +216,7 @@ export default function Revenue({ metrics, recentTransactions, subscriptionBreak
                                     <h4 className="text-sm font-medium text-gray-700 mb-3">User Distribution</h4>
                                     <div className="flex items-center">
                                         <div 
-                                            className="h-4 bg-indigo-500 rounded-l"
+                                            className="h-4 bg-flame-orange-500 rounded-l"
                                             style={{ width: `${metrics.conversionRate || 0}%` }}
                                         />
                                         <div 

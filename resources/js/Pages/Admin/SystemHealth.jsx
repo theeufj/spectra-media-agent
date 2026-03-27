@@ -43,7 +43,7 @@ const ApiCard = ({ api }) => {
             </svg>
         ),
         'credit-card': (
-            <svg className="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-8 h-8 text-flame-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
             </svg>
         ),
@@ -125,7 +125,7 @@ export default function SystemHealth({ health }) {
                             <button
                                 onClick={refreshHealth}
                                 disabled={refreshing}
-                                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                className="inline-flex items-center px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50"
                             >
                                 <svg className={`w-4 h-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -191,7 +191,7 @@ export default function SystemHealth({ health }) {
                                     <>
                                         <div className="w-full bg-gray-200 rounded-full h-2.5 mb-2">
                                             <div 
-                                                className={`h-2.5 rounded-full ${healthData.storage.usedPercent > 90 ? 'bg-red-600' : 'bg-indigo-600'}`}
+                                                className={`h-2.5 rounded-full ${healthData.storage.usedPercent > 90 ? 'bg-red-600' : 'bg-flame-orange-600'}`}
                                                 style={{ width: `${healthData.storage.usedPercent}%` }}
                                             ></div>
                                         </div>
@@ -248,7 +248,7 @@ export default function SystemHealth({ health }) {
                                                     <div className="flex space-x-2">
                                                         <button
                                                             onClick={() => handleRetryJob(job.id)}
-                                                            className="text-xs text-indigo-600 hover:text-indigo-800"
+                                                            className="text-xs text-flame-orange-600 hover:text-flame-orange-800"
                                                         >
                                                             Retry
                                                         </button>

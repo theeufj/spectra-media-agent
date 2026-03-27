@@ -47,7 +47,7 @@ export default function GoogleAdsAccounts({ auth, accounts = [], selectedAccount
                                     return (
                                         <label
                                             key={account.id}
-                                            className={`block cursor-pointer rounded-xl border p-4 transition ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                                            className={`block cursor-pointer rounded-xl border p-4 transition ${isSelected ? 'border-flame-orange-500 bg-flame-orange-50' : 'border-gray-200 bg-white hover:border-gray-300'}`}
                                         >
                                             <div className="flex items-start gap-3">
                                                 <input
@@ -56,7 +56,7 @@ export default function GoogleAdsAccounts({ auth, accounts = [], selectedAccount
                                                     value={account.id}
                                                     checked={isSelected}
                                                     onChange={() => setData('google_ads_customer_id', account.id)}
-                                                    className="mt-1 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                                    className="mt-1 h-4 w-4 border-gray-300 text-flame-orange-600 focus:ring-flame-orange-500"
                                                 />
                                                 <div>
                                                     <div className="text-sm font-semibold text-gray-900">{account.name}</div>

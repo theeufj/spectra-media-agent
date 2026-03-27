@@ -6,8 +6,8 @@ function GeneratingState() {
     return (
         <div className="bg-white rounded-lg shadow-md p-16 text-center">
             <div className="relative w-20 h-20 mx-auto mb-6">
-                <div className="absolute inset-0 rounded-full border-4 border-indigo-200 animate-ping opacity-25" />
-                <div className="relative w-20 h-20 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
+                <div className="absolute inset-0 rounded-full border-4 border-flame-orange-200 animate-ping opacity-25" />
+                <div className="relative w-20 h-20 rounded-full border-4 border-flame-orange-500 border-t-transparent animate-spin" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Generating Your Proposal</h2>
             <p className="text-gray-500 max-w-md mx-auto">
@@ -15,7 +15,7 @@ function GeneratingState() {
             </p>
             <div className="mt-8 flex justify-center gap-3">
                 {['Analyzing website', 'Researching industry', 'Building strategies', 'Generating PDF'].map((step, i) => (
-                    <span key={step} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-indigo-50 text-indigo-600 animate-pulse" style={{ animationDelay: `${i * 0.5}s` }}>
+                    <span key={step} className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-flame-orange-50 text-flame-orange-600 animate-pulse" style={{ animationDelay: `${i * 0.5}s` }}>
                         {step}
                     </span>
                 ))}
@@ -34,7 +34,7 @@ function FailedState({ error }) {
             <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">{error || 'An unexpected error occurred. Please try again.'}</p>
             <Link
                 href={route('proposals.create')}
-                className="mt-6 inline-flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium"
+                className="mt-6 inline-flex items-center px-5 py-2.5 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 transition font-medium"
             >
                 Try Again
             </Link>
@@ -53,7 +53,7 @@ function ProposalPreview({ proposal, data }) {
                 </div>
                 <a
                     href={route('proposals.export-pdf', proposal.id)}
-                    className="inline-flex items-center px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-medium shadow-md"
+                    className="inline-flex items-center px-5 py-2.5 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 transition font-medium shadow-md"
                 >
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -65,7 +65,7 @@ function ProposalPreview({ proposal, data }) {
             {/* Executive Summary */}
             {data.executive_summary && (
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4">
+                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-4">
                         <h2 className="text-lg font-semibold text-white">Executive Summary</h2>
                     </div>
                     <div className="p-6">
@@ -140,7 +140,7 @@ function ProposalPreview({ proposal, data }) {
                                             <div className="text-blue-700 font-bold text-sm">{ad.headline}</div>
                                             <div className="text-gray-600 text-sm mt-1">{ad.description}</div>
                                             {ad.call_to_action && (
-                                                <div className="text-indigo-600 text-xs font-semibold mt-2">{ad.call_to_action}</div>
+                                                <div className="text-flame-orange-600 text-xs font-semibold mt-2">{ad.call_to_action}</div>
                                             )}
                                         </div>
                                     ))}
@@ -216,7 +216,7 @@ function ProposalPreview({ proposal, data }) {
                         <table className="w-full">
                             <tbody>
                                 {Object.entries(data.investment_summary).map(([key, val], idx, arr) => (
-                                    <tr key={key} className={`${idx === arr.length - 1 ? 'bg-indigo-50 font-bold' : ''} border-b border-gray-100`}>
+                                    <tr key={key} className={`${idx === arr.length - 1 ? 'bg-flame-orange-50 font-bold' : ''} border-b border-gray-100`}>
                                         <td className="py-3 text-gray-700 capitalize">{key.replace(/_/g, ' ')}</td>
                                         <td className="py-3 text-right text-gray-900 font-semibold">
                                             {typeof val === 'number' ? `$${val.toLocaleString()}` : val}
@@ -232,14 +232,14 @@ function ProposalPreview({ proposal, data }) {
             {/* Why Us */}
             {data.why_us?.length > 0 && (
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-4">
+                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-4">
                         <h2 className="text-lg font-semibold text-white">Why Spectra Media?</h2>
                     </div>
                     <div className="p-6">
                         <ul className="space-y-3">
                             {data.why_us.map((point, idx) => (
                                 <li key={idx} className="flex items-start">
-                                    <svg className="w-5 h-5 text-indigo-500 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                    <svg className="w-5 h-5 text-flame-orange-500 mr-3 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                                     </svg>
                                     <span className="text-gray-700">{point}</span>
@@ -287,7 +287,7 @@ export default function Show({ proposal }) {
             <div className="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
                 <Link
                     href={route('proposals.index')}
-                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium inline-flex items-center mb-6"
+                    className="text-flame-orange-600 hover:text-flame-orange-800 text-sm font-medium inline-flex items-center mb-6"
                 >
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

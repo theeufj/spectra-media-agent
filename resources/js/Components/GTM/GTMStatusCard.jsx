@@ -81,7 +81,7 @@ export default function GTMStatusCard({ customer, onRescan }) {
                     <div className="mt-6 pt-4 border-t border-gray-200">
                         <button
                             onClick={onRescan}
-                            className="text-sm text-indigo-600 hover:text-indigo-900 font-medium"
+                            className="text-sm text-flame-orange-600 hover:text-flame-orange-900 font-medium"
                         >
                             Re-scan Website for GTM
                         </button>

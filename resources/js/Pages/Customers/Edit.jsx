@@ -179,7 +179,7 @@ export default function Edit({ auth, customer: initialCustomer, bm_configured })
                                                 id="description"
                                                 name="description"
                                                 value={data.description}
-                                                className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                                 rows="3"
                                                 placeholder="Brief description of the business..."
                                                 onChange={(e) => setData('description', e.target.value)}
@@ -236,7 +236,7 @@ export default function Edit({ auth, customer: initialCustomer, bm_configured })
                                                 id="country"
                                                 name="country"
                                                 value={data.country}
-                                                className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                                 onChange={(e) => setData('country', e.target.value)}
                                             >
                                                 <option value="">Select a country</option>
@@ -258,7 +258,7 @@ export default function Edit({ auth, customer: initialCustomer, bm_configured })
                                                 id="timezone"
                                                 name="timezone"
                                                 value={data.timezone}
-                                                className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                                 onChange={(e) => setData('timezone', e.target.value)}
                                             >
                                                 <option value="">Select a timezone</option>

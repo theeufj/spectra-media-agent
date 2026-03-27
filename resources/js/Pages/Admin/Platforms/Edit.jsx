@@ -90,7 +90,7 @@ export default function Edit({ auth, platform }) {
                                         type="checkbox"
                                         checked={data.is_enabled}
                                         onChange={(e) => setData('is_enabled', e.target.checked)}
-                                        className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                        className="rounded border-gray-300 text-flame-orange-600 shadow-sm focus:ring-flame-orange-500"
                                     />
                                     <InputLabel htmlFor="is_enabled" value="Enabled" className="ml-2" />
                                     <InputError message={errors.is_enabled} className="mt-2" />

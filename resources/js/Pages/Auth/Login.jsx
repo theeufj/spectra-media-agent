@@ -42,7 +42,7 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                             type="email"
                             name="email"
                             value={data.email}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 sm:text-sm"
                             autoComplete="username"
                             autoFocus
                             onChange={(e) => setData('email', e.target.value)}
@@ -62,7 +62,7 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                             type="password"
                             name="password"
                             value={data.password}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 sm:text-sm"
                             autoComplete="current-password"
                             onChange={(e) => setData('password', e.target.value)}
                             required
@@ -79,7 +79,7 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                                 name="remember"
                                 checked={data.remember}
                                 onChange={(e) => setData('remember', e.target.checked)}
-                                className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500"
+                                className="rounded border-gray-300 text-flame-orange-600 shadow-sm focus:ring-flame-orange-500"
                             />
                             <span className="ml-2 text-sm text-gray-600">Remember me</span>
                         </label>
@@ -111,7 +111,7 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                     <button
                         type="submit"
                         disabled={processing}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-flame-orange-600 hover:bg-flame-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-flame-orange-500 disabled:opacity-50"
                     >
                         {processing ? 'Signing in...' : 'Sign in'}
                     </button>
@@ -147,7 +147,7 @@ export default function Login({ status, enabledPlatforms = [], canResetPassword 
                 <div className="mt-4 text-center">
                     <Link
                         href={route('register')}
-                        className="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        className="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-flame-orange-500"
                     >
                         Don't have an account? Register
                     </Link>

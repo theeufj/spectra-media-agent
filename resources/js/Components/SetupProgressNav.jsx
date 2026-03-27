@@ -41,7 +41,7 @@ export default function SetupProgressNav() {
     const { steps, progress, completed_steps, total_steps } = setupData;
     
     return (
-        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-lg p-4 mb-4">
+        <div className="bg-gradient-to-r from-flame-orange-50 to-purple-50 border border-flame-orange-100 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
                     <span className="text-lg">🚀</span>
@@ -53,7 +53,7 @@ export default function SetupProgressNav() {
             {/* Progress Bar */}
             <div className="w-full bg-gray-200 rounded-full h-1.5 mb-3">
                 <div 
-                    className="bg-gradient-to-r from-indigo-500 to-purple-500 h-1.5 rounded-full transition-all duration-500"
+                    className="bg-gradient-to-r from-flame-orange-500 to-purple-500 h-1.5 rounded-full transition-all duration-500"
                     style={{ width: `${progress}%` }}
                 />
             </div>
@@ -72,7 +72,7 @@ export default function SetupProgressNav() {
                                 : step.partial
                                     ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 ring-2 ring-yellow-300'
                                     : index === completed_steps
-                                        ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 ring-2 ring-indigo-300'
+                                        ? 'bg-flame-orange-100 text-flame-orange-700 hover:bg-flame-orange-200 ring-2 ring-flame-orange-300'
                                         : 'bg-white text-gray-500 hover:bg-gray-50'
                             }
                         `}
@@ -145,7 +145,7 @@ export function InlineSetupProgress() {
     return (
         <Link
             href={nextStep.action_url}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-100 rounded-full hover:bg-indigo-200 transition-colors"
+            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-flame-orange-700 bg-flame-orange-100 rounded-full hover:bg-flame-orange-200 transition-colors"
         >
             <span className="mr-1.5">→</span>
             {nextStep.action_text || nextStep.title}

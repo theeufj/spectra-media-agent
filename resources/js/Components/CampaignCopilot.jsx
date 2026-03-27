@@ -120,7 +120,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
     return (
         <div className="fixed inset-y-0 right-0 w-full sm:w-[420px] bg-white shadow-2xl z-50 flex flex-col border-l border-gray-200">
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white">
+            <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 text-white">
                 <div className="flex items-center gap-2">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -151,7 +151,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
                                 <button
                                     key={i}
                                     onClick={() => sendMessage(q)}
-                                    className="block w-full text-left px-3 py-2 text-sm text-indigo-700 bg-indigo-50 rounded-lg hover:bg-indigo-100 transition"
+                                    className="block w-full text-left px-3 py-2 text-sm text-flame-orange-700 bg-flame-orange-50 rounded-lg hover:bg-flame-orange-100 transition"
                                 >
                                     {q}
                                 </button>
@@ -164,7 +164,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
                     <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
                             msg.role === 'user'
-                                ? 'bg-indigo-600 text-white rounded-br-md'
+                                ? 'bg-flame-orange-600 text-white rounded-br-md'
                                 : msg.error
                                     ? 'bg-red-50 text-red-700 border border-red-200 rounded-bl-md'
                                     : 'bg-gray-100 text-gray-800 rounded-bl-md'
@@ -199,13 +199,13 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
                         onKeyDown={handleKeyDown}
                         placeholder="Ask about your campaign..."
                         rows={1}
-                        className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        className="flex-1 resize-none rounded-xl border border-gray-300 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-flame-orange-500 focus:border-transparent"
                         style={{ maxHeight: '120px' }}
                     />
                     <button
                         onClick={() => sendMessage(input)}
                         disabled={!input.trim() || isLoading}
-                        className="flex-shrink-0 p-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
+                        className="flex-shrink-0 p-2.5 bg-flame-orange-600 text-white rounded-xl hover:bg-flame-orange-700 disabled:opacity-40 disabled:cursor-not-allowed transition"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

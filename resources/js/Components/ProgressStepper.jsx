@@ -33,7 +33,7 @@ export default function ProgressStepper({
                             {index !== steps.length - 1 && (
                                 <div 
                                     className={`absolute top-5 left-1/2 w-full h-0.5 ${
-                                        index < currentStep ? 'bg-indigo-600' : 'bg-gray-200'
+                                        index < currentStep ? 'bg-flame-orange-600' : 'bg-gray-200'
                                     }`}
                                     aria-hidden="true"
                                 />
@@ -51,12 +51,12 @@ export default function ProgressStepper({
                                         w-10 h-10 flex items-center justify-center rounded-full 
                                         border-2 transition-all duration-200 z-10 bg-white
                                         ${status === 'completed' 
-                                            ? 'bg-indigo-600 border-indigo-600 text-white' 
+                                            ? 'bg-flame-orange-600 border-flame-orange-600 text-white' 
                                             : status === 'current'
-                                                ? 'border-indigo-600 text-indigo-600'
+                                                ? 'border-flame-orange-600 text-flame-orange-600'
                                                 : 'border-gray-300 text-gray-500'
                                         }
-                                        ${isClickable ? 'group-hover:ring-2 group-hover:ring-indigo-200' : ''}
+                                        ${isClickable ? 'group-hover:ring-2 group-hover:ring-flame-orange-200' : ''}
                                     `}
                                 >
                                     {status === 'completed' ? (
@@ -77,7 +77,7 @@ export default function ProgressStepper({
                                     className={`
                                         mt-2 text-sm font-medium text-center
                                         ${status === 'current' 
-                                            ? 'text-indigo-600' 
+                                            ? 'text-flame-orange-600' 
                                             : status === 'completed'
                                                 ? 'text-gray-900'
                                                 : 'text-gray-500'
@@ -114,9 +114,9 @@ export function CompactStepper({ steps, currentStep }) {
                         className={`
                             flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
                             ${index < currentStep 
-                                ? 'bg-indigo-600 text-white' 
+                                ? 'bg-flame-orange-600 text-white' 
                                 : index === currentStep
-                                    ? 'bg-indigo-100 text-indigo-600 ring-2 ring-indigo-600'
+                                    ? 'bg-flame-orange-100 text-flame-orange-600 ring-2 ring-flame-orange-600'
                                     : 'bg-gray-100 text-gray-400'
                             }
                         `}
@@ -126,7 +126,7 @@ export function CompactStepper({ steps, currentStep }) {
                     {index < steps.length - 1 && (
                         <div 
                             className={`w-8 h-0.5 ${
-                                index < currentStep ? 'bg-indigo-600' : 'bg-gray-200'
+                                index < currentStep ? 'bg-flame-orange-600' : 'bg-gray-200'
                             }`}
                         />
                     )}

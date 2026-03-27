@@ -8,7 +8,7 @@ const NoCampaigns = () => (
         <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link
                 href={route('campaigns.wizard')}
-                className="inline-block bg-indigo-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-indigo-700 transition-colors"
+                className="inline-block bg-flame-orange-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-flame-orange-700 transition-colors"
             >
                 Create Your First Campaign
             </Link>

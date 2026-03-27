@@ -178,7 +178,7 @@ export default function NotificationBell() {
             'billing.warning': 'bg-yellow-50',
         };
         
-        return colors[notification.type] || 'bg-indigo-50';
+        return colors[notification.type] || 'bg-flame-orange-50';
     };
     
     return (
@@ -186,7 +186,7 @@ export default function NotificationBell() {
             {/* Bell Button */}
             <button
                 onClick={() => setIsOpen(!isOpen)}
-                className="relative p-2 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded-full transition-colors"
+                className="relative p-2 text-gray-500 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-flame-orange-500 focus:ring-offset-2 rounded-full transition-colors"
                 aria-label={`Notifications ${unreadCount > 0 ? `(${unreadCount} unread)` : ''}`}
             >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -210,20 +210,20 @@ export default function NotificationBell() {
             {isOpen && (
                 <div className="absolute right-0 mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-50">
                     {/* Header */}
-                    <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                    <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-flame-orange-500 to-purple-600 text-white">
                         <h3 className="text-sm font-semibold">Notifications</h3>
                         <div className="flex items-center space-x-3">
                             {unreadCount > 0 && (
                                 <button
                                     onClick={markAllAsRead}
-                                    className="text-xs text-indigo-100 hover:text-white font-medium transition-colors"
+                                    className="text-xs text-flame-orange-100 hover:text-white font-medium transition-colors"
                                 >
                                     Mark all read
                                 </button>
                             )}
                             <button
                                 onClick={fetchNotifications}
-                                className="text-indigo-100 hover:text-white transition-colors"
+                                className="text-flame-orange-100 hover:text-white transition-colors"
                                 title="Refresh"
                             >
                                 <svg className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,7 +237,7 @@ export default function NotificationBell() {
                     <div className="max-h-[28rem] overflow-y-auto">
                         {isLoading ? (
                             <div className="px-4 py-8 text-center">
-                                <div className="w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                                <div className="w-8 h-8 border-2 border-flame-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
                                 <p className="text-sm text-gray-500">Loading notifications...</p>
                             </div>
                         ) : error ? (
@@ -248,7 +248,7 @@ export default function NotificationBell() {
                                 <p className="text-sm">{error}</p>
                                 <button 
                                     onClick={fetchNotifications}
-                                    className="mt-2 text-sm text-indigo-600 hover:text-indigo-800"
+                                    className="mt-2 text-sm text-flame-orange-600 hover:text-flame-orange-800"
                                 >
                                     Try again
                                 </button>
@@ -288,14 +288,14 @@ export default function NotificationBell() {
                                                     {formatTime(notification.created_at)}
                                                 </p>
                                                 {notification.action_text && notification.action_url && (
-                                                    <span className="text-xs text-indigo-600 font-medium">
+                                                    <span className="text-xs text-flame-orange-600 font-medium">
                                                         {notification.action_text} →
                                                     </span>
                                                 )}
                                             </div>
                                         </div>
                                         {!notification.read_at && (
-                                            <span className="w-2 h-2 bg-indigo-500 rounded-full flex-shrink-0 mt-2" />
+                                            <span className="w-2 h-2 bg-flame-orange-500 rounded-full flex-shrink-0 mt-2" />
                                         )}
                                     </div>
                                 </div>
@@ -309,7 +309,7 @@ export default function NotificationBell() {
                             <Link
                                 href="/notifications"
                                 onClick={() => setIsOpen(false)}
-                                className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                                className="text-xs text-flame-orange-600 hover:text-flame-orange-800 font-medium"
                             >
                                 View all notifications
                             </Link>

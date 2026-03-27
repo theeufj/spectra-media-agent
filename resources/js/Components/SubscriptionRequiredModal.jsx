@@ -32,7 +32,7 @@ export default function SubscriptionRequiredModal({ show, onClose }) {
                                         You need an active subscription to deploy campaigns to advertising platforms.
                                     </p>
                                     
-                                    <div className="bg-gradient-to-r from-purple-50 to-indigo-50 rounded-lg p-4 border border-purple-200 mb-4">
+                                    <div className="bg-gradient-to-r from-purple-50 to-flame-orange-50 rounded-lg p-4 border border-purple-200 mb-4">
                                         <h4 className="text-sm font-semibold text-gray-800 mb-2">With a subscription, you can:</h4>
                                         <ul className="text-sm text-gray-700 space-y-2">
                                             <li className="flex items-start">
@@ -72,14 +72,14 @@ export default function SubscriptionRequiredModal({ show, onClose }) {
                     <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
                         <Link
                             href={route('subscription.pricing')}
-                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-base font-medium text-white hover:from-purple-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:w-auto sm:text-sm transition-all"
+                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gradient-to-r from-purple-600 to-flame-orange-600 text-base font-medium text-white hover:from-purple-700 hover:to-flame-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:w-auto sm:text-sm transition-all"
                         >
                             View Pricing Plans
                         </Link>
                         <button
                             type="button"
                             onClick={onClose}
-                            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:w-auto sm:text-sm"
+                            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-flame-orange-500 sm:mt-0 sm:w-auto sm:text-sm"
                         >
                             Cancel
                         </button>

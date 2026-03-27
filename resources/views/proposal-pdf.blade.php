@@ -21,7 +21,7 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            background: linear-gradient(135deg, #312e81 0%, #4338ca 40%, #6366f1 100%);
+            background: linear-gradient(135deg, #330f00 0%, #992e00 40%, #ff4d00 100%);
             color: #ffffff;
             text-align: center;
             padding: 60px;
@@ -75,10 +75,10 @@
         .section-title {
             font-size: 24px;
             font-weight: 700;
-            color: #312e81;
+            color: #330f00;
             margin-bottom: 16px;
             padding-bottom: 8px;
-            border-bottom: 2px solid #e0e7ff;
+            border-bottom: 2px solid #ffdbcc;
         }
 
         .section-text {
@@ -98,7 +98,7 @@
         }
 
         .platform-header {
-            background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
+            background: linear-gradient(135deg, #992e00 0%, #ff4d00 100%);
             color: #ffffff;
             padding: 16px 24px;
             font-size: 18px;
@@ -119,7 +119,7 @@
         .platform-body h4 {
             font-size: 14px;
             font-weight: 600;
-            color: #312e81;
+            color: #330f00;
             margin-bottom: 6px;
             margin-top: 16px;
         }
@@ -148,7 +148,7 @@
         .metric-value {
             font-size: 16px;
             font-weight: 700;
-            color: #312e81;
+            color: #330f00;
             margin-top: 4px;
         }
 
@@ -173,8 +173,8 @@
         }
 
         .tag {
-            background: #e0e7ff;
-            color: #3730a3;
+            background: #ffdbcc;
+            color: #661f00;
             font-size: 11px;
             font-weight: 600;
             padding: 3px 10px;
@@ -204,7 +204,7 @@
 
         .ad-concept .cta {
             font-size: 11px;
-            color: #6366f1;
+            color: #ff4d00;
             font-weight: 600;
             margin-top: 6px;
         }
@@ -228,13 +228,13 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
-            background: #6366f1;
+            background: #ff4d00;
         }
 
         .timeline-line {
             width: 2px;
             flex: 1;
-            background: #c7d2fe;
+            background: #ffb899;
             margin-top: 4px;
         }
 
@@ -246,7 +246,7 @@
         .timeline-content h4 {
             font-size: 15px;
             font-weight: 700;
-            color: #312e81;
+            color: #330f00;
         }
 
         .timeline-content .duration {
@@ -271,7 +271,7 @@
         }
 
         .result-card {
-            background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+            background: linear-gradient(135deg, #ffede5 0%, #ffdbcc 100%);
             border-radius: 10px;
             padding: 20px;
             text-align: center;
@@ -280,7 +280,7 @@
         .result-card h4 {
             font-size: 14px;
             font-weight: 700;
-            color: #4338ca;
+            color: #992e00;
             margin-bottom: 8px;
         }
 
@@ -314,11 +314,11 @@
         .investment-table td.value {
             text-align: right;
             font-weight: 700;
-            color: #312e81;
+            color: #330f00;
         }
 
         .investment-table tr.total {
-            background: #eef2ff;
+            background: #ffede5;
         }
 
         .investment-table tr.total td {
@@ -345,7 +345,7 @@
             content: '✓';
             position: absolute;
             left: 0;
-            color: #6366f1;
+            color: #ff4d00;
             font-weight: 700;
             font-size: 16px;
         }

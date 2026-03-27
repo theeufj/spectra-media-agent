@@ -43,7 +43,7 @@ export default function CustomerDetail({ auth }) {
                                     <div className="flex items-center gap-3">
                                         <Link
                                             href={route('admin.customers.dashboard', customer.id)}
-                                            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                                            className="inline-flex items-center px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700"
                                         >
                                             <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -146,7 +146,7 @@ export default function CustomerDetail({ auth }) {
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                                 <Link
                                                                     href={route('admin.campaigns.show', campaign.id)}
-                                                                    className="text-indigo-600 hover:text-indigo-900 font-medium"
+                                                                    className="text-flame-orange-600 hover:text-flame-orange-900 font-medium"
                                                                 >
                                                                     View Details
                                                                 </Link>

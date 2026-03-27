@@ -51,7 +51,7 @@ export default function QuickStart({ auth }) {
                                 <div className="relative">
                                     <div className={`
                                         flex items-center border-2 rounded-xl transition-all duration-200
-                                        ${urlFocused ? 'border-indigo-500 shadow-lg shadow-indigo-100' : 'border-gray-200'}
+                                        ${urlFocused ? 'border-flame-orange-500 shadow-lg shadow-flame-orange-100' : 'border-gray-200'}
                                         ${errors.website_url ? 'border-red-400' : ''}
                                     `}>
                                         <span className="pl-4 text-gray-400">
@@ -76,7 +76,7 @@ export default function QuickStart({ auth }) {
                                                 mr-2 px-6 py-2.5 rounded-lg font-medium text-white transition-all duration-200
                                                 ${processing || !data.website_url.trim()
                                                     ? 'bg-gray-300 cursor-not-allowed'
-                                                    : 'bg-indigo-600 hover:bg-indigo-700 shadow-md hover:shadow-lg'
+                                                    : 'bg-flame-orange-600 hover:bg-flame-orange-700 shadow-md hover:shadow-lg'
                                                 }
                                             `}
                                         >
@@ -114,7 +114,7 @@ export default function QuickStart({ auth }) {
 
                             <p className="mt-6 text-xs text-gray-400">
                                 Or{' '}
-                                <a href={route('customers.create')} className="text-indigo-600 hover:text-indigo-800">
+                                <a href={route('customers.create')} className="text-flame-orange-600 hover:text-flame-orange-800">
                                     set up manually
                                 </a>
                             </p>

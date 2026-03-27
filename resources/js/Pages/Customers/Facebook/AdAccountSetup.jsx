@@ -141,7 +141,7 @@ export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm
                                             value={adAccountId}
                                             onChange={e => setAdAccountId(e.target.value.replace(/\D/g, ''))}
                                             placeholder="123456789012345"
-                                            className="flex-1 min-w-0 block px-3 py-2 rounded-none rounded-r-md border border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
+                                            className="flex-1 min-w-0 block px-3 py-2 rounded-none rounded-r-md border border-gray-300 focus:ring-flame-orange-500 focus:border-flame-orange-500 text-sm font-mono"
                                             required
                                         />
                                     </div>

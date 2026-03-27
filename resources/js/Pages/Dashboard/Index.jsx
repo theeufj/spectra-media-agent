@@ -124,7 +124,7 @@ export default function Dashboard({ auth }) {
                                         <span className="text-sm font-medium text-gray-700">{usageStats.free_generations_used} / 5</span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.free_generations_used / 5) * 100, 100)}%` }}></div>
+                                        <div className="bg-flame-orange-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.free_generations_used / 5) * 100, 100)}%` }}></div>
                                     </div>
                                 </div>
                                 {/* CRO Audits Meter */}
@@ -134,12 +134,12 @@ export default function Dashboard({ auth }) {
                                         <span className="text-sm font-medium text-gray-700">{usageStats.cro_audits_used} / 3</span>
                                     </div>
                                     <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div className="bg-indigo-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.cro_audits_used / 3) * 100, 100)}%` }}></div>
+                                        <div className="bg-flame-orange-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.cro_audits_used / 3) * 100, 100)}%` }}></div>
                                     </div>
                                 </div>
                             </div>
                             <div className="mt-4 text-center">
-                                <a href={route('subscription.pricing')} className="text-indigo-600 hover:text-indigo-900 font-medium text-sm">
+                                <a href={route('subscription.pricing')} className="text-flame-orange-600 hover:text-flame-orange-900 font-medium text-sm">
                                     Upgrade to Unlimited &rarr;
                                 </a>
                             </div>

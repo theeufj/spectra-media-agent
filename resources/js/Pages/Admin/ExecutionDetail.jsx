@@ -104,11 +104,11 @@ const ExecutionSteps = ({ plan }) => {
             {plan.steps.map((step, index) => (
                 <div key={index} className="flex">
                     <div className="flex flex-col items-center mr-4">
-                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-indigo-600 text-white text-sm font-bold">
+                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-flame-orange-600 text-white text-sm font-bold">
                             {index + 1}
                         </div>
                         {index < plan.steps.length - 1 && (
-                            <div className="w-0.5 h-full bg-indigo-300 mt-2"></div>
+                            <div className="w-0.5 h-full bg-flame-orange-300 mt-2"></div>
                         )}
                     </div>
                     <div className="flex-1 bg-gray-50 rounded-lg p-4 mb-2">
@@ -123,7 +123,7 @@ const ExecutionSteps = ({ plan }) => {
                         )}
                         {step.parameters && Object.keys(step.parameters).length > 0 && (
                             <details className="mt-2">
-                                <summary className="text-xs text-indigo-600 cursor-pointer hover:text-indigo-800">
+                                <summary className="text-xs text-flame-orange-600 cursor-pointer hover:text-flame-orange-800">
                                     View parameters
                                 </summary>
                                 <pre className="mt-2 text-xs bg-white p-2 rounded border border-gray-200 overflow-x-auto">
@@ -151,7 +151,7 @@ export default function ExecutionDetail({ auth }) {
                     </h2>
                     <Link
                         href={route('admin.execution.metrics')}
-                        className="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 focus:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                        className="inline-flex items-center px-4 py-2 bg-gray-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-gray-700 focus:bg-gray-700 active:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-flame-orange-500 focus:ring-offset-2 transition ease-in-out duration-150"
                     >
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />

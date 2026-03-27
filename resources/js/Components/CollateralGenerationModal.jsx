@@ -17,7 +17,7 @@ export default function CollateralGenerationModal({ show, onClose }) {
                 <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
                     <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                         <div className="sm:flex sm:items-start">
-                            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 sm:mx-0 sm:h-10 sm:w-10">
+                            <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-gradient-to-br from-purple-100 to-flame-orange-100 sm:mx-0 sm:h-10 sm:w-10">
                                 <svg className="h-6 w-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                 </svg>
@@ -53,12 +53,12 @@ export default function CollateralGenerationModal({ show, onClose }) {
                                             <span>Optimizing for each platform</span>
                                         </li>
                                     </ul>
-                                    <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+                                    <div className="bg-flame-orange-50 rounded-lg p-4 border border-flame-orange-200">
                                         <div className="flex">
-                                            <svg className="h-5 w-5 text-indigo-600 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <svg className="h-5 w-5 text-flame-orange-600 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                                             </svg>
-                                            <p className="text-sm text-indigo-800">
+                                            <p className="text-sm text-flame-orange-800">
                                                 <strong>You'll receive an email</strong> when all your collateral has been generated and is ready for review.
                                             </p>
                                         </div>
@@ -71,7 +71,7 @@ export default function CollateralGenerationModal({ show, onClose }) {
                         <button
                             type="button"
                             onClick={onClose}
-                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-base font-medium text-white hover:from-purple-700 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:ml-3 sm:w-auto sm:text-sm transition-all"
+                            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-gradient-to-r from-purple-600 to-flame-orange-600 text-base font-medium text-white hover:from-purple-700 hover:to-flame-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 sm:ml-3 sm:w-auto sm:text-sm transition-all"
                         >
                             Got it!
                         </button>

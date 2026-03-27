@@ -152,7 +152,7 @@ class GenerateProposal implements ShouldQueue
         try {
             $imagePrompt = "Create a clean, modern, professional hero image for an advertising proposal document. "
                 . "The image should convey digital marketing success with abstract elements like rising graphs, "
-                . "connected nodes, and a gradient blue-to-indigo color palette. "
+                . "connected nodes, and a warm gradient from flame-orange to amber-gold color palette. "
                 . "Industry: {$this->proposal->industry}. Minimalist corporate style. No text.";
 
             $result = $geminiService->generateImage($imagePrompt, 'gemini-3.1-flash-image-preview', '1K');

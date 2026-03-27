@@ -43,7 +43,7 @@ export default function Create() {
             <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
                 <Link
                     href={route('proposals.index')}
-                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium inline-flex items-center mb-6"
+                    className="text-flame-orange-600 hover:text-flame-orange-800 text-sm font-medium inline-flex items-center mb-6"
                 >
                     <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -52,9 +52,9 @@ export default function Create() {
                 </Link>
 
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                    <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 px-6 py-5">
+                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-5">
                         <h1 className="text-2xl font-bold text-white">Generate a Proposal</h1>
-                        <p className="text-indigo-200 mt-1">
+                        <p className="text-flame-orange-200 mt-1">
                             Our AI will create a professional advertising proposal with platform strategies, projected metrics, and sample ad concepts.
                         </p>
                     </div>
@@ -69,7 +69,7 @@ export default function Create() {
                                 type="text"
                                 value={data.client_name}
                                 onChange={e => setData('client_name', e.target.value)}
-                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                 placeholder="e.g. Acme Corp"
                             />
                             {errors.client_name && <p className="mt-1 text-sm text-red-600">{errors.client_name}</p>}
@@ -82,7 +82,7 @@ export default function Create() {
                                 type="text"
                                 value={data.industry}
                                 onChange={e => setData('industry', e.target.value)}
-                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                 placeholder="e.g. E-commerce, Healthcare, Real Estate"
                             />
                             {errors.industry && <p className="mt-1 text-sm text-red-600">{errors.industry}</p>}
@@ -95,7 +95,7 @@ export default function Create() {
                                 type="url"
                                 value={data.website_url}
                                 onChange={e => setData('website_url', e.target.value)}
-                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                 placeholder="https://example.com"
                             />
                             <p className="mt-1 text-xs text-gray-400">We'll analyze the website to personalize the proposal.</p>
@@ -113,7 +113,7 @@ export default function Create() {
                                     type="number"
                                     value={data.budget}
                                     onChange={e => setData('budget', e.target.value)}
-                                    className="w-full pl-8 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                    className="w-full pl-8 rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                     placeholder="5000"
                                     min="100"
                                     step="100"
@@ -135,7 +135,7 @@ export default function Create() {
                                         onClick={() => togglePlatform(platform)}
                                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
                                             data.platforms.includes(platform)
-                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                                                ? 'bg-flame-orange-600 text-white border-flame-orange-600 shadow-md'
                                                 : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                                         }`}
                                     >
@@ -153,7 +153,7 @@ export default function Create() {
                                 value={data.goals}
                                 onChange={e => setData('goals', e.target.value)}
                                 rows={4}
-                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                 placeholder="e.g. Increase online sales by 30%, generate 200 leads/month, build brand awareness in the Southeast market..."
                             />
                             {errors.goals && <p className="mt-1 text-sm text-red-600">{errors.goals}</p>}
@@ -164,7 +164,7 @@ export default function Create() {
                             <button
                                 type="submit"
                                 disabled={processing}
-                                className="w-full inline-flex justify-center items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition font-semibold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="w-full inline-flex justify-center items-center px-6 py-3 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 transition font-semibold shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 {processing ? (
                                     <>

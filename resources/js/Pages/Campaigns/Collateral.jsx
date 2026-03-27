@@ -372,7 +372,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         navigator.clipboard.writeText(copyText);
                                                                         alert('Ad copy copied to clipboard!');
                                                                     }}
-                                                                    className="px-3 py-1 text-xs font-medium text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100"
+                                                                    className="px-3 py-1 text-xs font-medium text-flame-orange-600 bg-flame-orange-50 rounded-md hover:bg-flame-orange-100"
                                                                 >
                                                                     📋 Copy All
                                                                 </button>
@@ -380,7 +380,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 <a
                                                                     href={route('subscription.pricing')}
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    className="px-3 py-1 text-xs font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                                                                    className="px-3 py-1 text-xs font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700"
                                                                 >
                                                                     🔒 Upgrade to Export
                                                                 </a>
@@ -431,7 +431,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <button
                                             onClick={() => handleGenerateImage(strategyItem.id)}
                                             disabled={generatingImage}
-                                            className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                            className="mt-4 px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                         >
                                             {generatingImage && (
                                                 <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -460,7 +460,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                             {isSubscribed ? (
                                                                 <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 mr-2">
+                                                                    <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700 mr-2">
                                                                         Edit Image
                                                                     </button>
                                                                     <a 
@@ -476,7 +476,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 <a 
                                                                     href={route('subscription.pricing')}
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                                                                    className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700"
                                                                 >
                                                                     🔒 Upgrade to Download
                                                                 </a>

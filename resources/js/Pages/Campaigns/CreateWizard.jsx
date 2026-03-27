@@ -102,7 +102,7 @@ const WIZARD_STEPS = [
 const TextArea = ({ className = '', ...props }) => (
     <textarea
         {...props}
-        className={`border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full ${className}`}
+        className={`border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm w-full ${className}`}
         rows={3}
     />
 );
@@ -370,7 +370,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                                         <div
                                             className={`max-w-[80%] rounded-lg px-4 py-2 ${
                                                 msg.role === 'user'
-                                                    ? 'bg-indigo-600 text-white'
+                                                    ? 'bg-flame-orange-600 text-white'
                                                     : 'bg-white border border-gray-200 text-gray-800'
                                             }`}
                                         >
@@ -419,13 +419,13 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                                     onChange={(e) => setAiInput(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
                                     placeholder="Describe your campaign..."
-                                    className="flex-1 rounded-lg border-gray-300 focus:border-indigo-500 focus:ring-indigo-500"
+                                    className="flex-1 rounded-lg border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                     disabled={aiLoading}
                                 />
                                 <button
                                     onClick={handleAiSend}
                                     disabled={aiLoading || !aiInput.trim()}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Send
                                 </button>
@@ -445,16 +445,16 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                         {/* AI Option - Featured */}
                         <div 
                             onClick={startAiMode}
-                            className="cursor-pointer bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-2xl p-1 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
+                            className="cursor-pointer bg-gradient-to-r from-flame-orange-500 via-purple-500 to-pink-500 rounded-2xl p-1 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
                         >
                             <div className="bg-white rounded-xl p-6 flex items-center space-x-6">
-                                <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-xl flex items-center justify-center">
+                                <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-flame-orange-100 to-purple-100 rounded-xl flex items-center justify-center">
                                     <span className="text-4xl">🤖</span>
                                 </div>
                                 <div className="flex-1">
                                     <div className="flex items-center space-x-2">
                                         <h3 className="text-xl font-bold text-gray-900">Create with AI</h3>
-                                        <span className="px-2 py-0.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white text-xs rounded-full font-medium">
+                                        <span className="px-2 py-0.5 bg-gradient-to-r from-flame-orange-500 to-purple-500 text-white text-xs rounded-full font-medium">
                                             Recommended
                                         </span>
                                     </div>
@@ -463,7 +463,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                                     </p>
                                 </div>
                                 <div className="flex-shrink-0">
-                                    <svg className="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <svg className="w-8 h-8 text-flame-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                     </svg>
                                 </div>
@@ -488,9 +488,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                                     onClick={() => applyTemplate(template)}
                                     className={`
                                         p-6 rounded-lg border-2 text-left transition-all duration-200
-                                        hover:border-indigo-500 hover:shadow-lg
+                                        hover:border-flame-orange-500 hover:shadow-lg
                                         ${selectedTemplate === template.id 
-                                            ? 'border-indigo-500 bg-indigo-50' 
+                                            ? 'border-flame-orange-500 bg-flame-orange-50' 
                                             : 'border-gray-200 bg-white'
                                         }
                                     `}
@@ -763,16 +763,16 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                             </div>
                         )}
 
-                        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                        <div className="bg-flame-orange-50 border border-flame-orange-200 rounded-lg p-4">
                             <div className="flex">
-                                <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <svg className="w-5 h-5 text-flame-orange-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                     <path d="M11 3a1 1 0 10-2 0v1a1 1 0 102 0V3zM15.657 5.757a1 1 0 00-1.414-1.414l-.707.707a1 1 0 001.414 1.414l.707-.707zM18 10a1 1 0 01-1 1h-1a1 1 0 110-2h1a1 1 0 011 1zM5.05 6.464A1 1 0 106.464 5.05l-.707-.707a1 1 0 00-1.414 1.414l.707.707zM5 10a1 1 0 01-1 1H3a1 1 0 110-2h1a1 1 0 011 1zM8 16v-1h4v1a2 2 0 11-4 0zM12 14c.015-.34.208-.646.477-.859a4 4 0 10-4.954 0c.27.213.462.519.476.859h4.002z" />
                                 </svg>
                                 <div>
-                                    <p className="text-sm text-indigo-700">
+                                    <p className="text-sm text-flame-orange-700">
                                         <strong>What happens next?</strong>
                                     </p>
-                                    <p className="text-sm text-indigo-600 mt-1">
+                                    <p className="text-sm text-flame-orange-600 mt-1">
                                         Our AI will analyze your inputs along with your knowledge base and brand guidelines to generate 
                                         platform-specific advertising strategies. This usually takes 1-2 minutes.
                                     </p>
@@ -831,7 +831,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                                             type="button"
                                             onClick={nextStep}
                                             disabled={!validateStep(currentStep)}
-                                            className="bg-indigo-600 hover:bg-indigo-700"
+                                            className="bg-flame-orange-600 hover:bg-flame-orange-700"
                                         >
                                             Continue →
                                         </PrimaryButton>
@@ -869,7 +869,7 @@ const ReviewSection = ({ title, step, onEdit, children }) => (
             <button 
                 type="button"
                 onClick={onEdit}
-                className="text-sm text-indigo-600 hover:text-indigo-800"
+                className="text-sm text-flame-orange-600 hover:text-flame-orange-800"
             >
                 Edit
             </button>

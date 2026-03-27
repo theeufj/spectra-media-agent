@@ -175,7 +175,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                         <select
                                             id="business_type"
                                             name="business_type"
-                                            className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                             value={formData.business_type}
                                             onChange={handleInputChange}
                                         >
@@ -196,7 +196,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                     <textarea
                                         id="description"
                                         name="description"
-                                        className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                        className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                         rows="3"
                                         value={formData.description}
                                         onChange={handleInputChange}
@@ -211,7 +211,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                         <select
                                             id="country"
                                             name="country"
-                                            className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                             value={formData.country}
                                             onChange={handleInputChange}
                                         >
@@ -229,7 +229,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                         <select
                                             id="timezone"
                                             name="timezone"
-                                            className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                             value={formData.timezone}
                                             onChange={handleInputChange}
                                         >
@@ -248,7 +248,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                         <select
                                             id="currency_code"
                                             name="currency_code"
-                                            className="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
                                             value={formData.currency_code}
                                             onChange={handleInputChange}
                                         >
@@ -420,7 +420,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                                 </div>
                                                 <div className="flex-1">
                                                     <InputLabel htmlFor="role" value="Role" className="sr-only" />
-                                                    <select id="role" name="role" className="block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                                                    <select id="role" name="role" className="block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm">
                                                         <option>biller</option>
                                                         <option>marketing</option>
                                                     </select>

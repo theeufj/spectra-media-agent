@@ -78,7 +78,7 @@ export default function Index({ auth, campaigns = [] }) {
                                             }`}>
                                                 {campaign.status}
                                             </span>
-                                            <span className="text-sm font-semibold text-indigo-600 bg-indigo-50 px-3 py-1 rounded">{campaign.strategies?.length || 0} strategies</span>
+                                            <span className="text-sm font-semibold text-flame-orange-600 bg-flame-orange-50 px-3 py-1 rounded">{campaign.strategies?.length || 0} strategies</span>
                                         </div>
                                     </div>
 
@@ -132,21 +132,21 @@ export default function Index({ auth, campaigns = [] }) {
                                                                         <div className="flex items-center justify-between">
                                                                             <div className="flex gap-6">
                                                                                 <div className="flex flex-col items-center">
-                                                                                    <span className="text-2xl font-bold text-indigo-600">{summary.adCopies}</span>
+                                                                                    <span className="text-2xl font-bold text-flame-orange-600">{summary.adCopies}</span>
                                                                                     <span className="text-xs text-gray-600">Ad Copies</span>
                                                                                 </div>
                                                                                 <div className="flex flex-col items-center">
-                                                                                    <span className="text-2xl font-bold text-indigo-600">{summary.images}</span>
+                                                                                    <span className="text-2xl font-bold text-flame-orange-600">{summary.images}</span>
                                                                                     <span className="text-xs text-gray-600">Images</span>
                                                                                 </div>
                                                                                 <div className="flex flex-col items-center">
-                                                                                    <span className="text-2xl font-bold text-indigo-600">{summary.videos}</span>
+                                                                                    <span className="text-2xl font-bold text-flame-orange-600">{summary.videos}</span>
                                                                                     <span className="text-xs text-gray-600">Videos</span>
                                                                                 </div>
                                                                             </div>
                                                                             <Link 
                                                                                 href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })} 
-                                                                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm font-medium"
+                                                                                className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 text-sm font-medium"
                                                                             >
                                                                                 View Details
                                                                             </Link>

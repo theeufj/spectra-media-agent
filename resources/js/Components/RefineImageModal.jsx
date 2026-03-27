@@ -29,7 +29,7 @@ export default function RefineImageModal({ image, onClose }) {
                             id="prompt"
                             value={data.prompt}
                             onChange={(e) => setData('prompt', e.target.value)}
-                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-flame-orange-500 focus:border-flame-orange-500 sm:text-sm"
                             rows="3"
                             placeholder="e.g., 'Make the sky more dramatic and add a futuristic cityscape in the background.'"
                         ></textarea>
@@ -44,7 +44,7 @@ export default function RefineImageModal({ image, onClose }) {
                             type="file"
                             id="context_image"
                             onChange={(e) => setData('context_image', e.target.files[0])}
-                            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-flame-orange-50 file:text-flame-orange-700 hover:file:bg-flame-orange-100"
                         />
                         {errors.context_image && <p className="mt-2 text-sm text-red-600">{errors.context_image}</p>}
                     </div>

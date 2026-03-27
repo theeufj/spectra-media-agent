@@ -38,7 +38,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                 type="button"
                                                 className={`inline-flex items-center px-3 pt-1 border-b-2 text-sm font-medium leading-5 transition duration-150 ease-in-out focus:outline-none ${
                                                     route().current('campaigns.*')
-                                                        ? 'border-indigo-400 text-gray-900'
+                                                        ? 'border-flame-orange-400 text-gray-900'
                                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                 }`}
                                             >
@@ -67,7 +67,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                 type="button"
                                                 className={`inline-flex items-center px-3 pt-1 border-b-2 text-sm font-medium leading-5 transition duration-150 ease-in-out focus:outline-none ${
                                                     route().current('knowledge-base.*') || route().current('brand-guidelines.*')
-                                                        ? 'border-indigo-400 text-gray-900'
+                                                        ? 'border-flame-orange-400 text-gray-900'
                                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                 }`}
                                             >
@@ -105,7 +105,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                 type="button"
                                                 className={`inline-flex items-center px-3 pt-1 border-b-2 text-sm font-medium leading-5 transition duration-150 ease-in-out focus:outline-none ${
                                                     route().current('subscription.*') || route().current('billing.*')
-                                                        ? 'border-indigo-400 text-gray-900'
+                                                        ? 'border-flame-orange-400 text-gray-900'
                                                         : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                 }`}
                                             >
@@ -126,6 +126,10 @@ export default function AuthenticatedLayout({ header, children }) {
                                     </Dropdown>
                                 </div>
                                 
+                                <NavLink href={route('support-tickets.index')} active={route().current('support-tickets.*')}>
+                                    Support
+                                </NavLink>
+
                                 {user.isAdmin && (
                                     <NavLink href={route('admin.dashboard')} active={route().current('admin.dashboard')}>
                                         Admin
@@ -141,7 +145,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             {/* Create Campaign Button */}
                             <Link
                                 href={route('campaigns.wizard')}
-                                className="ml-3 inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+                                className="ml-3 inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
                             >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -334,6 +338,17 @@ export default function AuthenticatedLayout({ header, children }) {
                             Ad Spend Credits
                         </ResponsiveNavLink>
                         
+                        {/* Support */}
+                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-2">
+                            Support
+                        </div>
+                        <ResponsiveNavLink
+                            href={route('support-tickets.index')}
+                            active={route().current('support-tickets.*')}
+                        >
+                            Support Tickets
+                        </ResponsiveNavLink>
+
                         {user.isAdmin && (
                             <>
                                 <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-2">

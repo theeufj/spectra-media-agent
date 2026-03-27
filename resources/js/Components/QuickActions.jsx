@@ -19,7 +19,7 @@ export default function QuickActions() {
                 </svg>
             ),
             href: '/campaigns/wizard',
-            color: 'bg-indigo-500 hover:bg-indigo-600',
+            color: 'bg-flame-orange-500 hover:bg-flame-orange-600',
             primary: true
         },
         {
@@ -71,20 +71,20 @@ export default function QuickActions() {
                         className={`
                             flex items-center p-3 rounded-lg transition-all duration-200
                             ${action.primary 
-                                ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg' 
+                                ? 'bg-flame-orange-600 text-white hover:bg-flame-orange-700 shadow-md hover:shadow-lg' 
                                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                             }
                         `}
                     >
                         <span className={`
                             flex items-center justify-center w-10 h-10 rounded-lg mr-3
-                            ${action.primary ? 'bg-indigo-500' : 'bg-white shadow-sm'}
+                            ${action.primary ? 'bg-flame-orange-500' : 'bg-white shadow-sm'}
                         `}>
                             {action.icon}
                         </span>
                         <div>
                             <p className="font-medium">{action.title}</p>
-                            <p className={`text-sm ${action.primary ? 'text-indigo-200' : 'text-gray-500'}`}>
+                            <p className={`text-sm ${action.primary ? 'text-flame-orange-200' : 'text-gray-500'}`}>
                                 {action.description}
                             </p>
                         </div>
@@ -137,7 +137,7 @@ export function PendingTasks({ tasks = [] }) {
         <div className="bg-white rounded-lg shadow-md p-6">
             <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900">Pending Tasks</h3>
-                <span className="px-2 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-full">
+                <span className="px-2 py-1 text-xs font-medium bg-flame-orange-100 text-flame-orange-700 rounded-full">
                     {tasks.length}
                 </span>
             </div>
@@ -165,7 +165,7 @@ export function PendingTasks({ tasks = [] }) {
             {tasks.length > 5 && (
                 <Link
                     href="/tasks"
-                    className="block mt-4 text-center text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                    className="block mt-4 text-center text-sm text-flame-orange-600 hover:text-flame-orange-800 font-medium"
                 >
                     View all {tasks.length} tasks →
                 </Link>

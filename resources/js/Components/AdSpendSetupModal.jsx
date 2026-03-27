@@ -153,11 +153,11 @@ const PaymentForm = ({ campaign, onSuccess, onCancel }) => {
             </div>
 
             {/* Info Box */}
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
-                <h4 className="font-medium text-indigo-900 mb-2">How Ad Spend Billing Works</h4>
-                <ul className="text-sm text-indigo-700 space-y-1">
+            <div className="bg-flame-orange-50 border border-flame-orange-200 rounded-lg p-4">
+                <h4 className="font-medium text-flame-orange-900 mb-2">How Ad Spend Billing Works</h4>
+                <ul className="text-sm text-flame-orange-700 space-y-1">
                     <li>• We charge <strong>{daysToCharge} days of estimated ad spend</strong> upfront as credit
-                        {daysToCharge < 7 && <span className="text-indigo-500"> (your campaign is only {campaignDurationDays} days)</span>}
+                        {daysToCharge < 7 && <span className="text-flame-orange-500"> (your campaign is only {campaignDurationDays} days)</span>}
                     </li>
                     <li>• Your actual daily spend is deducted each morning at 6 AM</li>
                     <li>• Balance is automatically topped up when low</li>
@@ -174,7 +174,7 @@ const PaymentForm = ({ campaign, onSuccess, onCancel }) => {
                     </div>
                     <div className="text-right">
                         <p className="text-sm text-gray-500">Initial Charge ({daysToCharge} days)</p>
-                        <p className="text-2xl font-bold text-indigo-600">${upfrontCharge.toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-flame-orange-600">${upfrontCharge.toFixed(2)}</p>
                     </div>
                 </div>
             </div>
@@ -209,7 +209,7 @@ const PaymentForm = ({ campaign, onSuccess, onCancel }) => {
                     className={`flex-1 py-3 px-4 rounded-lg font-medium text-white transition-colors ${
                         processing
                             ? 'bg-gray-400 cursor-not-allowed'
-                            : 'bg-indigo-600 hover:bg-indigo-700'
+                            : 'bg-flame-orange-600 hover:bg-flame-orange-700'
                     }`}
                 >
                     {processing ? 'Processing...' : `Pay $${upfrontCharge.toFixed(2)} & Deploy`}

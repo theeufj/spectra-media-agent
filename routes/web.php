@@ -225,6 +225,18 @@ Route::middleware(['auth'])->group(function () {
 | Admin Platform Management Routes
 |--------------------------------------------------------------------------
 */
+/*
+|--------------------------------------------------------------------------
+| Support Ticket Routes (User-Facing)
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->group(function () {
+    Route::get('/support-tickets', [App\Http\Controllers\SupportTicketController::class, 'index'])->name('support-tickets.index');
+    Route::get('/support-tickets/create', [App\Http\Controllers\SupportTicketController::class, 'create'])->name('support-tickets.create');
+    Route::post('/support-tickets', [App\Http\Controllers\SupportTicketController::class, 'store'])->name('support-tickets.store');
+    Route::get('/support-tickets/{supportTicket}', [App\Http\Controllers\SupportTicketController::class, 'show'])->name('support-tickets.show');
+});
+
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('platforms', App\Http\Controllers\Admin\EnabledPlatformController::class);
     Route::post('/platforms/{platform}/toggle', [App\Http\Controllers\Admin\EnabledPlatformController::class, 'toggle'])->name('platforms.toggle');
@@ -480,6 +492,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('activity-logs', [App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('admin.activity.index');
     Route::get('activity-logs/stats', [App\Http\Controllers\Admin\ActivityLogController::class, 'stats'])->name('admin.activity.stats');
     Route::get('activity-logs/export', [App\Http\Controllers\Admin\ActivityLogController::class, 'export'])->name('admin.activity.export');
+    
+    // Support Tickets (Admin)
+    Route::get('support-tickets', [App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('admin.support-tickets.index');
+    Route::get('support-tickets/{supportTicket}', [App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('admin.support-tickets.show');
+    Route::put('support-tickets/{supportTicket}', [App\Http\Controllers\Admin\SupportTicketController::class, 'update'])->name('admin.support-tickets.update');
 });
 
 /*

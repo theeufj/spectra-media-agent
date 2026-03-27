@@ -24,7 +24,7 @@ const PerformanceStats = ({ stats, loading }) => {
         { label: 'Clicks', value: stats?.clicks?.toLocaleString() || '0', color: 'text-green-600' },
         { label: 'Cost', value: `$${(stats?.cost || 0).toFixed(2)}`, color: 'text-red-600' },
         { label: 'Conversions', value: (stats?.conversions || 0).toFixed(1), color: 'text-purple-600' },
-        { label: 'CTR', value: `${(stats?.ctr || 0).toFixed(2)}%`, color: 'text-indigo-600' },
+        { label: 'CTR', value: `${(stats?.ctr || 0).toFixed(2)}%`, color: 'text-flame-orange-600' },
         { label: 'CPC', value: `$${(stats?.cpc || 0).toFixed(2)}`, color: 'text-orange-600' },
         { label: 'CPA', value: stats?.cpa > 0 ? `$${stats.cpa.toFixed(2)}` : '-', color: 'text-pink-600' },
     ];
@@ -115,7 +115,7 @@ export default function CustomerDashboard({ auth }) {
                                             const campaign = campaigns.find(c => c.id === parseInt(e.target.value));
                                             setSelectedCampaign(campaign);
                                         }}
-                                        className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                        className="rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
                                     >
                                         {campaigns.map((campaign) => (
                                             <option key={campaign.id} value={campaign.id}>
@@ -166,7 +166,7 @@ export default function CustomerDashboard({ auth }) {
                                             {campaigns.map((campaign) => (
                                                 <tr 
                                                     key={campaign.id} 
-                                                    className={`hover:bg-gray-50 cursor-pointer ${selectedCampaign?.id === campaign.id ? 'bg-indigo-50' : ''}`}
+                                                    className={`hover:bg-gray-50 cursor-pointer ${selectedCampaign?.id === campaign.id ? 'bg-flame-orange-50' : ''}`}
                                                     onClick={() => setSelectedCampaign(campaign)}
                                                 >
                                                     <td className="px-6 py-4 whitespace-nowrap">
@@ -191,7 +191,7 @@ export default function CustomerDashboard({ auth }) {
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm">
                                                         <Link
                                                             href={route('admin.campaigns.show', campaign.id)}
-                                                            className="text-indigo-600 hover:text-indigo-900"
+                                                            className="text-flame-orange-600 hover:text-flame-orange-900"
                                                             onClick={(e) => e.stopPropagation()}
                                                         >
                                                             Details

@@ -128,7 +128,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                     <div>
                         <Link 
                             href={`/campaigns/${campaign.id}/strategies`}
-                            className="text-sm text-indigo-600 hover:text-indigo-800 mb-1 block"
+                            className="text-sm text-flame-orange-600 hover:text-flame-orange-800 mb-1 block"
                         >
                             ← Back to Campaign
                         </Link>
@@ -150,11 +150,11 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-semibold text-gray-900">Overall Progress</h3>
-                            <span className="text-2xl font-bold text-indigo-600">{overallProgress}%</span>
+                            <span className="text-2xl font-bold text-flame-orange-600">{overallProgress}%</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-3">
                             <div 
-                                className="bg-gradient-to-r from-indigo-500 to-purple-500 h-3 rounded-full transition-all duration-500"
+                                className="bg-gradient-to-r from-flame-orange-500 to-purple-500 h-3 rounded-full transition-all duration-500"
                                 style={{ width: `${overallProgress}%` }}
                             />
                         </div>

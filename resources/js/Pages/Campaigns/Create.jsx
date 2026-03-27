@@ -21,7 +21,7 @@ const FormSection = ({ title, description, children }) => (
 const TextArea = (props) => (
     <textarea
         {...props}
-        className="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-full"
+        className="border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm w-full"
     />
 );
 

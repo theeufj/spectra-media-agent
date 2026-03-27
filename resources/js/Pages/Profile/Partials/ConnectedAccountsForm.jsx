@@ -85,7 +85,7 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
 
             {/* Prominent CTA if no ad accounts connected */}
             {!hasGoogle && !hasFacebookAds && (
-                <div className="mt-6 p-6 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg text-white">
+                <div className="mt-6 p-6 bg-gradient-to-r from-flame-orange-500 to-purple-600 rounded-lg text-white">
                     <div className="flex items-start gap-4">
                         <div className="flex-shrink-0">
                             <svg className="w-10 h-10 text-white opacity-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,7 +94,7 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                         </div>
                         <div className="flex-1">
                             <h3 className="text-xl font-semibold">Connect Your Ad Accounts</h3>
-                            <p className="mt-2 text-indigo-100">
+                            <p className="mt-2 text-flame-orange-100">
                                 To create and manage advertising campaigns, you need to connect at least one ad platform. 
                                 Connect your Google or Facebook account to get started.
                             </p>
@@ -185,7 +185,7 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                                     {connection.platform === 'google' && (
                                         <a
                                             href={route('profile.google-ads.accounts')}
-                                            className="px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 rounded-md hover:bg-indigo-100"
+                                            className="px-3 py-1.5 text-sm font-medium text-flame-orange-700 bg-flame-orange-50 rounded-md hover:bg-flame-orange-100"
                                         >
                                             {connection.account_id ? 'Change Account' : 'Select Account'}
                                         </a>
@@ -193,7 +193,7 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                                     {connection.is_expired && info.connectUrl && (
                                         <a
                                             href={info.connectUrl}
-                                            className="px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700"
+                                            className="px-3 py-1.5 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700"
                                         >
                                             Reconnect
                                         </a>

@@ -6,7 +6,7 @@ const AGENT_TYPE_CONFIG = {
     budget: { icon: '💰', label: 'Budget Agent', color: 'text-green-600 bg-green-50' },
     creative: { icon: '🎨', label: 'Creative Agent', color: 'text-purple-600 bg-purple-50' },
     maintenance: { icon: '🔧', label: 'Maintenance Agent', color: 'text-blue-600 bg-blue-50' },
-    monitoring: { icon: '📊', label: 'Monitoring Agent', color: 'text-indigo-600 bg-indigo-50' },
+    monitoring: { icon: '📊', label: 'Monitoring Agent', color: 'text-flame-orange-600 bg-flame-orange-50' },
     keyword: { icon: '🔑', label: 'Keyword Agent', color: 'text-orange-600 bg-orange-50' },
     strategy: { icon: '🧠', label: 'Strategy Agent', color: 'text-pink-600 bg-pink-50' },
     deployment: { icon: '🚀', label: 'Deployment Agent', color: 'text-cyan-600 bg-cyan-50' },
