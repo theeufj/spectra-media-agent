@@ -476,7 +476,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $imageUrl,
             $adCopy->headlines[0] ?? 'Learn More',
             $adCopy->descriptions[0] ?? 'Discover our products and services',
-            'LEARN_MORE'
+            'LEARN_MORE',
+            $campaign->landing_page_url
         );
         
         if (!$fbCreative || !isset($fbCreative['id'])) {
@@ -489,6 +490,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         
         // Create ad
         $fbAd = $this->adService->createAd(
+            $accountId,
             $adSetId,
             $campaign->name . ' - Ad',
             $fbCreative['id']
@@ -549,6 +551,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         
         // Create ad
         $fbAd = $this->adService->createAd(
+            $accountId,
             $adSetId,
             $campaign->name . ' - Carousel Ad',
             $fbCreative['id']
@@ -589,7 +592,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $videoUrl,
             $adCopy->headlines[0] ?? 'Watch Now',
             $adCopy->descriptions[0] ?? 'Discover our story',
-            'LEARN_MORE'
+            'LEARN_MORE',
+            $campaign->landing_page_url
         );
         
         if (!$fbCreative || !isset($fbCreative['id'])) {
@@ -602,6 +606,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         
         // Create ad
         $fbAd = $this->adService->createAd(
+            $accountId,
             $adSetId,
             $campaign->name . ' - Video Ad',
             $fbCreative['id']

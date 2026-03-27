@@ -29,19 +29,33 @@ class CreativeService extends BaseFacebookAdsService
         string $imageUrl,
         string $headline,
         string $description,
-        string $callToAction = 'LEARN_MORE'
+        string $callToAction = 'LEARN_MORE',
+        ?string $linkUrl = null
     ): ?array {
+        $pageId = $this->customer->facebook_page_id;
+        if (!$pageId) {
+            Log::error("No Facebook Page ID on customer — cannot create creative", ['customer_id' => $this->customer->id]);
+            return null;
+        }
+
+        $imageHash = $this->uploadImage($accountId, $imageUrl);
+        if (!$imageHash) {
+            return null;
+        }
+
+        $destination = $linkUrl ?? $this->customer->website ?? 'https://facebook.com';
+
         try {
             $response = $this->post("/act_{$accountId}/adcreatives", [
                 'name' => $creativeName,
                 'object_story_spec' => json_encode([
-                    'page_id' => $this->getPagesForAccount($accountId)[0] ?? null,
+                    'page_id' => $pageId,
                     'link_data' => [
-                        'image_hash' => $this->uploadImage($accountId, $imageUrl),
-                        'link' => $this->getPageWebsite() ?? 'https://example.com',
-                        'headline' => $headline,
-                        'description' => $description,
-                        'call_to_action_type' => $callToAction,
+                        'image_hash'          => $imageHash,
+                        'link'                => $destination,
+                        'message'             => $description,
+                        'name'                => $headline,
+                        'call_to_action'      => ['type' => $callToAction],
                     ],
                 ]),
             ]);
@@ -85,18 +99,37 @@ class CreativeService extends BaseFacebookAdsService
         string $creativeName,
         string $videoUrl,
         string $headline,
-        string $description
+        string $description,
+        string $callToAction = 'LEARN_MORE',
+        ?string $linkUrl = null
     ): ?array {
+        $pageId = $this->customer->facebook_page_id;
+        if (!$pageId) {
+            Log::error("No Facebook Page ID on customer — cannot create video creative", ['customer_id' => $this->customer->id]);
+            return null;
+        }
+
+        $videoId = $this->uploadVideo($accountId, $videoUrl);
+        if (!$videoId) {
+            return null;
+        }
+
+        $destination = $linkUrl ?? $this->customer->website ?? 'https://facebook.com';
+
         try {
             $response = $this->post("/act_{$accountId}/adcreatives", [
                 'name' => $creativeName,
                 'object_story_spec' => json_encode([
-                    'page_id' => $this->getPagesForAccount($accountId)[0] ?? null,
+                    'page_id' => $pageId,
                     'video_data' => [
-                        'video_id' => $this->uploadVideo($accountId, $videoUrl),
-                        'link' => $this->getPageWebsite() ?? 'https://example.com',
-                        'headline' => $headline,
-                        'description' => $description,
+                        'video_id'       => $videoId,
+                        'title'          => $headline,
+                        'message'        => $description,
+                        'link_description' => $description,
+                        'call_to_action' => [
+                            'type'  => $callToAction,
+                            'value' => ['link' => $destination],
+                        ],
                     ],
                 ]),
             ]);
@@ -376,6 +409,78 @@ class CreativeService extends BaseFacebookAdsService
         } catch (\Exception $e) {
             Log::error("Error getting pages: " . $e->getMessage());
             return [];
+        }
+    }
+
+    /**
+     * Create a carousel creative with multiple images.
+     *
+     * @param string $accountId  Ad account ID (without 'act_' prefix)
+     * @param string $creativeName
+     * @param array  $cards  Each card: ['picture'=>url, 'name'=>headline, 'description'=>body, 'link'=>url]
+     * @param string $linkUrl  Fallback link used on child cards without their own link
+     * @return ?array
+     */
+    public function createCarouselCreative(
+        string $accountId,
+        string $creativeName,
+        array $cards,
+        string $linkUrl
+    ): ?array {
+        $pageId = $this->customer->facebook_page_id;
+        if (!$pageId) {
+            Log::error("No Facebook Page ID on customer — cannot create carousel creative", ['customer_id' => $this->customer->id]);
+            return null;
+        }
+
+        $childAttachments = [];
+        foreach ($cards as $card) {
+            $attachment = [
+                'link'        => $card['link'] ?? $linkUrl,
+                'name'        => $card['name'] ?? '',
+                'description' => $card['description'] ?? '',
+            ];
+            if (!empty($card['picture'])) {
+                $imageHash = $this->uploadImage($accountId, $card['picture']);
+                if ($imageHash) {
+                    $attachment['image_hash'] = $imageHash;
+                }
+            }
+            $childAttachments[] = $attachment;
+        }
+
+        try {
+            $response = $this->post("/act_{$accountId}/adcreatives", [
+                'name' => $creativeName,
+                'object_story_spec' => json_encode([
+                    'page_id'   => $pageId,
+                    'link_data' => [
+                        'link'                  => $linkUrl,
+                        'child_attachments'     => $childAttachments,
+                        'multi_share_optimized' => true,
+                        'call_to_action'        => ['type' => 'LEARN_MORE'],
+                    ],
+                ]),
+            ]);
+
+            if ($response && isset($response['id'])) {
+                Log::info("Created carousel creative for account {$accountId}", [
+                    'customer_id' => $this->customer->id,
+                    'creative_id' => $response['id'],
+                    'card_count'  => count($cards),
+                ]);
+                return $response;
+            }
+
+            Log::error("Failed to create carousel creative", ['customer_id' => $this->customer->id, 'response' => $response]);
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error creating carousel creative: " . $e->getMessage(), [
+                'exception'  => $e,
+                'account_id' => $accountId,
+                'customer_id' => $this->customer->id,
+            ]);
+            return null;
         }
     }
 

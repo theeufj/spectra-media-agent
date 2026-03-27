@@ -55,6 +55,7 @@ class AdService extends BaseFacebookAdsService
      * @return ?array
      */
     public function createAd(
+        string $accountId,
         string $adSetId,
         string $adName,
         string $creativeId,
@@ -64,7 +65,7 @@ class AdService extends BaseFacebookAdsService
         $finalStatus = CampaignStatusHelper::getFacebookAdsStatus($status);
         
         try {
-            $response = $this->post("/{$adSetId}/ads", [
+            $response = $this->post("/act_{$accountId}/ads", [
                 'name' => $adName,
                 'adset_id' => $adSetId,
                 'creative' => ['creative_id' => $creativeId],
