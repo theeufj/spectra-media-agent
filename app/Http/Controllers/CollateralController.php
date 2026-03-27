@@ -65,6 +65,7 @@ class CollateralController extends Controller
             'videoCollaterals' => $videoCollaterals,
             'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod(),
             'deploymentEnabled' => Setting::get('deployment_enabled', true),
+            'managedBillingEnabled' => Setting::get('managed_billing_enabled', true),
             'adSpendCredit' => $adSpendCredit ? [
                 'id' => $adSpendCredit->id,
                 'status' => $adSpendCredit->status,

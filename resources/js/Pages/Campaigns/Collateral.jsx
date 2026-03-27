@@ -10,7 +10,7 @@ import ConfirmationModal from '@/Components/ConfirmationModal';
 import Modal from '@/Components/Modal';
 import AdPreviewPanel from '@/Components/AdPreview';
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, adSpendCredit }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, managedBillingEnabled, adSpendCredit }) {
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
@@ -187,14 +187,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             return;
         }
 
-        // Check if ad spend billing is set up
-        if (!adSpendCredit || adSpendCredit.status === 'pending') {
+        // Check if ad spend billing is set up (only when managed billing is enabled)
+        if (managedBillingEnabled && (!adSpendCredit || adSpendCredit.status === 'pending')) {
             setShowAdSpendSetupModal(true);
             return;
         }
 
-        // Check if account is paused due to payment failure
-        if (adSpendCredit.status === 'paused') {
+        // Check if account is paused due to payment failure (only when managed billing is enabled)
+        if (managedBillingEnabled && adSpendCredit?.status === 'paused') {
             alert('Your ad spend billing is paused due to a payment issue. Please update your payment method in Billing → Ad Spend before deploying.');
             return;
         }

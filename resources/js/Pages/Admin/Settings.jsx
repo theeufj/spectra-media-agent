@@ -6,10 +6,12 @@ import SideNav from './SideNav';
 export default function Settings({ settings, campaignModeDescription }) {
     const deploymentSetting = settings.find(s => s.key === 'deployment_enabled');
     const campaignTestingModeSetting = settings.find(s => s.key === 'campaign_testing_mode');
+    const managedBillingSetting = settings.find(s => s.key === 'managed_billing_enabled');
     
     const { data, setData, post, processing } = useForm({
         deployment_enabled: deploymentSetting ? deploymentSetting.value === '1' : false,
         campaign_testing_mode: campaignTestingModeSetting ? campaignTestingModeSetting.value === '1' : false,
+        managed_billing_enabled: managedBillingSetting ? managedBillingSetting.value === '1' : true,
     });
 
     const handleSubmit = (e) => {
@@ -176,6 +178,78 @@ export default function Settings({ settings, campaignModeDescription }) {
                                                         <h5 className="text-sm font-medium text-green-800">Production Mode Active</h5>
                                                         <p className="text-sm text-green-700 mt-1">
                                                             Campaigns will be created as <strong>ENABLED</strong> and will go live immediately after deployment.
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Managed Billing Section */}
+                                <div className="border-b border-gray-200 pb-6">
+                                    <h4 className="text-lg font-medium text-gray-900 mb-4">Ad Spend Billing</h4>
+                                    
+                                    <div className="flex items-start">
+                                        <div className="flex-1">
+                                            <label className="flex items-center cursor-pointer">
+                                                <div className="relative">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={data.managed_billing_enabled}
+                                                        onChange={(e) => setData('managed_billing_enabled', e.target.checked)}
+                                                        className="sr-only"
+                                                    />
+                                                    <div className={`block w-14 h-8 rounded-full transition ${
+                                                        data.managed_billing_enabled 
+                                                            ? 'bg-purple-500' 
+                                                            : 'bg-gray-300'
+                                                    }`}></div>
+                                                    <div className={`absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition-transform ${
+                                                        data.managed_billing_enabled 
+                                                            ? 'transform translate-x-6' 
+                                                            : ''
+                                                    }`}></div>
+                                                </div>
+                                                <div className="ml-4">
+                                                    <span className="text-sm font-medium text-gray-900">
+                                                        Managed Ad Spend Billing
+                                                    </span>
+                                                    <p className="text-sm text-gray-500 mt-1">
+                                                        When enabled, users must pay ad spend through our platform before deploying. When disabled, campaigns deploy directly to the user's own ad account — they only need a valid subscription.
+                                                    </p>
+                                                </div>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div className={`mt-4 p-4 rounded-lg ${
+                                        data.managed_billing_enabled 
+                                            ? 'bg-purple-50 border border-purple-200' 
+                                            : 'bg-green-50 border border-green-200'
+                                    }`}>
+                                        <div className="flex items-start">
+                                            {data.managed_billing_enabled ? (
+                                                <>
+                                                    <svg className="w-5 h-5 text-purple-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                                                    </svg>
+                                                    <div className="ml-3">
+                                                        <h5 className="text-sm font-medium text-purple-800">Managed Billing Active</h5>
+                                                        <p className="text-sm text-purple-700 mt-1">
+                                                            Users will be prompted to set up ad spend billing before deploying. We charge 7 days of estimated ad spend upfront as credit.
+                                                        </p>
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-5 h-5 text-green-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                    </svg>
+                                                    <div className="ml-3">
+                                                        <h5 className="text-sm font-medium text-green-800">Direct Deployment Active</h5>
+                                                        <p className="text-sm text-green-700 mt-1">
+                                                            Users can deploy directly to their own ad accounts. No ad spend billing step — they only need a valid subscription to our service.
                                                         </p>
                                                     </div>
                                                 </>

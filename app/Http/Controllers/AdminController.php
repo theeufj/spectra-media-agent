@@ -342,6 +342,7 @@ class AdminController extends Controller
         $request->validate([
             'deployment_enabled' => 'required|boolean',
             'campaign_testing_mode' => 'sometimes|boolean',
+            'managed_billing_enabled' => 'sometimes|boolean',
         ]);
 
         Setting::set('deployment_enabled', $request->deployment_enabled, 'boolean');
@@ -349,6 +350,10 @@ class AdminController extends Controller
         // Store campaign testing mode in database
         if ($request->has('campaign_testing_mode')) {
             Setting::set('campaign_testing_mode', $request->campaign_testing_mode, 'boolean');
+        }
+
+        if ($request->has('managed_billing_enabled')) {
+            Setting::set('managed_billing_enabled', $request->managed_billing_enabled, 'boolean');
         }
 
         return redirect()->back()->with('flash', [
