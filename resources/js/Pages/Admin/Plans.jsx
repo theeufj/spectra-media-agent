@@ -13,6 +13,9 @@ const emptyPlan = {
     features: [''],
     is_active: true,
     is_free: false,
+    is_popular: false,
+    cta_text: '',
+    badge_text: '',
     sort_order: 0,
 };
 
@@ -27,6 +30,9 @@ function PlanForm({ plan, onClose, isEdit }) {
         features: plan.features?.length ? plan.features : [''],
         is_active: plan.is_active ?? true,
         is_free: plan.is_free ?? false,
+        is_popular: plan.is_popular ?? false,
+        cta_text: plan.cta_text || '',
+        badge_text: plan.badge_text || '',
         sort_order: plan.sort_order || 0,
     });
 
@@ -188,6 +194,38 @@ function PlanForm({ plan, onClose, isEdit }) {
                             />
                             <span className="text-sm text-gray-700">Free Plan</span>
                         </label>
+                        <label className="flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={data.is_popular}
+                                onChange={(e) => setData('is_popular', e.target.checked)}
+                                className="rounded border-gray-300 text-purple-600 shadow-sm mr-2"
+                            />
+                            <span className="text-sm text-gray-700">Popular (highlighted)</span>
+                        </label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">CTA Button Text</label>
+                            <input
+                                type="text"
+                                value={data.cta_text}
+                                onChange={(e) => setData('cta_text', e.target.value)}
+                                placeholder="e.g. Start Free Trial"
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Badge Text</label>
+                            <input
+                                type="text"
+                                value={data.badge_text}
+                                onChange={(e) => setData('badge_text', e.target.value)}
+                                placeholder="e.g. MOST POPULAR"
+                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                            />
+                        </div>
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t">

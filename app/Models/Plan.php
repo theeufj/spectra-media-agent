@@ -16,6 +16,9 @@ class Plan extends Model
         'features',
         'is_active',
         'is_free',
+        'is_popular',
+        'cta_text',
+        'badge_text',
         'sort_order',
     ];
 
@@ -23,6 +26,7 @@ class Plan extends Model
         'features' => 'array',
         'is_active' => 'boolean',
         'is_free' => 'boolean',
+        'is_popular' => 'boolean',
         'price_cents' => 'integer',
         'sort_order' => 'integer',
     ];

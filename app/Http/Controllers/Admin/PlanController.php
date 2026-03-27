@@ -31,6 +31,9 @@ class PlanController extends Controller
             'features.*' => 'string|max:255',
             'is_active' => 'boolean',
             'is_free' => 'boolean',
+            'is_popular' => 'boolean',
+            'cta_text' => 'nullable|string|max:255',
+            'badge_text' => 'nullable|string|max:255',
             'sort_order' => 'integer|min:0',
         ]);
 
@@ -55,6 +58,9 @@ class PlanController extends Controller
             'features.*' => 'string|max:255',
             'is_active' => 'boolean',
             'is_free' => 'boolean',
+            'is_popular' => 'boolean',
+            'cta_text' => 'nullable|string|max:255',
+            'badge_text' => 'nullable|string|max:255',
             'sort_order' => 'integer|min:0',
         ]);
 

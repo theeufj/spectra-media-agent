@@ -3,7 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 
-export default function Pricing({ auth }) {
+export default function Pricing({ auth, plans = [] }) {
     const [openFAQ, setOpenFAQ] = React.useState(null);
 
     const faqs = [
@@ -82,84 +82,49 @@ export default function Pricing({ auth }) {
                     {/* Pricing Cards */}
                     <div className="bg-gradient-to-b from-gray-50 to-white py-16 sm:py-24">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
-                                {/* Starter */}
-                                <div className="rounded-lg border border-gray-200 p-8 bg-white flex flex-col">
-                                    <h3 className="text-2xl font-bold text-gray-900">Starter</h3>
-                                    <p className="mt-2 text-sm text-gray-500">For local businesses and early-stage startups.</p>
-                                    <div className="mt-4 text-gray-900">
-                                        <span className="text-4xl font-extrabold">$99</span>
-                                        <span className="text-xl font-medium">/month</span>
+                            <div className={`grid grid-cols-1 ${plans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-8 max-w-7xl mx-auto`}>
+                                {plans.map((plan) => (
+                                    <div
+                                        key={plan.id}
+                                        className={`rounded-lg p-8 flex flex-col relative ${
+                                            plan.is_popular
+                                                ? 'border-2 border-flame-orange-600 bg-flame-orange-50 shadow-lg'
+                                                : 'border border-gray-200 bg-white'
+                                        }`}
+                                    >
+                                        {plan.badge_text && (
+                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-flame-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full">
+                                                {plan.badge_text}
+                                            </div>
+                                        )}
+                                        <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
+                                        <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
+                                        <div className="mt-4 text-gray-900">
+                                            <span className="text-4xl font-extrabold">${Math.round(plan.price_cents / 100)}</span>
+                                            <span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'year' : 'mo'}</span>
+                                        </div>
+                                        <ul className="mt-8 space-y-4 flex-grow">
+                                            {(plan.features || []).map((item) => (
+                                                <li key={item} className="flex items-start">
+                                                    <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                                                    <p className="text-gray-700">{item}</p>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <div className="mt-10">
+                                            <a
+                                                href="/register"
+                                                className={`block w-full text-center rounded-lg px-6 py-3 text-base font-medium ${
+                                                    plan.is_popular
+                                                        ? 'bg-flame-orange-600 text-white hover:bg-flame-orange-700 shadow-lg'
+                                                        : 'border-2 border-gray-300 text-gray-900 hover:border-gray-400'
+                                                }`}
+                                            >
+                                                {plan.cta_text || 'Get Started'}
+                                            </a>
+                                        </div>
                                     </div>
-                                    <p className="mt-4 text-sm text-gray-500">7-day free trial. Cancel anytime.</p>
-                                    <p className="mt-2 text-xs text-gray-400">Perfect for: Spending up to $3,000/mo on ads.</p>
-                                    <ul className="mt-8 space-y-4 flex-grow">
-                                        {['1 Brand Identity (Vision AI Extraction)', 'Google & Facebook Deployment', '3 Landing Page CRO Audits', 'Standard AI Copy & Image Generation', 'Weekly Performance Optimization', 'Basic Email Support'].map((item) => (
-                                            <li key={item} className="flex items-start">
-                                                <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                                                <p className="text-gray-700">{item}</p>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <div className="mt-10">
-                                        <a href="/register" className="block w-full text-center rounded-lg border-2 border-gray-300 px-6 py-3 text-base font-medium text-gray-900 hover:border-gray-400">
-                                            Start Free Trial
-                                        </a>
-                                    </div>
-                                </div>
-
-                                {/* Growth */}
-                                <div className="rounded-lg border-2 border-flame-orange-600 p-8 bg-flame-orange-50 shadow-lg relative flex flex-col">
-                                    <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-flame-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full">
-                                        MOST POPULAR
-                                    </div>
-                                    <h3 className="text-2xl font-bold text-gray-900">Growth</h3>
-                                    <p className="mt-2 text-sm text-gray-500">For e-commerce brands ready to scale.</p>
-                                    <div className="mt-4 text-gray-900">
-                                        <span className="text-4xl font-extrabold">$249</span>
-                                        <span className="text-xl font-medium">/month</span>
-                                    </div>
-                                    <p className="mt-4 text-sm text-gray-600">7-day free trial. Cancel anytime.</p>
-                                    <p className="mt-2 text-xs text-gray-500">Perfect for: Spending up to $25,000/mo on ads.</p>
-                                    <ul className="mt-8 space-y-4 flex-grow">
-                                        {['Everything in Starter, plus:', 'Unlimited Brand Identities', 'Unlimited Landing Page CRO Audits', 'Advanced Creative Suite (Video & Carousel)', 'Daily Performance Optimization', 'Strategy Agent "War Room" Access', 'Priority Support'].map((item) => (
-                                            <li key={item} className="flex items-start">
-                                                <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                                                <p className="text-gray-700">{item}</p>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <div className="mt-10">
-                                        <a href="/register" className="block w-full text-center rounded-lg bg-flame-orange-600 px-6 py-3 text-base font-medium text-white hover:bg-flame-orange-700 shadow-lg">
-                                            Start Scaling Now
-                                        </a>
-                                    </div>
-                                </div>
-
-                                {/* Agency */}
-                                <div className="rounded-lg border border-gray-200 p-8 bg-white flex flex-col">
-                                    <h3 className="text-2xl font-bold text-gray-900">Agency</h3>
-                                    <p className="mt-2 text-sm text-gray-500">For high-volume advertisers and marketing agencies.</p>
-                                    <div className="mt-4 text-gray-900">
-                                        <span className="text-4xl font-extrabold">$499</span>
-                                        <span className="text-xl font-medium">/month</span>
-                                    </div>
-                                    <p className="mt-4 text-sm text-gray-500">No contracts.</p>
-                                    <p className="mt-2 text-xs text-gray-400">Perfect for: Unlimited Ad Spend.</p>
-                                    <ul className="mt-8 space-y-4 flex-grow">
-                                        {['Everything in Growth, plus:', 'Multi-Client Management (10 sub-accounts)', 'White-Label Reports', 'Real-Time Bidding', 'Dedicated Account Success Manager', 'Early Access to Beta Features'].map((item) => (
-                                            <li key={item} className="flex items-start">
-                                                <svg className="h-6 w-6 text-green-500 mr-3 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
-                                                <p className="text-gray-700">{item}</p>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                    <div className="mt-10">
-                                        <a href="/register" className="block w-full text-center rounded-lg border-2 border-gray-300 px-6 py-3 text-base font-medium text-gray-900 hover:border-gray-400">
-                                            Contact Sales
-                                        </a>
-                                    </div>
-                                </div>
+                                ))}
                             </div>
 
                             {/* Trust Seals */}

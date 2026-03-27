@@ -19,6 +19,9 @@ return new class extends Migration
             $table->json('features')->nullable();
             $table->boolean('is_active')->default(true);
             $table->boolean('is_free')->default(false);
+            $table->boolean('is_popular')->default(false);
+            $table->string('cta_text')->nullable();
+            $table->string('badge_text')->nullable();
             $table->integer('sort_order')->default(0);
             $table->timestamps();
         });

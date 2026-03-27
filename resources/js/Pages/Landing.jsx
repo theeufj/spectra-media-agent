@@ -3,12 +3,13 @@ import { Head, Link } from '@inertiajs/react';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 
-export default function Landing({ auth }) {
+export default function Landing({ auth, plans = [] }) {
+    const lowestPrice = plans.length > 0 ? Math.round(Math.min(...plans.map(p => p.price_cents)) / 100) : 99;
     return (
         <>
             <Head>
                 <title>sitetospend - AI-Powered Digital Marketing</title>
-                <meta name="description" content="Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads 24/7—competitor discovery, self-healing campaigns, budget intelligence, and more. From $99/mo." />
+                <meta name="description" content={`Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads 24/7—competitor discovery, self-healing campaigns, budget intelligence, and more. From $${lowestPrice}/mo.`} />
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />
@@ -134,21 +135,17 @@ export default function Landing({ auth }) {
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="text-center mb-16">
                                 <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">Simple, Transparent Pricing</h2>
-                                <p className="mt-4 text-xl text-gray-500">Agency-level results starting at just $99/month.</p>
+                                <p className="mt-4 text-xl text-gray-500">Agency-level results starting at just ${lowestPrice}/month.</p>
                             </div>
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto">
-                                {[
-                                    { name: 'Starter', price: '$99', desc: 'For local businesses', highlight: false },
-                                    { name: 'Growth', price: '$249', desc: 'For scaling brands', highlight: true },
-                                    { name: 'Agency', price: '$499', desc: 'For agencies & enterprise', highlight: false },
-                                ].map((tier) => (
-                                    <div key={tier.name} className={`rounded-lg p-8 text-center ${tier.highlight ? 'border-2 border-flame-orange-600 bg-flame-orange-50 shadow-lg relative' : 'border border-gray-200 bg-white'}`}>
-                                        {tier.highlight && (
-                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-flame-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full">MOST POPULAR</div>
+                            <div className={`grid grid-cols-1 ${plans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-8 max-w-4xl mx-auto`}>
+                                {plans.map((plan) => (
+                                    <div key={plan.id} className={`rounded-lg p-8 text-center ${plan.is_popular ? 'border-2 border-flame-orange-600 bg-flame-orange-50 shadow-lg relative' : 'border border-gray-200 bg-white'}`}>
+                                        {plan.badge_text && (
+                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-flame-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full">{plan.badge_text}</div>
                                         )}
-                                        <h3 className="text-2xl font-bold text-gray-900">{tier.name}</h3>
-                                        <p className="mt-2 text-sm text-gray-500">{tier.desc}</p>
-                                        <div className="mt-4"><span className="text-4xl font-extrabold text-gray-900">{tier.price}</span><span className="text-xl font-medium">/mo</span></div>
+                                        <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
+                                        <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
+                                        <div className="mt-4"><span className="text-4xl font-extrabold text-gray-900">${Math.round(plan.price_cents / 100)}</span><span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'yr' : 'mo'}</span></div>
                                     </div>
                                 ))}
                             </div>
