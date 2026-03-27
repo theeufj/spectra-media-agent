@@ -177,6 +177,110 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
     );
 };
 
+// Strategy Generation Loading Experience
+const GENERATION_STEPS = [
+    { label: 'Analyzing your knowledge base', icon: '📚', duration: 15 },
+    { label: 'Reviewing brand guidelines', icon: '🎨', duration: 25 },
+    { label: 'Researching target audience', icon: '🎯', duration: 40 },
+    { label: 'Evaluating platform opportunities', icon: '📊', duration: 60 },
+    { label: 'Crafting ad copy strategies', icon: '✍️', duration: 80 },
+    { label: 'Designing imagery & video approaches', icon: '🖼️', duration: 100 },
+    { label: 'Optimizing budget allocation', icon: '💰', duration: 115 },
+    { label: 'Finalizing your strategies', icon: '✨', duration: 130 },
+];
+
+const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
+    const currentStepIndex = GENERATION_STEPS.findIndex(s => elapsedSeconds < s.duration);
+    const activeStep = currentStepIndex === -1 ? GENERATION_STEPS.length - 1 : currentStepIndex;
+    
+    const prevThreshold = activeStep > 0 ? GENERATION_STEPS[activeStep - 1].duration : 0;
+    const nextThreshold = GENERATION_STEPS[activeStep].duration;
+    const stepProgress = Math.min((elapsedSeconds - prevThreshold) / (nextThreshold - prevThreshold), 1);
+    const overallProgress = Math.min(((activeStep + stepProgress) / GENERATION_STEPS.length) * 100, 95);
+
+    const formatTime = (s) => {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+    };
+
+    return (
+        <div className="mb-8">
+            <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-indigo-600 via-indigo-700 to-purple-700 px-8 py-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h3 className="text-xl font-bold text-white">Building your strategy</h3>
+                            <p className="text-indigo-200 text-sm mt-1">for {campaignName}</p>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-2xl font-mono font-bold text-white">{formatTime(elapsedSeconds)}</div>
+                            <p className="text-indigo-200 text-xs">elapsed</p>
+                        </div>
+                    </div>
+                    <div className="mt-4 h-2 bg-indigo-900/30 rounded-full overflow-hidden">
+                        <div 
+                            className="h-full bg-gradient-to-r from-indigo-300 to-white rounded-full transition-all duration-1000 ease-out"
+                            style={{ width: `${overallProgress}%` }}
+                        />
+                    </div>
+                </div>
+
+                {/* Steps */}
+                <div className="px-8 py-6">
+                    <div className="space-y-3">
+                        {GENERATION_STEPS.map((step, idx) => {
+                            const isComplete = idx < activeStep;
+                            const isActive = idx === activeStep;
+
+                            return (
+                                <div 
+                                    key={idx} 
+                                    className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-all duration-500 ${
+                                        isActive ? 'bg-indigo-50 border border-indigo-200' : 
+                                        isComplete ? 'opacity-60' : 'opacity-40'
+                                    }`}
+                                >
+                                    <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center">
+                                        {isComplete ? (
+                                            <svg className="w-6 h-6 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        ) : isActive ? (
+                                            <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                        ) : (
+                                            <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
+                                        )}
+                                    </div>
+                                    <span className="text-lg">{step.icon}</span>
+                                    <span className={`text-sm font-medium ${
+                                        isActive ? 'text-indigo-700' : 
+                                        isComplete ? 'text-gray-500' : 'text-gray-400'
+                                    }`}>
+                                        {step.label}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-8 py-4 bg-gray-50 border-t flex items-center justify-between">
+                    <p className="text-xs text-gray-500">
+                        Our AI is analyzing your brand, audience, and market data to create tailored strategies.
+                    </p>
+                    <div className="flex items-center gap-1.5">
+                        <span className="inline-block w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                        <span className="text-xs text-gray-500 font-medium">Live</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 
 export default function Show({ auth, campaign }) {
     const [campaigns, setCampaign] = useState(campaign);
@@ -187,6 +291,7 @@ export default function Show({ auth, campaign }) {
     const [showGenerationModal, setShowGenerationModal] = useState(false);
     const [pollingError, setPollingError] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+    const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const { post, processing } = useForm();
 
     useEffect(() => {
@@ -269,6 +374,18 @@ export default function Show({ auth, campaign }) {
         };
     }, [isPolling, campaigns.id]);
 
+    // Elapsed time counter for generation loading state
+    useEffect(() => {
+        if (!isPolling) return;
+        const startTime = campaigns.strategy_generation_started_at 
+            ? new Date(campaigns.strategy_generation_started_at).getTime() 
+            : Date.now();
+        const tick = () => setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
+        tick();
+        const interval = setInterval(tick, 1000);
+        return () => clearInterval(interval);
+    }, [isPolling, campaigns.strategy_generation_started_at]);
+
     const handleSignOffStrategy = (strategy) => {
         setConfirmModal({
             show: true,
@@ -338,21 +455,10 @@ export default function Show({ auth, campaign }) {
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {isPolling && (
-                        <div className="mb-8 p-6 bg-delft-blue text-white rounded-lg flex items-center justify-center space-x-3">
-                            <div className="animate-spin">
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <div>
-                                <span className="text-lg font-semibold">AI is generating your advertising strategies...</span>
-                                {campaigns.strategy_generation_started_at && (
-                                    <p className="text-sm text-blue-200 mt-1">
-                                        Started {new Date(campaigns.strategy_generation_started_at).toLocaleTimeString()}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
+                        <StrategyGenerationLoader 
+                            elapsedSeconds={elapsedSeconds} 
+                            campaignName={campaigns.name} 
+                        />
                     )}
 
                     {pollingError && (
