@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Services\GoogleAds\ListAccessibleCustomers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -33,10 +34,34 @@ class CustomerController extends Controller
         $user = $request->user();
         $user->customers()->attach($customer->id, ['role' => 'owner']);
 
-        // Google Ads account connection happens via OAuth when the user connects
-        // their Google Ads account. No MCC sub-account creation needed.
+        // Apply Google Ads refresh token from OAuth session
+        $refreshToken = session('google_ads_refresh_token');
+        if ($refreshToken) {
+            $customer->update(['google_ads_refresh_token' => $refreshToken]);
+            session()->forget('google_ads_refresh_token');
 
-        // Facebook Ads integration is currently disabled.
+            // Discover Google Ads customer ID
+            try {
+                $listService = new ListAccessibleCustomers($customer);
+                $accessibleAccounts = $listService();
+
+                if (!empty($accessibleAccounts)) {
+                    $resourceName = $accessibleAccounts[0];
+                    if (preg_match('/customers\/(\d+)/', $resourceName, $matches)) {
+                        $customer->update(['google_ads_customer_id' => $matches[1]]);
+                        Log::info('Discovered Google Ads customer ID during customer creation', [
+                            'customer_id' => $customer->id,
+                            'google_ads_customer_id' => $matches[1],
+                        ]);
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Failed to discover Google Ads customer ID during customer creation', [
+                    'customer_id' => $customer->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         session(['active_customer_id' => $customer->id]);
 
