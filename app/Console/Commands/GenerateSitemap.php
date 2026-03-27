@@ -29,7 +29,12 @@ class GenerateSitemap extends Command
     {
         $this->info('Generating sitemap...');
 
-        $baseUrl = config('app.url', 'https://sitetospend.com');
+        $baseUrl = rtrim(config('app.url', 'https://sitetospend.com'), '/');
+
+        // Ensure we never generate a sitemap with localhost URLs
+        if (str_contains($baseUrl, 'localhost') || str_contains($baseUrl, '127.0.0.1')) {
+            $baseUrl = 'https://sitetospend.com';
+        }
 
         Sitemap::create()
             ->add(Url::create($baseUrl)->setPriority(1.0)->setChangeFrequency(Url::CHANGE_FREQUENCY_WEEKLY))
