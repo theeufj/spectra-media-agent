@@ -13,6 +13,7 @@ class Plan extends Model
         'price_cents',
         'billing_interval',
         'stripe_price_id',
+        'stripe_ad_spend_price_id',
         'features',
         'is_active',
         'is_free',

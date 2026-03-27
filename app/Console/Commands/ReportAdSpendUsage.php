@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
+use App\Models\Plan;
 use App\Models\PerformanceData;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -33,13 +34,6 @@ class ReportAdSpendUsage extends Command
         Log::info('Starting daily ad spend reporting job.');
 
         $yesterday = Carbon::yesterday();
-        $adSpendPriceId = env('STRIPE_AD_SPEND_PRICE_ID');
-
-        if (!$adSpendPriceId) {
-            $this->error('STRIPE_AD_SPEND_PRICE_ID is not set in the .env file.');
-            Log::error('STRIPE_AD_SPEND_PRICE_ID is not set.');
-            return 1;
-        }
 
         // Get all users who are active subscribers
         $subscribedUsers = User::whereHas('subscriptions')->get();
@@ -49,6 +43,15 @@ class ReportAdSpendUsage extends Command
                 // Find the user's subscription
                 $subscription = $user->subscription('default');
                 if (!$subscription) {
+                    continue;
+                }
+
+                // Resolve the ad spend price ID from the user's plan
+                $plan = Plan::where('stripe_price_id', $subscription->stripe_price)->first();
+                $adSpendPriceId = $plan?->stripe_ad_spend_price_id;
+
+                if (!$adSpendPriceId) {
+                    $this->line("No ad spend price configured for user {$user->id}'s plan, skipping.");
                     continue;
                 }
 

@@ -52,7 +52,7 @@ class SubscriptionController extends Controller
         }
 
         $priceId = $plan->stripe_price_id;
-        $adSpendPriceId = config('services.stripe.ad_spend_price_id');
+        $adSpendPriceId = $plan->stripe_ad_spend_price_id;
 
         Log::info("Initiating checkout for User ID: {$user->id} with Price ID: {$priceId} and Ad Spend Price ID: {$adSpendPriceId}");
 
