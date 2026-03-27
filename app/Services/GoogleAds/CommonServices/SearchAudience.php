@@ -17,6 +17,8 @@ class SearchAudience extends BaseGoogleAdsService
      */
     public function __invoke(string $customerId, string $keyword): array
     {
+        $audiences = []; // Initialize array
+        
         $this->ensureClient();
         $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
@@ -45,7 +47,7 @@ class SearchAudience extends BaseGoogleAdsService
                 ];
             }
         } catch (\Exception $e) {
-            // Log error or just return empty
+            // Log error or just return empty array
             $this->logError("Failed to search audiences: " . $e->getMessage());
         }
 
