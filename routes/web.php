@@ -509,6 +509,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('plans', [App\Http\Controllers\Admin\PlanController::class, 'store'])->name('admin.plans.store');
     Route::put('plans/{plan}', [App\Http\Controllers\Admin\PlanController::class, 'update'])->name('admin.plans.update');
     Route::delete('plans/{plan}', [App\Http\Controllers\Admin\PlanController::class, 'destroy'])->name('admin.plans.destroy');
+
+    // MCC Accounts Management
+    Route::get('mcc-accounts', [App\Http\Controllers\Admin\MccAccountController::class, 'index'])->name('admin.mcc-accounts.index');
+    Route::post('mcc-accounts', [App\Http\Controllers\Admin\MccAccountController::class, 'store'])->name('admin.mcc-accounts.store');
+    Route::put('mcc-accounts/{mccAccount}', [App\Http\Controllers\Admin\MccAccountController::class, 'update'])->name('admin.mcc-accounts.update');
+    Route::post('mcc-accounts/{mccAccount}/activate', [App\Http\Controllers\Admin\MccAccountController::class, 'activate'])->name('admin.mcc-accounts.activate');
+    Route::delete('mcc-accounts/{mccAccount}', [App\Http\Controllers\Admin\MccAccountController::class, 'destroy'])->name('admin.mcc-accounts.destroy');
 });
 
 /*

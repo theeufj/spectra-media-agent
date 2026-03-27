@@ -37,11 +37,12 @@ class CreateGoogleAdsSubAccount extends Command
             }
         }
 
-        $mccCustomerId = config('googleads.mcc_customer_id');
-        if (!$mccCustomerId) {
-            $this->error('MCC Customer ID not configured in config/googleads.php');
+        $mccAccount = \App\Models\MccAccount::getActive();
+        if (!$mccAccount) {
+            $this->error('No active MCC account configured. Add one via Admin > MCC Accounts.');
             return 1;
         }
+        $mccCustomerId = $mccAccount->google_customer_id;
 
         $accountName = $this->option('name') ?: ($customer->name . ' - Google Ads');
         $currencyCode = $this->option('currency');

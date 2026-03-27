@@ -3,8 +3,10 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer;
+use App\Models\MccAccount;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
 abstract class BaseGoogleAdsService
@@ -44,17 +46,18 @@ abstract class BaseGoogleAdsService
             }
 
             // All API calls use the platform MCC credentials.
-            // Individual customers never have their own Google Ads OAuth tokens.
-            $mccRefreshToken = config('googleads.mcc_refresh_token');
-            $mccCustomerId = config('googleads.mcc_customer_id');
+            // Resolved from DB (mcc_accounts table) with env fallback.
+            $mccAccount = MccAccount::getActive();
 
-            if (!$mccRefreshToken || !$mccCustomerId) {
-                Log::error('Platform MCC credentials not configured', [
-                    'has_refresh_token' => !empty($mccRefreshToken),
-                    'has_customer_id' => !empty($mccCustomerId),
-                ]);
+            if (!$mccAccount) {
+                Log::error('No active MCC account configured (checked DB and env)');
                 return null;
             }
+
+            $mccRefreshToken = $mccAccount->exists
+                ? Crypt::decryptString($mccAccount->refresh_token)
+                : $mccAccount->refresh_token;
+            $mccCustomerId = $mccAccount->google_customer_id;
 
             $oAuth2Credential = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)

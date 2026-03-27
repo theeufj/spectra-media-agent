@@ -122,8 +122,9 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         }
         
         // Verify platform MCC credentials are configured
-        if (!config('googleads.mcc_refresh_token') || !config('googleads.mcc_customer_id')) {
-            $result->addError('google_ads_not_authorized', 'Platform MCC credentials not configured');
+        $mccAccount = \App\Models\MccAccount::getActive();
+        if (!$mccAccount) {
+            $result->addError('google_ads_not_authorized', 'No active MCC account configured');
             return $result;
         }
         
@@ -161,13 +162,14 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function provisionGoogleAdsAccount(): bool
     {
-        $mccCustomerId = config('googleads.mcc_customer_id');
-        $mccRefreshToken = config('googleads.mcc_refresh_token');
-        
-        if (!$mccCustomerId || !$mccRefreshToken) {
-            Log::error('Cannot provision Google Ads account: MCC credentials not configured');
+        $mccAccount = \App\Models\MccAccount::getActive();
+
+        if (!$mccAccount) {
+            Log::error('Cannot provision Google Ads account: No active MCC configured');
             return false;
         }
+
+        $mccCustomerId = $mccAccount->google_customer_id;
         
         try {
             Log::info("Provisioning Google Ads sub-account under platform MCC", [

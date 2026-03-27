@@ -484,12 +484,12 @@ class HealthCheckAgent
     {
         $health = ['issues' => [], 'warnings' => []];
 
-        if (!config('googleads.mcc_refresh_token') || !config('googleads.mcc_customer_id')) {
+        if (!\App\Models\MccAccount::getActive()) {
             $health['issues'][] = [
                 'type' => 'token',
                 'severity' => 'critical',
-                'message' => 'Platform MCC credentials not configured',
-                'details' => 'Set GOOGLE_ADS_MCC_CUSTOMER_ID and GOOGLE_ADS_MCC_REFRESH_TOKEN env vars',
+                'message' => 'No active MCC account configured',
+                'details' => 'Add an MCC account via Admin > MCC Accounts, or set GOOGLE_ADS_MCC_CUSTOMER_ID and GOOGLE_ADS_MCC_REFRESH_TOKEN env vars',
             ];
         }
 
