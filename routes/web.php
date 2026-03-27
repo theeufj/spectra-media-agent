@@ -254,8 +254,11 @@ Route::middleware(['auth'])->group(function () {
     // Show the Facebook ad account setup page for a customer
     Route::get('/customers/{customer}/facebook/setup', [App\Http\Controllers\FacebookAdAccountController::class, 'show'])->name('customers.facebook.setup');
 
-    // Provision a BM-owned Facebook ad account (no client OAuth required)
-    Route::post('/customers/{customer}/facebook/provision', [App\Http\Controllers\FacebookAdAccountController::class, 'provision'])->name('customers.facebook.provision');
+    // Assign a BM-managed ad account to the customer (System User token used for all ops)
+    Route::post('/customers/{customer}/facebook/assign', [App\Http\Controllers\FacebookAdAccountController::class, 'assign'])->name('customers.facebook.assign');
+
+    // Verify the platform System User still has access to the customer's ad account
+    Route::post('/customers/{customer}/facebook/verify', [App\Http\Controllers\FacebookAdAccountController::class, 'verify'])->name('customers.facebook.verify');
 });
 
 /*

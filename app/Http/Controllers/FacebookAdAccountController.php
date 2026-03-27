@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Customer;
 use App\Services\FacebookAds\BusinessManagerService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class FacebookAdAccountController extends Controller
@@ -21,48 +20,63 @@ class FacebookAdAccountController extends Controller
 
         return Inertia::render('Customers/Facebook/AdAccountSetup', [
             'customer'      => $customer->only([
-                'id',
-                'name',
-                'facebook_ads_account_id',
-                'facebook_bm_owned',
-                'facebook_page_id',
-                'facebook_page_name',
+                'id', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
+                'facebook_page_id', 'facebook_page_name',
             ]),
             'bm_configured' => $this->bmService->isConfigured(),
         ]);
     }
 
     /**
-     * Provision a platform-owned Facebook ad account for the customer (Path A).
+     * Assign a manually-created BM ad account to the customer (Path A).
      *
-     * The platform's Business Manager creates the account—the client never
-     * needs to grant OAuth permissions.
+     * The platform admin creates the ad account in the Business Manager UI,
+     * assigns the System User as Admin, then enters the account ID here.
+     * The System User token is then used for all ad operations — no client
+     * OAuth required.
      */
-    public function provision(Request $request, Customer $customer)
+    public function assign(Request $request, Customer $customer)
     {
         $this->authorize('update', $customer);
 
         $validated = $request->validate([
-            'currency' => ['sometimes', 'string', 'size:3'],
-            'timezone' => ['sometimes', 'string', 'max:60'],
+            'ad_account_id' => ['required', 'string', 'regex:/^\d+$/'],
+        ], [
+            'ad_account_id.regex' => 'Enter the numeric account ID only (e.g. 123456789), without the "act_" prefix.',
         ]);
 
-        $result = $this->bmService->provisionAdAccount(
-            $customer,
-            $validated['currency'] ?? 'USD',
-            $validated['timezone'] ?? 'America/New_York'
-        );
+        $result = $this->bmService->assignAdAccount($customer, $validated['ad_account_id']);
 
         if (!$result['success']) {
-            return back()->with('error', 'Failed to create ad account: ' . $result['error']);
+            return back()->with('error', 'Could not link ad account: ' . $result['error']);
         }
 
         return back()->with([
-            'success'  => 'Facebook ad account created! Account ID: act_' . $result['account_id'],
+            'success'  => 'Facebook ad account linked! Account: act_' . $result['account_id'] . ($result['name'] ? ' (' . $result['name'] . ')' : ''),
             'customer' => $customer->fresh()->only([
                 'id', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
                 'facebook_page_id', 'facebook_page_name',
             ]),
         ]);
+    }
+
+    /**
+     * Verify the System User still has access to the customer's ad account.
+     */
+    public function verify(Request $request, Customer $customer)
+    {
+        $this->authorize('update', $customer);
+
+        if (!$customer->facebook_ads_account_id) {
+            return back()->with('error', 'No ad account linked yet.');
+        }
+
+        $result = $this->bmService->verifyAdAccountAccess($customer->facebook_ads_account_id);
+
+        if (!$result['success']) {
+            return back()->with('error', 'Access check failed: ' . $result['error']);
+        }
+
+        return back()->with('success', 'System User has access to act_' . $customer->facebook_ads_account_id . ' (' . ($result['name'] ?? 'unknown') . ')');
     }
 }

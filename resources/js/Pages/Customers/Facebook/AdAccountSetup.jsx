@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Head, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import PrimaryButton from '@/Components/PrimaryButton';
+import SecondaryButton from '@/Components/SecondaryButton';
 
 export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm_configured }) {
     const { flash } = usePage().props;
     const [customer, setCustomer] = useState(initialCustomer);
+    const [adAccountId, setAdAccountId] = useState('');
     const [processing, setProcessing] = useState(false);
     const [successMessage, setSuccessMessage] = useState(flash?.success || null);
     const [errorMessage, setErrorMessage] = useState(flash?.error || null);
@@ -19,15 +21,24 @@ export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm
         if (flash?.error) setErrorMessage(flash.error);
     }, [flash]);
 
-    const handleProvision = () => {
+    const handleAssign = (e) => {
+        e.preventDefault();
         setProcessing(true);
         setErrorMessage(null);
-        router.post(route('customers.facebook.provision', customer.id), {}, {
+        router.post(route('customers.facebook.assign', customer.id), { ad_account_id: adAccountId.replace('act_', '') }, {
             onFinish: () => setProcessing(false),
         });
     };
 
-    const isProvisioned = customer.facebook_ads_account_id && customer.facebook_bm_owned;
+    const handleVerify = () => {
+        setProcessing(true);
+        setErrorMessage(null);
+        router.post(route('customers.facebook.verify', customer.id), {}, {
+            onFinish: () => setProcessing(false),
+        });
+    };
+
+    const isLinked = customer.facebook_ads_account_id && customer.facebook_bm_owned;
 
     return (
         <AuthenticatedLayout
@@ -56,77 +67,102 @@ export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm
 
                     {/* How it works */}
                     <div className="bg-blue-50 border border-blue-200 rounded-lg p-5">
-                        <h3 className="font-semibold text-blue-900 mb-2">How Facebook Ads work here</h3>
+                        <h3 className="font-semibold text-blue-900 mb-2">How this works</h3>
                         <p className="text-sm text-blue-800">
-                            We create and manage a Facebook ad account on your behalf through our Business Manager.
-                            You never need to connect your personal Facebook account or grant any permissions —
-                            just provide billing details after setup and we handle everything else.
+                            We manage a Facebook ad account on your behalf through our Business Manager.
+                            The client never needs to connect their personal Facebook account — we handle
+                            all ad operations using our platform token.
                         </p>
                     </div>
 
-                    {/* Platform BM not configured warning (admin only) */}
+                    {/* BM not configured warning */}
                     {!bm_configured && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-5">
-                            <h3 className="font-semibold text-amber-900 mb-1">Platform setup required</h3>
+                            <h3 className="font-semibold text-amber-900 mb-1">Platform not configured</h3>
                             <p className="text-sm text-amber-800">
                                 <code className="bg-amber-100 px-1 rounded">FACEBOOK_BUSINESS_MANAGER_ID</code> and{' '}
-                                <code className="bg-amber-100 px-1 rounded">FACEBOOK_SYSTEM_USER_TOKEN</code> are not
-                                set in the server environment. Contact a platform administrator.
+                                <code className="bg-amber-100 px-1 rounded">FACEBOOK_SYSTEM_USER_TOKEN</code> must be
+                                set on the server.
                             </p>
                         </div>
                     )}
 
-                    {/* Step 1: Provision */}
+                    {/* Step 1: Create account in BM */}
                     <div className="bg-white shadow-sm sm:rounded-lg p-6">
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <h3 className="text-lg font-semibold text-gray-900">
-                                    Step 1 — Create Ad Account
-                                </h3>
-                                <p className="mt-1 text-sm text-gray-600">
-                                    We create a dedicated Facebook ad account linked to our Business Manager.
-                                    No Facebook login required on your end.
-                                </p>
-                            </div>
-                            {isProvisioned && (
+                        <div className="flex items-start justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-gray-900">
+                                Step 1 — Create ad account in Business Manager
+                            </h3>
+                            {isLinked && (
                                 <span className="ml-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                    ✓ Ready
+                                    ✓ Linked
                                 </span>
                             )}
                         </div>
 
-                        {isProvisioned ? (
-                            <p className="mt-3 text-sm text-gray-500">
-                                Ad Account:{' '}
-                                <code className="font-mono font-semibold text-gray-800">
-                                    act_{customer.facebook_ads_account_id}
-                                </code>
-                            </p>
-                        ) : (
-                            <div className="mt-4">
-                                <PrimaryButton
-                                    onClick={handleProvision}
-                                    disabled={processing || !bm_configured}
-                                >
-                                    {processing ? 'Creating account…' : 'Create Facebook Ad Account'}
-                                </PrimaryButton>
+                        <ol className="text-sm text-gray-600 space-y-2 mb-4 list-decimal list-inside">
+                            <li>Go to <strong>business.facebook.com → Business Settings → Accounts → Ad Accounts</strong></li>
+                            <li>Click <strong>Add → Create a new ad account</strong></li>
+                            <li>In the account, go to <strong>Ad Account Roles</strong> and add the System User as <strong>Admin</strong></li>
+                            <li>Copy the numeric account ID shown as <code className="bg-gray-100 px-1 rounded">act_XXXXXXXXX</code></li>
+                        </ol>
+                    </div>
+
+                    {/* Step 2: Link the account */}
+                    <div className="bg-white shadow-sm sm:rounded-lg p-6">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                            Step 2 — Link the account to this customer
+                        </h3>
+
+                        {isLinked ? (
+                            <div className="space-y-3">
+                                <p className="text-sm text-gray-600">
+                                    Linked account:{' '}
+                                    <code className="font-mono font-semibold text-gray-900">
+                                        act_{customer.facebook_ads_account_id}
+                                    </code>
+                                </p>
+                                <SecondaryButton onClick={handleVerify} disabled={processing}>
+                                    {processing ? 'Checking…' : 'Verify access'}
+                                </SecondaryButton>
                             </div>
+                        ) : (
+                            <form onSubmit={handleAssign} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Ad Account ID
+                                    </label>
+                                    <div className="flex rounded-md shadow-sm">
+                                        <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
+                                            act_
+                                        </span>
+                                        <input
+                                            type="text"
+                                            value={adAccountId}
+                                            onChange={e => setAdAccountId(e.target.value.replace(/\D/g, ''))}
+                                            placeholder="123456789012345"
+                                            className="flex-1 min-w-0 block px-3 py-2 rounded-none rounded-r-md border border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-mono"
+                                            required
+                                        />
+                                    </div>
+                                    <p className="mt-1 text-xs text-gray-500">
+                                        Paste the full <code>act_XXXX</code> value and we'll strip the prefix automatically.
+                                    </p>
+                                </div>
+                                <PrimaryButton type="submit" disabled={processing || !bm_configured || !adAccountId}>
+                                    {processing ? 'Linking…' : 'Link Ad Account'}
+                                </PrimaryButton>
+                            </form>
                         )}
                     </div>
 
-                    {/* Step 2: Page connection (shown once account exists) */}
-                    {isProvisioned && (
+                    {/* Step 3: Page */}
+                    {isLinked && (
                         <div className="bg-white shadow-sm sm:rounded-lg p-6">
-                            <div className="flex items-start justify-between">
-                                <div>
-                                    <h3 className="text-lg font-semibold text-gray-900">
-                                        Step 2 — Connect a Facebook Page
-                                    </h3>
-                                    <p className="mt-1 text-sm text-gray-600">
-                                        Ads need a Facebook Page to run from. You can grant our Business Manager
-                                        access to an existing Page, or we can create one for you.
-                                    </p>
-                                </div>
+                            <div className="flex items-start justify-between mb-3">
+                                <h3 className="text-lg font-semibold text-gray-900">
+                                    Step 3 — Facebook Page
+                                </h3>
                                 {customer.facebook_page_id && (
                                     <span className="ml-4 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                         ✓ Connected
@@ -135,28 +171,26 @@ export default function AdAccountSetupPage({ auth, customer: initialCustomer, bm
                             </div>
 
                             {customer.facebook_page_id ? (
-                                <p className="mt-3 text-sm text-gray-500">
-                                    Page: <span className="font-semibold text-gray-800">{customer.facebook_page_name}</span>
-                                    {' '}(ID: {customer.facebook_page_id})
+                                <p className="text-sm text-gray-600">
+                                    Page: <span className="font-semibold">{customer.facebook_page_name}</span>{' '}
+                                    (ID: {customer.facebook_page_id})
                                 </p>
                             ) : (
-                                <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg p-4 text-sm text-gray-600">
-                                    Ask your account manager to add a Facebook Page to this account,
-                                    or share your Page ID and we'll configure it for you.
-                                </div>
+                                <p className="text-sm text-gray-600">
+                                    Add the Platform System User as an editor on the client's Facebook Page,
+                                    then enter the Page ID via the customer profile settings.
+                                </p>
                             )}
                         </div>
                     )}
 
                     {/* All ready */}
-                    {isProvisioned && customer.facebook_page_id && (
+                    {isLinked && customer.facebook_page_id && (
                         <div className="bg-green-50 border border-green-200 rounded-lg p-5">
-                            <h3 className="font-semibold text-green-900 mb-1">
-                                ✅ Facebook Ads ready
-                            </h3>
+                            <h3 className="font-semibold text-green-900 mb-1">✅ Facebook Ads ready</h3>
                             <p className="text-sm text-green-800">
-                                Your Facebook ad account is configured and campaigns can now be deployed.
-                                All billing will be managed through the ad account.
+                                Ad account is linked and the platform System User has access.
+                                Campaigns can now be deployed — no client OAuth required.
                             </p>
                         </div>
                     )}

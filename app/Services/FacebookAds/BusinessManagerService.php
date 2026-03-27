@@ -40,87 +40,88 @@ class BusinessManagerService
     }
 
     /**
-     * Create a new ad account under the platform Business Manager and store
-     * the resulting account ID on the customer record.
+     * Verify the System User token has access to a specific ad account,
+     * then assign it to the customer as a BM-owned account.
      *
-     * The BM owns the account, so no client OAuth token is ever needed.
+     * Facebook's programmatic ad-account CREATION via API requires Marketing
+     * Partner approval from Facebook (their review process). As a workaround,
+     * the platform admin creates the account manually in the Business Manager UI
+     * and then calls this method to associate it with a customer.
+     *
+     * How to create the account manually:
+     *   1. Go to business.facebook.com → Business Settings → Accounts → Ad Accounts
+     *   2. Click Add → Create a new ad account
+     *   3. Assign the System User as Admin on that account
+     *   4. Copy the numeric account ID (strip 'act_' prefix) and call this method.
      *
      * @param  Customer $customer
-     * @param  string   $currency   ISO 4217 currency code (default: USD)
-     * @param  string   $timezone   IANA timezone (default: America/New_York)
-     * @return array{success: bool, account_id?: string, error?: string}
+     * @param  string   $adAccountId  Numeric account ID (with or without 'act_' prefix)
+     * @return array{success: bool, account_id?: string, name?: string, error?: string}
      */
-    public function provisionAdAccount(
-        Customer $customer,
-        string $currency = 'USD',
-        string $timezone = 'America/New_York'
-    ): array {
+    public function assignAdAccount(Customer $customer, string $adAccountId): array
+    {
         if (!$this->isConfigured()) {
-            return ['success' => false, 'error' => 'Facebook Business Manager not configured. Set FACEBOOK_BUSINESS_MANAGER_ID and FACEBOOK_SYSTEM_USER_TOKEN in .env'];
+            return ['success' => false, 'error' => 'Facebook Business Manager not configured.'];
         }
 
-        // If the customer already has a BM-owned account, skip creation.
-        if ($customer->facebook_ads_account_id && $customer->facebook_bm_owned) {
-            return ['success' => true, 'account_id' => $customer->facebook_ads_account_id];
+        // Normalise the ID
+        $accountId = ltrim($adAccountId, 'act_');
+
+        // If already assigned, just return success
+        if ($customer->facebook_ads_account_id === $accountId && $customer->facebook_bm_owned) {
+            return ['success' => true, 'account_id' => $accountId];
         }
 
-        $accountName = $customer->name . ' — Managed by Spectra';
+        // Verify the System User can actually access this account
+        $verify = $this->verifyAdAccountAccess($accountId);
+        if (!$verify['success']) {
+            return $verify;
+        }
+
+        $customer->update([
+            'facebook_ads_account_id'      => $accountId,
+            'facebook_bm_owned'            => true,
+            'facebook_ads_access_token'    => null,
+            'facebook_token_expires_at'    => null,
+            'facebook_token_refreshed_at'  => null,
+            'facebook_token_is_long_lived' => false,
+        ]);
+
+        Log::info('FacebookBusinessManagerService: Ad account assigned to customer', [
+            'customer_id' => $customer->id,
+            'account_id'  => $accountId,
+            'account_name' => $verify['name'] ?? null,
+        ]);
+
+        return ['success' => true, 'account_id' => $accountId, 'name' => $verify['name'] ?? null];
+    }
+
+    /**
+     * Verify that the platform System User token has access to a given ad account.
+     *
+     * @param  string $adAccountId  Numeric account ID (without 'act_' prefix)
+     * @return array{success: bool, name?: string, currency?: string, error?: string}
+     */
+    public function verifyAdAccountAccess(string $adAccountId): array
+    {
+        $accountId = ltrim($adAccountId, 'act_');
 
         try {
-            $response = Http::post(
-                "{$this->graphApiUrl}/{$this->apiVersion}/{$this->businessManagerId}/adaccounts",
-                [
-                    'access_token'     => $this->systemUserToken,
-                    'name'             => $accountName,
-                    'currency'         => $currency,
-                    'timezone_name'    => $timezone,
-                    'end_advertiser'   => $this->businessManagerId,
-                    'media_agency'     => 'NONE',
-                    'partner'          => 'NONE',
-                ]
-            );
-
-            if (!$response->successful()) {
-                $error = $response->json('error.message', $response->body());
-                Log::error('FacebookBusinessManagerService: Failed to create ad account', [
-                    'customer_id' => $customer->id,
-                    'status'      => $response->status(),
-                    'error'       => $error,
-                ]);
-                return ['success' => false, 'error' => $error];
-            }
-
-            $rawId = $response->json('account_id') ?? $response->json('id');
-            if (!$rawId) {
-                return ['success' => false, 'error' => 'No account_id in API response'];
-            }
-
-            // Normalise: strip 'act_' prefix, store numeric ID
-            $accountId = ltrim((string) $rawId, 'act_');
-
-            $customer->update([
-                'facebook_ads_account_id'   => $accountId,
-                'facebook_bm_owned'         => true,
-                // Clear any stale OAuth token fields
-                'facebook_ads_access_token' => null,
-                'facebook_token_expires_at' => null,
-                'facebook_token_refreshed_at' => null,
-                'facebook_token_is_long_lived' => false,
+            $response = Http::get("{$this->graphApiUrl}/{$this->apiVersion}/act_{$accountId}", [
+                'fields'       => 'id,name,account_status,currency',
+                'access_token' => $this->systemUserToken,
             ]);
 
-            Log::info('FacebookBusinessManagerService: Ad account provisioned', [
-                'customer_id' => $customer->id,
-                'account_id'  => $accountId,
-                'account_name' => $accountName,
-            ]);
+            if ($response->successful()) {
+                return [
+                    'success'  => true,
+                    'name'     => $response->json('name'),
+                    'currency' => $response->json('currency'),
+                ];
+            }
 
-            return ['success' => true, 'account_id' => $accountId];
-
+            return ['success' => false, 'error' => $response->json('error.message', 'Cannot access this ad account. Ensure the System User is assigned as Admin on it.')];
         } catch (\Exception $e) {
-            Log::error('FacebookBusinessManagerService: Exception provisioning ad account', [
-                'customer_id' => $customer->id,
-                'error'       => $e->getMessage(),
-            ]);
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
