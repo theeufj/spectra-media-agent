@@ -34,8 +34,9 @@ class CanonicalRedirect
             }
 
             // Strip junk query strings on GET requests (e.g. ?$, ?fbclid=, etc.)
-            if ($request->isMethod('GET') && $request->getQueryString() !== null) {
-                $allowed = ['page', 'token', 'search', 'sort', 'filter', 'plan'];
+            // Skip OAuth callback routes — they need state/code params preserved
+            if ($request->isMethod('GET') && $request->getQueryString() !== null && !$request->is('auth/*/callback')) {
+                $allowed = ['page', 'token', 'search', 'sort', 'filter', 'plan', 'status', 'priority', 'category'];
                 $query = $request->query();
                 $filtered = array_intersect_key($query, array_flip($allowed));
 
