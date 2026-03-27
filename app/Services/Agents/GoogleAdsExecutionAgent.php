@@ -446,6 +446,13 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             foreach ($imageCollaterals as $image) {
                 try {
                     $imageData = StorageHelper::get($image->s3_path);
+                    if (!$imageData) {
+                        Log::warning("GoogleAdsExecutionAgent: Image data is null, skipping upload", [
+                            's3_path' => $image->s3_path,
+                        ]);
+                        continue;
+                    }
+                    
                     $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
                     if ($assetResourceName) {
                         $imageAssetResourceNames[] = $assetResourceName;
@@ -564,6 +571,13 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             foreach ($imageCollaterals as $image) {
                 try {
                     $imageData = StorageHelper::get($image->s3_path);
+                    if (!$imageData) {
+                        Log::warning("GoogleAdsExecutionAgent: Image data is null, skipping upload", [
+                            's3_path' => $image->s3_path,
+                        ]);
+                        continue;
+                    }
+                    
                     $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
                     if ($assetResourceName) {
                         $imageAssetResourceNames[] = $assetResourceName;
@@ -701,6 +715,13 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         foreach ($imageCollaterals as $image) {
             try {
                 $imageData = StorageHelper::get($image->s3_path);
+                if (!$imageData) {
+                    Log::warning("GoogleAdsExecutionAgent: Image data is null, skipping upload", [
+                        's3_path' => $image->s3_path,
+                    ]);
+                    continue;
+                }
+                
                 $assetResourceName = ($uploadImageService)($customerId, $imageData, $image->s3_path);
                 
                 if ($assetResourceName) {
