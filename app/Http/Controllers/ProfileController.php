@@ -92,8 +92,11 @@ class ProfileController extends Controller
         ]);
     }
 
-    public function updateGoogleAdsAccount(Request $request, AccessibleAccountResolver $resolver): RedirectResponse
-    {
+    public function updateGoogleAdsAccount(
+        Request $request,
+        AccessibleAccountResolver $resolver,
+        \App\Services\GoogleAds\CreateManagedAccount $createManagedAccount
+    ): RedirectResponse {
         $validated = $request->validate([
             'google_ads_customer_id' => ['required', 'string'],
         ]);
@@ -108,11 +111,22 @@ class ProfileController extends Controller
             ]);
         }
 
-        $customer->update([
-            'google_ads_customer_id' => $validated['google_ads_customer_id'],
-        ]);
+        // Use MCCAccountManager to handle account selection
+        // It will detect if it's an MCC and create a Standard account if needed
+        $mccManager = new \App\Services\GoogleAds\MCCAccountManager($customer, $createManagedAccount);
+        $result = $mccManager->handleAccountSelection($validated['google_ads_customer_id']);
 
-        return Redirect::route('profile.edit')->with('status', 'Google Ads account updated successfully.');
+        if (!$result) {
+            return Redirect::route('profile.google-ads.accounts')->withErrors([
+                'google_ads_customer_id' => 'Failed to process the selected account. Please try again.',
+            ]);
+        }
+
+        $message = $result['is_new_account']
+            ? "Google Ads MCC detected. A new Standard account has been created and linked."
+            : "Google Ads account updated successfully.";
+
+        return Redirect::route('profile.edit')->with('status', $message);
     }
 
     /**

@@ -25,6 +25,8 @@ class Customer extends Model
         'phone',
         'google_ads_refresh_token',
         'google_ads_customer_id',
+        'google_ads_manager_customer_id',
+        'google_ads_customer_is_manager',
         'facebook_ads_account_id',
         'facebook_ads_access_token',
         'facebook_page_id',
@@ -55,6 +57,7 @@ class Customer extends Model
         'facebook_token_expires_at' => 'datetime',
         'facebook_token_refreshed_at' => 'datetime',
         'facebook_token_is_long_lived' => 'boolean',
+        'google_ads_customer_is_manager' => 'boolean',
     ];
 
     /**
