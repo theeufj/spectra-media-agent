@@ -9,6 +9,7 @@ use App\Prompts\ImagePrompt;
 use App\Prompts\ImagePromptSplitterPrompt;
 use App\Services\AdminMonitorService;
 use App\Services\GeminiService;
+use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -183,32 +184,11 @@ class GenerateImage implements ShouldQueue
                 // Store the image in S3
                 $extension = $this->getExtensionFromMimeType($imageData['mimeType']);
                 $filename = uniqid('img_', true) . '.' . $extension;
-                $s3Path = "collateral/images/{$this->campaign->id}/{$filename}";
+                $storagePath = "collateral/images/{$this->campaign->id}/{$filename}";
 
-                try {
-                    $s3Client = Storage::disk('s3')->getClient();
-                    $result = $s3Client->putObject([
-                        'Bucket' => config('filesystems.disks.s3.bucket'),
-                        'Key' => $s3Path,
-                        'Body' => $decodedImage,
-                        'ContentType' => $imageData['mimeType'],
-                    ]);
+                [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $decodedImage, $imageData['mimeType']);
 
-                    if (!isset($result['ETag'])) {
-                        throw new \Exception('S3 upload failed - no ETag in response.');
-                    }
-                } catch (\Exception $e) {
-                    throw new \Exception("Failed to upload image to S3. AWS Error: " . $e->getMessage());
-                }
-
-                Log::info("Image uploaded to S3 at path: {$s3Path}");
-
-                // Construct the CloudFront URL
-                $cloudfrontDomain = config('filesystems.cloudfront_domain');
-                if (!$cloudfrontDomain) {
-                    throw new \Exception('CloudFront domain is not configured.');
-                }
-                $cloudFrontUrl = "https://{$cloudfrontDomain}/{$s3Path}";
+                Log::info("Image uploaded at path: {$s3Path}");
 
                 // Create the ImageCollateral record
                 ImageCollateral::create([

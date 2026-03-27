@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\VideoCollateral;
 use App\Services\GeminiService;
+use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -65,44 +66,26 @@ class CheckVideoStatus implements ShouldQueue
                 throw new \Exception('Failed to download video from Gemini URI.');
             }
 
-            Log::info("Video data downloaded successfully. Preparing to upload to S3.");
+            Log::info("Video data downloaded successfully. Preparing to upload.");
 
             $filename = uniqid('vid_', true) . '.mp4';
-            $s3Path = "collateral/videos/{$this->videoCollateral->campaign_id}/{$filename}";
+            $storagePath = "collateral/videos/{$this->videoCollateral->campaign_id}/{$filename}";
 
-            try {
-                $s3Client = Storage::disk('s3')->getClient();
-                $result = $s3Client->putObject([
-                    'Bucket' => config('filesystems.disks.s3.bucket'),
-                    'Key' => $s3Path,
-                    'Body' => $videoData,
-                    'ContentType' => 'video/mp4',
-                ]);
+            [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $videoData, 'video/mp4');
 
-                if (!isset($result['ETag'])) {
-                    throw new \Exception('S3 upload failed - no ETag in response.');
-                }
-            } catch (\Exception $e) {
-                throw new \Exception("Failed to upload video to S3. AWS Error: " . $e->getMessage());
-            }
-
-            Log::info("Video successfully uploaded to S3 at path: {$s3Path}");
-
-            $cloudfrontDomain = config('filesystems.cloudfront_domain');
-            $cloudFrontUrl = "https://{$cloudfrontDomain}/{$s3Path}";
-            Log::info("Generated CloudFront URL: {$cloudFrontUrl}");
+            Log::info("Video uploaded at path: {$s3Path}, URL: {$cloudFrontUrl}");
 
             Log::info("Updating VideoCollateral record in the database with final status and URLs.");
             $this->videoCollateral->update([
                 'status' => 'completed',
                 's3_path' => $s3Path,
                 'cloudfront_url' => $cloudFrontUrl,
-                'gemini_video_uri' => $videoUri, // Store Gemini URI for potential extensions
+                'gemini_video_uri' => $videoUri,
             ]);
 
             Log::info("--- CheckVideoStatus Job Completed Successfully for VideoCollateral ID: {$this->videoCollateral->id} ---");
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("An error occurred in CheckVideoStatus for VideoCollateral ID {$this->videoCollateral->id}. Error: " . $e->getMessage());
             $this->videoCollateral->update(['status' => 'failed']);
             $this->fail($e);

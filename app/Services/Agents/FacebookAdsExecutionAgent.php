@@ -12,6 +12,7 @@ use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CreativeService;
 use App\Services\FacebookAds\AdService;
 use App\Services\Agents\Traits\RetryableApiOperation;
+use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -464,7 +465,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             throw new \Exception('No image or ad copy available for Facebook ad');
         }
         
-        $imageUrl = Storage::disk('s3')->url($imageCollateral->s3_path);
+        $imageUrl = StorageHelper::url($imageCollateral->s3_path);
         
         $fbCreative = $this->creativeService->createImageCreative(
             $accountId,
@@ -521,7 +522,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $carouselCards = [];
         foreach ($imageCollaterals as $index => $image) {
             $carouselCards[] = [
-                'picture' => Storage::disk('s3')->url($image->s3_path),
+                'picture' => StorageHelper::url($image->s3_path),
                 'name' => $adCopy->headlines[$index] ?? $adCopy->headlines[0] ?? 'Learn More',
                 'description' => $adCopy->descriptions[$index] ?? $adCopy->descriptions[0] ?? '',
                 'link' => $campaign->landing_page_url,
@@ -577,7 +578,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             throw new \Exception('No video or ad copy available for Facebook video ad');
         }
         
-        $videoUrl = Storage::disk('s3')->url($videoCollateral->s3_path);
+        $videoUrl = StorageHelper::url($videoCollateral->s3_path);
         
         $fbCreative = $this->creativeService->createVideoCreative(
             $accountId,

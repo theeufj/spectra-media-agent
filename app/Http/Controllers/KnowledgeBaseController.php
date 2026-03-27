@@ -6,7 +6,7 @@ use App\Jobs\CrawlSitemap;
 use App\Jobs\ProcessKnowledgeBaseFile;
 use App\Models\KnowledgeBase;
 use App\Services\GeminiService;
-use Aws\S3\S3Client;
+use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -120,38 +120,17 @@ class KnowledgeBaseController extends Controller
                 'endpoint' => $s3Config['endpoint'] ?? null,
             ]);
 
-            // Try uploading file to S3 with error capture
+            // Try uploading file with error capture
             try {
-                // Get AWS S3 client directly for better error handling
-                $s3Client = Storage::disk('s3')->getClient();
+                $fileContents = file_get_contents($file->getRealPath());
+                [$s3Path, $cloudFrontUrl] = StorageHelper::put($s3Path, $fileContents, $file->getMimeType());
 
-                \Log::info('S3 Client created', [
+                \Log::info('File upload result', [
                     'user_id' => $user->id,
+                    'path' => $s3Path,
+                    'url' => $cloudFrontUrl,
                 ]);
-
-                // Upload using putObject (without ACL since bucket disables them)
-                $result = $s3Client->putObject([
-                    'Bucket' => env('AWS_BUCKET') ?: env('S3_BUCKET'),
-                    'Key' => $s3Path,
-                    'Body' => fopen($file->getRealPath(), 'r'),
-                    'ContentType' => $file->getMimeType(),
-                ]);
-
-                \Log::info('S3 putObject result', [
-                    'user_id' => $user->id,
-                    'etag' => $result['ETag'] ?? null,
-                    'object_url' => $result['ObjectURL'] ?? null,
-                ]);
-
-                if (!isset($result['ETag'])) {
-                    \Log::error('S3 upload failed - no ETag in response', [
-                        'user_id' => $user->id,
-                        's3_path' => $s3Path,
-                        'result' => $result,
-                    ]);
-                    return redirect()->back()->withErrors(['document' => 'Failed to upload file to S3. No ETag returned.']);
-                }
-            } catch (\Exception $uploadError) {
+            } catch (\Throwable $uploadError) {
                 \Log::error('S3 upload exception: ' . $uploadError->getMessage(), [
                     'user_id' => $user->id,
                     's3_path' => $s3Path,
@@ -161,17 +140,12 @@ class KnowledgeBaseController extends Controller
                     'file' => $uploadError->getFile(),
                     'line' => $uploadError->getLine(),
                 ]);
-                return redirect()->back()->withErrors(['document' => 'S3 Error: ' . $uploadError->getMessage()]);
+                return redirect()->back()->withErrors(['document' => 'Upload Error: ' . $uploadError->getMessage()]);
             }
 
-            // Construct the CloudFront URL for accessing the file
-            $cloudfrontDomain = config('filesystems.cloudfront_domain') ?: env('CLOUDFRONT_DOMAIN');
-            $cloudFrontUrl = "{$cloudfrontDomain}/{$s3Path}";
-
-            \Log::info('CloudFront URL constructed', [
+            \Log::info('File URL constructed', [
                 'user_id' => $user->id,
-                'cloudfront_domain' => $cloudfrontDomain,
-                'cloudfront_url' => $cloudFrontUrl,
+                'url' => $cloudFrontUrl,
             ]);
 
             // Create knowledge base entry
@@ -223,25 +197,13 @@ class KnowledgeBaseController extends Controller
         try {
             // Delete file from S3 if it exists
             if ($knowledgeBase->file_path) {
-                try {
-                    $s3Client = Storage::disk('s3')->getClient();
-                    $s3Client->deleteObject([
-                        'Bucket' => env('AWS_BUCKET') ?: env('S3_BUCKET'),
-                        'Key' => $knowledgeBase->file_path,
-                    ]);
+                StorageHelper::delete($knowledgeBase->file_path);
 
-                    \Log::info('File deleted from S3', [
+                    \Log::info('File deleted from storage', [
                         'user_id' => $user->id,
                         'kb_id' => $knowledgeBase->id,
-                        's3_path' => $knowledgeBase->file_path,
+                        'path' => $knowledgeBase->file_path,
                     ]);
-                } catch (\Exception $s3Error) {
-                    \Log::warning('Failed to delete file from S3: ' . $s3Error->getMessage(), [
-                        'user_id' => $user->id,
-                        'kb_id' => $knowledgeBase->id,
-                    ]);
-                    // Continue with deletion even if S3 deletion fails
-                }
             }
 
             // Delete the database record

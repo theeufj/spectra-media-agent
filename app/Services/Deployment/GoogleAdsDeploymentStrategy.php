@@ -13,6 +13,7 @@ use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
 use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
+use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -94,7 +95,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         if ($imageCollaterals->isNotEmpty()) {
             $uploadImageAssetService = new UploadImageAsset($this->customer);
             foreach ($imageCollaterals as $image) {
-                $imageData = Storage::disk('s3')->get($image->s3_path);
+                $imageData = StorageHelper::get($image->s3_path);
                 $imageAssetResourceNames[] = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
             }
         }

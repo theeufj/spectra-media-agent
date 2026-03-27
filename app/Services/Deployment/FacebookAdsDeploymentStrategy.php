@@ -9,6 +9,7 @@ use App\Services\FacebookAds\CampaignService;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CreativeService;
 use App\Services\FacebookAds\AdService;
+use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -120,7 +121,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         // Upload first image (Facebook ad creative typically uses one main image)
         $firstImage = $imageCollaterals->first();
-        $imageUrl = Storage::disk('s3')->url($firstImage->s3_path);
+        $imageUrl = StorageHelper::url($firstImage->s3_path);
 
         $fbCreative = $this->creativeService->createImageCreative(
             $accountId,
@@ -208,7 +209,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         }
 
         $firstVideo = $videoCollaterals->first();
-        $videoUrl = Storage::disk('s3')->url($firstVideo->s3_path);
+        $videoUrl = StorageHelper::url($firstVideo->s3_path);
 
         $fbCreative = $this->creativeService->createVideoCreative(
             $accountId,

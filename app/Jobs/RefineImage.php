@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\ImageCollateral;
 use App\Services\GeminiService;
+use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -34,8 +35,8 @@ class RefineImage implements ShouldQueue
             $contextImages = [];
 
             // Add the original image as the first context
-            $originalImageData = Storage::disk('s3')->get($this->originalImage->s3_path);
-            $mimeType = Storage::disk('s3')->mimeType($this->originalImage->s3_path);
+            $originalImageData = StorageHelper::get($this->originalImage->s3_path);
+            $mimeType = StorageHelper::mimeType($this->originalImage->s3_path);
 
             $contextImages[] = [
                 'mime_type' => $mimeType,
@@ -71,32 +72,14 @@ class RefineImage implements ShouldQueue
             // Store the new image in S3
             $extension = $this->getExtensionFromMimeType($imageData['mimeType']);
             $filename = uniqid('img_refined_', true) . '.' . $extension;
-            $s3Path = "collateral/images/{$this->originalImage->campaign_id}/{$filename}";
+            $storagePath = "collateral/images/{$this->originalImage->campaign_id}/{$filename}";
 
-            try {
-                $s3Client = Storage::disk('s3')->getClient();
-                $result = $s3Client->putObject([
-                    'Bucket' => config('filesystems.disks.s3.bucket'),
-                    'Key' => $s3Path,
-                    'Body' => $decodedImage,
-                    'ContentType' => $imageData['mimeType'],
-                ]);
+            [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $decodedImage, $imageData['mimeType']);
 
-                if (!isset($result['ETag'])) {
-                    throw new \Exception('S3 upload failed - no ETag in response.');
-                }
-            } catch (\Exception $e) {
-                throw new \Exception("Failed to upload refined image to S3. AWS Error: " . $e->getMessage());
-            }
-
-            Log::info("Image uploaded to S3 at path: {$s3Path}");
+            Log::info("Refined image uploaded at path: {$s3Path}");
 
             // Deactivate the original image
             $this->originalImage->update(['is_active' => false]);
-
-            // Create the new, active ImageCollateral record
-            $cloudfrontDomain = config('filesystems.cloudfront_domain');
-            $cloudFrontUrl = "https://{$cloudfrontDomain}/{$s3Path}";
 
             $newImage = ImageCollateral::create([
                 'campaign_id' => $this->originalImage->campaign_id,

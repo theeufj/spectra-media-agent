@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Smalot\PdfParser\Parser;
@@ -165,26 +166,26 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                 'file_path' => $filePath,
             ]);
 
-            // Get the file content directly from S3
-            if (!Storage::disk('s3')->exists($filePath)) {
-                Log::error("File not found in S3", [
+            // Get the file content from storage
+            if (!StorageHelper::exists($filePath)) {
+                Log::error("File not found in storage", [
                     'file_path' => $filePath,
                     'kb_id' => $this->knowledgeBase->id,
                 ]);
                 return '';
             }
 
-            $fileContent = Storage::disk('s3')->get($filePath);
+            $fileContent = StorageHelper::get($filePath);
             
             if (empty($fileContent)) {
-                Log::warning("Retrieved empty content from S3 for PDF", [
+                Log::warning("Retrieved empty content from storage for PDF", [
                     'file_path' => $filePath,
                     'kb_id' => $this->knowledgeBase->id,
                 ]);
                 return '';
             }
 
-            Log::info("Successfully retrieved PDF content from S3", [
+            Log::info("Successfully retrieved PDF content from storage", [
                 'file_path' => $filePath,
                 'content_size' => strlen($fileContent),
             ]);

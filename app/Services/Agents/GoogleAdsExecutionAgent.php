@@ -35,6 +35,7 @@ use App\Services\GTM\GTMContainerService;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
@@ -444,7 +445,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
             foreach ($imageCollaterals as $image) {
                 try {
-                    $imageData = Storage::disk('s3')->get($image->s3_path);
+                    $imageData = StorageHelper::get($image->s3_path);
                     $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
                     if ($assetResourceName) {
                         $imageAssetResourceNames[] = $assetResourceName;
@@ -562,7 +563,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             $uploadImageAssetService = new UploadImageAsset($this->customer);
             foreach ($imageCollaterals as $image) {
                 try {
-                    $imageData = Storage::disk('s3')->get($image->s3_path);
+                    $imageData = StorageHelper::get($image->s3_path);
                     $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
                     if ($assetResourceName) {
                         $imageAssetResourceNames[] = $assetResourceName;
@@ -699,7 +700,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         foreach ($imageCollaterals as $image) {
             try {
-                $imageData = Storage::disk('s3')->get($image->s3_path);
+                $imageData = StorageHelper::get($image->s3_path);
                 $assetResourceName = ($uploadImageService)($customerId, $imageData, $image->s3_path);
                 
                 if ($assetResourceName) {
