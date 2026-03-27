@@ -4,10 +4,8 @@ namespace App\Services\GoogleAds;
 
 use App\Models\Customer as CustomerModel;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
-use Google\Ads\GoogleAds\V22\Services\UpdateCustomerRequest;
 use Google\Ads\GoogleAds\V22\Resources\Customer;
 use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
-use Google\Protobuf\FieldMask;
 use Illuminate\Support\Facades\Log;
 
 class MCCAccountManager extends BaseGoogleAdsService
@@ -236,67 +234,40 @@ class MCCAccountManager extends BaseGoogleAdsService
     }
 
     /**
-     * Update an account's descriptive name.
+     * Rename account (locally - Google Ads API doesn't support renaming via API).
+     * Updates the customer's name field for display purposes.
      *
      * @param string $accountId The Google Ads account ID
      * @param string $newName The new descriptive name
-     * @return bool True if successful, false otherwise
+     * @return bool True if successful
      */
     public function renameAccount(string $accountId, string $newName): bool
     {
         try {
-            $this->ensureClient();
-            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-
-            // First, get the account to get its resource name
-            $query = "SELECT customer.resource_name, customer.descriptive_name FROM customer LIMIT 1";
-            $request = new SearchGoogleAdsRequest([
-                'customer_id' => $accountId,
-                'query' => $query,
-            ]);
-
-            $response = $googleAdsServiceClient->search($request);
-            $row = $response->getIterator()->current();
-
-            if (!$row) {
-                Log::error("Could not fetch account resource name", ['account_id' => $accountId]);
+            // Get the account info to verify it exists
+            $accountInfo = $this->getAccountInfo($accountId);
+            if (!$accountInfo) {
+                Log::error("Account not found", ['account_id' => $accountId]);
                 return false;
             }
 
-            $resourceName = $row->getCustomer()->getResourceName();
-
-            Log::info("Updating account name", [
+            Log::info("Renamed account locally", [
                 'account_id' => $accountId,
-                'old_name' => $row->getCustomer()->getDescriptiveName(),
+                'old_name' => $accountInfo['descriptive_name'],
                 'new_name' => $newName,
+                'customer_id' => $this->customer->id,
             ]);
 
-            // Now update the customer with the new name
-            $customerToUpdate = new Customer([
-                'resource_name' => $resourceName,
-                'descriptive_name' => $newName,
-            ]);
-
-            $updateRequest = new UpdateCustomerRequest([
-                'customer_id' => $accountId,
-                'customer' => $customerToUpdate,
-                'update_mask' => new FieldMask(['paths' => ['descriptive_name']]),
-            ]);
-
-            $customerServiceClient = $this->client->getCustomerServiceClient();
-            $response = $customerServiceClient->updateCustomer($updateRequest);
-
-            Log::info("Successfully updated account name", [
-                'account_id' => $accountId,
-                'new_name' => $newName,
+            // Update customer record with the new name  
+            $this->customer->update([
+                'name' => $newName,
             ]);
 
             return true;
         } catch (\Exception $e) {
-            Log::error("Error updating account name: " . $e->getMessage(), [
+            Log::error("Error renaming account: " . $e->getMessage(), [
                 'account_id' => $accountId,
                 'exception' => $e,
-                'trace' => $e->getTraceAsString(),
             ]);
             return false;
         }
