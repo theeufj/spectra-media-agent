@@ -229,29 +229,20 @@ Route::get('/invitations/accept/{token}', [App\Http\Controllers\InvitationContro
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth'])->group(function () {
-    // Route to show GTM setup page with automatic Path A/B routing
-    // GET /customers/{customer}/gtm/setup
+    // Show GTM setup page (snippet display + verification status)
     Route::get('/customers/{customer}/gtm/setup', [App\Http\Controllers\GTMSetupController::class, 'show'])->name('customers.gtm.setup');
 
-    // Route to link an existing GTM container (Path A)
-    // POST /customers/{customer}/gtm/link
-    Route::post('/customers/{customer}/gtm/link', [App\Http\Controllers\GTMSetupController::class, 'linkExistingContainer'])->name('customers.gtm.link');
+    // Provision a platform-managed GTM container for the customer
+    Route::post('/customers/{customer}/gtm/provision', [App\Http\Controllers\GTMSetupController::class, 'provision'])->name('customers.gtm.provision');
 
-    // Route to create a new GTM container (Path B - placeholder)
-    // POST /customers/{customer}/gtm/create
-    Route::post('/customers/{customer}/gtm/create', [App\Http\Controllers\GTMSetupController::class, 'createNewContainer'])->name('customers.gtm.create');
+    // Verify the snippet is installed on the customer's website
+    Route::post('/customers/{customer}/gtm/verify-installed', [App\Http\Controllers\GTMSetupController::class, 'verifyInstalled'])->name('customers.gtm.verify');
 
-    // Route to verify GTM container access
-    // POST /customers/{customer}/gtm/verify
-    Route::post('/customers/{customer}/gtm/verify', [App\Http\Controllers\GTMSetupController::class, 'verifyAccess'])->name('customers.gtm.verify');
-
-    // Route to get current GTM status
-    // GET /customers/{customer}/gtm/status
-    Route::get('/customers/{customer}/gtm/status', [App\Http\Controllers\GTMSetupController::class, 'getStatus'])->name('customers.gtm.status');
-
-    // Route to re-scan website for GTM detection
-    // POST /customers/{customer}/gtm/rescan
+    // Re-scan website for any GTM detection
     Route::post('/customers/{customer}/gtm/rescan', [App\Http\Controllers\GTMSetupController::class, 'rescan'])->name('customers.gtm.rescan');
+
+    // JSON: current GTM status
+    Route::get('/customers/{customer}/gtm/status', [App\Http\Controllers\GTMSetupController::class, 'getStatus'])->name('customers.gtm.status');
 });
 
 /*

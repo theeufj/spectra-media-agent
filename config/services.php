@@ -52,6 +52,15 @@ return [
         'search_engine_id' => env('GOOGLE_SEARCH_ENGINE_ID'),
     ],
 
+    // Platform-managed Google Tag Manager (service account — no per-user OAuth needed)
+    'gtm' => [
+        // Refresh token for the PLATFORM's Google account with GTM edit+publish scopes.
+        // Generate once via: php artisan gtm:generate-token
+        'platform_refresh_token' => env('GTM_PLATFORM_REFRESH_TOKEN'),
+        // The GTM Account ID under which per-customer containers are created.
+        'platform_account_id' => env('GTM_PLATFORM_ACCOUNT_ID'),
+    ],
+
     'facebook' => [
         'client_id' => env('FACEBOOK_APP_ID'),
         'client_secret' => env('FACEBOOK_APP_SECRET'),
