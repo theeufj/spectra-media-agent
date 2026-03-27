@@ -32,10 +32,7 @@ class StorageHelper
 
             Log::info("File uploaded to S3: {$path}");
 
-            $cloudfrontDomain = config('filesystems.cloudfront_domain');
-            $url = $cloudfrontDomain
-                ? "https://{$cloudfrontDomain}/{$path}"
-                : Storage::disk('s3')->url($path);
+            $url = Storage::disk('s3')->url($path);
 
             return [$path, $url];
         }
@@ -126,10 +123,7 @@ class StorageHelper
         $s3Key = config('filesystems.disks.s3.key');
 
         if ($s3Bucket && $s3Key) {
-            $cloudfrontDomain = config('filesystems.cloudfront_domain');
-            return $cloudfrontDomain
-                ? "https://{$cloudfrontDomain}/{$path}"
-                : Storage::disk('s3')->url($path);
+            return Storage::disk('s3')->url($path);
         }
 
         return asset("storage/{$path}");
