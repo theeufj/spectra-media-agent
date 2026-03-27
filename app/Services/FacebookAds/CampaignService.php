@@ -67,10 +67,12 @@ class CampaignService extends BaseFacebookAdsService
         
         try {
             $response = $this->post("/act_{$accountId}/campaigns", [
-                'name' => $campaignName,
-                'objective' => $objective,
-                'daily_budget' => $dailyBudget,
-                'status' => $finalStatus,
+                'name'                            => $campaignName,
+                'objective'                       => $objective,
+                'daily_budget'                    => $dailyBudget,
+                'status'                          => $finalStatus,
+                'is_adset_budget_sharing_enabled' => true,
+                'special_ad_categories'           => [],
             ]);
 
             if ($response && isset($response['id'])) {

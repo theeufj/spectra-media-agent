@@ -71,11 +71,12 @@ echo "Step 2: Creating PAUSED test campaign...\n";
 $campaignName = '[SPECTRA TEST] Campaign — ' . date('Y-m-d H:i:s');
 
 $response = \Illuminate\Support\Facades\Http::post("{$baseUrl}/act_{$accountId}/campaigns", [
-    'name'               => $campaignName,
-    'objective'          => 'OUTCOME_TRAFFIC',
-    'status'             => 'PAUSED',
-    'special_ad_categories' => [],
-    'access_token'       => $token,
+    'name'                              => $campaignName,
+    'objective'                         => 'OUTCOME_TRAFFIC',
+    'status'                            => 'PAUSED',
+    'special_ad_categories'             => [],
+    'is_adset_budget_sharing_enabled'   => true,  // required when using campaign-level budget
+    'access_token'                      => $token,
 ]);
 
 $body = $response->json();
