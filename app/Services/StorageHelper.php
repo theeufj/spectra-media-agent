@@ -23,6 +23,7 @@ class StorageHelper
                 'Key' => $path,
                 'Body' => $contents,
                 'ContentType' => $contentType,
+                'ACL' => 'public-read',
             ]);
 
             if (!isset($result['ETag'])) {
