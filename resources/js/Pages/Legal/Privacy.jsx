@@ -63,7 +63,7 @@ export default function Privacy({ auth }) {
                                 
                                 <h3 className="text-xl lg:text-2xl font-bold text-gray-800 mt-6">Requested OAuth Scopes</h3>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
-                                    <li><strong className="font-semibold">openid, userinfo.email, userinfo.profile:</strong> Basic account information to authenticate you and associate your Google services with your cvseeyou account.</li>
+                                    <li><strong className="font-semibold">openid, userinfo.email, userinfo.profile:</strong> Basic account information to authenticate you and associate your Google services with your Site to Spend account.</li>
                                     <li><strong className="font-semibold">adwords (https://www.googleapis.com/auth/adwords):</strong> Full access to your Google Ads accounts to create, manage, and optimize advertising campaigns on your behalf.</li>
                                     <li><strong className="font-semibold">tagmanager.edit.containers:</strong> Edit access to your Google Tag Manager containers to configure tracking tags for campaign performance measurement.</li>
                                     <li><strong className="font-semibold">tagmanager.edit.containerversions:</strong> Create and edit Google Tag Manager container versions to implement and version control tracking configurations.</li>

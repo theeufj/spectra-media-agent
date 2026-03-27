@@ -36,7 +36,7 @@ const platformInfo = {
             </svg>
         ),
         color: 'bg-white',
-        connectUrl: '/auth/facebook-ads/redirect',
+        connectUrl: '/auth/facebook/redirect',
     },
     google_ads: {
         name: 'Google Ads',
@@ -112,7 +112,7 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                                     Connect Google Ads
                                 </a>
                                 <a
-                                    href="/auth/facebook-ads/redirect"
+                                    href="/auth/facebook/redirect"
                                     className="inline-flex items-center gap-2 px-4 py-2 bg-white text-gray-800 rounded-lg font-medium hover:bg-gray-100 transition-colors"
                                 >
                                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">
@@ -215,7 +215,7 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                             )}
                             {!hasFacebookAds && (
                                 <a
-                                    href="/auth/facebook-ads/redirect"
+                                    href="/auth/facebook/redirect"
                                     className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                                 >
                                     <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2">

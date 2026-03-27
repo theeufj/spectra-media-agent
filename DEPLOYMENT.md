@@ -1,4 +1,4 @@
-# Deployment Guide for cvseeyou.com
+# Deployment Guide for sitetospend.com
 
 ## Architecture Overview
 
@@ -6,7 +6,7 @@
                           Internet
                             |
                           Nginx (Port 443/80)
-                          cvseeyou.com
+                          sitetospend.com
                             |
                         Port 8000
                     Laravel Application
@@ -21,7 +21,7 @@
 - [ ] PHP 8.1+ and Composer installed
 - [ ] Node.js 16+ and npm installed
 - [ ] Nginx installed
-- [ ] Domain `cvseeyou.com` pointing to EC2 instance
+- [ ] Domain `sitetospend.com` pointing to EC2 instance
 - [ ] SSL certificate (Let's Encrypt or other)
 - [ ] `.env` file prepared for Laravel
 
@@ -34,24 +34,24 @@ ssh -i yourvideoagent.pem ubuntu@your-ec2-ip
 
 Create directories:
 ```bash
-sudo mkdir -p /var/www/cvseeyou
+sudo mkdir -p /var/www/sitetospend
 sudo mkdir -p /var/log/nginx
-sudo chown -R ubuntu:ubuntu /var/www/cvseeyou
+sudo chown -R ubuntu:ubuntu /var/www/sitetospend
 ```
 
 Create `.env` file for Laravel:
 ```bash
-cat > /var/www/cvseeyou/.env <<EOF
-APP_NAME=cvseeyou
+cat > /var/www/sitetospend/.env <<EOF
+APP_NAME=sitetospend
 APP_ENV=production
 APP_KEY=base64:YOUR_APP_KEY_HERE  # Will be generated during deploy
 APP_DEBUG=false
-APP_URL=https://cvseeyou.com
+APP_URL=https://sitetospend.com
 
 DB_CONNECTION=pgsql
 DB_HOST=127.0.0.1
 DB_PORT=5432
-DB_DATABASE=cvseeyou
+DB_DATABASE=sitetospend
 DB_USERNAME=postgres
 DB_PASSWORD=your-secure-password
 
@@ -64,14 +64,14 @@ MAIL_HOST=smtp.mailtrap.io
 MAIL_PORT=465
 MAIL_USERNAME=your-email@example.com
 MAIL_PASSWORD=your-password
-MAIL_FROM_ADDRESS=noreply@cvseeyou.com
-MAIL_FROM_NAME="cvseeyou"
+MAIL_FROM_ADDRESS=noreply@sitetospend.com
+MAIL_FROM_NAME="sitetospend"
 EOF
 ```
 
 Ensure PostgreSQL database exists:
 ```bash
-sudo -u postgres createdb cvseeyou
+sudo -u postgres createdb sitetospend
 ```
 
 ## Step 2: Update Local Deploy Script
@@ -105,8 +105,8 @@ The script will:
 
 Copy the nginx configuration:
 ```bash
-sudo cp spectra/nginx-cvseeyou.conf /etc/nginx/sites-available/cvseeyou
-sudo ln -s /etc/nginx/sites-available/cvseeyou /etc/nginx/sites-enabled/
+sudo cp spectra/nginx-sitetospend.conf /etc/nginx/sites-available/sitetospend
+sudo ln -s /etc/nginx/sites-available/sitetospend /etc/nginx/sites-enabled/
 ```
 
 Update paths in the nginx config if needed, then test:
@@ -123,7 +123,7 @@ sudo systemctl reload nginx
 
 ```bash
 sudo apt-get install certbot python3-certbot-nginx -y
-sudo certbot certonly --nginx -d cvseeyou.com -d www.cvseeyou.com
+sudo certbot certonly --nginx -d sitetospend.com -d www.sitetospend.com
 ```
 
 Update the nginx config with certificate paths, then reload:
@@ -136,7 +136,7 @@ sudo systemctl reload nginx
 Check Laravel service:
 
 ```bash
-sudo systemctl status cvseeyou
+sudo systemctl status sitetospend
 ```
 
 Check nginx:
@@ -155,17 +155,17 @@ curl http://localhost:8000/login
 
 Laravel logs:
 ```bash
-sudo tail -f /var/www/cvseeyou/storage/logs/laravel.log
+sudo tail -f /var/www/sitetospend/storage/logs/laravel.log
 ```
 
 Nginx access logs:
 ```bash
-sudo tail -f /var/log/nginx/cvseeyou_access.log
+sudo tail -f /var/log/nginx/sitetospend_access.log
 ```
 
 Nginx error logs:
 ```bash
-sudo tail -f /var/log/nginx/cvseeyou_error.log
+sudo tail -f /var/log/nginx/sitetospend_error.log
 ```
 
 ## Troubleshooting
@@ -173,12 +173,12 @@ sudo tail -f /var/log/nginx/cvseeyou_error.log
 ### Laravel service won't start
 
 ```bash
-sudo journalctl -u cvseeyou -n 50
+sudo journalctl -u sitetospend -n 50
 ```
 
 ### 502 Bad Gateway
 
-- Check if Laravel is running: `sudo systemctl status cvseeyou`
+- Check if Laravel is running: `sudo systemctl status sitetospend`
 - Check if port 8000 is listening: `sudo lsof -i :8000`
 - Check nginx logs for details
 
@@ -191,16 +191,16 @@ sudo journalctl -u cvseeyou -n 50
 ### Permission denied errors
 
 ```bash
-sudo chown -R www-data:www-data /var/www/cvseeyou
-sudo chmod -R 775 /var/www/cvseeyou/storage
-sudo chmod -R 775 /var/www/cvseeyou/bootstrap/cache
+sudo chown -R www-data:www-data /var/www/sitetospend
+sudo chmod -R 775 /var/www/sitetospend/storage
+sudo chmod -R 775 /var/www/sitetospend/bootstrap/cache
 ```
 
 ## Rollback (if needed)
 
 Keep a backup of the previous version:
 ```bash
-sudo mv /var/www/cvseeyou /var/www/cvseeyou-backup
+sudo mv /var/www/sitetospend /var/www/sitetospend-backup
 ```
 
 Then run deployment again to deploy the latest version.
@@ -216,20 +216,20 @@ Then run deployment again to deploy the latest version.
 ### View Service Status
 
 ```bash
-sudo systemctl status cvseeyou
+sudo systemctl status sitetospend
 ```
 
 ### Restart Service
 
 ```bash
-sudo systemctl restart cvseeyou
+sudo systemctl restart sitetospend
 ```
 
 ### Run Migrations Manually
 
 ```bash
 ssh ubuntu@your-ec2-ip
-cd /var/www/cvseeyou
+cd /var/www/sitetospend
 php artisan migrate
 ```
 
@@ -237,7 +237,7 @@ php artisan migrate
 
 ```bash
 ssh ubuntu@your-ec2-ip
-cd /var/www/cvseeyou
+cd /var/www/sitetospend
 php artisan cache:clear
 php artisan config:clear
 php artisan view:clear

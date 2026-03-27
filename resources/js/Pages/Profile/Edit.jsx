@@ -346,7 +346,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                             {tokenStatus && tokenStatus.needs_refresh && (
                                                 <div className="mb-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-sm text-yellow-800">
                                                     ⚠ Your Facebook connection expires in {tokenStatus.expires_in_days} days.
-                                                    <a href={route('facebook-ads.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline">
+                                                    <a href={route('facebook.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline">
                                                         Reconnect now
                                                     </a>
                                                 </div>
@@ -355,7 +355,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                             {tokenStatus && !tokenStatus.valid && (
                                                 <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded text-sm text-red-800">
                                                     ✕ Your Facebook connection has expired.
-                                                    <a href={route('facebook-ads.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline font-semibold">
+                                                    <a href={route('facebook.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline font-semibold">
                                                         Reconnect now
                                                     </a>
                                                 </div>
@@ -364,7 +364,7 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                             <form 
                                                 onSubmit={(e) => {
                                                     e.preventDefault();
-                                                    router.post(route('facebook-ads.disconnect'), {});
+                                                    router.post(route('facebook.disconnect'), {});
                                                 }}
                                                 className="inline"
                                             >
@@ -376,9 +376,9 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId, con
                                     ) : (
                                         <div>
                                             <p className="text-sm text-gray-600 mb-3">
-                                                Connect your Facebook account to manage ads through cvseeyou.
+                                                Connect your Facebook account to manage ads through Site to Spend.
                                             </p>
-                                            <a href={route('facebook-ads.redirect')}>
+                                            <a href={route('facebook.redirect')}>
                                                 <button 
                                                     type="button"
                                                     className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition duration-150 ease-in-out hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:bg-blue-800"
