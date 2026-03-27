@@ -64,6 +64,6 @@ Schedule::call(function () {
 // SEO & MAINTENANCE
 // ============================================================
 
-// Generate sitemap daily
-Schedule::command('sitemap:generate')->daily();
+// Sitemap is maintained as a static file in public/sitemap.xml
+// and committed to version control. No need to regenerate dynamically.
 
