@@ -200,6 +200,8 @@ class BrandGuidelineController extends Controller
         try {
             // Generate PDF using Browsershot
             $pdf = Browsershot::html($html)
+                ->setNodeBinary(config('browsershot.node_binary_path'))
+                ->addChromiumArguments(config('browsershot.chrome_args', []))
                 ->setOption('landscape', false)
                 ->margins(10, 10, 10, 10)
                 ->format('A4')

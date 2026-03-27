@@ -176,6 +176,8 @@ class BrandGuidelineExtractorService
             // Try Browsershot with Screenshot for Vision AI
             try {
                 $screenshot = Browsershot::url($websiteUrl)
+                    ->setNodeBinary(config('browsershot.node_binary_path'))
+                    ->addChromiumArguments(config('browsershot.chrome_args', []))
                     ->waitUntilNetworkIdle()
                     ->windowSize(1920, 1080)
                     ->timeout(60)
@@ -215,6 +217,8 @@ class BrandGuidelineExtractorService
             // Fallback to HTML scraping if Vision AI fails
             try {
                 $html = Browsershot::url($websiteUrl)
+                    ->setNodeBinary(config('browsershot.node_binary_path'))
+                    ->addChromiumArguments(config('browsershot.chrome_args', []))
                     ->waitUntilNetworkIdle()
                     ->timeout(30)
                     ->bodyHtml();

@@ -186,6 +186,8 @@ class CompetitorAnalysisAgent
             // Try Browsershot first for JavaScript-heavy sites
             try {
                 $html = Browsershot::url($url)
+                    ->setNodeBinary(config('browsershot.node_binary_path'))
+                    ->addChromiumArguments(config('browsershot.chrome_args', []))
                     ->timeout(30)
                     ->waitUntilNetworkIdle()
                     ->bodyHtml();
