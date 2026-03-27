@@ -3,13 +3,12 @@
 namespace App\Services\GTM;
 
 use App\Models\Customer;
-use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class GTMContainerService
 {
-    private string $baseUrl = 'https://www.tagmanager.googleapis.com/tagmanager/v2';
+    private string $baseUrl = 'https://tagmanager.googleapis.com/tagmanager/v2';
     private int $maxRetries = 3;
     private int $retryDelayMs = 1000;
 
@@ -23,25 +22,30 @@ class GTMContainerService
     {
         try {
             $refreshToken = config('services.gtm.platform_refresh_token');
+            $clientId     = config('services.google.client_id');
+            $clientSecret = config('services.google.client_secret');
 
-            if (!$refreshToken) {
-                Log::warning('GTMContainerService: GTM_PLATFORM_REFRESH_TOKEN is not configured');
+            if (!$refreshToken || !$clientId || !$clientSecret) {
+                Log::warning('GTMContainerService: Missing GTM platform credentials (GTM_PLATFORM_REFRESH_TOKEN, GOOGLE_OAUTH_CLIENT_ID, or GOOGLE_OAUTH_CLIENT_SECRET)');
                 return null;
             }
 
-            $configPath = storage_path('app/google_ads_php.ini');
+            $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
+                'client_id'     => $clientId,
+                'client_secret' => $clientSecret,
+                'refresh_token' => $refreshToken,
+                'grant_type'    => 'refresh_token',
+            ]);
 
-            if (!file_exists($configPath)) {
-                Log::warning('GTMContainerService: google_ads_php.ini not found');
+            if (!$response->successful()) {
+                Log::error('GTMContainerService: Failed to exchange refresh token', [
+                    'status' => $response->status(),
+                    'error'  => $response->json()['error'] ?? $response->body(),
+                ]);
                 return null;
             }
 
-            $oAuth2Credential = (new OAuth2TokenBuilder())
-                ->fromFile($configPath)
-                ->withRefreshToken($refreshToken)
-                ->build();
-
-            return $oAuth2Credential->getAccessToken();
+            return $response->json()['access_token'] ?? null;
         } catch (\Exception $e) {
             Log::error('GTMContainerService: Failed to get platform access token', [
                 'error' => $e->getMessage(),
