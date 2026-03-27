@@ -25,7 +25,7 @@ const TextArea = (props) => (
     />
 );
 
-export default function Create({ auth }) {
+export default function Create({ auth, brandGuideline }) {
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
     const prefillData = {
@@ -42,20 +42,46 @@ export default function Create({ auth }) {
         exclusions: 'Avoid real client data.',
     };
 
-    const { data, setData, post, processing, errors } = useForm(isLocalhost ? prefillData : {
+    // Build initial form data from brand guidelines if available
+    const brandPrefill = brandGuideline && !isLocalhost ? {
         name: '',
         reason: '',
         goals: '',
-        target_market: '',
-        voice: '',
+        target_market: brandGuideline.target_audience?.length
+            ? brandGuideline.target_audience.join(', ')
+            : '',
+        voice: brandGuideline.brand_voice?.description || (brandGuideline.tone_attributes?.length
+            ? brandGuideline.tone_attributes.join(', ')
+            : ''),
         total_budget: '',
         start_date: '',
         end_date: '',
         primary_kpi: '',
-        product_focus: '',
-        exclusions: '',
+        product_focus: brandGuideline.unique_selling_propositions?.length
+            ? brandGuideline.unique_selling_propositions.join(', ')
+            : '',
+        exclusions: brandGuideline.do_not_use?.length
+            ? brandGuideline.do_not_use.join(', ')
+            : '',
         selected_pages: [],
-    });
+    } : null;
+
+    const { data, setData, post, processing, errors } = useForm(
+        isLocalhost ? prefillData : (brandPrefill || {
+            name: '',
+            reason: '',
+            goals: '',
+            target_market: '',
+            voice: '',
+            total_budget: '',
+            start_date: '',
+            end_date: '',
+            primary_kpi: '',
+            product_focus: '',
+            exclusions: '',
+            selected_pages: [],
+        })
+    );
 
     // Get the current customer ID from the auth user (assuming single customer context for now)
     // In a real multi-tenant app, this might come from a route param or a selector.
@@ -75,6 +101,11 @@ export default function Create({ auth }) {
 
             <div className="py-12">
                 <form onSubmit={submit} className="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+                    {brandGuideline && !isLocalhost && (
+                        <div className="p-4 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+                            ✓ Some fields have been pre-filled from your brand guidelines. Feel free to adjust them.
+                        </div>
+                    )}
                     <FormSection
                         title="Core Campaign Brief"
                         description="Start with the high-level details. What is this campaign about and why are you running it?"

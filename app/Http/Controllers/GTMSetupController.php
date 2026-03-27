@@ -220,8 +220,21 @@ class GTMSetupController extends Controller
                 'website' => $customer->website,
             ]);
 
-            // Fetch website content (simplified - ideally use ScrapeCustomerWebsite job)
-            $htmlContent = @file_get_contents($customer->website);
+            // Fetch website content using Browsershot (executes JavaScript to detect dynamically-loaded GTM)
+            try {
+                $htmlContent = \Spatie\Browsershot\Browsershot::url($customer->website)
+                    ->setNodeBinary(config('browsershot.node_binary_path'))
+                    ->addChromiumArguments(config('browsershot.chrome_args', []))
+                    ->timeout(30)
+                    ->waitUntilNetworkIdle()
+                    ->bodyHtml();
+            } catch (\Exception $e) {
+                Log::warning('Browsershot failed for GTM rescan, falling back to HTTP', [
+                    'url' => $customer->website,
+                    'error' => $e->getMessage(),
+                ]);
+                $htmlContent = @file_get_contents($customer->website);
+            }
 
             if (!$htmlContent) {
                 return back()->with('error', 'Could not fetch website content. Please check the website URL.');

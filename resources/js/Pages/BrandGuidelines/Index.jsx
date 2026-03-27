@@ -222,15 +222,15 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                     <div className="flex-1 bg-gray-200 rounded-full h-4 mr-4">
                                                         <div
                                                             className="bg-blue-600 h-4 rounded-full transition-all duration-300"
-                                                            style={{ width: `${brandGuideline.quality_score}%` }}
+                                                            style={{ width: `${brandGuideline.extraction_quality_score}%` }}
                                                         ></div>
                                                     </div>
-                                                    <span className="text-2xl font-bold text-blue-900">{brandGuideline.quality_score}</span>
+                                                    <span className="text-2xl font-bold text-blue-900">{brandGuideline.extraction_quality_score}</span>
                                                 </div>
                                                 <p className="text-xs text-blue-700 mt-2">
-                                                    {brandGuideline.quality_score >= 80 && 'Excellent extraction quality!'}
-                                                    {brandGuideline.quality_score >= 60 && brandGuideline.quality_score < 80 && 'Good extraction quality. Consider reviewing and refining.'}
-                                                    {brandGuideline.quality_score < 60 && 'Low extraction quality. Manual review recommended.'}
+                                                    {brandGuideline.extraction_quality_score >= 80 && 'Excellent extraction quality!'}
+                                                    {brandGuideline.extraction_quality_score >= 60 && brandGuideline.extraction_quality_score < 80 && 'Good extraction quality. Consider reviewing and refining.'}
+                                                    {brandGuideline.extraction_quality_score < 60 && 'Low extraction quality. Manual review recommended.'}
                                                 </p>
                                             </div>
 

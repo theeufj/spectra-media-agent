@@ -34,7 +34,18 @@ class CampaignController extends Controller
      */
     public function create()
     {
-        return Inertia::render('Campaigns/Create');
+        $customerId = session('active_customer_id');
+        $brandGuideline = null;
+
+        if ($customerId) {
+            $brandGuideline = \App\Models\BrandGuideline::where('customer_id', $customerId)
+                ->latest('extracted_at')
+                ->first();
+        }
+
+        return Inertia::render('Campaigns/Create', [
+            'brandGuideline' => $brandGuideline,
+        ]);
     }
 
     /**
