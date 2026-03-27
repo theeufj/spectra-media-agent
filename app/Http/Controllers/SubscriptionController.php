@@ -66,16 +66,22 @@ class SubscriptionController extends Controller
 
         if ($deploymentEnabled) {
             // Full subscription flow - charge immediately
-            $checkout = $user->newSubscription('default', $priceId)
-                ->checkout([
-                    'success_url' => route('dashboard'),
-                    'cancel_url' => route('subscription.pricing'),
-                    'line_items' => [
-                        [
-                            'price' => $adSpendPriceId,
-                        ],
+            $checkoutOptions = [
+                'success_url' => route('dashboard'),
+                'cancel_url' => route('subscription.pricing'),
+            ];
+
+            // Only include ad spend metered billing if price ID is configured
+            if ($adSpendPriceId) {
+                $checkoutOptions['line_items'] = [
+                    [
+                        'price' => $adSpendPriceId,
                     ],
-                ]);
+                ];
+            }
+
+            $checkout = $user->newSubscription('default', $priceId)
+                ->checkout($checkoutOptions);
         } else {
             // Testing mode - only collect payment method without charging
             // Use Stripe Checkout in setup mode
