@@ -281,7 +281,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         
         try {
             // Use Google Search grounding for real-time API documentation access
-            $response = $this->geminiService->generateContent(
+            $response = $this->gemini->generateContent(
                 model: 'gemini-3-flash-preview',
                 prompt: $prompt,
                 config: [
@@ -321,7 +321,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $this->initializeServices();
         
         $startTime = microtime(true);
-        $result = ExecutionResult::success($plan);
+        $result = ExecutionResult::success(platformIds: [], executionTime: 0.0, plan: $plan);
         $accountId = str_replace('act_', '', $this->customer->facebook_ads_account_id);
         $strategy = $context->strategy;
         $campaign = $context->campaign;
@@ -391,7 +391,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
             $campaign->name,
-            $campaignStructure['objective'] ?? 'LINK_CLICKS',
+            $campaignStructure['objective'] ?? 'OUTCOME_TRAFFIC',
             $dailyBudgetCents,
             'PAUSED' // Start paused for review
         );
@@ -427,13 +427,16 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         // Build targeting from plan
         $targeting = $this->buildTargeting($plan);
         
+        // Campaign uses CBO — budget is set at campaign level, not ad-set level.
+        // optimization_goal drives how Facebook allocates impressions within the ad set.
+        // billing_event is always IMPRESSIONS (handled inside AdSetService).
         $fbAdSet = $this->adSetService->createAdSet(
+            $accountId,
             $campaignId,
             $campaign->name . ' - Ad Set',
-            $dailyBudgetCents,
             $targeting,
-            $campaignStructure['objective'] ?? 'LINK_CLICKS',
-            $campaignStructure['optimization_goal'] ?? 'LINK_CLICKS'
+            $campaignStructure['optimization_goal'] ?? 'LINK_CLICKS',
+            'PAUSED'
         );
         
         if (!$fbAdSet || !isset($fbAdSet['id'])) {

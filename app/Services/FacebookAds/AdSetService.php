@@ -56,20 +56,26 @@ class AdSetService extends BaseFacebookAdsService
      * @return ?array
      */
     public function createAdSet(
+        string $accountId,
         string $campaignId,
         string $adSetName,
-        int $dailyBudget = 50000,
         array $targeting = [],
-        string $billingEvent = 'LINK_CLICKS',
-        string $optimizationGoal = 'LINK_CLICKS'
+        string $optimizationGoal = 'LINK_CLICKS',
+        string $status = 'PAUSED'
     ): ?array {
+        // billing_event for standard traffic/awareness campaigns is always IMPRESSIONS.
+        // The old default of LINK_CLICKS as billing_event causes API errors with OUTCOME_* objectives.
+        $billingEvent = 'IMPRESSIONS';
+
         try {
             $data = [
-                'campaign_id' => $campaignId,
-                'name' => $adSetName,
-                'daily_budget' => $dailyBudget,
-                'billing_event' => $billingEvent,
+                'campaign_id'      => $campaignId,
+                'name'             => $adSetName,
+                // No daily_budget here — campaign uses CBO (Campaign Budget Optimisation);
+                // the budget set on the campaign flows down automatically.
+                'billing_event'    => $billingEvent,
                 'optimization_goal' => $optimizationGoal,
+                'status'           => $status,
             ];
 
             // Add targeting if provided
@@ -77,7 +83,9 @@ class AdSetService extends BaseFacebookAdsService
                 $data['targeting'] = json_encode($targeting);
             }
 
-            $response = $this->post("/{$campaignId}/adsets", $data);
+            // Correct endpoint: ad sets are created under the ad account, not the campaign.
+            // campaign_id is passed in the POST body above.
+            $response = $this->post("/act_{$accountId}/adsets", $data);
 
             if ($response && isset($response['id'])) {
                 Log::info("Created ad set for campaign {$campaignId}", [

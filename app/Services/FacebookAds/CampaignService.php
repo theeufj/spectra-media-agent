@@ -55,24 +55,44 @@ class CampaignService extends BaseFacebookAdsService
      * @param string|null $status Campaign status ('ACTIVE', 'PAUSED'). If null, uses config.
      * @return ?array
      */
+    /**
+     * Map legacy/shorthand objective names to the current Facebook Marketing API v18+ format.
+     * Old names like LINK_CLICKS, CONVERSIONS, REACH are no longer valid.
+     */
+    private function normaliseObjective(string $objective): string
+    {
+        return match (strtoupper($objective)) {
+            'LINK_CLICKS', 'TRAFFIC'             => 'OUTCOME_TRAFFIC',
+            'CONVERSIONS', 'PURCHASE', 'SALES'   => 'OUTCOME_SALES',
+            'LEAD_GENERATION', 'LEADS'           => 'OUTCOME_LEADS',
+            'BRAND_AWARENESS', 'REACH',
+            'AWARENESS'                          => 'OUTCOME_AWARENESS',
+            'ENGAGEMENT', 'POST_ENGAGEMENT'      => 'OUTCOME_ENGAGEMENT',
+            'APP_INSTALLS', 'APP_PROMOTION'      => 'OUTCOME_APP_PROMOTION',
+            default                              => $objective, // pass through OUTCOME_* as-is
+        };
+    }
+
     public function createCampaign(
         string $accountId,
         string $campaignName,
-        string $objective = 'LINK_CLICKS',
+        string $objective = 'OUTCOME_TRAFFIC',
         int $dailyBudget = 50000,
         ?string $status = null
     ): ?array {
         // Use CampaignStatusHelper to determine the appropriate status
         $finalStatus = CampaignStatusHelper::getFacebookAdsStatus($status);
-        
+        $normalisedObjective = $this->normaliseObjective($objective);
+
         try {
             $response = $this->post("/act_{$accountId}/campaigns", [
                 'name'                            => $campaignName,
-                'objective'                       => $objective,
+                'objective'                       => $normalisedObjective,
                 'daily_budget'                    => $dailyBudget,
-                'status'                          => $finalStatus,
+                'bid_strategy'                    => 'LOWEST_COST_WITHOUT_CAP',  // required with CBO
                 'is_adset_budget_sharing_enabled' => true,
                 'special_ad_categories'           => [],
+                'status'                          => $finalStatus,
             ]);
 
             if ($response && isset($response['id'])) {

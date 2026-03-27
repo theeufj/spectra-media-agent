@@ -75,7 +75,9 @@ $response = \Illuminate\Support\Facades\Http::post("{$baseUrl}/act_{$accountId}/
     'objective'                         => 'OUTCOME_TRAFFIC',
     'status'                            => 'PAUSED',
     'special_ad_categories'             => [],
-    'is_adset_budget_sharing_enabled'   => true,  // required when using campaign-level budget
+    'daily_budget'                      => 500,  // $5.00 in cents
+    'bid_strategy'                      => 'LOWEST_COST_WITHOUT_CAP',
+    'is_adset_budget_sharing_enabled'   => true,
     'access_token'                      => $token,
 ]);
 
