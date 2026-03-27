@@ -47,8 +47,12 @@ export default function Create({ auth, brandGuideline }) {
         name: '',
         reason: '',
         goals: '',
-        target_market: brandGuideline.target_audience?.length
-            ? brandGuideline.target_audience.join(', ')
+        target_market: brandGuideline.target_audience
+            ? [
+                brandGuideline.target_audience.primary,
+                brandGuideline.target_audience.demographics,
+                brandGuideline.target_audience.psychographics,
+              ].filter(Boolean).join('. ')
             : '',
         voice: brandGuideline.brand_voice?.description || (brandGuideline.tone_attributes?.length
             ? brandGuideline.tone_attributes.join(', ')
