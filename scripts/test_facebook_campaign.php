@@ -74,6 +74,7 @@ $r = \Illuminate\Support\Facades\Http::post("{$base}/act_{$accountId}/campaigns"
     'special_ad_categories'           => [],
     'daily_budget'                    => 500,
     'is_adset_budget_sharing_enabled' => false,
+    'bid_strategy'                    => 'LOWEST_COST_WITHOUT_CAP',
     'access_token'                    => $token,
 ]);
 $b = $r->json();
@@ -89,7 +90,7 @@ $r = \Illuminate\Support\Facades\Http::post("{$base}/act_{$accountId}/adsets", [
     'campaign_id'      => $created['campaign'],
     'name'             => '[SPECTRA TEST] Ad Set',
     'billing_event'    => 'IMPRESSIONS',
-    'optimization_goal'=> 'LINK_CLICKS',
+    'optimization_goal'=> 'LANDING_PAGE_VIEWS',
     'targeting'        => json_encode([
         'geo_locations' => ['countries' => ['AU']],
         'age_min' => 18,

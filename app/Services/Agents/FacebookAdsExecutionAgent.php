@@ -435,7 +435,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $campaignId,
             $campaign->name . ' - Ad Set',
             $targeting,
-            $campaignStructure['optimization_goal'] ?? 'LINK_CLICKS',
+            $campaignStructure['optimization_goal'] ?? 'LANDING_PAGE_VIEWS',
             'PAUSED'
         );
         

@@ -92,6 +92,7 @@ class CampaignService extends BaseFacebookAdsService
                 // CBO (campaign-level budget) — ad sets must NOT have their own budgets.
                 // is_adset_budget_sharing_enabled: false tells Facebook this is CBO mode.
                 'is_adset_budget_sharing_enabled' => false,
+                'bid_strategy'                    => 'LOWEST_COST_WITHOUT_CAP',
                 'special_ad_categories'           => [],
                 'status'                          => $finalStatus,
             ]);
