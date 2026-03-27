@@ -2,7 +2,7 @@ import React from 'react';
 import { router } from '@inertiajs/react';
 import DataTable from '@/Components/DataTable';
 
-const UserTable = ({ users }) => {
+const UserTable = ({ users, plans = [] }) => {
     const handlePromote = (userId) => {
         router.post(route('admin.users.promote', userId), {}, { preserveScroll: true });
     };
@@ -23,11 +23,29 @@ const UserTable = ({ users }) => {
         }
     };
 
-    const userHeaders = ['Name', 'Email', 'Roles', 'Status', 'Actions'];
+    const handleAssignPlan = (userId, planId) => {
+        router.post(route('admin.users.assign-plan', userId), {
+            plan_id: planId || null,
+        }, { preserveScroll: true });
+    };
+
+    const userHeaders = ['Name', 'Email', 'Roles', 'Plan', 'Status', 'Actions'];
     const userData = users.map(user => [
         user.name,
         user.email,
         user.roles.map(role => role.name).join(', '),
+        <select
+            value={user.assigned_plan_id || ''}
+            onChange={(e) => handleAssignPlan(user.id, e.target.value)}
+            className="text-sm border border-gray-300 rounded px-2 py-1"
+        >
+            <option value="">— No plan —</option>
+            {plans.map(plan => (
+                <option key={plan.id} value={plan.id}>
+                    {plan.name} ({plan.formatted_price})
+                </option>
+            ))}
+        </select>,
         user.banned_at ? 'Banned' : 'Active',
         <div className="text-right space-x-2">
             {!user.roles.some(role => role.name === 'admin') && (

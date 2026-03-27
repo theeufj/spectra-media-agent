@@ -24,10 +24,31 @@ class AdminController extends Controller
 
     public function usersIndex()
     {
-        $users = User::with('roles')->get();
+        $users = User::with(['roles', 'assignedPlan'])->get();
+        $plans = \App\Models\Plan::active()->ordered()->get();
         return Inertia::render('Admin/Users', [
             'users' => $users,
+            'plans' => $plans,
         ]);
+    }
+
+    public function assignPlan(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'plan_id' => 'nullable|exists:plans,id',
+        ]);
+
+        $user->assigned_plan_id = $validated['plan_id'];
+        $user->save();
+
+        $planName = $validated['plan_id'] ? \App\Models\Plan::find($validated['plan_id'])->name : 'None';
+        Log::info('Admin assigned plan to user', [
+            'user_id' => $user->id,
+            'plan_id' => $validated['plan_id'],
+            'plan_name' => $planName,
+        ]);
+
+        return redirect()->back()->with('success', "Plan '{$planName}' assigned to {$user->name}.");
     }
 
     public function customersIndex()

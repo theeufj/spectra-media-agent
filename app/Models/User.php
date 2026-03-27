@@ -76,12 +76,28 @@ class User extends Authenticatable implements MustVerifyEmail
      *
      * @return string
      */
+    public function assignedPlan()
+    {
+        return $this->belongsTo(Plan::class, 'assigned_plan_id');
+    }
+
     public function getSubscriptionPlanAttribute(): string
     {
-        // 'default' is the name of the subscription in Cashier.
-        // You can change this if you use a different name.
+        // Admin-assigned plan takes priority
+        if ($this->assigned_plan_id && $this->assignedPlan) {
+            return $this->assignedPlan->name;
+        }
+
+        // Then check Cashier subscription
         if ($this->subscribed('default')) {
-            return 'Spectra Pro';
+            $subscription = $this->subscription('default');
+            if ($subscription) {
+                $plan = Plan::where('stripe_price_id', $subscription->stripe_price)->first();
+                if ($plan) {
+                    return $plan->name;
+                }
+            }
+            return 'Subscribed';
         }
 
         return 'Free';
