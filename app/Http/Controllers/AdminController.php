@@ -54,7 +54,29 @@ class AdminController extends Controller
 
         return Inertia::render('Admin/CustomerDetail', [
             'customer' => $customer,
+            'bm_configured' => app(\App\Services\FacebookAds\BusinessManagerService::class)->isConfigured(),
         ]);
+    }
+
+    /**
+     * Update the Facebook Ad Account ID for a customer (admin only).
+     */
+    public function updateCustomerFacebook(Request $request, Customer $customer)
+    {
+        $validated = $request->validate([
+            'facebook_ads_account_id' => 'nullable|string|max:50',
+        ]);
+
+        $customer->update([
+            'facebook_ads_account_id' => $validated['facebook_ads_account_id'] ?: null,
+        ]);
+
+        Log::info('Admin updated Facebook Ad Account ID', [
+            'customer_id' => $customer->id,
+            'facebook_ads_account_id' => $customer->facebook_ads_account_id,
+        ]);
+
+        return redirect()->back()->with('success', 'Facebook Ad Account ID updated.');
     }
 
     /**

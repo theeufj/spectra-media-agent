@@ -1,9 +1,25 @@
+import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, usePage, useForm } from '@inertiajs/react';
 import SideNav from './SideNav';
+import FacebookAdAccountModal from '@/Components/FacebookAdAccountModal';
 
-export default function CustomerDetail({ auth }) {
+export default function CustomerDetail({ auth, bm_configured }) {
     const { customer } = usePage().props;
+    const [showFacebookModal, setShowFacebookModal] = useState(false);
+    const [editingFbAccount, setEditingFbAccount] = useState(false);
+
+    const fbForm = useForm({
+        facebook_ads_account_id: customer.facebook_ads_account_id || '',
+    });
+
+    const saveFbAccountId = (e) => {
+        e.preventDefault();
+        fbForm.put(route('admin.customers.update-facebook', customer.id), {
+            preserveScroll: true,
+            onSuccess: () => setEditingFbAccount(false),
+        });
+    };
 
     const owner = customer.users?.[0];
     const campaigns = customer.campaigns || [];
@@ -70,6 +86,66 @@ export default function CustomerDetail({ auth }) {
                                         <h4 className="text-sm font-medium text-gray-500">Created</h4>
                                         <p className="mt-1 text-gray-900">{new Date(customer.created_at).toLocaleDateString()}</p>
                                     </div>
+                                </div>
+
+                                {/* Facebook Ad Account */}
+                                <div className="mt-6 pt-6 border-t border-gray-200">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-medium text-gray-500">Facebook Ads Account</h4>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingFbAccount(!editingFbAccount)}
+                                                className="text-xs text-gray-500 hover:text-gray-700 font-medium transition"
+                                            >
+                                                {editingFbAccount ? 'Cancel' : 'Edit ID'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setShowFacebookModal(true)}
+                                                className="text-xs text-blue-600 hover:text-blue-800 font-medium transition"
+                                            >
+                                                {customer.facebook_ads_account_id ? 'Manage ↗' : '+ Link Account'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                    {editingFbAccount ? (
+                                        <form onSubmit={saveFbAccountId} className="flex items-center gap-2">
+                                            <div className="flex-1">
+                                                <div className="flex items-center">
+                                                    <span className="inline-flex items-center px-3 py-2 bg-gray-100 border border-r-0 border-gray-300 rounded-l-md text-sm text-gray-500">act_</span>
+                                                    <input
+                                                        type="text"
+                                                        value={fbForm.data.facebook_ads_account_id}
+                                                        onChange={e => fbForm.setData('facebook_ads_account_id', e.target.value)}
+                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                        placeholder="123456789"
+                                                    />
+                                                </div>
+                                                {fbForm.errors.facebook_ads_account_id && (
+                                                    <p className="mt-1 text-xs text-red-600">{fbForm.errors.facebook_ads_account_id}</p>
+                                                )}
+                                            </div>
+                                            <button
+                                                type="submit"
+                                                disabled={fbForm.processing}
+                                                className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                            >
+                                                {fbForm.processing ? 'Saving...' : 'Save'}
+                                            </button>
+                                        </form>
+                                    ) : customer.facebook_ads_account_id ? (
+                                        <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono flex items-center gap-2">
+                                            <span>act_{customer.facebook_ads_account_id}</span>
+                                            {customer.facebook_bm_owned && (
+                                                <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-sans font-medium">BM Managed</span>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                                            Not linked — Facebook deployment is blocked until an account is assigned.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -163,6 +239,13 @@ export default function CustomerDetail({ auth }) {
                     </div>
                 </div>
             </div>
+
+            <FacebookAdAccountModal
+                show={showFacebookModal}
+                onClose={() => setShowFacebookModal(false)}
+                customer={customer}
+                bmConfigured={bm_configured}
+            />
         </AuthenticatedLayout>
     );
 }

@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
+Route::get('/features', [LandingController::class, 'features'])->name('features');
+Route::get('/how-it-works', [LandingController::class, 'howItWorks'])->name('how-it-works');
+Route::get('/pricing', [LandingController::class, 'pricing'])->name('pricing');
+Route::get('/about', [LandingController::class, 'about'])->name('about');
 
 Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
@@ -287,7 +291,7 @@ Route::middleware(['auth'])->group(function () {
 | Facebook Ad Account Routes (Path A — Platform Business Manager)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'admin'])->group(function () {
     // Show the Facebook ad account setup page for a customer
     Route::get('/customers/{customer}/facebook/setup', [App\Http\Controllers\FacebookAdAccountController::class, 'show'])->name('customers.facebook.setup');
 
@@ -464,6 +468,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('settings', [App\Http\Controllers\AdminController::class, 'settingsIndex'])->name('admin.settings.index');
     Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');
     Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
+    Route::put('customers/{customer}', [App\Http\Controllers\AdminController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
     Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
     Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
     
