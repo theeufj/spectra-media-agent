@@ -79,4 +79,5 @@ class FacebookAdAccountController extends Controller
 
         return back()->with('success', 'System User has access to act_' . $customer->facebook_ads_account_id . ' (' . ($result['name'] ?? 'unknown') . ')');
     }
+
 }

@@ -71,6 +71,9 @@ return [
         // Create at business.facebook.com → System Users → Generate Token
         'business_manager_id' => env('FACEBOOK_BUSINESS_MANAGER_ID'),
         'system_user_token'   => env('FACEBOOK_SYSTEM_USER_TOKEN'),
+        // Platform Facebook Page used as the ad publisher for all customer campaigns.
+        // Customers do NOT need their own Facebook Page.
+        'page_id'             => env('FACEBOOK_PAGE_ID'),
     ],
 
     'stripe' => [

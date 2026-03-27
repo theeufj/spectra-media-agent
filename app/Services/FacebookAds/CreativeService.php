@@ -32,9 +32,9 @@ class CreativeService extends BaseFacebookAdsService
         string $callToAction = 'LEARN_MORE',
         ?string $linkUrl = null
     ): ?array {
-        $pageId = $this->customer->facebook_page_id;
+        $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
         if (!$pageId) {
-            Log::error("No Facebook Page ID on customer — cannot create creative", ['customer_id' => $this->customer->id]);
+            Log::error("No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env", ['customer_id' => $this->customer->id]);
             return null;
         }
 
@@ -103,9 +103,9 @@ class CreativeService extends BaseFacebookAdsService
         string $callToAction = 'LEARN_MORE',
         ?string $linkUrl = null
     ): ?array {
-        $pageId = $this->customer->facebook_page_id;
+        $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
         if (!$pageId) {
-            Log::error("No Facebook Page ID on customer — cannot create video creative", ['customer_id' => $this->customer->id]);
+            Log::error("No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env", ['customer_id' => $this->customer->id]);
             return null;
         }
 
@@ -427,9 +427,9 @@ class CreativeService extends BaseFacebookAdsService
         array $cards,
         string $linkUrl
     ): ?array {
-        $pageId = $this->customer->facebook_page_id;
+        $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
         if (!$pageId) {
-            Log::error("No Facebook Page ID on customer — cannot create carousel creative", ['customer_id' => $this->customer->id]);
+            Log::error("No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env", ['customer_id' => $this->customer->id]);
             return null;
         }
 
