@@ -425,6 +425,20 @@ class AdminController extends Controller
         return redirect()->back();
     }
 
+    public function deleteUser(User $user)
+    {
+        if ($user->hasRole('admin')) {
+            return redirect()->back()->with('error', 'Cannot delete an admin user.');
+        }
+
+        ActivityLogger::log('user_deleted', "Deleted user: {$user->name} ({$user->email})");
+        $user->roles()->detach();
+        $user->customers()->detach();
+        $user->delete();
+
+        return redirect()->back()->with('success', "User '{$user->name}' has been deleted.");
+    }
+
     public function banUser(User $user)
     {
         $user->update(['banned_at' => now()]);

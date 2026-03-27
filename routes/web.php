@@ -475,6 +475,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::put('customers/{customer}', [App\Http\Controllers\AdminController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
     Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
     Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
+    Route::delete('users/{user}', [App\Http\Controllers\AdminController::class, 'deleteUser'])->name('admin.users.delete');
     Route::post('users/{user}/assign-plan', [App\Http\Controllers\AdminController::class, 'assignPlan'])->name('admin.users.assign-plan');
     
     // Execution Metrics Dashboard (Admin Only)

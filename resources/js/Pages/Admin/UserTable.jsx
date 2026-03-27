@@ -17,6 +17,12 @@ const UserTable = ({ users, plans = [] }) => {
         router.post(route('admin.users.unban', userId), {}, { preserveScroll: true });
     };
 
+    const handleDeleteUser = (userId) => {
+        if (confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')) {
+            router.delete(route('admin.users.delete', userId), { preserveScroll: true });
+        }
+    };
+
     const handleImpersonate = (userId) => {
         if (confirm('You will be logged in as this user. Continue?')) {
             router.post(route('admin.impersonation.start', userId));
@@ -66,6 +72,9 @@ const UserTable = ({ users, plans = [] }) => {
                 <button onClick={() => handleUnbanUser(user.id)} className="text-green-600 hover:text-green-900">Unban</button>
             ) : (
                 <button onClick={() => handleBanUser(user.id)} className="text-red-600 hover:text-red-900">Ban</button>
+            )}
+            {!user.roles.some(role => role.name === 'admin') && (
+                <button onClick={() => handleDeleteUser(user.id)} className="text-red-800 hover:text-red-950">Delete</button>
             )}
         </div>
     ]);
