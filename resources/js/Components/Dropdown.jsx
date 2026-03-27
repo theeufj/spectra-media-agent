@@ -55,6 +55,8 @@ const Content = ({
 
     if (width === '48') {
         widthClasses = 'w-48';
+    } else if (width === '64') {
+        widthClasses = 'w-64';
     }
 
     return (
@@ -69,12 +71,12 @@ const Content = ({
                 leaveTo="opacity-0 scale-95"
             >
                 <div
-                    className={`absolute z-50 mt-2 rounded-md shadow-lg ${alignmentClasses} ${widthClasses}`}
+                    className={`absolute z-50 mt-2 rounded-lg shadow-lg ring-1 ring-gray-200 ${alignmentClasses} ${widthClasses}`}
                     onClick={() => setOpen(false)}
                 >
                     <div
                         className={
-                            `rounded-md ring-1 ring-black ring-opacity-5 ` +
+                            `rounded-lg overflow-hidden ` +
                             contentClasses
                         }
                     >
@@ -91,7 +93,7 @@ const DropdownLink = ({ className = '', children, ...props }) => {
         <Link
             {...props}
             className={
-                'block w-full px-4 py-2 text-start text-sm leading-5 text-gray-700 transition duration-150 ease-in-out hover:bg-gray-100 focus:bg-gray-100 focus:outline-none ' +
+                'block w-full px-4 py-2 text-start text-sm leading-5 text-gray-700 transition duration-150 ease-in-out hover:bg-gray-50 focus:bg-gray-50 focus:outline-none ' +
                 className
             }
         >
