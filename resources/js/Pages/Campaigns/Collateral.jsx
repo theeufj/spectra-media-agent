@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import RefineImageModal from '@/Components/RefineImageModal';
@@ -28,6 +28,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [showPreview, setShowPreview] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
+    // Refs for values accessed inside the polling interval to avoid stale closures
+    // and prevent the effect from restarting (which resets the safety timeout).
+    const collateralRef = useRef(collateral);
+    const generatingAdCopyRef = useRef(generatingAdCopy);
+    const generatingImageRef = useRef(generatingImage);
+    const generatingVideoRef = useRef(generatingVideo);
+
+    useEffect(() => { collateralRef.current = collateral; }, [collateral]);
+    useEffect(() => { generatingAdCopyRef.current = generatingAdCopy; }, [generatingAdCopy]);
+    useEffect(() => { generatingImageRef.current = generatingImage; }, [generatingImage]);
+    useEffect(() => { generatingVideoRef.current = generatingVideo; }, [generatingVideo]);
 
     // Polling effect
     useEffect(() => {
@@ -38,49 +49,49 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 const response = await fetch(route('api.collateral.show', { strategy: currentStrategy.id }));
                 if (response.ok) {
                     const data = await response.json();
+                    const current = collateralRef.current;
                     // Update all collateral data
-                    const hasNewAdCopy = data.adCopy && (!collateral.adCopy || data.adCopy.updated_at !== collateral.adCopy?.updated_at);
-                    const hasNewImages = JSON.stringify(data.imageCollaterals) !== JSON.stringify(collateral.imageCollaterals);
-                    const hasNewVideos = JSON.stringify(data.videoCollaterals) !== JSON.stringify(collateral.videoCollaterals);
+                    const hasNewAdCopy = data.adCopy && (!current.adCopy || data.adCopy.updated_at !== current.adCopy?.updated_at);
+                    const hasNewImages = JSON.stringify(data.imageCollaterals) !== JSON.stringify(current.imageCollaterals);
+                    const hasNewVideos = JSON.stringify(data.videoCollaterals) !== JSON.stringify(current.videoCollaterals);
                     
                     if (hasNewAdCopy || hasNewImages || hasNewVideos) {
                         setCollateral(data);
                         
                         // Stop polling for ad copy if it was generated
-                        if (hasNewAdCopy && generatingAdCopy) {
+                        if (hasNewAdCopy && generatingAdCopyRef.current) {
                             setGeneratingAdCopy(false);
                         }
                         
                         // Stop image generation flag if new images arrived
-                        if (hasNewImages && generatingImage) {
+                        if (hasNewImages && generatingImageRef.current) {
                             setGeneratingImage(false);
                         }
                         
                         // Stop video generation flag if new videos arrived
-                        if (hasNewVideos && generatingVideo) {
+                        if (hasNewVideos && generatingVideoRef.current) {
                             setGeneratingVideo(false);
                         }
                     }
                 }
             } catch (error) {
-                console.error('Failed to generate ad copy:', error);
+                console.error('Failed to poll collateral:', error);
             }
         }, 3000); // Poll every 3 seconds
 
-        // Stop polling after a certain time to avoid infinite loops
+        // Stop polling after 5 minutes (safety net — not reset by data changes)
         const timeout = setTimeout(() => {
             setIsPolling(false);
             setGeneratingAdCopy(false);
             setGeneratingImage(false);
             setGeneratingVideo(false);
-            clearInterval(pollInterval);
-        }, 300000); // Stop after 5 minutes
+        }, 300000);
 
         return () => {
             clearInterval(pollInterval);
             clearTimeout(timeout);
         };
-    }, [isPolling, currentStrategy.id, collateral, generatingAdCopy, generatingImage, generatingVideo]);
+    }, [isPolling, currentStrategy.id]);
 
     // Function to handle tab changes
     const handleTabChange = (platform) => {
@@ -117,13 +128,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             onConfirm: () => {
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingImage(true);
+                setIsPolling(true);
                 router.post(route('campaigns.collateral.image.store', { campaign: campaign.id, strategy: strategyId }), {}, {
-                    onSuccess: () => {
-                        setGeneratingImage(false);
-                        setIsPolling(true);
-                    },
                     onError: (errors) => {
                         setGeneratingImage(false);
+                        setIsPolling(false);
                         alert('Failed to start image generation: ' + (errors.message || 'An unknown error occurred.'));
                     },
                     preserveScroll: true,
@@ -141,13 +150,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             onConfirm: () => {
                 setConfirmModal({ ...confirmModal, show: false });
                 setGeneratingVideo(true);
+                setIsPolling(true);
                 router.post(route('campaigns.collateral.video.store', { campaign: campaign.id, strategy: strategyId }), { platform }, {
-                    onSuccess: () => {
-                        setGeneratingVideo(false);
-                        setIsPolling(true);
-                    },
                     onError: (errors) => {
                         setGeneratingVideo(false);
+                        setIsPolling(false);
                         alert('Failed to start video generation: ' + (errors.message || 'An unknown error occurred.'));
                     },
                     preserveScroll: true,

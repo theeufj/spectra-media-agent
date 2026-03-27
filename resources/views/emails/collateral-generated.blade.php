@@ -179,7 +179,7 @@
                 <a href="{{ route('dashboard') }}">Dashboard</a>
             </div>
             <p style="margin-top: 20px; font-size: 12px;">
-                © {{ date('Y') }} {{ config('app.name') }}. All rights reserved.
+                © {{ date('Y') }} Site to Spend. All rights reserved.
             </p>
         </div>
     </div>

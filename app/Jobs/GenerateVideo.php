@@ -8,6 +8,7 @@ use App\Models\VideoCollateral;
 use App\Services\VideoGeneration\VideoGenerationService;
 use App\Services\GeminiService;
 use App\Prompts\VideoScriptPrompt;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -19,7 +20,7 @@ use App\Prompts\VideoFromScriptPrompt;
 
 class GenerateVideo implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
     public $timeout = 900;

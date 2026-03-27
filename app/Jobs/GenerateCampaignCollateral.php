@@ -10,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -38,19 +39,38 @@ class GenerateCampaignCollateral implements ShouldQueue
                 return;
             }
 
-            // Generate collateral for each strategy
+            // Collect all generation jobs
+            $jobs = [];
             foreach ($strategies as $strategy) {
-                $this->generateCollateralForStrategy($strategy);
+                $jobs = array_merge($jobs, $this->buildJobsForStrategy($strategy));
             }
 
-            // Send email notification to the user
-            $user = \App\Models\User::find($this->userId);
-            if ($user) {
-                Mail::to($user->email)->send(new CollateralGenerated($this->campaign, $user));
-                Log::info("Collateral generation complete email sent to {$user->email} for Campaign ID: {$this->campaign->id}");
+            if (empty($jobs)) {
+                Log::warning("No collateral jobs to dispatch for Campaign ID: {$this->campaign->id}");
+                return;
             }
 
-            Log::info("Collateral generation job completed for Campaign ID: {$this->campaign->id}");
+            $campaignId = $this->campaign->id;
+            $userId = $this->userId;
+
+            // Dispatch as a batch so the email only sends after ALL jobs complete
+            Bus::batch($jobs)
+                ->name("Campaign {$campaignId} Collateral")
+                ->allowFailures()
+                ->then(function () use ($campaignId, $userId) {
+                    $campaign = Campaign::find($campaignId);
+                    $user = \App\Models\User::find($userId);
+                    if ($campaign && $user) {
+                        Mail::to($user->email)->send(new CollateralGenerated($campaign, $user));
+                        Log::info("Collateral generation complete email sent to {$user->email} for Campaign ID: {$campaignId}");
+                    }
+                })
+                ->catch(function ($batch, $e) use ($campaignId) {
+                    Log::error("Some collateral jobs failed for Campaign ID {$campaignId}: " . $e->getMessage());
+                })
+                ->dispatch();
+
+            Log::info("Dispatched " . count($jobs) . " collateral generation jobs as batch for Campaign ID: {$campaignId}");
 
         } catch (\Exception $e) {
             Log::error("Error in GenerateCampaignCollateral job for Campaign ID {$this->campaign->id}: " . $e->getMessage());
@@ -58,30 +78,28 @@ class GenerateCampaignCollateral implements ShouldQueue
         }
     }
 
-    private function generateCollateralForStrategy(Strategy $strategy): void
+    private function buildJobsForStrategy(Strategy $strategy): array
     {
-        Log::info("Generating collateral for Strategy ID: {$strategy->id}, Platform: {$strategy->platform}");
+        Log::info("Building collateral jobs for Strategy ID: {$strategy->id}, Platform: {$strategy->platform}");
 
-        // Generate 3 images per strategy
+        $jobs = [];
+
+        // 3 images per strategy
         for ($i = 0; $i < 3; $i++) {
-            GenerateImage::dispatch($this->campaign, $strategy)
-                ->delay(now()->addSeconds($i * 10)); // Stagger by 10 seconds
-            $imageNum = $i + 1;
-            Log::info("Dispatched image generation {$imageNum}/3 for Strategy ID: {$strategy->id}");
+            $jobs[] = new GenerateImage($this->campaign, $strategy);
         }
 
-        // Generate 2 videos per strategy (only if video strategy contains actionable content)
+        // 2 videos per strategy (only if actionable content)
         $videoStrategy = $strategy->video_strategy;
         if ($this->hasActionableVideoContent($videoStrategy)) {
             for ($i = 0; $i < 2; $i++) {
-                GenerateVideo::dispatch($this->campaign, $strategy, $strategy->platform)
-                    ->delay(now()->addSeconds(30 + ($i * 60))); // Stagger videos by 60 seconds, start after 30s
-                $videoNum = $i + 1;
-                Log::info("Dispatched video generation {$videoNum}/2 for Strategy ID: {$strategy->id}");
+                $jobs[] = new GenerateVideo($this->campaign, $strategy, $strategy->platform);
             }
         } else {
             Log::info("Skipping video generation for Strategy ID: {$strategy->id} - no actionable video content");
         }
+
+        return $jobs;
     }
 
     /**

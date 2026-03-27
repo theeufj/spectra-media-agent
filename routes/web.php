@@ -506,6 +506,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('support-tickets', [App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('admin.support-tickets.index');
     Route::get('support-tickets/{supportTicket}', [App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('admin.support-tickets.show');
     Route::put('support-tickets/{supportTicket}', [App\Http\Controllers\Admin\SupportTicketController::class, 'update'])->name('admin.support-tickets.update');
+
+    // Plans Management
+    Route::get('plans', [App\Http\Controllers\Admin\PlanController::class, 'index'])->name('admin.plans.index');
+    Route::post('plans', [App\Http\Controllers\Admin\PlanController::class, 'store'])->name('admin.plans.store');
+    Route::put('plans/{plan}', [App\Http\Controllers\Admin\PlanController::class, 'update'])->name('admin.plans.update');
+    Route::delete('plans/{plan}', [App\Http\Controllers\Admin\PlanController::class, 'destroy'])->name('admin.plans.destroy');
 });
 
 /*

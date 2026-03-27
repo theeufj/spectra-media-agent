@@ -2,7 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
 import SubscriptionTierSelector from '@/Components/SubscriptionTierSelector';
 
-export default function Pricing({ auth }) {
+export default function Pricing({ auth, plans }) {
     return (
         <AuthenticatedLayout
             user={auth.user}
@@ -12,7 +12,7 @@ export default function Pricing({ auth }) {
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <SubscriptionTierSelector />
+                    <SubscriptionTierSelector plans={plans} />
                 </div>
             </div>
         </AuthenticatedLayout>

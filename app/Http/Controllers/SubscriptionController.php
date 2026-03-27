@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -19,9 +20,11 @@ class SubscriptionController extends Controller
      */
     public function pricing(Request $request)
     {
-        // Inertia::render is a helper that renders a React component from the `resources/js/Pages` directory.
-        // It passes data from the backend (PHP) to the frontend (React) as props.
-        return Inertia::render('Subscription/Pricing');
+        $plans = Plan::active()->ordered()->get();
+
+        return Inertia::render('Subscription/Pricing', [
+            'plans' => $plans,
+        ]);
     }
 
     /**
@@ -36,8 +39,19 @@ class SubscriptionController extends Controller
         // Get the currently authenticated user.
         $user = Auth::user();
 
-        // Get the price ID from the request body. This corresponds to a Product Price in your Stripe dashboard.
-        $priceId = $request->input('price_id');
+        // Look up the plan from the database to get the Stripe price ID
+        $plan = Plan::active()
+            ->where('stripe_price_id', $request->input('price_id'))
+            ->first();
+
+        if (!$plan || !$plan->stripe_price_id) {
+            return redirect()->route('subscription.pricing')->with('flash', [
+                'type' => 'error',
+                'message' => 'Invalid plan selected. Please choose a valid plan.',
+            ]);
+        }
+
+        $priceId = $plan->stripe_price_id;
         $adSpendPriceId = config('services.stripe.ad_spend_price_id');
 
         Log::info("Initiating checkout for User ID: {$user->id} with Price ID: {$priceId} and Ad Spend Price ID: {$adSpendPriceId}");

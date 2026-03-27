@@ -10,6 +10,7 @@ use App\Prompts\ImagePromptSplitterPrompt;
 use App\Services\AdminMonitorService;
 use App\Services\GeminiService;
 use App\Services\StorageHelper;
+use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,7 +22,7 @@ use Intervention\Image\Laravel\Facades\Image;
 
 class GenerateImage implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * The number of times the job may be attempted.

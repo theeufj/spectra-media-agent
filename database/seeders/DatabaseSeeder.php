@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             EnabledPlatformSeeder::class,
             SettingSeeder::class,
+            PlanSeeder::class,
         ]);
     }
 }
