@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Services\FacebookAds\BusinessManagerService;
 use App\Services\GoogleAds\AccessibleAccountResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -84,7 +85,8 @@ class CustomerController extends Controller
         }
 
         return Inertia::render('Customers/Edit', [
-            'customer' => $customer,
+            'customer'      => $customer,
+            'bm_configured' => app(BusinessManagerService::class)->isConfigured(),
         ]);
     }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import InputLabel from '@/Components/InputLabel';
@@ -6,6 +6,7 @@ import TextInput from '@/Components/TextInput';
 import InputError from '@/Components/InputError';
 import PrimaryButton from '@/Components/PrimaryButton';
 import SecondaryButton from '@/Components/SecondaryButton';
+import FacebookAdAccountModal from '@/Components/FacebookAdAccountModal';
 
 // Google Ads supported countries (ISO 3166-1 alpha-2)
 const COUNTRIES = [
@@ -91,8 +92,9 @@ const TIMEZONES = [
     { value: 'Africa/Johannesburg', label: 'Johannesburg' },
 ];
 
-export default function Edit({ auth, customer: initialCustomer }) {
+export default function Edit({ auth, customer: initialCustomer, bm_configured }) {
     const { flash } = usePage().props;
+    const [showFacebookModal, setShowFacebookModal] = useState(false);
     const { data, setData, put, processing, errors } = useForm({
         name: initialCustomer.name || '',
         business_type: initialCustomer.business_type || '',
@@ -291,8 +293,8 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                     </div>
                                 </div>
 
-                                {/* Account IDs (Read-only) */}
-                                {(initialCustomer.google_ads_customer_id || initialCustomer.facebook_ads_account_id) && (
+                                {/* Account IDs */}
+                                {(initialCustomer.google_ads_customer_id || initialCustomer.facebook_ads_account_id || initialCustomer.gtm_container_id || auth.user.isAdmin) && (
                                     <div className="pt-6 border-t border-gray-200">
                                         <h3 className="text-lg font-medium text-gray-900 mb-4">Connected Accounts</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -305,14 +307,37 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                                 </div>
                                             )}
 
-                                            {initialCustomer.facebook_ads_account_id && (
-                                                <div>
-                                                    <InputLabel value="Facebook Ads Account ID" />
-                                                    <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono">
-                                                        {initialCustomer.facebook_ads_account_id}
-                                                    </div>
+                                            {/* Facebook Ad Account — admins see the link button; others see ID read-only */}
+                                            <div>
+                                                <div className="flex items-center justify-between">
+                                                    <InputLabel value="Facebook Ads Account" />
+                                                    {auth.user.isAdmin && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setShowFacebookModal(true)}
+                                                            className="text-xs text-blue-600 hover:text-blue-800 font-medium transition"
+                                                        >
+                                                            {initialCustomer.facebook_ads_account_id ? 'Manage ↗' : '+ Link Account'}
+                                                        </button>
+                                                    )}
                                                 </div>
-                                            )}
+                                                {initialCustomer.facebook_ads_account_id ? (
+                                                    <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono flex items-center gap-2">
+                                                        <span>act_{initialCustomer.facebook_ads_account_id}</span>
+                                                        {initialCustomer.facebook_bm_owned && (
+                                                            <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-sans font-medium">BM Managed</span>
+                                                        )}
+                                                    </div>
+                                                ) : auth.user.isAdmin ? (
+                                                    <div className="mt-1 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                                                        Not linked — Facebook deployment is blocked until an account is assigned.
+                                                    </div>
+                                                ) : (
+                                                    <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-400 italic">
+                                                        Not connected
+                                                    </div>
+                                                )}
+                                            </div>
 
                                             {initialCustomer.gtm_container_id && (
                                                 <div>
@@ -340,6 +365,15 @@ export default function Edit({ auth, customer: initialCustomer }) {
                     </div>
                 </div>
             </div>
+
+            {auth.user.isAdmin && (
+                <FacebookAdAccountModal
+                    show={showFacebookModal}
+                    onClose={() => setShowFacebookModal(false)}
+                    customer={initialCustomer}
+                    bmConfigured={bm_configured}
+                />
+            )}
         </AuthenticatedLayout>
     );
 }

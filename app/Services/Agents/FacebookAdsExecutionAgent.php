@@ -99,17 +99,15 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     protected function validatePrerequisites(ExecutionContext $context): ValidationResult
     {
         $result = new ValidationResult(true);
-        
-        // Check Facebook Ads account connection
-        if (!$this->customer->facebook_ads_account_id) {
-            $result->addError('facebook_ads_not_connected', 'Facebook Ads account not connected');
-            return $result;
-        }
-        
-        // For BM-owned accounts (Path A) the platform System User token is used —
-        // no per-client OAuth token is required.
-        if (!$this->customer->facebook_bm_owned && !$this->customer->facebook_ads_access_token) {
-            $result->addError('facebook_ads_not_authorized', 'Facebook Ads account not authorized');
+
+        // Facebook deployment requires an account assigned by a platform admin
+        // via the Business Manager (Path A). Accounts must be BM-managed —
+        // deployment is blocked until an admin links one from the customer edit page.
+        if (!$this->customer->facebook_bm_owned || !$this->customer->facebook_ads_account_id) {
+            $result->addError(
+                'facebook_bm_not_configured',
+                'Facebook ad account not set up. A platform admin must link a Business Manager-managed ad account before campaigns can be deployed.'
+            );
             return $result;
         }
         
