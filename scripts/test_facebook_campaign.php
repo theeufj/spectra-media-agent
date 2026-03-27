@@ -76,8 +76,8 @@ $response = \Illuminate\Support\Facades\Http::post("{$baseUrl}/act_{$accountId}/
     'status'                            => 'PAUSED',
     'special_ad_categories'             => [],
     'daily_budget'                      => 500,  // $5.00 in cents
-    'bid_strategy'                      => 'LOWEST_COST_WITHOUT_CAP',
-    'is_adset_budget_sharing_enabled'   => true,
+    // CBO mode: budget set at campaign level, is_adset_budget_sharing_enabled must be false
+    'is_adset_budget_sharing_enabled'   => false,
     'access_token'                      => $token,
 ]);
 
