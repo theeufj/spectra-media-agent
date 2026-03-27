@@ -50,10 +50,22 @@ abstract class BaseGoogleAdsService
             $oAuth2CredentialBuilder = (new OAuth2TokenBuilder())
                 ->fromFile($configPath);
 
-            // For MCC operations (creating sub-accounts), use MCC credentials from ini file
-            // For customer operations, use customer's refresh token
-            if (!$this->useMccCredentials && $this->customer->google_ads_refresh_token) {
+            // Determine refresh token: use customer's own token if available,
+            // otherwise fall back to the platform MCC token for managed accounts
+            $refreshToken = null;
+
+            if ($this->useMccCredentials) {
+                // Explicitly requested MCC credentials
+                $refreshToken = config('googleads.mcc_refresh_token');
+            } elseif ($this->customer->google_ads_refresh_token) {
+                // Customer has their own OAuth token
                 $refreshToken = $this->decryptRefreshToken($this->customer->google_ads_refresh_token);
+            } else {
+                // No customer token — use platform MCC to manage this customer's sub-account
+                $refreshToken = config('googleads.mcc_refresh_token');
+            }
+
+            if ($refreshToken) {
                 $oAuth2CredentialBuilder->withRefreshToken($refreshToken);
             }
 
@@ -63,10 +75,10 @@ abstract class BaseGoogleAdsService
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2Credential);
 
-            // Set login-customer-id based on account structure:
-            // 1. If using MCC credentials, use the configured MCC ID
-            // 2. If customer has a manager account, use it to access the Standard account
-            // 3. Otherwise, no login-customer-id needed
+            // Set login-customer-id for MCC access:
+            // 1. If using MCC credentials explicitly, use configured MCC ID
+            // 2. If customer has a manager account stored, use it
+            // 3. If customer has no own token, use the platform MCC ID
             if ($this->useMccCredentials) {
                 $loginCustomerId = config('googleads.mcc_customer_id');
                 
@@ -76,12 +88,14 @@ abstract class BaseGoogleAdsService
                 }
                 $builder->withLoginCustomerId($loginCustomerId);
             } elseif ($this->customer->google_ads_manager_customer_id) {
-                // Customer has an MCC account - use it as login customer to access the Standard account
                 Log::info("Setting login-customer-id to MCC account", [
                     'mcc_account_id' => $this->customer->google_ads_manager_customer_id,
                     'standard_account_id' => $this->customer->google_ads_customer_id,
                 ]);
                 $builder->withLoginCustomerId($this->customer->google_ads_manager_customer_id);
+            } elseif (!$this->customer->google_ads_refresh_token && config('googleads.mcc_customer_id')) {
+                // Customer managed via platform MCC
+                $builder->withLoginCustomerId(config('googleads.mcc_customer_id'));
             }
 
             return $builder->build();

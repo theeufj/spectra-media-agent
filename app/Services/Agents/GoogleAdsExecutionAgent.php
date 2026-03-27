@@ -111,15 +111,19 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     {
         $result = new ValidationResult(true);
         
-        // Check if customer has Google Ads refresh token (OAuth authorization)
-        if (!$this->customer->google_ads_refresh_token) {
-            $result->addError('google_ads_not_authorized', 'Google Ads account not authorized - please connect your Google Ads account via OAuth');
-            return $result;
+        // Ensure the customer has a Google Ads sub-account.
+        // If not, auto-provision one under the platform MCC.
+        if (!$this->customer->google_ads_customer_id) {
+            $provisioned = $this->provisionGoogleAdsAccount();
+            if (!$provisioned) {
+                $result->addError('google_ads_no_account', 'Failed to provision Google Ads account - check MCC configuration');
+                return $result;
+            }
         }
         
-        // Customer must have connected their Google Ads account
-        if (!$this->customer->google_ads_customer_id) {
-            $result->addError('google_ads_no_account', 'No Google Ads account found - please connect your Google Ads account via Settings');
+        // Verify we can build a Google Ads client (either customer token or platform MCC)
+        if (!$this->customer->google_ads_refresh_token && !config('googleads.mcc_refresh_token')) {
+            $result->addError('google_ads_not_authorized', 'No Google Ads credentials available - configure platform MCC or connect customer account');
             return $result;
         }
         
@@ -150,6 +154,58 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         }
         
         return $result;
+    }
+    
+    /**
+     * Auto-provision a Google Ads sub-account under the platform MCC.
+     */
+    protected function provisionGoogleAdsAccount(): bool
+    {
+        $mccCustomerId = config('googleads.mcc_customer_id');
+        $mccRefreshToken = config('googleads.mcc_refresh_token');
+        
+        if (!$mccCustomerId || !$mccRefreshToken) {
+            Log::error('Cannot provision Google Ads account: MCC credentials not configured');
+            return false;
+        }
+        
+        try {
+            Log::info("Provisioning Google Ads sub-account under platform MCC", [
+                'customer_id' => $this->customer->id,
+                'customer_name' => $this->customer->name,
+                'mcc_id' => $mccCustomerId,
+            ]);
+            
+            $mccManager = new \App\Services\GoogleAds\MCCAccountManager($this->customer);
+            $result = $mccManager->createStandardAccountUnderMCC(
+                $mccCustomerId,
+                $this->customer->name
+            );
+            
+            if (!$result) {
+                Log::error('Failed to create sub-account under MCC', [
+                    'customer_id' => $this->customer->id,
+                ]);
+                return false;
+            }
+            
+            // Refresh the customer model to pick up the new IDs
+            $this->customer->refresh();
+            
+            Log::info("Successfully provisioned Google Ads sub-account", [
+                'customer_id' => $this->customer->id,
+                'google_ads_customer_id' => $this->customer->google_ads_customer_id,
+                'mcc_id' => $this->customer->google_ads_manager_customer_id,
+            ]);
+            
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Error provisioning Google Ads sub-account: " . $e->getMessage(), [
+                'customer_id' => $this->customer->id,
+                'exception' => $e,
+            ]);
+            return false;
+        }
     }
     
     /**
