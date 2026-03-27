@@ -60,6 +60,8 @@ class HandleInertiaRequests extends Middleware
             'flash' => [
                 'type' => $request->session()->get('flash.type'),
                 'message' => $request->session()->get('flash.message'),
+                'success' => fn () => $request->session()->get('success'),
+                'error' => fn () => $request->session()->get('error'),
             ],
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
             'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),

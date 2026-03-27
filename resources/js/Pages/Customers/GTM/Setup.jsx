@@ -40,11 +40,15 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
     const [successMessage, setSuccessMessage] = useState(flash?.success || null);
     const [errorMessage, setErrorMessage] = useState(flash?.error || null);
 
+    // Sync state from props when Inertia re-renders with fresh data after redirect
+    useEffect(() => {
+        setCustomer(initialCustomer);
+        setSnippet(initialSnippet);
+    }, [initialCustomer, initialSnippet]);
+
     useEffect(() => {
         if (flash?.success) {
             setSuccessMessage(flash.success);
-            if (flash?.snippet) setSnippet(flash.snippet);
-            if (flash?.customer) setCustomer(flash.customer);
             setTimeout(() => setSuccessMessage(null), 6000);
         }
         if (flash?.error) setErrorMessage(flash.error);
