@@ -7,7 +7,7 @@
     <p>Hi {{ $userName }},</p>
     <p>Great news! We've finished crawling your sitemap and your knowledge base is ready to use.</p>
     
-    <div style="background-color: #f0f9ff; border-left: 4px solid #0369a1; padding: 15px; margin: 20px 0;">
+    <div style="background-color: #fff5f0; border-left: 4px solid #ff4d00; padding: 15px; margin: 20px 0;">
         <p style="margin: 0;"><strong>Sitemap URL:</strong> {{ $sitemapUrl }}</p>
         <p style="margin: 10px 0 0 0;"><strong>Pages Crawled:</strong> {{ $totalPages }}</p>
     </div>
@@ -20,7 +20,7 @@
     </ul>
     
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ url('/knowledge-base') }}" style="background-color: #0369a1; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Your Knowledge Base</a>
+        <a href="{{ url('/knowledge-base') }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Your Knowledge Base</a>
     </p>
     
     <p>Ready to create your first campaign with this knowledge? Head to your dashboard to get started.</p>

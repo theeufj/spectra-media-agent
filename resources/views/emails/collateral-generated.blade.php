@@ -22,7 +22,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #cc3d00 0%, #ff4d00 50%, #cc3d00 100%);
             color: #ffffff;
             padding: 30px;
             text-align: center;
@@ -46,8 +46,8 @@
             font-size: 16px;
         }
         .campaign-details {
-            background-color: #f7fafc;
-            border-left: 4px solid #667eea;
+            background-color: #fff5f0;
+            border-left: 4px solid #ff4d00;
             padding: 20px;
             margin: 30px 0;
             border-radius: 4px;
@@ -71,7 +71,7 @@
         .stat-number {
             font-size: 24px;
             font-weight: 700;
-            color: #667eea;
+            color: #ff4d00;
         }
         .stat-label {
             font-size: 12px;
@@ -81,7 +81,7 @@
         }
         .cta-button {
             display: inline-block;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%);
             color: #ffffff;
             padding: 14px 32px;
             text-decoration: none;
@@ -105,12 +105,12 @@
             margin-top: 15px;
         }
         .footer-links a {
-            color: #667eea;
+            color: #ff4d00;
             text-decoration: none;
             margin: 0 10px;
         }
         .highlight {
-            color: #667eea;
+            color: #ff4d00;
             font-weight: 600;
         }
     </style>

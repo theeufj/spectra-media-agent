@@ -12,6 +12,6 @@
     </ul>
     <p>You can view and manage all your invoices and billing details in your customer portal.</p>
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ route('subscription.portal') }}" style="background-color: #4a5568; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">Go to Billing Portal</a>
+        <a href="{{ route('subscription.portal') }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Go to Billing Portal</a>
     </p>
 @endsection

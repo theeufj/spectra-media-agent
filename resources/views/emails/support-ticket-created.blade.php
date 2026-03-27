@@ -46,6 +46,6 @@
     </div>
 
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ url('/admin/support-tickets/' . $ticket->id) }}" style="background-color: #4a5568; color: #ffffff; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Ticket in Admin</a>
+        <a href="{{ url('/admin/support-tickets/' . $ticket->id) }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Ticket in Admin</a>
     </p>
 @endsection

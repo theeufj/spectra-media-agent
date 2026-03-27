@@ -24,14 +24,20 @@
             overflow: hidden;
         }
         .header {
-            padding: 20px 30px;
-            background-color: #4a5568;
+            padding: 24px 30px;
+            background: linear-gradient(135deg, #cc3d00 0%, #ff4d00 50%, #cc3d00 100%);
             color: #ffffff;
             text-align: center;
         }
         .header h1 {
             margin: 0;
             font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+        .accent-bar {
+            height: 4px;
+            background: linear-gradient(90deg, #ff4d00, #ffc300, #ff4d00);
         }
         .content {
             padding: 30px;
@@ -43,12 +49,23 @@
         .content p {
             margin-bottom: 1.2em;
         }
+        .btn-primary {
+            display: inline-block;
+            background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%);
+            color: #ffffff;
+            padding: 14px 28px;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 15px;
+        }
         .footer {
             padding: 20px 30px;
             text-align: center;
             font-size: 12px;
             color: #a0aec0;
             background-color: #f7fafc;
+            border-top: 1px solid #e8e5ef;
         }
     </style>
 </head>
@@ -57,6 +74,7 @@
         <div class="header">
             <h1>Site to Spend</h1>
         </div>
+        <div class="accent-bar"></div>
         <div class="content">
             @yield('content')
         </div>
