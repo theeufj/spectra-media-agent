@@ -15,7 +15,7 @@ class CreateCustomerClientLink extends BaseGoogleAdsService
     public function __construct(Customer $customer)
     {
         // Use MCC credentials for linking sub-accounts
-        parent::__construct($customer, true);
+        parent::__construct($customer);
     }
 
     public function __invoke(string $managerAccountId, string $clientAccountId): ?array

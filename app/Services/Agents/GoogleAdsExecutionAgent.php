@@ -121,9 +121,9 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             }
         }
         
-        // Verify we can build a Google Ads client (either customer token or platform MCC)
-        if (!$this->customer->google_ads_refresh_token && !config('googleads.mcc_refresh_token')) {
-            $result->addError('google_ads_not_authorized', 'No Google Ads credentials available - configure platform MCC or connect customer account');
+        // Verify platform MCC credentials are configured
+        if (!config('googleads.mcc_refresh_token') || !config('googleads.mcc_customer_id')) {
+            $result->addError('google_ads_not_authorized', 'Platform MCC credentials not configured');
             return $result;
         }
         

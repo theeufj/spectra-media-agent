@@ -13,7 +13,7 @@ class CreateManagedAccount extends BaseGoogleAdsService
     public function __construct(CustomerModel $customer)
     {
         // Use MCC credentials for creating sub-accounts
-        parent::__construct($customer, true);
+        parent::__construct($customer);
     }
 
     /**

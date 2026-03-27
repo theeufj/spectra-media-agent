@@ -13,9 +13,9 @@ use App\Models\Customer;
 
 class CreateDisplayAdGroup extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer, bool $useMccCredentials = false)
+    public function __construct(Customer $customer)
     {
-        parent::__construct($customer, $useMccCredentials);
+        parent::__construct($customer);
     }
 
     /**

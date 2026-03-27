@@ -7,14 +7,13 @@ use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Google\Ads\GoogleAds\V22\Resources\Customer;
 use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
 use Illuminate\Support\Facades\Log;
+use App\Services\GoogleAds\BillingSetupService;
 
 class MCCAccountManager extends BaseGoogleAdsService
 {
     public function __construct(CustomerModel $customer)
     {
-        // Initialize with regular customer credentials (not MCC-specific)
-        // The customer's refresh token has access to their MCC via Google's OAuth
-        parent::__construct($customer, false);
+        parent::__construct($customer);
     }
 
     /**
@@ -149,6 +148,18 @@ class MCCAccountManager extends BaseGoogleAdsService
                 'google_ads_customer_id' => $newAccountId,
                 'google_ads_customer_is_manager' => false,
             ]);
+
+            // Attempt to enable billing on the new sub-account
+            try {
+                $billingService = new BillingSetupService($this->customer);
+                $billingService->setupBillingForSubAccount($newAccountId);
+            } catch (\Exception $e) {
+                // Non-fatal — campaigns can still be created, billing can be set up later
+                Log::warning("Could not set up billing for new sub-account", [
+                    'sub_account_id' => $newAccountId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
 
             Log::info("Successfully created and linked Standard account under MCC", [
                 'mcc_account_id' => $mccAccountId,

@@ -11,9 +11,9 @@ use App\Models\Customer;
 
 class CreateCampaignBudget extends BaseGoogleAdsService
 {
-    public function __construct(Customer $customer, bool $useMccCredentials = false)
+    public function __construct(Customer $customer)
     {
-        parent::__construct($customer, $useMccCredentials);
+        parent::__construct($customer);
     }
 
     public function __invoke(string $customerId, string $budgetName, int $dailyBudgetMicros = 5000000, bool $explicitlyShared = true): ?string

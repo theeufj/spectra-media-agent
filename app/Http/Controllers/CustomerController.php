@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Services\FacebookAds\BusinessManagerService;
-use App\Services\GoogleAds\AccessibleAccountResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +15,7 @@ class CustomerController extends Controller
         return Inertia::render('Customers/Create');
     }
 
-    public function store(Request $request, AccessibleAccountResolver $resolver)
+    public function store(Request $request)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -34,19 +32,6 @@ class CustomerController extends Controller
 
         $user = $request->user();
         $user->customers()->attach($customer->id, ['role' => 'owner']);
-
-        // Apply Google Ads refresh token from OAuth session
-        $refreshToken = session('google_ads_refresh_token');
-        if ($refreshToken) {
-            $customer->update(['google_ads_refresh_token' => $refreshToken]);
-            session()->forget('google_ads_refresh_token');
-
-            $accounts = $resolver->forCustomer($customer);
-
-            if (count($accounts) === 1) {
-                $customer->update(['google_ads_customer_id' => $accounts[0]['id']]);
-            }
-        }
 
         session(['active_customer_id' => $customer->id]);
 

@@ -23,8 +23,7 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
         $this->ensureClient();
 
         // 1. Create Budget
-        // Note: CreateCampaignBudget inherits BaseGoogleAdsService, so we pass useMccCredentials
-        $budgetService = new CreateCampaignBudget($this->customer, $this->useMccCredentials);
+        $budgetService = new CreateCampaignBudget($this->customer);
         
         // Ensure budget is a multiple of 10000 (1 cent) to avoid NON_MULTIPLE_OF_MINIMUM_CURRENCY_UNIT error
         $dailyBudgetMicros = (int)($campaignData['budget'] * 1000000);
