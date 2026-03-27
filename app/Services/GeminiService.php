@@ -330,7 +330,7 @@ class GeminiService
      * @param int $candidateCount The number of images to generate.
      * @return array|null An array of image data arrays, or null on failure.
      */
-    public function generateImage(string $prompt, string $model = 'gemini-2.0-flash-exp', string $imageSize = '1K'): ?array
+    public function generateImage(string $prompt, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K'): ?array
     {
         $payload = [
             'contents' => [
@@ -358,7 +358,7 @@ class GeminiService
      * @param string $imageSize The desired image size.
      * @return array|null A single generated image data array, or null on failure.
      */
-    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-2.0-flash-exp', string $imageSize = '1K'): ?array
+    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K'): ?array
     {
         $parts = [['text' => $prompt]];
         foreach ($contextImages as $image) {
