@@ -43,7 +43,7 @@ if (!$accountId) {
     exit(1);
 }
 
-$pageId     = $argPageId     ?? $customer?->facebook_page_id;
+$pageId     = $argPageId ?? $customer?->facebook_page_id ?? config('services.facebook.page_id');
 $landingUrl = $argLandingUrl ?? $customer?->website ?? 'https://sitetospend.com.au';
 
 $bm = new BusinessManagerService();
