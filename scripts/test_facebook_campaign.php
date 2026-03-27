@@ -4,10 +4,12 @@
  * Test Facebook end-to-end: campaign → ad set → image upload → creative → ad
  *
  * Usage (from project root):
- *   php scripts/test_facebook_campaign.php [ad_account_id] [page_id] [landing_url]
+ *   php scripts/test_facebook_campaign.php [ad_account_id] [page_id] [landing_url] [--keep]
+ *
+ * --keep  Skip deletion so you can inspect the objects in Ads Manager.
+ *         Without it, all test objects are deleted after the run.
  *
  * Falls back to first BM-owned customer if no args given.
- * All objects created are PAUSED and deleted at the end.
  */
 
 require __DIR__ . '/../vendor/autoload.php';
@@ -20,9 +22,11 @@ use App\Models\Customer;
 use App\Services\FacebookAds\BusinessManagerService;
 
 // ── resolve target account ────────────────────────────────────────────────────
-$argAccountId = $argv[1] ?? null;
-$argPageId    = $argv[2] ?? null;
-$argLandingUrl = $argv[3] ?? null;
+$keepObjects   = in_array('--keep', $argv, true);
+$cleanArgs     = array_values(array_filter($argv, fn($a) => $a !== '--keep'));
+$argAccountId  = $cleanArgs[1] ?? null;
+$argPageId     = $cleanArgs[2] ?? null;
+$argLandingUrl = $cleanArgs[3] ?? null;
 
 if ($argAccountId) {
     $accountId = ltrim($argAccountId, 'act_');
@@ -55,7 +59,8 @@ $base    = "https://graph.facebook.com/{$version}";
 echo "=== Facebook End-to-End Ad Creation Test ===\n";
 echo "Ad Account : act_{$accountId}\n";
 echo "Page ID    : " . ($pageId ?: '(none — creative step will be skipped)') . "\n";
-echo "Landing URL: {$landingUrl}\n\n";
+echo "Landing URL: {$landingUrl}\n";
+echo "Cleanup    : " . ($keepObjects ? 'DISABLED (--keep)' : 'enabled') . "\n\n";
 
 $created = ['campaign' => null, 'adset' => null, 'creative' => null, 'ad' => null, 'image_hash' => null];
 
@@ -201,13 +206,20 @@ if ($created['adset'] && $created['creative']) {
 
 // ── Cleanup ───────────────────────────────────────────────────────────────────
 cleanup:
-echo "Cleanup: deleting test objects...\n";
-
-foreach (['ad' => $created['ad'], 'creative' => $created['creative'], 'adset' => $created['adset'], 'campaign' => $created['campaign']] as $type => $id) {
-    if (!$id) continue;
-    $del = \Illuminate\Support\Facades\Http::delete("{$base}/{$id}", ['access_token' => $token]);
-    $ok  = $del->successful() && ($del->json()['success'] ?? false);
-    echo "  {$type} {$id}: " . ($ok ? "deleted" : "could not delete — remove manually") . "\n";
+if ($keepObjects) {
+    echo "Cleanup: SKIPPED (--keep flag set) — objects left in Ads Manager:\n";
+    foreach (['campaign' => $created['campaign'], 'adset' => $created['adset'], 'creative' => $created['creative'], 'ad' => $created['ad']] as $type => $id) {
+        if ($id) echo "  {$type}: {$id}\n";
+    }
+    echo "  ⚠️  Remember to delete these manually from Ads Manager when done.\n";
+} else {
+    echo "Cleanup: deleting test objects...\n";
+    foreach (['ad' => $created['ad'], 'creative' => $created['creative'], 'adset' => $created['adset'], 'campaign' => $created['campaign']] as $type => $id) {
+        if (!$id) continue;
+        $del = \Illuminate\Support\Facades\Http::delete("{$base}/{$id}", ['access_token' => $token]);
+        $ok  = $del->successful() && ($del->json()['success'] ?? false);
+        echo "  {$type} {$id}: " . ($ok ? "deleted" : "could not delete — remove manually") . "\n";
+    }
 }
 
 echo "\n";
