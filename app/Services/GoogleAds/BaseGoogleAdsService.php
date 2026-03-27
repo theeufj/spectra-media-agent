@@ -63,7 +63,10 @@ abstract class BaseGoogleAdsService
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2Credential);
 
-            // Use MCC ID as login-customer-id ONLY if we are using MCC credentials
+            // Set login-customer-id based on account structure:
+            // 1. If using MCC credentials, use the configured MCC ID
+            // 2. If customer has a manager account, use it to access the Standard account
+            // 3. Otherwise, no login-customer-id needed
             if ($this->useMccCredentials) {
                 $loginCustomerId = config('googleads.mcc_customer_id');
                 
@@ -72,6 +75,13 @@ abstract class BaseGoogleAdsService
                     return null;
                 }
                 $builder->withLoginCustomerId($loginCustomerId);
+            } elseif ($this->customer->google_ads_manager_customer_id) {
+                // Customer has an MCC account - use it as login customer to access the Standard account
+                Log::info("Setting login-customer-id to MCC account", [
+                    'mcc_account_id' => $this->customer->google_ads_manager_customer_id,
+                    'standard_account_id' => $this->customer->google_ads_customer_id,
+                ]);
+                $builder->withLoginCustomerId($this->customer->google_ads_manager_customer_id);
             }
 
             return $builder->build();
@@ -80,7 +90,7 @@ abstract class BaseGoogleAdsService
                 'customer_id' => $this->customer->id,
                 'has_refresh_token' => !empty($this->customer->google_ads_refresh_token),
                 'use_mcc_credentials' => $this->useMccCredentials,
-                'mcc_customer_id' => $loginCustomerId ?? 'not_configured',
+                'mcc_customer_id' => $this->customer->google_ads_manager_customer_id ?? 'not_configured',
                 'error_type' => get_class($e),
                 'error_message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
