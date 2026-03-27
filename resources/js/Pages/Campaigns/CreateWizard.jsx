@@ -308,7 +308,12 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
     const submit = (e) => {
         e.preventDefault();
         localStorage.removeItem('campaign_draft');
-        post(route('campaigns.store'));
+        post(route('campaigns.store'), {
+            onError: () => {
+                // Scroll to top so user can see error messages
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            },
+        });
     };
     
     // Calculate default dates
@@ -747,6 +752,17 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                             </ReviewSection>
                         </div>
                         
+                        {Object.keys(errors).length > 0 && (
+                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                                <h4 className="text-sm font-semibold text-red-800 mb-2">Please fix the following errors:</h4>
+                                <ul className="list-disc list-inside text-sm text-red-700 space-y-1">
+                                    {Object.entries(errors).map(([field, message]) => (
+                                        <li key={field}><strong>{field.replace(/_/g, ' ')}:</strong> {message}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+
                         <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
                             <div className="flex">
                                 <svg className="w-5 h-5 text-indigo-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
