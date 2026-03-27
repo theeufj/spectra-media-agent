@@ -94,8 +94,7 @@ class ProfileController extends Controller
 
     public function updateGoogleAdsAccount(
         Request $request,
-        AccessibleAccountResolver $resolver,
-        \App\Services\GoogleAds\CreateManagedAccount $createManagedAccount
+        AccessibleAccountResolver $resolver
     ): RedirectResponse {
         $validated = $request->validate([
             'google_ads_customer_id' => ['required', 'string'],
@@ -113,7 +112,7 @@ class ProfileController extends Controller
 
         // Use MCCAccountManager to handle account selection
         // It will detect if it's an MCC and create a Standard account if needed
-        $mccManager = new \App\Services\GoogleAds\MCCAccountManager($customer, $createManagedAccount);
+        $mccManager = new \App\Services\GoogleAds\MCCAccountManager($customer);
         $result = $mccManager->handleAccountSelection($validated['google_ads_customer_id']);
 
         if (!$result) {

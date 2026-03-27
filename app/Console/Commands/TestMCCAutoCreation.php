@@ -30,10 +30,7 @@ class TestMCCAutoCreation extends Command
 
         try {
             // Create the MCCAccountManager
-            $mccManager = new MCCAccountManager(
-                $customer,
-                app(CreateManagedAccount::class)
-            );
+            $mccManager = new MCCAccountManager($customer);
 
             $this->info("Step 1: Getting account info for {$accountId}...");
             $accountInfo = $mccManager->getAccountInfo($accountId);

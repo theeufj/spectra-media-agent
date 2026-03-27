@@ -4,18 +4,17 @@ namespace App\Services\GoogleAds;
 
 use App\Models\Customer as CustomerModel;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Ads\GoogleAds\V22\Resources\Customer;
+use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
 use Illuminate\Support\Facades\Log;
 
 class MCCAccountManager extends BaseGoogleAdsService
 {
-    private CreateManagedAccount $createManagedAccount;
-
-    public function __construct(
-        CustomerModel $customer,
-        CreateManagedAccount $createManagedAccount
-    ) {
-        parent::__construct($customer);
-        $this->createManagedAccount = $createManagedAccount;
+    public function __construct(CustomerModel $customer)
+    {
+        // Initialize with regular customer credentials (not MCC-specific)
+        // The customer's refresh token has access to their MCC via Google's OAuth
+        parent::__construct($customer, false);
     }
 
     /**
@@ -78,7 +77,7 @@ class MCCAccountManager extends BaseGoogleAdsService
      */
     public function createStandardAccountUnderMCC(
         string $mccAccountId,
-        string $accountName = null
+        ?string $accountName = null
     ): ?array {
         try {
             // First, verify it's actually an MCC account
@@ -102,22 +101,36 @@ class MCCAccountManager extends BaseGoogleAdsService
             Log::info("Creating Standard account under MCC", [
                 'mcc_account_id' => $mccAccountId,
                 'account_name' => $displayName,
+                'customer_id' => $this->customer->id,
             ]);
 
-            // Use the CreateManagedAccount service to create the sub-account
-            $resourceName = ($this->createManagedAccount)(
-                $mccAccountId,
-                $displayName,
-                $accountInfo['currency_code'] ?? 'USD',
-                $accountInfo['time_zone'] ?? 'America/New_York'
-            );
+            // Create the new customer object
+            $newCustomer = new Customer([
+                'descriptive_name' => $displayName,
+                'currency_code' => $accountInfo['currency_code'] ?? 'USD',
+                'time_zone' => $accountInfo['time_zone'] ?? 'America/New_York',
+            ]);
 
-            if (!$resourceName) {
-                Log::error("Failed to create managed account under MCC", [
+            // Create the request with the MCC account ID
+            $request = new CreateCustomerClientRequest([
+                'customer_id' => $mccAccountId,
+                'customer_client' => $newCustomer,
+            ]);
+
+            // Call the API to create the sub-account
+            $this->ensureClient();
+            $customerServiceClient = $this->client->getCustomerServiceClient();
+            $response = $customerServiceClient->createCustomerClient($request);
+
+            if (!$response->getResourceName()) {
+                Log::error("Failed to create managed account: No resource name returned", [
                     'mcc_account_id' => $mccAccountId,
+                    'account_name' => $displayName,
                 ]);
                 return null;
             }
+
+            $resourceName = $response->getResourceName();
 
             // Extract customer ID from resource name
             preg_match('/customers\/(\d+)/', $resourceName, $matches);
@@ -153,6 +166,7 @@ class MCCAccountManager extends BaseGoogleAdsService
             Log::error("Error creating Standard account under MCC: " . $e->getMessage(), [
                 'exception' => $e,
                 'mcc_account_id' => $mccAccountId,
+                'trace' => $e->getTraceAsString(),
             ]);
             return null;
         }
