@@ -171,9 +171,9 @@ class GenerateStrategy implements ShouldQueue
                 try {
                     $newStrategy = $this->campaign->strategies()->create([
                         'platform' => $strategy['platform'],
-                        'ad_copy_strategy' => $strategy['ad_copy_strategy'],
-                        'imagery_strategy' => $strategy['imagery_strategy'],
-                        'video_strategy' => $strategy['video_strategy'],
+                        'ad_copy_strategy' => is_array($strategy['ad_copy_strategy']) ? implode("\n\n", $strategy['ad_copy_strategy']) : ($strategy['ad_copy_strategy'] ?? ''),
+                        'imagery_strategy' => is_array($strategy['imagery_strategy']) ? implode("\n\n", $strategy['imagery_strategy']) : ($strategy['imagery_strategy'] ?? ''),
+                        'video_strategy' => is_array($strategy['video_strategy']) ? implode("\n\n", $strategy['video_strategy']) : ($strategy['video_strategy'] ?? ''),
                         'bidding_strategy' => $strategy['bidding_strategy'],
                         'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
                         'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
