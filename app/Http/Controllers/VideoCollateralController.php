@@ -85,7 +85,7 @@ class VideoCollateralController extends Controller
      *
      * @param Request $request
      * @param VideoCollateral $video
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\RedirectResponse
      */
     public function extend(Request $request, VideoCollateral $video)
     {
@@ -103,25 +103,25 @@ class VideoCollateralController extends Controller
 
             // Validate the video can be extended
             if ($video->status !== 'completed') {
-                return response()->json([
-                    'success' => false,
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
                     'message' => 'Video must be completed before it can be extended.'
-                ], 400);
+                ]);
             }
 
             if (!$video->gemini_video_uri) {
-                return response()->json([
-                    'success' => false,
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
                     'message' => 'This video cannot be extended. Only Veo-generated videos can be extended.'
-                ], 400);
+                ]);
             }
 
             $extensionCount = $video->extension_count ?? 0;
             if ($extensionCount >= 20) {
-                return response()->json([
-                    'success' => false,
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
                     'message' => 'Maximum extension limit (20) reached for this video.'
-                ], 400);
+                ]);
             }
 
             // Validate request
@@ -132,10 +132,9 @@ class VideoCollateralController extends Controller
             Log::info("Dispatching ExtendVideo job for VideoCollateral ID: {$video->id}");
             ExtendVideo::dispatch($video, $validated['prompt']);
 
-            return response()->json([
-                'success' => true,
+            return redirect()->back()->with('flash', [
+                'type' => 'success',
                 'message' => 'Video extension has been queued. This process can take several minutes.',
-                'extensions_remaining' => 20 - $extensionCount - 1
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
@@ -143,10 +142,10 @@ class VideoCollateralController extends Controller
             throw $e;
         } catch (\Exception $e) {
             Log::error("An unexpected error occurred during video extension for VideoCollateral ID: {$video->id}. Error: " . $e->getMessage());
-            return response()->json([
-                'success' => false,
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
                 'message' => 'Failed to start video extension: ' . $e->getMessage()
-            ], 500);
+            ]);
         }
     }
 }
