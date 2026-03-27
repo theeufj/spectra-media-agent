@@ -205,8 +205,8 @@ class DeploymentService
      */
     protected static function getAgent(string $platform, Customer $customer): mixed
     {
-        return match ($platform) {
-            'Google Ads (SEM)', 'Google', 'Google Ads' => new GoogleAdsExecutionAgent($customer, app(GeminiService::class)),
+        return match (self::normalizePlatform($platform)) {
+            'google' => new GoogleAdsExecutionAgent($customer, app(GeminiService::class)),
             default => null
         };
     }
@@ -220,9 +220,24 @@ class DeploymentService
      */
     protected static function getStrategy(string $platform, Customer $customer): ?DeploymentStrategy
     {
-        return match ($platform) {
-            'Google Ads (SEM)' => new GoogleAdsDeploymentStrategy($customer),
+        return match (self::normalizePlatform($platform)) {
+            'google' => new GoogleAdsDeploymentStrategy($customer),
             default => null
         };
+    }
+
+    protected static function normalizePlatform(string $platform): string
+    {
+        $normalized = strtolower(trim($platform));
+
+        if (str_contains($normalized, 'google')) {
+            return 'google';
+        }
+
+        if (str_contains($normalized, 'facebook')) {
+            return 'facebook';
+        }
+
+        return $normalized;
     }
 }
