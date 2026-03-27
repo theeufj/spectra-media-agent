@@ -3,8 +3,9 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
+use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 
 class GetConversionActionDetails extends BaseGoogleAdsService
 {
@@ -25,7 +26,10 @@ class GetConversionActionDetails extends BaseGoogleAdsService
 
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
-            $stream = $googleAdsServiceClient->search($customerId, $query);
+            $stream = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => $query,
+            ]));
 
             foreach ($stream->iterateAllElements() as $googleAdsRow) {
                 /** @var ConversionAction $conversionAction */

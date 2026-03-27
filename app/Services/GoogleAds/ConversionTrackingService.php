@@ -2,9 +2,10 @@
 
 namespace App\Services\GoogleAds;
 
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsServiceClient;
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Services\GoogleAdsServiceClient;
+use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Illuminate\Support\Facades\Log;
 
 class ConversionTrackingService extends BaseGoogleAdsService
 {
@@ -19,7 +20,10 @@ class ConversionTrackingService extends BaseGoogleAdsService
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
             $query = "SELECT conversion_action.id FROM conversion_action";
-            $response = $googleAdsServiceClient->search($customerId, $query);
+            $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => $query,
+            ]));
 
             return count(iterator_to_array($response->getIterator())) > 0;
         } catch (\Exception $e) {

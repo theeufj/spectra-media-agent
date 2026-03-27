@@ -1201,11 +1201,11 @@ PROMPT;
                             Log::warning("Failed to create GTM Tag: " . ($tagResult['error'] ?? 'Unknown'));
                         }
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     Log::warning("GTM Integration failed: " . $e->getMessage());
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Don't fail the whole execution for this, just warn
             Log::warning("GoogleAdsExecutionAgent: Failed to setup conversion tracking: " . $e->getMessage());
             $result->addWarning("Conversion tracking setup failed: " . $e->getMessage());
