@@ -50,6 +50,29 @@ class CampaignController extends Controller
             ->get(['id', 'url', 'title', 'meta_description'])
             ->toArray();
 
+        // If no customer_pages exist, backfill from knowledge_bases
+        if (empty($pages)) {
+            $userIds = $customer->users()->pluck('users.id');
+            $kbEntries = \App\Models\KnowledgeBase::whereIn('user_id', $userIds)
+                ->whereNotNull('url')
+                ->select('url')
+                ->distinct()
+                ->get();
+
+            foreach ($kbEntries as $kb) {
+                \App\Models\CustomerPage::firstOrCreate(
+                    ['customer_id' => $customer->id, 'url' => $kb->url],
+                    ['title' => basename(parse_url($kb->url, PHP_URL_PATH)) ?: parse_url($kb->url, PHP_URL_HOST)]
+                );
+            }
+
+            // Re-query after backfill
+            $pages = $customer->pages()
+                ->orderBy('created_at', 'desc')
+                ->get(['id', 'url', 'title', 'meta_description'])
+                ->toArray();
+        }
+
         // Load brand guidelines for pre-filling
         $brandGuideline = \App\Models\BrandGuideline::where('customer_id', $customer->id)
             ->latest('extracted_at')

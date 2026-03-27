@@ -13,8 +13,22 @@ class CustomerPageController extends Controller
      */
     public function index(Request $request, Customer $customer)
     {
-        // Ensure the user has access to this customer (authorization logic needed here usually)
-        // For now assuming middleware handles basic auth.
+        // If no customer_pages exist, backfill from knowledge_bases
+        if ($customer->pages()->count() === 0) {
+            $userIds = $customer->users()->pluck('users.id');
+            $kbEntries = \App\Models\KnowledgeBase::whereIn('user_id', $userIds)
+                ->whereNotNull('url')
+                ->select('url')
+                ->distinct()
+                ->get();
+
+            foreach ($kbEntries as $kb) {
+                CustomerPage::firstOrCreate(
+                    ['customer_id' => $customer->id, 'url' => $kb->url],
+                    ['title' => basename(parse_url($kb->url, PHP_URL_PATH)) ?: parse_url($kb->url, PHP_URL_HOST)]
+                );
+            }
+        }
 
         $query = $customer->pages();
 
