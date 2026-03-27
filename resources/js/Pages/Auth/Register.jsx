@@ -6,12 +6,17 @@ import CloudflareTurnstile from '@/Components/CloudflareTurnstile';
 export default function Register({ enabledPlatforms = [] }) {
     const { turnstileSiteKey } = usePage().props;
     
+    // Capture audit token from URL query param
+    const urlParams = new URLSearchParams(window.location.search);
+    const auditToken = urlParams.get('audit');
+
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         email: '',
         password: '',
         password_confirmation: '',
         cf_turnstile_response: '',
+        audit_token: auditToken || '',
     });
 
     const submit = (e) => {

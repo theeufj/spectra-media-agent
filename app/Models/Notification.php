@@ -52,6 +52,7 @@ class Notification extends Model
     const TYPE_SYSTEM_INFO = 'system.info';
     const TYPE_BILLING_WARNING = 'billing.warning';
     const TYPE_BILLING_SUCCESS = 'billing.success';
+    const TYPE_AB_TEST_COMPLETE = 'ab_test.complete';
 
     /**
      * Get the user that owns the notification.
@@ -138,6 +139,7 @@ class Notification extends Model
             self::TYPE_HEALTH_CRITICAL => '🔴',
             self::TYPE_BILLING_WARNING => '💳',
             self::TYPE_BILLING_SUCCESS => '💰',
+            self::TYPE_AB_TEST_COMPLETE => '🏆',
             self::TYPE_SYSTEM_INFO => 'ℹ️',
             default => '📬',
         };

@@ -470,6 +470,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         
         $imageUrl = StorageHelper::url($imageCollateral->s3_path);
         
+        $destinationUrl = $this->getDestinationUrl($campaign, $strategy);
+
         $fbCreative = $this->creativeService->createImageCreative(
             $accountId,
             $campaign->name . ' - Creative',
@@ -477,7 +479,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $adCopy->headlines[0] ?? 'Learn More',
             $adCopy->descriptions[0] ?? 'Discover our products and services',
             'LEARN_MORE',
-            $campaign->landing_page_url
+            $destinationUrl
         );
         
         if (!$fbCreative || !isset($fbCreative['id'])) {
@@ -530,7 +532,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 'picture' => StorageHelper::url($image->s3_path),
                 'name' => $adCopy->headlines[$index] ?? $adCopy->headlines[0] ?? 'Learn More',
                 'description' => $adCopy->descriptions[$index] ?? $adCopy->descriptions[0] ?? '',
-                'link' => $campaign->landing_page_url,
+                'link' => $this->getDestinationUrl($campaign, $strategy),
             ];
         }
         
@@ -538,7 +540,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $accountId,
             $campaign->name . ' - Carousel Creative',
             $carouselCards,
-            $campaign->landing_page_url
+            $this->getDestinationUrl($campaign, $strategy)
         );
         
         if (!$fbCreative || !isset($fbCreative['id'])) {
@@ -593,7 +595,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $adCopy->headlines[0] ?? 'Watch Now',
             $adCopy->descriptions[0] ?? 'Discover our story',
             'LEARN_MORE',
-            $campaign->landing_page_url
+            $this->getDestinationUrl($campaign, $strategy)
         );
         
         if (!$fbCreative || !isset($fbCreative['id'])) {
@@ -876,5 +878,33 @@ PROMPT;
     protected function getPlatformName(): string
     {
         return 'Facebook Ads';
+    }
+
+    /**
+     * Append UTM parameters to a URL for attribution tracking.
+     */
+    protected function appendUtmParameters(string $url, Campaign $campaign, Strategy $strategy): string
+    {
+        $params = [
+            'utm_source' => 'facebook',
+            'utm_medium' => $strategy->campaign_type ?? 'social',
+            'utm_campaign' => 'spectra_' . $campaign->id,
+            'utm_content' => 'strategy_' . $strategy->id,
+        ];
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+        return $url . $separator . http_build_query($params);
+    }
+
+    /**
+     * Get destination URL with UTM parameters appended.
+     */
+    protected function getDestinationUrl(Campaign $campaign, Strategy $strategy): string
+    {
+        $url = $campaign->landing_page_url ?? $campaign->customer?->website ?? '';
+        if (empty($url)) {
+            return '';
+        }
+        return $this->appendUtmParameters($url, $campaign, $strategy);
     }
 }

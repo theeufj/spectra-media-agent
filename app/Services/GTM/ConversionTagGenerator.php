@@ -289,4 +289,40 @@ JAVASCRIPT;
             throw $e;
         }
     }
+
+    /**
+     * Generate a Spectra Attribution Pixel tag for GTM.
+     *
+     * @param string $customerId The Spectra customer ID
+     * @param array $config Optional configuration
+     * @return array GTM tag configuration
+     */
+    public function generateSpectraPixelTag(string $customerId, array $config = []): array
+    {
+        $pixelUrl = config('app.url') . '/js/spectra-pixel.js';
+
+        $tagConfig = [
+            'type' => 'html',
+            'name' => 'Spectra Attribution Pixel',
+            'parameter' => [
+                [
+                    'type' => 'template',
+                    'key' => 'html',
+                    'value' => '<script src="' . $pixelUrl . '" data-customer="' . $customerId . '"></script>',
+                ],
+            ],
+            'firingTriggerId' => $config['trigger_id'] ?? null,
+            'tagFiringOption' => 'ONCE_PER_EVENT',
+        ];
+
+        if (!$tagConfig['firingTriggerId']) {
+            unset($tagConfig['firingTriggerId']);
+        }
+
+        Log::info('Generated Spectra Attribution Pixel tag', [
+            'customer_id' => $customerId,
+        ]);
+
+        return $tagConfig;
+    }
 }

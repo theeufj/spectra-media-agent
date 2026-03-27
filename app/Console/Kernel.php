@@ -5,6 +5,7 @@ namespace App\Console;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use App\Jobs\FetchGoogleAdsPerformanceData;
+use App\Jobs\EvaluateABTests;
 use App\Models\Campaign;
 
 class Kernel extends ConsoleKernel
@@ -16,6 +17,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('billing:report-ad-spend')->daily();
         $schedule->command('campaign:fetch-performance-data')->hourly();
+        $schedule->job(new EvaluateABTests)->dailyAt('06:00');
     }
 
     /**

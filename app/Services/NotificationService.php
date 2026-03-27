@@ -198,6 +198,36 @@ class NotificationService
     }
 
     /**
+     * Notify about A/B test reaching significance.
+     */
+    public function notifyABTestComplete(
+        \App\Models\ABTest $test,
+        array $winner,
+        float $confidence,
+        float $liftPct
+    ): Notification {
+        $user = $test->campaign->customer->user;
+
+        return $this->notify(
+            $user,
+            Notification::TYPE_AB_TEST_COMPLETE,
+            'A/B Test Winner Found',
+            "Your {$test->test_type} test reached " . round($confidence * 100, 1) . "% confidence. " .
+            "\"{$winner['label']}\" won with a " . round($liftPct, 1) . "% lift in CTR.",
+            route('campaigns.show', $test->campaign_id),
+            'View Results',
+            $test->campaign->customer,
+            [
+                'test_id' => $test->id,
+                'test_type' => $test->test_type,
+                'winner' => $winner['label'],
+                'confidence' => round($confidence * 100, 1),
+                'lift_pct' => round($liftPct, 1),
+            ]
+        );
+    }
+
+    /**
      * Get unread notifications count for a user.
      */
     public function getUnreadCount(User $user, ?int $customerId = null): int

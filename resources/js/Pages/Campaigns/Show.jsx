@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
+import CampaignCopilot from '@/Components/CampaignCopilot';
 
 // Collateral Summary Card Component
 const CollateralSummaryCard = ({ campaign }) => {
@@ -292,6 +293,7 @@ export default function Show({ auth, campaign }) {
     const [pollingError, setPollingError] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
+    const [copilotOpen, setCopilotOpen] = useState(false);
     const { post, processing } = useForm();
 
     useEffect(() => {
@@ -514,6 +516,25 @@ export default function Show({ auth, campaign }) {
                     )}
                 </div>
             </div>
+
+            {/* Campaign Copilot */}
+            <CampaignCopilot campaignId={campaigns.id} isOpen={copilotOpen} onClose={() => setCopilotOpen(false)} />
+
+            {/* Copilot FAB */}
+            {!copilotOpen && (
+                <button
+                    onClick={() => setCopilotOpen(true)}
+                    className="fixed bottom-6 right-6 z-40 bg-indigo-600 text-white p-4 rounded-full shadow-lg hover:bg-indigo-700 hover:scale-105 transition-all group"
+                    title="Ask Campaign Copilot"
+                >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                    </svg>
+                    <span className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
+                        Campaign Copilot
+                    </span>
+                </button>
+            )}
         </AuthenticatedLayout>
     );
 }

@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
+use App\Models\AuditSession;
 use App\Models\Customer;
 use App\Models\User;
+use App\Jobs\RunAccountAudit;
 use App\Services\GoogleAds\ListAccessibleCustomers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
 
 class GoogleController extends Controller
@@ -93,6 +96,85 @@ class GoogleController extends Controller
             // Log the error
             \Log::error('Google OAuth Error: ' . $e->getMessage());
             return redirect('/login')->with('error', 'Something went wrong with the Google login.');
+        }
+    }
+
+    /**
+     * Redirect to Google OAuth with read-only scopes for the free audit.
+     */
+    public function redirectForAudit()
+    {
+        return Socialite::driver('google')
+            ->scopes([
+                'openid',
+                'profile',
+                'email',
+                'https://www.googleapis.com/auth/adwords.readonly',
+            ])
+            ->with([
+                'access_type' => 'offline',
+                'prompt' => 'consent',
+                'state' => 'audit',
+            ])
+            ->redirect();
+    }
+
+    /**
+     * Handle the Google OAuth callback for audit sessions.
+     */
+    public function callbackForAudit()
+    {
+        try {
+            $googleUser = Socialite::driver('google')->user();
+
+            $token = Str::random(64);
+
+            $auditSession = AuditSession::create([
+                'token' => $token,
+                'email' => $googleUser->getEmail(),
+                'platform' => 'google',
+                'access_token_encrypted' => Crypt::encryptString($googleUser->token),
+                'refresh_token_encrypted' => isset($googleUser->refreshToken)
+                    ? Crypt::encryptString($googleUser->refreshToken)
+                    : null,
+                'status' => 'pending',
+            ]);
+
+            // Discover accessible Google Ads accounts using the audit token
+            try {
+                $tempCustomer = new Customer();
+                $tempCustomer->google_ads_refresh_token = $auditSession->refresh_token_encrypted;
+
+                $listService = new ListAccessibleCustomers($tempCustomer);
+                $accessibleAccounts = ($listService)();
+
+                if (!empty($accessibleAccounts)) {
+                    preg_match('/customers\/(\d+)/', $accessibleAccounts[0], $matches);
+                    $googleAdsCustomerId = $matches[1] ?? null;
+
+                    if ($googleAdsCustomerId) {
+                        $auditSession->update(['google_ads_customer_id' => $googleAdsCustomerId]);
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('Could not discover Google Ads account during audit OAuth', [
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+            if (!$auditSession->google_ads_customer_id) {
+                $auditSession->update(['status' => 'failed']);
+                return redirect('/free-audit')->with('error', 'No Google Ads account found. Please ensure your Google account has an active Google Ads account.');
+            }
+
+            // Dispatch the audit job
+            RunAccountAudit::dispatch($auditSession);
+
+            return redirect("/free-audit/{$token}");
+
+        } catch (\Exception $e) {
+            Log::error('Google Audit OAuth Error: ' . $e->getMessage());
+            return redirect('/free-audit')->with('error', 'Something went wrong connecting your Google account. Please try again.');
         }
     }
 }

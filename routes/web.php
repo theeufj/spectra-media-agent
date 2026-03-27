@@ -14,6 +14,15 @@ Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
 
+/*
+|--------------------------------------------------------------------------
+| Free Audit Routes (Public — no auth required)
+|--------------------------------------------------------------------------
+*/
+Route::get('/free-audit', [App\Http\Controllers\AuditController::class, 'index'])->name('audit.index');
+Route::get('/free-audit/{token}', [App\Http\Controllers\AuditController::class, 'show'])->name('audit.show');
+Route::get('/api/audit/{token}/status', [App\Http\Controllers\AuditController::class, 'status'])->name('audit.status');
+
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified', 'ensureUserHasCustomer'])->name('dashboard');
 
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
@@ -149,6 +158,9 @@ Route::middleware(['auth'])->group(function () {
     // GET /campaigns/{campaign}/deployment-status
     Route::get('/campaigns/{campaign}/deployment-status', [App\Http\Controllers\CampaignController::class, 'deploymentStatus'])->name('campaigns.deployment-status');
 
+    // Multi-touch attribution dashboard
+    Route::get('/campaigns/{campaign}/attribution', [App\Http\Controllers\AttributionController::class, 'show'])->name('campaigns.attribution');
+
     // Route to display the collateral generation page for a specific campaign strategy.
     // GET /campaigns/{campaign}/{strategy}/collateral
     Route::get('/campaigns/{campaign}/{strategy}/collateral', [App\Http\Controllers\CollateralController::class, 'show'])->name('campaigns.collateral.show');
@@ -165,6 +177,11 @@ Route::middleware(['auth'])->group(function () {
     // DELETE /campaigns/{campaign}
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');
 
+    // Campaign Copilot — conversational AI assistant per campaign
+    Route::post('/api/campaigns/{campaign}/chat', [\App\Http\Controllers\CampaignCopilotController::class, 'chat'])->name('campaigns.copilot.chat');
+    Route::get('/api/campaigns/{campaign}/chat/history', [\App\Http\Controllers\CampaignCopilotController::class, 'history'])->name('campaigns.copilot.history');
+    Route::delete('/api/campaigns/{campaign}/chat', [\App\Http\Controllers\CampaignCopilotController::class, 'clear'])->name('campaigns.copilot.clear');
+
     // Deployment routes
     Route::middleware(['subscribed'])->group(function () {
         Route::post('/deployment/toggle-collateral', [\App\Http\Controllers\DeploymentController::class, 'toggleCollateral'])
@@ -172,6 +189,14 @@ Route::middleware(['auth'])->group(function () {
         Route::post('/deployment/deploy', [\App\Http\Controllers\DeploymentController::class, 'deploy'])
             ->name('deployment.deploy');
     });
+
+    // AI-Generated Proposals
+    Route::get('/proposals', [\App\Http\Controllers\ProposalController::class, 'index'])->name('proposals.index');
+    Route::get('/proposals/create', [\App\Http\Controllers\ProposalController::class, 'create'])->name('proposals.create');
+    Route::post('/proposals', [\App\Http\Controllers\ProposalController::class, 'store'])->name('proposals.store');
+    Route::get('/proposals/{proposal}', [\App\Http\Controllers\ProposalController::class, 'show'])->name('proposals.show');
+    Route::get('/proposals/{proposal}/status', [\App\Http\Controllers\ProposalController::class, 'status'])->name('proposals.status');
+    Route::get('/proposals/{proposal}/pdf', [\App\Http\Controllers\ProposalController::class, 'exportPdf'])->name('proposals.export-pdf');
 });
 
 /*
