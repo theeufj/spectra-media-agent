@@ -34,7 +34,7 @@ class StoreCampaignRequest extends FormRequest
             'reason' => 'required|string',
             'goals' => 'required|string',
             'target_market' => 'required|string',
-            'voice' => 'required|string|max:1000',
+            'voice' => 'required|string',
             'total_budget' => 'required|numeric|min:0',
             'daily_budget' => 'nullable|numeric|min:0',
             'start_date' => 'required|date',
