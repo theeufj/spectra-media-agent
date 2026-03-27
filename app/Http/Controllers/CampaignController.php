@@ -34,18 +34,7 @@ class CampaignController extends Controller
      */
     public function create()
     {
-        $customerId = session('active_customer_id');
-        $brandGuideline = null;
-
-        if ($customerId) {
-            $brandGuideline = \App\Models\BrandGuideline::where('customer_id', $customerId)
-                ->latest('extracted_at')
-                ->first();
-        }
-
-        return Inertia::render('Campaigns/Create', [
-            'brandGuideline' => $brandGuideline,
-        ]);
+        return redirect()->route('campaigns.wizard');
     }
 
     /**
@@ -60,9 +49,15 @@ class CampaignController extends Controller
             ->orderBy('created_at', 'desc')
             ->get(['id', 'url', 'title', 'meta_description'])
             ->toArray();
+
+        // Load brand guidelines for pre-filling
+        $brandGuideline = \App\Models\BrandGuideline::where('customer_id', $customer->id)
+            ->latest('extracted_at')
+            ->first();
         
         return Inertia::render('Campaigns/CreateWizard', [
             'pages' => $pages,
+            'brandGuideline' => $brandGuideline,
         ]);
     }
 

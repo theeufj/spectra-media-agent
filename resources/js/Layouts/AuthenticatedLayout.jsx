@@ -140,7 +140,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             
                             {/* Create Campaign Button */}
                             <Link
-                                href={route('campaigns.create')}
+                                href={route('campaigns.wizard')}
                                 className="ml-3 inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
                             >
                                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -238,7 +238,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                     View Dashboard →
                                 </Link>
                                 <Link
-                                    href="/campaigns/create"
+                                    href="/campaigns/wizard"
                                     className="inline-flex items-center px-4 py-2 bg-white text-green-700 border border-green-300 rounded-lg hover:bg-green-50"
                                 >
                                     Create Another Campaign

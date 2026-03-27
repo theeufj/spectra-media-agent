@@ -122,7 +122,7 @@ const HelpText = ({ text }) => (
     <p className="mt-1 text-sm text-gray-500">{text}</p>
 );
 
-export default function CreateWizard({ auth, pages = [] }) {
+export default function CreateWizard({ auth, pages = [], brandGuideline }) {
     const [currentStep, setCurrentStep] = useState(0);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [creationMode, setCreationMode] = useState(null); // 'template' or 'ai'
@@ -138,18 +138,34 @@ export default function CreateWizard({ auth, pages = [] }) {
     const chatEndRef = useRef(null);
     const customerId = auth.user?.active_customer?.id;
     
+    // Build initial form values from brand guidelines if available
+    const brandDefaults = brandGuideline ? {
+        target_market: brandGuideline.target_audience
+            ? [brandGuideline.target_audience.primary, brandGuideline.target_audience.demographics, brandGuideline.target_audience.psychographics].filter(Boolean).join('. ')
+            : '',
+        voice: brandGuideline.brand_voice?.description || (brandGuideline.tone_attributes?.length
+            ? brandGuideline.tone_attributes.join(', ')
+            : ''),
+        product_focus: brandGuideline.unique_selling_propositions?.length
+            ? brandGuideline.unique_selling_propositions.join(', ')
+            : '',
+        exclusions: brandGuideline.do_not_use?.length
+            ? brandGuideline.do_not_use.join(', ')
+            : '',
+    } : {};
+
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         reason: '',
         goals: '',
-        target_market: '',
-        voice: '',
+        target_market: brandDefaults.target_market || '',
+        voice: brandDefaults.voice || '',
         total_budget: '',
         start_date: '',
         end_date: '',
         primary_kpi: '',
-        product_focus: '',
-        exclusions: '',
+        product_focus: brandDefaults.product_focus || '',
+        exclusions: brandDefaults.exclusions || '',
         selected_pages: [],
     });
     
