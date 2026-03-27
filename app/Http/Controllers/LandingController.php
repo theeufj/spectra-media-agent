@@ -6,13 +6,28 @@ use Illuminate\Http\Request;
 
 class LandingController extends Controller
 {
-    /**
-     * Show the application's landing page.
-     *
-     * @return \Inertia\Response
-     */
     public function index()
     {
         return \Inertia\Inertia::render('Landing');
+    }
+
+    public function features()
+    {
+        return \Inertia\Inertia::render('Features');
+    }
+
+    public function howItWorks()
+    {
+        return \Inertia\Inertia::render('HowItWorks');
+    }
+
+    public function pricing()
+    {
+        return \Inertia\Inertia::render('Pricing');
+    }
+
+    public function about()
+    {
+        return \Inertia\Inertia::render('About');
     }
 }
