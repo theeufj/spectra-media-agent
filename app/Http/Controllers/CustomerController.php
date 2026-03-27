@@ -3,10 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Services\GoogleAds\ListAccessibleCustomers;
+use App\Services\GoogleAds\AccessibleAccountResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class CustomerController extends Controller
@@ -16,7 +15,7 @@ class CustomerController extends Controller
         return Inertia::render('Customers/Create');
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AccessibleAccountResolver $resolver)
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
@@ -40,30 +39,18 @@ class CustomerController extends Controller
             $customer->update(['google_ads_refresh_token' => $refreshToken]);
             session()->forget('google_ads_refresh_token');
 
-            // Discover Google Ads customer ID
-            try {
-                $listService = new ListAccessibleCustomers($customer);
-                $accessibleAccounts = $listService();
+            $accounts = $resolver->forCustomer($customer);
 
-                if (!empty($accessibleAccounts)) {
-                    $resourceName = $accessibleAccounts[0];
-                    if (preg_match('/customers\/(\d+)/', $resourceName, $matches)) {
-                        $customer->update(['google_ads_customer_id' => $matches[1]]);
-                        Log::info('Discovered Google Ads customer ID during customer creation', [
-                            'customer_id' => $customer->id,
-                            'google_ads_customer_id' => $matches[1],
-                        ]);
-                    }
-                }
-            } catch (\Throwable $e) {
-                Log::warning('Failed to discover Google Ads customer ID during customer creation', [
-                    'customer_id' => $customer->id,
-                    'error' => $e->getMessage(),
-                ]);
+            if (count($accounts) === 1) {
+                $customer->update(['google_ads_customer_id' => $accounts[0]['id']]);
             }
         }
 
         session(['active_customer_id' => $customer->id]);
+
+        if ($refreshToken && isset($accounts) && count($accounts) > 1) {
+            return redirect()->route('profile.google-ads.accounts')->with('status', 'Select the Google Ads account you want Spectra to use.');
+        }
 
         if ($request->wantsJson()) {
             return response()->json(['message' => 'Customer created successfully', 'customer' => $customer]);

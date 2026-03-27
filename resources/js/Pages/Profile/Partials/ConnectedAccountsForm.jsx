@@ -155,6 +155,10 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                                                 <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-800 rounded-full">
                                                     Expired
                                                 </span>
+                                            ) : connection.platform === 'google' && !connection.account_id ? (
+                                                <span className="px-2 py-0.5 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
+                                                    Select account
+                                                </span>
                                             ) : (
                                                 <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
                                                     Connected
@@ -164,6 +168,11 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                                         <p className="text-sm text-gray-500">
                                             {connection.account_name || info.description}
                                         </p>
+                                        {connection.account_id && (
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                Google Ads account ID: {connection.account_id}
+                                            </p>
+                                        )}
                                         <p className="text-xs text-gray-400 mt-1">
                                             Connected {connection.connected_at}
                                             {connection.expires_at && !connection.is_expired && (
@@ -173,6 +182,14 @@ export default function ConnectedAccountsForm({ connections = [], className = ''
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2">
+                                    {connection.platform === 'google' && (
+                                        <a
+                                            href={route('profile.google-ads.accounts')}
+                                            className="px-3 py-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 rounded-md hover:bg-indigo-100"
+                                        >
+                                            {connection.account_id ? 'Change Account' : 'Select Account'}
+                                        </a>
+                                    )}
                                     {connection.is_expired && info.connectUrl && (
                                         <a
                                             href={info.connectUrl}

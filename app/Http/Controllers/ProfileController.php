@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\GoogleAds\AccessibleAccountResolver;
 use App\Http\Requests\ProfileUpdateRequest;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
@@ -20,6 +21,7 @@ class ProfileController extends Controller
     {
         $user = $request->user();
         $customers = $user->customers()->with('users')->get();
+        $customer = $this->resolveCustomer($request);
         
         // Get user's connected accounts from connections table
         $connections = $user->connections()->get()->map(function ($connection) {
@@ -37,7 +39,6 @@ class ProfileController extends Controller
         
         // Also check for Google connection via customer's google_ads_refresh_token
         // This handles users who signed up with Google OAuth
-        $customer = $customers->first();
         if ($customer && $customer->google_ads_refresh_token) {
             // Check if we already have a 'google' connection to avoid duplicates
             $hasGoogleConnection = collect($connections)->contains(function ($conn) {
@@ -49,8 +50,10 @@ class ProfileController extends Controller
                 $connections[] = [
                     'id' => 'google_oauth', // Special ID for OAuth-based connection
                     'platform' => 'google',
-                    'account_name' => 'Google Account (via OAuth)',
-                    'account_id' => null,
+                    'account_name' => $customer->google_ads_customer_id
+                        ? 'Google Ads account selected'
+                        : 'Google account connected - choose an Ads account',
+                    'account_id' => $customer->google_ads_customer_id,
                     'connected_at' => $customer->created_at->diffForHumans(),
                     'expires_at' => null,
                     'is_expired' => false,
@@ -66,6 +69,50 @@ class ProfileController extends Controller
             'facebookAppId' => config('services.facebook.client_id'),
             'connections' => $connections,
         ]);
+    }
+
+    public function googleAdsAccounts(Request $request, AccessibleAccountResolver $resolver): Response|RedirectResponse
+    {
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer || !$customer->google_ads_refresh_token) {
+            return Redirect::route('profile.edit')->with('status', 'Connect Google before selecting an Ads account.');
+        }
+
+        $accounts = $resolver->forCustomer($customer);
+
+        if (count($accounts) === 0) {
+            return Redirect::route('profile.edit')->with('status', 'No accessible Google Ads accounts were found for this Google login.');
+        }
+
+        return Inertia::render('Profile/GoogleAdsAccounts', [
+            'accounts' => $accounts,
+            'selectedAccountId' => $customer->google_ads_customer_id,
+            'customerName' => $customer->name,
+        ]);
+    }
+
+    public function updateGoogleAdsAccount(Request $request, AccessibleAccountResolver $resolver): RedirectResponse
+    {
+        $validated = $request->validate([
+            'google_ads_customer_id' => ['required', 'string'],
+        ]);
+
+        $customer = $this->resolveCustomer($request);
+        $accounts = $resolver->forCustomer($customer);
+        $validIds = collect($accounts)->pluck('id')->all();
+
+        if (!in_array($validated['google_ads_customer_id'], $validIds, true)) {
+            return Redirect::route('profile.google-ads.accounts')->withErrors([
+                'google_ads_customer_id' => 'Select one of the accessible Google Ads accounts.',
+            ]);
+        }
+
+        $customer->update([
+            'google_ads_customer_id' => $validated['google_ads_customer_id'],
+        ]);
+
+        return Redirect::route('profile.edit')->with('status', 'Google Ads account updated successfully.');
     }
 
     /**
@@ -93,9 +140,12 @@ class ProfileController extends Controller
         
         // Handle special case for Google OAuth connection (stored on customer)
         if ($connectionId === 'google_oauth') {
-            $customer = $user->customers()->first();
+            $customer = $this->resolveCustomer($request);
             if ($customer) {
-                $customer->update(['google_ads_refresh_token' => null]);
+                $customer->update([
+                    'google_ads_refresh_token' => null,
+                    'google_ads_customer_id' => null,
+                ]);
             }
             return Redirect::route('profile.edit')->with('status', 'Google account disconnected successfully.');
         }
@@ -128,5 +178,13 @@ class ProfileController extends Controller
         $request->session()->regenerateToken();
 
         return Redirect::to('/');
+    }
+
+    private function resolveCustomer(Request $request)
+    {
+        $user = $request->user();
+        $activeCustomerId = session('active_customer_id');
+
+        return $user->customers()->find($activeCustomerId) ?? $user->customers()->first();
     }
 }

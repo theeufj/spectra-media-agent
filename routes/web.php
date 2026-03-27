@@ -18,6 +18,8 @@ Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['au
 
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::get('/profile/google-ads/accounts', [ProfileController::class, 'googleAdsAccounts'])->name('profile.google-ads.accounts');
+    Route::put('/profile/google-ads/accounts', [ProfileController::class, 'updateGoogleAdsAccount'])->name('profile.google-ads.accounts.update');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::delete('/profile/connections/{connection}', [ProfileController::class, 'disconnectAccount'])->name('profile.disconnect');

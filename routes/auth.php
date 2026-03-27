@@ -20,15 +20,15 @@ Route::middleware('guest')->group(function () {
     Route::get('/register', [RegisteredUserController::class, 'create'])->name('register');
     Route::post('/register', [RegisteredUserController::class, 'store']);
 
-    /*
-    |--------------------------------------------------------------------------
-    | Google OAuth Routes (Authentication)
-    |--------------------------------------------------------------------------
-    */
-    Route::get('auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
-    Route::get('auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
-
 });
+
+/*
+|--------------------------------------------------------------------------
+| Google OAuth Routes
+|--------------------------------------------------------------------------
+*/
+Route::get('auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
+Route::get('auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
 
 /*
 |--------------------------------------------------------------------------

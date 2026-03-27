@@ -3,14 +3,12 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Models\Customer;
 use App\Mail\WelcomeEmail;
-use App\Services\GoogleAds\ListAccessibleCustomers;
-use Illuminate\Http\Request;
+use App\Models\Customer;
+use App\Models\User;
+use App\Services\GoogleAds\AccessibleAccountResolver;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
@@ -30,7 +28,7 @@ class GoogleController extends Controller
             ->redirect();
     }
 
-    public function callback()
+    public function callback(AccessibleAccountResolver $resolver)
     {
         $googleUser = Socialite::driver('google')->user();
 
@@ -50,6 +48,8 @@ class GoogleController extends Controller
         // Store the Google OAuth refresh token for API access
         $refreshToken = $googleUser->refreshToken;
 
+        Auth::login($user, true);
+
         if ($user->wasRecentlyCreated) {
             // Store the refresh token in the session to be used when creating the customer
             session(['google_ads_refresh_token' => $refreshToken]);
@@ -58,17 +58,24 @@ class GoogleController extends Controller
         } else {
             // Update existing customer's refresh token if we got a new one
             if ($refreshToken && $user->customers()->count() > 0) {
-                $customer = $user->customers()->first();
+                $customer = $this->resolveCustomer($user);
                 $customer->update([
                     'google_ads_refresh_token' => $refreshToken,
                 ]);
 
-                // Discover Google Ads customer ID from the new token
-                $this->discoverGoogleAdsCustomerId($customer);
+                $accounts = $resolver->forCustomer($customer);
+
+                if (count($accounts) === 1) {
+                    $customer->update(['google_ads_customer_id' => $accounts[0]['id']]);
+
+                    return redirect()->route('profile.edit')->with('status', 'Google Ads account connected successfully.');
+                }
+
+                if (count($accounts) > 1) {
+                    return redirect()->route('profile.google-ads.accounts')->with('status', 'Select the Google Ads account you want Spectra to use.');
+                }
             }
         }
-
-        Auth::login($user, true);
 
         if ($user->customers()->doesntExist()) {
             return redirect()->route('customers.create');
@@ -77,35 +84,10 @@ class GoogleController extends Controller
         return redirect()->intended(route('dashboard'));
     }
 
-    /**
-     * Discover and store the Google Ads customer ID for a customer.
-     */
-    private function discoverGoogleAdsCustomerId(Customer $customer): void
+    private function resolveCustomer(User $user): Customer
     {
-        try {
-            $listService = new ListAccessibleCustomers($customer);
-            $accessibleAccounts = $listService();
+        $activeCustomerId = session('active_customer_id');
 
-            if (!empty($accessibleAccounts)) {
-                $resourceName = $accessibleAccounts[0];
-                if (preg_match('/customers\/(\d+)/', $resourceName, $matches)) {
-                    $customer->update(['google_ads_customer_id' => $matches[1]]);
-                    Log::info('Discovered Google Ads customer ID', [
-                        'customer_id' => $customer->id,
-                        'google_ads_customer_id' => $matches[1],
-                        'total_accessible' => count($accessibleAccounts),
-                    ]);
-                }
-            } else {
-                Log::warning('No accessible Google Ads accounts found', [
-                    'customer_id' => $customer->id,
-                ]);
-            }
-        } catch (\Throwable $e) {
-            Log::warning('Failed to discover Google Ads customer ID', [
-                'customer_id' => $customer->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
+        return $user->customers()->find($activeCustomerId) ?? $user->customers()->firstOrFail();
     }
 }
