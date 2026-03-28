@@ -32,7 +32,55 @@ function CopyBlock({ label, code }) {
     );
 }
 
-export default function GTMSetupPage({ auth, customer: initialCustomer, snippet: initialSnippet }) {
+function ExistingTagsInfo() {
+    const [expanded, setExpanded] = useState(false);
+
+    return (
+        <div className="bg-blue-50 border border-blue-200 shadow-sm sm:rounded-lg p-6">
+            <button
+                onClick={() => setExpanded(!expanded)}
+                className="flex items-center gap-2 w-full text-left"
+            >
+                <svg className="h-5 w-5 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+                </svg>
+                <span className="text-sm font-semibold text-blue-900">
+                    Already have Google tags on your website?
+                </span>
+                <svg className={`h-4 w-4 text-blue-500 ml-auto transition-transform ${expanded ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                </svg>
+            </button>
+
+            {expanded && (
+                <div className="mt-4 space-y-3 text-sm text-blue-800">
+                    <p>
+                        If your website already has Google tags installed — such as Google Tag Manager, Google Analytics, or Google Ads conversion tracking — that's completely fine. Here's how our tracking works with your existing setup:
+                    </p>
+                    <div className="space-y-2">
+                        <p>
+                            <strong>Google Tag Manager (GTM):</strong> Multiple GTM containers can run on the same page without conflict. Our container handles campaign conversion tracking independently from your existing container.
+                        </p>
+                        <p>
+                            <strong>Google Analytics (GA4):</strong> Your existing analytics will continue working as normal. Our tracking is focused on ad conversion events and doesn't duplicate analytics data.
+                        </p>
+                        <p>
+                            <strong>Google Ads conversion tags:</strong> If you have manually installed Google Ads conversion tags (e.g., a global site tag or gtag.js snippet), we recommend removing them after our tracking is verified. Running both could count conversions twice.
+                        </p>
+                        <p>
+                            <strong>Facebook Pixel / other platforms:</strong> No changes needed — our container is completely separate.
+                        </p>
+                    </div>
+                    <p className="text-blue-700 italic">
+                        Just proceed with the steps below and add our snippet alongside your existing tags.
+                    </p>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function GTMSetupPage({ auth, customer: initialCustomer, snippet: initialSnippet, existingTags }) {
     const { flash } = usePage().props;
     const [customer, setCustomer] = useState(initialCustomer);
     const [snippet, setSnippet] = useState(initialSnippet);
@@ -99,6 +147,56 @@ export default function GTMSetupPage({ auth, customer: initialCustomer, snippet:
                         <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800">
                             {errorMessage}
                         </div>
+                    )}
+
+                    {/* Existing Google Tags Guidance */}
+                    {(customer.gtm_detected || existingTags) && (
+                        <div className="bg-amber-50 border border-amber-200 shadow-sm sm:rounded-lg p-6">
+                            <div className="flex items-start gap-3">
+                                <svg className="h-6 w-6 text-amber-500 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                                </svg>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-amber-900">
+                                        Existing Google Tags Detected
+                                    </h3>
+                                    {existingTags?.detected_container_id && (
+                                        <p className="mt-1 text-sm text-amber-800">
+                                            We found container <code className="font-mono font-semibold bg-amber-100 px-1 rounded">{existingTags.detected_container_id}</code> on your website.
+                                        </p>
+                                    )}
+                                    <p className="mt-2 text-sm text-amber-800">
+                                        No worries — our tracking works alongside your existing tags. Here's what you need to know:
+                                    </p>
+                                    <ul className="mt-3 space-y-2 text-sm text-amber-800">
+                                        <li className="flex items-start gap-2">
+                                            <span className="font-bold text-amber-600 mt-px">•</span>
+                                            <span><strong>Existing GTM container:</strong> You can keep your current container in place. Our container runs independently and won't interfere with your existing tags or tracking.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="font-bold text-amber-600 mt-px">•</span>
+                                            <span><strong>Google Analytics (GA4):</strong> If you have GA4 installed directly (not through GTM), it will continue to work normally. Our container only handles conversion tracking for your ad campaigns.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="font-bold text-amber-600 mt-px">•</span>
+                                            <span><strong>Google Ads tags:</strong> If you already have Google Ads conversion tags on your site, we recommend removing them once our tracking is verified to avoid duplicate conversion counting.</span>
+                                        </li>
+                                        <li className="flex items-start gap-2">
+                                            <span className="font-bold text-amber-600 mt-px">•</span>
+                                            <span><strong>Other tags (Facebook Pixel, etc.):</strong> No changes needed. Our container is completely separate and won't affect any other tracking you have in place.</span>
+                                        </li>
+                                    </ul>
+                                    <p className="mt-3 text-sm text-amber-700 italic">
+                                        Continue with the steps below to set up conversion tracking — just add our snippet alongside your existing tags.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* General guidance when no tags detected but helpful context */}
+                    {!customer.gtm_detected && !existingTags && !customer.gtm_container_id && (
+                        <ExistingTagsInfo />
                     )}
 
                     {/* Step 1: Provision */}

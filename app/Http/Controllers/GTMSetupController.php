@@ -22,9 +22,20 @@ class GTMSetupController extends Controller
             $snippet = $gtmService->getSnippetHtml($customer->gtm_container_id);
         }
 
+        // Build existing tags info from stored detection data
+        $existingTags = null;
+        if ($customer->gtm_detected && $customer->gtm_config) {
+            $config = is_array($customer->gtm_config) ? $customer->gtm_config : json_decode($customer->gtm_config, true);
+            $existingTags = [
+                'detected_container_id' => $config['detected_container_id'] ?? null,
+                'detected_at' => $customer->gtm_detected_at,
+            ];
+        }
+
         return Inertia::render('Customers/GTM/Setup', [
-            'customer' => $customer,
-            'snippet'  => $snippet,
+            'customer'     => $customer,
+            'snippet'      => $snippet,
+            'existingTags' => $existingTags,
         ]);
     }
 
