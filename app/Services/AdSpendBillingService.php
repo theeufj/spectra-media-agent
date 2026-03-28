@@ -377,13 +377,19 @@ class AdSpendBillingService
                 ->get();
 
             foreach ($activeCampaigns as $campaign) {
-                if ($campaign->platform === 'google') {
-                    $spend = $this->getGoogleAdsSpend($customer, $campaign);
-                } else {
-                    continue;
-                }
+                $platformsFetched = [];
 
-                $totalSpend += $spend;
+                foreach ($campaign->strategies()->where('deployment_status', 'deployed')->get() as $strategy) {
+                    $platform = strtolower(trim($strategy->platform));
+
+                    if (str_contains($platform, 'google') && !in_array('google', $platformsFetched)) {
+                        $totalSpend += $this->getGoogleAdsSpend($customer, $campaign);
+                        $platformsFetched[] = 'google';
+                    } elseif (str_contains($platform, 'facebook') && !in_array('facebook', $platformsFetched)) {
+                        $totalSpend += $this->getFacebookAdsSpend($customer, $campaign);
+                        $platformsFetched[] = 'facebook';
+                    }
+                }
             }
 
         } catch (\Exception $e) {

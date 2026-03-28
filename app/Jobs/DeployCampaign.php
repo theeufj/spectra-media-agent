@@ -92,11 +92,22 @@ class DeployCampaign implements ShouldQueue
             ]);
         }
 
+        // Split the campaign's daily budget evenly across strategies
+        $strategies = $this->campaign->strategies;
+        if ($strategies->count() > 0 && $this->campaign->daily_budget) {
+            $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
+            foreach ($strategies as $strategy) {
+                if (!$strategy->daily_budget) {
+                    $strategy->update(['daily_budget' => $budgetPerStrategy]);
+                }
+            }
+        }
+
         $deploymentResults = [];
         $successCount = 0;
         $failureCount = 0;
 
-        foreach ($this->campaign->strategies as $strategy) {
+        foreach ($strategies as $strategy) {
             Log::info("Deploying strategy for platform: {$strategy->platform}", [
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => $strategy->id,

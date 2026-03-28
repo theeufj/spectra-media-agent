@@ -145,12 +145,19 @@ class ExecutionContext
     }
 
     /**
-     * Calculate daily budget from total campaign budget.
+     * Calculate daily budget for this strategy.
+     * Uses the strategy-level budget if set, otherwise falls back to campaign budget split.
      * 
      * @return float Daily budget
      */
     public function calculateDailyBudget(): float
     {
+        // Use strategy-level budget if assigned (set by DeployCampaign budget splitting)
+        if ($this->strategy->daily_budget && $this->strategy->daily_budget > 0) {
+            return (float) $this->strategy->daily_budget;
+        }
+
+        // Fallback: split campaign budget by duration
         $duration = $this->getCampaignDurationDays();
         if ($duration <= 0) {
             return 0;

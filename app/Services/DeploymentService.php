@@ -8,6 +8,7 @@ use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\GoogleAdsExecutionAgent;
+use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
 use Illuminate\Support\Facades\Log;
@@ -206,7 +207,8 @@ class DeploymentService
     protected static function getAgent(string $platform, Customer $customer): mixed
     {
         return match (self::normalizePlatform($platform)) {
-            'google' => new GoogleAdsExecutionAgent($customer, app(GeminiService::class)),
+            'google' => new GoogleAdsExecutionAgent($customer),
+            'facebook' => new FacebookAdsExecutionAgent($customer),
             default => null
         };
     }

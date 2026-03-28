@@ -18,6 +18,7 @@ class Strategy extends Model
     protected $fillable = [
         'campaign_id',
         'platform',
+        'daily_budget',
         'campaign_type',
         'ad_copy_strategy',
         'imagery_strategy',
