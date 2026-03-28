@@ -160,11 +160,7 @@ class CompetitorIntelligenceAgent
     public function generateCounterStrategy(Customer $customer): array
     {
         // Gather all competitor intelligence
-        $competitors = $customer->competitors()
-            ->whereNotNull('messaging_analysis')
-            ->orderByDesc('impression_share')
-            ->take(5)
-            ->get();
+        $competitors = $this->getAnalyzedCompetitors($customer);
 
         if ($competitors->isEmpty()) {
             return [
@@ -209,15 +205,35 @@ class CompetitorIntelligenceAgent
         $strategy = $this->parseJson($response['text']);
 
         // Store the strategy on the customer
-        $customer->update([
-            'competitive_strategy' => $strategy,
-            'competitive_strategy_updated_at' => now(),
-        ]);
+        $this->persistStrategy($customer, $strategy);
 
         return [
             'status' => 'success',
             'strategy' => $strategy,
         ];
+    }
+
+    /**
+     * Get analyzed competitors for counter-strategy generation.
+     */
+    protected function getAnalyzedCompetitors(Customer $customer)
+    {
+        return $customer->competitors()
+            ->whereNotNull('messaging_analysis')
+            ->orderByDesc('impression_share')
+            ->take(5)
+            ->get();
+    }
+
+    /**
+     * Persist the counter-strategy to the customer record.
+     */
+    protected function persistStrategy(Customer $customer, array $strategy): void
+    {
+        $customer->update([
+            'competitive_strategy' => $strategy,
+            'competitive_strategy_updated_at' => now(),
+        ]);
     }
 
     /**

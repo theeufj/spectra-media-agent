@@ -41,9 +41,7 @@ class CompetitorAnalysisAgent
             'errors' => [],
         ];
 
-        $competitors = $customer->competitors()
-            ->needsAnalysis(7) // Older than 7 days or never analyzed
-            ->get();
+        $competitors = $this->getCompetitorsNeedingAnalysis($customer);
 
         foreach ($competitors as $competitor) {
             $analysisResult = $this->analyze($competitor, $customer);
@@ -60,6 +58,16 @@ class CompetitorAnalysisAgent
         }
 
         return $results;
+    }
+
+    /**
+     * Get competitors that need analysis (older than given days or never analyzed).
+     */
+    protected function getCompetitorsNeedingAnalysis(Customer $customer, int $days = 7)
+    {
+        return $customer->competitors()
+            ->needsAnalysis($days)
+            ->get();
     }
 
     /**
@@ -88,7 +96,7 @@ class CompetitorAnalysisAgent
             }
 
             // Update raw content
-            $competitor->update([
+            $this->persistAnalysis($competitor, [
                 'raw_content' => $scrapedContent['content'],
                 'title' => $scrapedContent['title'] ?? $competitor->title,
                 'meta_description' => $scrapedContent['meta_description'] ?? $competitor->meta_description,
@@ -130,7 +138,7 @@ class CompetitorAnalysisAgent
             }
 
             // Step 6: Update competitor record
-            $competitor->update([
+            $updateData = [
                 'messaging_analysis' => array_merge(
                     $competitor->messaging_analysis ?? [],
                     $analysis['messaging'] ?? []
@@ -139,17 +147,17 @@ class CompetitorAnalysisAgent
                 'keywords_detected' => $analysis['keywords_themes']['primary_keywords'] ?? [],
                 'pricing_info' => $analysis['pricing'] ?? [],
                 'last_analyzed_at' => now(),
-            ]);
+            ];
 
             // Store counter-strategy as a separate attribute
             if (isset($analysis['counter_strategy'])) {
-                $competitor->update([
-                    'messaging_analysis' => array_merge(
-                        $competitor->messaging_analysis ?? [],
-                        ['counter_strategy' => $analysis['counter_strategy']]
-                    ),
-                ]);
+                $updateData['messaging_analysis'] = array_merge(
+                    $updateData['messaging_analysis'],
+                    ['counter_strategy' => $analysis['counter_strategy']]
+                );
             }
+
+            $this->persistAnalysis($competitor, $updateData);
 
             $result['success'] = true;
             $result['analysis'] = $analysis;
@@ -168,6 +176,14 @@ class CompetitorAnalysisAgent
         }
 
         return $result;
+    }
+
+    /**
+     * Persist analysis data to a competitor record.
+     */
+    protected function persistAnalysis(Competitor $competitor, array $data): void
+    {
+        $competitor->update($data);
     }
 
     /**

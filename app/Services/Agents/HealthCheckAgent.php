@@ -9,6 +9,9 @@ use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use App\Services\FacebookAds\InsightService;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
+use App\Models\GoogleAdsPerformanceData;
+use App\Models\FacebookAdsPerformanceData;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
@@ -554,9 +557,65 @@ class HealthCheckAgent
      */
     protected function checkGoogleAdsAccountStatus(Customer $customer): array
     {
-        // This would normally call the Google Ads API to check account status
-        // Simplified for now
-        return ['issues' => [], 'warnings' => []];
+        $health = ['issues' => [], 'warnings' => []];
+
+        try {
+            $service = new class($customer) extends \App\Services\GoogleAds\BaseGoogleAdsService {
+                public function getAccountStatus(string $customerId): ?array
+                {
+                    $this->ensureClient();
+
+                    $query = "SELECT customer.status, customer.manager, customer.descriptive_name FROM customer LIMIT 1";
+
+                    $response = $this->searchQuery($customerId, $query);
+                    foreach ($response->getIterator() as $row) {
+                        $c = $row->getCustomer();
+                        return [
+                            'status' => $c->getStatus(),
+                            'is_manager' => $c->getManager(),
+                            'name' => $c->getDescriptiveName(),
+                        ];
+                    }
+                    return null;
+                }
+            };
+
+            $customerId = $customer->google_ads_customer_id;
+            $status = $service->getAccountStatus($customerId);
+
+            if ($status) {
+                // Status enum: 1=ENABLED, 2=CANCELED, 3=SUSPENDED, 4=CLOSED
+                if ($status['status'] === 3) {
+                    $health['issues'][] = [
+                        'type' => 'account_suspended',
+                        'severity' => 'critical',
+                        'message' => 'Google Ads account is suspended',
+                        'details' => 'Contact Google Ads support to resolve account suspension',
+                    ];
+                } elseif ($status['status'] === 2) {
+                    $health['issues'][] = [
+                        'type' => 'account_canceled',
+                        'severity' => 'critical',
+                        'message' => 'Google Ads account is canceled',
+                        'details' => 'The account has been canceled and cannot run ads',
+                    ];
+                } elseif ($status['status'] === 4) {
+                    $health['issues'][] = [
+                        'type' => 'account_closed',
+                        'severity' => 'critical',
+                        'message' => 'Google Ads account is closed',
+                        'details' => 'The account has been permanently closed',
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            Log::debug("HealthCheckAgent: Could not check Google account status", [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $health;
     }
 
     /**
@@ -564,9 +623,67 @@ class HealthCheckAgent
      */
     protected function checkFacebookAccountRestrictions(Customer $customer): array
     {
-        // This would normally call the Facebook API to check account status
-        // Simplified for now
-        return ['issues' => [], 'warnings' => []];
+        $health = ['issues' => [], 'warnings' => []];
+
+        try {
+            $accountId = $customer->facebook_ads_account_id;
+            $accessToken = $customer->facebook_ads_access_token;
+
+            if (!$accountId || !$accessToken) {
+                return $health;
+            }
+
+            $response = Http::get("https://graph.facebook.com/v22.0/{$accountId}", [
+                'access_token' => $accessToken,
+                'fields' => 'account_status,disable_reason,name',
+            ]);
+
+            if (!$response->successful()) {
+                return $health;
+            }
+
+            $data = $response->json();
+            $accountStatus = $data['account_status'] ?? 1;
+
+            // Facebook account_status: 1=ACTIVE, 2=DISABLED, 3=UNSETTLED, 7=PENDING_REVIEW, 9=IN_GRACE_PERIOD, 100=PENDING_CLOSURE, 101=CLOSED
+            $statusMessages = [
+                2 => ['severity' => 'critical', 'message' => 'Facebook ad account is disabled', 'type' => 'account_disabled'],
+                3 => ['severity' => 'critical', 'message' => 'Facebook ad account has unsettled payments', 'type' => 'account_unsettled'],
+                7 => ['severity' => 'high', 'message' => 'Facebook ad account is pending review', 'type' => 'account_pending_review'],
+                9 => ['severity' => 'high', 'message' => 'Facebook ad account is in grace period', 'type' => 'account_grace_period'],
+                100 => ['severity' => 'critical', 'message' => 'Facebook ad account is pending closure', 'type' => 'account_pending_closure'],
+                101 => ['severity' => 'critical', 'message' => 'Facebook ad account is closed', 'type' => 'account_closed'],
+            ];
+
+            if (isset($statusMessages[$accountStatus])) {
+                $info = $statusMessages[$accountStatus];
+                $disableReason = $data['disable_reason'] ?? null;
+                $details = $disableReason ? "Disable reason: {$disableReason}" : 'Check Facebook Business Manager for details';
+
+                if (in_array($info['severity'], ['critical'])) {
+                    $health['issues'][] = [
+                        'type' => $info['type'],
+                        'severity' => $info['severity'],
+                        'message' => $info['message'],
+                        'details' => $details,
+                    ];
+                } else {
+                    $health['warnings'][] = [
+                        'type' => $info['type'],
+                        'severity' => $info['severity'],
+                        'message' => $info['message'],
+                        'details' => $details,
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            Log::debug("HealthCheckAgent: Could not check Facebook account restrictions", [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return $health;
     }
 
     /**
@@ -657,22 +774,171 @@ class HealthCheckAgent
     {
         $health = ['warnings' => [], 'metrics' => []];
 
-        // This would compare recent performance to historical averages
-        // Simplified implementation
-        
+        try {
+            // Get last 7 days vs previous 7 days
+            $recentStart = now()->subDays(7)->toDateString();
+            $recentEnd = now()->toDateString();
+            $previousStart = now()->subDays(14)->toDateString();
+            $previousEnd = now()->subDays(7)->toDateString();
+
+            $recent = null;
+            $previous = null;
+
+            if ($campaign->google_ads_campaign_id) {
+                $recent = GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->whereBetween('date', [$recentStart, $recentEnd])
+                    ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
+                    ->first();
+                $previous = GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->whereBetween('date', [$previousStart, $previousEnd])
+                    ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
+                    ->first();
+            } elseif ($campaign->facebook_ads_campaign_id) {
+                $recent = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->whereBetween('date', [$recentStart, $recentEnd])
+                    ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
+                    ->first();
+                $previous = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->whereBetween('date', [$previousStart, $previousEnd])
+                    ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
+                    ->first();
+            }
+
+            if (!$recent || !$previous || ($previous->impressions ?? 0) == 0) {
+                return $health;
+            }
+
+            $health['metrics'] = [
+                'recent_impressions' => (int) $recent->impressions,
+                'previous_impressions' => (int) $previous->impressions,
+                'recent_clicks' => (int) $recent->clicks,
+                'previous_clicks' => (int) $previous->clicks,
+            ];
+
+            // Check CTR drop
+            $recentCtr = $recent->impressions > 0 ? $recent->clicks / $recent->impressions : 0;
+            $previousCtr = $previous->impressions > 0 ? $previous->clicks / $previous->impressions : 0;
+
+            if ($previousCtr > 0) {
+                $ctrChange = ($recentCtr - $previousCtr) / $previousCtr;
+                if ($ctrChange < -$this->performanceDropThreshold) {
+                    $dropPercent = round(abs($ctrChange) * 100);
+                    $health['warnings'][] = [
+                        'type' => 'ctr_drop',
+                        'severity' => 'high',
+                        'message' => "CTR dropped {$dropPercent}% compared to the previous 7 days",
+                        'details' => sprintf('CTR went from %.2f%% to %.2f%%', $previousCtr * 100, $recentCtr * 100),
+                    ];
+                }
+            }
+
+            // Check CPC spike
+            $recentCpc = $recent->clicks > 0 ? $recent->cost / $recent->clicks : 0;
+            $previousCpc = $previous->clicks > 0 ? $previous->cost / $previous->clicks : 0;
+
+            if ($previousCpc > 0) {
+                $cpcChange = ($recentCpc - $previousCpc) / $previousCpc;
+                if ($cpcChange > ($this->performanceSpikeThreshold - 1)) {
+                    $spikePercent = round($cpcChange * 100);
+                    $health['warnings'][] = [
+                        'type' => 'cpc_spike',
+                        'severity' => 'high',
+                        'message' => "CPC increased {$spikePercent}% compared to the previous 7 days",
+                        'details' => sprintf('CPC went from $%.2f to $%.2f', $previousCpc, $recentCpc),
+                    ];
+                }
+            }
+
+            // Check conversion rate drop
+            $recentCvr = $recent->clicks > 0 ? $recent->conversions / $recent->clicks : 0;
+            $previousCvr = $previous->clicks > 0 ? $previous->conversions / $previous->clicks : 0;
+
+            if ($previousCvr > 0) {
+                $cvrChange = ($recentCvr - $previousCvr) / $previousCvr;
+                if ($cvrChange < -$this->performanceDropThreshold) {
+                    $dropPercent = round(abs($cvrChange) * 100);
+                    $health['warnings'][] = [
+                        'type' => 'conversion_rate_drop',
+                        'severity' => 'high',
+                        'message' => "Conversion rate dropped {$dropPercent}% compared to the previous 7 days",
+                        'details' => sprintf('CVR went from %.2f%% to %.2f%%', $previousCvr * 100, $recentCvr * 100),
+                    ];
+                }
+            }
+
+        } catch (\Exception $e) {
+            Log::debug("HealthCheckAgent: Could not detect performance anomalies", [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return $health;
     }
 
     /**
-     * Check for creative fatigue.
+     * Check for creative fatigue by comparing recent CTR to earlier CTR for high-impression campaigns.
      */
     protected function checkCreativeFatigue(Campaign $campaign): array
     {
         $health = ['warnings' => []];
 
-        // This would analyze CTR trends over time for the same creatives
-        // Simplified implementation
-        
+        try {
+            $model = $campaign->google_ads_campaign_id
+                ? GoogleAdsPerformanceData::class
+                : ($campaign->facebook_ads_campaign_id ? FacebookAdsPerformanceData::class : null);
+
+            if (!$model) {
+                return $health;
+            }
+
+            // Total impressions over last 30 days
+            $totalImpressions = $model::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(30)->toDateString())
+                ->sum('impressions');
+
+            if ($totalImpressions < $this->creativeFatigueImpressions) {
+                return $health;
+            }
+
+            // Compare first half (days 30-16) vs second half (days 15-1)
+            $earlyData = $model::where('campaign_id', $campaign->id)
+                ->whereBetween('date', [now()->subDays(30)->toDateString(), now()->subDays(16)->toDateString()])
+                ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks')
+                ->first();
+
+            $recentData = $model::where('campaign_id', $campaign->id)
+                ->whereBetween('date', [now()->subDays(15)->toDateString(), now()->toDateString()])
+                ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks')
+                ->first();
+
+            if (!$earlyData || !$recentData || ($earlyData->impressions ?? 0) == 0 || ($recentData->impressions ?? 0) == 0) {
+                return $health;
+            }
+
+            $earlyCtr = $earlyData->clicks / $earlyData->impressions;
+            $recentCtr = $recentData->clicks / $recentData->impressions;
+
+            if ($earlyCtr > 0) {
+                $ctrDrop = ($earlyCtr - $recentCtr) / $earlyCtr;
+                if ($ctrDrop >= $this->creativeFatigueCtRDropThreshold) {
+                    $dropPercent = round($ctrDrop * 100);
+                    $health['warnings'][] = [
+                        'type' => 'creative_fatigue',
+                        'severity' => 'medium',
+                        'message' => "Possible creative fatigue: CTR dropped {$dropPercent}% over the last 30 days ({$totalImpressions} impressions)",
+                        'details' => sprintf('CTR went from %.2f%% to %.2f%%', $earlyCtr * 100, $recentCtr * 100),
+                    ];
+                }
+            }
+
+        } catch (\Exception $e) {
+            Log::debug("HealthCheckAgent: Could not check creative fatigue", [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
         return $health;
     }
 
@@ -690,10 +956,65 @@ class HealthCheckAgent
                 $customerId = $campaign->customer->google_ads_customer_id;
                 $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
                 
-                // This would check actual ad status
-                // Simplified implementation
+                $ads = $getAdStatus($customerId, $resourceName);
+
+                $disapproved = 0;
+                $limited = 0;
+
+                foreach ($ads as $ad) {
+                    // approval_status: 2 = APPROVED, 3 = APPROVED_LIMITED, 4 = DISAPPROVED
+                    if (($ad['approval_status'] ?? 0) === 4) {
+                        $disapproved++;
+                        $topics = array_map(fn($t) => $t['topic'] ?? 'unknown', $ad['policy_topics'] ?? []);
+                        $health['issues'][] = [
+                            'type' => 'google_ad_disapproved',
+                            'severity' => 'high',
+                            'message' => "Google ad disapproved: {$ad['resource_name']}",
+                            'details' => 'Policy topics: ' . implode(', ', $topics),
+                        ];
+                    } elseif (($ad['approval_status'] ?? 0) === 3) {
+                        $limited++;
+                    }
+                }
+
+                if ($limited > 0) {
+                    $health['warnings'][] = [
+                        'type' => 'google_ads_limited',
+                        'severity' => 'medium',
+                        'message' => "{$limited} Google ad(s) have limited approval",
+                    ];
+                }
+
             } catch (\Exception $e) {
                 Log::warning("HealthCheckAgent: Could not check ad status", [
+                    'campaign_id' => $campaign->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Check Facebook Ads
+        if ($campaign->facebook_ads_campaign_id && $campaign->customer) {
+            try {
+                $adSetService = new \App\Services\FacebookAds\AdSetService($campaign->customer);
+                $adService = new \App\Services\FacebookAds\AdService($campaign->customer);
+                $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+
+                foreach ($adSets as $adSet) {
+                    $ads = $adService->listAds($adSet['id']) ?? [];
+                    foreach ($ads as $ad) {
+                        $status = $ad['status'] ?? '';
+                        if ($status === 'DISAPPROVED') {
+                            $health['issues'][] = [
+                                'type' => 'facebook_ad_disapproved',
+                                'severity' => 'high',
+                                'message' => "Facebook ad disapproved: {$ad['name']} ({$ad['id']})",
+                            ];
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning("HealthCheckAgent: Could not check Facebook ad status", [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
                 ]);

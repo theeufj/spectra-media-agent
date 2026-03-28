@@ -9,8 +9,12 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use App\Services\GoogleAds\ConversionTrackingService;
+use App\Services\FacebookAds\AdAccountService;
+use App\Services\FacebookAds\AdService;
+use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\CampaignService;
+use App\Services\FacebookAds\InsightService;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 
@@ -532,18 +536,25 @@ class AccountAuditAgent
         $adAccountId = $auditSession->facebook_ad_account_id;
         $metrics = [];
 
+        // Build services from the audit session's access token
+        $campaignService = CampaignService::fromAccessToken($accessToken);
+        $insightService = InsightService::fromAccessToken($accessToken);
+        $adSetService = AdSetService::fromAccessToken($accessToken);
+        $adService = AdService::fromAccessToken($accessToken);
+        $accountService = AdAccountService::fromAccessToken($accessToken);
+
         try {
             // 1. Campaign performance & fatigue
-            $metrics['campaigns'] = $this->auditFacebookCampaigns($accessToken, $adAccountId);
+            $metrics['campaigns'] = $this->auditFacebookCampaigns($campaignService, $insightService, $adAccountId);
 
             // 2. Ad set health
-            $metrics['ad_sets'] = $this->auditFacebookAdSets($accessToken, $adAccountId);
+            $metrics['ad_sets'] = $this->auditFacebookAdSets($adSetService, $insightService, $adAccountId);
 
             // 3. Creative variation
-            $metrics['creatives'] = $this->auditFacebookCreatives($accessToken, $adAccountId);
+            $metrics['creatives'] = $this->auditFacebookCreatives($adService, $insightService, $adAccountId);
 
             // 4. Pixel health
-            $metrics['pixel'] = $this->auditFacebookPixel($accessToken, $adAccountId);
+            $metrics['pixel'] = $this->auditFacebookPixel($accountService, $adAccountId);
 
         } catch (\Exception $e) {
             Log::error("AccountAuditAgent: Facebook Ads audit error", [
@@ -559,26 +570,22 @@ class AccountAuditAgent
     /**
      * Audit Facebook campaign performance and frequency/fatigue.
      */
-    protected function auditFacebookCampaigns(string $accessToken, string $adAccountId): array
+    protected function auditFacebookCampaigns(CampaignService $campaignService, InsightService $insightService, string $adAccountId): array
     {
-        $response = Http::get("https://graph.facebook.com/v22.0/{$adAccountId}/campaigns", [
-            'access_token' => $accessToken,
-            'fields' => 'id,name,status,objective',
-            'limit' => 100,
-        ]);
+        // CampaignService expects account ID without 'act_' prefix
+        $rawAccountId = str_replace('act_', '', $adAccountId);
+        $campaigns = $campaignService->listCampaigns($rawAccountId) ?? [];
 
-        $campaigns = $response->json('data', []);
+        $dateStart = Carbon::now()->subDays(30)->format('Y-m-d');
+        $dateEnd = Carbon::now()->format('Y-m-d');
 
-        // Get insights for active campaigns
-        $insightsResponse = Http::get("https://graph.facebook.com/v22.0/{$adAccountId}/insights", [
-            'access_token' => $accessToken,
-            'fields' => 'campaign_id,campaign_name,impressions,clicks,spend,actions,frequency,reach,cpc,cpm',
-            'time_range' => json_encode(['since' => Carbon::now()->subDays(30)->format('Y-m-d'), 'until' => Carbon::now()->format('Y-m-d')]),
-            'level' => 'campaign',
-            'limit' => 100,
-        ]);
-
-        $insights = $insightsResponse->json('data', []);
+        $insights = $insightService->getAccountInsightsByLevel(
+            $adAccountId,
+            $dateStart,
+            $dateEnd,
+            'campaign',
+            ['campaign_id', 'campaign_name', 'impressions', 'clicks', 'spend', 'actions', 'frequency', 'reach', 'cpc', 'cpm']
+        );
 
         $totalSpend = 0;
         $totalWasted = 0;
@@ -631,36 +638,50 @@ class AccountAuditAgent
     }
 
     /**
-     * Audit Facebook ad sets — dead delivery, oversized audiences.
+     * Audit Facebook ad sets — dead delivery, learning limited, budget conflicts.
      */
-    protected function auditFacebookAdSets(string $accessToken, string $adAccountId): array
+    protected function auditFacebookAdSets(AdSetService $adSetService, InsightService $insightService, string $adAccountId): array
     {
-        $response = Http::get("https://graph.facebook.com/v22.0/{$adAccountId}/adsets", [
-            'access_token' => $accessToken,
-            'fields' => 'id,name,status,targeting,effective_status',
-            'limit' => 100,
-            'filtering' => json_encode([['field' => 'effective_status', 'operator' => 'IN', 'value' => ['ACTIVE', 'PAUSED']]]),
+        $adSets = $adSetService->listAdSetsByAccount($adAccountId, [
+            ['field' => 'effective_status', 'operator' => 'IN', 'value' => ['ACTIVE', 'PAUSED']],
         ]);
 
-        $adSets = $response->json('data', []);
         $deadAdSets = 0;
+        $learningLimited = 0;
 
-        // Get insights per ad set
-        $insightsResponse = Http::get("https://graph.facebook.com/v22.0/{$adAccountId}/insights", [
-            'access_token' => $accessToken,
-            'fields' => 'adset_id,impressions,spend',
-            'time_range' => json_encode(['since' => Carbon::now()->subDays(7)->format('Y-m-d'), 'until' => Carbon::now()->format('Y-m-d')]),
-            'level' => 'adset',
-            'limit' => 100,
-        ]);
+        $dateStart = Carbon::now()->subDays(7)->format('Y-m-d');
+        $dateEnd = Carbon::now()->format('Y-m-d');
 
-        $insights = collect($insightsResponse->json('data', []))->keyBy('adset_id');
+        $insightsData = $insightService->getAccountInsightsByLevel(
+            $adAccountId,
+            $dateStart,
+            $dateEnd,
+            'adset',
+            ['adset_id', 'impressions', 'spend', 'actions', 'clicks']
+        );
+
+        $insights = collect($insightsData)->keyBy('adset_id');
 
         foreach ($adSets as $adSet) {
             if ($adSet['effective_status'] === 'ACTIVE') {
                 $adSetInsight = $insights->get($adSet['id']);
                 if (!$adSetInsight || (int) ($adSetInsight['impressions'] ?? 0) === 0) {
                     $deadAdSets++;
+                }
+            }
+
+            // Check for learning limited — ad sets with insufficient conversions for optimization
+            if ($adSet['effective_status'] === 'ACTIVE') {
+                $adSetInsight = $insights->get($adSet['id']);
+                $conversions = 0;
+                foreach (($adSetInsight['actions'] ?? []) as $action) {
+                    if (in_array($action['action_type'], ['purchase', 'lead', 'complete_registration'])) {
+                        $conversions += (int) ($action['value'] ?? 0);
+                    }
+                }
+                // Less than ~50 conversions/week suggests learning limited
+                if ($conversions > 0 && $conversions < 10) {
+                    $learningLimited++;
                 }
             }
         }
@@ -674,25 +695,30 @@ class AccountAuditAgent
             );
         }
 
+        if ($learningLimited > 0) {
+            $this->addFinding(
+                'learning_limited',
+                'medium',
+                "{$learningLimited} Ad Set(s) Likely Learning-Limited",
+                "These ad sets had fewer than 10 conversion events in 7 days. Facebook needs ~50 conversions/week to optimize effectively. Consider broadening targeting or switching to an upper-funnel objective."
+            );
+        }
+
         return [
             'total_ad_sets' => count($adSets),
             'dead_ad_sets' => $deadAdSets,
+            'learning_limited' => $learningLimited,
         ];
     }
 
     /**
-     * Audit Facebook creative variation — single-ad ad sets.
+     * Audit Facebook creative variation — single-ad ad sets, per-ad frequency and CTR.
      */
-    protected function auditFacebookCreatives(string $accessToken, string $adAccountId): array
+    protected function auditFacebookCreatives(AdService $adService, InsightService $insightService, string $adAccountId): array
     {
-        $response = Http::get("https://graph.facebook.com/v22.0/{$adAccountId}/ads", [
-            'access_token' => $accessToken,
-            'fields' => 'id,adset_id,effective_status',
-            'limit' => 500,
-            'filtering' => json_encode([['field' => 'effective_status', 'operator' => 'IN', 'value' => ['ACTIVE']]]),
+        $ads = $adService->listAdsByAccount($adAccountId, [
+            ['field' => 'effective_status', 'operator' => 'IN', 'value' => ['ACTIVE']],
         ]);
-
-        $ads = $response->json('data', []);
 
         // Count ads per ad set
         $adSetAdCounts = [];
@@ -712,24 +738,51 @@ class AccountAuditAgent
             );
         }
 
+        // Per-ad frequency check (high frequency = creative fatigue)
+        $highFrequencyAds = 0;
+        if (!empty($ads)) {
+            $adIds = array_column($ads, 'id');
+            $dateStart = Carbon::now()->subDays(14)->format('Y-m-d');
+            $dateEnd = Carbon::now()->format('Y-m-d');
+
+            // Check up to 50 ads to avoid rate limits
+            foreach (array_slice($adIds, 0, 50) as $adId) {
+                $adInsights = $insightService->getAdInsights(
+                    $adId,
+                    $dateStart,
+                    $dateEnd,
+                    ['frequency', 'impressions', 'clicks']
+                );
+                $data = $adInsights[0] ?? null;
+                if ($data && (float) ($data['frequency'] ?? 0) > 4.0) {
+                    $highFrequencyAds++;
+                }
+            }
+
+            if ($highFrequencyAds > 0) {
+                $this->addFinding(
+                    'high_ad_frequency',
+                    'high',
+                    "{$highFrequencyAds} Ad(s) With Frequency Above 4x",
+                    "These ads have been shown to users more than 4 times in 14 days. Refresh creatives to prevent ad fatigue and declining performance."
+                );
+            }
+        }
+
         return [
             'total_active_ads' => count($ads),
             'single_ad_sets' => $singleAdSets,
             'total_ad_sets_with_ads' => count($adSetAdCounts),
+            'high_frequency_ads' => $highFrequencyAds,
         ];
     }
 
     /**
-     * Audit Facebook pixel health.
+     * Audit Facebook pixel health — existence, recency, and event coverage.
      */
-    protected function auditFacebookPixel(string $accessToken, string $adAccountId): array
+    protected function auditFacebookPixel(AdAccountService $accountService, string $adAccountId): array
     {
-        $response = Http::get("https://graph.facebook.com/v22.0/{$adAccountId}/adspixels", [
-            'access_token' => $accessToken,
-            'fields' => 'id,name,last_fired_time',
-        ]);
-
-        $pixels = $response->json('data', []);
+        $pixels = $accountService->getPixels($adAccountId);
 
         if (empty($pixels)) {
             $this->addFinding(
@@ -738,8 +791,10 @@ class AccountAuditAgent
                 'No Facebook Pixel Installed',
                 'Without a pixel, you cannot track conversions, build custom audiences, or optimize for conversions.'
             );
-            return ['has_pixel' => false];
+            return ['has_pixel' => false, 'event_types' => []];
         }
+
+        $pixelId = $pixels[0]['id'];
 
         // Check if pixel has fired recently
         $lastFired = $pixels[0]['last_fired_time'] ?? null;
@@ -753,9 +808,45 @@ class AccountAuditAgent
                     "Your pixel hasn't fired in over 7 days. It may not be installed correctly on your website."
                 );
             }
+        } else {
+            $this->addFinding(
+                'pixel_never_fired',
+                'critical',
+                'Facebook Pixel Has Never Fired',
+                'Your pixel exists but has never been triggered. Verify it is installed on your website.'
+            );
         }
 
-        return ['has_pixel' => true, 'pixel_count' => count($pixels)];
+        // Check pixel event stats for the last 7 days
+        $eventTypes = [];
+        try {
+            $stats = $accountService->getPixelStats($pixelId);
+
+            foreach ($stats as $stat) {
+                $eventTypes[] = $stat['event'] ?? $stat['name'] ?? 'unknown';
+            }
+
+            // Check for missing key conversion events
+            $keyEvents = ['Purchase', 'Lead', 'CompleteRegistration', 'AddToCart', 'InitiateCheckout'];
+            $hasConversionEvent = !empty(array_intersect($keyEvents, $eventTypes));
+
+            if (!$hasConversionEvent && !empty($eventTypes)) {
+                $this->addFinding(
+                    'missing_conversion_events',
+                    'high',
+                    'No Key Conversion Events Detected',
+                    'Your pixel is firing page views but not tracking conversion events (Purchase, Lead, etc.). Set up standard events to enable conversion optimization.'
+                );
+            }
+        } catch (\Exception $e) {
+            Log::debug("AccountAuditAgent: Could not fetch pixel stats", ['error' => $e->getMessage()]);
+        }
+
+        return [
+            'has_pixel' => true,
+            'pixel_count' => count($pixels),
+            'event_types' => $eventTypes,
+        ];
     }
 
     // =========================================================================

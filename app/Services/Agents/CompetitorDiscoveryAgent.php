@@ -60,9 +60,7 @@ class CompetitorDiscoveryAgent
             $knowledgeBaseContent = $this->getKnowledgeBaseSummary($customer);
             
             // Step 2: Get existing competitors to exclude
-            $existingCompetitors = $customer->competitors()
-                ->pluck('domain')
-                ->toArray();
+            $existingCompetitors = $this->getExistingCompetitorDomains($customer);
 
             Log::info('CompetitorDiscoveryAgent: Starting discovery', [
                 'customer_id' => $customer->id,
@@ -180,7 +178,13 @@ class CompetitorDiscoveryAgent
         $ourDomain = Competitor::extractDomain($customer->website);
 
         // Build the discovery prompt with sitemap context
-        $prompt = CompetitorDiscoveryPrompt::generate($customer, $knowledgeBaseContent, $existingCompetitors);
+        $prompt = CompetitorDiscoveryPrompt::build(
+            $customer->name,
+            $customer->website ?? '',
+            $knowledgeBaseContent,
+            $customer->business_type ?? $customer->industry ?? null,
+            $existingCompetitors
+        );
 
         try {
             // Use Gemini with Google Search grounding enabled
@@ -201,7 +205,8 @@ class CompetitorDiscoveryAgent
             }
 
             // Parse the JSON response
-            $discoveredCompetitors = $this->parseResponse($responseText);
+            $parsedData = $this->parseResponse($responseText);
+            $discoveredCompetitors = $parsedData['competitors'] ?? $parsedData;
 
             foreach ($discoveredCompetitors as $competitorData) {
                 $domain = Competitor::extractDomain($competitorData['url'] ?? '');
@@ -333,6 +338,16 @@ class CompetitorDiscoveryAgent
         }
 
         return $data;
+    }
+
+    /**
+     * Get existing competitor domains for a customer.
+     */
+    protected function getExistingCompetitorDomains(Customer $customer): array
+    {
+        return $customer->competitors()
+            ->pluck('domain')
+            ->toArray();
     }
 
     /**

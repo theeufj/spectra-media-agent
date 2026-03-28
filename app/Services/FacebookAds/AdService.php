@@ -46,6 +46,37 @@ class AdService extends BaseFacebookAdsService
     }
 
     /**
+     * List ads for an ad account (account-level).
+     *
+     * @param string $accountId Account ID (with act_ prefix)
+     * @param array $filters Optional API filtering
+     * @param int $limit Max results
+     * @return array
+     */
+    public function listAdsByAccount(string $accountId, array $filters = [], int $limit = 500): array
+    {
+        try {
+            $params = [
+                'fields' => 'id,name,adset_id,effective_status',
+                'limit' => $limit,
+            ];
+
+            if (!empty($filters)) {
+                $params['filtering'] = json_encode($filters);
+            }
+
+            $response = $this->get("/{$accountId}/ads", $params);
+
+            return $response['data'] ?? [];
+        } catch (\Exception $e) {
+            Log::error("Error listing ads by account: " . $e->getMessage(), [
+                'account_id' => $accountId,
+            ]);
+            return [];
+        }
+    }
+
+    /**
      * Create a new ad.
      *
      * @param string $adSetId Ad set ID

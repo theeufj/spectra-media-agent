@@ -148,4 +148,46 @@ class AdAccountService extends BaseFacebookAdsService
             return null;
         }
     }
+
+    /**
+     * Get pixels for an ad account.
+     *
+     * @param string $accountId Account ID (with act_ prefix)
+     * @return array
+     */
+    public function getPixels(string $accountId): array
+    {
+        try {
+            $response = $this->get("/{$accountId}/adspixels", [
+                'fields' => 'id,name,last_fired_time',
+            ]);
+
+            return $response['data'] ?? [];
+        } catch (\Exception $e) {
+            Log::error("Error getting pixels: " . $e->getMessage(), [
+                'account_id' => $accountId,
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Get event stats for a pixel.
+     *
+     * @param string $pixelId Pixel ID
+     * @return array
+     */
+    public function getPixelStats(string $pixelId): array
+    {
+        try {
+            $response = $this->get("/{$pixelId}/stats");
+
+            return $response['data'] ?? [];
+        } catch (\Exception $e) {
+            Log::error("Error getting pixel stats: " . $e->getMessage(), [
+                'pixel_id' => $pixelId,
+            ]);
+            return [];
+        }
+    }
 }

@@ -10,6 +10,7 @@ use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use App\Services\FacebookAds\AdService as FacebookAdService;
+use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\FacebookAds\CreativeService as FacebookCreativeService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\Agents\Traits\RetryableApiOperation;
@@ -304,14 +305,91 @@ class SelfHealingAgent
     }
 
     /**
-     * Check Google delivery health for issues.
+     * Check Google delivery health for issues like limited serving status.
      */
     protected function checkGoogleDeliveryHealth(Customer $customer, Campaign $campaign, string $customerId, string $campaignResourceName, array &$results): void
     {
-        // Check for limited by budget status
-        // Check for limited by bid status
-        // Check for learning status on Smart Bidding
-        // These would require additional API calls to get campaign status details
+        try {
+            $service = new class($customer) extends \App\Services\GoogleAds\BaseGoogleAdsService {
+                public function getCampaignDeliveryStatus(string $customerId, string $campaignId): ?array
+                {
+                    $this->ensureClient();
+
+                    $query = "SELECT " .
+                        "campaign.id, " .
+                        "campaign.status, " .
+                        "campaign.serving_status, " .
+                        "campaign.bidding_strategy_type, " .
+                        "campaign.primary_status, " .
+                        "campaign.primary_status_reasons " .
+                        "FROM campaign " .
+                        "WHERE campaign.id = {$campaignId}";
+
+                    $response = $this->searchQuery($customerId, $query);
+                    foreach ($response->getIterator() as $row) {
+                        $c = $row->getCampaign();
+                        return [
+                            'status' => $c->getStatus(),
+                            'serving_status' => $c->getServingStatus(),
+                            'bidding_strategy_type' => $c->getBiddingStrategyType(),
+                            'primary_status' => $c->getPrimaryStatus(),
+                            'primary_status_reasons' => iterator_to_array($c->getPrimaryStatusReasons()),
+                        ];
+                    }
+                    return null;
+                }
+            };
+
+            $status = $service->getCampaignDeliveryStatus($customerId, $campaign->google_ads_campaign_id);
+
+            if (!$status) {
+                return;
+            }
+
+            // Check serving status (2 = SERVING, 3 = NONE, 4 = ENDED, 5 = PENDING, 6 = SUSPENDED)
+            $servingStatus = $status['serving_status'] ?? 0;
+            if ($servingStatus === 3) {
+                $results['warnings'][] = [
+                    'type' => 'not_serving',
+                    'platform' => 'google_ads',
+                    'message' => 'Campaign is not serving',
+                    'severity' => 'high',
+                ];
+            } elseif ($servingStatus === 6) {
+                $results['warnings'][] = [
+                    'type' => 'suspended',
+                    'platform' => 'google_ads',
+                    'message' => 'Campaign is suspended by Google',
+                    'severity' => 'critical',
+                ];
+            }
+
+            // Check primary status reasons for common issues
+            $reasons = $status['primary_status_reasons'] ?? [];
+            foreach ($reasons as $reason) {
+                if ($reason === 7) { // BUDGET_LIMITED
+                    $results['warnings'][] = [
+                        'type' => 'limited_by_budget',
+                        'platform' => 'google_ads',
+                        'message' => 'Campaign is limited by budget — consider increasing the daily budget',
+                        'severity' => 'medium',
+                    ];
+                } elseif ($reason === 8) { // BID_STRATEGY_LEARNING
+                    $results['warnings'][] = [
+                        'type' => 'bid_strategy_learning',
+                        'platform' => 'google_ads',
+                        'message' => 'Smart Bidding strategy is still in the learning phase',
+                        'severity' => 'low',
+                    ];
+                }
+            }
+
+        } catch (\Exception $e) {
+            Log::debug("SelfHealingAgent: Could not check Google delivery health", [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -354,13 +432,30 @@ class SelfHealingAgent
     }
 
     /**
-     * Get all ads for a Facebook campaign.
+     * Get all ads for a Facebook campaign by fetching ad sets then ads.
      */
     protected function getFacebookAdsForCampaign(FacebookAdService $adService, Campaign $campaign): array
     {
-        // This would typically query ad sets first, then get ads
-        // Simplified implementation - would need to expand based on actual API structure
-        return [];
+        $customer = $campaign->customer;
+        $adSetService = new FacebookAdSetService($customer);
+
+        $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id);
+        if (empty($adSets['data'])) {
+            return [];
+        }
+
+        $allAds = [];
+        foreach ($adSets['data'] as $adSet) {
+            $ads = $adService->listAds($adSet['id']);
+            if (!empty($ads['data'])) {
+                foreach ($ads['data'] as $ad) {
+                    $ad['adset_id'] = $adSet['id'];
+                    $allAds[] = $ad;
+                }
+            }
+        }
+
+        return $allAds;
     }
 
     /**
@@ -419,14 +514,80 @@ class SelfHealingAgent
                         'link_description' => $newAdData['description'] ?? $currentCopy['description'],
                     ];
 
-                    $results['actions_taken'][] = [
-                        'type' => 'facebook_ad_healing_initiated',
-                        'platform' => 'facebook_ads',
-                        'original_ad' => $ad['id'] ?? 'unknown',
-                        'reason' => $violationReason,
-                        'suggested_changes' => $newCreativeData,
-                        'note' => 'Manual review recommended - new creative prepared but not automatically deployed',
-                    ];
+                    // Auto-deploy the new compliant creative
+                    $accountId = str_replace('act_', '', $customer->facebook_ads_account_id);
+                    $imageUrl = $creative['image_url'] ?? $creative['thumbnail_url'] ?? null;
+                    $linkUrl = $creative['link_url'] ?? $customer->website ?? '';
+
+                    $newCreativeId = null;
+                    if ($imageUrl) {
+                        try {
+                            $newCreative = $creativeService->createImageCreative(
+                                $accountId,
+                                $newCreativeData['name'],
+                                $imageUrl,
+                                $newCreativeData['title'],
+                                $newCreativeData['body'],
+                                $creative['call_to_action_type'] ?? 'LEARN_MORE',
+                                $linkUrl
+                            );
+                            $newCreativeId = $newCreative['id'] ?? null;
+                        } catch (\Exception $e) {
+                            Log::warning("SelfHealingAgent: Could not create Facebook creative", [
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
+                    }
+
+                    if ($newCreativeId) {
+                        // Create a new ad with the compliant creative
+                        try {
+                            $replacementAdService = new FacebookAdService($customer);
+                            $newAd = $replacementAdService->createAd(
+                                $accountId,
+                                $ad['adset_id'] ?? '',
+                                $newCreativeData['name'],
+                                $newCreativeId,
+                                'ACTIVE'
+                            );
+
+                            // Pause the original disapproved ad
+                            if (!empty($ad['id'])) {
+                                $replacementAdService->pauseAd($ad['id']);
+                            }
+
+                            $results['actions_taken'][] = [
+                                'type' => 'facebook_ad_replaced',
+                                'platform' => 'facebook_ads',
+                                'original_ad' => $ad['id'] ?? 'unknown',
+                                'new_ad' => $newAd['id'] ?? 'unknown',
+                                'new_creative' => $newCreativeId,
+                                'reason' => $violationReason,
+                                'changes' => $newCreativeData,
+                            ];
+                        } catch (\Exception $e) {
+                            Log::warning("SelfHealingAgent: Could not deploy replacement Facebook ad", [
+                                'error' => $e->getMessage(),
+                            ]);
+                            $results['actions_taken'][] = [
+                                'type' => 'facebook_ad_healing_initiated',
+                                'platform' => 'facebook_ads',
+                                'original_ad' => $ad['id'] ?? 'unknown',
+                                'reason' => $violationReason,
+                                'suggested_changes' => $newCreativeData,
+                                'note' => 'Compliant creative created but ad deployment failed',
+                            ];
+                        }
+                    } else {
+                        $results['actions_taken'][] = [
+                            'type' => 'facebook_ad_healing_initiated',
+                            'platform' => 'facebook_ads',
+                            'original_ad' => $ad['id'] ?? 'unknown',
+                            'reason' => $violationReason,
+                            'suggested_changes' => $newCreativeData,
+                            'note' => $imageUrl ? 'Creative creation failed' : 'No image available to create replacement creative',
+                        ];
+                    }
 
                     Log::info("SelfHealingAgent: Prepared compliant Facebook ad copy", [
                         'original_ad' => $ad['id'] ?? 'unknown',
@@ -553,9 +714,7 @@ class SelfHealingAgent
      */
     public function healAllCampaigns(Customer $customer): array
     {
-        $campaigns = Campaign::where('customer_id', $customer->id)
-            ->where('status', 'active')
-            ->get();
+        $campaigns = $this->getActiveCampaigns($customer);
 
         $allResults = [
             'customer_id' => $customer->id,
@@ -580,5 +739,15 @@ class SelfHealingAgent
         }
 
         return $allResults;
+    }
+
+    /**
+     * Get active campaigns for a customer.
+     */
+    protected function getActiveCampaigns(Customer $customer)
+    {
+        return Campaign::where('customer_id', $customer->id)
+            ->where('status', 'active')
+            ->get();
     }
 }

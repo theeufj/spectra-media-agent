@@ -10,13 +10,23 @@ abstract class BaseFacebookAdsService
 {
     protected ?string $accessToken = null;
     protected ?Customer $customer = null;
-    protected string $apiVersion = 'v18.0';
+    protected string $apiVersion = 'v22.0';
     protected string $graphApiUrl = 'https://graph.facebook.com';
 
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
         $this->accessToken = $this->getAccessToken();
+    }
+
+    /**
+     * Create a service instance with a raw access token (e.g. for audit sessions).
+     */
+    public static function fromAccessToken(string $accessToken): static
+    {
+        $instance = new static(new Customer());
+        $instance->accessToken = $accessToken;
+        return $instance;
     }
 
     /**

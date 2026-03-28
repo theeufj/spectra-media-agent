@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\FacebookAds\InsightService;
+use App\Models\GoogleAdsPerformanceData;
 use App\Prompts\OptimizationPrompt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -342,18 +343,32 @@ class CampaignOptimizationAgent
     }
 
     /**
-     * Get Google Ads historical metrics for trend analysis.
+     * Get Google Ads historical metrics for trend analysis (60-30 days ago).
      */
     protected function getGoogleHistoricalMetrics(Campaign $campaign): ?array
     {
         try {
-            // Get metrics from 60-30 days ago for comparison
-            $resourceName = "customers/{$campaign->customer->google_ads_customer_id}/campaigns/{$campaign->google_ads_campaign_id}";
-            return ($this->getGoogleCampaignPerformance)(
-                $campaign->customer->google_ads_customer_id,
-                $resourceName,
-                'LAST_30_DAYS' // Would ideally use a custom date range
-            );
+            $data = GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->whereBetween('date', [
+                    now()->subDays(60)->toDateString(),
+                    now()->subDays(30)->toDateString(),
+                ])
+                ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
+                ->first();
+
+            if (!$data || ($data->impressions ?? 0) == 0) {
+                return null;
+            }
+
+            return [
+                'impressions' => (int) $data->impressions,
+                'clicks' => (int) $data->clicks,
+                'cost_micros' => (float) $data->cost * 1000000,
+                'conversions' => (float) $data->conversions,
+                'ctr' => $data->impressions > 0 ? $data->clicks / $data->impressions : 0,
+                'average_cpc' => $data->clicks > 0 ? ($data->cost / $data->clicks) * 1000000 : 0,
+                'cost_per_conversion' => $data->conversions > 0 ? ($data->cost / $data->conversions) * 1000000 : 0,
+            ];
         } catch (\Exception $e) {
             return null;
         }
@@ -402,7 +417,7 @@ class CampaignOptimizationAgent
     }
 
     /**
-     * Get Facebook historical metrics for trend analysis.
+     * Get Facebook historical metrics for trend analysis (60-30 days ago), normalized.
      */
     protected function getFacebookHistoricalMetrics(Campaign $campaign): ?array
     {
@@ -417,11 +432,25 @@ class CampaignOptimizationAgent
                 $dateEnd
             );
 
-            if (empty($insights) || !isset($insights['data'][0])) {
+            if (empty($insights) || !isset($insights[0])) {
                 return null;
             }
 
-            return $insights['data'][0];
+            $data = $insights[0];
+
+            return [
+                'impressions' => (int) ($data['impressions'] ?? 0),
+                'clicks' => (int) ($data['clicks'] ?? 0),
+                'cost_micros' => (float) ($data['spend'] ?? 0) * 1000000,
+                'conversions' => $this->sumActions($data['actions'] ?? [], ['purchase', 'lead', 'complete_registration']),
+                'ctr' => isset($data['clicks'], $data['impressions']) && $data['impressions'] > 0
+                    ? $data['clicks'] / $data['impressions']
+                    : 0,
+                'average_cpc' => (float) ($data['cpc'] ?? 0) * 1000000,
+                'cost_per_conversion' => (float) ($data['cost_per_action_type'][0]['value'] ?? 0) * 1000000,
+                'frequency' => (float) ($data['frequency'] ?? 0),
+                'reach' => (int) ($data['reach'] ?? 0),
+            ];
         } catch (\Exception $e) {
             return null;
         }

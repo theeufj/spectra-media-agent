@@ -272,4 +272,46 @@ class InsightService extends BaseFacebookAdsService
 
         return 0;
     }
+
+    /**
+     * Get account-level insights with a specific level (campaign, adset, ad).
+     *
+     * @param string $accountId Account ID (with act_ prefix)
+     * @param string $dateStart Start date YYYY-MM-DD
+     * @param string $dateEnd End date YYYY-MM-DD
+     * @param string $level Breakdown level: 'account', 'campaign', 'adset', 'ad'
+     * @param array|null $fields Fields to retrieve
+     * @param int $limit Max rows
+     * @return array
+     */
+    public function getAccountInsightsByLevel(
+        string $accountId,
+        string $dateStart,
+        string $dateEnd,
+        string $level = 'account',
+        ?array $fields = null,
+        int $limit = 100
+    ): array {
+        try {
+            $params = [
+                'fields' => implode(',', $fields ?? ['impressions', 'clicks', 'spend', 'actions', 'reach', 'frequency', 'cpc', 'cpm']),
+                'time_range' => json_encode(['since' => $dateStart, 'until' => $dateEnd]),
+                'limit' => $limit,
+            ];
+
+            if ($level !== 'account') {
+                $params['level'] = $level;
+            }
+
+            $response = $this->get("/{$accountId}/insights", $params);
+
+            return $response['data'] ?? [];
+        } catch (\Exception $e) {
+            Log::error("Error getting account insights by level: " . $e->getMessage(), [
+                'account_id' => $accountId,
+                'level' => $level,
+            ]);
+            return [];
+        }
+    }
 }
