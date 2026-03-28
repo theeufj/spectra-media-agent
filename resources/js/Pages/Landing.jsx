@@ -40,11 +40,7 @@ export default function Landing({ auth, plans = [] }) {
                                         <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Generous free tier · ✓ Cancel anytime</p>
                                     </div>
                                 </div>
-                                <div className="mt-12 -mb-16 sm:-mb-48 lg:m-0 lg:relative">
-                                    <div className="mx-auto max-w-md px-4 sm:max-w-2xl sm:px-6 lg:max-w-none lg:px-0">
-                                        <img className="w-full lg:absolute lg:inset-y-0 lg:left-0 lg:h-full lg:w-auto lg:max-w-none" src="https://tailwindui.com/img/component-images/cloud-illustration-flame-orange-400.svg" alt="" />
-                                    </div>
-                                </div>
+                                
                             </div>
                         </div>
                     </div>
