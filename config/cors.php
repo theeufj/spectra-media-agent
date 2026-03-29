@@ -19,12 +19,12 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => [
+    'allowed_origins' => array_filter([
         env('APP_URL', 'http://localhost:8000'),
-        'http://localhost:5173',
-        'http://127.0.0.1:5173',
-        'http://[::1]:5173',
-    ],
+        env('APP_ENV') === 'local' ? 'http://localhost:5173' : null,
+        env('APP_ENV') === 'local' ? 'http://127.0.0.1:5173' : null,
+        env('APP_ENV') === 'local' ? 'http://[::1]:5173' : null,
+    ]),
 
     'allowed_origins_patterns' => [],
 
@@ -32,7 +32,7 @@ return [
 
     'exposed_headers' => [],
 
-    'max_age' => 0,
+    'max_age' => 600,
 
     'supports_credentials' => true,
 
