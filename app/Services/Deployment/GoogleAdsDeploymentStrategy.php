@@ -37,9 +37,12 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             $campaignResourceName = match($strategy->campaign_type) {
                 'display' => $this->deployDisplayCampaign($customerId, $campaign, $strategy),
                 'search' => $this->deploySearchCampaign($customerId, $campaign, $strategy),
-                'video' => throw new \Exception("Video campaign deployment not yet implemented."),
-                'shopping' => throw new \Exception("Shopping campaign deployment not yet implemented."),
-                'app' => throw new \Exception("App campaign deployment not yet implemented."),
+                'video' => throw new \Exception("Video campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
+                'shopping' => throw new \Exception("Shopping campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
+                'app' => throw new \Exception("App campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
+                'demand_gen' => throw new \Exception("Demand Gen campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
+                'local_services' => throw new \Exception("Local Services campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
+                'performance_max' => throw new \Exception("Performance Max campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
                 default => throw new \Exception("Unknown campaign type: {$strategy->campaign_type}"),
             };
 

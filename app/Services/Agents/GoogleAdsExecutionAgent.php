@@ -30,6 +30,13 @@ use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\VideoServices\CreateVideoCampaign;
 use App\Services\GoogleAds\VideoServices\CreateVideoAdGroup;
 use App\Services\GoogleAds\VideoServices\CreateResponsiveVideoAd;
+use App\Services\GoogleAds\DemandGenServices\CreateDemandGenCampaign;
+use App\Services\GoogleAds\DemandGenServices\CreateDemandGenAdGroup;
+use App\Services\GoogleAds\DemandGenServices\CreateDemandGenMultiAssetAd;
+use App\Services\GoogleAds\ShoppingServices\CreateShoppingCampaign;
+use App\Services\GoogleAds\ShoppingServices\CreateShoppingAdGroup;
+use App\Services\GoogleAds\ShoppingServices\CreateShoppingProductAd;
+use App\Services\GoogleAds\LocalServicesServices\CreateLocalServicesCampaign;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
 use App\Services\Agents\Traits\RetryableApiOperation;
@@ -397,6 +404,18 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                     
                 case 'video':
                     $this->executeVideoCampaign($customerId, $campaign, $strategy, $plan, $result);
+                    break;
+
+                case 'demand_gen':
+                    $this->executeDemandGenCampaign($customerId, $campaign, $strategy, $plan, $result);
+                    break;
+
+                case 'shopping':
+                    $this->executeShoppingCampaign($customerId, $campaign, $strategy, $plan, $result);
+                    break;
+
+                case 'local_services':
+                    $this->executeLocalServicesCampaign($customerId, $campaign, $strategy, $plan, $result);
                     break;
                     
                 default:
@@ -912,6 +931,243 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
     }
     
+    /**
+     * Execute Demand Gen campaign deployment
+     *
+     * Demand Gen campaigns run across YouTube, Gmail, and Discover using multi-asset ads.
+     */
+    protected function executeDemandGenCampaign(
+        string $customerId,
+        Campaign $campaign,
+        Strategy $strategy,
+        ExecutionPlan $plan,
+        ExecutionResult $result
+    ): void {
+        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
+            $customerId = $this->customer->google_ads_customer_id;
+        }
+
+        Log::info("GoogleAdsExecutionAgent: Creating Demand Gen Campaign", ['customer_id' => $customerId]);
+
+        // 1. Create Campaign
+        $createCampaignService = new CreateDemandGenCampaign($this->customer);
+        $campaignStructure = $plan->getCampaignStructure();
+        $timestamp = now()->format('Ymd_His');
+        $campaignName = $campaign->name . ' - DemandGen - ' . $timestamp;
+
+        $campaignData = [
+            'businessName' => $campaignName,
+            'budget' => $campaignStructure['daily_budget'] ?? $campaign->total_budget / 30,
+            'startDate' => now()->format('Y-m-d'),
+            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'targetCpaMicros' => $strategy->cpa_target ?? null,
+        ];
+
+        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+        if (!$campaignResourceName) {
+            throw new \Exception('Failed to create Demand Gen campaign');
+        }
+
+        $result->addPlatformId('campaign', $campaignResourceName);
+        $campaign->google_ads_campaign_id = $campaignResourceName;
+        $campaign->save();
+
+        // 1.5 Add Location Targeting
+        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
+
+        // 2. Create Ad Group
+        $createAdGroupService = new CreateDemandGenAdGroup($this->customer);
+        $adGroupName = 'Demand Gen Ad Group - ' . $timestamp;
+        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
+        if (!$adGroupResourceName) {
+            throw new \Exception('Failed to create Demand Gen ad group');
+        }
+
+        $result->addPlatformId('ad_group', $adGroupResourceName);
+        $strategy->google_ads_ad_group_id = $adGroupResourceName;
+        $strategy->save();
+
+        // 3. Upload Image Assets
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
+        $imageAssetResourceNames = [];
+        $logoAssetResourceNames = [];
+
+        if ($imageCollaterals->isNotEmpty()) {
+            $uploadImageAssetService = new UploadImageAsset($this->customer);
+            foreach ($imageCollaterals as $image) {
+                try {
+                    $imageData = StorageHelper::get($image->s3_path);
+                    if (!$imageData) continue;
+
+                    $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
+                    if ($assetResourceName) {
+                        if (str_contains(strtolower($image->s3_path), 'logo')) {
+                            $logoAssetResourceNames[] = $assetResourceName;
+                        } else {
+                            $imageAssetResourceNames[] = $assetResourceName;
+                        }
+                        $result->addPlatformId('image_asset', $assetResourceName);
+                    }
+                } catch (\Exception $e) {
+                    $result->addWarning("Failed to upload image asset {$image->s3_path}: " . $e->getMessage());
+                }
+            }
+        }
+
+        // 4. Create Demand Gen Multi-Asset Ad
+        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
+        if ($adCopy && !empty($imageAssetResourceNames)) {
+            $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
+
+            if (!$finalUrl) {
+                $result->addWarning('No landing page URL found for Demand Gen ad. Skipping ad creation.');
+            } else {
+                $createAdService = new CreateDemandGenMultiAssetAd($this->customer);
+                $adData = [
+                    'finalUrls' => [$finalUrl],
+                    'headlines' => array_slice($adCopy->headlines ?? [], 0, 5),
+                    'descriptions' => array_slice($adCopy->descriptions ?? [], 0, 5),
+                    'businessName' => $this->customer->business_name ?? $campaign->name,
+                    'imageAssets' => $imageAssetResourceNames,
+                    'logoAssets' => $logoAssetResourceNames,
+                    'callToActionText' => 'Learn more',
+                ];
+
+                $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
+                if ($adResourceName) {
+                    $result->addPlatformId('ad', $adResourceName);
+                }
+            }
+        }
+
+        // 5. Add Ad Extensions
+        $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
+    }
+
+    /**
+     * Execute Shopping campaign deployment
+     *
+     * Shopping campaigns require a linked Google Merchant Center account.
+     * Product data comes from the feed — ads are auto-generated.
+     */
+    protected function executeShoppingCampaign(
+        string $customerId,
+        Campaign $campaign,
+        Strategy $strategy,
+        ExecutionPlan $plan,
+        ExecutionResult $result
+    ): void {
+        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
+            $customerId = $this->customer->google_ads_customer_id;
+        }
+
+        Log::info("GoogleAdsExecutionAgent: Creating Shopping Campaign", ['customer_id' => $customerId]);
+
+        // Validate Merchant Center ID
+        $merchantId = $this->customer->google_merchant_id
+            ?? $plan->getCampaignStructure()['merchant_id']
+            ?? null;
+
+        if (!$merchantId) {
+            throw new \Exception('Shopping campaigns require a linked Google Merchant Center account. No merchant_id found.');
+        }
+
+        // 1. Create Campaign
+        $createCampaignService = new CreateShoppingCampaign($this->customer);
+        $campaignStructure = $plan->getCampaignStructure();
+        $timestamp = now()->format('Ymd_His');
+        $campaignName = $campaign->name . ' - Shopping - ' . $timestamp;
+
+        $campaignData = [
+            'businessName' => $campaignName,
+            'budget' => $campaignStructure['daily_budget'] ?? $campaign->total_budget / 30,
+            'startDate' => now()->format('Y-m-d'),
+            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'merchantId' => $merchantId,
+            'feedLabel' => $campaignStructure['feed_label'] ?? null,
+            'campaignPriority' => $campaignStructure['campaign_priority'] ?? 0,
+            'enableLocal' => $campaignStructure['enable_local'] ?? false,
+            'targetCpaMicros' => $strategy->cpa_target ?? null,
+        ];
+
+        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+        if (!$campaignResourceName) {
+            throw new \Exception('Failed to create Shopping campaign');
+        }
+
+        $result->addPlatformId('campaign', $campaignResourceName);
+        $campaign->google_ads_campaign_id = $campaignResourceName;
+        $campaign->save();
+
+        // 1.5 Add Location Targeting
+        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
+
+        // 2. Create Ad Group
+        $createAdGroupService = new CreateShoppingAdGroup($this->customer);
+        $adGroupName = 'All Products - ' . $timestamp;
+        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
+        if (!$adGroupResourceName) {
+            throw new \Exception('Failed to create Shopping ad group');
+        }
+
+        $result->addPlatformId('ad_group', $adGroupResourceName);
+        $strategy->google_ads_ad_group_id = $adGroupResourceName;
+        $strategy->save();
+
+        // 3. Create Shopping Product Ad (auto-generated from feed)
+        $createAdService = new CreateShoppingProductAd($this->customer);
+        $adResourceName = ($createAdService)($customerId, $adGroupResourceName);
+        if ($adResourceName) {
+            $result->addPlatformId('ad', $adResourceName);
+        }
+    }
+
+    /**
+     * Execute Local Services campaign deployment
+     *
+     * Local Services Ads are auto-generated from the business profile.
+     * No ad groups or ad creatives are needed — just the campaign.
+     */
+    protected function executeLocalServicesCampaign(
+        string $customerId,
+        Campaign $campaign,
+        Strategy $strategy,
+        ExecutionPlan $plan,
+        ExecutionResult $result
+    ): void {
+        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
+            $customerId = $this->customer->google_ads_customer_id;
+        }
+
+        Log::info("GoogleAdsExecutionAgent: Creating Local Services Campaign", ['customer_id' => $customerId]);
+
+        // 1. Create Campaign (Local Services campaigns don't need ad groups or ads)
+        $createCampaignService = new CreateLocalServicesCampaign($this->customer);
+        $campaignStructure = $plan->getCampaignStructure();
+        $timestamp = now()->format('Ymd_His');
+        $campaignName = $campaign->name . ' - Local Services - ' . $timestamp;
+
+        $campaignData = [
+            'businessName' => $campaignName,
+            'budget' => $campaignStructure['daily_budget'] ?? $campaign->total_budget / 30,
+            'startDate' => now()->format('Y-m-d'),
+            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'categoryBids' => $campaignStructure['category_bids'] ?? [],
+        ];
+
+        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+        if (!$campaignResourceName) {
+            throw new \Exception('Failed to create Local Services campaign');
+        }
+
+        $result->addPlatformId('campaign', $campaignResourceName);
+        $campaign->google_ads_campaign_id = $campaignResourceName;
+        $campaign->save();
+
+        // 1.5 Add Location Targeting (critical for local services)
+        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
+    }
+
     /**
      * Create and link assets for Performance Max
      * @deprecated Replaced by inline logic in executePerformanceMaxCampaign using CreateAssetGroupWithAssets
