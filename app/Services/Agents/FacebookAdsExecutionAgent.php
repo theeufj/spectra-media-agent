@@ -857,9 +857,20 @@ PROMPT;
      */
     protected function hasPixelInstalled(ExecutionContext $context): bool
     {
-        // TODO: Implement actual Pixel check via Facebook API
-        // For now, return false to be conservative
-        return false;
+        try {
+            $adAccountId = $context->customer->facebook_ad_account_id;
+            if (!$adAccountId) {
+                return false;
+            }
+
+            $adAccountService = new \App\Services\FacebookAds\AdAccountService($context->customer);
+            $pixels = $adAccountService->getPixels($adAccountId);
+
+            return !empty($pixels);
+        } catch (\Exception $e) {
+            Log::warning('Failed to check Pixel installation: ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**
@@ -867,9 +878,32 @@ PROMPT;
      */
     protected function hasPixelWithConversions(ExecutionContext $context): bool
     {
-        // TODO: Implement actual Pixel conversion data check via Facebook API
-        // For now, return false to be conservative
-        return false;
+        try {
+            $adAccountId = $context->customer->facebook_ad_account_id;
+            if (!$adAccountId) {
+                return false;
+            }
+
+            $adAccountService = new \App\Services\FacebookAds\AdAccountService($context->customer);
+            $pixels = $adAccountService->getPixels($adAccountId);
+
+            foreach ($pixels as $pixel) {
+                $pixelId = $pixel['id'] ?? null;
+                if (!$pixelId) {
+                    continue;
+                }
+
+                $stats = $adAccountService->getPixelStats($pixelId);
+                if (!empty($stats)) {
+                    return true;
+                }
+            }
+
+            return false;
+        } catch (\Exception $e) {
+            Log::warning('Failed to check Pixel conversions: ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**

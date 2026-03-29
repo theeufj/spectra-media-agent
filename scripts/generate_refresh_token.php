@@ -63,6 +63,6 @@ if (isset($authToken['refresh_token'])) {
     printf("Copy this refresh token and save it to your Customer record in the database (google_ads_refresh_token column).\n");
     printf("You can also add it to google_ads_php.ini for testing, but the application expects it in the database.\n");
 } else {
-    printf("\nError: Could not retrieve refresh token. Response:\n");
-    print_r($authToken);
+    printf("\nError: Could not retrieve refresh token.\n");
+    printf("Response keys: %s\n", implode(', ', array_keys($authToken ?? [])));
 }

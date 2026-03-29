@@ -32,25 +32,28 @@ class FacebookAdsService
     {
         Log::info("Creating Facebook Ad Campaign for local Campaign ID: {$campaign->id}");
 
-        // Placeholder for the actual API call to create a campaign.
-        // The real implementation would involve a POST request to:
-        // "{$this->baseGraphUrl}/{$adAccountId}/campaigns"
-        // with parameters for name, objective, status, etc.
+        try {
+            $response = Http::post("{$this->baseGraphUrl}/{$adAccountId}/campaigns", [
+                'name' => $campaign->name,
+                'objective' => 'OUTCOME_LEADS',
+                'status' => 'PAUSED',
+                'special_ad_categories' => [],
+                'access_token' => $this->accessToken,
+            ]);
 
-        // Example payload structure:
-        $payload = [
-            'name' => $campaign->name,
-            'objective' => 'OUTCOME_LEADS', // This would be mapped from $campaign->goals
-            'status' => 'PAUSED', // Always create campaigns as paused
-            'special_ad_categories' => [],
-            'access_token' => $this->accessToken,
-        ];
+            if (!$response->successful()) {
+                Log::error('FacebookAdsService: Failed to create campaign', [
+                    'status' => $response->status(),
+                    'body' => $response->json(),
+                ]);
+                return null;
+            }
 
-        Log::info('FacebookAdsService: Placeholder for createCampaign', $payload);
-
-        // In a real implementation, you would return the ID from the API response.
-        // e.g., return $response->json()['id'];
-        return 'facebook_campaign_id_placeholder_' . uniqid();
+            return $response->json()['id'] ?? null;
+        } catch (\Exception $e) {
+            Log::error('FacebookAdsService: Exception creating campaign: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -59,12 +62,30 @@ class FacebookAdsService
      * @param string $campaignId The Facebook Campaign ID.
      * @return string|null The ID of the newly created ad set.
      */
-    public function createAdSet(string $campaignId): ?string
+    public function createAdSet(string $campaignId, array $adSetData = []): ?string
     {
         Log::info("Creating Facebook Ad Set for Facebook Campaign ID: {$campaignId}");
-        // Placeholder for API call to create an ad set.
-        // This would involve setting targeting, budget, bidding, etc.
-        return 'facebook_ad_set_id_placeholder_' . uniqid();
+
+        try {
+            $response = Http::post("{$this->baseGraphUrl}/{$campaignId}/adsets", array_merge([
+                'campaign_id' => $campaignId,
+                'status' => 'PAUSED',
+                'access_token' => $this->accessToken,
+            ], $adSetData));
+
+            if (!$response->successful()) {
+                Log::error('FacebookAdsService: Failed to create ad set', [
+                    'status' => $response->status(),
+                    'body' => $response->json(),
+                ]);
+                return null;
+            }
+
+            return $response->json()['id'] ?? null;
+        } catch (\Exception $e) {
+            Log::error('FacebookAdsService: Exception creating ad set: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -73,12 +94,28 @@ class FacebookAdsService
      * @param string $adAccountId The Facebook Ad Account ID.
      * @return string|null The ID of the newly created ad creative.
      */
-    public function createAdCreative(string $adAccountId): ?string
+    public function createAdCreative(string $adAccountId, array $creativeData = []): ?string
     {
         Log::info("Creating Facebook Ad Creative for Ad Account ID: {$adAccountId}");
-        // Placeholder for API call to create an ad creative.
-        // This would involve uploading the image/video and setting the headlines/descriptions.
-        return 'facebook_ad_creative_id_placeholder_' . uniqid();
+
+        try {
+            $response = Http::post("{$this->baseGraphUrl}/{$adAccountId}/adcreatives", array_merge([
+                'access_token' => $this->accessToken,
+            ], $creativeData));
+
+            if (!$response->successful()) {
+                Log::error('FacebookAdsService: Failed to create ad creative', [
+                    'status' => $response->status(),
+                    'body' => $response->json(),
+                ]);
+                return null;
+            }
+
+            return $response->json()['id'] ?? null;
+        } catch (\Exception $e) {
+            Log::error('FacebookAdsService: Exception creating ad creative: ' . $e->getMessage());
+            return null;
+        }
     }
 
     /**
@@ -91,7 +128,27 @@ class FacebookAdsService
     public function createAd(string $adSetId, string $creativeId): ?string
     {
         Log::info("Creating Facebook Ad for Ad Set ID: {$adSetId}");
-        // Placeholder for API call to create the final ad.
-        return 'facebook_ad_id_placeholder_' . uniqid();
+
+        try {
+            $response = Http::post("{$this->baseGraphUrl}/{$adSetId}/ads", [
+                'adset_id' => $adSetId,
+                'creative' => ['creative_id' => $creativeId],
+                'status' => 'PAUSED',
+                'access_token' => $this->accessToken,
+            ]);
+
+            if (!$response->successful()) {
+                Log::error('FacebookAdsService: Failed to create ad', [
+                    'status' => $response->status(),
+                    'body' => $response->json(),
+                ]);
+                return null;
+            }
+
+            return $response->json()['id'] ?? null;
+        } catch (\Exception $e) {
+            Log::error('FacebookAdsService: Exception creating ad: ' . $e->getMessage());
+            return null;
+        }
     }
 }

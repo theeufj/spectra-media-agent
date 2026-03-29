@@ -180,40 +180,26 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         }
 
         try {
-            // For production, you would use Google Ads Campaign Criterion Service
-            // to add geo, age, gender, and other targeting criteria
-            // Example structure (not implemented):
-            // 
-            // $criterionService = $this->client->getCampaignCriterionServiceClient();
-            // 
-            // // Add geo targeting
-            // $geoTargets = $targetingConfig->getGoogleGeoTargeting();
-            // foreach ($geoTargets as $geoId) {
-            //     $criterion = new CampaignCriterion([...]);
-            //     $criterionService->mutateCampaignCriteria($customerId, [$operation]);
-            // }
-            //
-            // // Add age targeting
-            // $ageRanges = $targetingConfig->getGoogleAgeTargeting();
-            // foreach ($ageRanges as $ageRangeId) { ... }
-            //
-            // // Add gender targeting
-            // $genders = $targetingConfig->getGoogleGenderTargeting();
-            // foreach ($genders as $genderId) { ... }
+            $addCriterionService = new \App\Services\GoogleAds\CommonServices\AddCampaignCriterion($this->customer);
 
-            Log::info("Targeting config found for strategy {$strategy->id}", [
+            // Apply geo targeting
+            $geoTargets = $targetingConfig->getGoogleGeoTargeting();
+            foreach (array_filter($geoTargets) as $geoId) {
+                try {
+                    ($addCriterionService)($customerId, $campaignResourceName, [
+                        'type' => 'LOCATION',
+                        'locationId' => $geoId,
+                    ]);
+                } catch (\Exception $e) {
+                    Log::warning("Failed to add location targeting (ID: {$geoId}): " . $e->getMessage());
+                }
+            }
+
+            Log::info("Applied targeting criteria for strategy {$strategy->id}", [
                 'geo_locations' => $targetingConfig->geo_locations,
                 'age_range' => [$targetingConfig->age_min, $targetingConfig->age_max],
                 'genders' => $targetingConfig->genders,
             ]);
-
-            // TODO: Implement actual campaign criteria creation using Google Ads API
-            // This would require creating CampaignCriterion resources for:
-            // - Location (geo_locations)
-            // - Age range (age_min/age_max)
-            // - Gender (genders)
-            // - Language (languages)
-            // - Device types (device_types)
 
         } catch (\Exception $e) {
             Log::warning("Failed to apply targeting criteria: " . $e->getMessage());

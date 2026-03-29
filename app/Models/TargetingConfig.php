@@ -68,10 +68,9 @@ class TargetingConfig extends Model
         }
 
         // Convert location objects to Google Ads geo target constants
-        // This would need a mapping service in production
-        return array_map(function ($location) {
+        return array_filter(array_map(function ($location) {
             return $location['google_criterion_id'] ?? null;
-        }, $this->geo_locations);
+        }, $this->geo_locations));
     }
 
     /**

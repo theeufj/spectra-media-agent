@@ -181,9 +181,14 @@ class AssetValidator
                 $errors[] = "Unsupported video extension: {$extension}. Allowed: " . implode(', ', self::VIDEO_RULES['allowed_extensions']);
             }
 
-            // For video duration and dimensions, we would need FFmpeg or similar
-            // This is a simplified check - in production, integrate with FFmpeg
-            $errors[] = "Note: Full video validation (duration, codec, resolution) requires FFmpeg integration";
+            // Attempt full validation with FFmpeg if available
+            $ffprobeAvailable = !empty(trim(shell_exec('which ffprobe 2>/dev/null') ?? ''));
+            if ($ffprobeAvailable) {
+                $ffmpegErrors = $this->validateVideoWithFFmpeg($filePath);
+                $errors = array_merge($errors, $ffmpegErrors['errors'] ?? []);
+            } else {
+                \Illuminate\Support\Facades\Log::info('AssetValidator: FFmpeg not available, skipping duration/codec/resolution validation');
+            }
 
         } finally {
             // Clean up temp file if created

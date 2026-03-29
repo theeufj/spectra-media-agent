@@ -289,14 +289,25 @@ class CampaignOptimizationAgent
     protected function getHistoricalConfidence(array $recommendation, ?array $historicalMetrics): float
     {
         if (!$historicalMetrics) {
-            return 0.5; // Neutral if no historical data
+            return 0.5;
         }
         
-        // Compare current trends with historical patterns
-        // If recommendation aligns with historical improvement patterns, increase confidence
-        // This is a simplified implementation - would need more sophisticated analysis
-        
-        return 0.7; // Default moderate confidence when historical data exists
+        $type = $recommendation['type'] ?? '';
+        $direction = $recommendation['direction'] ?? 'increase';
+
+        // Check if the recommended direction aligns with historical trends
+        $metricKey = strtolower($type) . '_trend';
+        $historicalTrend = $historicalMetrics[$metricKey] ?? null;
+
+        if ($historicalTrend === null) {
+            return 0.6; // Slight confidence boost for having historical data
+        }
+
+        // Higher confidence if recommendation aligns with trend
+        $trendsAlign = ($direction === 'increase' && $historicalTrend > 0)
+            || ($direction === 'decrease' && $historicalTrend < 0);
+
+        return $trendsAlign ? 0.85 : 0.5;
     }
 
     /**
@@ -495,11 +506,65 @@ class CampaignOptimizationAgent
      */
     public function applyRecommendation(Campaign $campaign, array $recommendation): array
     {
-        // This would implement actual application of recommendations
-        // For now, return a status indicating the action would be taken
+        $type = $recommendation['type'] ?? null;
+        
+        if (!$type) {
+            return [
+                'applied' => false,
+                'message' => 'Recommendation type is missing',
+                'recommendation' => $recommendation,
+            ];
+        }
+
+        try {
+            return match ($type) {
+                'BUDGET' => $this->applyBudgetRecommendation($campaign, $recommendation),
+                default => [
+                    'applied' => false,
+                    'message' => "Auto-apply not yet supported for recommendation type: {$type}",
+                    'recommendation' => $recommendation,
+                ],
+            };
+        } catch (\Exception $e) {
+            Log::error("Failed to apply recommendation: " . $e->getMessage(), [
+                'campaign_id' => $campaign->id,
+                'recommendation' => $recommendation,
+            ]);
+            return [
+                'applied' => false,
+                'message' => 'Failed to apply: ' . $e->getMessage(),
+                'recommendation' => $recommendation,
+            ];
+        }
+    }
+
+    /**
+     * Apply a budget adjustment recommendation.
+     */
+    protected function applyBudgetRecommendation(Campaign $campaign, array $recommendation): array
+    {
+        $newBudget = $recommendation['suggested_value'] ?? null;
+
+        if (!$newBudget || $newBudget <= 0) {
+            return [
+                'applied' => false,
+                'message' => 'Invalid budget value in recommendation',
+                'recommendation' => $recommendation,
+            ];
+        }
+
+        $oldBudget = $campaign->daily_budget;
+        $campaign->daily_budget = $newBudget;
+        $campaign->save();
+
+        Log::info("Applied budget recommendation for campaign {$campaign->id}", [
+            'old_budget' => $oldBudget,
+            'new_budget' => $newBudget,
+        ]);
+
         return [
-            'applied' => false,
-            'message' => 'Auto-apply functionality requires implementation of specific action handlers',
+            'applied' => true,
+            'message' => "Budget adjusted from {$oldBudget} to {$newBudget}",
             'recommendation' => $recommendation,
         ];
     }

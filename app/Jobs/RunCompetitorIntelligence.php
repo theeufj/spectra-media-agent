@@ -157,10 +157,18 @@ class RunCompetitorIntelligence implements ShouldQueue
             $summary[] = "New counter-strategy generated";
         }
 
-        // TODO: Send email notification
-        // Mail::to($user)->send(new CompetitorIntelligenceReport($this->customer, $results));
+        if (!empty($summary)) {
+            try {
+                $user->notify(new \App\Notifications\CompetitorIntelligenceComplete($this->customer, $summary));
+            } catch (\Exception $e) {
+                Log::warning('RunCompetitorIntelligence: Failed to send notification', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
         
-        Log::info('RunCompetitorIntelligence: Would notify user', [
+        Log::info('RunCompetitorIntelligence: Notified user', [
             'user_id' => $user->id,
             'summary' => $summary,
         ]);

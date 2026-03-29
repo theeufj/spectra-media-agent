@@ -1179,9 +1179,18 @@ PROMPT;
      */
     protected function hasConversionTracking(ExecutionContext $context): bool
     {
-        // TODO: Implement actual conversion tracking check via Google Ads API
-        // For now, return false to be conservative
-        return false;
+        try {
+            $customerId = $context->customer->google_ads_customer_id;
+            if (!$customerId) {
+                return false;
+            }
+
+            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($context->customer);
+            return $conversionService->isConversionTrackingSetUp($customerId);
+        } catch (\Exception $e) {
+            Log::warning('Failed to check conversion tracking: ' . $e->getMessage());
+            return false;
+        }
     }
     
     /**
@@ -1189,9 +1198,18 @@ PROMPT;
      */
     protected function getConversionCount(ExecutionContext $context): int
     {
-        // TODO: Implement actual conversion count retrieval via Google Ads API
-        // For now, return 0
-        return 0;
+        try {
+            $customerId = $context->customer->google_ads_customer_id;
+            if (!$customerId) {
+                return 0;
+            }
+
+            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($context->customer);
+            return $conversionService->getConversionCountLast30Days($customerId);
+        } catch (\Exception $e) {
+            Log::warning('Failed to get conversion count: ' . $e->getMessage());
+            return 0;
+        }
     }
     
     /**

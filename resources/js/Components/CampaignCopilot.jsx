@@ -104,7 +104,7 @@ export default function CampaignCopilot({ campaignId, isOpen, onClose }) {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
                 },
             });
-        } catch (e) { /* ignore */ }
+        } catch (e) { console.error('Failed to clear chat:', e); }
         setMessages([]);
     };
 

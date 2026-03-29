@@ -386,66 +386,7 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
         ->name('api.agent-activities.index');
 });
 
-Route::get('/test-email', function () {
-    Log::info('Attempting to send a test email...');
-    Log::info('Mail driver:', ['driver' => config('mail.default')]);
-    try {
-        Mail::to('theeufj@gmail.com')->send(new \App\Mail\WelcomeEmail('Josh'));
-        Log::info('Email sent successfully!');
-        return 'Email sent!';
-    } catch (Exception $e) {
-        Log::error('Failed to send email:', ['error' => $e->getMessage()]);
-        return 'Failed to send email. Check logs for details.';
-    }
-});
 
-Route::get('/test-campaign-deployed', function () {
-    $user = \App\Models\User::first();
-    $campaign = \App\Models\Campaign::first();
-
-    if (!$user || !$campaign) {
-        return 'Please create a user and a campaign first.';
-    }
-
-    Mail::to($user->email)->send(new \App\Mail\CampaignDeployed($user, $campaign));
-    return 'Campaign deployed email sent!';
-});
-
-Route::get('/test-videos-generated', function () {
-    $user = \App\Models\User::first();
-    $campaign = \App\Models\Campaign::first();
-
-    if (!$user || !$campaign) {
-        return 'Please create a user and a campaign first.';
-    }
-
-    Mail::to($user->email)->send(new \App\Mail\VideosGenerated($user, $campaign));
-    return 'Videos generated email sent!';
-});
-
-Route::get('/test-invoice-created', function () {
-    $user = \App\Models\User::first();
-
-    if (!$user) {
-        return 'Please create a user first.';
-    }
-
-    Mail::to($user->email)->send(new \App\Mail\InvoiceCreated($user, '29.99', now()->toFormattedDateString()));
-    return 'Invoice created email sent!';
-});
-
-Route::get('/test-admin-notification', function () {
-    $user = \App\Models\User::first();
-    if (!$user) {
-        return 'Please create a user first.';
-    }
-
-    $subject = 'Important Update Regarding Your Account';
-    $body = '<p>We are writing to inform you about an upcoming change to our service that will affect your account. Please log in to your dashboard to review the details.</p><p>Thank you for your understanding.</p>';
-
-    Mail::to($user->email)->send(new \App\Mail\AdminNotification($user, $subject, $body));
-    return 'Admin notification sent!';
-});
 
 /*
 |--------------------------------------------------------------------------

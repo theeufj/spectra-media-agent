@@ -33,4 +33,27 @@ class ConversionTrackingService extends BaseGoogleAdsService
             return false;
         }
     }
+
+    public function getConversionCountLast30Days(string $customerId): int
+    {
+        try {
+            $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
+
+            $query = "SELECT metrics.conversions FROM customer WHERE segments.date DURING LAST_30_DAYS";
+            $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
+                'customer_id' => $customerId,
+                'query' => $query,
+            ]));
+
+            $total = 0;
+            foreach ($response->getIterator() as $row) {
+                $total += (int) $row->getMetrics()->getConversions();
+            }
+
+            return $total;
+        } catch (\Exception $e) {
+            Log::error("Error getting conversion count for customer {$customerId}: " . $e->getMessage());
+            return 0;
+        }
+    }
 }

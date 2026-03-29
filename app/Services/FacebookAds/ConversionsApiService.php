@@ -493,9 +493,9 @@ class ConversionsApiService
                         'event_id' => Str::uuid()->toString(),
                         'action_source' => 'website',
                         'user_data' => [
-                            'em' => hash('sha256', 'test@example.com'),
-                            'client_ip_address' => '127.0.0.1',
-                            'client_user_agent' => 'Test/1.0',
+                            'em' => hash('sha256', 'test_' . $testCode . '@test.internal'),
+                            'client_ip_address' => request()->ip() ?? '0.0.0.0',
+                            'client_user_agent' => request()->userAgent() ?? 'CAPI-TestEvent/1.0',
                         ],
                     ]]),
                     'test_event_code' => $testCode,
