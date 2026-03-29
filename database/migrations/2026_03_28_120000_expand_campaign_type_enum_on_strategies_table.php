@@ -10,7 +10,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        DB::statement("ALTER TABLE strategies MODIFY COLUMN campaign_type ENUM('display', 'search', 'video', 'shopping', 'app', 'demand_gen', 'local_services', 'performance_max') NOT NULL DEFAULT 'display'");
+        // PostgreSQL: change column to varchar, then recreate the check constraint
+        DB::statement("ALTER TABLE strategies ALTER COLUMN campaign_type TYPE VARCHAR(255)");
+        DB::statement("ALTER TABLE strategies DROP CONSTRAINT IF EXISTS strategies_campaign_type_check");
+        DB::statement("ALTER TABLE strategies ADD CONSTRAINT strategies_campaign_type_check CHECK (campaign_type IN ('display', 'search', 'video', 'shopping', 'app', 'demand_gen', 'local_services', 'performance_max'))");
     }
 
     /**
@@ -18,6 +21,7 @@ return new class extends Migration
      */
     public function down(): void
     {
-        DB::statement("ALTER TABLE strategies MODIFY COLUMN campaign_type ENUM('display', 'search', 'video', 'shopping', 'app') NOT NULL DEFAULT 'display'");
+        DB::statement("ALTER TABLE strategies DROP CONSTRAINT IF EXISTS strategies_campaign_type_check");
+        DB::statement("ALTER TABLE strategies ADD CONSTRAINT strategies_campaign_type_check CHECK (campaign_type IN ('display', 'search', 'video', 'shopping', 'app'))");
     }
 };
