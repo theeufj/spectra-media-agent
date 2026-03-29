@@ -94,12 +94,12 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $targeting = $this->buildTargeting($strategy);
         
         $fbAdSet = $this->adSetService->createAdSet(
+            $accountId,
             $fbCampaign['id'],
             $campaign->name . ' - Ad Set',
-            (int)($strategy->budget * 100), // Daily budget in cents
             $targeting,
             'LINK_CLICKS',
-            'LINK_CLICKS'
+            'PAUSED'
         );
 
         if (!$fbAdSet || !isset($fbAdSet['id'])) {
@@ -143,6 +143,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         // 4. Create Ad
         $fbAd = $this->adService->createAd(
+            $accountId,
             $fbAdSet['id'],
             $campaign->name . ' - Ad',
             $fbCreative['id']
@@ -185,12 +186,12 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $targeting = $this->buildTargeting($strategy);
         
         $fbAdSet = $this->adSetService->createAdSet(
+            $accountId,
             $fbCampaign['id'],
             $campaign->name . ' - Video Ad Set',
-            (int)($strategy->budget * 100),
             $targeting,
             'VIDEO_VIEWS',
-            'VIDEO_VIEWS'
+            'PAUSED'
         );
 
         if (!$fbAdSet || !isset($fbAdSet['id'])) {
@@ -228,6 +229,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         // 4. Create Ad
         $fbAd = $this->adService->createAd(
+            $accountId,
             $fbAdSet['id'],
             $campaign->name . ' - Video Ad',
             $fbCreative['id']

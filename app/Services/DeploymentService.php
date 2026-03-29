@@ -10,6 +10,7 @@ use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Deployment\DeploymentStrategy;
+use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
 use Illuminate\Support\Facades\Log;
 
@@ -224,6 +225,7 @@ class DeploymentService
     {
         return match (self::normalizePlatform($platform)) {
             'google' => new GoogleAdsDeploymentStrategy($customer),
+            'facebook' => new FacebookAdsDeploymentStrategy($customer),
             default => null
         };
     }

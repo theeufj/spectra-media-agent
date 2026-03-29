@@ -435,7 +435,7 @@ class AdSpendBillingService
     protected function getFacebookAdsSpend(Customer $customer, Campaign $campaign): float
     {
         // Check if customer has Facebook access token
-        if (empty($customer->facebook_access_token)) {
+        if (empty($customer->facebook_ads_access_token)) {
             return 0;
         }
         
@@ -609,7 +609,7 @@ class AdSpendBillingService
      */
     protected function pauseFacebookCampaign(Customer $customer, string $campaignId): void
     {
-        if (empty($customer->facebook_access_token)) {
+        if (empty($customer->facebook_ads_access_token)) {
             return;
         }
         
@@ -622,7 +622,7 @@ class AdSpendBillingService
      */
     protected function resumeFacebookCampaign(Customer $customer, string $campaignId): void
     {
-        if (empty($customer->facebook_access_token)) {
+        if (empty($customer->facebook_ads_access_token)) {
             return;
         }
         

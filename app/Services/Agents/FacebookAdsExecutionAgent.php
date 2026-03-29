@@ -858,7 +858,7 @@ PROMPT;
     protected function hasPixelInstalled(ExecutionContext $context): bool
     {
         try {
-            $adAccountId = $context->customer->facebook_ad_account_id;
+            $adAccountId = $context->customer->facebook_ads_account_id;
             if (!$adAccountId) {
                 return false;
             }
@@ -879,7 +879,7 @@ PROMPT;
     protected function hasPixelWithConversions(ExecutionContext $context): bool
     {
         try {
-            $adAccountId = $context->customer->facebook_ad_account_id;
+            $adAccountId = $context->customer->facebook_ads_account_id;
             if (!$adAccountId) {
                 return false;
             }

@@ -1,7 +1,17 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from '@inertiajs/react';
 
 export default function Footer() {
+    useEffect(() => {
+        const script = document.createElement('script');
+        script.src = 'https://proveably.com/portal/public/trust/b294b3b8-245a-469c-a8fc-e478db31c249/badge.js';
+        script.async = true;
+        document.body.appendChild(script);
+        return () => {
+            document.body.removeChild(script);
+        };
+    }, []);
+
     return (
         <footer className="bg-gray-900">
             <div className="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
@@ -47,7 +57,8 @@ export default function Footer() {
 
                 <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center">
                     <p className="text-sm text-gray-500">&copy; {new Date().getFullYear()} sitetospend. All rights reserved.</p>
-                    <div className="mt-4 sm:mt-0 flex space-x-6">
+                    <div className="mt-4 sm:mt-0 flex items-center space-x-6">
+                        <div id="proveably-badge"></div>
                         <Link href={route('terms')} className="text-sm text-gray-500 hover:text-gray-300">Terms</Link>
                         <Link href={route('privacy')} className="text-sm text-gray-500 hover:text-gray-300">Privacy</Link>
                     </div>
