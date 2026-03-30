@@ -16,7 +16,7 @@
         <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
 
         <!-- Canonical URL -->
-        <link rel="canonical" href="{{ url()->current() }}" />
+        <link rel="canonical" href="{{ str_replace('http://', 'https://', url()->current()) }}" />
 
         <!-- SEO Meta Tags -->
         <meta name="description" content="Site to Spend offers agentic digital marketing services, leveraging AI to create and manage ad campaigns across platforms like Google, Facebook, and more.">

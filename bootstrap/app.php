@@ -32,9 +32,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\CheckForBannedUser::class,
         ]);
 
-        $middleware->trustProxies(at: [
-            \App\Http\Middleware\TrustProxies::class,
-        ]);
+        $middleware->trustProxies(
+            at: '*',
+            headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO | \Illuminate\Http\Request::HEADER_X_FORWARDED_AWS_ELB
+        );
 
         $middleware->alias([
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
