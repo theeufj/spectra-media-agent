@@ -59,13 +59,13 @@ export default function SetupProgressNav() {
             </div>
             
             {/* Steps */}
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
                 {steps.map((step, index) => (
                     <Link 
                         key={step.key}
                         href={step.action_url}
                         className={`
-                            flex-1 flex items-center space-x-2 px-3 py-2 rounded-lg text-xs
+                            sm:flex-1 flex items-center space-x-2 px-3 py-2 rounded-lg text-xs
                             transition-all duration-200
                             ${step.completed 
                                 ? 'bg-green-100 text-green-700 hover:bg-green-200' 
