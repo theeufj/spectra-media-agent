@@ -49,8 +49,8 @@ export default function Index({ auth, campaigns = [] }) {
                 isDestructive={confirmModal.isDestructive}
             />
 
-            <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div className="py-6 sm:py-12">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     {campaigns && campaigns.length > 0 ? (
                         campaigns.map(campaign => {
                             const isExpanded = expandedCampaign === campaign.id;
@@ -59,20 +59,20 @@ export default function Index({ auth, campaigns = [] }) {
                                     {/* Campaign Header - Collapsible */}
                                     <div 
                                         onClick={() => setExpandedCampaign(isExpanded ? null : campaign.id)}
-                                        className="p-6 text-gray-900 cursor-pointer hover:bg-gray-50 transition-colors flex justify-between items-center"
+                                        className="p-4 sm:p-6 text-gray-900 cursor-pointer hover:bg-gray-50 transition-colors flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3"
                                     >
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-4">
-                                                <svg className={`h-6 w-6 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-3 sm:gap-4">
+                                                <svg className={`h-5 w-5 sm:h-6 sm:w-6 text-gray-400 transition-transform flex-shrink-0 ${isExpanded ? 'rotate-90' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                 </svg>
-                                                <div>
-                                                    <h3 className="text-2xl font-bold">{campaign.name}</h3>
-                                                    <p className="text-sm text-gray-500 mt-1">{campaign.reason}</p>
+                                                <div className="min-w-0">
+                                                    <h3 className="text-lg sm:text-2xl font-bold truncate">{campaign.name}</h3>
+                                                    <p className="text-sm text-gray-500 mt-1 truncate">{campaign.reason}</p>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 ml-8 sm:ml-0">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
                                                 campaign.status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
                                             }`}>

@@ -71,11 +71,11 @@ export default function Dashboard({ auth }) {
         <AuthenticatedLayout
             user={auth.user}
             header={
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">
                         Performance Dashboard
                     </h2>
-                    <div className="flex items-center space-x-4">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                         {campaigns.length > 0 && (
                             <CampaignSelector
                                 campaigns={campaigns}
@@ -90,8 +90,8 @@ export default function Dashboard({ auth }) {
         >
             <Head title="Performance Dashboard" />
 
-            <div className="py-12">
-                <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <div className="py-6 sm:py-12">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     {/* Setup Progress for New Users */}
                     <SetupProgressNav />
 

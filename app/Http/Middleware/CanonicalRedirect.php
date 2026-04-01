@@ -34,8 +34,8 @@ class CanonicalRedirect
             }
 
             // Strip junk query strings on GET requests (e.g. ?$, ?fbclid=, etc.)
-            // Skip OAuth callback routes — they need state/code params preserved
-            if ($request->isMethod('GET') && $request->getQueryString() !== null && !$request->is('auth/*/callback')) {
+            // Skip signed URL routes (email verification) and OAuth callbacks
+            if ($request->isMethod('GET') && $request->getQueryString() !== null && !$request->is('auth/*/callback') && !isset($request->query()['signature'])) {
                 $allowed = ['page', 'token', 'search', 'sort', 'filter', 'plan', 'status', 'priority', 'category'];
                 $query = $request->query();
                 $filtered = array_intersect_key($query, array_flip($allowed));
