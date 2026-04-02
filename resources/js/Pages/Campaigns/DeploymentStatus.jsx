@@ -124,7 +124,7 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
         <AuthenticatedLayout
             user={auth.user}
             header={
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
                     <div>
                         <Link 
                             href={`/campaigns/${campaign.id}/strategies`}
@@ -132,11 +132,11 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                         >
                             ← Back to Campaign
                         </Link>
-                        <h2 className="font-semibold text-xl text-gray-800 leading-tight">
+                        <h2 className="font-semibold text-lg sm:text-xl text-gray-800 leading-tight">
                             Deployment Status: {campaign.name}
                         </h2>
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(overallStatus)}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs sm:text-sm font-medium self-start flex-shrink-0 ${getStatusColor(overallStatus)}`}>
                         {getStatusIcon(overallStatus)} {overallStatus?.charAt(0).toUpperCase() + overallStatus?.slice(1)}
                     </span>
                 </div>
@@ -165,29 +165,29 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                         {deployments.map((deployment) => (
                             <div 
                                 key={deployment.id}
-                                className={`bg-white rounded-lg shadow-md p-6 border-l-4 ${
+                                className={`bg-white rounded-lg shadow-md p-4 sm:p-6 border-l-4 ${
                                     deployment.status === 'deployed' ? 'border-green-500' :
                                     deployment.status === 'failed' ? 'border-red-500' :
                                     deployment.status === 'deploying' ? 'border-blue-500' :
                                     'border-gray-300'
                                 }`}
                             >
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center space-x-3">
-                                        <span className="text-2xl">
+                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                                    <div className="flex items-center space-x-2 sm:space-x-3">
+                                        <span className="text-xl sm:text-2xl">
                                             {deployment.platform?.toLowerCase().includes('google') ? '🔍' : 
                                              deployment.platform?.toLowerCase().includes('facebook') ? '👥' : '📢'}
                                         </span>
                                         <div>
-                                            <h4 className="font-semibold text-gray-900">{deployment.platform}</h4>
-                                            <p className="text-sm text-gray-500">
+                                            <h4 className="font-semibold text-sm sm:text-base text-gray-900">{deployment.platform}</h4>
+                                            <p className="text-xs sm:text-sm text-gray-500">
                                                 {deployment.ad_copies_count || 0} ad copies • 
                                                 {deployment.images_count || 0} images • 
                                                 {deployment.videos_count || 0} videos
                                             </p>
                                         </div>
                                     </div>
-                                    <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(deployment.status)}`}>
+                                    <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium whitespace-nowrap self-start flex-shrink-0 ${getStatusColor(deployment.status)}`}>
                                         {getStatusIcon(deployment.status)} {deployment.status}
                                     </span>
                                 </div>

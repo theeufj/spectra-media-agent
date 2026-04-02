@@ -299,10 +299,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
-                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                    <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-4 sm:p-6">
                         {/* Tab Navigation */}
                         <div className="border-b border-gray-200">
-                            <nav className="-mb-px flex space-x-8" aria-label="Tabs">
+                            <nav className="-mb-px flex gap-2 sm:gap-6 overflow-x-auto" aria-label="Tabs">
                                 {allStrategies.map((strategyItem) => {
                                     const totalCollateral = strategyItem.ad_copies_count + strategyItem.image_collaterals_count + strategyItem.video_collaterals_count;
                                     return (
@@ -315,7 +315,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     ? 'border-blue-500 text-blue-600'
                                                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                                                 }
-                                                whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 flex items-center
+                                                whitespace-nowrap py-2 px-1 sm:py-4 border-b-2 font-medium text-xs sm:text-sm transition-colors duration-200 flex items-center
                                             `}
                                         >
                                             {strategyItem.platform}

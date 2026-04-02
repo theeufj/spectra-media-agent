@@ -185,21 +185,21 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                         </div>
                     </div>
 
-                    <div className="flex gap-6">
+                    <div className="flex flex-col lg:flex-row gap-6">
                         {/* Sidebar Navigation */}
-                        <div className="w-64 flex-shrink-0">
-                            <nav className="space-y-1 sticky top-6">
+                        <div className="w-full lg:w-64 lg:flex-shrink-0">
+                            <nav className="flex lg:flex-col gap-2 lg:gap-0 lg:space-y-1 lg:sticky lg:top-6 overflow-x-auto pb-2 lg:pb-0">
                                 {sections.map((section) => (
                                     <button
                                         key={section.id}
                                         onClick={() => setActiveSection(section.id)}
-                                        className={`w-full flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                                        className={`lg:w-full flex-shrink-0 flex items-center px-3 py-2 text-xs sm:text-sm font-medium rounded-md whitespace-nowrap transition-colors ${
                                             activeSection === section.id
                                                 ? 'bg-blue-100 text-blue-700'
                                                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                                         }`}
                                     >
-                                        <span className="mr-3 text-lg">{section.icon}</span>
+                                        <span className="mr-2 lg:mr-3 text-lg">{section.icon}</span>
                                         {section.name}
                                     </button>
                                 ))}

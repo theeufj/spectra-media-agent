@@ -75,7 +75,7 @@ export default function ProgressStepper({
                                 {/* Step Label */}
                                 <span 
                                     className={`
-                                        mt-2 text-sm font-medium text-center
+                                        mt-2 text-xs sm:text-sm font-medium text-center
                                         ${status === 'current' 
                                             ? 'text-flame-orange-600' 
                                             : status === 'completed'
@@ -89,7 +89,7 @@ export default function ProgressStepper({
                                 
                                 {/* Step Description (optional) */}
                                 {step.description && (
-                                    <span className="mt-0.5 text-xs text-gray-400 text-center max-w-[120px]">
+                                    <span className="mt-0.5 text-xs text-gray-400 text-center max-w-[80px] sm:max-w-[120px]">
                                         {step.description}
                                     </span>
                                 )}
@@ -107,12 +107,12 @@ export default function ProgressStepper({
  */
 export function CompactStepper({ steps, currentStep }) {
     return (
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto">
             {steps.map((step, index) => (
                 <React.Fragment key={step.id}>
                     <div 
                         className={`
-                            flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium
+                            flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium flex-shrink-0
                             ${index < currentStep 
                                 ? 'bg-flame-orange-600 text-white' 
                                 : index === currentStep

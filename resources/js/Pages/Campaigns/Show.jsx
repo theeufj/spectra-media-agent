@@ -27,18 +27,18 @@ const CollateralSummaryCard = ({ campaign }) => {
             <div className="p-6">
                 {hasCollateral ? (
                     <>
-                        <div className="grid grid-cols-3 gap-4 mb-6">
-                            <div className="text-center p-4 bg-blue-50 rounded-lg">
-                                <div className="text-3xl font-bold text-blue-600">{summary.ad_copies}</div>
-                                <div className="text-sm text-gray-600">Ad Copies</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-6">
+                            <div className="text-center p-3 sm:p-4 bg-blue-50 rounded-lg">
+                                <div className="text-2xl sm:text-3xl font-bold text-blue-600">{summary.ad_copies}</div>
+                                <div className="text-xs sm:text-sm text-gray-600">Ad Copies</div>
                             </div>
-                            <div className="text-center p-4 bg-green-50 rounded-lg">
-                                <div className="text-3xl font-bold text-green-600">{summary.images}</div>
-                                <div className="text-sm text-gray-600">Images</div>
+                            <div className="text-center p-3 sm:p-4 bg-green-50 rounded-lg">
+                                <div className="text-2xl sm:text-3xl font-bold text-green-600">{summary.images}</div>
+                                <div className="text-xs sm:text-sm text-gray-600">Images</div>
                             </div>
-                            <div className="text-center p-4 bg-purple-50 rounded-lg">
-                                <div className="text-3xl font-bold text-purple-600">{summary.videos}</div>
-                                <div className="text-sm text-gray-600">Videos</div>
+                            <div className="text-center p-3 sm:p-4 bg-purple-50 rounded-lg">
+                                <div className="text-2xl sm:text-3xl font-bold text-purple-600">{summary.videos}</div>
+                                <div className="text-xs sm:text-sm text-gray-600">Videos</div>
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-3">

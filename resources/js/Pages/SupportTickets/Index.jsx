@@ -48,7 +48,7 @@ export default function Index({ tickets }) {
             <div className="py-12">
                 <div className="max-w-4xl mx-auto sm:px-6 lg:px-8">
                     {tickets.length === 0 ? (
-                        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                        <div className="bg-white rounded-lg shadow-md p-6 sm:p-12 text-center">
                             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                             </svg>

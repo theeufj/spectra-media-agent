@@ -9,7 +9,7 @@ export function GoogleSearchPreview({ headlines = [], descriptions = [], url = '
     const displayUrl = url.replace(/^https?:\/\//, '').split('/')[0];
     
     return (
-        <div className="bg-white border border-gray-200 rounded-lg p-4 max-w-[400px] font-sans">
+        <div className="bg-white border border-gray-200 rounded-lg p-3 sm:p-4 max-w-full sm:max-w-[400px] font-sans">
             <div className="text-xs text-gray-500 mb-1">Ad · {displayUrl}</div>
             <h3 className="text-lg text-blue-800 hover:underline cursor-pointer leading-tight">
                 {headlines.slice(0, 3).join(' | ') || 'Your Ad Headline Here'}
@@ -24,15 +24,15 @@ export function GoogleSearchPreview({ headlines = [], descriptions = [], url = '
 // Google Display Ad Preview
 export function GoogleDisplayPreview({ headline, description, imageUrl, logoUrl }) {
     return (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden max-w-[300px]">
+        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden max-w-full sm:max-w-[300px]">
             {imageUrl ? (
                 <img 
                     src={imageUrl} 
                     alt="Ad preview" 
-                    className="w-full h-40 object-cover"
+                    className="w-full h-32 sm:h-40 object-cover"
                 />
             ) : (
-                <div className="w-full h-40 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-500">
+                <div className="w-full h-32 sm:h-40 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center text-gray-500">
                     <span className="text-4xl">🖼️</span>
                 </div>
             )}
@@ -69,7 +69,7 @@ export function FacebookFeedPreview({
     ctaText = 'Learn More' 
 }) {
     return (
-        <div className="bg-white border border-gray-200 rounded-lg max-w-[400px] font-sans">
+        <div className="bg-white border border-gray-200 rounded-lg max-w-full sm:max-w-[400px] font-sans">
             {/* Header */}
             <div className="p-3 flex items-center space-x-2">
                 <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold">
@@ -93,10 +93,10 @@ export function FacebookFeedPreview({
                 <img 
                     src={imageUrl} 
                     alt="Ad preview" 
-                    className="w-full h-52 object-cover"
+                    className="w-full h-40 sm:h-52 object-cover"
                 />
             ) : (
-                <div className="w-full h-52 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                <div className="w-full h-40 sm:h-52 bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
                     <span className="text-6xl">🖼️</span>
                 </div>
             )}
@@ -141,7 +141,7 @@ export function InstagramFeedPreview({
     ctaText = 'Learn More' 
 }) {
     return (
-        <div className="bg-white border border-gray-200 rounded-lg max-w-[350px] font-sans">
+        <div className="bg-white border border-gray-200 rounded-lg max-w-full sm:max-w-[350px] font-sans">
             {/* Header */}
             <div className="p-3 flex items-center justify-between">
                 <div className="flex items-center space-x-2">
@@ -217,7 +217,7 @@ export default function AdPreviewPanel({
                 See how your ads will appear across different placements
             </p>
             
-            <div className="flex gap-6 overflow-x-auto pb-4">
+            <div className="flex gap-4 sm:gap-6 overflow-x-auto pb-4">
                 {/* Google Search */}
                 <div className="flex-shrink-0">
                     <p className="text-xs text-gray-500 mb-2 font-medium">Google Search</p>

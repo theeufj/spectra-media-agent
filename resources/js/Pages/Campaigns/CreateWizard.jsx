@@ -344,31 +344,31 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                 if (creationMode === 'ai') {
                     return (
                         <div className="space-y-4 max-w-3xl mx-auto">
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                                 <button
                                     onClick={backToMethodSelection}
-                                    className="flex items-center text-gray-600 hover:text-gray-900"
+                                    className="flex items-center text-gray-600 hover:text-gray-900 order-2 sm:order-1"
                                 >
                                     <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                                     </svg>
                                     Back to options
                                 </button>
-                                <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center order-1 sm:order-2">
                                     <span className="text-2xl mr-2">🤖</span>
                                     AI Campaign Builder
                                 </h2>
                             </div>
                             
                             {/* Chat Messages */}
-                            <div className="bg-gray-50 rounded-lg border border-gray-200 h-96 overflow-y-auto p-4 space-y-4">
+                            <div className="bg-gray-50 rounded-lg border border-gray-200 h-64 sm:h-96 overflow-y-auto p-4 space-y-4">
                                 {aiMessages.map((msg, idx) => (
                                     <div
                                         key={idx}
                                         className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                     >
                                         <div
-                                            className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                                            className={`max-w-[90%] sm:max-w-[80%] rounded-lg px-3 py-2 sm:px-4 ${
                                                 msg.role === 'user'
                                                     ? 'bg-flame-orange-600 text-white'
                                                     : 'bg-white border border-gray-200 text-gray-800'
@@ -412,20 +412,20 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                             )}
                             
                             {/* Chat Input */}
-                            <div className="flex space-x-2">
+                            <div className="flex gap-1 sm:gap-2">
                                 <input
                                     type="text"
                                     value={aiInput}
                                     onChange={(e) => setAiInput(e.target.value)}
                                     onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
                                     placeholder="Describe your campaign..."
-                                    className="flex-1 rounded-lg border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="flex-1 rounded-lg border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
                                     disabled={aiLoading}
                                 />
                                 <button
                                     onClick={handleAiSend}
                                     disabled={aiLoading || !aiInput.trim()}
-                                    className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="px-3 py-2 sm:px-4 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     Send
                                 </button>
