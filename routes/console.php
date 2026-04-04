@@ -10,6 +10,7 @@ use App\Jobs\RunCompetitorIntelligence;
 use App\Jobs\ProcessDailyAdSpendBilling;
 use App\Jobs\RunHealthChecks;
 use App\Jobs\CheckCampaignPolicyViolations;
+use App\Jobs\HourlyBudgetOptimization;
 use App\Models\Customer;
 
 Artisan::command('inspire', function () {
@@ -22,6 +23,9 @@ Artisan::command('inspire', function () {
 
 // Campaign status monitoring - checks if campaigns are approved/live
 Schedule::job(new MonitorCampaignStatus)->hourly();
+
+// Hourly budget optimization - applies learned per-account multipliers and snapshots performance
+Schedule::job(new HourlyBudgetOptimization)->hourly();
 
 // Proactive health checks - API connectivity, token validity, delivery issues
 // Runs every 6 hours to catch issues early

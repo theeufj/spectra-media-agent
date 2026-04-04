@@ -6,6 +6,9 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
+use App\Services\FacebookAds\InsightService as FacebookInsightService;
+use App\Services\FacebookAds\AdService as FacebookAdService;
+use App\Services\Agents\AdaptiveThresholds;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -13,6 +16,10 @@ use Illuminate\Support\Facades\Log;
  * 
  * Analyzes creative performance at the asset level (headlines, descriptions, images).
  * Identifies winners, losers, and generates AI-powered creative variations.
+ * 
+ * Supported Platforms:
+ * - Google Ads: RSA asset-level analysis (headlines, descriptions, images)
+ * - Facebook Ads: Ad-level creative performance analysis
  * 
  * Capabilities:
  * - A/B test tracking at headline/image level
@@ -30,6 +37,8 @@ class CreativeIntelligenceAgent
         'winner_ctr_percentile' => 0.75,  // Top 25% are winners
         'loser_ctr_percentile' => 0.25,   // Bottom 25% are losers
         'min_conversions_for_winner' => 2,
+        'auto_pause_min_impressions' => 2000, // Must have 2000+ impressions to auto-pause
+        'auto_pause_max_ctr' => 0.005, // CTR below 0.5% with enough impressions = auto-pause candidate
     ];
 
     public function __construct(GeminiService $gemini)
@@ -39,11 +48,13 @@ class CreativeIntelligenceAgent
 
     /**
      * Analyze creative performance for a campaign.
+     * Automatically detects platform and runs appropriate analysis.
      */
     public function analyze(Campaign $campaign): array
     {
         $results = [
             'campaign_id' => $campaign->id,
+            'platform' => null,
             'headlines' => [
                 'winners' => [],
                 'losers' => [],
@@ -58,67 +69,243 @@ class CreativeIntelligenceAgent
                 'winners' => [],
                 'losers' => [],
             ],
+            'ads' => [
+                'winners' => [],
+                'losers' => [],
+                'learning' => [],
+            ],
             'recommendations' => [],
             'new_variations' => [],
+            'auto_actions' => [],
         ];
 
-        if (!$campaign->google_ads_campaign_id || !$campaign->customer) {
+        if (!$campaign->customer) {
             return $results;
         }
 
+        // Load adaptive thresholds if customer has historical data
+        if ($campaign->customer) {
+            $adaptive = AdaptiveThresholds::forCustomer($campaign->customer);
+            $this->thresholds['min_impressions_for_decision'] = $adaptive['min_impressions_for_decision'] ?? $this->thresholds['min_impressions_for_decision'];
+            $this->thresholds['auto_pause_min_impressions'] = $adaptive['auto_pause_min_impressions'] ?? $this->thresholds['auto_pause_min_impressions'];
+            $this->thresholds['auto_pause_max_ctr'] = $adaptive['auto_pause_max_ctr'] ?? $this->thresholds['auto_pause_max_ctr'];
+        }
+
+        $hasGoogle = $campaign->google_ads_campaign_id && $campaign->customer->google_ads_customer_id;
+        $hasFacebook = $campaign->facebook_ads_campaign_id && $campaign->customer->facebook_ads_account_id;
+
+        // Analyze Google Ads campaign (asset-level)
+        if ($hasGoogle) {
+            $results['platform'] = 'google_ads';
+            $this->analyzeGoogleAdsCampaign($campaign, $results);
+        }
+
+        // Analyze Facebook Ads campaign (ad-level)
+        if ($hasFacebook) {
+            $results['platform'] = $hasGoogle ? 'multi_platform' : 'facebook_ads';
+            $this->analyzeFacebookAdsCampaign($campaign, $results);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Analyze Google Ads campaign creative performance at the asset level.
+     */
+    protected function analyzeGoogleAdsCampaign(Campaign $campaign, array &$results): void
+    {
         $customer = $campaign->customer;
         $customerId = $customer->google_ads_customer_id;
         $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
 
         try {
-            // Get asset performance data
             $assetService = new GetAdPerformanceByAsset($customer, true);
             $textAssets = $assetService->getResponsiveSearchAdAssets($customerId, $campaignResourceName);
             $imageAssets = $assetService->getImageAssetPerformance($customerId, $campaignResourceName);
 
-            // Analyze headlines
             $results['headlines'] = $this->categorizeAssets($textAssets['headlines'] ?? []);
-            
-            // Analyze descriptions
             $results['descriptions'] = $this->categorizeAssets($textAssets['descriptions'] ?? []);
-            
-            // Analyze images
             $results['images'] = $this->categorizeAssets($imageAssets);
 
-            // Generate recommendations
-            $results['recommendations'] = $this->generateRecommendations($results);
+            $results['recommendations'] = array_merge(
+                $results['recommendations'],
+                $this->generateRecommendations($results, 'google_ads')
+            );
 
-            // Generate new variations based on winners
             if (!empty($results['headlines']['winners'])) {
                 $results['new_variations']['headlines'] = $this->generateHeadlineVariations(
                     $results['headlines']['winners'],
-                    $customer
+                    $customer,
+                    'google'
                 );
             }
 
             if (!empty($results['descriptions']['winners'])) {
                 $results['new_variations']['descriptions'] = $this->generateDescriptionVariations(
                     $results['descriptions']['winners'],
-                    $customer
+                    $customer,
+                    'google'
                 );
             }
 
-            Log::info('CreativeIntelligenceAgent: Analysis complete', [
+            Log::info('CreativeIntelligenceAgent: Google Ads analysis complete', [
                 'campaign_id' => $campaign->id,
                 'headline_winners' => count($results['headlines']['winners']),
                 'description_winners' => count($results['descriptions']['winners']),
-                'recommendations' => count($results['recommendations']),
             ]);
-
         } catch (\Exception $e) {
-            Log::error('CreativeIntelligenceAgent: Analysis failed', [
+            Log::error('CreativeIntelligenceAgent: Google Ads analysis failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
-            $results['error'] = $e->getMessage();
+            $results['errors'][] = 'Google Ads: ' . $e->getMessage();
         }
+    }
 
-        return $results;
+    /**
+     * Analyze Facebook Ads campaign creative performance at the ad level.
+     * Facebook doesn't have asset-level breakdowns like Google RSAs,
+     * so we compare performance across individual ads.
+     */
+    protected function analyzeFacebookAdsCampaign(Campaign $campaign, array &$results): void
+    {
+        $customer = $campaign->customer;
+
+        try {
+            $insightService = new FacebookInsightService($customer);
+            $adService = new FacebookAdService($customer);
+
+            // Get ad-level insights for the last 30 days
+            $dateEnd = now()->format('Y-m-d');
+            $dateStart = now()->subDays(30)->format('Y-m-d');
+
+            $accountId = "act_{$customer->facebook_ads_account_id}";
+            $adInsights = $insightService->getAccountInsightsByLevel(
+                $accountId,
+                $dateStart,
+                $dateEnd,
+                'ad',
+                ['ad_id', 'ad_name', 'impressions', 'clicks', 'spend', 'actions', 'ctr', 'cpc']
+            );
+
+            if (empty($adInsights)) {
+                return;
+            }
+
+            // Normalize Facebook ad insights to the same format as Google assets
+            $adPerformance = [];
+            foreach ($adInsights as $insight) {
+                $impressions = (int) ($insight['impressions'] ?? 0);
+                $clicks = (int) ($insight['clicks'] ?? 0);
+                $conversions = $insightService->parseAction($insight['actions'] ?? null, 'purchase');
+                $ctr = $impressions > 0 ? $clicks / $impressions : 0;
+
+                $adPerformance[] = [
+                    'text' => $insight['ad_name'] ?? $insight['ad_id'],
+                    'ad_id' => $insight['ad_id'] ?? null,
+                    'impressions' => $impressions,
+                    'clicks' => $clicks,
+                    'conversions' => $conversions,
+                    'ctr' => $ctr,
+                    'cost' => (float) ($insight['spend'] ?? 0),
+                ];
+            }
+
+            // Categorize ads into winners/losers/learning
+            $results['ads'] = $this->categorizeAssets($adPerformance);
+
+            // Generate Facebook-specific recommendations
+            $fbRecommendations = [];
+            $adWinners = count($results['ads']['winners']);
+            $adLosers = count($results['ads']['losers']);
+
+            if ($adLosers > 0) {
+                $fbRecommendations[] = [
+                    'type' => 'facebook_ad',
+                    'action' => 'pause_losers',
+                    'platform' => 'facebook_ads',
+                    'priority' => 'high',
+                    'message' => "Consider pausing {$adLosers} underperforming Facebook ad(s) and creating new variations based on winners.",
+                    'assets' => array_slice($results['ads']['losers'], 0, 3),
+                ];
+            }
+
+            if ($adWinners > 0 && $adLosers > 0) {
+                $fbRecommendations[] = [
+                    'type' => 'facebook_ad',
+                    'action' => 'create_variations',
+                    'platform' => 'facebook_ads',
+                    'priority' => 'medium',
+                    'message' => "Create new ad variations modeled after {$adWinners} winning Facebook ad(s).",
+                ];
+            }
+
+            $results['recommendations'] = array_merge($results['recommendations'], $fbRecommendations);
+
+            // Generate new ad copy variations based on winning ads
+            if (!empty($results['ads']['winners'])) {
+                $results['new_variations']['facebook_headlines'] = $this->generateHeadlineVariations(
+                    $results['ads']['winners'],
+                    $customer,
+                    'facebook'
+                );
+                $results['new_variations']['facebook_descriptions'] = $this->generateDescriptionVariations(
+                    $results['ads']['winners'],
+                    $customer,
+                    'facebook'
+                );
+            }
+
+            // Auto-pause losing Facebook ads with statistical confidence
+            // Only pause ads with 2000+ impressions, 0 conversions, and CTR below threshold
+            $autoPaused = [];
+            foreach ($results['ads']['losers'] as $loser) {
+                if (
+                    ($loser['impressions'] ?? 0) >= $this->thresholds['auto_pause_min_impressions'] &&
+                    ($loser['conversions'] ?? 0) === 0 &&
+                    ($loser['ctr'] ?? 0) < $this->thresholds['auto_pause_max_ctr'] &&
+                    !empty($loser['ad_id'])
+                ) {
+                    try {
+                        $adService->pauseAd($loser['ad_id']);
+                        $autoPaused[] = [
+                            'action' => 'paused',
+                            'platform' => 'facebook_ads',
+                            'ad_id' => $loser['ad_id'],
+                            'ad_name' => $loser['text'],
+                            'impressions' => $loser['impressions'],
+                            'ctr' => round($loser['ctr'] * 100, 2) . '%',
+                            'reason' => 'Auto-paused: 2000+ impressions with 0 conversions and CTR below 0.5%',
+                        ];
+                    } catch (\Exception $e) {
+                        Log::warning('CreativeIntelligenceAgent: Failed to auto-pause Facebook ad', [
+                            'ad_id' => $loser['ad_id'],
+                            'error' => $e->getMessage(),
+                        ]);
+                    }
+                }
+            }
+
+            if (!empty($autoPaused)) {
+                $results['auto_actions'] = array_merge($results['auto_actions'], $autoPaused);
+                Log::info('CreativeIntelligenceAgent: Auto-paused Facebook ads', [
+                    'campaign_id' => $campaign->id,
+                    'count' => count($autoPaused),
+                ]);
+            }
+
+            Log::info('CreativeIntelligenceAgent: Facebook Ads analysis complete', [
+                'campaign_id' => $campaign->id,
+                'ad_winners' => $adWinners,
+                'ad_losers' => $adLosers,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('CreativeIntelligenceAgent: Facebook Ads analysis failed', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+            $results['errors'][] = 'Facebook Ads: ' . $e->getMessage();
+        }
     }
 
     /**
@@ -197,7 +384,7 @@ class CreativeIntelligenceAgent
     /**
      * Generate recommendations based on analysis.
      */
-    protected function generateRecommendations(array $analysis): array
+    protected function generateRecommendations(array $analysis, string $platform = 'google_ads'): array
     {
         $recommendations = [];
 
@@ -255,7 +442,7 @@ class CreativeIntelligenceAgent
     /**
      * Generate new headline variations based on winners.
      */
-    protected function generateHeadlineVariations(array $winners, Customer $customer): array
+    protected function generateHeadlineVariations(array $winners, Customer $customer, string $platform = 'google'): array
     {
         if (empty($winners)) {
             return [];
@@ -270,14 +457,17 @@ class CreativeIntelligenceAgent
             $brandContext .= "USPs: " . implode(', ', $customer->brandGuideline->unique_selling_propositions ?? []);
         }
 
+        $maxChars = $platform === 'facebook' ? 40 : 30;
+        $platformName = $platform === 'facebook' ? 'Facebook Ads' : 'Google Ads';
+
         $prompt = <<<PROMPT
-Generate 5 new headline variations for Google Ads based on these winning headlines:
+Generate 5 new headline variations for {$platformName} based on these winning headlines:
 - {$winningList}
 
 {$brandContext}
 
 Requirements:
-1. Maximum 30 characters each
+1. Maximum {$maxChars} characters each
 2. Maintain the tone and style of winners
 3. Try different angles while keeping what works
 4. Include a call to action where appropriate
@@ -308,7 +498,7 @@ PROMPT;
     /**
      * Generate new description variations based on winners.
      */
-    protected function generateDescriptionVariations(array $winners, Customer $customer): array
+    protected function generateDescriptionVariations(array $winners, Customer $customer, string $platform = 'google'): array
     {
         if (empty($winners)) {
             return [];
@@ -322,14 +512,17 @@ PROMPT;
             $brandContext = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
         }
 
+        $maxChars = $platform === 'facebook' ? 125 : 90;
+        $platformName = $platform === 'facebook' ? 'Facebook Ads' : 'Google Ads';
+
         $prompt = <<<PROMPT
-Generate 3 new description variations for Google Ads based on these winning descriptions:
+Generate 3 new description variations for {$platformName} based on these winning descriptions:
 - {$winningList}
 
 {$brandContext}
 
 Requirements:
-1. Maximum 90 characters each
+1. Maximum {$maxChars} characters each
 2. Maintain the persuasive elements that make winners successful
 3. Include benefits and call-to-action
 4. Vary the approach while keeping core message

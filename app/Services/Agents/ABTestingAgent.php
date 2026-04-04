@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
+use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -169,6 +170,7 @@ class ABTestingAgent
 
     /**
      * Refresh variant metrics from the ad platform.
+     * Supports Google Ads (asset-level) and Facebook Ads (ad-level).
      */
     protected function refreshVariantMetrics(ABTest $test): ?array
     {
@@ -177,15 +179,28 @@ class ABTestingAgent
             return null;
         }
 
+        $customer = $campaign->customer;
+
+        // Try Google Ads first
+        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
+            return $this->refreshGoogleVariantMetrics($test, $campaign, $customer);
+        }
+
+        // Try Facebook Ads
+        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
+            return $this->refreshFacebookVariantMetrics($test, $campaign, $customer);
+        }
+
+        return $test->variants;
+    }
+
+    /**
+     * Refresh variant metrics from Google Ads asset-level data.
+     */
+    protected function refreshGoogleVariantMetrics(ABTest $test, Campaign $campaign, $customer): ?array
+    {
         try {
-            $customer = $campaign->customer;
             $customerId = $customer->google_ads_customer_id;
-
-            if (!$customerId || !$campaign->google_ads_campaign_id) {
-                // For Facebook or missing Google campaigns, return current variants as-is
-                return $test->variants;
-            }
-
             $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
             $assetService = new GetAdPerformanceByAsset($customer, true);
 
@@ -204,7 +219,6 @@ class ABTestingAgent
                 $assetPool = $assetService->getImageAssetPerformance($customerId, $campaignResourceName);
             }
 
-            // Match platform assets back to our tracked variants by content
             $variants = $test->variants;
             foreach ($variants as &$variant) {
                 foreach ($assetPool as $asset) {
@@ -221,7 +235,71 @@ class ABTestingAgent
 
             return $variants;
         } catch (\Exception $e) {
-            Log::warning('ABTestingAgent: Failed to refresh metrics', [
+            Log::warning('ABTestingAgent: Failed to refresh Google metrics', [
+                'test_id' => $test->id,
+                'error' => $e->getMessage(),
+            ]);
+            return $test->variants;
+        }
+    }
+
+    /**
+     * Refresh variant metrics from Facebook Ads ad-level insights.
+     * Facebook A/B tests compare at the ad level rather than asset level.
+     */
+    protected function refreshFacebookVariantMetrics(ABTest $test, Campaign $campaign, $customer): ?array
+    {
+        try {
+            $insightService = new FacebookInsightService($customer);
+            $accountId = "act_{$customer->facebook_ads_account_id}";
+            $dateEnd = now()->format('Y-m-d');
+            $dateStart = $test->started_at->format('Y-m-d');
+
+            $adInsights = $insightService->getAccountInsightsByLevel(
+                $accountId,
+                $dateStart,
+                $dateEnd,
+                'ad',
+                ['ad_id', 'ad_name', 'impressions', 'clicks', 'spend', 'actions']
+            );
+
+            if (empty($adInsights)) {
+                return $test->variants;
+            }
+
+            // Build lookup by ad name/id
+            $insightLookup = [];
+            foreach ($adInsights as $insight) {
+                $key = $insight['ad_name'] ?? $insight['ad_id'] ?? '';
+                if (!isset($insightLookup[$key])) {
+                    $insightLookup[$key] = [
+                        'impressions' => 0,
+                        'clicks' => 0,
+                        'conversions' => 0,
+                        'cost' => 0,
+                    ];
+                }
+                $insightLookup[$key]['impressions'] += (int) ($insight['impressions'] ?? 0);
+                $insightLookup[$key]['clicks'] += (int) ($insight['clicks'] ?? 0);
+                $insightLookup[$key]['conversions'] += $insightService->parseAction($insight['actions'] ?? null, 'purchase');
+                $insightLookup[$key]['cost'] += (float) ($insight['spend'] ?? 0);
+            }
+
+            // Match insights back to variants
+            $variants = $test->variants;
+            foreach ($variants as &$variant) {
+                $content = $variant['content'] ?? '';
+                if (isset($insightLookup[$content])) {
+                    $variant['impressions'] = $insightLookup[$content]['impressions'];
+                    $variant['clicks'] = $insightLookup[$content]['clicks'];
+                    $variant['conversions'] = $insightLookup[$content]['conversions'];
+                    $variant['cost'] = $insightLookup[$content]['cost'];
+                }
+            }
+
+            return $variants;
+        } catch (\Exception $e) {
+            Log::warning('ABTestingAgent: Failed to refresh Facebook metrics', [
                 'test_id' => $test->id,
                 'error' => $e->getMessage(),
             ]);

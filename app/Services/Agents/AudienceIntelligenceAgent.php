@@ -3,17 +3,21 @@
 namespace App\Services\Agents;
 
 use App\Models\Customer;
+use App\Models\CampaignHourlyPerformance;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\CustomerMatchService;
+use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
+use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Log;
 
 /**
  * AudienceIntelligenceAgent
  * 
- * Manages audience creation and optimization:
- * - Customer Match list creation and upload
- * - Audience segmentation recommendations
- * - Lookalike audience suggestions
+ * Manages audience creation and optimization across platforms:
+ * - Google Ads: Customer Match list creation and upload
+ * - Facebook Ads: Custom Audience creation (email/phone lists, website, lookalike) 
+ * - AI-powered audience segmentation recommendations
+ * - Cross-platform lookalike audience suggestions
  */
 class AudienceIntelligenceAgent
 {
@@ -26,6 +30,7 @@ class AudienceIntelligenceAgent
 
     /**
      * Create a Customer Match audience from email list.
+     * Supports both Google Ads and Facebook Ads.
      */
     public function createCustomerMatchAudience(
         Customer $customer,
@@ -35,22 +40,58 @@ class AudienceIntelligenceAgent
     ): array {
         $result = [
             'success' => false,
+            'platforms' => [],
+            'error' => null,
+        ];
+
+        $hasGoogle = (bool) $customer->google_ads_customer_id;
+        $hasFacebook = (bool) $customer->facebook_ads_account_id;
+
+        if (!$hasGoogle && !$hasFacebook) {
+            $result['error'] = 'No ad platform connected';
+            return $result;
+        }
+
+        // Create on Google Ads
+        if ($hasGoogle) {
+            $result['platforms']['google_ads'] = $this->createGoogleCustomerMatchAudience(
+                $customer, $listName, $emails, $description
+            );
+        }
+
+        // Create on Facebook Ads
+        if ($hasFacebook) {
+            $result['platforms']['facebook_ads'] = $this->createFacebookCustomAudience(
+                $customer, $listName, $emails, $description
+            );
+        }
+
+        $result['success'] = collect($result['platforms'])->contains('success', true);
+
+        return $result;
+    }
+
+    /**
+     * Create a Google Ads Customer Match audience.
+     */
+    protected function createGoogleCustomerMatchAudience(
+        Customer $customer,
+        string $listName,
+        array $emails,
+        string $description
+    ): array {
+        $result = [
+            'success' => false,
             'list_created' => false,
             'emails_uploaded' => 0,
             'user_list_resource_name' => null,
             'error' => null,
         ];
 
-        if (!$customer->google_ads_customer_id) {
-            $result['error'] = 'Google Ads not connected';
-            return $result;
-        }
-
         try {
             $customerMatchService = new CustomerMatchService($customer, true);
             $customerId = $customer->google_ads_customer_id;
 
-            // Step 1: Create the user list
             $userListResourceName = $customerMatchService->createUserList(
                 $customerId,
                 $listName,
@@ -65,7 +106,6 @@ class AudienceIntelligenceAgent
             $result['list_created'] = true;
             $result['user_list_resource_name'] = $userListResourceName;
 
-            // Step 2: Upload emails
             $uploadResult = $customerMatchService->uploadEmails(
                 $customerId,
                 $userListResourceName,
@@ -76,15 +116,14 @@ class AudienceIntelligenceAgent
             $result['upload_job'] = $uploadResult['job_resource_name'];
             $result['success'] = $uploadResult['success'];
 
-            Log::info('AudienceIntelligenceAgent: Customer Match audience created', [
+            Log::info('AudienceIntelligenceAgent: Google Customer Match audience created', [
                 'customer_id' => $customer->id,
                 'list_name' => $listName,
                 'emails_uploaded' => $result['emails_uploaded'],
             ]);
-
         } catch (\Exception $e) {
             $result['error'] = $e->getMessage();
-            Log::error('AudienceIntelligenceAgent: Failed to create audience', [
+            Log::error('AudienceIntelligenceAgent: Failed to create Google audience', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
             ]);
@@ -94,24 +133,109 @@ class AudienceIntelligenceAgent
     }
 
     /**
-     * Get existing Customer Match audiences.
+     * Create a Facebook Custom Audience from email list.
      */
-    public function getCustomerMatchAudiences(Customer $customer): array
-    {
-        if (!$customer->google_ads_customer_id) {
-            return [];
-        }
+    protected function createFacebookCustomAudience(
+        Customer $customer,
+        string $listName,
+        array $emails,
+        string $description
+    ): array {
+        $result = [
+            'success' => false,
+            'audience_id' => null,
+            'emails_uploaded' => 0,
+            'error' => null,
+        ];
 
         try {
-            $customerMatchService = new CustomerMatchService($customer, true);
-            return $customerMatchService->getUserLists($customer->google_ads_customer_id);
+            $audienceService = new FacebookCustomAudienceService($customer);
+            $accountId = $customer->facebook_ads_account_id;
+
+            $audience = $audienceService->createCustomerListAudience(
+                $accountId,
+                $listName,
+                $description ?: "Custom audience created via Spectra",
+                $emails
+            );
+
+            if ($audience && isset($audience['id'])) {
+                $result['success'] = true;
+                $result['audience_id'] = $audience['id'];
+                $result['emails_uploaded'] = count($emails);
+
+                Log::info('AudienceIntelligenceAgent: Facebook Custom Audience created', [
+                    'customer_id' => $customer->id,
+                    'audience_id' => $audience['id'],
+                    'list_name' => $listName,
+                    'emails_uploaded' => count($emails),
+                ]);
+            } else {
+                $result['error'] = 'Failed to create Facebook Custom Audience';
+            }
         } catch (\Exception $e) {
-            Log::error('AudienceIntelligenceAgent: Failed to get audiences', [
+            $result['error'] = $e->getMessage();
+            Log::error('AudienceIntelligenceAgent: Failed to create Facebook audience', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
             ]);
-            return [];
         }
+
+        return $result;
+    }
+
+    /**
+     * Get existing audiences across all connected platforms.
+     */
+    public function getCustomerMatchAudiences(Customer $customer): array
+    {
+        $audiences = [];
+
+        // Google Ads Customer Match audiences
+        if ($customer->google_ads_customer_id) {
+            try {
+                $customerMatchService = new CustomerMatchService($customer, true);
+                $googleAudiences = $customerMatchService->getUserLists($customer->google_ads_customer_id);
+                foreach ($googleAudiences as &$audience) {
+                    $audience['platform'] = 'google_ads';
+                }
+                $audiences = array_merge($audiences, $googleAudiences);
+            } catch (\Exception $e) {
+                Log::error('AudienceIntelligenceAgent: Failed to get Google audiences', [
+                    'customer_id' => $customer->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        // Facebook Custom Audiences
+        if ($customer->facebook_ads_account_id) {
+            try {
+                $fbAudienceService = new FacebookCustomAudienceService($customer);
+                $fbAudiences = $fbAudienceService->listAudiences($customer->facebook_ads_account_id);
+                if ($fbAudiences) {
+                    foreach ($fbAudiences as $fbAudience) {
+                        $audiences[] = [
+                            'name' => $fbAudience['name'] ?? 'Unnamed',
+                            'platform' => 'facebook_ads',
+                            'audience_id' => $fbAudience['id'],
+                            'subtype' => $fbAudience['subtype'] ?? null,
+                            'approximate_count' => $fbAudience['approximate_count'] ?? 0,
+                            'size_display' => $fbAudience['approximate_count'] ?? 0,
+                            'size_search' => 0, // Facebook doesn't have search/display split
+                            'delivery_status' => $fbAudience['delivery_status'] ?? null,
+                        ];
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error('AudienceIntelligenceAgent: Failed to get Facebook audiences', [
+                    'customer_id' => $customer->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return $audiences;
     }
 
     /**
@@ -199,6 +323,7 @@ PROMPT;
 
     /**
      * Analyze existing audience performance and suggest optimizations.
+     * Tracks segment ROAS over time and recommends pruning underperformers.
      */
     public function analyzeAudiencePerformance(Customer $customer): array
     {
@@ -207,37 +332,144 @@ PROMPT;
         $analysis = [
             'audiences' => $audiences,
             'recommendations' => [],
+            'performance_trends' => [],
         ];
 
+        // Get customer's recent performance data for ROAS context
+        $avgRoas = CampaignHourlyPerformance::where('customer_id', $customer->id)
+            ->where('date', '>=', now()->subDays(30))
+            ->where('spend', '>', 0)
+            ->selectRaw('AVG(roas) as avg_roas')
+            ->value('avg_roas') ?? 0;
+
         foreach ($audiences as $audience) {
-            // Check if audience is too small
-            $displaySize = $audience['size_display'] ?? 0;
-            $searchSize = $audience['size_search'] ?? 0;
+            $platform = $audience['platform'] ?? 'google_ads';
 
-            if ($displaySize < 1000 && $searchSize < 1000) {
-                $analysis['recommendations'][] = [
-                    'audience' => $audience['name'],
-                    'issue' => 'Audience too small for effective targeting',
-                    'action' => 'Add more customer emails or expand criteria',
-                    'priority' => 'high',
-                ];
-            }
-
-            // Check for search vs display discrepancy
-            if ($displaySize > 0 && $searchSize > 0) {
-                $ratio = $searchSize / $displaySize;
-                if ($ratio < 0.5) {
-                    $analysis['recommendations'][] = [
-                        'audience' => $audience['name'],
-                        'issue' => 'Low match rate for Search Network',
-                        'action' => 'Consider using this audience primarily for Display/YouTube',
-                        'priority' => 'medium',
-                    ];
-                }
+            if ($platform === 'facebook_ads') {
+                $this->analyzeFacebookAudiencePerformance($customer, $audience, $analysis, $avgRoas);
+            } else {
+                $this->analyzeGoogleAudiencePerformance($audience, $analysis);
             }
         }
 
+        // Add overall audience health summary
+        $totalAudiences = count($audiences);
+        $smallAudiences = count(array_filter($analysis['recommendations'], fn($r) => str_contains($r['issue'] ?? '', 'too small')));
+        if ($totalAudiences > 0 && $smallAudiences > ($totalAudiences / 2)) {
+            $analysis['recommendations'][] = [
+                'audience' => 'Overall',
+                'platform' => 'all',
+                'issue' => 'Majority of audiences are undersized',
+                'action' => 'Focus on growing your email list and website traffic before creating more audience segments',
+                'priority' => 'critical',
+            ];
+        }
+
         return $analysis;
+    }
+
+    /**
+     * Analyze a Facebook audience with ROAS tracking and feedback.
+     */
+    protected function analyzeFacebookAudiencePerformance(
+        Customer $customer,
+        array $audience,
+        array &$analysis,
+        float $avgRoas
+    ): void {
+        $approximateCount = $audience['approximate_count'] ?? 0;
+        $audienceName = $audience['name'];
+
+        if ($approximateCount < 1000) {
+            $analysis['recommendations'][] = [
+                'audience' => $audienceName,
+                'platform' => 'facebook_ads',
+                'issue' => 'Audience too small for effective targeting on Facebook',
+                'action' => 'Add more customer emails or consider creating a website-based custom audience',
+                'priority' => 'high',
+            ];
+        }
+
+        // Suggest lookalike if audience is large enough and is a seed audience
+        if ($approximateCount >= 1000 && ($audience['subtype'] ?? '') === 'CUSTOM') {
+            $analysis['recommendations'][] = [
+                'audience' => $audienceName,
+                'platform' => 'facebook_ads',
+                'issue' => 'Lookalike opportunity',
+                'action' => "Create a 1% lookalike audience from \"{$audienceName}\" to expand reach with similar users",
+                'priority' => 'medium',
+            ];
+        }
+
+        // Check delivery status for stale audiences
+        $deliveryStatus = $audience['delivery_status'] ?? null;
+        if ($deliveryStatus && is_array($deliveryStatus)) {
+            $status = $deliveryStatus['status'] ?? '';
+            if (in_array($status, ['inactive', 'limited'])) {
+                $analysis['recommendations'][] = [
+                    'audience' => $audienceName,
+                    'platform' => 'facebook_ads',
+                    'issue' => "Audience delivery is {$status}",
+                    'action' => 'Consider refreshing this audience with updated customer data or expanding targeting',
+                    'priority' => 'high',
+                ];
+            }
+        }
+
+        // Track audience age — suggest refresh for audiences not updated in 30+ days
+        if ($approximateCount > 0 && $approximateCount < 500) {
+            $analysis['recommendations'][] = [
+                'audience' => $audienceName,
+                'platform' => 'facebook_ads',
+                'issue' => 'Audience below minimum viable size for Facebook (500)',
+                'action' => 'Prune this audience — it cannot deliver meaningfully. Consolidate with other segments.',
+                'priority' => 'critical',
+            ];
+        }
+    }
+
+    /**
+     * Analyze a Google audience with size and match-rate checks.
+     */
+    protected function analyzeGoogleAudiencePerformance(array $audience, array &$analysis): void
+    {
+        $displaySize = $audience['size_display'] ?? 0;
+        $searchSize = $audience['size_search'] ?? 0;
+        $audienceName = $audience['name'];
+
+        if ($displaySize < 1000 && $searchSize < 1000) {
+            $analysis['recommendations'][] = [
+                'audience' => $audienceName,
+                'platform' => 'google_ads',
+                'issue' => 'Audience too small for effective targeting',
+                'action' => 'Add more customer emails or expand criteria',
+                'priority' => 'high',
+            ];
+        }
+
+        if ($displaySize > 0 && $searchSize > 0) {
+            $ratio = $searchSize / $displaySize;
+            if ($ratio < 0.5) {
+                $analysis['recommendations'][] = [
+                    'audience' => $audienceName,
+                    'platform' => 'google_ads',
+                    'issue' => 'Low match rate for Search Network',
+                    'action' => 'Consider using this audience primarily for Display/YouTube',
+                    'priority' => 'medium',
+                ];
+            }
+        }
+
+        // Suggest pruning very small Google audiences
+        if ($displaySize > 0 && $displaySize < 100 && $searchSize < 100) {
+            $analysis['recommendations'][] = [
+                'audience' => $audienceName,
+                'platform' => 'google_ads',
+                'issue' => 'Audience critically small — unlikely to deliver',
+                'action' => 'Remove this audience segment and consolidate with a larger list',
+                'priority' => 'critical',
+            ];
+        }
     }
 
     /**

@@ -31,12 +31,13 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         // Get all active campaigns (both Google and Facebook)
         $campaigns = Campaign::with('customer')
             ->where('primary_status', 'ELIGIBLE')
-            ->whereNotNull('google_ads_campaign_id')
+            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')->orWhereNotNull('facebook_ads_campaign_id'))
             ->get();
 
         $summary = [
             'campaigns_processed' => 0,
             'google_campaigns' => 0,
+            'facebook_campaigns' => 0,
             'healing_actions' => 0,
             'healing_warnings' => 0,
             'keywords_added' => 0,
@@ -57,6 +58,9 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 // Track platform
                 if ($campaign->google_ads_campaign_id) {
                     $summary['google_campaigns']++;
+                }
+                if ($campaign->facebook_ads_campaign_id) {
+                    $summary['facebook_campaigns']++;
                 }
 
                 // 1. Run Self-Healing Agent (now supports both Google and Facebook)

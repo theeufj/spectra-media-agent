@@ -44,6 +44,8 @@ class Customer extends Model
         'cro_audits_used',
         'gtm_detected',
         'gtm_detected_at',
+        'average_order_value',
+        'agent_thresholds',
     ];
 
     protected $casts = [
@@ -60,6 +62,8 @@ class Customer extends Model
         'facebook_token_is_long_lived' => 'boolean',
         'facebook_bm_owned' => 'boolean',
         'google_ads_customer_is_manager' => 'boolean',
+        'average_order_value' => 'float',
+        'agent_thresholds' => 'array',
     ];
 
     /**
