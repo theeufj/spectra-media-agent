@@ -104,9 +104,9 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {/* Header */}
                     <div className="mb-8">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h1 className="text-3xl font-bold text-gray-900">{customer.name} - Brand Guidelines</h1>
+                        <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                            <div className="min-w-0">
+                                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">{customer.name} - Brand Guidelines</h1>
                                 <p className="mt-2 text-sm text-gray-600">
                                     Last extracted: {new Date(brandGuideline.extracted_at).toLocaleDateString()} 
                                     {brandGuideline.user_verified && (
@@ -121,7 +121,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                     )}
                                 </p>
                             </div>
-                            <div className="flex space-x-3">
+                            <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto sm:flex-shrink-0">
                                 {!isEditing && canEdit && (
                                     <>
                                         <button
@@ -454,7 +454,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             {/* Brand Personality */}
                                             <div>
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Brand Personality</h3>
-                                                <div className="grid grid-cols-2 gap-4">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-2">Archetype</label>
                                                         {!isEditing ? (
@@ -546,7 +546,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             {/* Color Palette */}
                                             <div>
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Color Palette</h3>
-                                                <div className="grid grid-cols-2 gap-4 mb-4">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-2">Primary Colors</label>
                                                         <div className="flex flex-wrap gap-2">
@@ -656,7 +656,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                             />
                                                         )}
                                                     </div>
-                                                    <div className="grid grid-cols-2 gap-4">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                         <div>
                                                             <label className="block text-sm font-medium text-gray-700 mb-2">Font Weights</label>
                                                             {!isEditing ? (
@@ -691,7 +691,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                             <div>
                                                 <h3 className="text-lg font-semibold text-gray-900 mb-3">Visual Style</h3>
                                                 <div className="space-y-4">
-                                                    <div className="grid grid-cols-2 gap-4">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                         <div>
                                                             <label className="block text-sm font-medium text-gray-700 mb-2">Overall Aesthetic</label>
                                                             {!isEditing ? (
@@ -719,7 +719,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                             )}
                                                         </div>
                                                     </div>
-                                                    <div className="grid grid-cols-2 gap-4">
+                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                         <div>
                                                             <label className="block text-sm font-medium text-gray-700 mb-2">Color Treatment</label>
                                                             {!isEditing ? (
@@ -920,7 +920,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                 )}
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-2">Language Level</label>
                                                     {!isEditing ? (
