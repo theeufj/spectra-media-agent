@@ -40,29 +40,77 @@ if ($clientId === 'INSERT_CLIENT_ID_HERE' || $clientSecret === 'INSERT_CLIENT_SE
     die("Error: Please update spectra/storage/app/google_ads_php.ini with your Client ID and Client Secret.\n");
 }
 
+$redirectUri = 'http://localhost:8088';
+
 $oauth2 = new OAuth2([
     'clientId' => $clientId,
     'clientSecret' => $clientSecret,
     'authorizationUri' => 'https://accounts.google.com/o/oauth2/v2/auth',
-    'redirectUri' => 'urn:ietf:wg:oauth:2.0:oob',
+    'redirectUri' => $redirectUri,
     'tokenCredentialUri' => 'https://oauth2.googleapis.com/token',
-    'scope' => 'https://www.googleapis.com/auth/adwords'
+    'scope' => 'https://www.googleapis.com/auth/adwords',
 ]);
 
-printf("Log into the Google account you want to use to manage your ads.\n");
-printf("Paste the following URL into your browser:\n%s\n\n", $oauth2->buildFullAuthorizationUri());
-printf("Retrieve the authorization code and paste it here:\n");
+$authUrl = $oauth2->buildFullAuthorizationUri(['access_type' => 'offline', 'prompt' => 'consent']);
 
-$code = trim(fgets(STDIN));
+printf("Log into the Google account you want to use to manage your ads.\n");
+printf("Opening browser...\n\n");
+
+// Try to open the URL in the default browser
+$url = (string) $authUrl;
+if (PHP_OS_FAMILY === 'Darwin') {
+    exec('open ' . escapeshellarg($url));
+} elseif (PHP_OS_FAMILY === 'Linux') {
+    exec('xdg-open ' . escapeshellarg($url));
+} else {
+    printf("Paste the following URL into your browser:\n%s\n\n", $url);
+}
+
+// Start a temporary local server to capture the OAuth callback
+printf("Waiting for Google OAuth callback on %s ...\n", $redirectUri);
+
+$server = stream_socket_server('tcp://127.0.0.1:8088', $errno, $errstr);
+if (!$server) {
+    die("Error: Could not start local server: $errstr ($errno)\n");
+}
+
+$conn = stream_socket_accept($server, 120); // wait up to 2 minutes
+if (!$conn) {
+    fclose($server);
+    die("Error: Timed out waiting for OAuth callback.\n");
+}
+
+$request = fread($conn, 4096);
+
+// Send a nice response to the browser
+$html = '<html><body style="font-family:sans-serif;text-align:center;padding:60px;">'
+    . '<h2>✅ Authorization received!</h2>'
+    . '<p>You can close this tab and return to your terminal.</p>'
+    . '</body></html>';
+$response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: " . strlen($html) . "\r\n\r\n" . $html;
+fwrite($conn, $response);
+fclose($conn);
+fclose($server);
+
+// Extract the authorization code from the GET request
+if (preg_match('/[?&]code=([^\s&]+)/', $request, $matches)) {
+    $code = urldecode($matches[1]);
+} else {
+    die("Error: Could not extract authorization code from callback.\nRequest: $request\n");
+}
+
+printf("Authorization code received. Exchanging for tokens...\n");
 
 $oauth2->setCode($code);
 $authToken = $oauth2->fetchAuthToken();
 
 if (isset($authToken['refresh_token'])) {
-    printf("\nRefresh token: %s\n", $authToken['refresh_token']);
-    printf("Copy this refresh token and save it to your Customer record in the database (google_ads_refresh_token column).\n");
-    printf("You can also add it to google_ads_php.ini for testing, but the application expects it in the database.\n");
+    printf("\n✅ Refresh token: %s\n\n", $authToken['refresh_token']);
+    printf("Save this to:\n");
+    printf("  1. storage/app/google_ads_php.ini (refreshToken field) for local testing\n");
+    printf("  2. mcc_accounts table (refresh_token column, encrypted) for production\n");
+    printf("  3. Or set GOOGLE_ADS_MCC_REFRESH_TOKEN in .env\n");
 } else {
     printf("\nError: Could not retrieve refresh token.\n");
-    printf("Response keys: %s\n", implode(', ', array_keys($authToken ?? [])));
+    printf("Response: %s\n", json_encode($authToken));
 }

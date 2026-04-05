@@ -16,6 +16,7 @@ use Google\Ads\GoogleAds\V22\Common\MaximizeConversionValue;
 use Google\Ads\GoogleAds\V22\Common\TargetCpa;
 use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\ApiCore\ApiException;
 use App\Models\Customer;
 use App\Services\CampaignStatusHelper;
 
@@ -80,7 +81,7 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
             $newCampaignResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Demand Gen campaign: " . $newCampaignResourceName);
             return $newCampaignResourceName;
-        } catch (GoogleAdsException $e) {
+        } catch (GoogleAdsException|ApiException $e) {
             $this->logError("Error creating Demand Gen campaign for customer $customerId: " . $e->getMessage(), $e);
             return null;
         }
@@ -108,7 +109,7 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
             $newBudgetResourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Successfully created Demand Gen campaign budget: " . $newBudgetResourceName);
             return $newBudgetResourceName;
-        } catch (GoogleAdsException $e) {
+        } catch (GoogleAdsException|ApiException $e) {
             $this->logError("Error creating Demand Gen campaign budget for customer $customerId: " . $e->getMessage(), $e);
             return null;
         }

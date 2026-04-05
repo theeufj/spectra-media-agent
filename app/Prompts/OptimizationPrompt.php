@@ -49,6 +49,16 @@ Focus Areas:
 3. Keyword/audience opportunities (if targeting needs refinement)
 4. Ad copy improvements (if CTR or engagement is below benchmarks)
 5. Creative optimization (if ad fatigue or low engagement is detected)
+6. Ad extensions (structured snippets, call, price, promotion extensions to improve ad real estate)
+7. Ad scheduling / dayparting (optimize delivery to high-converting hours/days)
+8. Audience creation (ONLY if the campaign is 30+ days old with 30+ conversions — create remarketing or customer match audiences)
+
+AUDIENCE CREATION RULES — IMPORTANT:
+- Do NOT recommend AUDIENCE type unless the campaign has been running for at least 30 days AND has accumulated meaningful conversion data (30+ conversions).
+- When recommending AUDIENCE, set sub_type to "remarketing" (url-based visitors) or "customer_match" (email/phone list upload).
+- For remarketing, include "url_contains" (e.g. "/products", "/checkout"), "membership_days" (e.g. 90), and "audience_name".
+- For customer_match, include "audience_name" and "description".
+- Audience recommendations are progressive — the system learns from conversion data before building audiences.
 
 Return your response in the following JSON format:
 {
@@ -57,7 +67,7 @@ Return your response in the following JSON format:
     "trend_summary": "Brief description of performance trends (improving, declining, stable)",
     "recommendations": [
         {
-            "type": "BUDGET|BIDDING|KEYWORDS|ADS|TARGETING|CREATIVE|OTHER",
+            "type": "BUDGET|BIDDING|KEYWORDS|ADS|TARGETING|CREATIVE|AD_EXTENSIONS|SCHEDULE|AUDIENCE|OTHER",
             "action": "INCREASE|DECREASE|ADD|REMOVE|MODIFY|TEST",
             "description": "Detailed description of the recommendation.",
             "reasoning": "Why this recommendation will help achieve the campaign goals, with supporting data points.",

@@ -16,5 +16,26 @@ class GoogleAdsPerformanceData extends Model
         'clicks',
         'cost',
         'conversions',
+        'conversion_value',
+        'ctr',
+        'cpc',
+        'cpa',
     ];
+
+    protected $casts = [
+        'date' => 'date',
+        'impressions' => 'integer',
+        'clicks' => 'integer',
+        'cost' => 'float',
+        'conversions' => 'float',
+        'conversion_value' => 'float',
+        'ctr' => 'float',
+        'cpc' => 'float',
+        'cpa' => 'float',
+    ];
+
+    public function campaign()
+    {
+        return $this->belongsTo(Campaign::class);
+    }
 }

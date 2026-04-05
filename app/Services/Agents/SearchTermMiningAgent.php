@@ -93,9 +93,10 @@ class SearchTermMiningAgent
             return;
         }
 
-        // Check if this is a HIGH PERFORMER → Add as exact match keyword
+        // Check if this is a HIGH PERFORMER → Add as keyword with match type based on conversion volume
         if ($clicks >= $minClicks && $ctr >= $promoteCtrThreshold && $conversions > 0) {
-            $this->addAsKeyword($customer, $customerId, $term['ad_group_resource_name'], $searchTerm, $results);
+            $matchType = $this->determineMatchType($conversions);
+            $this->addAsKeyword($customer, $customerId, $term['ad_group_resource_name'], $searchTerm, $matchType, $results);
             return;
         }
 
@@ -113,23 +114,48 @@ class SearchTermMiningAgent
     }
 
     /**
-     * Add a search term as an exact match keyword.
+     * Determine match type based on conversion volume.
+     * High-confidence terms (10+ conversions) → EXACT
+     * Medium-confidence (5-9 conversions) → PHRASE
+     * Low-confidence (1-4 conversions) → BROAD
      */
-    protected function addAsKeyword(Customer $customer, string $customerId, string $adGroupResourceName, string $keyword, array &$results): void
+    protected function determineMatchType(float $conversions): int
+    {
+        if ($conversions >= 10) {
+            return KeywordMatchType::EXACT;
+        }
+        if ($conversions >= 5) {
+            return KeywordMatchType::PHRASE;
+        }
+        return KeywordMatchType::BROAD;
+    }
+
+    /**
+     * Add a search term as a keyword with the specified match type.
+     */
+    protected function addAsKeyword(Customer $customer, string $customerId, string $adGroupResourceName, string $keyword, int $matchType, array &$results): void
     {
         try {
             $addKeyword = new AddKeyword($customer, true);
-            $resourceName = ($addKeyword)($customerId, $adGroupResourceName, $keyword, KeywordMatchType::EXACT);
+            $resourceName = ($addKeyword)($customerId, $adGroupResourceName, $keyword, $matchType);
+
+            $matchTypeName = match ($matchType) {
+                KeywordMatchType::EXACT => 'EXACT',
+                KeywordMatchType::PHRASE => 'PHRASE',
+                KeywordMatchType::BROAD => 'BROAD',
+                default => 'UNKNOWN',
+            };
 
             if ($resourceName) {
                 $results['keywords_added'][] = [
                     'keyword' => $keyword,
-                    'match_type' => 'EXACT',
+                    'match_type' => $matchTypeName,
                     'resource_name' => $resourceName,
                 ];
 
                 Log::info("SearchTermMiningAgent: Added keyword", [
                     'keyword' => $keyword,
+                    'match_type' => $matchTypeName,
                     'ad_group' => $adGroupResourceName,
                 ]);
             }

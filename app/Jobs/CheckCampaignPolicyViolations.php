@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Campaign;
-use App\Services\GoogleAds\GoogleAdsService;
+use App\Services\GoogleAds\AccountStructureService;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,8 +33,8 @@ class CheckCampaignPolicyViolations implements ShouldQueue
     {
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
-            $googleAdsService = new GoogleAdsService();
-            $client = $googleAdsService->getClient();
+            $service = new AccountStructureService($campaign->customer);
+            $client = $service->getClient();
             $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
 
             $query = "SELECT ad_group_ad.policy_summary FROM ad_group_ad WHERE campaign.id = {$campaign->google_ads_campaign_id}";

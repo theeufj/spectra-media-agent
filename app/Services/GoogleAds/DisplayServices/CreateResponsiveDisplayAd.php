@@ -50,36 +50,57 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
             $descriptions[] = new AdTextAsset(['text' => $descriptionText]);
         }
 
-        // Prepare image assets
-        $imageAssets = [];
+        // Prepare landscape marketing image assets (1.91:1 aspect ratio)
+        $marketingImages = [];
         foreach ($adData['imageAssets'] as $imageAssetResourceName) {
-            $imageAssets[] = new AdImageAsset(['asset' => $imageAssetResourceName]);
+            $marketingImages[] = new AdImageAsset(['asset' => $imageAssetResourceName]);
         }
 
-        // Prepare logo assets
+        // Prepare square marketing image assets (1:1 aspect ratio)
+        $squareMarketingImages = [];
+        foreach ($adData['squareImageAssets'] ?? $adData['imageAssets'] as $imageAssetResourceName) {
+            $squareMarketingImages[] = new AdImageAsset(['asset' => $imageAssetResourceName]);
+        }
+
+        // Prepare logo assets: logo_images = 4:1 landscape logos, square_logo_images = 1:1 square logos
         $logoAssets = [];
         if (isset($adData['logoAssets'])) {
             foreach ($adData['logoAssets'] as $logoAssetResourceName) {
                 $logoAssets[] = new AdImageAsset(['asset' => $logoAssetResourceName]);
             }
         }
+        $squareLogoAssets = [];
+        if (isset($adData['squareLogoAssets'])) {
+            foreach ($adData['squareLogoAssets'] as $logoAssetResourceName) {
+                $squareLogoAssets[] = new AdImageAsset(['asset' => $logoAssetResourceName]);
+            }
+        }
 
         // Create ResponsiveDisplayAdInfo
-        $responsiveDisplayAdInfo = new ResponsiveDisplayAdInfo([
-            'headlines' => $headlines,
-            'long_headlines' => $longHeadlines,
-            'descriptions' => $descriptions,
-            'marketing_images' => $imageAssets,
-            'square_marketing_images' => $imageAssets, // Assuming square images are also provided as marketing images
-            'logo_images' => $logoAssets,
-            'square_logo_images' => $logoAssets, // Assuming square logos are also provided as logo images
-            'final_urls' => $adData['finalUrls'],
-            'business_name' => $adData['businessName'] ?? null,
-        ]);
+        // long_headline is singular (one AdTextAsset), not an array
+        $longHeadline = !empty($longHeadlines) ? $longHeadlines[0] : new AdTextAsset(['text' => $adData['headlines'][0] ?? 'Learn More']);
 
-        // Create Ad
+        $rdaFields = [
+            'headlines' => $headlines,
+            'long_headline' => $longHeadline,
+            'descriptions' => $descriptions,
+            'marketing_images' => $marketingImages,
+            'square_marketing_images' => $squareMarketingImages,
+            'business_name' => $adData['businessName'] ?? null,
+        ];
+        if (!empty($logoAssets)) {
+            $rdaFields['logo_images'] = $logoAssets; // 4:1 landscape logos
+        }
+        if (!empty($squareLogoAssets)) {
+            $rdaFields['square_logo_images'] = $squareLogoAssets; // 1:1 square logos
+        }
+
+        $responsiveDisplayAdInfo = new ResponsiveDisplayAdInfo($rdaFields);
+
+        // Create Ad (final_urls belongs on the Ad object, not ResponsiveDisplayAdInfo)
         $ad = new Ad([
             'responsive_display_ad' => $responsiveDisplayAdInfo,
+            'final_urls' => $adData['finalUrls'],
         ]);
 
         // Create AdGroupAd

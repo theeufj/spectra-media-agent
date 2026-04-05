@@ -5,6 +5,22 @@ namespace App\Services\Agents;
 use App\Models\Campaign;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
+use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
+use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
+use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
+use App\Services\GoogleAds\CommonServices\RemoveKeyword;
+use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
+use App\Services\GoogleAds\CommonServices\SetLocationBidAdjustment;
+use App\Services\GoogleAds\CommonServices\SetAdSchedule;
+use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
+use App\Services\GoogleAds\CommonServices\CreateCallAsset;
+use App\Services\GoogleAds\CommonServices\CreatePriceAsset;
+use App\Services\GoogleAds\CommonServices\CreatePromotionAsset;
+use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
+use App\Services\GoogleAds\CommonServices\CreateUserList;
+use App\Services\GoogleAds\CommonServices\CreateRemarketingAudience;
+use App\Models\Audience;
+use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use App\Services\FacebookAds\InsightService;
 use App\Models\GoogleAdsPerformanceData;
 use App\Prompts\OptimizationPrompt;
@@ -277,6 +293,9 @@ class CampaignOptimizationAgent
             'BUDGET' => $impressions >= 1000 ? 0.85 : 0.5,
             'BIDDING' => $conversions >= $this->minConversionsForCpaAnalysis ? 0.8 : 0.4,
             'KEYWORDS' => $clicks >= $this->minClicksForCtrAnalysis ? 0.75 : 0.45,
+            'AD_EXTENSIONS' => $impressions >= 1000 ? 0.85 : 0.5,
+            'SCHEDULE' => $clicks >= 500 ? 0.75 : 0.4,
+            'AUDIENCE' => $conversions >= 30 ? 0.8 : 0.3,
             'ADS' => $clicks >= 100 ? 0.7 : 0.4,
             'TARGETING' => $impressions >= 5000 ? 0.7 : 0.35,
             default => 0.5,
@@ -519,6 +538,12 @@ class CampaignOptimizationAgent
         try {
             return match ($type) {
                 'BUDGET' => $this->applyBudgetRecommendation($campaign, $recommendation),
+                'KEYWORDS' => $this->applyKeywordRecommendation($campaign, $recommendation),
+                'BIDDING' => $this->applyBiddingRecommendation($campaign, $recommendation),
+                'TARGETING' => $this->applyTargetingRecommendation($campaign, $recommendation),
+                'AD_EXTENSIONS' => $this->applyAdExtensionRecommendation($campaign, $recommendation),
+                'SCHEDULE' => $this->applyScheduleRecommendation($campaign, $recommendation),
+                'AUDIENCE' => $this->applyAudienceRecommendation($campaign, $recommendation),
                 default => [
                     'applied' => false,
                     'message' => "Auto-apply not yet supported for recommendation type: {$type}",
@@ -557,6 +582,19 @@ class CampaignOptimizationAgent
         $campaign->daily_budget = $newBudget;
         $campaign->save();
 
+        // Also update Google Ads API if campaign is linked
+        if ($campaign->google_ads_campaign_id && $campaign->customer) {
+            try {
+                $customer = $campaign->customer;
+                $customerId = $customer->google_ads_customer_id;
+                $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $updateBudget = new UpdateCampaignBudget($customer);
+                ($updateBudget)($customerId, $campaignResourceName, (int) ($newBudget * 1_000_000));
+            } catch (\Exception $e) {
+                Log::warning("Applied budget locally but failed to update Google Ads API: " . $e->getMessage());
+            }
+        }
+
         Log::info("Applied budget recommendation for campaign {$campaign->id}", [
             'old_budget' => $oldBudget,
             'new_budget' => $newBudget,
@@ -567,5 +605,414 @@ class CampaignOptimizationAgent
             'message' => "Budget adjusted from {$oldBudget} to {$newBudget}",
             'recommendation' => $recommendation,
         ];
+    }
+
+    /**
+     * Apply a keyword recommendation (bid adjust, pause, or remove).
+     */
+    protected function applyKeywordRecommendation(Campaign $campaign, array $recommendation): array
+    {
+        $action = $recommendation['direction'] ?? $recommendation['action'] ?? null;
+        $criterionResourceName = $recommendation['criterion_resource_name'] ?? null;
+        $customer = $campaign->customer;
+
+        if (!$customer || !$criterionResourceName) {
+            return [
+                'applied' => false,
+                'message' => 'Missing customer or criterion resource name',
+                'recommendation' => $recommendation,
+            ];
+        }
+
+        $customerId = $customer->google_ads_customer_id;
+
+        $result = match ($action) {
+            'increase', 'decrease' => $this->adjustKeywordBid($customer, $customerId, $criterionResourceName, $recommendation),
+            'pause' => $this->pauseKeyword($customer, $customerId, $criterionResourceName),
+            'enable' => $this->enableKeyword($customer, $customerId, $criterionResourceName),
+            'remove' => $this->removeKeyword($customer, $customerId, $criterionResourceName),
+            default => ['applied' => false, 'message' => "Unknown keyword action: {$action}"],
+        };
+
+        $result['recommendation'] = $recommendation;
+        return $result;
+    }
+
+    protected function adjustKeywordBid($customer, string $customerId, string $criterionResourceName, array $recommendation): array
+    {
+        $newBidMicros = $recommendation['suggested_value'] ?? null;
+        if (!$newBidMicros) {
+            return ['applied' => false, 'message' => 'No suggested bid value'];
+        }
+
+        $service = new UpdateKeywordBid($customer);
+        $success = ($service)($customerId, $criterionResourceName, (int) $newBidMicros);
+
+        return [
+            'applied' => $success,
+            'message' => $success
+                ? "Keyword bid adjusted to {$newBidMicros} micros"
+                : 'Failed to adjust keyword bid',
+        ];
+    }
+
+    protected function pauseKeyword($customer, string $customerId, string $criterionResourceName): array
+    {
+        $service = new UpdateKeywordStatus($customer);
+        $success = $service->pause($customerId, $criterionResourceName);
+
+        return [
+            'applied' => $success,
+            'message' => $success ? 'Keyword paused' : 'Failed to pause keyword',
+        ];
+    }
+
+    protected function enableKeyword($customer, string $customerId, string $criterionResourceName): array
+    {
+        $service = new UpdateKeywordStatus($customer);
+        $success = $service->enable($customerId, $criterionResourceName);
+
+        return [
+            'applied' => $success,
+            'message' => $success ? 'Keyword enabled' : 'Failed to enable keyword',
+        ];
+    }
+
+    protected function removeKeyword($customer, string $customerId, string $criterionResourceName): array
+    {
+        $service = new RemoveKeyword($customer);
+        $success = ($service)($customerId, $criterionResourceName);
+
+        return [
+            'applied' => $success,
+            'message' => $success ? 'Keyword removed' : 'Failed to remove keyword',
+        ];
+    }
+
+    /**
+     * Apply a bidding recommendation (strategy-level changes).
+     */
+    protected function applyBiddingRecommendation(Campaign $campaign, array $recommendation): array
+    {
+        // Bidding strategy changes are high-risk — log for review
+        Log::info("Bidding recommendation flagged for review", [
+            'campaign_id' => $campaign->id,
+            'recommendation' => $recommendation,
+        ]);
+
+        return [
+            'applied' => false,
+            'message' => 'Bidding strategy changes require manual review',
+            'recommendation' => $recommendation,
+        ];
+    }
+
+    /**
+     * Apply a targeting recommendation (device/location bid adjustments).
+     */
+    protected function applyTargetingRecommendation(Campaign $campaign, array $recommendation): array
+    {
+        $subType = $recommendation['sub_type'] ?? null;
+        $customer = $campaign->customer;
+
+        if (!$customer || !$campaign->google_ads_campaign_id) {
+            return [
+                'applied' => false,
+                'message' => 'Missing customer or campaign Google ID',
+                'recommendation' => $recommendation,
+            ];
+        }
+
+        $customerId = $customer->google_ads_customer_id;
+        $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+
+        $result = match ($subType) {
+            'device' => $this->applyDeviceBidAdjustment($customer, $customerId, $campaignResourceName, $recommendation),
+            'location' => $this->applyLocationBidAdjustment($customer, $customerId, $campaignResourceName, $recommendation),
+            default => ['applied' => false, 'message' => "Unknown targeting sub_type: {$subType}"],
+        };
+
+        $result['recommendation'] = $recommendation;
+        return $result;
+    }
+
+    protected function applyDeviceBidAdjustment($customer, string $customerId, string $campaignResourceName, array $recommendation): array
+    {
+        $deviceType = $recommendation['device_type'] ?? null;
+        $bidModifier = $recommendation['suggested_value'] ?? null;
+
+        if (!$deviceType || $bidModifier === null) {
+            return ['applied' => false, 'message' => 'Missing device type or bid modifier'];
+        }
+
+        $service = new SetDeviceBidAdjustment($customer);
+        $resourceName = ($service)($customerId, $campaignResourceName, (int) $deviceType, (float) $bidModifier);
+
+        return [
+            'applied' => $resourceName !== null,
+            'message' => $resourceName
+                ? "Device bid adjustment set to {$bidModifier}x"
+                : 'Failed to set device bid adjustment',
+        ];
+    }
+
+    protected function applyLocationBidAdjustment($customer, string $customerId, string $campaignResourceName, array $recommendation): array
+    {
+        $geoTarget = $recommendation['geo_target_constant'] ?? null;
+        $bidModifier = $recommendation['suggested_value'] ?? null;
+
+        if (!$geoTarget || $bidModifier === null) {
+            return ['applied' => false, 'message' => 'Missing geo target or bid modifier'];
+        }
+
+        $service = new SetLocationBidAdjustment($customer);
+        $resourceName = ($service)($customerId, $campaignResourceName, $geoTarget, (float) $bidModifier);
+
+        return [
+            'applied' => $resourceName !== null,
+            'message' => $resourceName
+                ? "Location bid adjustment set to {$bidModifier}x for {$geoTarget}"
+                : 'Failed to set location bid adjustment',
+        ];
+    }
+
+    /**
+     * Apply an ad schedule recommendation.
+     */
+    protected function applyScheduleRecommendation(Campaign $campaign, array $recommendation): array
+    {
+        $customer = $campaign->customer;
+
+        if (!$customer || !$campaign->google_ads_campaign_id) {
+            return ['applied' => false, 'message' => 'Missing customer or campaign Google ID', 'recommendation' => $recommendation];
+        }
+
+        $customerId = $customer->google_ads_customer_id;
+        $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $service = new SetAdSchedule($customer);
+
+        $scheduleType = $recommendation['sub_type'] ?? 'business_hours';
+
+        if ($scheduleType === 'business_hours') {
+            $bidModifier = (float) ($recommendation['suggested_value'] ?? 1.2);
+            $results = $service->setBusinessHours($customerId, $campaignResourceName, $bidModifier);
+            $applied = count(array_filter($results)) > 0;
+
+            return [
+                'applied' => $applied,
+                'message' => $applied
+                    ? 'Business hours schedule set (Mon-Fri 9am-5pm, ' . $bidModifier . 'x bid)'
+                    : 'Failed to set business hours schedule',
+                'recommendation' => $recommendation,
+            ];
+        }
+
+        // Custom single-day schedule
+        $dayOfWeek = (int) ($recommendation['day_of_week'] ?? 2);
+        $startHour = (int) ($recommendation['start_hour'] ?? 9);
+        $endHour = (int) ($recommendation['end_hour'] ?? 17);
+        $bidModifier = (float) ($recommendation['suggested_value'] ?? 1.0);
+
+        $resourceName = ($service)($customerId, $campaignResourceName, $dayOfWeek, $startHour, 2, $endHour, 2, $bidModifier);
+
+        return [
+            'applied' => $resourceName !== null,
+            'message' => $resourceName
+                ? "Ad schedule set for day {$dayOfWeek} ({$startHour}:00-{$endHour}:00, {$bidModifier}x bid)"
+                : 'Failed to set ad schedule',
+            'recommendation' => $recommendation,
+        ];
+    }
+
+    /**
+     * Apply an ad extension recommendation.
+     */
+    protected function applyAdExtensionRecommendation(Campaign $campaign, array $recommendation): array
+    {
+        $customer = $campaign->customer;
+
+        if (!$customer || !$campaign->google_ads_campaign_id) {
+            return ['applied' => false, 'message' => 'Missing customer or campaign Google ID', 'recommendation' => $recommendation];
+        }
+
+        $customerId = $customer->google_ads_customer_id;
+        $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $extensionType = $recommendation['sub_type'] ?? null;
+
+        if (!$extensionType) {
+            return ['applied' => false, 'message' => 'Missing extension sub_type', 'recommendation' => $recommendation];
+        }
+
+        try {
+            [$assetResource, $fieldType, $label] = match ($extensionType) {
+                'structured_snippet' => $this->createStructuredSnippet($customer, $customerId, $recommendation),
+                'call' => $this->createCallExtension($customer, $customerId, $recommendation),
+                'price' => $this->createPriceExtension($customer, $customerId, $recommendation),
+                'promotion' => $this->createPromotionExtension($customer, $customerId, $recommendation),
+                default => [null, null, $extensionType],
+            };
+
+            if (!$assetResource) {
+                return ['applied' => false, 'message' => "Failed to create {$extensionType} extension", 'recommendation' => $recommendation];
+            }
+
+            // Link to campaign
+            $linker = new LinkCampaignAsset($customer);
+            $linkResource = ($linker)($customerId, $campaignResourceName, $assetResource, $fieldType);
+
+            return [
+                'applied' => $linkResource !== null,
+                'message' => $linkResource
+                    ? "{$label} extension created and linked to campaign"
+                    : "{$label} created but failed to link to campaign",
+                'recommendation' => $recommendation,
+            ];
+        } catch (\Exception $e) {
+            Log::error("Ad extension recommendation failed: " . $e->getMessage(), [
+                'campaign_id' => $campaign->id,
+                'extension_type' => $extensionType,
+            ]);
+            return ['applied' => false, 'message' => 'Error: ' . substr($e->getMessage(), 0, 200), 'recommendation' => $recommendation];
+        }
+    }
+
+    protected function createStructuredSnippet($customer, string $customerId, array $rec): array
+    {
+        $header = $rec['header'] ?? 'Services';
+        $values = $rec['values'] ?? $rec['items'] ?? [];
+
+        if (empty($values)) {
+            return [null, null, 'Structured Snippet'];
+        }
+
+        $service = new CreateStructuredSnippetAsset($customer);
+        $resource = ($service)($customerId, $header, $values);
+        return [$resource, AssetFieldType::STRUCTURED_SNIPPET, 'Structured Snippet'];
+    }
+
+    protected function createCallExtension($customer, string $customerId, array $rec): array
+    {
+        $phone = $rec['phone_number'] ?? null;
+        $country = $rec['country_code'] ?? 'AU';
+
+        if (!$phone) {
+            return [null, null, 'Call'];
+        }
+
+        $service = new CreateCallAsset($customer);
+        $resource = ($service)($customerId, $phone, $country);
+        return [$resource, AssetFieldType::CALL, 'Call'];
+    }
+
+    protected function createPriceExtension($customer, string $customerId, array $rec): array
+    {
+        $type = (int) ($rec['price_type'] ?? 8); // SERVICES
+        $qualifier = (int) ($rec['price_qualifier'] ?? 2); // FROM
+        $offerings = $rec['offerings'] ?? [];
+
+        if (empty($offerings)) {
+            return [null, null, 'Price'];
+        }
+
+        $service = new CreatePriceAsset($customer);
+        $resource = ($service)($customerId, $type, $qualifier, $offerings);
+        return [$resource, AssetFieldType::PRICE, 'Price'];
+    }
+
+    protected function createPromotionExtension($customer, string $customerId, array $rec): array
+    {
+        $target = $rec['promotion_target'] ?? null;
+        $data = $rec['promotion_data'] ?? [];
+
+        if (!$target || empty($data)) {
+            return [null, null, 'Promotion'];
+        }
+
+        $service = new CreatePromotionAsset($customer);
+        $resource = ($service)($customerId, $target, $data);
+        return [$resource, AssetFieldType::PROMOTION, 'Promotion'];
+    }
+
+    /**
+     * Apply an audience recommendation (customer match or remarketing).
+     * Only runs when the campaign has 30+ days of conversion data (gated by confidence score).
+     */
+    protected function applyAudienceRecommendation(Campaign $campaign, array $recommendation): array
+    {
+        $customer = $campaign->customer;
+
+        if (!$customer || !$campaign->google_ads_campaign_id) {
+            return ['applied' => false, 'message' => 'Missing customer or campaign Google ID', 'recommendation' => $recommendation];
+        }
+
+        // Verify the campaign has sufficient maturity (30+ days of data)
+        $daysSinceCreation = $campaign->created_at?->diffInDays(now()) ?? 0;
+        if ($daysSinceCreation < 30) {
+            return [
+                'applied' => false,
+                'message' => "Campaign is only {$daysSinceCreation} days old. Audience creation requires 30+ days of data.",
+                'recommendation' => $recommendation,
+            ];
+        }
+
+        $customerId = $customer->google_ads_customer_id;
+        $subType = $recommendation['sub_type'] ?? 'remarketing';
+        $listName = $recommendation['audience_name'] ?? $recommendation['description'] ?? 'Auto-created audience';
+
+        try {
+            $resourceName = match ($subType) {
+                'customer_match' => $this->createCustomerMatchAudience($customer, $customerId, $recommendation),
+                'remarketing' => $this->createRemarketingAudienceFromRec($customer, $customerId, $recommendation),
+                default => null,
+            };
+
+            if (!$resourceName) {
+                return ['applied' => false, 'message' => "Failed to create {$subType} audience", 'recommendation' => $recommendation];
+            }
+
+            // Record in local database
+            Audience::create([
+                'customer_id' => $customer->id,
+                'campaign_id' => $campaign->id,
+                'name' => $listName,
+                'platform' => 'google',
+                'type' => $subType,
+                'platform_resource_name' => $resourceName,
+                'status' => 'active',
+                'source_data' => [
+                    'recommendation' => $recommendation,
+                    'created_by' => 'optimization_agent',
+                ],
+            ]);
+
+            return [
+                'applied' => true,
+                'message' => "{$subType} audience '{$listName}' created: {$resourceName}",
+                'recommendation' => $recommendation,
+            ];
+        } catch (\Exception $e) {
+            Log::error("Audience recommendation failed: " . $e->getMessage(), [
+                'campaign_id' => $campaign->id,
+                'sub_type' => $subType,
+            ]);
+            return ['applied' => false, 'message' => 'Error: ' . substr($e->getMessage(), 0, 200), 'recommendation' => $recommendation];
+        }
+    }
+
+    protected function createCustomerMatchAudience($customer, string $customerId, array $rec): ?string
+    {
+        $listName = $rec['audience_name'] ?? 'Customer Match';
+        $service = new CreateUserList($customer);
+        return ($service)($customerId, $listName, $rec['description'] ?? '');
+    }
+
+    protected function createRemarketingAudienceFromRec($customer, string $customerId, array $rec): ?string
+    {
+        $listName = $rec['audience_name'] ?? 'Remarketing Audience';
+        $urlContains = $rec['url_contains'] ?? '/';
+        $days = (int) ($rec['membership_days'] ?? 90);
+
+        $service = new CreateRemarketingAudience($customer);
+        return ($service)($customerId, $listName, $urlContains, $days);
     }
 }

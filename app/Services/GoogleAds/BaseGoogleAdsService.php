@@ -101,7 +101,7 @@ abstract class BaseGoogleAdsService
     /**
      * Execute a GAQL search query using the V22 SearchGoogleAdsRequest pattern.
      */
-    protected function searchQuery(string $customerId, string $query): \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsResponse
+    protected function searchQuery(string $customerId, string $query): \Google\ApiCore\PagedListResponse
     {
         $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
         return $googleAdsServiceClient->search(
@@ -110,5 +110,13 @@ abstract class BaseGoogleAdsService
                 'query' => $query,
             ])
         );
+    }
+
+    /**
+     * Get the underlying GoogleAdsClient instance.
+     */
+    public function getClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
+    {
+        return $this->client;
     }
 }

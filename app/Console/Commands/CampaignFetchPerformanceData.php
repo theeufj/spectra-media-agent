@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Jobs\FetchGoogleAdsPerformanceData;
+use App\Jobs\FetchFacebookAdsPerformanceData;
 use App\Models\Campaign;
 use Illuminate\Console\Command;
 
@@ -20,7 +21,7 @@ class CampaignFetchPerformanceData extends Command
      *
      * @var string
      */
-    protected $description = 'Fetch performance data for all active campaigns from Google Ads';
+    protected $description = 'Fetch performance data for all active campaigns from Google Ads and Facebook Ads';
 
     /**
      * Execute the console command.
@@ -30,14 +31,20 @@ class CampaignFetchPerformanceData extends Command
         $campaigns = Campaign::where('status', 'active')->get();
 
         $googleCount = 0;
+        $facebookCount = 0;
 
         foreach ($campaigns as $campaign) {
             if ($campaign->google_ads_campaign_id) {
                 FetchGoogleAdsPerformanceData::dispatch($campaign);
                 $googleCount++;
             }
+
+            if ($campaign->facebook_ads_campaign_id) {
+                FetchFacebookAdsPerformanceData::dispatch($campaign);
+                $facebookCount++;
+            }
         }
 
-        $this->info("Successfully dispatched {$googleCount} Google Ads performance data jobs.");
+        $this->info("Dispatched {$googleCount} Google Ads and {$facebookCount} Facebook Ads performance data jobs.");
     }
 }

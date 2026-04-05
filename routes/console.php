@@ -11,7 +11,11 @@ use App\Jobs\ProcessDailyAdSpendBilling;
 use App\Jobs\RunHealthChecks;
 use App\Jobs\CheckCampaignPolicyViolations;
 use App\Jobs\HourlyBudgetOptimization;
+use App\Jobs\GetKeywordQualityScore;
+use App\Jobs\GenerateExecutiveReport;
+use App\Jobs\SendDailyPerformanceReports;
 use App\Models\Customer;
+use App\Models\Campaign;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -44,11 +48,23 @@ Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00'); // Run during
 // Daily ad spend billing - bills customers for yesterday's spend, handles failures
 Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00'); // Run after ad networks finalize spend
 
+// Daily performance email - send yesterday's metrics summary to all users
+Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00'); // Run after perf data is fetched
+
 // Policy compliance checks - detects disapprovals and policy violations
 Schedule::call(function () {
     \App\Models\Campaign::where('platform_status', 'ENABLED')->each(function ($campaign) {
         CheckCampaignPolicyViolations::dispatch($campaign->id);
     });
+})->daily();
+
+// Keyword Quality Score tracking - captures daily QS snapshots for trending
+Schedule::call(function () {
+    Campaign::where('platform_status', 'ENABLED')
+        ->whereNotNull('google_ads_campaign_id')
+        ->each(function ($campaign) {
+            GetKeywordQualityScore::dispatch($campaign->id);
+        });
 })->daily();
 
 // ============================================================
@@ -63,6 +79,15 @@ Schedule::call(function () {
         RunCompetitorIntelligence::dispatch($customer);
     });
 })->weekly()->sundays()->at('02:00'); // Run Sunday nights
+
+// Weekly executive reports - AI-generated performance summaries per customer
+Schedule::call(function () {
+    Customer::whereHas('campaigns', function ($q) {
+        $q->where('platform_status', 'ENABLED');
+    })->each(function ($customer) {
+        GenerateExecutiveReport::dispatch($customer->id, 'weekly');
+    });
+})->weekly()->mondays()->at('07:00'); // Run Monday mornings
 
 // ============================================================
 // SEO & MAINTENANCE

@@ -6,7 +6,7 @@ use App\Models\Campaign;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\Recommendation;
 use App\Services\CircuitBreaker\CircuitBreakerService;
-use App\Services\GoogleAds\GoogleAdsService;
+use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\RecommendationGenerationService;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
@@ -46,11 +46,11 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
             try {
                 Log::info("Starting FetchGoogleAdsPerformanceData job for campaign ID: {$this->campaign->id}");
 
-                $googleAdsService = new GoogleAdsService($customer);
-                $googleAdsServiceClient = $googleAdsService->getClient()->getGoogleAdsServiceClient();
+                $service = new AccountStructureService($customer);
+                $googleAdsServiceClient = $service->getClient()->getGoogleAdsServiceClient();
 
                 $query = "SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, "
-                       . "metrics.cost_micros, metrics.conversions, segments.date FROM campaign "
+                       . "metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM campaign "
                        . "WHERE campaign.resource_name = '{$this->campaign->google_ads_campaign_id}' "
                        . "AND segments.date BETWEEN '" . now()->subDays(3)->format('Y-m-d') . "' AND '" . now()->format('Y-m-d') . "'";
 
@@ -65,16 +65,29 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                     $metrics = $googleAdsRow->getMetrics();
                     $segments = $googleAdsRow->getSegments();
 
+                    $impressions = $metrics->getImpressions();
+                    $clicks = $metrics->getClicks();
+                    $cost = $metrics->getCostMicros() / 1000000;
+                    $conversions = $metrics->getConversions();
+                    $conversionValue = $metrics->getConversionsValue();
+
                     $data = [
                         'campaign_id' => $this->campaign->id,
                         'date' => $segments->getDate(),
-                        'impressions' => $metrics->getImpressions(),
-                        'clicks' => $metrics->getClicks(),
-                        'cost' => $metrics->getCostMicros() / 1000000,
-                        'conversions' => $metrics->getConversions(),
+                        'impressions' => $impressions,
+                        'clicks' => $clicks,
+                        'cost' => $cost,
+                        'conversions' => $conversions,
+                        'conversion_value' => $conversionValue,
+                        'ctr' => $impressions > 0 ? round($clicks / $impressions * 100, 2) : 0,
+                        'cpc' => $clicks > 0 ? round($cost / $clicks, 2) : 0,
+                        'cpa' => $conversions > 0 ? round($cost / $conversions, 2) : 0,
                     ];
 
-                    GoogleAdsPerformanceData::create($data);
+                    GoogleAdsPerformanceData::updateOrCreate(
+                        ['campaign_id' => $this->campaign->id, 'date' => $segments->getDate()],
+                        $data
+                    );
                     $performanceData[] = $data;
                 }
 

@@ -3,7 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Campaign;
-use App\Services\GoogleAds\GoogleAdsService;
+use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\NegativeKeywords\AddNegativeKeywordService;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
@@ -34,8 +34,8 @@ class FindUnderperformingKeywords implements ShouldQueue
     {
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
-            $googleAdsService = new GoogleAdsService($campaign->customer);
-            $googleAdsServiceClient = $googleAdsService->getClient()->getGoogleAdsServiceClient();
+            $service = new AccountStructureService($campaign->customer);
+            $googleAdsServiceClient = $service->getClient()->getGoogleAdsServiceClient();
 
             $query = "SELECT ad_group_criterion.keyword.text, metrics.clicks, metrics.impressions, metrics.conversions FROM keyword_view WHERE campaign.id = {$campaign->google_ads_campaign_id} AND metrics.conversions = 0 AND metrics.clicks > 100";
 

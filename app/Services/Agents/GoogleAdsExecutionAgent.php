@@ -15,6 +15,7 @@ use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
 use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
 use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
+use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\AddCampaignCriterion;
 use App\Services\GoogleAds\CommonServices\LinkAdGroupAsset;
 use App\Services\GoogleAds\CommonServices\SearchAudience;
@@ -506,9 +507,16 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         // 3. Add Keywords from campaign, strategy targeting config, or execution plan
         $keywords = $this->getKeywords($campaign, $strategy, $plan);
+        if (empty($keywords)) {
+            // Fallback: use AI keyword research to generate initial keywords
+            $keywords = $this->researchKeywords($customerId, $campaign, $strategy);
+        }
         if (!empty($keywords)) {
             $this->addKeywords($customerId, $adGroupResourceName, $keywords, $result);
         }
+
+        // 3.2 Add negative keywords at campaign creation time
+        $this->addInitialNegativeKeywords($customerId, $campaignResourceName, $campaign, $strategy, $result);
 
         // 3.5 Add Audience Targeting
         $this->addAudienceTargeting($customerId, $adGroupResourceName, $strategy, $result);
@@ -1244,6 +1252,88 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             } catch (\Exception $e) {
                 $result->addWarning("Failed to add keyword: " . $e->getMessage());
             }
+        }
+    }
+
+    /**
+     * Use AI-powered keyword research when no keywords are configured.
+     */
+    protected function researchKeywords(string $customerId, Campaign $campaign, Strategy $strategy): array
+    {
+        try {
+            if (!config('services.gemini.api_key')) {
+                return [];
+            }
+
+            $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
+            $industry = $strategy->businessProfile?->industry ?? null;
+            $landingPageUrl = $campaign->landing_page_url ?? null;
+
+            $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
+            $research = $researchService->research($customerId, $businessName, $industry, $landingPageUrl);
+
+            $keywords = $research['keywords'] ?? [];
+            if (!empty($keywords)) {
+                Log::info("GoogleAdsExecutionAgent: AI keyword research generated " . count($keywords) . " keywords", [
+                    'campaign_id' => $campaign->id,
+                ]);
+            }
+
+            return $keywords;
+        } catch (\Exception $e) {
+            Log::warning("GoogleAdsExecutionAgent: AI keyword research failed", [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+            return [];
+        }
+    }
+
+    /**
+     * Add initial negative keywords at campaign creation time.
+     */
+    protected function addInitialNegativeKeywords(string $customerId, string $campaignResourceName, Campaign $campaign, Strategy $strategy, ExecutionResult $result): void
+    {
+        try {
+            if (!config('services.gemini.api_key')) {
+                return;
+            }
+
+            $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
+            $industry = $strategy->businessProfile?->industry ?? null;
+
+            $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
+            $research = $researchService->research($customerId, $businessName, $industry);
+            $negatives = $research['negative_keywords'] ?? [];
+
+            if (empty($negatives)) {
+                return;
+            }
+
+            $addNegativeService = new AddNegativeKeyword($this->customer);
+            $added = 0;
+            foreach ($negatives as $negative) {
+                try {
+                    $resourceName = ($addNegativeService)($customerId, $campaignResourceName, $negative, \Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType::EXACT);
+                    if ($resourceName) {
+                        $added++;
+                        $result->addPlatformId('negative_keyword', $resourceName);
+                    }
+                } catch (\Exception $e) {
+                    // May fail if negative already exists
+                }
+            }
+
+            if ($added > 0) {
+                Log::info("GoogleAdsExecutionAgent: Added {$added} initial negative keywords", [
+                    'campaign_id' => $campaign->id,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning("GoogleAdsExecutionAgent: Failed to add initial negatives", [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
