@@ -16,6 +16,7 @@ import AgentActivityFeed from '@/Components/AgentActivityFeed';
 
 export default function Dashboard({ auth }) {
     const { campaigns, defaultCampaign, usageStats, pendingTasks, healthAlerts, agentActivities, flash } = usePage().props;
+    const activeCustomer = auth.user?.active_customer;
     const [selectedCampaign, setSelectedCampaign] = useState(defaultCampaign);
     const [performanceData, setPerformanceData] = useState(null);
     const [showFlash, setShowFlash] = useState(!!flash?.success);
@@ -94,6 +95,16 @@ export default function Dashboard({ auth }) {
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     {/* Setup Progress for New Users */}
                     <SetupProgressNav />
+
+                    {/* Account ID Reference */}
+                    {activeCustomer?.google_ads_customer_id && (
+                        <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0" />
+                            </svg>
+                            <span>Account ID: <span className="font-mono font-medium text-gray-700">{activeCustomer.google_ads_customer_id}</span></span>
+                        </div>
+                    )}
 
                     {/* Flash Message */}
                     {showFlash && flash?.success && (

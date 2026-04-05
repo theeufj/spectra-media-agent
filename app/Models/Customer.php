@@ -23,7 +23,6 @@ class Customer extends Model
         'currency_code',
         'website',
         'phone',
-        'google_ads_refresh_token',
         'google_ads_customer_id',
         'google_ads_manager_customer_id',
         'google_ads_customer_is_manager',
@@ -65,6 +64,25 @@ class Customer extends Model
         'average_order_value' => 'float',
         'agent_thresholds' => 'array',
     ];
+
+    /**
+     * Prevent google_ads_customer_id from being set to the platform MCC account.
+     * All customer accounts must be sub-accounts created under the MCC.
+     */
+    public function setGoogleAdsCustomerIdAttribute(?string $value): void
+    {
+        if ($value !== null) {
+            $mcc = \App\Models\MccAccount::getActive();
+            if ($mcc && $value === $mcc->google_customer_id) {
+                throw new \InvalidArgumentException(
+                    "Cannot assign the MCC account ({$value}) as a customer's Google Ads account. "
+                    . "Customers must have sub-accounts created under the MCC."
+                );
+            }
+        }
+
+        $this->attributes['google_ads_customer_id'] = $value;
+    }
 
     /**
      * The users that belong to the customer.

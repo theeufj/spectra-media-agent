@@ -225,22 +225,15 @@ class MCCAccountManager extends BaseGoogleAdsService
 
             return null;
         } else {
-            // It's a Standard account, store it directly
-            Log::info("Selected account is a Standard account, storing directly", [
+            // External Standard accounts are not allowed — all accounts must be
+            // created under the platform MCC so we control billing & management.
+            Log::warning("Rejected external Standard account selection — only MCC accounts are accepted", [
                 'account_id' => $selectedAccountId,
                 'account_name' => $accountInfo['descriptive_name'],
+                'customer_id' => $this->customer->id,
             ]);
 
-            $this->customer->update([
-                'google_ads_customer_id' => $selectedAccountId,
-                'google_ads_customer_is_manager' => false,
-            ]);
-
-            return [
-                'account_id' => $selectedAccountId,
-                'is_new_account' => false,
-                'mcc_account_id' => null,
-            ];
+            return null;
         }
     }
 

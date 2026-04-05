@@ -88,10 +88,30 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                     </div>
                                 </div>
 
-                                {/* Facebook Ad Account */}
+                                {/* Connected Ad Accounts */}
                                 <div className="mt-6 pt-6 border-t border-gray-200">
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h4 className="text-sm font-medium text-gray-500">Facebook Ads Account</h4>
+                                    <h4 className="text-sm font-medium text-gray-500 mb-3">Connected Ad Accounts</h4>
+
+                                    {/* Google Ads Customer ID */}
+                                    <div className="mb-4">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-medium text-gray-500">Google Ads Customer ID</span>
+                                        </div>
+                                        {customer.google_ads_customer_id ? (
+                                            <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono">
+                                                {customer.google_ads_customer_id}
+                                            </div>
+                                        ) : (
+                                            <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                                                Not linked — Google Ads deployment is blocked until an account is assigned.
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Facebook Ad Account */}
+                                    <div>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-medium text-gray-500">Facebook Ads Account</span>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
@@ -146,6 +166,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                             Not linked — Facebook deployment is blocked until an account is assigned.
                                         </div>
                                     )}
+                                    </div>
                                 </div>
                             </div>
                         </div>

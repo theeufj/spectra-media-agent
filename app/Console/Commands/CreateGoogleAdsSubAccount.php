@@ -72,9 +72,12 @@ class CreateGoogleAdsSubAccount extends Command
                 return 1;
             }
 
-            // Update customer record with new Google Ads customer ID
-            $customer->google_ads_customer_id = $result['customer_id'];
-            $customer->save();
+            // Update customer record with new Google Ads customer ID and manager fields
+            $customer->update([
+                'google_ads_customer_id' => $result['customer_id'],
+                'google_ads_manager_customer_id' => $mccCustomerId,
+                'google_ads_customer_is_manager' => false,
+            ]);
 
             $this->info("✅ Successfully created Google Ads sub-account!");
             $this->info("Customer ID: {$result['customer_id']}");

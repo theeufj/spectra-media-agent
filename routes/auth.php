@@ -38,13 +38,7 @@ Route::middleware('guest')->group(function () {
 Route::get('auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
 Route::get('auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
 
-/*
-|--------------------------------------------------------------------------
-| Google Audit OAuth Routes (read-only, for free audit)
-|--------------------------------------------------------------------------
-*/
-Route::get('auth/google/audit/redirect', [GoogleController::class, 'redirectForAudit'])->name('google.audit.redirect');
-Route::get('auth/google/audit/callback', [GoogleController::class, 'callbackForAudit'])->name('google.audit.callback');
+
 
 /*
 |--------------------------------------------------------------------------
