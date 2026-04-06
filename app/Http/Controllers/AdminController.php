@@ -117,6 +117,30 @@ class AdminController extends Controller
     }
 
     /**
+     * Update the Microsoft Ads IDs for a customer (admin only).
+     */
+    public function updateCustomerMicrosoft(Request $request, Customer $customer)
+    {
+        $validated = $request->validate([
+            'microsoft_ads_customer_id' => 'nullable|string|max:50',
+            'microsoft_ads_account_id' => 'nullable|string|max:50',
+        ]);
+
+        $customer->update([
+            'microsoft_ads_customer_id' => $validated['microsoft_ads_customer_id'] ?: null,
+            'microsoft_ads_account_id' => $validated['microsoft_ads_account_id'] ?: null,
+        ]);
+
+        Log::info('Admin updated Microsoft Ads settings', [
+            'customer_id' => $customer->id,
+            'microsoft_ads_customer_id' => $customer->microsoft_ads_customer_id,
+            'microsoft_ads_account_id' => $customer->microsoft_ads_account_id,
+        ]);
+
+        return redirect()->back()->with('success', 'Microsoft Ads account updated.');
+    }
+
+    /**
      * Show detailed view of a campaign including strategies and collateral.
      */
     public function campaignShow(Campaign $campaign)

@@ -15,6 +15,10 @@ use App\Jobs\GetKeywordQualityScore;
 use App\Jobs\GenerateExecutiveReport;
 use App\Jobs\GenerateMonthlyReport;
 use App\Jobs\SendDailyPerformanceReports;
+use App\Jobs\FetchGoogleAdsPerformanceData;
+use App\Jobs\FetchFacebookAdsPerformanceData;
+use App\Jobs\FetchMicrosoftAdsPerformanceData;
+use App\Jobs\FetchLinkedInAdsPerformanceData;
 use App\Models\Customer;
 use App\Models\Campaign;
 
@@ -35,6 +39,24 @@ Schedule::job(new HourlyBudgetOptimization)->hourly();
 // Proactive health checks - API connectivity, token validity, delivery issues
 // Runs every 6 hours to catch issues early
 Schedule::job(new RunHealthChecks)->everySixHours();
+
+// Performance data fetch - pull metrics from all ad platforms for active campaigns
+Schedule::call(function () {
+    Campaign::where('platform_status', 'ENABLED')->each(function ($campaign) {
+        if ($campaign->google_ads_campaign_id) {
+            FetchGoogleAdsPerformanceData::dispatch($campaign);
+        }
+        if ($campaign->facebook_ads_campaign_id) {
+            FetchFacebookAdsPerformanceData::dispatch($campaign);
+        }
+        if ($campaign->microsoft_ads_campaign_id) {
+            FetchMicrosoftAdsPerformanceData::dispatch($campaign);
+        }
+        if ($campaign->linkedin_campaign_id) {
+            FetchLinkedInAdsPerformanceData::dispatch($campaign);
+        }
+    });
+})->hourly();
 
 // ============================================================
 // DAILY OPERATIONS

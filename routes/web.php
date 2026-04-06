@@ -10,6 +10,8 @@ use App\Http\Controllers\KeywordController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\SeoController;
+use App\Http\Controllers\AnalyticsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -414,6 +416,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');
     Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
     Route::put('customers/{customer}', [App\Http\Controllers\AdminController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
+    Route::put('customers/{customer}/microsoft', [App\Http\Controllers\AdminController::class, 'updateCustomerMicrosoft'])->name('admin.customers.update-microsoft');
     Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
     Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
     Route::delete('users/{user}', [App\Http\Controllers\AdminController::class, 'deleteUser'])->name('admin.users.delete');
@@ -516,6 +519,7 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/keywords', [KeywordController::class, 'index'])->name('keywords.index');
     Route::get('/keywords/research', [KeywordController::class, 'research'])->name('keywords.research');
     Route::post('/keywords/research', [KeywordController::class, 'doResearch'])->name('keywords.do-research');
+    Route::post('/keywords/inline-research', [KeywordController::class, 'inlineResearch'])->name('keywords.inline-research');
     Route::post('/keywords/add', [KeywordController::class, 'addToCampaign'])->name('keywords.add-to-campaign');
     Route::post('/keywords/bulk', [KeywordController::class, 'bulkAction'])->name('keywords.bulk');
     Route::get('/keywords/competitor-gap', [KeywordController::class, 'competitorGap'])->name('keywords.competitor-gap');
@@ -562,4 +566,30 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::post('/products/feeds/{feed}/sync', [ProductController::class, 'syncFeed'])->name('products.feeds.sync');
     Route::delete('/products/feeds/{feed}', [ProductController::class, 'deleteFeed'])->name('products.feeds.delete');
     Route::get('/products/list', [ProductController::class, 'products'])->name('products.list');
+});
+
+/*
+|--------------------------------------------------------------------------
+| SEO Tools Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/seo', [SeoController::class, 'index'])->name('seo.index');
+    Route::post('/seo/audit', [SeoController::class, 'runAudit'])->name('seo.audit');
+    Route::get('/seo/audit/{audit}', [SeoController::class, 'auditDetail'])->name('seo.audit.detail');
+    Route::get('/seo/rankings', [SeoController::class, 'rankings'])->name('seo.rankings');
+    Route::post('/seo/rankings/track', [SeoController::class, 'trackKeywords'])->name('seo.rankings.track');
+    Route::get('/seo/backlinks', [SeoController::class, 'backlinks'])->name('seo.backlinks');
+    Route::get('/seo/competitors', [SeoController::class, 'competitorComparison'])->name('seo.competitors');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Advanced Analytics Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
+    Route::get('/analytics/cross-platform', [AnalyticsController::class, 'crossPlatform'])->name('analytics.cross-platform');
+    Route::get('/analytics/attribution', [AnalyticsController::class, 'attribution'])->name('analytics.attribution');
 });

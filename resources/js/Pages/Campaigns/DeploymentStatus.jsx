@@ -176,7 +176,9 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                                     <div className="flex items-center space-x-2 sm:space-x-3">
                                         <span className="text-xl sm:text-2xl">
                                             {deployment.platform?.toLowerCase().includes('google') ? '🔍' : 
-                                             deployment.platform?.toLowerCase().includes('facebook') ? '👥' : '📢'}
+                                             deployment.platform?.toLowerCase().includes('facebook') ? '👥' :
+                                             deployment.platform?.toLowerCase().includes('microsoft') || deployment.platform?.toLowerCase().includes('bing') ? '🪟' :
+                                             deployment.platform?.toLowerCase().includes('linkedin') ? '💼' : '📢'}
                                         </span>
                                         <div>
                                             <h4 className="font-semibold text-sm sm:text-base text-gray-900">{deployment.platform}</h4>
@@ -260,6 +262,8 @@ function DeploymentProgress({ job }) {
         { id: 'init', name: 'Initializing', description: 'Preparing deployment' },
         { id: 'google', name: 'Google Ads', description: 'Creating Google campaigns' },
         { id: 'facebook', name: 'Facebook Ads', description: 'Creating Facebook campaigns' },
+        { id: 'microsoft', name: 'Microsoft Ads', description: 'Creating Microsoft campaigns' },
+        { id: 'linkedin', name: 'LinkedIn Ads', description: 'Creating LinkedIn campaigns' },
         { id: 'verify', name: 'Verification', description: 'Verifying deployment' },
         { id: 'complete', name: 'Complete', description: 'All done!' },
     ];
@@ -270,9 +274,11 @@ function DeploymentProgress({ job }) {
         if (job.status === 'completed') return stages.length;
         
         // Determine current stage based on events
+        if (job.linkedin_status === 'processing') return 4;
+        if (job.microsoft_status === 'processing') return 3;
         if (job.facebook_status === 'processing') return 2;
         if (job.google_status === 'processing') return 1;
-        if (job.google_status === 'completed' && job.facebook_status === 'completed') return 3;
+        if (job.google_status === 'completed' && job.facebook_status === 'completed' && job.microsoft_status === 'completed' && job.linkedin_status === 'completed') return 5;
         return 1;
     };
     

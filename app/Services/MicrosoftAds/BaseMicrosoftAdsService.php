@@ -27,14 +27,26 @@ abstract class BaseMicrosoftAdsService
         $this->authenticate();
     }
 
+    /**
+     * Authenticate using platform-level management account credential.
+     * Never uses per-customer tokens — all accounts are managed under Spectra's manager account.
+     */
     protected function authenticate(): void
     {
         try {
-            // Use 'organizations' endpoint for work/school accounts (Azure AD)
-            $response = Http::asForm()->post("https://login.microsoftonline.com/organizations/oauth2/v2.0/token", [
+            $refreshToken = $this->config['refresh_token'] ?? null;
+
+            if (!$refreshToken) {
+                Log::error('Microsoft Ads: No management refresh token configured. Set MICROSOFT_ADS_REFRESH_TOKEN in .env');
+                return;
+            }
+
+            $tenantId = $this->config['tenant_id'] ?? 'common';
+
+            $response = Http::asForm()->post("https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token", [
                 'client_id' => $this->config['client_id'],
                 'client_secret' => $this->config['client_secret'],
-                'refresh_token' => $this->config['refresh_token'],
+                'refresh_token' => $refreshToken,
                 'grant_type' => 'refresh_token',
                 'scope' => 'https://ads.microsoft.com/msads.manage offline_access',
             ]);
@@ -42,7 +54,10 @@ abstract class BaseMicrosoftAdsService
             if ($response->successful()) {
                 $this->accessToken = $response->json('access_token');
             } else {
-                Log::error('Microsoft Ads authentication failed', ['status' => $response->status()]);
+                Log::error('Microsoft Ads authentication failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                ]);
             }
         } catch (\Exception $e) {
             Log::error('Microsoft Ads authentication error', ['error' => $e->getMessage()]);

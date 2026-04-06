@@ -88,6 +88,22 @@ class SelfHealingAgent
             $this->healFacebookAdsCampaign($campaign, $customer, $results);
         }
 
+        // Heal Microsoft Ads campaign
+        if ($campaign->microsoft_ads_campaign_id && $customer->microsoft_ads_account_id) {
+            $results['platform'] = $results['platform']
+                ? 'multi_platform'
+                : 'microsoft_ads';
+            $this->healMicrosoftAdsCampaign($campaign, $customer, $results);
+        }
+
+        // Heal LinkedIn Ads campaign
+        if ($campaign->linkedin_campaign_id && $customer->linkedin_ads_account_id) {
+            $results['platform'] = $results['platform']
+                ? 'multi_platform'
+                : 'linkedin_ads';
+            $this->healLinkedInAdsCampaign($campaign, $customer, $results);
+        }
+
         // Log summary
         Log::info("SelfHealingAgent: Completed healing for campaign {$campaign->id}", [
             'actions_count' => count($results['actions_taken']),
@@ -749,5 +765,119 @@ class SelfHealingAgent
         return Campaign::where('customer_id', $customer->id)
             ->where('status', 'active')
             ->get();
+    }
+
+    /**
+     * Heal Microsoft Ads campaign issues.
+     * Checks for delivery problems and performance anomalies in stored data.
+     */
+    protected function healMicrosoftAdsCampaign(Campaign $campaign, Customer $customer, array &$results): void
+    {
+        try {
+            // Check for zero-impression campaigns (delivery failure)
+            $recentData = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(3)->toDateString())
+                ->get();
+
+            if ($recentData->isNotEmpty() && $recentData->sum('impressions') === 0) {
+                $results['warnings'][] = [
+                    'type' => 'zero_delivery',
+                    'platform' => 'microsoft_ads',
+                    'message' => 'Microsoft Ads campaign has zero impressions in last 3 days',
+                    'suggestion' => 'Check campaign status, budget, and targeting settings in Microsoft Ads',
+                ];
+
+                // Try to check campaign status
+                try {
+                    $service = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
+                    $status = $service->getCampaignStatus($campaign->microsoft_ads_campaign_id);
+
+                    if ($status && strtolower($status) === 'budgetpaused') {
+                        $results['actions_taken'][] = [
+                            'type' => 'budget_alert',
+                            'platform' => 'microsoft_ads',
+                            'message' => 'Campaign is budget-paused - may need budget increase',
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::debug("SelfHealingAgent: Could not check Microsoft campaign status: " . $e->getMessage());
+                }
+            }
+
+            // Check for sudden performance drops
+            $last7Days = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(7)->toDateString())
+                ->sum('clicks');
+
+            $prev7Days = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->whereBetween('date', [now()->subDays(14)->toDateString(), now()->subDays(7)->toDateString()])
+                ->sum('clicks');
+
+            if ($prev7Days > 20 && $last7Days < $prev7Days * 0.5) {
+                $results['warnings'][] = [
+                    'type' => 'performance_drop',
+                    'platform' => 'microsoft_ads',
+                    'message' => 'Microsoft Ads clicks dropped >50% week over week',
+                    'details' => "Previous week: {$prev7Days} clicks, This week: {$last7Days} clicks",
+                ];
+            }
+        } catch (\Exception $e) {
+            $results['errors'][] = "Microsoft Ads healing failed: " . $e->getMessage();
+            Log::error("SelfHealingAgent: Microsoft Ads healing error", ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Heal LinkedIn Ads campaign issues.
+     * Checks for delivery problems and performance anomalies in stored data.
+     */
+    protected function healLinkedInAdsCampaign(Campaign $campaign, Customer $customer, array &$results): void
+    {
+        try {
+            // Check for zero-impression campaigns
+            $recentData = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(3)->toDateString())
+                ->get();
+
+            if ($recentData->isNotEmpty() && $recentData->sum('impressions') === 0) {
+                $results['warnings'][] = [
+                    'type' => 'zero_delivery',
+                    'platform' => 'linkedin_ads',
+                    'message' => 'LinkedIn Ads campaign has zero impressions in last 3 days',
+                    'suggestion' => 'Check campaign status, budget, and audience targeting on LinkedIn',
+                ];
+            }
+
+            // Check for sudden performance drops
+            $last7Days = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(7)->toDateString())
+                ->sum('clicks');
+
+            $prev7Days = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->whereBetween('date', [now()->subDays(14)->toDateString(), now()->subDays(7)->toDateString()])
+                ->sum('clicks');
+
+            if ($prev7Days > 10 && $last7Days < $prev7Days * 0.5) {
+                $results['warnings'][] = [
+                    'type' => 'performance_drop',
+                    'platform' => 'linkedin_ads',
+                    'message' => 'LinkedIn Ads clicks dropped >50% week over week',
+                    'details' => "Previous week: {$prev7Days} clicks, This week: {$last7Days} clicks",
+                ];
+            }
+
+            // Check token health
+            if ($customer->linkedin_ads_token_expires_at && now()->gt($customer->linkedin_ads_token_expires_at)) {
+                $results['warnings'][] = [
+                    'type' => 'token_expired',
+                    'platform' => 'linkedin_ads',
+                    'message' => 'LinkedIn Ads access token has expired',
+                    'suggestion' => 'Customer needs to reconnect LinkedIn account',
+                ];
+            }
+        } catch (\Exception $e) {
+            $results['errors'][] = "LinkedIn Ads healing failed: " . $e->getMessage();
+            Log::error("SelfHealingAgent: LinkedIn Ads healing error", ['error' => $e->getMessage()]);
+        }
     }
 }

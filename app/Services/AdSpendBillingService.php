@@ -388,6 +388,12 @@ class AdSpendBillingService
                     } elseif (str_contains($platform, 'facebook') && !in_array('facebook', $platformsFetched)) {
                         $totalSpend += $this->getFacebookAdsSpend($customer, $campaign);
                         $platformsFetched[] = 'facebook';
+                    } elseif (str_contains($platform, 'microsoft') && !in_array('microsoft', $platformsFetched)) {
+                        $totalSpend += $this->getMicrosoftAdsSpend($customer, $campaign);
+                        $platformsFetched[] = 'microsoft';
+                    } elseif (str_contains($platform, 'linkedin') && !in_array('linkedin', $platformsFetched)) {
+                        $totalSpend += $this->getLinkedInAdsSpend($customer, $campaign);
+                        $platformsFetched[] = 'linkedin';
                     }
                 }
             }
@@ -482,6 +488,56 @@ class AdSpendBillingService
     }
 
     /**
+     * Get spend from Microsoft Ads for yesterday.
+     */
+    protected function getMicrosoftAdsSpend(Customer $customer, Campaign $campaign): float
+    {
+        if (empty($campaign->microsoft_ads_campaign_id)) {
+            return 0;
+        }
+
+        try {
+            $yesterday = now()->subDay()->toDateString();
+            $spend = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', $yesterday)
+                ->sum('cost');
+
+            return (float) $spend;
+        } catch (\Exception $e) {
+            Log::warning('AdSpendBilling: Failed to get Microsoft Ads spend', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+            return 0;
+        }
+    }
+
+    /**
+     * Get spend from LinkedIn Ads for yesterday.
+     */
+    protected function getLinkedInAdsSpend(Customer $customer, Campaign $campaign): float
+    {
+        if (empty($campaign->linkedin_campaign_id)) {
+            return 0;
+        }
+
+        try {
+            $yesterday = now()->subDay()->toDateString();
+            $spend = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', $yesterday)
+                ->sum('cost');
+
+            return (float) $spend;
+        } catch (\Exception $e) {
+            Log::warning('AdSpendBilling: Failed to get LinkedIn Ads spend', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+            return 0;
+        }
+    }
+
+    /**
      * Get average daily budget across all customer campaigns.
      */
     protected function getAverageDailyBudget(Customer $customer): float
@@ -535,6 +591,26 @@ class AdSpendBillingService
                 if (!empty($campaign->facebook_ads_campaign_id)) {
                     $this->pauseFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
                 }
+
+                // Pause Microsoft Ads campaign
+                if (!empty($campaign->microsoft_ads_campaign_id) && !empty($customer->microsoft_ads_account_id)) {
+                    try {
+                        $msService = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
+                        $msService->updateCampaignStatus($campaign->microsoft_ads_campaign_id, 'Paused');
+                    } catch (\Exception $e) {
+                        Log::warning('AdSpendBilling: Failed to pause Microsoft campaign', ['error' => $e->getMessage()]);
+                    }
+                }
+
+                // Pause LinkedIn Ads campaign
+                if (!empty($campaign->linkedin_campaign_id) && !empty($customer->linkedin_ads_account_id)) {
+                    try {
+                        $liService = new \App\Services\LinkedInAds\CampaignService($customer);
+                        $liService->updateCampaignStatus($campaign->linkedin_campaign_id, 'PAUSED');
+                    } catch (\Exception $e) {
+                        Log::warning('AdSpendBilling: Failed to pause LinkedIn campaign', ['error' => $e->getMessage()]);
+                    }
+                }
                 
                 // Mark as paused in our database
                 $campaign->update([
@@ -545,8 +621,6 @@ class AdSpendBillingService
 
                 Log::info('AdSpendBilling: Paused campaign', [
                     'campaign_id' => $campaign->id,
-                    'google_ads_id' => $campaign->google_ads_campaign_id,
-                    'facebook_ads_id' => $campaign->facebook_ads_campaign_id,
                     'reason' => 'payment_failure',
                 ]);
 
@@ -582,6 +656,26 @@ class AdSpendBillingService
                 if (!empty($campaign->facebook_ads_campaign_id)) {
                     $this->resumeFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
                 }
+
+                // Resume Microsoft Ads campaign
+                if (!empty($campaign->microsoft_ads_campaign_id) && !empty($customer->microsoft_ads_account_id)) {
+                    try {
+                        $msService = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
+                        $msService->updateCampaignStatus($campaign->microsoft_ads_campaign_id, 'Active');
+                    } catch (\Exception $e) {
+                        Log::warning('AdSpendBilling: Failed to resume Microsoft campaign', ['error' => $e->getMessage()]);
+                    }
+                }
+
+                // Resume LinkedIn Ads campaign
+                if (!empty($campaign->linkedin_campaign_id) && !empty($customer->linkedin_ads_account_id)) {
+                    try {
+                        $liService = new \App\Services\LinkedInAds\CampaignService($customer);
+                        $liService->updateCampaignStatus($campaign->linkedin_campaign_id, 'ACTIVE');
+                    } catch (\Exception $e) {
+                        Log::warning('AdSpendBilling: Failed to resume LinkedIn campaign', ['error' => $e->getMessage()]);
+                    }
+                }
                 
                 $campaign->update([
                     'status' => 'active',
@@ -591,7 +685,6 @@ class AdSpendBillingService
 
                 Log::info('AdSpendBilling: Resumed campaign', [
                     'campaign_id' => $campaign->id,
-                    'google_ads_id' => $campaign->google_ads_campaign_id,
                     'facebook_ads_id' => $campaign->facebook_ads_campaign_id,
                 ]);
 

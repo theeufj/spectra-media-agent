@@ -44,17 +44,6 @@ export default function FreeAudit({ auth, error }) {
                                 Google Ads Audit — Coming Soon
                             </div>
 
-                            <a
-                                href={route('facebook.audit.redirect')}
-                                className="flex items-center justify-center w-full px-6 py-4 border-2 border-gray-200 rounded-xl shadow-sm bg-white text-gray-700 font-semibold hover:border-blue-300 hover:shadow-md transition-all group"
-                            >
-                                <svg className="w-6 h-6 mr-3" viewBox="0 0 24 24" fill="#1877F2">
-                                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                                </svg>
-                                Audit My Facebook Ads
-                                <svg className="w-5 h-5 ml-auto text-gray-400 group-hover:text-blue-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                            </a>
-
                             <p className="text-center text-xs text-gray-400 mt-4">
                                 We only request <strong>read-only</strong> access. We can't change anything in your account.
                             </p>

@@ -38,24 +38,6 @@ Route::middleware('guest')->group(function () {
 Route::get('auth/google/redirect', [GoogleController::class, 'redirect'])->name('google.redirect');
 Route::get('auth/google/callback', [GoogleController::class, 'callback'])->name('google.callback');
 
-
-
-/*
-|--------------------------------------------------------------------------
-| Facebook OAuth Routes (accessible to both guests and authenticated users)
-|--------------------------------------------------------------------------
-*/
-Route::get('auth/facebook/redirect', [\App\Http\Controllers\Auth\FacebookController::class, 'redirect'])->name('facebook.redirect');
-Route::get('auth/facebook/callback', [\App\Http\Controllers\Auth\FacebookController::class, 'callback'])->name('facebook.callback');
-
-/*
-|--------------------------------------------------------------------------
-| Facebook Audit OAuth Routes (read-only, for free audit)
-|--------------------------------------------------------------------------
-*/
-Route::get('auth/facebook/audit/redirect', [\App\Http\Controllers\Auth\FacebookController::class, 'redirectForAudit'])->name('facebook.audit.redirect');
-Route::get('auth/facebook/audit/callback', [\App\Http\Controllers\Auth\FacebookController::class, 'callbackForAudit'])->name('facebook.audit.callback');
-
 /*
 |--------------------------------------------------------------------------
 | Email Verification Routes
@@ -85,6 +67,4 @@ Route::middleware('auth')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
-
-    Route::post('auth/facebook/disconnect', [\App\Http\Controllers\FacebookOAuthController::class, 'disconnect'])->name('facebook.disconnect');
 });

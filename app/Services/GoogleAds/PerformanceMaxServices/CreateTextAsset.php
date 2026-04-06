@@ -15,8 +15,6 @@ class CreateTextAsset extends BaseGoogleAdsService
     {
         $this->ensureClient();
 
-        // Check if asset already exists (optional optimization, skipping for now)
-
         $asset = new Asset([
             'text_asset' => new TextAsset(['text' => $text]),
             // 'name' => ... // Optional, auto-generated if omitted

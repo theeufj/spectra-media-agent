@@ -36,6 +36,7 @@ class Customer extends Model
         'facebook_bm_owned',
         'microsoft_ads_customer_id',
         'microsoft_ads_account_id',
+        'linkedin_ads_account_id',
         'gtm_container_id',
         'gtm_account_id',
         'gtm_workspace_id',
@@ -67,6 +68,10 @@ class Customer extends Model
         'average_order_value' => 'float',
         'agent_thresholds' => 'array',
         'report_branding' => 'array',
+    ];
+
+    protected $hidden = [
+        'facebook_ads_access_token',
     ];
 
     /**

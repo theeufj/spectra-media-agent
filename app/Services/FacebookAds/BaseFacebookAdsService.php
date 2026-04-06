@@ -3,7 +3,6 @@
 namespace App\Services\FacebookAds;
 
 use App\Models\Customer;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
 abstract class BaseFacebookAdsService
@@ -32,29 +31,16 @@ abstract class BaseFacebookAdsService
     /**
      * Get the Facebook access token.
      *
-     * Priority:
-     *   1. Customer's own OAuth token (Path B — existing clients)
-     *   2. Platform System User token (Path A — BM-owned accounts, no client OAuth)
+     * Uses the platform System User token for all BM-owned accounts.
      *
      * @return ?string
      */
     protected function getAccessToken(): ?string
     {
-        // 1. Customer's own OAuth token
-        try {
-            if ($this->customer->facebook_ads_access_token) {
-                return Crypt::decryptString($this->customer->facebook_ads_access_token);
-            }
-        } catch (\Exception $e) {
-            Log::error("Failed to decrypt Facebook access token for customer {$this->customer->id}: " . $e->getMessage());
-        }
-
-        // 2. Platform System User token (BM-owned accounts)
-        if ($this->customer->facebook_bm_owned) {
-            $systemToken = config('services.facebook.system_user_token');
-            if ($systemToken) {
-                return $systemToken;
-            }
+        // Platform System User token (BM-owned accounts)
+        $systemToken = config('services.facebook.system_user_token');
+        if ($systemToken) {
+            return $systemToken;
         }
 
         return null;

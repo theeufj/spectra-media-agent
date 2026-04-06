@@ -37,6 +37,7 @@ class Campaign extends Model
         'last_checked_at',
         'facebook_ads_campaign_id',
         'microsoft_ads_campaign_id',
+        'linkedin_campaign_id',
         'strategy_generation_started_at',
         'strategy_generation_completed_at',
         'strategy_generation_error',

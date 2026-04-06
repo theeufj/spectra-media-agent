@@ -3,6 +3,7 @@
 namespace App\Services\Agents;
 
 use App\Models\Campaign;
+use App\Models\AgentActivity;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
@@ -81,6 +82,14 @@ class CampaignOptimizationAgent
             $platform = 'Facebook Ads';
             $metrics = $this->getFacebookMetrics($campaign);
             $historicalMetrics = $this->getFacebookHistoricalMetrics($campaign);
+        } elseif ($campaign->microsoft_ads_campaign_id && $campaign->customer) {
+            $platform = 'Microsoft Ads';
+            $metrics = $this->getMicrosoftMetrics($campaign);
+            $historicalMetrics = $this->getMicrosoftHistoricalMetrics($campaign);
+        } elseif ($campaign->linkedin_campaign_id && $campaign->customer) {
+            $platform = 'LinkedIn Ads';
+            $metrics = $this->getLinkedInMetrics($campaign);
+            $historicalMetrics = $this->getLinkedInHistoricalMetrics($campaign);
         }
 
         if (!$metrics) {
@@ -501,6 +510,114 @@ class CampaignOptimizationAgent
     }
 
     /**
+     * Get Microsoft Ads metrics from stored performance data (last 30 days).
+     */
+    protected function getMicrosoftMetrics(Campaign $campaign): ?array
+    {
+        $data = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->where('date', '>=', now()->subDays(30)->toDateString())
+            ->get();
+
+        if ($data->isEmpty()) return null;
+
+        $impressions = $data->sum('impressions');
+        $clicks = $data->sum('clicks');
+        $cost = $data->sum('cost');
+        $conversions = $data->sum('conversions');
+
+        return [
+            'impressions' => $impressions,
+            'clicks' => $clicks,
+            'cost_micros' => $cost * 1000000,
+            'conversions' => $conversions,
+            'ctr' => $impressions > 0 ? $clicks / $impressions : 0,
+            'average_cpc' => $clicks > 0 ? ($cost / $clicks) * 1000000 : 0,
+            'cost_per_conversion' => $conversions > 0 ? ($cost / $conversions) * 1000000 : 0,
+        ];
+    }
+
+    /**
+     * Get Microsoft Ads historical metrics (60-30 days ago).
+     */
+    protected function getMicrosoftHistoricalMetrics(Campaign $campaign): ?array
+    {
+        $data = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->whereBetween('date', [now()->subDays(60)->toDateString(), now()->subDays(30)->toDateString()])
+            ->get();
+
+        if ($data->isEmpty()) return null;
+
+        $impressions = $data->sum('impressions');
+        $clicks = $data->sum('clicks');
+        $cost = $data->sum('cost');
+        $conversions = $data->sum('conversions');
+
+        return [
+            'impressions' => $impressions,
+            'clicks' => $clicks,
+            'cost_micros' => $cost * 1000000,
+            'conversions' => $conversions,
+            'ctr' => $impressions > 0 ? $clicks / $impressions : 0,
+            'average_cpc' => $clicks > 0 ? ($cost / $clicks) * 1000000 : 0,
+            'cost_per_conversion' => $conversions > 0 ? ($cost / $conversions) * 1000000 : 0,
+        ];
+    }
+
+    /**
+     * Get LinkedIn Ads metrics from stored performance data (last 30 days).
+     */
+    protected function getLinkedInMetrics(Campaign $campaign): ?array
+    {
+        $data = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->where('date', '>=', now()->subDays(30)->toDateString())
+            ->get();
+
+        if ($data->isEmpty()) return null;
+
+        $impressions = $data->sum('impressions');
+        $clicks = $data->sum('clicks');
+        $cost = $data->sum('cost');
+        $conversions = $data->sum('conversions');
+
+        return [
+            'impressions' => $impressions,
+            'clicks' => $clicks,
+            'cost_micros' => $cost * 1000000,
+            'conversions' => $conversions,
+            'ctr' => $impressions > 0 ? $clicks / $impressions : 0,
+            'average_cpc' => $clicks > 0 ? ($cost / $clicks) * 1000000 : 0,
+            'cost_per_conversion' => $conversions > 0 ? ($cost / $conversions) * 1000000 : 0,
+        ];
+    }
+
+    /**
+     * Get LinkedIn Ads historical metrics (60-30 days ago).
+     */
+    protected function getLinkedInHistoricalMetrics(Campaign $campaign): ?array
+    {
+        $data = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->whereBetween('date', [now()->subDays(60)->toDateString(), now()->subDays(30)->toDateString()])
+            ->get();
+
+        if ($data->isEmpty()) return null;
+
+        $impressions = $data->sum('impressions');
+        $clicks = $data->sum('clicks');
+        $cost = $data->sum('cost');
+        $conversions = $data->sum('conversions');
+
+        return [
+            'impressions' => $impressions,
+            'clicks' => $clicks,
+            'cost_micros' => $cost * 1000000,
+            'conversions' => $conversions,
+            'ctr' => $impressions > 0 ? $clicks / $impressions : 0,
+            'average_cpc' => $clicks > 0 ? ($cost / $clicks) * 1000000 : 0,
+            'cost_per_conversion' => $conversions > 0 ? ($cost / $conversions) * 1000000 : 0,
+        ];
+    }
+
+    /**
      * Cache recommendations for retrieval.
      */
     protected function cacheRecommendations(int $campaignId, array $recommendations): void
@@ -694,7 +811,46 @@ class CampaignOptimizationAgent
      */
     protected function applyBiddingRecommendation(Campaign $campaign, array $recommendation): array
     {
-        // Bidding strategy changes are high-risk — log for review
+        $customer = $campaign->customer;
+        $subType = $recommendation['sub_type'] ?? null;
+        $confidence = $recommendation['confidence'] ?? 0;
+
+        // Only auto-apply keyword CPC bids with high confidence
+        if ($subType === 'keyword_cpc' && $confidence >= 0.85 && $campaign->google_ads_campaign_id && $customer) {
+            $keywordResource = $recommendation['keyword_resource'] ?? null;
+            $newBidMicros = $recommendation['suggested_value'] ?? null;
+
+            if ($keywordResource && $newBidMicros) {
+                try {
+                    $service = new UpdateKeywordBid($customer);
+                    $result = ($service)($customer->google_ads_customer_id, $keywordResource, (int) $newBidMicros);
+
+                    if ($result) {
+                        AgentActivity::record(
+                            'optimization',
+                            'bid_adjusted',
+                            "Auto-adjusted keyword bid to $" . round($newBidMicros / 1000000, 2),
+                            $customer->id,
+                            $campaign->id,
+                            ['keyword' => $keywordResource, 'new_bid_micros' => $newBidMicros, 'confidence' => $confidence]
+                        );
+
+                        return [
+                            'applied' => true,
+                            'message' => 'Keyword bid adjusted to $' . round($newBidMicros / 1000000, 2),
+                            'recommendation' => $recommendation,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("Failed to auto-apply bid adjustment", [
+                        'campaign_id' => $campaign->id,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        // All other bidding changes require manual review
         Log::info("Bidding recommendation flagged for review", [
             'campaign_id' => $campaign->id,
             'recommendation' => $recommendation,

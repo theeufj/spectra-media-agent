@@ -365,7 +365,97 @@ PROMPT;
             ];
         }
 
+        // Check for audience saturation across platforms
+        $this->detectAudienceSaturation($customer, $analysis);
+
         return $analysis;
+    }
+
+    /**
+     * Detect audience saturation and frequency caps across all platforms.
+     * Suggests expansion when campaigns are hitting frequency limits.
+     */
+    protected function detectAudienceSaturation(Customer $customer, array &$analysis): void
+    {
+        $campaigns = $customer->campaigns()->where('status', 'active')->get();
+
+        foreach ($campaigns as $campaign) {
+            // Facebook frequency check
+            if ($campaign->facebook_ads_campaign_id) {
+                $fbData = \App\Models\FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->where('date', '>=', now()->subDays(7)->toDateString())
+                    ->avg('frequency');
+
+                if ($fbData && $fbData > 3.0) {
+                    $analysis['recommendations'][] = [
+                        'audience' => $campaign->name,
+                        'platform' => 'facebook_ads',
+                        'issue' => "High frequency ({$fbData}) — audience saturation detected",
+                        'action' => 'Create a 1-2% lookalike audience from your best-converting custom audience to expand reach',
+                        'priority' => 'high',
+                    ];
+                }
+            }
+
+            // LinkedIn audience exhaustion check
+            if ($campaign->linkedin_campaign_id) {
+                $liData = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->where('date', '>=', now()->subDays(7)->toDateString())
+                    ->get();
+
+                if ($liData->isNotEmpty()) {
+                    $impressions = $liData->sum('impressions');
+                    $clicks = $liData->sum('clicks');
+                    $ctr = $impressions > 0 ? ($clicks / $impressions) * 100 : 0;
+
+                    // Declining impressions + declining CTR = audience exhaustion
+                    $firstHalf = $liData->take((int) floor($liData->count() / 2));
+                    $secondHalf = $liData->skip((int) floor($liData->count() / 2));
+
+                    if ($firstHalf->sum('impressions') > 0 && $secondHalf->sum('impressions') > 0) {
+                        $impDecline = $secondHalf->sum('impressions') / $firstHalf->sum('impressions');
+
+                        if ($impDecline < 0.7) {
+                            $analysis['recommendations'][] = [
+                                'audience' => $campaign->name,
+                                'platform' => 'linkedin_ads',
+                                'issue' => 'LinkedIn audience exhaustion — impressions declining >30%',
+                                'action' => 'Expand targeting: add related job titles, seniority levels, or company industries. Consider broadening company size filters.',
+                                'priority' => 'high',
+                            ];
+                        }
+                    }
+                }
+            }
+
+            // Microsoft Ads audience check — use impression trend as proxy
+            if ($campaign->microsoft_ads_campaign_id) {
+                $msData = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->where('date', '>=', now()->subDays(7)->toDateString())
+                    ->get();
+
+                if ($msData->isNotEmpty() && $msData->count() >= 4) {
+                    $firstHalf = $msData->take((int) floor($msData->count() / 2));
+                    $secondHalf = $msData->skip((int) floor($msData->count() / 2));
+
+                    if ($firstHalf->sum('impressions') > 100) {
+                        $impDecline = $secondHalf->sum('impressions') > 0
+                            ? $secondHalf->sum('impressions') / $firstHalf->sum('impressions')
+                            : 0;
+
+                        if ($impDecline < 0.6) {
+                            $analysis['recommendations'][] = [
+                                'audience' => $campaign->name,
+                                'platform' => 'microsoft_ads',
+                                'issue' => 'Microsoft Ads impression volume declining — possible audience exhaustion',
+                                'action' => 'Review keyword match types and consider expanding to broader terms or adding new ad groups',
+                                'priority' => 'medium',
+                            ];
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /**

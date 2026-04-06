@@ -18,19 +18,22 @@ class ExecutionPlan
     public array $fallbackPlans;
     public string $reasoning;
     public array $rawPlan;
+    public string $estimatedDuration;
 
     public function __construct(
         array $steps,
-        array $budgetAllocation,
-        array $fallbackPlans,
-        string $reasoning,
-        array $rawPlan = []
+        array $budgetAllocation = [],
+        array $fallbackPlans = [],
+        string $reasoning = '',
+        array $rawPlan = [],
+        string $estimatedDuration = '',
     ) {
         $this->steps = $steps;
         $this->budgetAllocation = $budgetAllocation;
         $this->fallbackPlans = $fallbackPlans;
         $this->reasoning = $reasoning;
         $this->rawPlan = $rawPlan;
+        $this->estimatedDuration = $estimatedDuration;
     }
 
     /**

@@ -8,10 +8,16 @@ export default function CustomerDetail({ auth, bm_configured }) {
     const { customer } = usePage().props;
     const [showFacebookModal, setShowFacebookModal] = useState(false);
     const [editingFbAccount, setEditingFbAccount] = useState(false);
+    const [editingMsAccount, setEditingMsAccount] = useState(false);
 
     const fbForm = useForm({
         facebook_ads_account_id: customer.facebook_ads_account_id || '',
         facebook_page_url: '',
+    });
+
+    const msForm = useForm({
+        microsoft_ads_customer_id: customer.microsoft_ads_customer_id || '',
+        microsoft_ads_account_id: customer.microsoft_ads_account_id || '',
     });
 
     const saveFbAccountId = (e) => {
@@ -19,6 +25,14 @@ export default function CustomerDetail({ auth, bm_configured }) {
         fbForm.put(route('admin.customers.update-facebook', customer.id), {
             preserveScroll: true,
             onSuccess: () => setEditingFbAccount(false),
+        });
+    };
+
+    const saveMsAccountIds = (e) => {
+        e.preventDefault();
+        msForm.put(route('admin.customers.update-microsoft', customer.id), {
+            preserveScroll: true,
+            onSuccess: () => setEditingMsAccount(false),
         });
     };
 
@@ -200,6 +214,67 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                             </div>
                                         )}
                                     </div>
+                                    </div>
+
+                                    {/* Microsoft Ads Account */}
+                                    <div className="mt-4">
+                                        <div className="flex items-center justify-between mb-1">
+                                            <span className="text-xs font-medium text-gray-500">Microsoft Ads Account</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingMsAccount(!editingMsAccount)}
+                                                className="text-xs text-gray-500 hover:text-gray-700 font-medium transition"
+                                            >
+                                                {editingMsAccount ? 'Cancel' : 'Edit'}
+                                            </button>
+                                        </div>
+                                        {editingMsAccount ? (
+                                            <form onSubmit={saveMsAccountIds} className="space-y-3">
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Customer ID</label>
+                                                    <input
+                                                        type="text"
+                                                        value={msForm.data.microsoft_ads_customer_id}
+                                                        onChange={e => msForm.setData('microsoft_ads_customer_id', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="e.g., 123456789"
+                                                    />
+                                                    {msForm.errors.microsoft_ads_customer_id && (
+                                                        <p className="mt-1 text-xs text-red-600">{msForm.errors.microsoft_ads_customer_id}</p>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Account ID</label>
+                                                    <input
+                                                        type="text"
+                                                        value={msForm.data.microsoft_ads_account_id}
+                                                        onChange={e => msForm.setData('microsoft_ads_account_id', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-teal-500 focus:border-teal-500"
+                                                        placeholder="e.g., 987654321"
+                                                    />
+                                                    {msForm.errors.microsoft_ads_account_id && (
+                                                        <p className="mt-1 text-xs text-red-600">{msForm.errors.microsoft_ads_account_id}</p>
+                                                    )}
+                                                </div>
+                                                <button
+                                                    type="submit"
+                                                    disabled={msForm.processing}
+                                                    className="px-3 py-2 bg-teal-600 text-white text-sm rounded-md hover:bg-teal-700 disabled:opacity-50"
+                                                >
+                                                    {msForm.processing ? 'Saving...' : 'Save'}
+                                                </button>
+                                            </form>
+                                        ) : customer.microsoft_ads_account_id ? (
+                                            <div className="space-y-1">
+                                                <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono">
+                                                    Customer: {customer.microsoft_ads_customer_id} / Account: {customer.microsoft_ads_account_id}
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                                                Not linked — Microsoft Ads deployment is blocked until an account is assigned.
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>

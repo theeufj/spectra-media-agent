@@ -17,6 +17,8 @@ class ExecutionResult
     public float $executionTime;
     public ?ExecutionPlan $plan;
     public array $metadata;
+    public string $message;
+    public array $data;
 
     public function __construct(
         bool $success,
@@ -25,7 +27,9 @@ class ExecutionResult
         array $platformIds = [],
         float $executionTime = 0.0,
         ?ExecutionPlan $plan = null,
-        array $metadata = []
+        array $metadata = [],
+        string $message = '',
+        array $data = [],
     ) {
         $this->success = $success;
         $this->errors = $errors;
@@ -34,6 +38,8 @@ class ExecutionResult
         $this->executionTime = $executionTime;
         $this->plan = $plan;
         $this->metadata = $metadata;
+        $this->message = $message;
+        $this->data = $data;
     }
 
     /**

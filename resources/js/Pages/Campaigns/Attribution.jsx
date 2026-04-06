@@ -21,6 +21,8 @@ const MODEL_DESCRIPTIONS = {
 const CHANNEL_COLORS = {
     'google / cpc': { bg: 'bg-blue-100', text: 'text-blue-800', bar: 'bg-blue-500' },
     'facebook / cpc': { bg: 'bg-flame-orange-100', text: 'text-flame-orange-800', bar: 'bg-flame-orange-500' },
+    'microsoft / cpc': { bg: 'bg-teal-100', text: 'text-teal-800', bar: 'bg-teal-500' },
+    'linkedin / cpc': { bg: 'bg-sky-100', text: 'text-sky-800', bar: 'bg-sky-500' },
     'google / organic': { bg: 'bg-green-100', text: 'text-green-800', bar: 'bg-green-500' },
     'direct / none': { bg: 'bg-gray-100', text: 'text-gray-800', bar: 'bg-gray-500' },
     'email / email': { bg: 'bg-yellow-100', text: 'text-yellow-800', bar: 'bg-yellow-500' },

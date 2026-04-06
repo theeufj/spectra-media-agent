@@ -83,6 +83,20 @@ class HealthCheckAgent
             $this->mergeIssues($results, $facebookHealth);
         }
 
+        // Check Microsoft Ads health
+        if ($customer->microsoft_ads_account_id) {
+            $microsoftHealth = $this->checkMicrosoftAdsHealth($customer);
+            $results['microsoft_ads'] = $microsoftHealth;
+            $this->mergeIssues($results, $microsoftHealth);
+        }
+
+        // Check LinkedIn Ads health
+        if ($customer->linkedin_ads_account_id) {
+            $linkedinHealth = $this->checkLinkedInAdsHealth($customer);
+            $results['linkedin_ads'] = $linkedinHealth;
+            $this->mergeIssues($results, $linkedinHealth);
+        }
+
         // Check billing health
         $billingHealth = $this->checkBillingHealth($customer);
         $results['billing'] = $billingHealth;
@@ -1163,5 +1177,117 @@ Provide your recommendations as a JSON array with the following structure:
 
 Focus on the most impactful actions first. Be specific and actionable.
 PROMPT;
+    }
+
+    /**
+     * Check Microsoft Ads account health.
+     */
+    protected function checkMicrosoftAdsHealth(Customer $customer): array
+    {
+        $health = [
+            'status' => 'healthy',
+            'issues' => [],
+            'warnings' => [],
+            'metrics' => [],
+        ];
+
+        try {
+            // Check management-level credential
+            if (!config('microsoftads.refresh_token')) {
+                $health['issues'][] = [
+                    'type' => 'token',
+                    'severity' => 'critical',
+                    'message' => 'No Microsoft Ads management credential configured',
+                    'details' => 'Set MICROSOFT_ADS_REFRESH_TOKEN in .env',
+                ];
+                $health['status'] = 'critical';
+                return $health;
+            }
+
+            // Check for recent performance data (indicates API is working)
+            $recentData = \App\Models\MicrosoftAdsPerformanceData::whereHas('campaign', function ($q) use ($customer) {
+                $q->where('customer_id', $customer->id);
+            })->where('date', '>=', now()->subDays(3)->toDateString())->exists();
+
+            if (!$recentData) {
+                $activeMsCampaigns = $customer->campaigns()
+                    ->whereNotNull('microsoft_ads_campaign_id')
+                    ->where('status', 'active')
+                    ->exists();
+
+                if ($activeMsCampaigns) {
+                    $health['warnings'][] = [
+                        'type' => 'no_recent_data',
+                        'severity' => 'medium',
+                        'message' => 'No recent Microsoft Ads performance data',
+                        'details' => 'Performance data has not been received in the last 3 days',
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error("HealthCheckAgent: Error checking Microsoft Ads health", [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+        return $health;
+    }
+
+    /**
+     * Check LinkedIn Ads account health.
+     */
+    protected function checkLinkedInAdsHealth(Customer $customer): array
+    {
+        $health = [
+            'status' => 'healthy',
+            'issues' => [],
+            'warnings' => [],
+            'metrics' => [],
+        ];
+
+        try {
+            // Check management-level credential
+            if (!config('linkedinads.refresh_token')) {
+                $health['issues'][] = [
+                    'type' => 'token',
+                    'severity' => 'critical',
+                    'message' => 'No LinkedIn Ads management credential configured',
+                    'details' => 'Set LINKEDIN_ADS_REFRESH_TOKEN in .env',
+                ];
+                $health['status'] = 'critical';
+                return $health;
+            }
+
+            // Check for recent performance data
+            $recentData = \App\Models\LinkedInAdsPerformanceData::whereHas('campaign', function ($q) use ($customer) {
+                $q->where('customer_id', $customer->id);
+            })->where('date', '>=', now()->subDays(3)->toDateString())->exists();
+
+            if (!$recentData) {
+                $activeLiCampaigns = $customer->campaigns()
+                    ->whereNotNull('linkedin_campaign_id')
+                    ->where('status', 'active')
+                    ->exists();
+
+                if ($activeLiCampaigns) {
+                    $health['warnings'][] = [
+                        'type' => 'no_recent_data',
+                        'severity' => 'medium',
+                        'message' => 'No recent LinkedIn Ads performance data',
+                        'details' => 'Performance data has not been received in the last 3 days',
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error("HealthCheckAgent: Error checking LinkedIn Ads health", [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+        return $health;
     }
 }

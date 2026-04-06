@@ -10,21 +10,25 @@ namespace App\Services\Agents;
  */
 class RecoveryPlan
 {
-    public \Exception $error;
+    public ?\Exception $error;
     public array $recoveryActions;
     public string $reasoning;
     public array $metadata;
+    public bool $canAutoRecover;
 
     public function __construct(
-        \Exception $error,
+        ?\Exception $error = null,
         array $recoveryActions = [],
         string $reasoning = '',
-        array $metadata = []
+        array $metadata = [],
+        array $actions = [],
+        bool $canAutoRecover = false,
     ) {
         $this->error = $error;
-        $this->recoveryActions = $recoveryActions;
+        $this->recoveryActions = !empty($recoveryActions) ? $recoveryActions : $actions;
         $this->reasoning = $reasoning;
         $this->metadata = $metadata;
+        $this->canAutoRecover = $canAutoRecover;
     }
 
     /**

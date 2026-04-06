@@ -45,6 +45,14 @@ class StoreCampaignRequest extends FormRequest
             'exclusions' => 'nullable|string',
             'selected_pages' => 'nullable|array',
             'selected_pages.*' => 'exists:customer_pages,id',
+            'keywords' => 'nullable|array|max:100',
+            'keywords.*.text' => 'required_with:keywords|string|max:200',
+            'keywords.*.match_type' => 'required_with:keywords|string|in:BROAD,PHRASE,EXACT',
+            'keywords.*.avg_monthly_searches' => 'nullable|integer',
+            'keywords.*.competition_index' => 'nullable|integer|min:0|max:100',
+            'keywords.*.intent' => 'nullable|string|max:50',
+            'keywords.*.cluster' => 'nullable|string|max:200',
+            'keywords.*.funnel_stage' => 'nullable|string|max:50',
         ];
     }
 

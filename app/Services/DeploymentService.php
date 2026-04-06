@@ -10,6 +10,7 @@ use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Agents\MicrosoftAdsExecutionAgent;
+use App\Services\Agents\LinkedInAdsExecutionAgent;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
@@ -219,6 +220,7 @@ class DeploymentService
             'google' => new GoogleAdsExecutionAgent($customer),
             'facebook' => new FacebookAdsExecutionAgent($customer),
             'microsoft' => new MicrosoftAdsExecutionAgent($customer),
+            'linkedin' => new LinkedInAdsExecutionAgent($customer),
             default => null
         };
     }
@@ -253,6 +255,10 @@ class DeploymentService
 
         if (str_contains($normalized, 'microsoft') || str_contains($normalized, 'bing')) {
             return 'microsoft';
+        }
+
+        if (str_contains($normalized, 'linkedin')) {
+            return 'linkedin';
         }
 
         return $normalized;

@@ -127,6 +127,10 @@ class CampaignController extends Controller
         $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
         
         $validated = $request->validated();
+
+        // Extract keywords before creating campaign (not a campaign column)
+        $keywords = $validated['keywords'] ?? [];
+        unset($validated['keywords']);
         
         // Calculate daily_budget if not provided
         if (empty($validated['daily_budget']) && !empty($validated['total_budget'])) {
@@ -140,6 +144,33 @@ class CampaignController extends Controller
 
         if ($request->has('selected_pages')) {
             $campaign->pages()->attach($request->input('selected_pages'));
+        }
+
+        // Store user-selected keywords
+        if (!empty($keywords)) {
+            foreach ($keywords as $kw) {
+                \App\Models\Keyword::updateOrCreate(
+                    [
+                        'customer_id' => $customer->id,
+                        'keyword_text' => $kw['text'],
+                        'campaign_id' => $campaign->id,
+                    ],
+                    [
+                        'match_type' => $kw['match_type'],
+                        'status' => 'active',
+                        'source' => 'wizard',
+                        'avg_monthly_searches' => $kw['avg_monthly_searches'] ?? null,
+                        'competition_index' => $kw['competition_index'] ?? null,
+                        'intent' => $kw['intent'] ?? null,
+                        'cluster' => $kw['cluster'] ?? null,
+                        'funnel_stage' => $kw['funnel_stage'] ?? null,
+                        'added_by' => $request->user()->id,
+                    ]
+                );
+            }
+
+            // Also store on campaign JSON for quick access by strategy generation
+            $campaign->update(['keywords' => $keywords]);
         }
 
         // Mark that we're about to start generating strategies

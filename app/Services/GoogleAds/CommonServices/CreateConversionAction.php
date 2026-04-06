@@ -25,7 +25,12 @@ class CreateConversionAction extends BaseGoogleAdsService
     {
         $this->ensureClient();
 
-        // Check if it already exists (simple check by name could be added here, but for now we rely on unique names or API error)
+        // Check if a conversion action with this name already exists
+        $existing = $this->findExistingByName($customerId, $name);
+        if ($existing) {
+            $this->logInfo("Conversion Action '{$name}' already exists: {$existing}");
+            return $existing;
+        }
         
         $conversionAction = new ConversionAction([
             'name' => $name,
@@ -59,5 +64,29 @@ class CreateConversionAction extends BaseGoogleAdsService
             $this->logError("Failed to create Conversion Action: " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Check if a conversion action with the given name already exists.
+     */
+    protected function findExistingByName(string $customerId, string $name): ?string
+    {
+        try {
+            $query = "SELECT conversion_action.resource_name "
+                . "FROM conversion_action "
+                . "WHERE conversion_action.name = '" . addslashes($name) . "' "
+                . "AND conversion_action.status = 'ENABLED' "
+                . "LIMIT 1";
+
+            $response = $this->searchQuery($customerId, $query);
+
+            foreach ($response->iterateAllElements() as $row) {
+                return $row->getConversionAction()->getResourceName();
+            }
+        } catch (\Exception $e) {
+            $this->logError("Failed to check existing conversion action: " . $e->getMessage());
+        }
+
+        return null;
     }
 }

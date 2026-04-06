@@ -11,6 +11,13 @@ namespace App\Services\Agents;
 class OptimizationAnalysis
 {
     protected array $opportunities = [];
+    public string $recommendedStrategy = '';
+
+    public function __construct(array $opportunities = [], string $recommendedStrategy = '')
+    {
+        $this->opportunities = $opportunities;
+        $this->recommendedStrategy = $recommendedStrategy;
+    }
 
     /**
      * Add an optimization opportunity.

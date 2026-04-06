@@ -26,7 +26,9 @@ class MonitorCampaignStatus implements ShouldQueue
         $campaigns = Campaign::with('customer.users')
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
-                      ->orWhereNotNull('facebook_ads_campaign_id');
+                      ->orWhereNotNull('facebook_ads_campaign_id')
+                      ->orWhereNotNull('microsoft_ads_campaign_id')
+                      ->orWhereNotNull('linkedin_campaign_id');
             })
             ->whereNotNull('customer_id')
             ->get();
@@ -39,6 +41,14 @@ class MonitorCampaignStatus implements ShouldQueue
 
                 if ($campaign->facebook_ads_campaign_id) {
                     $this->checkFacebookAdsStatus($campaign);
+                }
+
+                if ($campaign->microsoft_ads_campaign_id) {
+                    $this->checkMicrosoftAdsStatus($campaign);
+                }
+
+                if ($campaign->linkedin_campaign_id) {
+                    $this->checkLinkedInAdsStatus($campaign);
                 }
             } catch (\Exception $e) {
                 Log::error("Failed to monitor campaign {$campaign->id}: " . $e->getMessage());
@@ -188,6 +198,90 @@ class MonitorCampaignStatus implements ShouldQueue
             6 => 'PENDING',
             7 => 'MISCONFIGURED',
             8 => 'LIMITED',
+            default => 'UNKNOWN',
+        };
+    }
+
+    private function checkMicrosoftAdsStatus(Campaign $campaign): void
+    {
+        $customer = $campaign->customer;
+        if (!$customer || !$customer->microsoft_ads_account_id) {
+            return;
+        }
+
+        try {
+            $service = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
+            $msStatus = $service->getCampaignStatus($campaign->microsoft_ads_campaign_id);
+
+            if ($msStatus) {
+                $oldStatus = $campaign->primary_status;
+                $mapped = $this->mapMicrosoftStatus($msStatus);
+
+                $campaign->update([
+                    'platform_status' => $msStatus,
+                    'primary_status' => $mapped,
+                    'last_checked_at' => now(),
+                ]);
+
+                $this->notifyIfBecameActive($campaign, $oldStatus, 'ELIGIBLE');
+            }
+        } catch (\Exception $e) {
+            Log::warning("MonitorCampaignStatus: Microsoft Ads check failed for campaign {$campaign->id}: " . $e->getMessage());
+        }
+    }
+
+    private function checkLinkedInAdsStatus(Campaign $campaign): void
+    {
+        $customer = $campaign->customer;
+        if (!$customer || !$customer->linkedin_ads_account_id) {
+            return;
+        }
+
+        try {
+            $service = new \App\Services\LinkedInAds\CampaignService($customer);
+            $liCampaign = $service->getCampaign($campaign->linkedin_campaign_id);
+
+            if ($liCampaign) {
+                $oldStatus = $campaign->primary_status;
+                $liStatus = $liCampaign['status'] ?? 'UNKNOWN';
+                $mapped = $this->mapLinkedInStatus($liStatus);
+
+                $campaign->update([
+                    'platform_status' => $liStatus,
+                    'primary_status' => $mapped,
+                    'last_checked_at' => now(),
+                ]);
+
+                $this->notifyIfBecameActive($campaign, $oldStatus, 'ELIGIBLE');
+            }
+        } catch (\Exception $e) {
+            Log::warning("MonitorCampaignStatus: LinkedIn Ads check failed for campaign {$campaign->id}: " . $e->getMessage());
+        }
+    }
+
+    private function mapMicrosoftStatus(string $status): string
+    {
+        return match (strtolower($status)) {
+            'active' => 'ELIGIBLE',
+            'paused' => 'PAUSED',
+            'budgetpaused' => 'LIMITED',
+            'budgetandmanuallypaused' => 'PAUSED',
+            'deleted' => 'REMOVED',
+            'suspended' => 'MISCONFIGURED',
+            default => 'UNKNOWN',
+        };
+    }
+
+    private function mapLinkedInStatus(string $status): string
+    {
+        return match (strtoupper($status)) {
+            'ACTIVE' => 'ELIGIBLE',
+            'PAUSED' => 'PAUSED',
+            'ARCHIVED' => 'REMOVED',
+            'COMPLETED' => 'ENDED',
+            'CANCELED' => 'REMOVED',
+            'DRAFT' => 'PENDING',
+            'PENDING_REVIEW' => 'PENDING',
             default => 'UNKNOWN',
         };
     }

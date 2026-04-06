@@ -93,6 +93,8 @@ class CreativeIntelligenceAgent
 
         $hasGoogle = $campaign->google_ads_campaign_id && $campaign->customer->google_ads_customer_id;
         $hasFacebook = $campaign->facebook_ads_campaign_id && $campaign->customer->facebook_ads_account_id;
+        $hasMicrosoft = $campaign->microsoft_ads_campaign_id && $campaign->customer->microsoft_ads_account_id;
+        $hasLinkedIn = $campaign->linkedin_campaign_id && $campaign->customer->linkedin_ads_account_id;
 
         // Analyze Google Ads campaign (asset-level)
         if ($hasGoogle) {
@@ -104,6 +106,18 @@ class CreativeIntelligenceAgent
         if ($hasFacebook) {
             $results['platform'] = $hasGoogle ? 'multi_platform' : 'facebook_ads';
             $this->analyzeFacebookAdsCampaign($campaign, $results);
+        }
+
+        // Analyze Microsoft Ads campaign (performance-based)
+        if ($hasMicrosoft) {
+            $results['platform'] = ($hasGoogle || $hasFacebook) ? 'multi_platform' : 'microsoft_ads';
+            $this->analyzeMicrosoftAdsCampaign($campaign, $results);
+        }
+
+        // Analyze LinkedIn Ads campaign (performance-based)
+        if ($hasLinkedIn) {
+            $results['platform'] = ($hasGoogle || $hasFacebook || $hasMicrosoft) ? 'multi_platform' : 'linkedin_ads';
+            $this->analyzeLinkedInAdsCampaign($campaign, $results);
         }
 
         return $results;
@@ -548,5 +562,119 @@ PROMPT;
         }
 
         return [];
+    }
+
+    /**
+     * Analyze Microsoft Ads campaign performance for creative insights.
+     * Uses stored performance data to detect trends and generate recommendations.
+     */
+    protected function analyzeMicrosoftAdsCampaign(Campaign $campaign, array &$results): void
+    {
+        try {
+            $data = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(30)->toDateString())
+                ->orderBy('date')
+                ->get();
+
+            if ($data->isEmpty()) return;
+
+            $totalImpressions = $data->sum('impressions');
+            $totalClicks = $data->sum('clicks');
+            $avgCtr = $totalImpressions > 0 ? ($totalClicks / $totalImpressions) * 100 : 0;
+
+            // Check for declining CTR trend (creative fatigue indicator)
+            $firstHalf = $data->take((int) floor($data->count() / 2));
+            $secondHalf = $data->skip((int) floor($data->count() / 2));
+
+            $firstCtr = $firstHalf->sum('impressions') > 0
+                ? ($firstHalf->sum('clicks') / $firstHalf->sum('impressions')) * 100
+                : 0;
+            $secondCtr = $secondHalf->sum('impressions') > 0
+                ? ($secondHalf->sum('clicks') / $secondHalf->sum('impressions')) * 100
+                : 0;
+
+            if ($firstCtr > 0 && $secondCtr < $firstCtr * 0.75) {
+                $results['recommendations'][] = [
+                    'type' => 'creative_fatigue',
+                    'platform' => 'microsoft_ads',
+                    'severity' => 'high',
+                    'message' => 'Microsoft Ads CTR declining - possible creative fatigue',
+                    'details' => sprintf('CTR dropped from %.2f%% to %.2f%% over 30 days', $firstCtr, $secondCtr),
+                    'suggestion' => 'Refresh ad copy and test new headlines/descriptions',
+                ];
+            }
+
+            $results['microsoft_ads_summary'] = [
+                'impressions' => $totalImpressions,
+                'clicks' => $totalClicks,
+                'avg_ctr' => round($avgCtr, 2),
+                'days_analyzed' => $data->count(),
+            ];
+        } catch (\Exception $e) {
+            Log::warning('CreativeIntelligenceAgent: Microsoft Ads analysis failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Analyze LinkedIn Ads campaign performance for creative insights.
+     * Uses stored performance data to detect trends and generate recommendations.
+     */
+    protected function analyzeLinkedInAdsCampaign(Campaign $campaign, array &$results): void
+    {
+        try {
+            $data = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(30)->toDateString())
+                ->orderBy('date')
+                ->get();
+
+            if ($data->isEmpty()) return;
+
+            $totalImpressions = $data->sum('impressions');
+            $totalClicks = $data->sum('clicks');
+            $avgCtr = $totalImpressions > 0 ? ($totalClicks / $totalImpressions) * 100 : 0;
+
+            // LinkedIn B2B benchmarks are lower - adjust thresholds
+            if ($totalImpressions > 1000 && $avgCtr < 0.3) {
+                $results['recommendations'][] = [
+                    'type' => 'low_ctr',
+                    'platform' => 'linkedin_ads',
+                    'severity' => 'medium',
+                    'message' => 'LinkedIn Ads CTR below B2B benchmark',
+                    'details' => sprintf('Average CTR: %.2f%% (benchmark: 0.3-0.5%%)', $avgCtr),
+                    'suggestion' => 'Test more compelling ad copy, professional imagery, and stronger CTAs for B2B audience',
+                ];
+            }
+
+            // Check for declining performance trend
+            $firstHalf = $data->take((int) floor($data->count() / 2));
+            $secondHalf = $data->skip((int) floor($data->count() / 2));
+
+            $firstCtr = $firstHalf->sum('impressions') > 0
+                ? ($firstHalf->sum('clicks') / $firstHalf->sum('impressions')) * 100
+                : 0;
+            $secondCtr = $secondHalf->sum('impressions') > 0
+                ? ($secondHalf->sum('clicks') / $secondHalf->sum('impressions')) * 100
+                : 0;
+
+            if ($firstCtr > 0 && $secondCtr < $firstCtr * 0.75) {
+                $results['recommendations'][] = [
+                    'type' => 'creative_fatigue',
+                    'platform' => 'linkedin_ads',
+                    'severity' => 'high',
+                    'message' => 'LinkedIn Ads creative fatigue detected',
+                    'details' => sprintf('CTR dropped from %.2f%% to %.2f%% over 30 days', $firstCtr, $secondCtr),
+                    'suggestion' => 'Rotate creative assets and test new messaging angles for B2B audience',
+                ];
+            }
+
+            $results['linkedin_ads_summary'] = [
+                'impressions' => $totalImpressions,
+                'clicks' => $totalClicks,
+                'avg_ctr' => round($avgCtr, 2),
+                'days_analyzed' => $data->count(),
+            ];
+        } catch (\Exception $e) {
+            Log::warning('CreativeIntelligenceAgent: LinkedIn Ads analysis failed', ['error' => $e->getMessage()]);
+        }
     }
 }

@@ -8,6 +8,7 @@ import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
 import ProgressStepper from '@/Components/ProgressStepper';
 import ProductSelection from './ProductSelection';
+import KeywordSelector from '@/Components/KeywordSelector';
 
 // Campaign Templates for quick start
 const CAMPAIGN_TEMPLATES = [
@@ -92,6 +93,11 @@ const WIZARD_STEPS = [
         description: 'What to promote'
     },
     { 
+        id: 'keywords', 
+        title: 'Keywords',
+        description: 'Search terms'
+    },
+    { 
         id: 'review', 
         title: 'Review & Create',
         description: 'Final check'
@@ -167,6 +173,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
         product_focus: brandDefaults.product_focus || '',
         exclusions: brandDefaults.exclusions || '',
         selected_pages: [],
+        keywords: [],
     });
     
     // Auto-scroll chat to bottom
@@ -275,7 +282,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                 return data.total_budget && data.start_date && data.end_date && data.primary_kpi;
             case 4: // Products
                 return true; // Optional step
-            case 5: // Review
+            case 5: // Keywords
+                return true; // Optional step
+            case 6: // Review
                 return true;
             default:
                 return true;
@@ -719,7 +728,24 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                     </div>
                 );
                 
-            case 5: // Review
+            case 5: // Keywords
+                return (
+                    <div className="space-y-6 max-w-3xl mx-auto">
+                        <div className="mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Keywords (Optional)</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Research and select keywords for your campaign, or skip this step and let our AI choose them automatically.
+                            </p>
+                        </div>
+                        <KeywordSelector
+                            value={data.keywords}
+                            onChange={(keywords) => setData('keywords', keywords)}
+                            landingPage={data.selected_pages?.[0]?.url || ''}
+                        />
+                    </div>
+                );
+
+            case 6: // Review
                 return (
                     <div className="space-y-6 max-w-3xl mx-auto">
                         <div className="text-center mb-8">
@@ -749,6 +775,18 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                                 <ReviewItem label="Product Focus" value={data.product_focus || 'Not specified'} />
                                 <ReviewItem label="Selected Pages" value={data.selected_pages?.length ? `${data.selected_pages.length} pages selected` : 'None'} />
                                 <ReviewItem label="Exclusions" value={data.exclusions || 'None'} />
+                            </ReviewSection>
+                            
+                            <ReviewSection title="Keywords" step={5} onEdit={() => goToStep(5)}>
+                                <ReviewItem label="Keywords" value={data.keywords?.length ? `${data.keywords.length} keywords selected` : 'None (AI will choose)'} />
+                                {data.keywords?.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {data.keywords.slice(0, 10).map((kw, i) => (
+                                            <span key={i} className="text-xs bg-gray-100 border border-gray-200 rounded px-2 py-0.5 text-gray-700">{kw.text}</span>
+                                        ))}
+                                        {data.keywords.length > 10 && <span className="text-xs text-gray-400">+{data.keywords.length - 10} more</span>}
+                                    </div>
+                                )}
                             </ReviewSection>
                         </div>
                         

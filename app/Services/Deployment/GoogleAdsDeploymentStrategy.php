@@ -5,6 +5,8 @@ namespace App\Services\Deployment;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Services\Agents\ExecutionContext;
+use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
 use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
 use App\Services\GoogleAds\DisplayServices\CreateDisplayCampaign;
@@ -37,12 +39,9 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             $campaignResourceName = match($strategy->campaign_type) {
                 'display' => $this->deployDisplayCampaign($customerId, $campaign, $strategy),
                 'search' => $this->deploySearchCampaign($customerId, $campaign, $strategy),
-                'video' => throw new \Exception("Video campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
-                'shopping' => throw new \Exception("Shopping campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
-                'app' => throw new \Exception("App campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
-                'demand_gen' => throw new \Exception("Demand Gen campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
-                'local_services' => throw new \Exception("Local Services campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
-                'performance_max' => throw new \Exception("Performance Max campaign deployment not yet implemented via legacy strategy. Use the agent-based deployment path."),
+                'video', 'shopping', 'demand_gen', 'local_services', 'performance_max'
+                    => $this->deployViaExecutionAgent($campaign, $strategy),
+                'app' => throw new \Exception("App campaigns are not yet supported. Please create App campaigns directly in Google Ads."),
                 default => throw new \Exception("Unknown campaign type: {$strategy->campaign_type}"),
             };
 
@@ -57,6 +56,33 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             Log::error("Google Ads deployment failed for Strategy ID {$strategy->id}: " . $e->getMessage());
             return false;
         }
+    }
+
+    /**
+     * Deploy campaign types via the AI-powered GoogleAdsExecutionAgent.
+     * Handles: video, shopping, demand_gen, local_services, performance_max.
+     */
+    private function deployViaExecutionAgent(Campaign $campaign, Strategy $strategy): string
+    {
+        Log::info("Delegating {$strategy->campaign_type} deployment to GoogleAdsExecutionAgent", [
+            'campaign_id' => $campaign->id,
+            'strategy_id' => $strategy->id,
+        ]);
+
+        $agent = app(GoogleAdsExecutionAgent::class, ['customer' => $this->customer]);
+        $context = ExecutionContext::create($strategy, $campaign, $this->customer);
+        $result = $agent->execute($context);
+
+        if (!$result->success) {
+            throw new \Exception(
+                "Execution agent deployment failed: " . implode('; ', $result->errors)
+            );
+        }
+
+        // Return the campaign resource name from the agent's platform IDs
+        return $result->platformIds['campaign_resource_name']
+            ?? $result->platformIds['campaign_id']
+            ?? 'agent-deployed';
     }
 
     private function deployDisplayCampaign(string $customerId, Campaign $campaign, Strategy $strategy): ?string

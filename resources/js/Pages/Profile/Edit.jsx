@@ -7,10 +7,9 @@ import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
 import DangerButton from '@/Components/DangerButton';
-import FacebookPageSelector from '@/Components/FacebookPageSelector';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 
-export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
+export default function Edit({ auth, mustVerifyEmail, status }) {
     const { customers } = usePage().props;
     const [formData, setFormData] = useState({
         name: '',
@@ -23,65 +22,6 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
         phone: '',
     });
     const [isCreating, setIsCreating] = useState(false);
-    const [showPageSelector, setShowPageSelector] = useState(false);
-    const [tokenStatus, setTokenStatus] = useState(null);
-
-    // Check if we need to show page selector (from URL param)
-    useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('select_facebook_page') === 'true') {
-            setShowPageSelector(true);
-            // Clean up URL
-            window.history.replaceState({}, '', window.location.pathname);
-        }
-    }, []);
-
-    // Fetch token status for connected customers
-    useEffect(() => {
-        const fetchTokenStatus = async () => {
-            try {
-                const response = await fetch('/facebook/token-status', {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    },
-                    credentials: 'same-origin',
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    setTokenStatus(data);
-                }
-            } catch (err) {
-                console.error('Failed to fetch token status:', err);
-            }
-        };
-
-        if (customers.some(c => c.facebook_ads_account_id)) {
-            fetchTokenStatus();
-        }
-    }, [customers]);
-
-    useEffect(() => {
-        if (!facebookAppId) return;
-
-        window.fbAsyncInit = function() {
-            window.FB.init({
-                appId      : facebookAppId,
-                cookie     : true,
-                xfbml      : true,
-                version    : 'v19.0'
-            });
-            window.FB.AppEvents.logPageView();
-        };
-
-        (function(d, s, id){
-            var js, fjs = d.getElementsByTagName(s)[0];
-            if (d.getElementById(id)) {return;}
-            js = d.createElement(s); js.id = id;
-            js.src = "https://connect.facebook.net/en_US/sdk.js";
-            fjs.parentNode.insertBefore(js, fjs);
-        }(document, 'script', 'facebook-jssdk'));
-    }, [facebookAppId]);
 
     const handleInputChange = (e) => {
         const { name, value } = e.target;
@@ -302,87 +242,66 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
                                     </p>
                                 </header>
 
-                                {/* Facebook Integration Section */}
+                                {/* Facebook Ads Integration Section (Business Manager) */}
                                 <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                                     <h3 className="text-md font-medium text-gray-900 mb-3">Facebook Ads Integration</h3>
                                     {customer.facebook_ads_account_id ? (
                                         <div>
-                                            <p className="text-sm text-gray-600 mb-2">
-                                                <span className="text-green-600 font-semibold">✓ Connected</span> - Facebook Ads account ID: <code className="bg-white px-2 py-1 rounded text-xs font-mono">{customer.facebook_ads_account_id}</code>
+                                            <p className="text-sm text-gray-600 mb-1">
+                                                <span className="text-green-600 font-semibold">✓ Connected</span> - Facebook Ads account managed via Business Manager.
                                             </p>
-                                            
-                                            {/* Facebook Page Info */}
-                                            {customer.facebook_page_id ? (
-                                                <p className="text-sm text-gray-600 mb-2">
-                                                    <span className="text-green-600 font-semibold">✓ Page:</span> {customer.facebook_page_name || customer.facebook_page_id}
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => setShowPageSelector(true)}
-                                                        className="ml-2 text-blue-600 hover:text-blue-800 text-xs underline"
-                                                    >
-                                                        Change
-                                                    </button>
-                                                </p>
-                                            ) : (
-                                                <p className="text-sm text-yellow-600 mb-2">
-                                                    ⚠ No Facebook Page selected.
-                                                    <button 
-                                                        type="button"
-                                                        onClick={() => setShowPageSelector(true)}
-                                                        className="ml-2 text-blue-600 hover:text-blue-800 underline"
-                                                    >
-                                                        Select a Page
-                                                    </button>
-                                                </p>
-                                            )}
-                                            
-                                            {/* Token Status Warning */}
-                                            {tokenStatus && tokenStatus.needs_refresh && (
-                                                <div className="mb-3 p-2 bg-yellow-100 border border-yellow-300 rounded text-sm text-yellow-800">
-                                                    ⚠ Your Facebook connection expires in {tokenStatus.expires_in_days} days.
-                                                    <a href={route('facebook.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline">
-                                                        Reconnect now
-                                                    </a>
-                                                </div>
-                                            )}
-                                            
-                                            {tokenStatus && !tokenStatus.valid && (
-                                                <div className="mb-3 p-2 bg-red-100 border border-red-300 rounded text-sm text-red-800">
-                                                    ✕ Your Facebook connection has expired.
-                                                    <a href={route('facebook.redirect')} className="ml-2 text-blue-600 hover:text-blue-800 underline font-semibold">
-                                                        Reconnect now
-                                                    </a>
-                                                </div>
-                                            )}
-                                            
-                                            <form 
-                                                onSubmit={(e) => {
-                                                    e.preventDefault();
-                                                    router.post(route('facebook.disconnect'), {});
-                                                }}
-                                                className="inline"
-                                            >
-                                                <DangerButton type="submit">
-                                                    Disconnect Facebook
-                                                </DangerButton>
-                                            </form>
+                                            <p className="text-xs text-gray-500">
+                                                Account ID: <code className="bg-white px-2 py-1 rounded font-mono">{customer.facebook_ads_account_id}</code>
+                                                {customer.facebook_page_name && (
+                                                    <> | Page: {customer.facebook_page_name}</>
+                                                )}
+                                            </p>
                                         </div>
                                     ) : (
                                         <div>
-                                            <p className="text-sm text-gray-600 mb-3">
-                                                Connect your Facebook account to manage ads through Site to Spend.
+                                            <p className="text-sm text-gray-600">
+                                                Facebook Ads is managed via our Business Manager. Contact your account manager to link a Facebook Ads account.
                                             </p>
-                                            <a href={route('facebook.redirect')}>
-                                                <button 
-                                                    type="button"
-                                                    className="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-xs font-semibold uppercase tracking-widest text-white transition duration-150 ease-in-out hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 active:bg-blue-800"
-                                                >
-                                                    Connect Facebook Account
-                                                </button>
-                                            </a>
                                         </div>
                                     )}
                                 </div>
+
+                                {/* LinkedIn Ads Integration Section */}
+                                <div className="mt-6 p-4 bg-sky-50 border border-sky-200 rounded-lg">
+                                    <h3 className="text-md font-medium text-gray-900 mb-3">LinkedIn Ads Integration</h3>
+                                    {customer.linkedin_ads_account_id ? (
+                                        <div>
+                                            <p className="text-sm text-gray-600 mb-2">
+                                                <span className="text-green-600 font-semibold">✓ Active</span> - LinkedIn Ads account ID: <code className="bg-white px-2 py-1 rounded text-xs font-mono">{customer.linkedin_ads_account_id}</code>
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <p className="text-sm text-gray-600">
+                                                LinkedIn Ads is managed via our organization account. Contact your account manager to link a LinkedIn Ads account.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Microsoft Ads Integration Section */}
+                                <div className="mt-6 p-4 bg-teal-50 border border-teal-200 rounded-lg">
+                                    <h3 className="text-md font-medium text-gray-900 mb-3">Microsoft Ads Integration</h3>
+                                    {customer.microsoft_ads_account_id ? (
+                                        <div>
+                                            <p className="text-sm text-gray-600 mb-2">
+                                                <span className="text-green-600 font-semibold">✓ Active</span> - Microsoft Ads account ID: <code className="bg-white px-2 py-1 rounded text-xs font-mono">{customer.microsoft_ads_account_id}</code>
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <p className="text-sm text-gray-600">
+                                                Microsoft Ads is managed via our management account. Contact your account manager to link a Microsoft Ads account.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+
                                 {auth.user.customers.find(c => c.id === customer.id)?.role === 'owner' && (
                                     <div className="mt-6">
                                         <h3 className="text-md font-medium text-gray-900">Users on this Account</h3>
@@ -433,16 +352,6 @@ export default function Edit({ auth, mustVerifyEmail, status, facebookAppId }) {
                     </div>
                 </div>
             </div>
-            
-            {/* Facebook Page Selector Modal */}
-            <FacebookPageSelector
-                isOpen={showPageSelector}
-                onClose={() => setShowPageSelector(false)}
-                onSelect={(page) => {
-                    // Refresh the page to show updated data
-                    router.reload({ only: ['customers'] });
-                }}
-            />
         </AuthenticatedLayout>
     );
 }

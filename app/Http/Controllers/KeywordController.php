@@ -296,4 +296,51 @@ class KeywordController extends Controller
 
         return $user->customers()->first();
     }
+
+    /**
+     * JSON endpoint for inline keyword research during campaign creation.
+     * Returns keyword data directly without Inertia redirect.
+     */
+    public function inlineResearch(Request $request)
+    {
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) {
+            return response()->json(['error' => 'No active customer.'], 403);
+        }
+
+        $validated = $request->validate([
+            'seed_keywords' => 'nullable|string|max:500',
+            'landing_page' => 'nullable|url|max:500',
+            'max_keywords' => 'nullable|integer|min:5|max:50',
+        ]);
+
+        $customerId = $customer->google_ads_customer_id;
+        if (!$customerId) {
+            return response()->json(['error' => 'Google Ads account required for keyword research.'], 422);
+        }
+
+        try {
+            $service = new KeywordResearchService($customer);
+            $results = $service->research(
+                $customerId,
+                $customer->name,
+                $customer->industry,
+                $validated['landing_page'] ?? $customer->website_url,
+                'languageConstants/1000',
+                [],
+                $validated['max_keywords'] ?? 20
+            );
+
+            if (!empty($results['keywords'])) {
+                $clusterService = new KeywordClusteringService();
+                $clusters = $clusterService->cluster($results['keywords']);
+                $results['clusters'] = $clusters['clusters'] ?? [];
+            }
+
+            return response()->json($results);
+        } catch (\Exception $e) {
+            Log::error('KeywordController: Inline research failed', ['error' => $e->getMessage()]);
+            return response()->json(['error' => 'Keyword research failed: ' . $e->getMessage()], 500);
+        }
+    }
 }
