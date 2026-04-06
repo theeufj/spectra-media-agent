@@ -111,7 +111,16 @@ class AdSetService extends BaseFacebookAdsService
 
             // Add targeting if provided
             if (!empty($targeting)) {
+                // Meta requires advantage_audience flag in targeting_automation
+                if (!isset($targeting['targeting_automation'])) {
+                    $targeting['targeting_automation'] = ['advantage_audience' => 1];
+                }
                 $data['targeting'] = json_encode($targeting);
+            } else {
+                // Even with no targeting, the flag is required
+                $data['targeting'] = json_encode([
+                    'targeting_automation' => ['advantage_audience' => 1],
+                ]);
             }
 
             // Correct endpoint: ad sets are created under the ad account, not the campaign.

@@ -864,7 +864,7 @@ PROMPT;
             }
 
             $adAccountService = new \App\Services\FacebookAds\AdAccountService($context->customer);
-            $pixels = $adAccountService->getPixels($adAccountId);
+            $pixels = $adAccountService->getPixels('act_' . $adAccountId);
 
             return !empty($pixels);
         } catch (\Exception $e) {
@@ -885,7 +885,7 @@ PROMPT;
             }
 
             $adAccountService = new \App\Services\FacebookAds\AdAccountService($context->customer);
-            $pixels = $adAccountService->getPixels($adAccountId);
+            $pixels = $adAccountService->getPixels('act_' . $adAccountId);
 
             foreach ($pixels as $pixel) {
                 $pixelId = $pixel['id'] ?? null;
