@@ -88,15 +88,29 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'facebook_ads_account_id' => 'nullable|string|max:50',
+            'facebook_page_url' => 'nullable|string|max:500',
         ]);
 
-        $customer->update([
+        $updates = [
             'facebook_ads_account_id' => $validated['facebook_ads_account_id'] ?: null,
-        ]);
+        ];
 
-        Log::info('Admin updated Facebook Ad Account ID', [
+        if (!empty($validated['facebook_page_url'])) {
+            $parsed = Customer::parseFacebookPageUrl($validated['facebook_page_url']);
+            if ($parsed) {
+                $updates['facebook_page_id'] = $parsed['page_id'];
+                if ($parsed['page_name']) {
+                    $updates['facebook_page_name'] = $parsed['page_name'];
+                }
+            }
+        }
+
+        $customer->update($updates);
+
+        Log::info('Admin updated Facebook settings', [
             'customer_id' => $customer->id,
             'facebook_ads_account_id' => $customer->facebook_ads_account_id,
+            'facebook_page_id' => $customer->facebook_page_id,
         ]);
 
         return redirect()->back()->with('success', 'Facebook Ad Account ID updated.');

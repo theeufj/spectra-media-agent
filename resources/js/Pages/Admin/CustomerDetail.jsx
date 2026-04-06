@@ -11,6 +11,7 @@ export default function CustomerDetail({ auth, bm_configured }) {
 
     const fbForm = useForm({
         facebook_ads_account_id: customer.facebook_ads_account_id || '',
+        facebook_page_url: '',
     });
 
     const saveFbAccountId = (e) => {
@@ -130,21 +131,38 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                         </div>
                                     </div>
                                     {editingFbAccount ? (
-                                        <form onSubmit={saveFbAccountId} className="flex items-center gap-2">
-                                            <div className="flex-1">
-                                                <div className="flex items-center">
-                                                    <span className="inline-flex items-center px-3 py-2 bg-gray-100 border border-r-0 border-gray-300 rounded-l-md text-sm text-gray-500">act_</span>
-                                                    <input
-                                                        type="text"
-                                                        value={fbForm.data.facebook_ads_account_id}
-                                                        onChange={e => fbForm.setData('facebook_ads_account_id', e.target.value)}
-                                                        className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md text-sm focus:ring-blue-500 focus:border-blue-500"
-                                                        placeholder="123456789"
-                                                    />
+                                        <form onSubmit={saveFbAccountId} className="space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1">
+                                                    <label className="block text-xs text-gray-500 mb-1">Ad Account ID</label>
+                                                    <div className="flex items-center">
+                                                        <span className="inline-flex items-center px-3 py-2 bg-gray-100 border border-r-0 border-gray-300 rounded-l-md text-sm text-gray-500">act_</span>
+                                                        <input
+                                                            type="text"
+                                                            value={fbForm.data.facebook_ads_account_id}
+                                                            onChange={e => fbForm.setData('facebook_ads_account_id', e.target.value)}
+                                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-r-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                            placeholder="123456789"
+                                                        />
+                                                    </div>
+                                                    {fbForm.errors.facebook_ads_account_id && (
+                                                        <p className="mt-1 text-xs text-red-600">{fbForm.errors.facebook_ads_account_id}</p>
+                                                    )}
                                                 </div>
-                                                {fbForm.errors.facebook_ads_account_id && (
-                                                    <p className="mt-1 text-xs text-red-600">{fbForm.errors.facebook_ads_account_id}</p>
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Facebook Page URL</label>
+                                                <input
+                                                    type="text"
+                                                    value={fbForm.data.facebook_page_url}
+                                                    onChange={e => fbForm.setData('facebook_page_url', e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                    placeholder="https://www.facebook.com/YourPage"
+                                                />
+                                                {fbForm.errors.facebook_page_url && (
+                                                    <p className="mt-1 text-xs text-red-600">{fbForm.errors.facebook_page_url}</p>
                                                 )}
+                                                <p className="mt-1 text-xs text-gray-400">Paste the full Facebook Page URL — we'll extract the Page ID automatically.</p>
                                             </div>
                                             <button
                                                 type="submit"
@@ -166,6 +184,22 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                             Not linked — Facebook deployment is blocked until an account is assigned.
                                         </div>
                                     )}
+
+                                    {/* Facebook Page */}
+                                    <div className="mt-3">
+                                        <span className="text-xs font-medium text-gray-500">Facebook Page</span>
+                                        {customer.facebook_page_id ? (
+                                            <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 flex items-center gap-2">
+                                                <svg className="w-4 h-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z"/></svg>
+                                                <span>{customer.facebook_page_name || customer.facebook_page_id}</span>
+                                                <a href={`https://facebook.com/${customer.facebook_page_id}`} target="_blank" rel="noopener" className="ml-auto text-xs text-blue-600 hover:text-blue-800">View ↗</a>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-1 px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
+                                                No Facebook Page linked — click "Edit ID" above to add one.
+                                            </div>
+                                        )}
+                                    </div>
                                     </div>
                                 </div>
                             </div>

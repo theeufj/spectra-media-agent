@@ -100,6 +100,7 @@ export default function Create({ auth }) {
         currency_code: '',
         website: '',
         phone: '',
+        facebook_page_url: '',
     });
 
     const submit = (e) => {
@@ -206,6 +207,23 @@ export default function Create({ auth }) {
                                                 onChange={(e) => setData('phone', e.target.value)}
                                             />
                                             <InputError message={errors.phone} className="mt-2" />
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <InputLabel htmlFor="facebook_page_url" value="Facebook Page URL (optional)" />
+                                            <TextInput
+                                                id="facebook_page_url"
+                                                name="facebook_page_url"
+                                                type="url"
+                                                value={data.facebook_page_url}
+                                                className="mt-1 block w-full"
+                                                placeholder="https://www.facebook.com/YourBusinessPage"
+                                                onChange={(e) => setData('facebook_page_url', e.target.value)}
+                                            />
+                                            <InputError message={errors.facebook_page_url} className="mt-2" />
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                Required for Facebook Ads. Paste your business's Facebook Page link — we'll connect it automatically.
+                                            </p>
                                         </div>
                                     </div>
                                 </div>

@@ -131,4 +131,67 @@ class Customer extends Model
     {
         return $this->hasOne(AdSpendCredit::class);
     }
+
+    /**
+     * Extract a Facebook Page ID from a URL or raw ID string.
+     *
+     * Supports:
+     *   - https://www.facebook.com/profile.php?id=61584812770566
+     *   - https://www.facebook.com/YourPageName
+     *   - https://facebook.com/YourPageName/
+     *   - https://www.facebook.com/p/PageName-61584812770566/
+     *   - Raw numeric ID: 61584812770566
+     *   - Page slug: YourPageName
+     *
+     * Returns ['page_id' => string, 'page_name' => string|null] or null if unparseable.
+     */
+    public static function parseFacebookPageUrl(?string $input): ?array
+    {
+        if (empty($input)) {
+            return null;
+        }
+
+        $input = trim($input);
+
+        // Raw numeric ID
+        if (preg_match('/^\d{5,}$/', $input)) {
+            return ['page_id' => $input, 'page_name' => null];
+        }
+
+        // URL format
+        if (preg_match('#facebook\.com#i', $input)) {
+            $parsed = parse_url($input);
+            $path = trim($parsed['path'] ?? '', '/');
+
+            // profile.php?id=123
+            if (str_contains($path, 'profile.php')) {
+                parse_str($parsed['query'] ?? '', $query);
+                if (!empty($query['id']) && preg_match('/^\d+$/', $query['id'])) {
+                    return ['page_id' => $query['id'], 'page_name' => null];
+                }
+            }
+
+            // /p/PageName-123456/ format
+            if (preg_match('#^p/(.+?)(?:-(\d{5,}))?/?$#', $path, $m)) {
+                return [
+                    'page_id' => $m[2] ?? $m[1],
+                    'page_name' => str_replace('-', ' ', $m[1]),
+                ];
+            }
+
+            // /PageName or /PageName/
+            if ($path && !str_contains($path, '/') || preg_match('#^[^/]+/?$#', $path)) {
+                $slug = trim($path, '/');
+                // If slug is numeric, it's a page ID
+                if (preg_match('/^\d{5,}$/', $slug)) {
+                    return ['page_id' => $slug, 'page_name' => null];
+                }
+                // Otherwise it's a vanity slug — use as both
+                return ['page_id' => $slug, 'page_name' => $slug];
+            }
+        }
+
+        // Fallback — treat non-empty string as a slug/ID
+        return ['page_id' => $input, 'page_name' => null];
+    }
 }

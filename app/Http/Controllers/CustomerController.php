@@ -26,7 +26,21 @@ class CustomerController extends Controller
             'currency_code' => 'nullable|string|size:3|uppercase', // ISO 4217 currency code
             'website' => 'nullable|url|max:255',
             'phone' => 'nullable|string|max:20',
+            'facebook_page_url' => 'nullable|string|max:500',
         ]);
+
+        $facebookPageUrl = $validated['facebook_page_url'] ?? null;
+        unset($validated['facebook_page_url']);
+
+        if ($facebookPageUrl) {
+            $parsed = Customer::parseFacebookPageUrl($facebookPageUrl);
+            if ($parsed) {
+                $validated['facebook_page_id'] = $parsed['page_id'];
+                if ($parsed['page_name']) {
+                    $validated['facebook_page_name'] = $parsed['page_name'];
+                }
+            }
+        }
 
         $customer = Customer::create($validated);
 
