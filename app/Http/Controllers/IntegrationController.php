@@ -14,7 +14,8 @@ class IntegrationController extends Controller
 {
     public function index(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $integrations = CrmIntegration::where('customer_id', $customer->id)->get();
 
         $conversionStats = OfflineConversion::where('customer_id', $customer->id)
@@ -38,7 +39,8 @@ class IntegrationController extends Controller
 
     public function connect(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $validated = $request->validate([
             'provider' => 'required|in:hubspot,salesforce',
             'access_token' => 'required|string',
@@ -72,7 +74,8 @@ class IntegrationController extends Controller
 
     public function disconnect(Request $request, CrmIntegration $integration)
     {
-        if ($integration->customer_id !== $request->user()->customer->id) {
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer || $integration->customer_id !== $customer->id) {
             abort(403);
         }
 
@@ -86,7 +89,8 @@ class IntegrationController extends Controller
 
     public function sync(Request $request, CrmIntegration $integration)
     {
-        if ($integration->customer_id !== $request->user()->customer->id) {
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer || $integration->customer_id !== $customer->id) {
             abort(403);
         }
 
@@ -101,7 +105,8 @@ class IntegrationController extends Controller
 
     public function conversions(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $conversions = OfflineConversion::where('customer_id', $customer->id)
             ->orderBy('conversion_time', 'desc')
             ->limit(100)
@@ -114,7 +119,8 @@ class IntegrationController extends Controller
 
     public function retryUpload(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         OfflineConversion::where('customer_id', $customer->id)
             ->where('upload_status', 'failed')
             ->update(['upload_status' => 'pending']);

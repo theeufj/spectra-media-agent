@@ -17,7 +17,8 @@ class AnalyticsController extends Controller
 
     public function index(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $days = (int) $request->get('days', 30);
 
         $summary = $this->analytics->getSummary($customer, $days);
@@ -34,7 +35,8 @@ class AnalyticsController extends Controller
 
     public function crossPlatform(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $days = (int) $request->get('days', 30);
 
         $comparison = $this->analytics->getPlatformComparison($customer, $days);
@@ -49,7 +51,8 @@ class AnalyticsController extends Controller
 
     public function attribution(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
 
         // Demo touchpoints for visualization — in production these come from conversion tracking
         $sampleTouchpoints = [

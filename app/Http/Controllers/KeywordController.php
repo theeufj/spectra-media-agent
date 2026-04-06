@@ -184,7 +184,7 @@ class KeywordController extends Controller
 
         $competitors = $customer->competitors()
             ->whereNotNull('keywords_detected')
-            ->latest('analyzed_at')
+            ->latest('last_analyzed_at')
             ->take(5)
             ->get();
 
@@ -281,20 +281,6 @@ class KeywordController extends Controller
         $list->delete();
 
         return back()->with('flash', ['type' => 'success', 'message' => 'Negative keyword list deleted.']);
-    }
-
-    protected function getActiveCustomer(Request $request): ?Customer
-    {
-        $user = $request->user();
-        $customerId = session('active_customer_id');
-
-        if ($customerId) {
-            return Customer::where('id', $customerId)
-                ->whereHas('users', fn($q) => $q->where('user_id', $user->id))
-                ->first();
-        }
-
-        return $user->customers()->first();
     }
 
     /**

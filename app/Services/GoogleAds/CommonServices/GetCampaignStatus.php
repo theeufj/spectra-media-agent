@@ -6,6 +6,7 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Services\CampaignServiceClient;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\ApiCore\ApiException;
 
 class GetCampaignStatus extends BaseGoogleAdsService
 {
@@ -39,7 +40,7 @@ class GetCampaignStatus extends BaseGoogleAdsService
             }
 
             return null; // Not found
-        } catch (GoogleAdsException $e) {
+        } catch (GoogleAdsException|ApiException $e) {
             $this->logError("Failed to get campaign status: " . $e->getMessage());
             return null;
         }

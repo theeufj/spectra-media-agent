@@ -150,20 +150,6 @@ class ReportController extends Controller
         return back()->with('flash', ['type' => 'success', 'message' => 'Report branding updated.']);
     }
 
-    protected function getActiveCustomer(Request $request): ?Customer
-    {
-        $user = $request->user();
-        $customerId = session('active_customer_id');
-
-        if ($customerId) {
-            return Customer::where('id', $customerId)
-                ->whereHas('users', fn($q) => $q->where('user_id', $user->id))
-                ->first();
-        }
-
-        return $user->customers()->first();
-    }
-
     protected function canWhiteLabel(Request $request): bool
     {
         $user = $request->user();

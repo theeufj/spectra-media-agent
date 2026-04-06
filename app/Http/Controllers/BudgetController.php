@@ -12,7 +12,8 @@ class BudgetController extends Controller
 {
     public function allocator(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $allocator = new CrossChannelBudgetAllocator();
         $analysis = $allocator->analyze($customer);
 
@@ -25,7 +26,8 @@ class BudgetController extends Controller
 
     public function updateAllocation(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $validated = $request->validate([
             'total_monthly_budget' => 'required|numeric|min:0',
             'google_ads_pct' => 'required|numeric|min:0|max:100',
@@ -56,7 +58,8 @@ class BudgetController extends Controller
 
     public function rebalance(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $allocator = new CrossChannelBudgetAllocator();
         $result = $allocator->rebalance($customer, 'manual');
 
@@ -65,7 +68,8 @@ class BudgetController extends Controller
 
     public function history(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->getActiveCustomer($request);
+        if (!$customer) return redirect()->route('dashboard');
         $logs = CrossChannelRebalanceLog::where('customer_id', $customer->id)
             ->orderBy('created_at', 'desc')
             ->limit(50)

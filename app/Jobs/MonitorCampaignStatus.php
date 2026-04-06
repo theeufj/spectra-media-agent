@@ -62,6 +62,7 @@ class MonitorCampaignStatus implements ShouldQueue
         if (!$customerId) {
             return;
         }
+        $customerId = str_replace('-', '', $customerId);
         $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
         $statusData = $getCampaignStatus($customerId, $resourceName);
 
