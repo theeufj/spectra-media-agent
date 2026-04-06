@@ -23,6 +23,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'name',
         'email',
         'password',
+        'customer_id',
         'notification_preferences',
     ];
 
@@ -69,6 +70,14 @@ class User extends Authenticatable implements MustVerifyEmail
     public function customers()
     {
         return $this->belongsToMany(Customer::class)->withPivot('role');
+    }
+
+    /**
+     * Get the user's primary customer (via customer_id column).
+     */
+    public function customer()
+    {
+        return $this->belongsTo(Customer::class);
     }
 
     /**
