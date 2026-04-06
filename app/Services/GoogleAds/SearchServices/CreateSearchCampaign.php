@@ -104,9 +104,12 @@ class CreateSearchCampaign extends BaseGoogleAdsService
     {
         $this->ensureClient();
         
+        $dailyBudgetMicros = (int) round($budgetAmount * 1_000_000);
+        $dailyBudgetMicros = (int) (round($dailyBudgetMicros / 10_000) * 10_000); // Must be multiple of minimum currency unit
+
         $campaignBudget = new CampaignBudget([
             'name' => 'Search Budget - ' . uniqid(),
-            'amount_micros' => (int) ($budgetAmount * 1_000_000), // Convert to micros
+            'amount_micros' => $dailyBudgetMicros,
             'delivery_method' => BudgetType::STANDARD,
             'explicitly_shared' => false
         ]);

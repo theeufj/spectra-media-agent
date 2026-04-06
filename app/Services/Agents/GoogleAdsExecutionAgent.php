@@ -1633,10 +1633,14 @@ PROMPT;
      */
     protected function setupConversionTracking(string $customerId, ExecutionResult $result): void
     {
-        // In a real scenario, we would check if conversions exist first.
-        // For now, we'll attempt to create a default "Purchase" conversion action.
-        
         try {
+            // Check if conversion tracking is already set up — skip if so
+            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
+            if ($conversionService->isConversionTrackingSetUp($customerId)) {
+                Log::info("GoogleAdsExecutionAgent: Conversion tracking already exists, skipping creation");
+                return;
+            }
+
             $createConversionService = new CreateConversionAction($this->customer);
             $conversionName = "Default Purchase Conversion";
             

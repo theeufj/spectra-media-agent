@@ -16,7 +16,7 @@ class CreateCampaignBudget extends BaseGoogleAdsService
         parent::__construct($customer);
     }
 
-    public function __invoke(string $customerId, string $budgetName, int $dailyBudgetMicros = 5000000, bool $explicitlyShared = true): ?string
+    public function __invoke(string $customerId, string $budgetName, int $dailyBudgetMicros = 5_000_000, bool $explicitlyShared = true): ?string
     {
         $campaignBudget = new CampaignBudget([
             'name' => $budgetName,

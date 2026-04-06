@@ -108,7 +108,8 @@ class BudgetIntelligenceAgent
     ): void {
         $baseDailyBudget = $campaign->daily_budget ?? 0;
         $adjustedBudget = $baseDailyBudget * $combinedMultiplier;
-        $adjustedBudgetMicros = $adjustedBudget * 1000000;
+        $adjustedBudgetMicros = (int) round($adjustedBudget * 1_000_000);
+        $adjustedBudgetMicros = (int) (round($adjustedBudgetMicros / 10_000) * 10_000);
 
         $customer = $campaign->customer;
         $customerId = $customer->google_ads_customer_id;
