@@ -4,11 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Services\FacebookAds\BusinessManagerService;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class FacebookAdAccountController extends Controller
 {
+    use AuthorizesRequests;
+
     public function __construct(protected BusinessManagerService $bmService) {}
 
     /**
