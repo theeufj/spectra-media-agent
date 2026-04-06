@@ -505,11 +505,15 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $strategy->google_ads_ad_group_id = $adGroupResourceName;
         $strategy->save();
         
-        // 3. Add Keywords from campaign, strategy targeting config, or execution plan
+        // 3. Add Keywords — always validate through Keyword Planner for volume data
         $keywords = $this->getKeywords($campaign, $strategy, $plan);
         if (empty($keywords)) {
             // Fallback: use AI keyword research to generate initial keywords
             $keywords = $this->researchKeywords($customerId, $campaign, $strategy);
+        }
+        // Validate all keywords through Keyword Planner to filter low-volume terms
+        if (!empty($keywords)) {
+            $keywords = $this->validateAndEnrichKeywords($customerId, $keywords, $campaign, $strategy);
         }
         if (!empty($keywords)) {
             $this->addKeywords($customerId, $adGroupResourceName, $keywords, $result);
@@ -1253,6 +1257,106 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 $result->addWarning("Failed to add keyword: " . $e->getMessage());
             }
         }
+    }
+
+    /**
+     * Validate keywords through Google Keyword Planner and filter out low-volume terms.
+     * Uses AI keywords as seeds, expands via Keyword Planner, and returns only viable keywords.
+     */
+    protected function validateAndEnrichKeywords(string $customerId, array $keywords, Campaign $campaign, Strategy $strategy): array
+    {
+        try {
+            // Extract keyword texts to use as seeds for Keyword Planner
+            $seedTexts = array_map(function ($kw) {
+                return is_array($kw) ? ($kw['text'] ?? $kw['keyword'] ?? '') : $kw;
+            }, $keywords);
+            $seedTexts = array_values(array_filter($seedTexts));
+
+            if (empty($seedTexts)) {
+                return $keywords;
+            }
+
+            $landingPageUrl = $campaign->landing_page_url ?? null;
+            $generateIdeas = new \App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas($this->customer);
+            $ideas = ($generateIdeas)($customerId, array_slice($seedTexts, 0, 20), $landingPageUrl);
+
+            if (empty($ideas)) {
+                Log::warning('GoogleAdsExecutionAgent: Keyword Planner returned no ideas, using original keywords');
+                return $keywords;
+            }
+
+            // Build a lookup of keyword volumes from Planner results
+            $ideaMap = [];
+            foreach ($ideas as $idea) {
+                $ideaMap[strtolower($idea['keyword'])] = $idea;
+            }
+
+            // Check which original keywords have sufficient volume
+            $validated = [];
+            $minVolume = 10;
+            foreach ($keywords as $kw) {
+                $text = is_array($kw) ? ($kw['text'] ?? $kw['keyword'] ?? '') : $kw;
+                $lower = strtolower($text);
+                if (isset($ideaMap[$lower]) && ($ideaMap[$lower]['avg_monthly_searches'] ?? 0) >= $minVolume) {
+                    $idea = $ideaMap[$lower];
+                    $validated[] = [
+                        'text' => $text,
+                        'match_type' => $this->recommendMatchTypeFromMetrics($idea),
+                        'avg_monthly_searches' => $idea['avg_monthly_searches'],
+                    ];
+                }
+            }
+
+            // If too few original keywords survived, supplement with top Keyword Planner suggestions
+            if (count($validated) < 6) {
+                $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
+                $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
+                $industry = $strategy->businessProfile?->industry ?? null;
+                $research = $researchService->research($customerId, $businessName, $industry, $landingPageUrl, 'languageConstants/1000', [], 20);
+                $researchKeywords = $research['keywords'] ?? [];
+
+                // Add research keywords that aren't already in validated set
+                $existingTexts = array_map(fn($v) => strtolower($v['text']), $validated);
+                foreach ($researchKeywords as $rk) {
+                    if (count($validated) >= 20) break;
+                    $rkText = strtolower($rk['text'] ?? '');
+                    if (!in_array($rkText, $existingTexts) && ($rk['avg_monthly_searches'] ?? 0) >= $minVolume) {
+                        $validated[] = $rk;
+                        $existingTexts[] = $rkText;
+                    }
+                }
+            }
+
+            Log::info('GoogleAdsExecutionAgent: Keyword validation complete', [
+                'original_count' => count($keywords),
+                'validated_count' => count($validated),
+            ]);
+
+            return !empty($validated) ? $validated : $keywords;
+        } catch (\Exception $e) {
+            Log::warning('GoogleAdsExecutionAgent: Keyword validation failed, using original keywords', [
+                'error' => $e->getMessage(),
+            ]);
+            return $keywords;
+        }
+    }
+
+    /**
+     * Recommend match type from Keyword Planner metrics.
+     */
+    protected function recommendMatchTypeFromMetrics(array $idea): string
+    {
+        $volume = $idea['avg_monthly_searches'] ?? 0;
+        $competitionIndex = $idea['competition_index'] ?? 50;
+        $cpc = ($idea['average_cpc_micros'] ?? 0) / 1_000_000;
+
+        if ($volume > 1000 && $competitionIndex < 30) {
+            return 'BROAD';
+        }
+        if ($competitionIndex > 70 || $cpc > 5.0) {
+            return 'EXACT';
+        }
+        return 'PHRASE';
     }
 
     /**

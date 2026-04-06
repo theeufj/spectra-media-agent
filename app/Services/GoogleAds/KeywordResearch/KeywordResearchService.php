@@ -134,6 +134,11 @@ class KeywordResearchService
     protected function rankAndSelect(array $keywordIdeas, int $max): array
     {
         // Score each keyword: balance of volume, competition (lower = better), CPC
+        // Filter out keywords with insufficient search volume
+        $keywordIdeas = array_filter($keywordIdeas, function ($idea) {
+            return ($idea['avg_monthly_searches'] ?? 0) >= 10;
+        });
+
         $scored = array_map(function ($idea) {
             $volume = $idea['avg_monthly_searches'] ?? 0;
             $competitionIndex = $idea['competition_index'] ?? 50;
