@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\Campaign;
 use App\Models\KeywordQualityScore;
 use App\Models\CampaignHourlyPerformance;
+use App\Models\FacebookAdsPerformanceData;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\Reporting\QualityScoreTrendingService;
@@ -36,15 +37,21 @@ class ExecutiveReportService
         $endDate = now()->toDateString();
 
         $campaigns = Campaign::where('customer_id', $customer->id)
-            ->whereNotNull('google_ads_campaign_id')
+            ->where(function ($q) {
+                $q->whereNotNull('google_ads_campaign_id')
+                  ->orWhereNotNull('facebook_ads_campaign_id');
+            })
             ->get();
 
         $googlePerformance = $this->getGooglePerformance($customer, $campaigns, $days);
+        $facebookPerformance = $this->getFacebookPerformance($customer, $campaigns, $days);
         $keywordInsights = $this->getKeywordInsights($customer, $days);
         $hourlyInsights = $this->getHourlyInsights($customer, $days);
         $qsTrends = $this->trendingService->getTrends($customer, $days);
 
-        $summary = $this->calculateSummary($googlePerformance);
+        $googleSummary = $this->calculateSummary($googlePerformance);
+        $facebookSummary = $this->calculateFacebookSummary($facebookPerformance);
+        $combinedSummary = $this->calculateCombinedSummary($googleSummary, $facebookSummary);
 
         $report = [
             'customer_id' => $customer->id,
@@ -55,8 +62,11 @@ class ExecutiveReportService
                 'end' => $endDate,
                 'days' => $days,
             ],
-            'summary' => $summary,
+            'summary' => $combinedSummary,
+            'google_summary' => $googleSummary,
+            'facebook_summary' => $facebookSummary,
             'campaigns' => $googlePerformance,
+            'facebook_campaigns' => $facebookPerformance,
             'keyword_insights' => $keywordInsights,
             'quality_score_trends' => $qsTrends,
             'hourly_insights' => $hourlyInsights,
@@ -203,10 +213,12 @@ class ExecutiveReportService
         $summary = $report['summary'];
         $kwInsights = $report['keyword_insights'];
         $period = $report['period']['type'];
+        $googleSummary = $report['google_summary'];
+        $facebookSummary = $report['facebook_summary'];
 
-        $prompt = "You are a senior SEM account strategist writing a {$period} executive summary for {$report['customer_name']}.\n\n"
-            . "Performance Data:\n"
-            . "- Campaigns: {$summary['total_campaigns']}\n"
+        $prompt = "You are a senior digital marketing strategist writing a {$period} executive summary for {$report['customer_name']}.\n\n"
+            . "Combined Performance:\n"
+            . "- Total Campaigns: {$summary['total_campaigns']}\n"
             . "- Impressions: " . number_format($summary['total_impressions']) . "\n"
             . "- Clicks: " . number_format($summary['total_clicks']) . "\n"
             . "- CTR: {$summary['blended_ctr']}%\n"
@@ -214,6 +226,24 @@ class ExecutiveReportService
             . "- Conversions: {$summary['total_conversions']}\n"
             . "- CPA: \${$summary['blended_cpa']}\n"
             . "- Avg CPC: \${$summary['blended_cpc']}\n";
+
+        if ($googleSummary['total_campaigns'] > 0) {
+            $prompt .= "\nGoogle Ads:\n"
+                . "- Campaigns: {$googleSummary['total_campaigns']}\n"
+                . "- Spend: \${$googleSummary['total_cost']}\n"
+                . "- Conversions: {$googleSummary['total_conversions']}\n"
+                . "- CPA: \${$googleSummary['blended_cpa']}\n";
+        }
+
+        if ($facebookSummary['total_campaigns'] > 0) {
+            $prompt .= "\nFacebook Ads:\n"
+                . "- Campaigns: {$facebookSummary['total_campaigns']}\n"
+                . "- Spend: \${$facebookSummary['total_cost']}\n"
+                . "- Conversions: {$facebookSummary['total_conversions']}\n"
+                . "- CPA: \${$facebookSummary['blended_cpa']}\n"
+                . "- Reach: " . number_format($facebookSummary['total_reach']) . "\n"
+                . "- Frequency: {$facebookSummary['avg_frequency']}\n";
+        }
 
         if ($kwInsights['average_qs']) {
             $prompt .= "\nKeyword Quality:\n"
@@ -223,14 +253,14 @@ class ExecutiveReportService
                 . "- Low QS keywords (<5): {$kwInsights['low_qs_keywords']}\n";
         }
 
-        $prompt .= "\nWrite a concise 3-4 paragraph executive summary covering: 1) Overall performance, 2) Key wins and concerns, 3) Recommended next steps. Be data-driven and specific.";
+        $prompt .= "\nWrite a concise 3-4 paragraph executive summary covering: 1) Overall cross-platform performance, 2) Platform-specific highlights and concerns, 3) Key wins, 4) Recommended next steps. Be data-driven and specific.";
 
         try {
             $result = $this->gemini->generateContent(
                 'gemini-3-flash-preview',
                 $prompt,
                 ['temperature' => 0.3, 'maxOutputTokens' => 1024],
-                'You are a professional SEM analyst writing executive reports for business stakeholders.'
+                'You are a professional digital marketing analyst writing executive reports for business stakeholders.'
             );
 
             return $result['text'] ?? null;
@@ -238,5 +268,96 @@ class ExecutiveReportService
             Log::warning("Failed to generate AI narrative: " . $e->getMessage());
             return null;
         }
+    }
+
+    protected function getFacebookPerformance(Customer $customer, $campaigns, int $days): array
+    {
+        $results = [];
+        $startDate = now()->subDays($days)->toDateString();
+
+        foreach ($campaigns as $campaign) {
+            if (!$campaign->facebook_ads_campaign_id) {
+                continue;
+            }
+
+            $perfData = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', $startDate)
+                ->get();
+
+            if ($perfData->isNotEmpty()) {
+                $results[] = [
+                    'campaign_name' => $campaign->name,
+                    'campaign_id' => $campaign->id,
+                    'impressions' => $perfData->sum('impressions'),
+                    'clicks' => $perfData->sum('clicks'),
+                    'cost' => round($perfData->sum('cost'), 2),
+                    'conversions' => $perfData->sum('conversions'),
+                    'reach' => $perfData->sum('reach'),
+                    'avg_frequency' => $perfData->avg('frequency') ? round($perfData->avg('frequency'), 2) : 0,
+                    'cpc' => $perfData->avg('cpc') ? round($perfData->avg('cpc'), 2) : 0,
+                    'cpm' => $perfData->avg('cpm') ? round($perfData->avg('cpm'), 2) : 0,
+                    'cpa' => $perfData->avg('cpa') ? round($perfData->avg('cpa'), 2) : 0,
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    protected function calculateFacebookSummary(array $facebookPerformance): array
+    {
+        $totalImpressions = 0;
+        $totalClicks = 0;
+        $totalCost = 0;
+        $totalConversions = 0;
+        $totalReach = 0;
+        $totalFrequency = 0;
+
+        foreach ($facebookPerformance as $campaign) {
+            $totalImpressions += $campaign['impressions'] ?? 0;
+            $totalClicks += $campaign['clicks'] ?? 0;
+            $totalCost += $campaign['cost'] ?? 0;
+            $totalConversions += $campaign['conversions'] ?? 0;
+            $totalReach += $campaign['reach'] ?? 0;
+            $totalFrequency += $campaign['avg_frequency'] ?? 0;
+        }
+
+        $count = count($facebookPerformance);
+
+        return [
+            'total_campaigns' => $count,
+            'total_impressions' => $totalImpressions,
+            'total_clicks' => $totalClicks,
+            'total_cost' => round($totalCost, 2),
+            'total_conversions' => $totalConversions,
+            'total_reach' => $totalReach,
+            'avg_frequency' => $count > 0 ? round($totalFrequency / $count, 2) : 0,
+            'blended_ctr' => $totalImpressions > 0 ? round($totalClicks / $totalImpressions * 100, 2) : 0,
+            'blended_cpc' => $totalClicks > 0 ? round($totalCost / $totalClicks, 2) : 0,
+            'blended_cpa' => $totalConversions > 0 ? round($totalCost / $totalConversions, 2) : 0,
+        ];
+    }
+
+    protected function calculateCombinedSummary(array $googleSummary, array $facebookSummary): array
+    {
+        $totalImpressions = $googleSummary['total_impressions'] + $facebookSummary['total_impressions'];
+        $totalClicks = $googleSummary['total_clicks'] + $facebookSummary['total_clicks'];
+        $totalCost = $googleSummary['total_cost'] + $facebookSummary['total_cost'];
+        $totalConversions = $googleSummary['total_conversions'] + $facebookSummary['total_conversions'];
+
+        return [
+            'total_campaigns' => $googleSummary['total_campaigns'] + $facebookSummary['total_campaigns'],
+            'total_impressions' => $totalImpressions,
+            'total_clicks' => $totalClicks,
+            'total_cost' => round($totalCost, 2),
+            'total_conversions' => $totalConversions,
+            'blended_ctr' => $totalImpressions > 0 ? round($totalClicks / $totalImpressions * 100, 2) : 0,
+            'blended_cpc' => $totalClicks > 0 ? round($totalCost / $totalClicks, 2) : 0,
+            'blended_cpa' => $totalConversions > 0 ? round($totalCost / $totalConversions, 2) : 0,
+            'platforms' => array_filter([
+                $googleSummary['total_campaigns'] > 0 ? 'google' : null,
+                $facebookSummary['total_campaigns'] > 0 ? 'facebook' : null,
+            ]),
+        ];
     }
 }

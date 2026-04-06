@@ -25,7 +25,10 @@ class OptimizeCampaigns implements ShouldQueue
         // We only optimize campaigns that are 'ELIGIBLE' (primary status)
         // This covers both Google (ENABLED/ELIGIBLE) and Facebook (ACTIVE)
         $campaigns = Campaign::where('primary_status', 'ELIGIBLE')
-            ->whereNotNull('google_ads_campaign_id')
+            ->where(function ($query) {
+                $query->whereNotNull('google_ads_campaign_id')
+                      ->orWhereNotNull('facebook_ads_campaign_id');
+            })
             ->where(function ($query) {
                 $query->whereNull('last_optimized_at')
                       ->orWhere('last_optimized_at', '<=', now()->subHours(24));

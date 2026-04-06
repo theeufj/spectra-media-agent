@@ -2,9 +2,12 @@
 
 namespace App\Jobs;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Prompts\SeasonalStrategyPrompt;
 use App\Services\GeminiService;
+use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
+use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -96,15 +99,71 @@ class ApplySeasonalStrategyShift implements ShouldQueue
 
             Log::info("Generated seasonal strategy shift:", $strategyShift);
 
-            // Here, you would dispatch jobs to the implementation agents to apply the strategy shift.
-            // For example:
-            // dispatch(new UpdateCampaignBudget($this->campaignId, $strategyShift['budget_adjustment']['new_daily_budget']));
-            // dispatch(new UpdateBiddingStrategy($this->campaignId, $strategyShift['bidding_strategy_change']));
+            $this->applyBudgetAdjustment($campaign, $strategyShift, $baselineStrategy);
+
+            AgentActivity::record(
+                'seasonal',
+                'strategy_applied',
+                "Applied {$this->season} seasonal strategy to \"{$campaign->name}\"",
+                $campaign->customer_id,
+                $campaign->id,
+                ['season' => $this->season, 'strategy_shift' => $strategyShift]
+            );
 
         } catch (\Exception $e) {
             Log::error("Error applying seasonal strategy shift to campaign {$this->campaignId}: " . $e->getMessage(), [
                 'exception' => $e,
             ]);
         }
+    }
+
+    private function applyBudgetAdjustment(Campaign $campaign, array $strategyShift, array $baselineStrategy): void
+    {
+        $budgetMultiplier = $baselineStrategy['budget_multiplier'] ?? 1.0;
+        $currentBudget = $campaign->daily_budget ?? $campaign->total_budget ?? 0;
+
+        // Use the AI-generated budget if available, otherwise apply the config multiplier
+        $newDailyBudget = $strategyShift['budget_adjustment']['new_daily_budget']
+            ?? round($currentBudget * $budgetMultiplier, 2);
+
+        if ($newDailyBudget <= 0) {
+            Log::warning("Skipping budget adjustment — calculated budget is zero for campaign {$campaign->id}");
+            return;
+        }
+
+        $customer = $campaign->customer;
+
+        // Apply to Google Ads
+        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
+            try {
+                $updateBudget = app(UpdateCampaignBudget::class, ['customer' => $customer]);
+                $customerId = $customer->google_ads_customer_id;
+                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $budgetMicros = $newDailyBudget * 1_000_000;
+
+                $updateBudget($customerId, $resourceName, $budgetMicros);
+                Log::info("Applied seasonal budget to Google campaign {$campaign->id}: \${$newDailyBudget}/day");
+            } catch (\Exception $e) {
+                Log::error("Failed to apply seasonal budget to Google campaign {$campaign->id}: " . $e->getMessage());
+            }
+        }
+
+        // Apply to Facebook Ads
+        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
+            try {
+                $fbCampaignService = new FacebookCampaignService($customer);
+                // Facebook budget is in cents
+                $budgetCents = (int) round($newDailyBudget * 100);
+                $fbCampaignService->updateCampaign($campaign->facebook_ads_campaign_id, [
+                    'daily_budget' => $budgetCents,
+                ]);
+                Log::info("Applied seasonal budget to Facebook campaign {$campaign->id}: \${$newDailyBudget}/day");
+            } catch (\Exception $e) {
+                Log::error("Failed to apply seasonal budget to Facebook campaign {$campaign->id}: " . $e->getMessage());
+            }
+        }
+
+        // Update the campaign record
+        $campaign->update(['daily_budget' => $newDailyBudget]);
     }
 }

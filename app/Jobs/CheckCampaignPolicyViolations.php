@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Services\GoogleAds\AccountStructureService;
+use App\Services\FacebookAds\AdService as FacebookAdService;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -33,31 +34,87 @@ class CheckCampaignPolicyViolations implements ShouldQueue
     {
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
-            $service = new AccountStructureService($campaign->customer);
-            $client = $service->getClient();
-            $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
 
-            $query = "SELECT ad_group_ad.policy_summary FROM ad_group_ad WHERE campaign.id = {$campaign->google_ads_campaign_id}";
+            if ($campaign->google_ads_campaign_id) {
+                $this->checkGoogleAdsPolicyViolations($campaign);
+            }
 
-            $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
-                'customer_id' => $campaign->customer->google_ads_customer_id,
-                'query' => $query,
-            ]));
-
-            foreach ($response->getIterator() as $googleAdsRow) {
-                $policySummary = $googleAdsRow->getAdGroupAd()->getPolicySummary();
-                if (count($policySummary->getPolicyTopicEntries()) > 0) {
-                    Log::warning("Policy violation found for campaign {$this->campaignId}. Pausing campaign.", [
-                        'policy_summary' => $policySummary->serializeToJsonString(),
-                    ]);
-                    $campaign->update(['status' => 'PAUSED']);
-                    break;
-                }
+            if ($campaign->facebook_ads_campaign_id) {
+                $this->checkFacebookAdsPolicyViolations($campaign);
             }
         } catch (\Exception $e) {
             Log::error("Error checking for policy violations for campaign {$this->campaignId}: " . $e->getMessage(), [
                 'exception' => $e,
             ]);
+        }
+    }
+
+    private function checkGoogleAdsPolicyViolations(Campaign $campaign): void
+    {
+        $service = new AccountStructureService($campaign->customer);
+        $client = $service->getClient();
+        $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
+
+        $query = "SELECT ad_group_ad.policy_summary FROM ad_group_ad WHERE campaign.id = {$campaign->google_ads_campaign_id}";
+
+        $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
+            'customer_id' => $campaign->customer->google_ads_customer_id,
+            'query' => $query,
+        ]));
+
+        foreach ($response->getIterator() as $googleAdsRow) {
+            $policySummary = $googleAdsRow->getAdGroupAd()->getPolicySummary();
+            if (count($policySummary->getPolicyTopicEntries()) > 0) {
+                Log::warning("Google Ads policy violation found for campaign {$this->campaignId}. Pausing campaign.", [
+                    'policy_summary' => $policySummary->serializeToJsonString(),
+                ]);
+                $campaign->update(['status' => 'PAUSED']);
+                break;
+            }
+        }
+    }
+
+    private function checkFacebookAdsPolicyViolations(Campaign $campaign): void
+    {
+        $customer = $campaign->customer;
+        if (!$customer || !$customer->facebook_ads_account_id) {
+            return;
+        }
+
+        $adService = new FacebookAdService($customer);
+        $accountId = 'act_' . $customer->facebook_ads_account_id;
+
+        $ads = $adService->listAdsByAccount($accountId, [
+            [
+                'field' => 'campaign.id',
+                'operator' => 'EQUAL',
+                'value' => $campaign->facebook_ads_campaign_id,
+            ],
+        ]);
+
+        $disapprovedAds = [];
+        foreach ($ads as $ad) {
+            $effectiveStatus = $ad['effective_status'] ?? '';
+            if (in_array($effectiveStatus, ['DISAPPROVED', 'WITH_ISSUES'])) {
+                $disapprovedAds[] = [
+                    'ad_id' => $ad['id'],
+                    'name' => $ad['name'] ?? 'Unknown',
+                    'effective_status' => $effectiveStatus,
+                ];
+            }
+        }
+
+        if (!empty($disapprovedAds)) {
+            Log::warning("Facebook Ads policy violations found for campaign {$this->campaignId}.", [
+                'disapproved_count' => count($disapprovedAds),
+                'ads' => $disapprovedAds,
+            ]);
+
+            // If all ads are disapproved, pause the campaign
+            if (count($disapprovedAds) === count($ads)) {
+                Log::warning("All ads disapproved for Facebook campaign {$this->campaignId}. Pausing campaign.");
+                $campaign->update(['status' => 'PAUSED']);
+            }
         }
     }
 }

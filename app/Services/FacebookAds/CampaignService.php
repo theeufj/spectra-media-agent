@@ -124,6 +124,34 @@ class CampaignService extends BaseFacebookAdsService
     }
 
     /**
+     * Get a single campaign's details including effective status.
+     *
+     * @param string $campaignId Campaign ID
+     * @return ?array
+     */
+    public function getCampaign(string $campaignId): ?array
+    {
+        try {
+            $response = $this->get("/{$campaignId}", [
+                'fields' => 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time,end_time,issues_info',
+            ]);
+
+            if ($response && isset($response['id'])) {
+                return $response;
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Error getting campaign {$campaignId}: " . $e->getMessage(), [
+                'exception' => $e,
+                'campaign_id' => $campaignId,
+                'customer_id' => $this->customer->id,
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Update a campaign.
      *
      * @param string $campaignId Campaign ID
