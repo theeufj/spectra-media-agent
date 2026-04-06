@@ -4,14 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Customer;
 use App\Services\FacebookAds\BusinessManagerService;
-use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class FacebookAdAccountController extends Controller
 {
-    use AuthorizesRequests;
-
     public function __construct(protected BusinessManagerService $bmService) {}
 
     /**
@@ -19,7 +16,6 @@ class FacebookAdAccountController extends Controller
      */
     public function show(Request $request, Customer $customer)
     {
-        $this->authorize('update', $customer);
 
         return Inertia::render('Customers/Facebook/AdAccountSetup', [
             'customer'      => $customer->only([
@@ -40,8 +36,6 @@ class FacebookAdAccountController extends Controller
      */
     public function assign(Request $request, Customer $customer)
     {
-        $this->authorize('update', $customer);
-
         $validated = $request->validate([
             'ad_account_id' => ['required', 'string', 'regex:/^\d+$/'],
         ], [
@@ -68,8 +62,6 @@ class FacebookAdAccountController extends Controller
      */
     public function verify(Request $request, Customer $customer)
     {
-        $this->authorize('update', $customer);
-
         if (!$customer->facebook_ads_account_id) {
             return back()->with('error', 'No ad account linked yet.');
         }
