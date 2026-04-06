@@ -5,6 +5,11 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LegalController;
+use App\Http\Controllers\ReportController;
+use App\Http\Controllers\KeywordController;
+use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\ProductController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -487,4 +492,74 @@ Route::middleware(['auth'])->group(function () {
     // Route to delete a strategy.
     // DELETE /strategies/{strategy}
     Route::delete('/strategies/{strategy}', [App\Http\Controllers\StrategyController::class, 'destroy'])->name('strategies.destroy');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Report Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    Route::post('/reports/generate', [ReportController::class, 'generate'])->name('reports.generate');
+    Route::get('/reports/{period}/{date}/download', [ReportController::class, 'download'])->name('reports.download');
+    Route::get('/reports/settings', [ReportController::class, 'settings'])->name('reports.settings');
+    Route::post('/reports/branding', [ReportController::class, 'updateBranding'])->name('reports.branding.update');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Keyword Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/keywords', [KeywordController::class, 'index'])->name('keywords.index');
+    Route::get('/keywords/research', [KeywordController::class, 'research'])->name('keywords.research');
+    Route::post('/keywords/research', [KeywordController::class, 'doResearch'])->name('keywords.do-research');
+    Route::post('/keywords/add', [KeywordController::class, 'addToCampaign'])->name('keywords.add-to-campaign');
+    Route::post('/keywords/bulk', [KeywordController::class, 'bulkAction'])->name('keywords.bulk');
+    Route::get('/keywords/competitor-gap', [KeywordController::class, 'competitorGap'])->name('keywords.competitor-gap');
+    Route::get('/keywords/negative-lists', [KeywordController::class, 'negativeLists'])->name('keywords.negative-lists');
+    Route::post('/keywords/negative-lists', [KeywordController::class, 'storeNegativeList'])->name('keywords.negative-lists.store');
+    Route::put('/keywords/negative-lists/{list}', [KeywordController::class, 'updateNegativeList'])->name('keywords.negative-lists.update');
+    Route::delete('/keywords/negative-lists/{list}', [KeywordController::class, 'destroyNegativeList'])->name('keywords.negative-lists.destroy');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Budget Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/budget', [BudgetController::class, 'allocator'])->name('budget.allocator');
+    Route::put('/budget', [BudgetController::class, 'updateAllocation'])->name('budget.update');
+    Route::post('/budget/rebalance', [BudgetController::class, 'rebalance'])->name('budget.rebalance');
+    Route::get('/budget/history', [BudgetController::class, 'history'])->name('budget.history');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Integration Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/integrations', [IntegrationController::class, 'index'])->name('integrations.index');
+    Route::post('/integrations/connect', [IntegrationController::class, 'connect'])->name('integrations.connect');
+    Route::post('/integrations/{integration}/disconnect', [IntegrationController::class, 'disconnect'])->name('integrations.disconnect');
+    Route::post('/integrations/{integration}/sync', [IntegrationController::class, 'sync'])->name('integrations.sync');
+    Route::get('/integrations/conversions', [IntegrationController::class, 'conversions'])->name('integrations.conversions');
+    Route::post('/integrations/retry-upload', [IntegrationController::class, 'retryUpload'])->name('integrations.retry-upload');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Product / Shopping Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::post('/products/feeds', [ProductController::class, 'createFeed'])->name('products.feeds.create');
+    Route::post('/products/feeds/{feed}/sync', [ProductController::class, 'syncFeed'])->name('products.feeds.sync');
+    Route::delete('/products/feeds/{feed}', [ProductController::class, 'deleteFeed'])->name('products.feeds.delete');
+    Route::get('/products/list', [ProductController::class, 'products'])->name('products.list');
 });

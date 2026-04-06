@@ -4,6 +4,7 @@ namespace App\Services\Agents;
 
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\Keyword;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
@@ -158,6 +159,16 @@ class SearchTermMiningAgent
                     'match_type' => $matchTypeName,
                     'ad_group' => $adGroupResourceName,
                 ]);
+
+                // Track in Keyword model for portfolio visibility
+                try {
+                    Keyword::updateOrCreate(
+                        ['customer_id' => $customer->id, 'keyword_text' => $keyword, 'ad_group_resource_name' => $adGroupResourceName],
+                        ['match_type' => $matchTypeName, 'status' => 'active', 'source' => 'mined', 'criterion_resource_name' => $resourceName, 'added_by_agent' => 'SearchTermMiningAgent']
+                    );
+                } catch (\Exception $trackingError) {
+                    Log::debug('SearchTermMiningAgent: Could not track keyword in model', ['error' => $trackingError->getMessage()]);
+                }
             }
         } catch (\Exception $e) {
             // Might fail if keyword already exists, which is fine

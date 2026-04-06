@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SideNav from './SideNav';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 const emptyPlan = {
     name: '',
@@ -249,11 +250,17 @@ function PlanForm({ plan, onClose, isEdit }) {
 export default function Plans({ plans }) {
     const [showForm, setShowForm] = useState(false);
     const [editingPlan, setEditingPlan] = useState(null);
+    const [confirmModal, setConfirmModal] = useState({ show: false, planName: '', onConfirm: null });
 
     const handleDelete = (plan) => {
-        if (confirm(`Are you sure you want to delete "${plan.name}"?`)) {
-            router.delete(route('admin.plans.destroy', plan.id));
-        }
+        setConfirmModal({
+            show: true,
+            planName: plan.name,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.delete(route('admin.plans.destroy', plan.id));
+            },
+        });
     };
 
     return (
@@ -366,6 +373,15 @@ export default function Plans({ plans }) {
                     onClose={() => { setShowForm(false); setEditingPlan(null); }}
                 />
             )}
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title="Delete Plan"
+                message={`Are you sure you want to delete "${confirmModal.planName}"?`}
+                isDestructive={true}
+                confirmText="Delete"
+            />
         </AuthenticatedLayout>
     );
 }

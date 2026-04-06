@@ -3,6 +3,7 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmationModal from '@/Components/ConfirmationModal';
+import { useToast } from '@/Components/Toast';
 
 export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
     const { props } = usePage();
@@ -13,6 +14,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
     const [searching, setSearching] = useState(false);
     const [selectedResult, setSelectedResult] = useState(null);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+    const toast = useToast();
 
     // Extract data from paginated response
     const knowledgeBases = paginatedData?.data || [];
@@ -44,7 +46,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                         router.visit(route('knowledge-base.index', { page: pagination.current_page }), { preserveScroll: true });
                     },
                     onError: () => {
-                        alert('Failed to delete knowledge base entry');
+                        toast.error('Failed to delete knowledge base entry');
                         setDeleting(null);
                         setLoading(false);
                     },
@@ -76,7 +78,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
             })
             .catch((error) => {
                 console.error('Search error:', error);
-                alert('Failed to search knowledge base. Please try again.');
+                toast.error('Failed to search knowledge base. Please try again.');
             })
             .finally(() => {
                 setSearching(false);

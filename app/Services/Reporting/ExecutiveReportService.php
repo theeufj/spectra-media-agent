@@ -4,7 +4,9 @@ namespace App\Services\Reporting;
 
 use App\Models\Customer;
 use App\Models\Campaign;
+use App\Models\AgentActivity;
 use App\Models\KeywordQualityScore;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\FacebookAdsPerformanceData;
 use App\Services\GeminiService;
@@ -35,6 +37,12 @@ class ExecutiveReportService
         $days = $period === 'monthly' ? 30 : 7;
         $startDate = now()->subDays($days)->toDateString();
         $endDate = now()->toDateString();
+
+        // For monthly reports, also gather prior period data for comparisons
+        $priorPeriodData = null;
+        if ($period === 'monthly') {
+            $priorPeriodData = $this->getPriorPeriodComparison($customer, $days);
+        }
 
         $campaigns = Campaign::where('customer_id', $customer->id)
             ->where(function ($q) {
@@ -70,6 +78,8 @@ class ExecutiveReportService
             'keyword_insights' => $keywordInsights,
             'quality_score_trends' => $qsTrends,
             'hourly_insights' => $hourlyInsights,
+            'prior_period' => $priorPeriodData,
+            'agent_activity_summary' => $this->getAgentActivitySummary($customer, $days),
             'generated_at' => now()->toIso8601String(),
         ];
 
@@ -255,6 +265,22 @@ class ExecutiveReportService
 
         $prompt .= "\nWrite a concise 3-4 paragraph executive summary covering: 1) Overall cross-platform performance, 2) Platform-specific highlights and concerns, 3) Key wins, 4) Recommended next steps. Be data-driven and specific.";
 
+        // Include agent activity context for richer narrative
+        $agentSummary = $report['agent_activity_summary'] ?? null;
+        if ($agentSummary && $agentSummary['total_actions'] > 0) {
+            $prompt .= "\n\nAutonomous Agent Activity This Period ({$agentSummary['total_actions']} total actions, {$agentSummary['completed']} completed):";
+            foreach ($agentSummary['by_agent'] ?? [] as $agent) {
+                $prompt .= "\n- {$agent['agent']} Agent: {$agent['total_actions']} actions";
+                foreach ($agent['key_actions'] as $action) {
+                    $prompt .= "\n  • {$action['description']}";
+                }
+            }
+            $prompt .= "\n\nIMPORTANT: In your summary, explain how these autonomous agent actions impacted the performance metrics. "
+                . "For example, 'CPA improved because the Search Term Mining agent added X negative keywords' or "
+                . "'Budget utilization improved after the Budget Intelligence agent shifted spend to peak hours.' "
+                . "This helps the client understand the value of the autonomous optimization.";
+        }
+
         try {
             $result = $this->gemini->generateContent(
                 'gemini-3-flash-preview',
@@ -358,6 +384,74 @@ class ExecutiveReportService
                 $googleSummary['total_campaigns'] > 0 ? 'google' : null,
                 $facebookSummary['total_campaigns'] > 0 ? 'facebook' : null,
             ]),
+        ];
+    }
+
+    /**
+     * Get prior period comparison data for month-over-month analysis.
+     */
+    protected function getPriorPeriodComparison(Customer $customer, int $days): array
+    {
+        $priorStart = now()->subDays($days * 2)->toDateString();
+        $priorEnd = now()->subDays($days)->toDateString();
+
+        $campaignIds = Campaign::where('customer_id', $customer->id)->pluck('id');
+
+        $priorGoogle = GoogleAdsPerformanceData::whereIn('campaign_id', $campaignIds)
+            ->whereBetween('date', [$priorStart, $priorEnd])
+            ->get();
+
+        $priorFacebook = FacebookAdsPerformanceData::whereIn('campaign_id', $campaignIds)
+            ->whereBetween('date', [$priorStart, $priorEnd])
+            ->get();
+
+        $priorSpend = round($priorGoogle->sum('cost') + $priorFacebook->sum('cost'), 2);
+        $priorClicks = $priorGoogle->sum('clicks') + $priorFacebook->sum('clicks');
+        $priorConversions = $priorGoogle->sum('conversions') + $priorFacebook->sum('conversions');
+        $priorImpressions = $priorGoogle->sum('impressions') + $priorFacebook->sum('impressions');
+
+        return [
+            'period' => ['start' => $priorStart, 'end' => $priorEnd],
+            'total_cost' => $priorSpend,
+            'total_clicks' => $priorClicks,
+            'total_conversions' => $priorConversions,
+            'total_impressions' => $priorImpressions,
+            'blended_ctr' => $priorImpressions > 0 ? round($priorClicks / $priorImpressions * 100, 2) : 0,
+            'blended_cpc' => $priorClicks > 0 ? round($priorSpend / $priorClicks, 2) : 0,
+            'blended_cpa' => $priorConversions > 0 ? round($priorSpend / $priorConversions, 2) : 0,
+        ];
+    }
+
+    /**
+     * Get agent activity summary for the report period.
+     */
+    protected function getAgentActivitySummary(Customer $customer, int $days): array
+    {
+        $activities = AgentActivity::where('customer_id', $customer->id)
+            ->where('created_at', '>=', now()->subDays($days))
+            ->get();
+
+        $byType = $activities->groupBy('agent_type')->map(function ($group, $type) {
+            return [
+                'agent' => $type,
+                'total_actions' => $group->count(),
+                'completed' => $group->where('status', 'completed')->count(),
+                'failed' => $group->where('status', 'failed')->count(),
+                'key_actions' => $group->where('status', 'completed')
+                    ->sortByDesc('created_at')
+                    ->take(3)
+                    ->map(fn($a) => [
+                        'action' => $a->action,
+                        'description' => $a->description,
+                        'date' => $a->created_at->toDateTimeString(),
+                    ])->values()->toArray(),
+            ];
+        })->values()->toArray();
+
+        return [
+            'total_actions' => $activities->count(),
+            'completed' => $activities->where('status', 'completed')->count(),
+            'by_agent' => $byType,
         ];
     }
 }

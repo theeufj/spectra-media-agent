@@ -4,18 +4,23 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class NegativeKeywordList extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'campaign_id',
-        'name',
+        'customer_id', 'name', 'keywords', 'applied_to_campaigns', 'created_by',
     ];
 
-    public function keywords()
+    protected $casts = [
+        'keywords' => 'array',
+        'applied_to_campaigns' => 'array',
+    ];
+
+    public function customer(): BelongsTo
     {
-        return $this->hasMany(NegativeKeyword::class);
+        return $this->belongsTo(Customer::class);
     }
 }

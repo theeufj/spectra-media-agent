@@ -1,16 +1,26 @@
 import React from 'react';
 import { router } from '@inertiajs/react';
 import DataTable from '@/Components/DataTable';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 const UserTable = ({ users, plans = [] }) => {
+    const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+
     const handlePromote = (userId) => {
         router.post(route('admin.users.promote', userId), {}, { preserveScroll: true });
     };
 
     const handleBanUser = (userId) => {
-        if (confirm('Are you sure you want to ban this user?')) {
-            router.post(route('admin.users.ban', userId), {}, { preserveScroll: true });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Ban User',
+            message: 'Are you sure you want to ban this user?',
+            isDestructive: true,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.post(route('admin.users.ban', userId), {}, { preserveScroll: true });
+            },
+        });
     };
 
     const handleUnbanUser = (userId) => {
@@ -18,15 +28,28 @@ const UserTable = ({ users, plans = [] }) => {
     };
 
     const handleDeleteUser = (userId) => {
-        if (confirm('Are you sure you want to permanently delete this user? This action cannot be undone.')) {
-            router.delete(route('admin.users.delete', userId), { preserveScroll: true });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Delete User',
+            message: 'Are you sure you want to permanently delete this user? This action cannot be undone.',
+            isDestructive: true,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.delete(route('admin.users.delete', userId), { preserveScroll: true });
+            },
+        });
     };
 
     const handleImpersonate = (userId) => {
-        if (confirm('You will be logged in as this user. Continue?')) {
-            router.post(route('admin.impersonation.start', userId));
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Impersonate User',
+            message: 'You will be logged in as this user. Continue?',
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.post(route('admin.impersonation.start', userId));
+            },
+        });
     };
 
     const handleAssignPlan = (userId, planId) => {
@@ -85,6 +108,14 @@ const UserTable = ({ users, plans = [] }) => {
                 <h3 className="text-lg font-medium text-gray-900 mb-4">User Management</h3>
                 <DataTable headers={userHeaders} data={userData} />
             </div>
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                isDestructive={confirmModal.isDestructive}
+            />
         </div>
     );
 };

@@ -1,12 +1,22 @@
 import React from 'react';
 import { router, Link } from '@inertiajs/react';
 import DataTable from '@/Components/DataTable';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 const CustomerTable = ({ customers, plans = [] }) => {
+    const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+
     const handleDeleteCustomer = (customerId) => {
-        if (confirm('Are you sure you want to delete this customer?')) {
-            router.delete(route('admin.customers.delete', customerId), { preserveScroll: true });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Delete Customer',
+            message: 'Are you sure you want to delete this customer?',
+            isDestructive: true,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.delete(route('admin.customers.delete', customerId), { preserveScroll: true });
+            },
+        });
     };
 
     const handleAssignPlan = (userId, planId) => {
@@ -62,6 +72,14 @@ const CustomerTable = ({ customers, plans = [] }) => {
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Customer List ({customers.length})</h3>
                 <DataTable headers={customerHeaders} data={customerData} />
             </div>
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                isDestructive={confirmModal.isDestructive}
+            />
         </div>
     );
 };

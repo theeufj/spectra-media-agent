@@ -8,6 +8,7 @@ use App\Notifications\DeploymentCompleted;
 use App\Notifications\DeploymentFailed;
 use App\Services\DeploymentService;
 use App\Services\AdSpendBillingService;
+use App\Jobs\VerifyDeployment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -171,6 +172,11 @@ class DeployCampaign implements ShouldQueue
             ['successful' => $successCount, 'failed' => $failureCount],
             $failureCount === 0 ? 'completed' : 'failed'
         );
+
+        // Dispatch verification job after 60s to confirm objects exist on platforms
+        if ($successCount > 0) {
+            VerifyDeployment::dispatch($this->campaign)->delay(now()->addSeconds(60));
+        }
     }
 
     /**

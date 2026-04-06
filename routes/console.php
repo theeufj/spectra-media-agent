@@ -13,6 +13,7 @@ use App\Jobs\CheckCampaignPolicyViolations;
 use App\Jobs\HourlyBudgetOptimization;
 use App\Jobs\GetKeywordQualityScore;
 use App\Jobs\GenerateExecutiveReport;
+use App\Jobs\GenerateMonthlyReport;
 use App\Jobs\SendDailyPerformanceReports;
 use App\Models\Customer;
 use App\Models\Campaign;
@@ -88,6 +89,47 @@ Schedule::call(function () {
         GenerateExecutiveReport::dispatch($customer->id, 'weekly');
     });
 })->weekly()->mondays()->at('07:00'); // Run Monday mornings
+
+// ============================================================
+// MONTHLY OPERATIONS
+// ============================================================
+
+// Monthly executive reports - detailed monthly performance summaries with PDF
+Schedule::call(function () {
+    Customer::whereHas('campaigns', function ($q) {
+        $q->where('platform_status', 'ENABLED');
+    })->each(function ($customer) {
+        GenerateMonthlyReport::dispatch($customer->id);
+    });
+})->monthlyOn(1, '07:00'); // Run 1st of each month at 7am
+
+// Cross-channel budget rebalance - check all auto-rebalance allocations
+Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->dailyAt('06:00');
+
+// CRM sync - sync offline conversions from connected CRMs
+Schedule::call(function () {
+    \App\Models\CrmIntegration::where('status', 'connected')->each(function ($integration) {
+        \App\Jobs\SyncCrmConversions::dispatch($integration->id);
+    });
+})->everyFourHours();
+
+// Product feed sync - sync Merchant Center product feeds
+Schedule::call(function () {
+    \App\Models\ProductFeed::where('status', 'active')
+        ->where(function ($q) {
+            $q->where('sync_frequency', 'hourly')
+              ->orWhere(function ($q2) {
+                  $q2->where('sync_frequency', 'daily')
+                     ->where(function ($q3) {
+                         $q3->whereNull('last_synced_at')
+                            ->orWhere('last_synced_at', '<', now()->subHours(20));
+                     });
+              });
+        })
+        ->each(function ($feed) {
+            \App\Jobs\SyncProductFeed::dispatch($feed->id);
+        });
+})->hourly();
 
 // ============================================================
 // SEO & MAINTENANCE

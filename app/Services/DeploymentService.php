@@ -9,6 +9,7 @@ use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\FacebookAdsExecutionAgent;
+use App\Services\Agents\MicrosoftAdsExecutionAgent;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
@@ -71,6 +72,10 @@ class DeploymentService
             // Create execution context
             $context = ExecutionContext::create($strategy, $campaign, $customer);
             
+            // Mark strategy as deploying
+            $strategy->deployment_status = 'deploying';
+            $strategy->save();
+
             // Execute with agent
             $result = $agent->execute($context);
             
@@ -86,6 +91,9 @@ class DeploymentService
             ];
             $strategy->execution_time = $result->executionTime;
             $strategy->execution_errors = $result->errors;
+            $strategy->deployment_status = $result->success ? 'deployed' : 'failed';
+            $strategy->deployment_error = $result->success ? null : implode('; ', array_map(fn($e) => is_string($e) ? $e : json_encode($e), $result->errors));
+            $strategy->deployed_at = $result->success ? now() : null;
             $strategy->save();
             
             if ($result->success) {
@@ -210,6 +218,7 @@ class DeploymentService
         return match (self::normalizePlatform($platform)) {
             'google' => new GoogleAdsExecutionAgent($customer),
             'facebook' => new FacebookAdsExecutionAgent($customer),
+            'microsoft' => new MicrosoftAdsExecutionAgent($customer),
             default => null
         };
     }
@@ -238,8 +247,12 @@ class DeploymentService
             return 'google';
         }
 
-        if (str_contains($normalized, 'facebook')) {
+        if (str_contains($normalized, 'facebook') || str_contains($normalized, 'meta')) {
             return 'facebook';
+        }
+
+        if (str_contains($normalized, 'microsoft') || str_contains($normalized, 'bing')) {
+            return 'microsoft';
         }
 
         return $normalized;

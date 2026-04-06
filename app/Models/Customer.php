@@ -34,6 +34,8 @@ class Customer extends Model
         'facebook_token_refreshed_at',
         'facebook_token_is_long_lived',
         'facebook_bm_owned',
+        'microsoft_ads_customer_id',
+        'microsoft_ads_account_id',
         'gtm_container_id',
         'gtm_account_id',
         'gtm_workspace_id',
@@ -45,6 +47,7 @@ class Customer extends Model
         'gtm_detected_at',
         'average_order_value',
         'agent_thresholds',
+        'report_branding',
     ];
 
     protected $casts = [
@@ -63,6 +66,7 @@ class Customer extends Model
         'google_ads_customer_is_manager' => 'boolean',
         'average_order_value' => 'float',
         'agent_thresholds' => 'array',
+        'report_branding' => 'array',
     ];
 
     /**

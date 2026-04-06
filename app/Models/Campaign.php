@@ -36,6 +36,7 @@ class Campaign extends Model
         'primary_status_reasons',
         'last_checked_at',
         'facebook_ads_campaign_id',
+        'microsoft_ads_campaign_id',
         'strategy_generation_started_at',
         'strategy_generation_completed_at',
         'strategy_generation_error',

@@ -3,6 +3,7 @@ import { Head, Link, usePage, useForm } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import SideNav from './SideNav';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 // Performance Stats Component
 const PerformanceStats = ({ stats, loading }) => {
@@ -49,6 +50,7 @@ export default function CampaignDetail({ auth }) {
     const [expandedStrategy, setExpandedStrategy] = useState(null);
     const [performanceData, setPerformanceData] = useState(null);
     const [performanceLoading, setPerformanceLoading] = useState(true);
+    const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
     const { data, setData, put, processing } = useForm({
         name: campaign.name,
@@ -90,15 +92,28 @@ export default function CampaignDetail({ auth }) {
     };
 
     const handlePause = () => {
-        if (confirm('Are you sure you want to pause this campaign?')) {
-            pausePost(route('admin.campaigns.pause', campaign.id));
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Pause Campaign',
+            message: 'Are you sure you want to pause this campaign?',
+            isDestructive: true,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                pausePost(route('admin.campaigns.pause', campaign.id));
+            },
+        });
     };
 
     const handleStart = () => {
-        if (confirm('Are you sure you want to start this campaign?')) {
-            startPost(route('admin.campaigns.start', campaign.id));
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Start Campaign',
+            message: 'Are you sure you want to start this campaign?',
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                startPost(route('admin.campaigns.start', campaign.id));
+            },
+        });
     };
 
     return (
@@ -390,6 +405,14 @@ export default function CampaignDetail({ auth }) {
                     </div>
                 </div>
             </div>
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                isDestructive={confirmModal.isDestructive}
+            />
         </AuthenticatedLayout>
     );
 }

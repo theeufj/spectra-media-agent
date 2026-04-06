@@ -9,10 +9,12 @@ import AdSpendSetupModal from '@/Components/AdSpendSetupModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import Modal from '@/Components/Modal';
 import AdPreviewPanel from '@/Components/AdPreview';
+import { useToast } from '@/Components/Toast';
 
 export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, managedBillingEnabled, adSpendCredit }) {
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
+    const toast = useToast();
     const [activeTab, setActiveTab] = useState(currentStrategy.platform);
     const [generatingAdCopy, setGeneratingAdCopy] = useState(false);
     const [generatingImage, setGeneratingImage] = useState(false);
@@ -111,7 +113,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     onError: (errors) => {
                         setGeneratingAdCopy(false);
                         setIsPolling(false);
-                        alert('Failed to generate ad copy: ' + (errors.platform || 'An unknown error occurred.'));
+                        toast.error('Failed to generate ad copy: ' + (errors.platform || 'An unknown error occurred.'));
                     },
                     preserveScroll: true,
                 });
@@ -133,7 +135,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     onError: (errors) => {
                         setGeneratingImage(false);
                         setIsPolling(false);
-                        alert('Failed to start image generation: ' + (errors.message || 'An unknown error occurred.'));
+                        toast.error('Failed to start image generation: ' + (errors.message || 'An unknown error occurred.'));
                     },
                     preserveScroll: true,
                 });
@@ -155,7 +157,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     onError: (errors) => {
                         setGeneratingVideo(false);
                         setIsPolling(false);
-                        alert('Failed to start video generation: ' + (errors.message || 'An unknown error occurred.'));
+                        toast.error('Failed to start video generation: ' + (errors.message || 'An unknown error occurred.'));
                     },
                     preserveScroll: true,
                 });
@@ -202,7 +204,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
         // Check if account is paused due to payment failure (only when managed billing is enabled)
         if (managedBillingEnabled && adSpendCredit?.status === 'paused') {
-            alert('Your ad spend billing is paused due to a payment issue. Please update your payment method in Billing → Ad Spend before deploying.');
+            toast.warning('Your ad spend billing is paused due to a payment issue. Please update your payment method in Billing → Ad Spend before deploying.');
             return;
         }
 
@@ -237,14 +239,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         }, {
             preserveScroll: true,
             onSuccess: (page) => {
-                alert('Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.');
+                toast.success('Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.');
             },
             onError: (errors) => {
                 console.error('Deployment errors:', errors);
                 if (errors.message) {
-                    alert(errors.message);
+                    toast.error(errors.message);
                 } else {
-                    alert('Deployment failed. Please check the console for details.');
+                    toast.error('Deployment failed. Please check the console for details.');
                 }
             },
         });
@@ -377,7 +379,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         e.stopPropagation();
                                                                         const copyText = `Headlines:\n${collateral.adCopy.headlines.join('\n')}\n\nDescriptions:\n${collateral.adCopy.descriptions.join('\n')}`;
                                                                         navigator.clipboard.writeText(copyText);
-                                                                        alert('Ad copy copied to clipboard!');
+                                                                        toast.success('Ad copy copied to clipboard!');
                                                                     }}
                                                                     className="px-3 py-1 text-xs font-medium text-flame-orange-600 bg-flame-orange-50 rounded-md hover:bg-flame-orange-100"
                                                                 >

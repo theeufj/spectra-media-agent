@@ -2,10 +2,12 @@ import React, { useState, Fragment } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import { Dialog, Transition } from '@headlessui/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit }) {
     const [isEditing, setIsEditing] = useState(false);
     const [activeSection, setActiveSection] = useState('overview');
+    const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
     
     const { data, setData, put, processing, errors } = useForm({
         brand_voice: brandGuideline?.brand_voice || { primary_tone: '', description: '', examples: [] },
@@ -37,11 +39,17 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
     };
 
     const handleReExtract = () => {
-        if (confirm('This will re-analyze your website and update the brand guidelines. Your manual edits will be preserved. Continue?')) {
-            router.post(route('brand-guidelines.re-extract'), {}, {
-                preserveScroll: true,
-            });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Re-analyze Website',
+            message: 'This will re-analyze your website and update the brand guidelines. Your manual edits will be preserved. Continue?',
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.post(route('brand-guidelines.re-extract'), {}, {
+                    preserveScroll: true,
+                });
+            },
+        });
     };
 
     const addArrayItem = (field, value = '') => {
@@ -1013,6 +1021,14 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                     </div>
                 </div>
             </div>
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                confirmText="Continue"
+            />
         </AuthenticatedLayout>
     );
 }

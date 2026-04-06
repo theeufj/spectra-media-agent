@@ -4,8 +4,9 @@ import NavLink from '@/Components/NavLink';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import NotificationBell from '@/Components/NotificationBell';
 import ImpersonationBanner from '@/Components/ImpersonationBanner';
+import { useToast } from '@/Components/Toast';
 import { Link, usePage, router } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Transition } from '@headlessui/react';
 
 function UserInitials({ name, className = '' }) {
@@ -75,9 +76,19 @@ export default function AuthenticatedLayout({ header, children }) {
     const user = usePage().props.auth.user;
     const activeCustomer = user.active_customer;
     const customers = user.customers || [];
+    const toast = useToast();
+    const lastFlashRef = useRef(null);
 
     const [mobileOpen, setMobileOpen] = useState(false);
-    const [showBanner, setShowBanner] = useState(true);
+
+    // Bridge Inertia flash messages to toast notifications
+    useEffect(() => {
+        if (flash?.message && flash.message !== lastFlashRef.current) {
+            lastFlashRef.current = flash.message;
+            const type = flash.type === 'success' ? 'success' : flash.type === 'warning' ? 'warning' : flash.type === 'info' ? 'info' : 'error';
+            toast[type](flash.message);
+        }
+    }, [flash?.message, flash?.type]);
 
     // Close mobile drawer on navigation
     useEffect(() => {
@@ -146,6 +157,46 @@ export default function AuthenticatedLayout({ header, children }) {
                                         <Dropdown.Link href={route('brand-guidelines.index')}>Brand Guidelines</Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
+
+                                {/* Keywords Dropdown */}
+                                <Dropdown>
+                                    <Dropdown.Trigger>
+                                        <NavDropdownButton active={route().current('keywords.*')}>
+                                            Keywords
+                                        </NavDropdownButton>
+                                    </Dropdown.Trigger>
+                                    <Dropdown.Content align="left">
+                                        <Dropdown.Link href={route('keywords.index')}>Portfolio</Dropdown.Link>
+                                        <Dropdown.Link href={route('keywords.research')}>Research</Dropdown.Link>
+                                        <Dropdown.Link href={route('keywords.competitor-gap')}>Competitor Gap</Dropdown.Link>
+                                        <Dropdown.Link href={route('keywords.negative-lists')}>Negative Lists</Dropdown.Link>
+                                    </Dropdown.Content>
+                                </Dropdown>
+
+                                {/* Budget Dropdown */}
+                                <Dropdown>
+                                    <Dropdown.Trigger>
+                                        <NavDropdownButton active={route().current('budget.*')}>
+                                            Budget
+                                        </NavDropdownButton>
+                                    </Dropdown.Trigger>
+                                    <Dropdown.Content align="left">
+                                        <Dropdown.Link href={route('budget.allocator')}>Allocator</Dropdown.Link>
+                                        <Dropdown.Link href={route('budget.history')}>History</Dropdown.Link>
+                                    </Dropdown.Content>
+                                </Dropdown>
+
+                                <NavLink href={route('reports.index')} active={route().current('reports.*')}>
+                                    Reports
+                                </NavLink>
+
+                                <NavLink href={route('integrations.index')} active={route().current('integrations.*')}>
+                                    Integrations
+                                </NavLink>
+
+                                <NavLink href={route('products.index')} active={route().current('products.*')}>
+                                    Products
+                                </NavLink>
 
                                 <NavLink href={route('support-tickets.index')} active={route().current('support-tickets.*')}>
                                     Support
@@ -381,6 +432,33 @@ export default function AuthenticatedLayout({ header, children }) {
                             </MobileNavLink>
                         </MobileNavSection>
 
+                        <MobileNavSection title="Keywords">
+                            <MobileNavLink
+                                href={route('keywords.index')}
+                                active={route().current('keywords.index')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" /></svg>}
+                            >
+                                Keyword Portfolio
+                            </MobileNavLink>
+                            <MobileNavLink
+                                href={route('keywords.research')}
+                                active={route().current('keywords.research')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
+                            >
+                                Research
+                            </MobileNavLink>
+                        </MobileNavSection>
+
+                        <MobileNavSection title="Reports">
+                            <MobileNavLink
+                                href={route('reports.index')}
+                                active={route().current('reports.*')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+                            >
+                                Performance Reports
+                            </MobileNavLink>
+                        </MobileNavSection>
+
                         <MobileNavSection title="Support & Setup">
                             <MobileNavLink
                                 href={route('support-tickets.index')}
@@ -486,19 +564,6 @@ export default function AuthenticatedLayout({ header, children }) {
                     </div>
                 </div>
             </Transition>
-
-            {/* ── Flash Banner ── */}
-            {flash?.message && showBanner && (
-                <div className={`relative ${flash.type === 'success' ? 'bg-green-500' : 'bg-red-500'} text-white text-center p-4`}>
-                    {flash.message}
-                    <button
-                        onClick={() => setShowBanner(false)}
-                        className="absolute top-1/2 right-4 -translate-y-1/2 text-white hover:text-gray-200 text-xl font-bold"
-                    >
-                        &times;
-                    </button>
-                </div>
-            )}
 
             {header && (
                 <header className="bg-white shadow-sm">

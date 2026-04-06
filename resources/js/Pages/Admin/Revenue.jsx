@@ -2,6 +2,7 @@ import React from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import SideNav from './SideNav';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 const MetricCard = ({ title, value, subtitle, icon, trend, color = 'flame' }) => {
     const colors = {
@@ -108,10 +109,16 @@ const TransactionRow = ({ transaction, onRefund }) => (
 );
 
 export default function Revenue({ metrics, recentTransactions, subscriptionBreakdown, monthlyRevenue }) {
+    const [confirmModal, setConfirmModal] = React.useState({ show: false, onConfirm: null });
+
     const handleRefund = (chargeId) => {
-        if (confirm('Are you sure you want to issue a full refund for this charge?')) {
-            router.post(route('admin.revenue.refund', chargeId), {}, { preserveScroll: true });
-        }
+        setConfirmModal({
+            show: true,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.post(route('admin.revenue.refund', chargeId), {}, { preserveScroll: true });
+            },
+        });
     };
 
     return (
@@ -270,6 +277,15 @@ export default function Revenue({ metrics, recentTransactions, subscriptionBreak
                     </div>
                 </div>
             </div>
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title="Issue Refund"
+                message="Are you sure you want to issue a full refund for this charge?"
+                isDestructive={true}
+                confirmText="Refund"
+            />
         </AuthenticatedLayout>
     );
 }

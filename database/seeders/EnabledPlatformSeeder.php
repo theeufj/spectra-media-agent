@@ -28,6 +28,13 @@ class EnabledPlatformSeeder extends Seeder
                 'is_enabled' => true,
                 'sort_order' => 2,
             ],
+            [
+                'name' => 'Microsoft',
+                'slug' => 'microsoft',
+                'description' => 'Microsoft Ads platform',
+                'is_enabled' => true,
+                'sort_order' => 3,
+            ],
         ];
 
         foreach ($platforms as $platform) {

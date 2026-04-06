@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SideNav from './SideNav';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 function AccountForm({ account, onClose, isEdit }) {
     const { data, setData, post, put, processing, errors } = useForm({
@@ -121,11 +122,20 @@ export default function MccAccounts({ accounts, usingEnvFallback, envCustomerId 
     const [showForm, setShowForm] = useState(false);
     const [editAccount, setEditAccount] = useState(null);
     const [confirmDelete, setConfirmDelete] = useState(null);
+    const [confirmActivate, setConfirmActivate] = useState({ show: false, account: null });
 
     const handleActivate = (account) => {
-        if (confirm(`Set "${account.name}" as the active MCC account? All new API calls will use this account.`)) {
-            router.post(route('admin.mcc-accounts.activate', account.id));
+        setConfirmActivate({
+            show: true,
+            account,
+        });
+    };
+
+    const doActivate = () => {
+        if (confirmActivate.account) {
+            router.post(route('admin.mcc-accounts.activate', confirmActivate.account.id));
         }
+        setConfirmActivate({ show: false, account: null });
     };
 
     const handleDelete = (account) => {
@@ -300,6 +310,15 @@ export default function MccAccounts({ accounts, usingEnvFallback, envCustomerId 
                     onClose={() => { setShowForm(false); setEditAccount(null); }}
                 />
             )}
+            <ConfirmationModal
+                show={confirmActivate.show}
+                onClose={() => setConfirmActivate({ show: false, account: null })}
+                onConfirm={doActivate}
+                title="Activate MCC Account"
+                message={`Set "${confirmActivate.account?.name}" as the active MCC account? All new API calls will use this account.`}
+                confirmText="Activate"
+                confirmButtonClass="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800"
+            />
         </AuthenticatedLayout>
     );
 }

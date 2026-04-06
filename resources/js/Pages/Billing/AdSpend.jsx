@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { useToast } from '@/Components/Toast';
 import { Head, router } from '@inertiajs/react';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
@@ -125,6 +126,7 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
 const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
     const [showPaymentForm, setShowPaymentForm] = useState(false);
     const [retrying, setRetrying] = useState(false);
+    const toast = useToast();
 
     const handleRetryPayment = async () => {
         setRetrying(true);
@@ -140,11 +142,11 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
             if (result.success) {
                 router.reload();
             } else {
-                alert(result.error || 'Payment retry failed. Please update your payment method.');
+                toast.error(result.error || 'Payment retry failed. Please update your payment method.');
                 setShowPaymentForm(true);
             }
         } catch (err) {
-            alert('An error occurred. Please try again.');
+            toast.error('An error occurred. Please try again.');
         }
         setRetrying(false);
     };

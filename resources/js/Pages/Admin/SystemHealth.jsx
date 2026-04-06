@@ -2,6 +2,7 @@ import React from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import SideNav from './SideNav';
+import ConfirmationModal from '@/Components/ConfirmationModal';
 
 const StatusBadge = ({ status }) => {
     const colors = {
@@ -75,6 +76,7 @@ const ApiCard = ({ api }) => {
 export default function SystemHealth({ health }) {
     const [healthData, setHealthData] = React.useState(health);
     const [refreshing, setRefreshing] = React.useState(false);
+    const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
     const refreshHealth = async () => {
         setRefreshing(true);
@@ -93,15 +95,29 @@ export default function SystemHealth({ health }) {
     };
 
     const handleDeleteJob = (jobId) => {
-        if (confirm('Are you sure you want to delete this failed job?')) {
-            router.delete(route('admin.health.delete-job', jobId), { preserveScroll: true });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Delete Failed Job',
+            message: 'Are you sure you want to delete this failed job?',
+            isDestructive: true,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.delete(route('admin.health.delete-job', jobId), { preserveScroll: true });
+            },
+        });
     };
 
     const handleFlushJobs = () => {
-        if (confirm('Are you sure you want to delete ALL failed jobs?')) {
-            router.post(route('admin.health.flush-jobs'), {}, { preserveScroll: true });
-        }
+        setConfirmModal({
+            show: true,
+            title: 'Delete All Failed Jobs',
+            message: 'Are you sure you want to delete ALL failed jobs?',
+            isDestructive: true,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.post(route('admin.health.flush-jobs'), {}, { preserveScroll: true });
+            },
+        });
     };
 
     return (
@@ -269,6 +285,14 @@ export default function SystemHealth({ health }) {
                     </div>
                 </div>
             </div>
+            <ConfirmationModal
+                show={confirmModal.show}
+                onClose={() => setConfirmModal(prev => ({ ...prev, show: false }))}
+                onConfirm={confirmModal.onConfirm}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                isDestructive={confirmModal.isDestructive}
+            />
         </AuthenticatedLayout>
     );
 }
