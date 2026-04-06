@@ -205,17 +205,20 @@ export default function AuthenticatedLayout({ header, children }) {
                                     Reports
                                 </NavLink>
 
-                                <NavLink href={route('integrations.index')} active={route().current('integrations.*')}>
-                                    Integrations
-                                </NavLink>
-
-                                <NavLink href={route('products.index')} active={route().current('products.*')}>
-                                    Products
-                                </NavLink>
-
-                                <NavLink href={route('support-tickets.index')} active={route().current('support-tickets.*')}>
-                                    Support
-                                </NavLink>
+                                {/* More Dropdown */}
+                                <Dropdown>
+                                    <Dropdown.Trigger>
+                                        <NavDropdownButton active={route().current('integrations.*') || route().current('products.*') || route().current('support-tickets.*') || route().current('analytics.*')}>
+                                            More
+                                        </NavDropdownButton>
+                                    </Dropdown.Trigger>
+                                    <Dropdown.Content align="left">
+                                        <Dropdown.Link href={route('analytics.index')}>Analytics</Dropdown.Link>
+                                        <Dropdown.Link href={route('integrations.index')}>Integrations</Dropdown.Link>
+                                        <Dropdown.Link href={route('products.index')}>Products</Dropdown.Link>
+                                        <Dropdown.Link href={route('support-tickets.index')}>Support</Dropdown.Link>
+                                    </Dropdown.Content>
+                                </Dropdown>
                             </div>
                         </div>
 
