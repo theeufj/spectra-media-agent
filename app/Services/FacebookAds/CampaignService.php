@@ -23,7 +23,7 @@ class CampaignService extends BaseFacebookAdsService
     {
         try {
             $response = $this->get("/act_{$accountId}/campaigns", [
-                'fields' => 'id,name,status,objective,daily_budget,lifetime_budget,start_time,end_time,created_time,updated_time',
+                'fields' => 'id,name,status,objective,daily_budget,lifetime_budget,start_time,created_time,updated_time',
             ]);
 
             if ($response && isset($response['data'])) {
@@ -133,7 +133,7 @@ class CampaignService extends BaseFacebookAdsService
     {
         try {
             $response = $this->get("/{$campaignId}", [
-                'fields' => 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time,end_time,issues_info',
+                'fields' => 'id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time,issues_info',
             ]);
 
             if ($response && isset($response['id'])) {
