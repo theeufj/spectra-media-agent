@@ -120,4 +120,14 @@ class VerifyDeployment implements ShouldQueue
 
         return false;
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('VerifyDeployment failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

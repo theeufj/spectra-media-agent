@@ -203,4 +203,14 @@ class DeployCampaign implements ShouldQueue
             }
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('DeployCampaign failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

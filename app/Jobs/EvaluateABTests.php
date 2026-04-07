@@ -92,4 +92,14 @@ class EvaluateABTests implements ShouldQueue
         $days = $test->started_at->diffInDays(now());
         return "{$days} days";
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('EvaluateABTests failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

@@ -187,4 +187,14 @@ class HourlyBudgetOptimization implements ShouldQueue
 
         return null;
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('HourlyBudgetOptimization failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

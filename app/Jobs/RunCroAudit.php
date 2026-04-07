@@ -70,4 +70,14 @@ class RunCroAudit implements ShouldQueue
             throw $e;
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('RunCroAudit failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

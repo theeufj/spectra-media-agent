@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AttributionConversion;
 use App\Models\AttributionTouchpoint;
+use App\Models\Customer;
 use App\Services\Attribution\AttributionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -14,8 +15,46 @@ use Illuminate\Support\Str;
 class TrackingController extends Controller
 {
     /**
+     * Verify the HMAC signature on a tracking request.
+     * The pixel must sign: customer_id + timestamp using the customer's signing secret.
+     */
+    protected function verifyTrackingSignature(Request $request): ?Customer
+    {
+        $signature = $request->header('X-Tracking-Signature');
+        $timestamp = $request->input('timestamp') ?? $request->header('X-Tracking-Timestamp');
+        $customerId = $request->input('customer_id');
+
+        if (!$signature || !$timestamp || !$customerId) {
+            return null;
+        }
+
+        // Reject if timestamp is more than 5 minutes old (replay protection)
+        try {
+            $requestTime = \Carbon\Carbon::parse($timestamp);
+            if ($requestTime->diffInMinutes(now(), absolute: true) > 5) {
+                return null;
+            }
+        } catch (\Exception $e) {
+            return null;
+        }
+
+        $customer = Customer::find($customerId);
+        if (!$customer || !$customer->tracking_signing_secret) {
+            return null;
+        }
+
+        $expectedSignature = hash_hmac('sha256', $customerId . '|' . $timestamp, $customer->tracking_signing_secret);
+
+        if (!hash_equals($expectedSignature, $signature)) {
+            return null;
+        }
+
+        return $customer;
+    }
+
+    /**
      * Record a touchpoint from the Spectra pixel.
-     * Public endpoint — rate-limited, no auth required.
+     * Public endpoint — rate-limited, HMAC-verified.
      */
     public function touchpoint(Request $request): JsonResponse
     {
@@ -25,6 +64,12 @@ class TrackingController extends Controller
             return response()->json(['error' => 'Too many requests'], 429);
         }
         RateLimiter::hit($key, 60);
+
+        // Verify HMAC signature
+        $customer = $this->verifyTrackingSignature($request);
+        if (!$customer) {
+            return response()->json(['error' => 'Invalid or missing tracking signature'], 403);
+        }
 
         $validated = $request->validate([
             'customer_id' => 'required|integer|exists:customers,id',
@@ -67,6 +112,12 @@ class TrackingController extends Controller
             return response()->json(['error' => 'Too many requests'], 429);
         }
         RateLimiter::hit($key, 60);
+
+        // Verify HMAC signature
+        $customer = $this->verifyTrackingSignature($request);
+        if (!$customer) {
+            return response()->json(['error' => 'Invalid or missing tracking signature'], 403);
+        }
 
         $validated = $request->validate([
             'customer_id' => 'required|integer|exists:customers,id',

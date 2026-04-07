@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Backlink analysis service.
@@ -28,6 +29,13 @@ class BacklinkAnalysisService
      * Analyze backlink profile for a domain.
      */
     public function analyze(string $domain): array
+    {
+        return Cache::remember('backlink_analysis:' . md5($domain), now()->addHours(24), function () use ($domain) {
+            return $this->performAnalysis($domain);
+        });
+    }
+
+    protected function performAnalysis(string $domain): array
     {
         Log::info('BacklinkAnalysis: Starting', ['customer_id' => $this->customer->id, 'domain' => $domain]);
 
@@ -75,30 +83,32 @@ class BacklinkAnalysisService
 
     protected function fetchFromMoz(string $domain, string $apiKey): array
     {
-        try {
-            $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $apiKey,
-            ])->post('https://lsapi.seomoz.com/v2/links', [
-                'target' => $domain,
-                'scope' => 'page',
-                'limit' => 100,
-            ]);
+        return Cache::remember('moz_backlinks:' . md5($domain), now()->addHours(24), function () use ($domain, $apiKey) {
+            try {
+                $response = Http::withHeaders([
+                    'Authorization' => 'Bearer ' . $apiKey,
+                ])->post('https://lsapi.seomoz.com/v2/links', [
+                    'target' => $domain,
+                    'scope' => 'page',
+                    'limit' => 100,
+                ]);
 
-            if (!$response->successful()) return [];
+                if (!$response->successful()) return [];
 
-            return collect($response->json('results', []))->map(fn ($link) => [
-                'source_url' => $link['source_page'] ?? '',
-                'source_domain' => parse_url($link['source_page'] ?? '', PHP_URL_HOST) ?: '',
-                'target_url' => $link['target_page'] ?? '',
-                'anchor_text' => $link['anchor_text'] ?? '',
-                'rel' => ($link['nofollow'] ?? false) ? 'nofollow' : 'dofollow',
-                'domain_authority' => $link['source_domain_authority'] ?? null,
-                'first_seen' => $link['first_seen'] ?? null,
-            ])->toArray();
-        } catch (\Exception $e) {
-            Log::debug('BacklinkAnalysis: Moz API failed', ['error' => $e->getMessage()]);
-            return [];
-        }
+                return collect($response->json('results', []))->map(fn ($link) => [
+                    'source_url' => $link['source_page'] ?? '',
+                    'source_domain' => parse_url($link['source_page'] ?? '', PHP_URL_HOST) ?: '',
+                    'target_url' => $link['target_page'] ?? '',
+                    'anchor_text' => $link['anchor_text'] ?? '',
+                    'rel' => ($link['nofollow'] ?? false) ? 'nofollow' : 'dofollow',
+                    'domain_authority' => $link['source_domain_authority'] ?? null,
+                    'first_seen' => $link['first_seen'] ?? null,
+                ])->toArray();
+            } catch (\Exception $e) {
+                Log::debug('BacklinkAnalysis: Moz API failed', ['error' => $e->getMessage()]);
+                return [];
+            }
+        });
     }
 
     /**

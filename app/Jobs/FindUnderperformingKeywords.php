@@ -54,4 +54,14 @@ class FindUnderperformingKeywords implements ShouldQueue
             ]);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('FindUnderperformingKeywords failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

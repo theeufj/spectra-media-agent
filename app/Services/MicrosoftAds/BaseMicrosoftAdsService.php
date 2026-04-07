@@ -3,6 +3,7 @@
 namespace App\Services\MicrosoftAds;
 
 use App\Models\Customer;
+use App\Services\Agents\Traits\RetryableApiOperation;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -14,6 +15,9 @@ use Illuminate\Support\Facades\Log;
  */
 abstract class BaseMicrosoftAdsService
 {
+    use RetryableApiOperation;
+
+    protected string $platform = 'microsoft_ads';
     protected ?string $accessToken = null;
     protected Customer $customer;
     protected array $config;
@@ -129,5 +133,29 @@ abstract class BaseMicrosoftAdsService
             Log::error("Microsoft Ads Reporting error: {$operation}", ['error' => $e->getMessage()]);
             return null;
         }
+    }
+
+    /**
+     * Make an API call with automatic retry and circuit breaker protection.
+     */
+    protected function apiCallWithRetry(string $operation, array $body): ?array
+    {
+        return $this->executeWithRetry(
+            fn () => $this->apiCall($operation, $body),
+            $operation,
+            ['customer_id' => $this->customer->id]
+        );
+    }
+
+    /**
+     * Make a reporting call with automatic retry and circuit breaker protection.
+     */
+    protected function reportingCallWithRetry(string $operation, array $body): ?array
+    {
+        return $this->executeWithRetry(
+            fn () => $this->reportingCall($operation, $body),
+            "reporting_{$operation}",
+            ['customer_id' => $this->customer->id]
+        );
     }
 }

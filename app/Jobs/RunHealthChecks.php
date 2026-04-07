@@ -38,7 +38,12 @@ class RunHealthChecks implements ShouldQueue
     /**
      * The number of times the job may be attempted.
      */
-    public int $tries = 1;
+    public int $tries = 3;
+
+    /**
+     * The backoff times in seconds between retries.
+     */
+    public array $backoff = [60, 300];
 
     /**
      * The maximum time in seconds the job can run.

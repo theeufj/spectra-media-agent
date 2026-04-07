@@ -3,10 +3,14 @@
 namespace App\Services\FacebookAds;
 
 use App\Models\Customer;
+use App\Services\Agents\Traits\RetryableApiOperation;
 use Illuminate\Support\Facades\Log;
 
 abstract class BaseFacebookAdsService
 {
+    use RetryableApiOperation;
+
+    protected string $platform = 'facebook';
     protected ?string $accessToken = null;
     protected ?Customer $customer = null;
     protected string $apiVersion = 'v22.0';
@@ -186,5 +190,29 @@ abstract class BaseFacebookAdsService
     protected function getBaseUrl(): string
     {
         return $this->graphApiUrl . '/' . $this->apiVersion;
+    }
+
+    /**
+     * Make a GET request with automatic retry and circuit breaker protection.
+     */
+    protected function getWithRetry(string $endpoint, array $params = [], string $operationName = 'graph_get'): ?array
+    {
+        return $this->executeWithRetry(
+            fn () => $this->get($endpoint, $params),
+            $operationName,
+            ['endpoint' => $endpoint, 'customer_id' => $this->customer->id ?? null]
+        );
+    }
+
+    /**
+     * Make a POST request with automatic retry and circuit breaker protection.
+     */
+    protected function postWithRetry(string $endpoint, array $data = [], string $operationName = 'graph_post'): ?array
+    {
+        return $this->executeWithRetry(
+            fn () => $this->post($endpoint, $data),
+            $operationName,
+            ['endpoint' => $endpoint, 'customer_id' => $this->customer->id ?? null]
+        );
     }
 }

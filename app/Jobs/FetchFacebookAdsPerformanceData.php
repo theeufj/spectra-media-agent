@@ -149,4 +149,14 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
             Log::warning("Could not acquire lock or circuit breaker is open for campaign {$this->campaign->id}");
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('FetchFacebookAdsPerformanceData failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

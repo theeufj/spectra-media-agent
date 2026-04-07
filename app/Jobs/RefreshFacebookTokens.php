@@ -155,4 +155,14 @@ class RefreshFacebookTokens implements ShouldQueue
             Log::error('Failed to send token expired notification: ' . $e->getMessage());
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('RefreshFacebookTokens failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

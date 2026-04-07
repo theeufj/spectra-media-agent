@@ -21,6 +21,21 @@ use App\Jobs\FetchMicrosoftAdsPerformanceData;
 use App\Jobs\FetchLinkedInAdsPerformanceData;
 use App\Models\Customer;
 use App\Models\Campaign;
+use App\Models\User;
+use App\Notifications\ScheduledJobFailed;
+
+/**
+ * Notify admin users when a critical scheduled job fails.
+ */
+function notifyAdminOnFailure(string $jobName): \Closure
+{
+    return function () use ($jobName) {
+        $admins = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new ScheduledJobFailed($jobName, 'Scheduled execution failed'));
+        }
+    };
+}
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -31,14 +46,14 @@ Artisan::command('inspire', function () {
 // ============================================================
 
 // Campaign status monitoring - checks if campaigns are approved/live
-Schedule::job(new MonitorCampaignStatus)->hourly();
+Schedule::job(new MonitorCampaignStatus)->hourly()->withoutOverlapping();
 
 // Hourly budget optimization - applies learned per-account multipliers and snapshots performance
-Schedule::job(new HourlyBudgetOptimization)->hourly();
+Schedule::job(new HourlyBudgetOptimization)->hourly()->withoutOverlapping();
 
 // Proactive health checks - API connectivity, token validity, delivery issues
 // Runs every 6 hours to catch issues early
-Schedule::job(new RunHealthChecks)->everySixHours();
+Schedule::job(new RunHealthChecks)->everySixHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunHealthChecks'));
 
 // Performance data fetch - pull metrics from all ad platforms for active campaigns
 Schedule::call(function () {
@@ -56,30 +71,30 @@ Schedule::call(function () {
             FetchLinkedInAdsPerformanceData::dispatch($campaign);
         }
     });
-})->hourly();
+})->hourly()->withoutOverlapping();
 
 // ============================================================
 // DAILY OPERATIONS
 // ============================================================
 
 // AI-powered optimization analysis - reviews performance and suggests improvements
-Schedule::job(new OptimizeCampaigns)->daily();
+Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(notifyAdminOnFailure('OptimizeCampaigns'));
 
 // Autonomous campaign maintenance - self-healing, keyword mining, budget intelligence
-Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00'); // Run during low-traffic hours
+Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('AutomatedCampaignMaintenance'));
 
 // Daily ad spend billing - bills customers for yesterday's spend, handles failures
-Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00'); // Run after ad networks finalize spend
+Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ProcessDailyAdSpendBilling'));
 
 // Daily performance email - send yesterday's metrics summary to all users
-Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00'); // Run after perf data is fetched
+Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00')->withoutOverlapping();
 
 // Policy compliance checks - detects disapprovals and policy violations
 Schedule::call(function () {
     \App\Models\Campaign::where('platform_status', 'ENABLED')->each(function ($campaign) {
         CheckCampaignPolicyViolations::dispatch($campaign->id);
     });
-})->daily();
+})->daily()->withoutOverlapping();
 
 // Keyword Quality Score tracking - captures daily QS snapshots for trending
 Schedule::call(function () {
@@ -88,7 +103,7 @@ Schedule::call(function () {
         ->each(function ($campaign) {
             GetKeywordQualityScore::dispatch($campaign->id);
         });
-})->daily();
+})->daily()->withoutOverlapping();
 
 // ============================================================
 // WEEKLY OPERATIONS
@@ -101,7 +116,7 @@ Schedule::call(function () {
     })->each(function ($customer) {
         RunCompetitorIntelligence::dispatch($customer);
     });
-})->weekly()->sundays()->at('02:00'); // Run Sunday nights
+})->weekly()->sundays()->at('02:00')->withoutOverlapping(); // Run Sunday nights
 
 // Weekly executive reports - AI-generated performance summaries per customer
 Schedule::call(function () {
@@ -110,7 +125,7 @@ Schedule::call(function () {
     })->each(function ($customer) {
         GenerateExecutiveReport::dispatch($customer->id, 'weekly');
     });
-})->weekly()->mondays()->at('07:00'); // Run Monday mornings
+})->weekly()->mondays()->at('07:00')->withoutOverlapping(); // Run Monday mornings
 
 // ============================================================
 // MONTHLY OPERATIONS
@@ -123,17 +138,17 @@ Schedule::call(function () {
     })->each(function ($customer) {
         GenerateMonthlyReport::dispatch($customer->id);
     });
-})->monthlyOn(1, '07:00'); // Run 1st of each month at 7am
+})->monthlyOn(1, '07:00')->withoutOverlapping(); // Run 1st of each month at 7am
 
 // Cross-channel budget rebalance - check all auto-rebalance allocations
-Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->dailyAt('06:00');
+Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->dailyAt('06:00')->withoutOverlapping();
 
 // CRM sync - sync offline conversions from connected CRMs
 Schedule::call(function () {
     \App\Models\CrmIntegration::where('status', 'connected')->each(function ($integration) {
         \App\Jobs\SyncCrmConversions::dispatch($integration->id);
     });
-})->everyFourHours();
+})->everyFourHours()->withoutOverlapping();
 
 // Product feed sync - sync Merchant Center product feeds
 Schedule::call(function () {
@@ -151,7 +166,7 @@ Schedule::call(function () {
         ->each(function ($feed) {
             \App\Jobs\SyncProductFeed::dispatch($feed->id);
         });
-})->hourly();
+})->hourly()->withoutOverlapping();
 
 // ============================================================
 // SEO & MAINTENANCE
@@ -159,4 +174,7 @@ Schedule::call(function () {
 
 // Sitemap is maintained as a static file in public/sitemap.xml
 // and committed to version control. No need to regenerate dynamically.
+
+// Weekly cleanup - remove expired proposals and temp files
+Schedule::job(new \App\Jobs\CleanupTemporaryFiles)->weeklyOn(0, '03:00')->withoutOverlapping();
 

@@ -100,4 +100,14 @@ class GenerateExecutiveReport implements ShouldQueue
         $history = array_slice($history, 0, 24);
         Cache::put($key, $history, now()->addDays(365));
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateExecutiveReport failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

@@ -117,4 +117,14 @@ class CheckCampaignPolicyViolations implements ShouldQueue
             }
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('CheckCampaignPolicyViolations failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

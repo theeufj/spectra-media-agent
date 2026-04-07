@@ -199,4 +199,14 @@ class GenerateVideo implements ShouldQueue
             $this->fail($e);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateVideo failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

@@ -45,4 +45,14 @@ class RunSeoAudit implements ShouldQueue
             ]);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('RunSeoAudit failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

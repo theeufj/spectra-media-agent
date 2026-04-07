@@ -50,4 +50,14 @@ class SyncProductFeed implements ShouldQueue
             ]);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('SyncProductFeed failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

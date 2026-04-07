@@ -196,4 +196,14 @@ class GenerateProposal implements ShouldQueue
 
         return null;
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateProposal failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

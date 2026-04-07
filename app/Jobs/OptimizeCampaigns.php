@@ -110,4 +110,14 @@ class OptimizeCampaigns implements ShouldQueue
             }
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('OptimizeCampaigns failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

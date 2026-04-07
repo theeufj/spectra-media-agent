@@ -286,4 +286,14 @@ class MonitorCampaignStatus implements ShouldQueue
             default => 'UNKNOWN',
         };
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('MonitorCampaignStatus failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

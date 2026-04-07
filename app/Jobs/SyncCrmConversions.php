@@ -88,4 +88,14 @@ class SyncCrmConversions implements ShouldQueue
             ]);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('SyncCrmConversions failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Http\Requests\AddAdSpendCreditRequest;
+use App\Http\Requests\SetupAdSpendBillingRequest;
 use App\Services\AdSpendBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +25,7 @@ class AdSpendBillingController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $customer = $user->customers()->first();
+        $customer = $this->getActiveCustomer($request);
 
         if (!$customer) {
             return Inertia::render('Billing/AdSpend', [
@@ -79,7 +81,7 @@ class AdSpendBillingController extends Controller
     public function getBalance(Request $request)
     {
         $user = $request->user();
-        $customer = $user->customers()->first();
+        $customer = $this->getActiveCustomer($request);
 
         if (!$customer || !$customer->adSpendCredit) {
             return response()->json([
@@ -110,7 +112,7 @@ class AdSpendBillingController extends Controller
     public function getTransactions(Request $request)
     {
         $user = $request->user();
-        $customer = $user->customers()->first();
+        $customer = $this->getActiveCustomer($request);
 
         if (!$customer || !$customer->adSpendCredit) {
             return response()->json([
@@ -132,14 +134,11 @@ class AdSpendBillingController extends Controller
     /**
      * Add credit to account (manual top-up).
      */
-    public function addCredit(Request $request)
+    public function addCredit(AddAdSpendCreditRequest $request)
     {
-        $request->validate([
-            'amount' => 'required|numeric|min:50|max:10000',
-        ]);
 
         $user = $request->user();
-        $customer = $user->customers()->first();
+        $customer = $this->getActiveCustomer($request);
 
         if (!$customer) {
             return response()->json([
@@ -180,7 +179,7 @@ class AdSpendBillingController extends Controller
     public function retryPayment(Request $request)
     {
         $user = $request->user();
-        $customer = $user->customers()->first();
+        $customer = $this->getActiveCustomer($request);
 
         if (!$customer || !$customer->adSpendCredit) {
             return response()->json([
@@ -245,7 +244,7 @@ class AdSpendBillingController extends Controller
 
             // If retry payment flag is set, also retry the failed payment
             if ($request->retry_payment) {
-                $customer = $user->customers()->first();
+                $customer = $this->getActiveCustomer($request);
                 
                 if ($customer && $customer->adSpendCredit) {
                     $credit = $customer->adSpendCredit;
@@ -296,15 +295,11 @@ class AdSpendBillingController extends Controller
      * Set up ad spend billing during deployment (first time setup).
      * This creates the credit account and charges the initial 7-day credit.
      */
-    public function setupForDeployment(Request $request)
+    public function setupForDeployment(SetupAdSpendBillingRequest $request)
     {
-        $request->validate([
-            'payment_method_id' => 'required|string',
-            'daily_budget' => 'required|numeric|min:1',
-        ]);
 
         $user = $request->user();
-        $customer = $user->customers()->first();
+        $customer = $this->getActiveCustomer($request);
 
         if (!$customer) {
             return response()->json([

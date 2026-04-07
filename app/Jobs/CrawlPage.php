@@ -411,4 +411,14 @@ class CrawlPage implements ShouldQueue
 
         return 'general';
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('CrawlPage failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

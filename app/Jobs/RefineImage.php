@@ -116,4 +116,14 @@ class RefineImage implements ShouldQueue
         $parts = explode('/', $mimeType);
         return end($parts) ?: 'png';
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('RefineImage failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

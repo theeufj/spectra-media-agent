@@ -243,4 +243,14 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
             return '';
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('ProcessKnowledgeBaseFile failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

@@ -49,6 +49,7 @@ class Customer extends Model
         'average_order_value',
         'agent_thresholds',
         'report_branding',
+        'tracking_signing_secret',
     ];
 
     protected $casts = [
@@ -72,6 +73,7 @@ class Customer extends Model
 
     protected $hidden = [
         'facebook_ads_access_token',
+        'tracking_signing_secret',
     ];
 
     /**

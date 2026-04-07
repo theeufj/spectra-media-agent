@@ -173,4 +173,14 @@ class RunCompetitorIntelligence implements ShouldQueue
             'summary' => $summary,
         ]);
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('RunCompetitorIntelligence failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

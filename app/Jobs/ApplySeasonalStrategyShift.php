@@ -166,4 +166,14 @@ class ApplySeasonalStrategyShift implements ShouldQueue
         // Update the campaign record
         $campaign->update(['daily_budget' => $newDailyBudget]);
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('ApplySeasonalStrategyShift failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

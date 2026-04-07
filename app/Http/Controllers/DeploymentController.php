@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\DeployCampaign;
+use App\Http\Requests\DeployCollateralRequest;
 use App\Models\Campaign;
 use App\Models\Setting;
 use Illuminate\Http\Request;
@@ -16,17 +17,14 @@ class DeploymentController extends Controller
      * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
-    public function toggleCollateral(Request $request)
+    public function toggleCollateral(DeployCollateralRequest $request)
     {
         Log::info('🔄 Toggle collateral called', [
             'user_id' => auth()->id(),
             'request_data' => $request->all(),
         ]);
 
-        $validated = $request->validate([
-            'type' => 'required|string|in:ad_copy,image,video',
-            'id' => 'required|integer',
-        ]);
+        $validated = $request->validated();
 
         $modelClass = match ($validated['type']) {
             'ad_copy' => \App\Models\AdCopy::class,
@@ -50,7 +48,7 @@ class DeploymentController extends Controller
         }
 
         $customer = $campaign->customer;
-        if (!$customer || $customer->user_id !== auth()->id()) {
+        if (!$customer || !$request->user()->customers()->where('customers.id', $customer->id)->exists()) {
             return response()->json(['message' => 'Unauthorized'], 403);
         }
 

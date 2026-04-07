@@ -5,6 +5,7 @@ namespace App\Observers;
 use App\Jobs\ScrapeCustomerWebsite;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class CustomerObserver
 {
@@ -17,6 +18,11 @@ class CustomerObserver
      */
     public function created(Customer $customer): void
     {
+        // Auto-generate tracking signing secret for HMAC pixel verification
+        if (!$customer->tracking_signing_secret) {
+            $customer->updateQuietly(['tracking_signing_secret' => Str::random(64)]);
+        }
+
         if ($customer->website) {
             Log::info('New customer created with website - dispatching scrape job', [
                 'customer_id' => $customer->id,

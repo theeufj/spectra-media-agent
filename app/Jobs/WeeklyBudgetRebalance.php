@@ -53,4 +53,14 @@ class WeeklyBudgetRebalance implements ShouldQueue
             }
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('WeeklyBudgetRebalance failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

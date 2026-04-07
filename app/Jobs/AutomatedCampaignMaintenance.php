@@ -125,4 +125,14 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
         Log::info("AutomatedCampaignMaintenance: Completed daily maintenance", $summary);
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('AutomatedCampaignMaintenance failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

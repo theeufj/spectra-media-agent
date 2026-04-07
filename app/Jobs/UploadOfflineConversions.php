@@ -323,4 +323,14 @@ class UploadOfflineConversions implements ShouldQueue
         }
         return 'Unknown error';
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('UploadOfflineConversions failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

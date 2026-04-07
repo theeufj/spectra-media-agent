@@ -120,4 +120,14 @@ class GenerateStrategyCollateral implements ShouldQueue
         
         return true;
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateStrategyCollateral failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

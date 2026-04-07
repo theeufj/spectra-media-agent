@@ -27,6 +27,40 @@ Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privac
 
 /*
 |--------------------------------------------------------------------------
+| Health Check (Public — no auth, used by load balancers)
+|--------------------------------------------------------------------------
+*/
+Route::get('/health', function () {
+    $status = 'ok';
+    $checks = [];
+
+    // Database check
+    try {
+        \Illuminate\Support\Facades\DB::connection()->getPdo();
+        $checks['database'] = 'ok';
+    } catch (\Throwable $e) {
+        $checks['database'] = 'failed';
+        $status = 'degraded';
+    }
+
+    // Redis/Cache check
+    try {
+        \Illuminate\Support\Facades\Cache::store()->put('health_check', true, 10);
+        $checks['cache'] = 'ok';
+    } catch (\Throwable $e) {
+        $checks['cache'] = 'failed';
+        $status = 'degraded';
+    }
+
+    return response()->json([
+        'status' => $status,
+        'timestamp' => now()->toIso8601String(),
+        'checks' => $checks,
+    ], $status === 'ok' ? 200 : 503);
+})->name('health');
+
+/*
+|--------------------------------------------------------------------------
 | Free Audit Routes (Public — no auth required)
 |--------------------------------------------------------------------------
 */

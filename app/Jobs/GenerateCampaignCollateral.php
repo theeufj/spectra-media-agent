@@ -128,4 +128,14 @@ class GenerateCampaignCollateral implements ShouldQueue
         
         return true;
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateCampaignCollateral failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

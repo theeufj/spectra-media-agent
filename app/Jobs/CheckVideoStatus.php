@@ -92,4 +92,14 @@ class CheckVideoStatus implements ShouldQueue
             Log::info("--- CheckVideoStatus Job Failed for VideoCollateral ID: {$this->videoCollateral->id} ---");
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('CheckVideoStatus failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

@@ -82,4 +82,14 @@ class ExtendVideo implements ShouldQueue
             $this->fail($e);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('ExtendVideo failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

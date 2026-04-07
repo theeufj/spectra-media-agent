@@ -602,6 +602,61 @@ PROMPT;
                     'details' => sprintf('CTR dropped from %.2f%% to %.2f%% over 30 days', $firstCtr, $secondCtr),
                     'suggestion' => 'Refresh ad copy and test new headlines/descriptions',
                 ];
+
+                // Generate fresh ad copy variations via Gemini
+                try {
+                    $customer = $campaign->customer;
+                    $brandContext = '';
+                    if ($customer->brandGuideline) {
+                        $brandContext = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
+                    }
+
+                    $headlinePrompt = <<<PROMPT
+Generate 5 new headline variations for Microsoft Ads (Bing Ads) for business: {$customer->name} ({$customer->business_type}).
+{$brandContext}
+The campaign is experiencing creative fatigue (CTR dropped from {$firstCtr}% to {$secondCtr}%).
+
+Requirements:
+1. Maximum 30 characters each
+2. Fresh angles to combat ad fatigue
+3. Include strong CTAs and value propositions
+4. Suitable for Microsoft/Bing search audience (typically older, professional)
+
+Return as JSON array of strings:
+["headline 1", "headline 2", "headline 3", "headline 4", "headline 5"]
+PROMPT;
+
+                    $headlineResponse = $this->gemini->generateContent(
+                        'gemini-3-flash-preview',
+                        $headlinePrompt,
+                        ['responseMimeType' => 'application/json']
+                    );
+
+                    $descriptionPrompt = <<<PROMPT
+Generate 3 new description variations for Microsoft Ads (Bing Ads) for business: {$customer->name} ({$customer->business_type}).
+{$brandContext}
+Requirements:
+1. Maximum 90 characters each
+2. Benefits-focused with clear CTA
+3. Fresh messaging to combat creative fatigue
+
+Return as JSON array of strings:
+["description 1", "description 2", "description 3"]
+PROMPT;
+
+                    $descResponse = $this->gemini->generateContent(
+                        'gemini-3-flash-preview',
+                        $descriptionPrompt,
+                        ['responseMimeType' => 'application/json']
+                    );
+
+                    $results['creative_variations']['microsoft_ads'] = [
+                        'headlines' => isset($headlineResponse['text']) ? (json_decode($headlineResponse['text'], true) ?? []) : [],
+                        'descriptions' => isset($descResponse['text']) ? (json_decode($descResponse['text'], true) ?? []) : [],
+                    ];
+                } catch (\Exception $e) {
+                    Log::debug('CreativeIntelligenceAgent: Gemini variation generation failed for Microsoft', ['error' => $e->getMessage()]);
+                }
             }
 
             $results['microsoft_ads_summary'] = [
@@ -665,6 +720,63 @@ PROMPT;
                     'details' => sprintf('CTR dropped from %.2f%% to %.2f%% over 30 days', $firstCtr, $secondCtr),
                     'suggestion' => 'Rotate creative assets and test new messaging angles for B2B audience',
                 ];
+
+                // Generate fresh B2B ad copy variations via Gemini
+                try {
+                    $customer = $campaign->customer;
+                    $brandContext = '';
+                    if ($customer->brandGuideline) {
+                        $brandContext = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
+                    }
+
+                    $headlinePrompt = <<<PROMPT
+Generate 5 new headline variations for LinkedIn Ads for B2B business: {$customer->name} ({$customer->business_type}).
+{$brandContext}
+The campaign is experiencing creative fatigue (CTR dropped from {$firstCtr}% to {$secondCtr}%).
+
+Requirements:
+1. Maximum 70 characters each (LinkedIn Sponsored Content limit)
+2. Professional B2B tone
+3. Focus on thought leadership, ROI, and business outcomes
+4. Fresh angles to combat ad fatigue
+5. Suitable for LinkedIn's professional audience
+
+Return as JSON array of strings:
+["headline 1", "headline 2", "headline 3", "headline 4", "headline 5"]
+PROMPT;
+
+                    $headlineResponse = $this->gemini->generateContent(
+                        'gemini-3-flash-preview',
+                        $headlinePrompt,
+                        ['responseMimeType' => 'application/json']
+                    );
+
+                    $descriptionPrompt = <<<PROMPT
+Generate 3 new introductory text variations for LinkedIn Sponsored Content for B2B business: {$customer->name} ({$customer->business_type}).
+{$brandContext}
+Requirements:
+1. Maximum 150 characters each
+2. Professional B2B messaging with clear value proposition
+3. Strong CTA (Learn More, Get Started, Download)
+4. Fresh messaging to combat creative fatigue
+
+Return as JSON array of strings:
+["intro text 1", "intro text 2", "intro text 3"]
+PROMPT;
+
+                    $descResponse = $this->gemini->generateContent(
+                        'gemini-3-flash-preview',
+                        $descriptionPrompt,
+                        ['responseMimeType' => 'application/json']
+                    );
+
+                    $results['creative_variations']['linkedin_ads'] = [
+                        'headlines' => isset($headlineResponse['text']) ? (json_decode($headlineResponse['text'], true) ?? []) : [],
+                        'descriptions' => isset($descResponse['text']) ? (json_decode($descResponse['text'], true) ?? []) : [],
+                    ];
+                } catch (\Exception $e) {
+                    Log::debug('CreativeIntelligenceAgent: Gemini variation generation failed for LinkedIn', ['error' => $e->getMessage()]);
+                }
             }
 
             $results['linkedin_ads_summary'] = [

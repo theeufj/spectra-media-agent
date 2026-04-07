@@ -27,6 +27,7 @@ use App\Models\GoogleAdsPerformanceData;
 use App\Prompts\OptimizationPrompt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Laravel\Pennant\Feature;
 
 /**
  * CampaignOptimizationAgent
@@ -642,6 +643,16 @@ class CampaignOptimizationAgent
      */
     public function applyRecommendation(Campaign $campaign, array $recommendation): array
     {
+        // Gate mutations behind feature flag
+        $customer = $campaign->customer;
+        if ($customer && !Feature::for($customer)->active('auto_optimization')) {
+            return [
+                'applied' => false,
+                'message' => 'Auto-optimization is disabled for this customer (feature flag: auto_optimization)',
+                'recommendation' => $recommendation,
+            ];
+        }
+
         $type = $recommendation['type'] ?? null;
         
         if (!$type) {

@@ -58,4 +58,14 @@ class RunAccountAudit implements ShouldQueue
             throw $e;
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('RunAccountAudit failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

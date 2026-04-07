@@ -178,4 +178,14 @@ class GenerateAdCopy implements ShouldQueue
             $this->fail($e);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateAdCopy failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

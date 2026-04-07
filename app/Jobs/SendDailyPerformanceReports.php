@@ -64,4 +64,14 @@ class SendDailyPerformanceReports implements ShouldQueue
 
         Log::info("Daily performance reports complete: {$sent} emails queued across {$customers->count()} customers");
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('SendDailyPerformanceReports failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

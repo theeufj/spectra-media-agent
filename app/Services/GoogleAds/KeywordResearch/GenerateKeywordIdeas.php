@@ -10,6 +10,7 @@ use Google\Ads\GoogleAds\V22\Services\UrlSeed;
 use Google\Ads\GoogleAds\V22\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
 use Google\ApiCore\ApiException;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Cache;
 
 class GenerateKeywordIdeas extends BaseGoogleAdsService
 {
@@ -36,6 +37,22 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
         ?string $language = null,
         array $geoTargets = [],
         int $pageSize = 50
+    ): array {
+        // Cache keyword ideas for 24 hours to avoid redundant API calls
+        $cacheKey = 'keyword_ideas:' . $customerId . ':' . md5(json_encode($seedKeywords) . $url . $language . json_encode($geoTargets) . $pageSize);
+        
+        return Cache::remember($cacheKey, now()->addHours(24), function () use ($customerId, $seedKeywords, $url, $language, $geoTargets, $pageSize) {
+            return $this->fetchKeywordIdeas($customerId, $seedKeywords, $url, $language, $geoTargets, $pageSize);
+        });
+    }
+
+    protected function fetchKeywordIdeas(
+        string $customerId,
+        array $seedKeywords,
+        ?string $url,
+        ?string $language,
+        array $geoTargets,
+        int $pageSize
     ): array {
         $this->ensureClient();
 

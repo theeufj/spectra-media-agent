@@ -82,4 +82,14 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
 
         Log::info('ProcessDailyAdSpendBilling: Completed daily billing run', $results);
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('ProcessDailyAdSpendBilling failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

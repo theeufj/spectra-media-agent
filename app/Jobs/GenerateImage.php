@@ -225,4 +225,14 @@ class GenerateImage implements ShouldQueue
         $parts = explode('/', $mimeType);
         return end($parts) ?: 'png'; // Default to png if detection fails
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('GenerateImage failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

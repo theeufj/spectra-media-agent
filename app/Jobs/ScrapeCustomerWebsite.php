@@ -187,4 +187,14 @@ class ScrapeCustomerWebsite implements ShouldQueue
 
         return $url;
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('ScrapeCustomerWebsite failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

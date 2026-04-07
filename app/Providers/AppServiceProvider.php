@@ -2,11 +2,14 @@
 
 namespace App\Providers;
 
+use App\Models\AdSpendCredit;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Observers\CustomerObserver;
+use App\Policies\AdSpendCreditPolicy;
 use App\Policies\CampaignPolicy;
+use App\Policies\CustomerPolicy;
 use App\Policies\StrategyPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Vite;
@@ -44,6 +47,8 @@ class AppServiceProvider extends ServiceProvider
         // Register authorization policies
         Gate::policy(Campaign::class, CampaignPolicy::class);
         Gate::policy(Strategy::class, StrategyPolicy::class);
+        Gate::policy(Customer::class, CustomerPolicy::class);
+        Gate::policy(AdSpendCredit::class, AdSpendCreditPolicy::class);
     }
 }
 

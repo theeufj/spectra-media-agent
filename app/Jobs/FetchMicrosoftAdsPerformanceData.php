@@ -107,4 +107,14 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
             $this->release(60);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('FetchMicrosoftAdsPerformanceData failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }

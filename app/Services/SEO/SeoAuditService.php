@@ -7,6 +7,7 @@ use App\Models\SeoAudit;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Spatie\Browsershot\Browsershot;
 
 /**
@@ -165,16 +166,18 @@ class SeoAuditService
 
     protected function fetchPage(string $url): ?string
     {
-        try {
-            $response = Http::timeout(30)
-                ->withHeaders(['User-Agent' => 'SpectraMediaBot/1.0 (SEO Audit)'])
-                ->get($url);
+        return Cache::remember('seo_page:' . md5($url), now()->addHour(), function () use ($url) {
+            try {
+                $response = Http::timeout(30)
+                    ->withHeaders(['User-Agent' => 'SpectraMediaBot/1.0 (SEO Audit)'])
+                    ->get($url);
 
-            return $response->successful() ? $response->body() : null;
-        } catch (\Exception $e) {
-            Log::warning('SEO Audit: Failed to fetch page', ['url' => $url, 'error' => $e->getMessage()]);
-            return null;
-        }
+                return $response->successful() ? $response->body() : null;
+            } catch (\Exception $e) {
+                Log::warning('SEO Audit: Failed to fetch page', ['url' => $url, 'error' => $e->getMessage()]);
+                return null;
+            }
+        });
     }
 
     protected function analyzeMeta(string $html, string $url): array

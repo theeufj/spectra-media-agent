@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds;
 
 use App\Models\Customer;
 use App\Models\MccAccount;
+use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Illuminate\Support\Facades\Crypt;
@@ -11,6 +12,9 @@ use Illuminate\Support\Facades\Log;
 
 abstract class BaseGoogleAdsService
 {
+    use RetryableApiOperation;
+
+    protected string $platform = 'google_ads';
     protected ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient $client = null;
     protected ?Customer $customer = null;
     public function __construct(Customer $customer)
@@ -118,5 +122,17 @@ abstract class BaseGoogleAdsService
     public function getClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
     {
         return $this->client;
+    }
+
+    /**
+     * Execute a GAQL search query with automatic retry and circuit breaker protection.
+     */
+    protected function searchQueryWithRetry(string $customerId, string $query, string $operationName = 'search_query'): \Google\ApiCore\PagedListResponse
+    {
+        return $this->executeWithRetry(
+            fn () => $this->searchQuery($customerId, $query),
+            $operationName,
+            ['customer_id' => $customerId]
+        );
     }
 }

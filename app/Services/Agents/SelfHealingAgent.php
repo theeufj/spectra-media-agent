@@ -17,6 +17,7 @@ use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Prompts\AdCompliancePrompt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Laravel\Pennant\Feature;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 
 /**
@@ -73,6 +74,14 @@ class SelfHealingAgent
         }
 
         $customer = $campaign->customer;
+
+        // Check feature flag - if disabled, only run diagnostics (no mutations)
+        $autoHealingEnabled = Feature::for($customer)->active('auto_healing');
+        if (!$autoHealingEnabled) {
+            $results['feature_flag'] = 'auto_healing disabled - diagnostics only';
+            Log::info("SelfHealingAgent: auto_healing feature disabled for customer {$customer->id}, running diagnostics only");
+        }
+        $results['auto_healing_enabled'] = $autoHealingEnabled;
 
         // Heal Google Ads campaign
         if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
@@ -787,20 +796,45 @@ class SelfHealingAgent
                     'suggestion' => 'Check campaign status, budget, and targeting settings in Microsoft Ads',
                 ];
 
-                // Try to check campaign status
+                // Try to check and fix campaign status
                 try {
                     $service = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
                     $status = $service->getCampaignStatus($campaign->microsoft_ads_campaign_id);
 
                     if ($status && strtolower($status) === 'budgetpaused') {
-                        $results['actions_taken'][] = [
-                            'type' => 'budget_alert',
-                            'platform' => 'microsoft_ads',
-                            'message' => 'Campaign is budget-paused - may need budget increase',
-                        ];
+                        // Attempt budget increase (20% bump)
+                        $currentBudget = $campaign->daily_budget ?? 0;
+                        if ($currentBudget > 0) {
+                            $newBudget = round($currentBudget * 1.2, 2);
+                            $updated = $service->updateCampaignBudget($campaign->microsoft_ads_campaign_id, $newBudget);
+                            if ($updated) {
+                                $results['actions_taken'][] = [
+                                    'type' => 'budget_increase',
+                                    'platform' => 'microsoft_ads',
+                                    'message' => "Increased daily budget from \${$currentBudget} to \${$newBudget} to restore delivery",
+                                ];
+                                $campaign->update(['daily_budget' => $newBudget]);
+                            }
+                        } else {
+                            $results['actions_taken'][] = [
+                                'type' => 'budget_alert',
+                                'platform' => 'microsoft_ads',
+                                'message' => 'Campaign is budget-paused - may need budget increase',
+                            ];
+                        }
+                    } elseif ($status && strtolower($status) === 'paused') {
+                        // Re-enable paused campaign
+                        $resumed = $service->updateCampaignStatus($campaign->microsoft_ads_campaign_id, 'Active');
+                        if ($resumed) {
+                            $results['actions_taken'][] = [
+                                'type' => 'campaign_resumed',
+                                'platform' => 'microsoft_ads',
+                                'message' => 'Re-enabled paused Microsoft Ads campaign',
+                            ];
+                        }
                     }
                 } catch (\Exception $e) {
-                    Log::debug("SelfHealingAgent: Could not check Microsoft campaign status: " . $e->getMessage());
+                    Log::debug("SelfHealingAgent: Could not remediate Microsoft campaign: " . $e->getMessage());
                 }
             }
 
@@ -820,6 +854,23 @@ class SelfHealingAgent
                     'message' => 'Microsoft Ads clicks dropped >50% week over week',
                     'details' => "Previous week: {$prev7Days} clicks, This week: {$last7Days} clicks",
                 ];
+
+                // Use Gemini to suggest ad copy improvements
+                try {
+                    $gemini = app(\App\Services\GeminiService::class);
+                    $suggestion = $gemini->generateText(
+                        "A Microsoft Ads campaign for '{$customer->name}' ({$customer->business_type}) experienced a >50% click drop. " .
+                        "Previous week: {$prev7Days} clicks, this week: {$last7Days} clicks. " .
+                        "Suggest 3 specific, actionable fixes (targeting, bid strategy, ad copy) in a JSON array with 'action' and 'reason' keys."
+                    );
+                    $results['ai_suggestions'][] = [
+                        'type' => 'performance_recovery',
+                        'platform' => 'microsoft_ads',
+                        'suggestions' => $suggestion,
+                    ];
+                } catch (\Exception $e) {
+                    Log::debug("SelfHealingAgent: Gemini suggestion failed: " . $e->getMessage());
+                }
             }
         } catch (\Exception $e) {
             $results['errors'][] = "Microsoft Ads healing failed: " . $e->getMessage();
@@ -846,6 +897,50 @@ class SelfHealingAgent
                     'message' => 'LinkedIn Ads campaign has zero impressions in last 3 days',
                     'suggestion' => 'Check campaign status, budget, and audience targeting on LinkedIn',
                 ];
+
+                // Try to check and fix campaign status
+                try {
+                    $service = new \App\Services\LinkedInAds\CampaignManagementService($customer);
+                    $linkedInCampaignId = $campaign->linkedin_ads_campaign_id;
+
+                    if ($linkedInCampaignId) {
+                        $campaignData = $service->getCampaign($linkedInCampaignId);
+                        $status = $campaignData['status'] ?? null;
+
+                        if ($status === 'PAUSED') {
+                            $activated = $service->updateCampaignStatus($linkedInCampaignId, 'ACTIVE');
+                            if ($activated) {
+                                $results['actions_taken'][] = [
+                                    'type' => 'campaign_resumed',
+                                    'platform' => 'linkedin_ads',
+                                    'message' => 'Re-enabled paused LinkedIn Ads campaign',
+                                ];
+                            }
+                        } elseif ($status === 'DRAFT') {
+                            $results['warnings'][] = [
+                                'type' => 'campaign_draft',
+                                'platform' => 'linkedin_ads',
+                                'message' => 'LinkedIn campaign is still in DRAFT status — needs manual launch',
+                            ];
+                        }
+
+                        // Check budget adequacy
+                        $dailyBudget = $campaignData['dailyBudget']['amount'] ?? null;
+                        if ($dailyBudget && floatval($dailyBudget) < 10) {
+                            $newBudget = round(floatval($dailyBudget) * 1.5, 2);
+                            $updated = $service->updateCampaignBudget($linkedInCampaignId, $newBudget);
+                            if ($updated) {
+                                $results['actions_taken'][] = [
+                                    'type' => 'budget_increase',
+                                    'platform' => 'linkedin_ads',
+                                    'message' => "Increased daily budget from \${$dailyBudget} to \${$newBudget} for better delivery",
+                                ];
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::debug("SelfHealingAgent: Could not remediate LinkedIn campaign: " . $e->getMessage());
+                }
             }
 
             // Check for sudden performance drops
@@ -864,16 +959,23 @@ class SelfHealingAgent
                     'message' => 'LinkedIn Ads clicks dropped >50% week over week',
                     'details' => "Previous week: {$prev7Days} clicks, This week: {$last7Days} clicks",
                 ];
-            }
 
-            // Check token health
-            if ($customer->linkedin_ads_token_expires_at && now()->gt($customer->linkedin_ads_token_expires_at)) {
-                $results['warnings'][] = [
-                    'type' => 'token_expired',
-                    'platform' => 'linkedin_ads',
-                    'message' => 'LinkedIn Ads access token has expired',
-                    'suggestion' => 'Customer needs to reconnect LinkedIn account',
-                ];
+                // Use Gemini to suggest recovery actions
+                try {
+                    $gemini = app(\App\Services\GeminiService::class);
+                    $suggestion = $gemini->generateText(
+                        "A LinkedIn Ads campaign for '{$customer->name}' ({$customer->business_type}) experienced a >50% click drop. " .
+                        "Previous week: {$prev7Days} clicks, this week: {$last7Days} clicks. " .
+                        "Suggest 3 specific, actionable fixes (audience targeting, bid strategy, ad creative) in a JSON array with 'action' and 'reason' keys."
+                    );
+                    $results['ai_suggestions'][] = [
+                        'type' => 'performance_recovery',
+                        'platform' => 'linkedin_ads',
+                        'suggestions' => $suggestion,
+                    ];
+                } catch (\Exception $e) {
+                    Log::debug("SelfHealingAgent: Gemini suggestion failed: " . $e->getMessage());
+                }
             }
         } catch (\Exception $e) {
             $results['errors'][] = "LinkedIn Ads healing failed: " . $e->getMessage();

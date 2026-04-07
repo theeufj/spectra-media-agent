@@ -99,4 +99,14 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
             $this->release(60);
         }
     }
+
+    /**
+     * Handle a job failure.
+     */
+    public function failed(\Throwable $exception): void
+    {
+        Log::error('FetchLinkedInAdsPerformanceData failed: ' . $exception->getMessage(), [
+            'exception' => $exception->getTraceAsString(),
+        ]);
+    }
 }
