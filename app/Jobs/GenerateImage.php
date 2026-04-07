@@ -55,6 +55,12 @@ class GenerateImage implements ShouldQueue
         Log::info("Starting image generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
         try {
+            // Check free-tier image limit before generating
+            if (!ImageCollateral::canGenerateForCampaign($this->campaign)) {
+                Log::info("Image limit reached for Campaign ID: {$this->campaign->id}, skipping generation");
+                return;
+            }
+
             // Fetch brand guidelines if available
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
             if (!$brandGuidelines) {

@@ -62,4 +62,24 @@ class ImageCollateral extends Model
     {
         return $this->belongsTo(Strategy::class);
     }
+
+    /**
+     * Check if a new image can be generated for the given campaign.
+     * Free / unsubscribed users: max 4 images per campaign.
+     */
+    public static function canGenerateForCampaign(Campaign $campaign): bool
+    {
+        $user = $campaign->customer?->users()?->first();
+
+        if (!$user) {
+            return false;
+        }
+
+        // Subscribed users have no limit
+        if ($user->subscribed('default') || $user->subscription_status === 'active') {
+            return true;
+        }
+
+        return static::where('campaign_id', $campaign->id)->count() < 4;
+    }
 }

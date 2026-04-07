@@ -23,7 +23,7 @@ export default function Pricing({ auth, plans = [] }) {
         <>
             <Head>
                 <title>Pricing - Simple, Transparent Plans | sitetospend</title>
-                <meta name="description" content="sitetospend pricing: Starter at $99/mo, Growth at $249/mo, Agency at $499/mo. All plans include AI agents, campaign automation, and a 7-day free trial. No credit card required." />
+                <meta name="description" content="sitetospend pricing: Starter at $99/mo, Growth at $249/mo, Agency custom pricing. All plans include AI agents, campaign automation, and a 7-day free trial. No credit card required." />
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />
@@ -100,8 +100,19 @@ export default function Pricing({ auth, plans = [] }) {
                                         <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
                                         <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
                                         <div className="mt-4 text-gray-900">
-                                            <span className="text-4xl font-extrabold">${Math.round(plan.price_cents / 100)}</span>
-                                            <span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'year' : 'mo'}</span>
+                                            {plan.price_cents > 0 ? (
+                                                <>
+                                                    <span className="text-4xl font-extrabold">${Math.round(plan.price_cents / 100)}</span>
+                                                    <span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'year' : 'mo'}</span>
+                                                </>
+                                            ) : !plan.is_free ? (
+                                                <span className="text-4xl font-extrabold">Custom</span>
+                                            ) : (
+                                                <>
+                                                    <span className="text-4xl font-extrabold">$0</span>
+                                                    <span className="text-xl font-medium">/mo</span>
+                                                </>
+                                            )}
                                         </div>
                                         <ul className="mt-8 space-y-4 flex-grow">
                                             {(plan.features || []).map((item) => (

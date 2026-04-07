@@ -22,19 +22,33 @@ class OptimizeCampaigns implements ShouldQueue
      */
     public function handle(CampaignOptimizationAgent $optimizationAgent): void
     {
-        // Find active campaigns that haven't been optimized in the last 24 hours
-        // We only optimize campaigns that are 'ELIGIBLE' (primary status)
+        // Find active campaigns that are 'ELIGIBLE' (primary status)
         // This covers both Google (ENABLED/ELIGIBLE) and Facebook (ACTIVE)
         $campaigns = Campaign::where('primary_status', 'ELIGIBLE')
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
                       ->orWhereNotNull('facebook_ads_campaign_id');
             })
-            ->where(function ($query) {
-                $query->whereNull('last_optimized_at')
-                      ->orWhere('last_optimized_at', '<=', now()->subHours(24));
-            })
+            ->whereNull('last_optimized_at')
+            ->orWhere('last_optimized_at', '<=', now()->subHours(24))
             ->get();
+
+        // Filter by plan-aware optimization frequency:
+        // Free / Starter → weekly (7 days), Growth / Agency → daily (24h)
+        $campaigns = $campaigns->filter(function (Campaign $campaign) {
+            if (is_null($campaign->last_optimized_at)) {
+                return true; // never optimized — always run
+            }
+
+            $user = $campaign->customer?->users()?->first();
+            $slug = $user?->resolveCurrentPlan()?->slug ?? 'free';
+
+            $cooldown = in_array($slug, ['growth', 'agency'], true)
+                ? now()->subHours(24)
+                : now()->subDays(7);
+
+            return $campaign->last_optimized_at <= $cooldown;
+        });
 
         foreach ($campaigns as $campaign) {
             try {

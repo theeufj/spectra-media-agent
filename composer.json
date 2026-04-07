@@ -17,6 +17,7 @@
         "laravel/cashier": "^16.0",
         "laravel/framework": "^12.0",
         "laravel/horizon": "^5.45",
+        "laravel/pennant": "^1.23",
         "laravel/sanctum": "^4.0",
         "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.10.1",

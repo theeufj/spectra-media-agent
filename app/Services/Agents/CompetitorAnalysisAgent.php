@@ -5,6 +5,7 @@ namespace App\Services\Agents;
 use App\Models\Customer;
 use App\Models\Competitor;
 use App\Services\GeminiService;
+use App\Services\FirecrawlService;
 use App\Prompts\CompetitorAnalysisPrompt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
@@ -188,6 +189,7 @@ class CompetitorAnalysisAgent
 
     /**
      * Scrape a competitor website.
+     * Uses Firecrawl API (returns clean markdown) with HTTP fallback.
      */
     protected function scrapeWebsite(string $url): array
     {
@@ -199,41 +201,39 @@ class CompetitorAnalysisAgent
         ];
 
         try {
-            // Try Browsershot first for JavaScript-heavy sites
-            try {
-                $html = Browsershot::url($url)
-                    ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(config('browsershot.chrome_args', []))
-                    ->timeout(30)
-                    ->waitUntilNetworkIdle()
-                    ->bodyHtml();
-            } catch (\Exception $e) {
-                // Fallback to simple HTTP
-                Log::debug('CompetitorAnalysisAgent: Browsershot failed, using HTTP', [
-                    'url' => $url,
-                    'error' => $e->getMessage(),
-                ]);
-                
-                $response = Http::withHeaders([
-                    'User-Agent' => 'Mozilla/5.0 (compatible; SpectraBot/1.0)',
-                ])->timeout(15)->get($url);
-                
-                if (!$response->successful()) {
+            // Try Firecrawl first (returns clean markdown, handles JS rendering)
+            $firecrawl = new FirecrawlService();
+
+            if ($firecrawl->isConfigured()) {
+                $scraped = $firecrawl->scrape($url);
+
+                if ($scraped['success']) {
+                    $result['content'] = $scraped['markdown'];
+                    $result['title'] = $scraped['title'];
+                    $result['meta_description'] = $scraped['meta_description'];
                     return $result;
                 }
-                
-                $html = $response->body();
+
+                Log::debug('CompetitorAnalysisAgent: Firecrawl failed, falling back to HTTP', [
+                    'url' => $url,
+                ]);
             }
 
+            // Fallback to simple HTTP + DOM parsing
+            $response = Http::withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (compatible; SpectraBot/1.0)',
+            ])->timeout(15)->get($url);
+
+            if (!$response->successful()) {
+                return $result;
+            }
+
+            $html = $response->body();
             $crawler = new Crawler($html, $url);
 
-            // Extract title
             $result['title'] = $crawler->filter('title')->first()->text('');
-
-            // Extract meta description
             $result['meta_description'] = $crawler->filter('meta[name="description"]')->first()->attr('content', '');
 
-            // Extract headings
             $headings = [];
             $crawler->filter('h1, h2, h3')->each(function (Crawler $node) use (&$headings) {
                 $tag = $node->nodeName();
@@ -244,7 +244,6 @@ class CompetitorAnalysisAgent
             });
             $result['headings'] = $headings;
 
-            // Remove navigation, header, footer for cleaner content
             $crawler->filter('header, nav, footer, script, style, noscript, .header, .nav, .footer, #header, #nav, #footer')
                 ->each(function (Crawler $node) {
                     foreach ($node as $n) {
@@ -254,7 +253,6 @@ class CompetitorAnalysisAgent
                     }
                 });
 
-            // Extract main content
             $textContent = $crawler->filter('body')->text('');
             $result['content'] = preg_replace('/\s+/', ' ', $textContent);
 

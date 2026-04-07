@@ -32,6 +32,13 @@ class RefineImage implements ShouldQueue
         Log::info("Starting image refinement job for ImageCollateral ID: {$this->originalImage->id}");
 
         try {
+            // Check free-tier image limit (refinement creates a new record)
+            $campaign = $this->originalImage->campaign;
+            if ($campaign && !ImageCollateral::canGenerateForCampaign($campaign)) {
+                Log::info("Image limit reached for Campaign ID: {$campaign->id}, skipping refinement");
+                return;
+            }
+
             $contextImages = [];
 
             // Add the original image as the first context

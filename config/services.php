@@ -92,4 +92,8 @@ return [
         'turnstile_secret_key' => env('CLOUDFLARE_TURNSTILE_SECRET_KEY'),
     ],
 
+    'firecrawl' => [
+        'api_key' => env('FIRECRAWL_API_KEY'),
+    ],
+
 ];

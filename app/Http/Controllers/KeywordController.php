@@ -182,6 +182,17 @@ class KeywordController extends Controller
         $customer = $this->getActiveCustomer($request);
         if (!$customer) return redirect()->route('dashboard');
 
+        $canAccess = $request->user()->hasFeature('competitor_analysis');
+
+        if (!$canAccess) {
+            return Inertia::render('Keywords/CompetitorGap', [
+                'gaps' => [],
+                'competitors' => [],
+                'ourKeywordCount' => 0,
+                'canAccessCompetitors' => false,
+            ]);
+        }
+
         $competitors = $customer->competitors()
             ->whereNotNull('keywords_detected')
             ->latest('last_analyzed_at')
@@ -216,6 +227,7 @@ class KeywordController extends Controller
             'gaps' => array_slice($gaps, 0, 100),
             'competitors' => $competitors->map->only('id', 'domain', 'name'),
             'ourKeywordCount' => count($ourKeywords),
+            'canAccessCompetitors' => true,
         ]);
     }
 

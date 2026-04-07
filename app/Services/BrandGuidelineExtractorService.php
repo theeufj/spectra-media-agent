@@ -19,28 +19,37 @@ class BrandGuidelineExtractorService
     }
     
     /**
-     * Check if customer can extract brand guidelines (subscription-based limit)
+     * Check if customer can extract brand guidelines (plan-based limit).
+     *
+     * Free: 1 guideline per customer
+     * Starter: up to 3
+     * Growth / Agency: unlimited
      */
     protected function canExtractGuidelines(Customer $customer): bool
     {
-        // Get first user associated with customer to check subscription
         $user = $customer->users()->first();
-        
+
         if (!$user) {
             return false;
         }
-        
-        // Pro users have unlimited extractions
-        if ($user->subscribed('default')) {
+
+        $plan = $user->resolveCurrentPlan();
+        $slug = $plan?->slug ?? 'free';
+
+        // Growth / Agency — unlimited
+        if (in_array($slug, ['growth', 'agency'], true)) {
             return true;
         }
-        
-        // Free users limited to 3 brand guideline extractions (check if already exists)
-        $existingGuideline = BrandGuideline::where('customer_id', $customer->id)->first();
-        
-        // If guideline already exists, allow re-extraction (same limit)
-        // Free users get 1 brand guideline extraction per customer
-        return !$existingGuideline;
+
+        $existing = BrandGuideline::where('customer_id', $customer->id)->count();
+
+        // Starter — up to 3
+        if ($slug === 'starter') {
+            return $existing < 3;
+        }
+
+        // Free — 1
+        return $existing < 1;
     }
 
     /**

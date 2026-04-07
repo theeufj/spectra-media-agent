@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Campaign;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -68,8 +69,12 @@ class GenerateStrategyCollateral implements ShouldQueue
             ->delay(now()->addSeconds(5));
         Log::info("Dispatched ad copy generation for Strategy ID: {$this->strategy->id}");
 
-        // Generate 3 images per strategy
+        // Generate 3 images per strategy (respecting free-tier limit)
         for ($i = 0; $i < 3; $i++) {
+            if (!ImageCollateral::canGenerateForCampaign($this->campaign)) {
+                Log::info("Image limit reached for Campaign ID: {$this->campaign->id}, skipping remaining image generation");
+                break;
+            }
             GenerateImage::dispatch($this->campaign, $this->strategy)
                 ->delay(now()->addSeconds(10 + ($i * 10))); // Stagger by 10 seconds
             $imageNum = $i + 1;

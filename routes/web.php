@@ -466,6 +466,11 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::put('mcc-accounts/{mccAccount}', [App\Http\Controllers\Admin\MccAccountController::class, 'update'])->name('admin.mcc-accounts.update');
     Route::post('mcc-accounts/{mccAccount}/activate', [App\Http\Controllers\Admin\MccAccountController::class, 'activate'])->name('admin.mcc-accounts.activate');
     Route::delete('mcc-accounts/{mccAccount}', [App\Http\Controllers\Admin\MccAccountController::class, 'destroy'])->name('admin.mcc-accounts.destroy');
+
+    // Feature Flags
+    Route::get('feature-flags', [App\Http\Controllers\Admin\FeatureFlagController::class, 'index'])->name('admin.feature-flags.index');
+    Route::post('feature-flags/{feature}/toggle', [App\Http\Controllers\Admin\FeatureFlagController::class, 'toggle'])->name('admin.feature-flags.toggle');
+    Route::post('feature-flags/{feature}/purge', [App\Http\Controllers\Admin\FeatureFlagController::class, 'purge'])->name('admin.feature-flags.purge');
 });
 
 /*
@@ -582,6 +587,17 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::post('/seo/rankings/track', [SeoController::class, 'trackKeywords'])->name('seo.rankings.track');
     Route::get('/seo/backlinks', [SeoController::class, 'backlinks'])->name('seo.backlinks');
     Route::get('/seo/competitors', [SeoController::class, 'competitorComparison'])->name('seo.competitors');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Strategy War Room
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/strategy/war-room', [App\Http\Controllers\WarRoomController::class, 'index'])->name('strategy.war-room');
+    Route::post('/strategy/war-room/recommendations/{recommendation}/approve', [App\Http\Controllers\WarRoomController::class, 'approveRecommendation'])->name('strategy.war-room.recommendations.approve');
+    Route::post('/strategy/war-room/recommendations/{recommendation}/reject', [App\Http\Controllers\WarRoomController::class, 'rejectRecommendation'])->name('strategy.war-room.recommendations.reject');
 });
 
 /*

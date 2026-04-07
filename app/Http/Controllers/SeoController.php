@@ -170,15 +170,20 @@ class SeoController extends Controller
         if (!$customer) {
             return redirect()->route('customers.create');
         }
+
+        $canAccess = $request->user()->hasFeature('competitor_analysis');
         $domain = $customer->website ? parse_url($customer->website, PHP_URL_HOST) : null;
 
-        $competitors = Competitor::where('customer_id', $customer->id)
-            ->orderBy('updated_at', 'desc')
-            ->get();
+        $competitors = $canAccess
+            ? Competitor::where('customer_id', $customer->id)
+                ->orderBy('updated_at', 'desc')
+                ->get()
+            : collect();
 
         return Inertia::render('SEO/Competitors', [
             'domain' => $domain,
             'competitors' => $competitors,
+            'canAccessCompetitors' => $canAccess,
         ]);
     }
 }

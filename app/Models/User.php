@@ -8,6 +8,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Cashier\Billable;
 use App\Mail\InvoiceCreated;
+use App\Models\Plan;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
@@ -110,6 +111,59 @@ class User extends Authenticatable implements MustVerifyEmail
         }
 
         return 'Free';
+    }
+
+    /**
+     * Feature-to-plan mapping: which plan slugs grant access to which features.
+     */
+    protected static array $featurePlanMap = [
+        'competitor_analysis' => ['growth', 'agency'],
+        'white_label_reports' => ['agency'],
+        'multi_client' => ['agency'],
+        'advanced_creative' => ['growth', 'agency'],
+        'daily_optimization' => ['growth', 'agency'],
+        'war_room' => ['growth', 'agency'],
+        'beta_features' => ['agency'],
+    ];
+
+    /**
+     * Check if the user's current plan includes a given feature.
+     */
+    public function hasFeature(string $feature): bool
+    {
+        // Admins always have access
+        if ($this->is_admin) {
+            return true;
+        }
+
+        $allowedSlugs = static::$featurePlanMap[$feature] ?? [];
+
+        if (empty($allowedSlugs)) {
+            return false;
+        }
+
+        $plan = $this->resolveCurrentPlan();
+
+        return $plan && in_array($plan->slug, $allowedSlugs, true);
+    }
+
+    /**
+     * Resolve the user's current Plan model (assigned or Stripe subscription).
+     */
+    public function resolveCurrentPlan(): ?Plan
+    {
+        if ($this->assigned_plan_id && $this->assignedPlan) {
+            return $this->assignedPlan;
+        }
+
+        if ($this->subscribed('default')) {
+            $subscription = $this->subscription('default');
+            if ($subscription) {
+                return Plan::where('stripe_price_id', $subscription->stripe_price)->first();
+            }
+        }
+
+        return Plan::where('slug', 'free')->first();
     }
 
     public function sendInvoice(Invoice $invoice)
