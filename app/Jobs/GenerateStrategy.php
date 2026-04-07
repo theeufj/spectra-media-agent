@@ -92,6 +92,16 @@ class GenerateStrategy implements ShouldQueue
             $enabledPlatforms = EnabledPlatform::getEnabledPlatformNames();
             Log::info("Found " . count($enabledPlatforms) . " enabled platforms: " . implode(', ', $enabledPlatforms));
 
+            // Step 1.8: Filter by user's plan-allowed platforms
+            $user = $this->campaign->customer->users()->first();
+            if ($user) {
+                $allowed = $user->allowedPlatforms();
+                $enabledPlatforms = array_values(array_filter($enabledPlatforms, function ($p) use ($allowed) {
+                    return in_array(strtolower($p), $allowed, true);
+                }));
+                Log::info("Plan-filtered platforms for campaign {$this->campaign->id}: " . implode(', ', $enabledPlatforms));
+            }
+
             if (empty($enabledPlatforms)) {
                 Log::error("No enabled platforms found for campaign {$this->campaign->id}. Cannot generate strategy.");
                 $this->failWithError('No advertising platforms are currently enabled. Please contact support.');

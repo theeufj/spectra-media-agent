@@ -148,6 +148,25 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Get the ad platforms this user's plan allows.
+     */
+    public function allowedPlatforms(): array
+    {
+        if ($this->is_admin) {
+            return ['google', 'facebook', 'microsoft', 'linkedin'];
+        }
+
+        $plan = $this->resolveCurrentPlan();
+        $slug = $plan?->slug ?? 'free';
+
+        return match ($slug) {
+            'free' => ['google'],
+            'starter' => ['google', 'facebook'],
+            default => ['google', 'facebook', 'microsoft', 'linkedin'],
+        };
+    }
+
+    /**
      * Resolve the user's current Plan model (assigned or Stripe subscription).
      */
     public function resolveCurrentPlan(): ?Plan

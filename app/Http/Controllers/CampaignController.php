@@ -81,6 +81,7 @@ class CampaignController extends Controller
         return Inertia::render('Campaigns/CreateWizard', [
             'pages' => $pages,
             'brandGuideline' => $brandGuideline,
+            'allowedPlatforms' => $request->user()->allowedPlatforms(),
         ]);
     }
 
@@ -125,7 +126,20 @@ class CampaignController extends Controller
     public function store(StoreCampaignRequest $request)
     {
         $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
-        
+
+        // Enforce campaign limit for Free plan (max 1)
+        $user = $request->user();
+        $plan = $user->resolveCurrentPlan();
+        if (($plan?->slug ?? 'free') === 'free') {
+            $existingCount = $customer->campaigns()->count();
+            if ($existingCount >= 1) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'Free plan is limited to 1 campaign. Please upgrade to create more campaigns.',
+                ]);
+            }
+        }
+
         $validated = $request->validated();
 
         // Extract keywords before creating campaign (not a campaign column)

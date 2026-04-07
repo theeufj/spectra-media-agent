@@ -95,6 +95,17 @@ class DeployCampaign implements ShouldQueue
 
         // Split the campaign's daily budget evenly across strategies
         $strategies = $this->campaign->strategies;
+
+        // Filter strategies to only platforms the user's plan allows
+        $user = $this->campaign->customer->users()->first();
+        if ($user) {
+            $allowed = $user->allowedPlatforms();
+            $strategies = $strategies->filter(function ($strategy) use ($allowed) {
+                return in_array(strtolower($strategy->platform), $allowed, true);
+            });
+            Log::info("Plan-filtered strategies for deployment: " . $strategies->pluck('platform')->implode(', '));
+        }
+
         if ($strategies->count() > 0 && $this->campaign->daily_budget) {
             $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
             foreach ($strategies as $strategy) {
