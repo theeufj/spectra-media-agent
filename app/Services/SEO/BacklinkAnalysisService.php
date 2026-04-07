@@ -170,11 +170,12 @@ class BacklinkAnalysisService
                 ->take(20)
                 ->implode(', ');
 
+            $totalBacklinks = count($backlinks);
             $prompt = <<<PROMPT
 You are an SEO link building expert. Analyze this domain's backlink profile:
 Domain: {$domain}
 Top referring domains: {$topDomains}
-Total backlinks: {count($backlinks)}
+Total backlinks: {$totalBacklinks}
 
 Suggest 3-5 link building opportunities as JSON:
 [{"type": "guest_post|resource_page|broken_link|directory|partnership", "description": "specific opportunity", "difficulty": "easy|medium|hard", "estimated_value": "high|medium|low"}]
