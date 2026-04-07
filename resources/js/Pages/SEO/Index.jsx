@@ -92,8 +92,8 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                                     <div key={i} className="flex items-start gap-3 p-3 bg-red-50 rounded-lg">
                                         <span className="text-red-500 mt-0.5">⚠</span>
                                         <div>
-                                            <p className="text-sm font-medium text-gray-900">{issue.title || issue}</p>
-                                            {issue.description && <p className="text-xs text-gray-500 mt-0.5">{issue.description}</p>}
+                                            <p className="text-sm font-medium text-gray-900">{issue.title || issue.message || (typeof issue === 'string' ? issue : JSON.stringify(issue))}</p>
+                                            {(issue.description || issue.category) && <p className="text-xs text-gray-500 mt-0.5">{issue.description || issue.category}</p>}
                                         </div>
                                     </div>
                                 ))}
