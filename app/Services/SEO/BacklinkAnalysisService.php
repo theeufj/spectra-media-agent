@@ -39,18 +39,35 @@ class BacklinkAnalysisService
     {
         Log::info('BacklinkAnalysis: Starting', ['customer_id' => $this->customer->id, 'domain' => $domain]);
 
-        // Check for Moz or Ahrefs API keys
         $backlinks = $this->fetchBacklinks($domain);
+        $toxicLinks = $this->detectToxicLinks($backlinks);
+        $topAnchors = $this->analyzeAnchors($backlinks);
+        $totalBacklinks = count($backlinks);
+
+        // Calculate anchor text percentages
+        $anchorAnalysis = collect($topAnchors)->map(function ($anchor) use ($totalBacklinks) {
+            return array_merge($anchor, [
+                'text' => $anchor['anchor'],
+                'percentage' => $totalBacklinks > 0 ? round(($anchor['count'] / $totalBacklinks) * 100, 1) : 0,
+            ]);
+        })->toArray();
+
+        // Estimate average domain authority from backlinks that have it
+        $daValues = collect($backlinks)->pluck('domain_authority')->filter()->values();
+        $domainAuthority = $daValues->isNotEmpty() ? round($daValues->avg(), 1) : null;
 
         $profile = [
             'domain' => $domain,
-            'total_backlinks' => count($backlinks),
+            'total_backlinks' => $totalBacklinks,
             'referring_domains' => $this->countUniqueDomains($backlinks),
             'dofollow_count' => collect($backlinks)->where('rel', '!=', 'nofollow')->count(),
             'nofollow_count' => collect($backlinks)->where('rel', 'nofollow')->count(),
+            'domain_authority' => $domainAuthority,
             'backlinks' => $backlinks,
-            'toxic_links' => $this->detectToxicLinks($backlinks),
-            'top_anchors' => $this->analyzeAnchors($backlinks),
+            'toxic_links' => $toxicLinks,
+            'toxic_count' => count($toxicLinks),
+            'top_anchors' => $topAnchors,
+            'anchor_analysis' => $anchorAnalysis,
             'analyzed_at' => now()->toIso8601String(),
         ];
 
@@ -112,12 +129,69 @@ class BacklinkAnalysisService
     }
 
     /**
-     * Estimate backlinks using Google search operators.
+     * Estimate backlinks using Google Custom Search API link: operator.
+     *
+     * This is a limited fallback when no Moz API key is configured.
+     * Uses Google CSE to find pages linking to the domain.
      */
     protected function estimateBacklinks(string $domain): array
     {
-        // This is a limited fallback — real implementation would use a backlink API
-        return [];
+        $apiKey = config('services.google_cse.api_key') ?: config('services.google.search_api_key');
+        $cseId = config('services.google_cse.search_engine_id') ?: config('services.google.search_engine_id');
+
+        if (!$apiKey || !$cseId) {
+            Log::debug('BacklinkAnalysis: No Moz or Google CSE API key configured, cannot fetch backlinks');
+            return [];
+        }
+
+        try {
+            $backlinks = [];
+            $queries = [
+                "link:{$domain} -site:{$domain}",
+                "\"{$domain}\" -site:{$domain}",
+            ];
+
+            foreach ($queries as $query) {
+                for ($start = 1; $start <= 21; $start += 10) {
+                    $response = Http::get('https://www.googleapis.com/customsearch/v1', [
+                        'key' => $apiKey,
+                        'cx' => $cseId,
+                        'q' => $query,
+                        'start' => $start,
+                        'num' => 10,
+                    ]);
+
+                    if (!$response->successful()) break;
+
+                    foreach ($response->json('items', []) as $item) {
+                        $sourceUrl = $item['link'] ?? '';
+                        $sourceHost = parse_url($sourceUrl, PHP_URL_HOST) ?: '';
+
+                        // Skip self-referencing results
+                        if (str_contains($sourceHost, $domain)) continue;
+
+                        $backlinks[] = [
+                            'source_url' => $sourceUrl,
+                            'source_domain' => $sourceHost,
+                            'target_url' => "https://{$domain}",
+                            'anchor_text' => $item['title'] ?? '',
+                            'rel' => 'dofollow', // Cannot determine via CSE
+                            'domain_authority' => null,
+                            'first_seen' => null,
+                        ];
+                    }
+                }
+            }
+
+            // Deduplicate by source domain
+            return collect($backlinks)
+                ->unique('source_url')
+                ->values()
+                ->toArray();
+        } catch (\Exception $e) {
+            Log::debug('BacklinkAnalysis: CSE fallback failed', ['error' => $e->getMessage()]);
+            return [];
+        }
     }
 
     protected function countUniqueDomains(array $backlinks): int

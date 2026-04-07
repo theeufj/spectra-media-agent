@@ -1,5 +1,50 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
+import { Line } from 'react-chartjs-2';
+import {
+    Chart as ChartJS,
+    CategoryScale,
+    LinearScale,
+    PointElement,
+    LineElement,
+    Tooltip,
+    Filler,
+} from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Filler);
+
+function TrendSparkline({ data }) {
+    if (!data || data.length < 2) return <span className="text-xs text-gray-400">—</span>;
+
+    const chartData = {
+        labels: data.map(d => d.date),
+        datasets: [{
+            data: data.map(d => d.position),
+            borderColor: '#ea580c',
+            backgroundColor: 'rgba(234, 88, 12, 0.1)',
+            borderWidth: 1.5,
+            pointRadius: 0,
+            fill: true,
+            tension: 0.3,
+        }],
+    };
+
+    const options = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { tooltip: { enabled: false } },
+        scales: {
+            x: { display: false },
+            y: { display: false, reverse: true }, // lower position = better, so reverse
+        },
+    };
+
+    return (
+        <div className="w-24 h-8">
+            <Line data={chartData} options={options} />
+        </div>
+    );
+}
 
 export default function Rankings({ summary, rankings = [], trends = {} }) {
     return (
@@ -60,6 +105,7 @@ export default function Rankings({ summary, rankings = [], trends = {} }) {
                                             <th className="pb-2 font-medium">Position</th>
                                             <th className="pb-2 font-medium">Previous</th>
                                             <th className="pb-2 font-medium">Change</th>
+                                            <th className="pb-2 font-medium">30d Trend</th>
                                             <th className="pb-2 font-medium">URL</th>
                                         </tr>
                                     </thead>
@@ -73,6 +119,9 @@ export default function Rankings({ summary, rankings = [], trends = {} }) {
                                                     {r.change > 0 && <span className="text-green-600 font-medium">↑ {r.change}</span>}
                                                     {r.change < 0 && <span className="text-red-600 font-medium">↓ {Math.abs(r.change)}</span>}
                                                     {(!r.change || r.change === 0) && <span className="text-gray-400">—</span>}
+                                                </td>
+                                                <td className="py-2.5">
+                                                    <TrendSparkline data={trends[r.keyword]} />
                                                 </td>
                                                 <td className="py-2.5 text-gray-500 truncate max-w-xs text-xs">{r.url || '—'}</td>
                                             </tr>

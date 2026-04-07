@@ -71,7 +71,7 @@ Schedule::call(function () {
             FetchLinkedInAdsPerformanceData::dispatch($campaign);
         }
     });
-})->hourly()->withoutOverlapping();
+})->name('fetch-platform-performance-data')->hourly()->withoutOverlapping();
 
 // ============================================================
 // DAILY OPERATIONS
@@ -94,7 +94,7 @@ Schedule::call(function () {
     \App\Models\Campaign::where('platform_status', 'ENABLED')->each(function ($campaign) {
         CheckCampaignPolicyViolations::dispatch($campaign->id);
     });
-})->daily()->withoutOverlapping();
+})->name('check-campaign-policy-violations')->daily()->withoutOverlapping();
 
 // Keyword Quality Score tracking - captures daily QS snapshots for trending
 Schedule::call(function () {
@@ -103,7 +103,7 @@ Schedule::call(function () {
         ->each(function ($campaign) {
             GetKeywordQualityScore::dispatch($campaign->id);
         });
-})->daily()->withoutOverlapping();
+})->name('get-keyword-quality-scores')->daily()->withoutOverlapping();
 
 // ============================================================
 // WEEKLY OPERATIONS
@@ -116,7 +116,7 @@ Schedule::call(function () {
     })->each(function ($customer) {
         RunCompetitorIntelligence::dispatch($customer);
     });
-})->weekly()->sundays()->at('02:00')->withoutOverlapping(); // Run Sunday nights
+})->name('run-competitor-intelligence')->weekly()->sundays()->at('02:00')->withoutOverlapping(); // Run Sunday nights
 
 // Weekly executive reports - AI-generated performance summaries per customer
 Schedule::call(function () {
@@ -125,7 +125,7 @@ Schedule::call(function () {
     })->each(function ($customer) {
         GenerateExecutiveReport::dispatch($customer->id, 'weekly');
     });
-})->weekly()->mondays()->at('07:00')->withoutOverlapping(); // Run Monday mornings
+})->name('generate-weekly-executive-reports')->weekly()->mondays()->at('07:00')->withoutOverlapping(); // Run Monday mornings
 
 // ============================================================
 // MONTHLY OPERATIONS
@@ -138,7 +138,7 @@ Schedule::call(function () {
     })->each(function ($customer) {
         GenerateMonthlyReport::dispatch($customer->id);
     });
-})->monthlyOn(1, '07:00')->withoutOverlapping(); // Run 1st of each month at 7am
+})->name('generate-monthly-reports')->monthlyOn(1, '07:00')->withoutOverlapping(); // Run 1st of each month at 7am
 
 // Cross-channel budget rebalance - check all auto-rebalance allocations
 Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->dailyAt('06:00')->withoutOverlapping();
@@ -148,7 +148,7 @@ Schedule::call(function () {
     \App\Models\CrmIntegration::where('status', 'connected')->each(function ($integration) {
         \App\Jobs\SyncCrmConversions::dispatch($integration->id);
     });
-})->everyFourHours()->withoutOverlapping();
+})->name('sync-crm-conversions')->everyFourHours()->withoutOverlapping();
 
 // Product feed sync - sync Merchant Center product feeds
 Schedule::call(function () {
@@ -166,11 +166,19 @@ Schedule::call(function () {
         ->each(function ($feed) {
             \App\Jobs\SyncProductFeed::dispatch($feed->id);
         });
-})->hourly()->withoutOverlapping();
+})->name('sync-product-feeds')->hourly()->withoutOverlapping();
 
 // ============================================================
 // SEO & MAINTENANCE
 // ============================================================
+
+// Daily keyword rank tracking - tracks SEO positions for all customers with keywords
+Schedule::call(function () {
+    Customer::whereHas('keywords', fn ($q) => $q->where('status', 'active'))
+        ->each(function ($customer) {
+            \App\Jobs\TrackKeywordRankings::dispatch($customer->id);
+        });
+})->name('track-keyword-rankings')->dailyAt('05:00')->withoutOverlapping();
 
 // Sitemap is maintained as a static file in public/sitemap.xml
 // and committed to version control. No need to regenerate dynamically.

@@ -161,20 +161,27 @@ class RankTrackingService
             ->whereDate('date', now()->toDateString())
             ->get();
 
+        $top3 = $latest->where('position', '<=', 3)->count();
         $top10 = $latest->where('position', '<=', 10)->count();
         $top30 = $latest->where('position', '<=', 30)->count();
         $improved = $latest->where('change', '>', 0)->count();
         $declined = $latest->where('change', '<', 0)->count();
+        $avgPosition = $latest->whereNotNull('position')->avg('position');
 
         return [
             'total_keywords' => $latest->count(),
+            'top_3' => $top3,
+            'top_3_count' => $top3,
             'top_10' => $top10,
+            'top_10_count' => $top10,
             'top_11_30' => $top30 - $top10,
             'not_ranking' => $latest->whereNull('position')->count(),
             'improved' => $improved,
+            'improved_count' => $improved,
             'declined' => $declined,
             'unchanged' => $latest->count() - $improved - $declined,
-            'average_position' => $latest->whereNotNull('position')->avg('position'),
+            'average_position' => $avgPosition,
+            'avg_position' => $avgPosition,
         ];
     }
 }
