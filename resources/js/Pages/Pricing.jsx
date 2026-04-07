@@ -124,7 +124,7 @@ export default function Pricing({ auth, plans = [] }) {
                                         </ul>
                                         <div className="mt-10">
                                             <a
-                                                href="/register"
+                                                href={plan.cta_text === 'Contact Sales' ? 'mailto:hello@sitetospend.com?subject=Agency Plan Inquiry' : '/register'}
                                                 className={`block w-full text-center rounded-lg px-6 py-3 text-base font-medium ${
                                                     plan.is_popular
                                                         ? 'bg-flame-orange-600 text-white hover:bg-flame-orange-700 shadow-lg'

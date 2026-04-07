@@ -4,7 +4,8 @@ import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 
 export default function Landing({ auth, plans = [] }) {
-    const lowestPrice = plans.length > 0 ? Math.round(Math.min(...plans.map(p => p.price_cents)) / 100) : 99;
+    const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
+    const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 99;
     return (
         <>
             <Head>
@@ -141,7 +142,7 @@ export default function Landing({ auth, plans = [] }) {
                                         )}
                                         <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
                                         <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
-                                        <div className="mt-4"><span className="text-4xl font-extrabold text-gray-900">${Math.round(plan.price_cents / 100)}</span><span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'yr' : 'mo'}</span></div>
+                                        <div className="mt-4">{plan.price_cents > 0 ? (<><span className="text-4xl font-extrabold text-gray-900">${Math.round(plan.price_cents / 100)}</span><span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'yr' : 'mo'}</span></>) : !plan.is_free ? (<span className="text-4xl font-extrabold text-gray-900">Custom</span>) : (<><span className="text-4xl font-extrabold text-gray-900">$0</span><span className="text-xl font-medium">/mo</span></>)}</div>
                                     </div>
                                 ))}
                             </div>
