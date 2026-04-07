@@ -141,6 +141,44 @@ class AdminController extends Controller
     }
 
     /**
+     * Update the Google Ads IDs for a customer (admin only).
+     * Used when Standard Access is pending and sub-accounts are created manually in Google Ads UI.
+     */
+    public function updateCustomerGoogle(Request $request, Customer $customer)
+    {
+        $validated = $request->validate([
+            'google_ads_customer_id' => 'nullable|string|max:50',
+            'google_ads_manager_customer_id' => 'nullable|string|max:50',
+        ]);
+
+        // Strip dashes (Google Ads UI shows xxx-xxx-xxxx but API uses digits only)
+        $customerId = $validated['google_ads_customer_id']
+            ? preg_replace('/[^0-9]/', '', $validated['google_ads_customer_id'])
+            : null;
+        $managerId = $validated['google_ads_manager_customer_id']
+            ? preg_replace('/[^0-9]/', '', $validated['google_ads_manager_customer_id'])
+            : null;
+
+        // Default manager to active MCC if not provided but customer ID is set
+        if ($customerId && !$managerId) {
+            $managerId = config('googleads.mcc_customer_id');
+        }
+
+        $customer->update([
+            'google_ads_customer_id' => $customerId,
+            'google_ads_manager_customer_id' => $managerId,
+        ]);
+
+        Log::info('Admin updated Google Ads settings', [
+            'customer_id' => $customer->id,
+            'google_ads_customer_id' => $customer->google_ads_customer_id,
+            'google_ads_manager_customer_id' => $customer->google_ads_manager_customer_id,
+        ]);
+
+        return redirect()->back()->with('success', 'Google Ads account updated.');
+    }
+
+    /**
      * Show detailed view of a campaign including strategies and collateral.
      */
     public function campaignShow(Campaign $campaign)

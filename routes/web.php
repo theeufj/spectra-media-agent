@@ -417,6 +417,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
     Route::put('customers/{customer}', [App\Http\Controllers\AdminController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
     Route::put('customers/{customer}/microsoft', [App\Http\Controllers\AdminController::class, 'updateCustomerMicrosoft'])->name('admin.customers.update-microsoft');
+    Route::put('customers/{customer}/google', [App\Http\Controllers\AdminController::class, 'updateCustomerGoogle'])->name('admin.customers.update-google');
     Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
     Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
     Route::delete('users/{user}', [App\Http\Controllers\AdminController::class, 'deleteUser'])->name('admin.users.delete');

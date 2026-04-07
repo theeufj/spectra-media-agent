@@ -9,6 +9,12 @@ export default function CustomerDetail({ auth, bm_configured }) {
     const [showFacebookModal, setShowFacebookModal] = useState(false);
     const [editingFbAccount, setEditingFbAccount] = useState(false);
     const [editingMsAccount, setEditingMsAccount] = useState(false);
+    const [editingGoogleAccount, setEditingGoogleAccount] = useState(false);
+
+    const googleForm = useForm({
+        google_ads_customer_id: customer.google_ads_customer_id || '',
+        google_ads_manager_customer_id: customer.google_ads_manager_customer_id || '',
+    });
 
     const fbForm = useForm({
         facebook_ads_account_id: customer.facebook_ads_account_id || '',
@@ -33,6 +39,14 @@ export default function CustomerDetail({ auth, bm_configured }) {
         msForm.put(route('admin.customers.update-microsoft', customer.id), {
             preserveScroll: true,
             onSuccess: () => setEditingMsAccount(false),
+        });
+    };
+
+    const saveGoogleAccountIds = (e) => {
+        e.preventDefault();
+        googleForm.put(route('admin.customers.update-google', customer.id), {
+            preserveScroll: true,
+            onSuccess: () => setEditingGoogleAccount(false),
         });
     };
 
@@ -110,11 +124,62 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                     {/* Google Ads Customer ID */}
                                     <div className="mb-4">
                                         <div className="flex items-center justify-between mb-1">
-                                            <span className="text-xs font-medium text-gray-500">Google Ads Customer ID</span>
+                                            <span className="text-xs font-medium text-gray-500">Google Ads Account</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingGoogleAccount(!editingGoogleAccount)}
+                                                className="text-xs text-gray-500 hover:text-gray-700 font-medium transition"
+                                            >
+                                                {editingGoogleAccount ? 'Cancel' : 'Edit'}
+                                            </button>
                                         </div>
-                                        {customer.google_ads_customer_id ? (
-                                            <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono">
-                                                {customer.google_ads_customer_id}
+                                        {editingGoogleAccount ? (
+                                            <form onSubmit={saveGoogleAccountIds} className="space-y-3">
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Customer ID (sub-account)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={googleForm.data.google_ads_customer_id}
+                                                        onChange={e => googleForm.setData('google_ads_customer_id', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                        placeholder="e.g., 123-456-7890 or 1234567890"
+                                                    />
+                                                    {googleForm.errors.google_ads_customer_id && (
+                                                        <p className="mt-1 text-xs text-red-600">{googleForm.errors.google_ads_customer_id}</p>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Manager Customer ID (MCC) — leave blank to use default</label>
+                                                    <input
+                                                        type="text"
+                                                        value={googleForm.data.google_ads_manager_customer_id}
+                                                        onChange={e => googleForm.setData('google_ads_manager_customer_id', e.target.value)}
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-blue-500 focus:border-blue-500"
+                                                        placeholder="e.g., 870-102-3448 (auto-fills from MCC config)"
+                                                    />
+                                                    {googleForm.errors.google_ads_manager_customer_id && (
+                                                        <p className="mt-1 text-xs text-red-600">{googleForm.errors.google_ads_manager_customer_id}</p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="submit"
+                                                        disabled={googleForm.processing}
+                                                        className="px-3 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 disabled:opacity-50"
+                                                    >
+                                                        {googleForm.processing ? 'Saving...' : 'Save'}
+                                                    </button>
+                                                    <p className="text-xs text-gray-400">Create the sub-account in Google Ads UI, then paste the ID here.</p>
+                                                </div>
+                                            </form>
+                                        ) : customer.google_ads_customer_id ? (
+                                            <div className="space-y-1">
+                                                <div className="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono">
+                                                    Customer: {customer.google_ads_customer_id}
+                                                    {customer.google_ads_manager_customer_id && (
+                                                        <span className="ml-2 text-gray-400">/ MCC: {customer.google_ads_manager_customer_id}</span>
+                                                    )}
+                                                </div>
                                             </div>
                                         ) : (
                                             <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-md text-sm text-amber-700">
