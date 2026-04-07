@@ -14,9 +14,18 @@ use Inertia\Inertia;
 
 class SeoController extends Controller
 {
+    private function resolveCustomer(Request $request)
+    {
+        return $request->user()->customer ?? $request->user()->customers()->first();
+    }
+
     public function index(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
 
         $latestAudit = SeoAudit::where('customer_id', $customer->id)
             ->orderBy('created_at', 'desc')
@@ -54,7 +63,11 @@ class SeoController extends Controller
 
     public function runAudit(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
 
         $validated = $request->validate([
             'url' => 'required|url|max:500',
@@ -67,7 +80,11 @@ class SeoController extends Controller
 
     public function auditDetail(Request $request, SeoAudit $audit)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
 
         if ($audit->customer_id !== $customer->id) {
             abort(403);
@@ -80,7 +97,11 @@ class SeoController extends Controller
 
     public function rankings(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
 
         $service = new RankTrackingService($customer);
         $summary = $service->getSummary();
@@ -105,7 +126,11 @@ class SeoController extends Controller
 
     public function trackKeywords(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
 
         TrackKeywordRankings::dispatch($customer->id);
 
@@ -114,7 +139,11 @@ class SeoController extends Controller
 
     public function backlinks(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
         $domain = $customer->website ? parse_url($customer->website, PHP_URL_HOST) : null;
 
         if (!$domain) {
@@ -136,7 +165,11 @@ class SeoController extends Controller
 
     public function competitorComparison(Request $request)
     {
-        $customer = $request->user()->customer;
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
         $domain = $customer->website ? parse_url($customer->website, PHP_URL_HOST) : null;
 
         $competitors = Competitor::where('customer_id', $customer->id)
