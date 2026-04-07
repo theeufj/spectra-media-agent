@@ -587,6 +587,11 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::post('/seo/rankings/track', [SeoController::class, 'trackKeywords'])->name('seo.rankings.track');
     Route::get('/seo/backlinks', [SeoController::class, 'backlinks'])->name('seo.backlinks');
     Route::get('/seo/competitors', [SeoController::class, 'competitorComparison'])->name('seo.competitors');
+
+    // CRO Audits
+    Route::get('/seo/cro', [App\Http\Controllers\CroController::class, 'index'])->name('seo.cro');
+    Route::get('/seo/cro/{audit}', [App\Http\Controllers\CroController::class, 'show'])->name('seo.cro.show');
+    Route::post('/seo/cro/run', [App\Http\Controllers\CroController::class, 'run'])->name('seo.cro.run');
 });
 
 /*
