@@ -101,6 +101,63 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                         </div>
                     )}
 
+                    {/* Quick Wins from Latest Audit */}
+                    {latestAudit?.recommendations && latestAudit.recommendations.length > 0 && (
+                        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <h2 className="text-lg font-semibold text-gray-900">Quick Wins</h2>
+                                {latestAudit?.id && (
+                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-flame-orange-600 hover:underline">View Full Audit</a>
+                                )}
+                            </div>
+                            <div className="space-y-3">
+                                {latestAudit.recommendations.filter(r => r.priority === 'high').slice(0, 3).map((rec, i) => (
+                                    <div key={i} className="border border-gray-100 rounded-lg p-3">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 font-medium">{rec.priority}</span>
+                                            <span className="text-xs text-gray-400">{rec.category}</span>
+                                        </div>
+                                        <p className="text-sm font-medium text-gray-900">{rec.message || (typeof rec === 'string' ? rec : JSON.stringify(rec))}</p>
+                                        {rec.action && (
+                                            <div className="mt-2 bg-gray-50 rounded p-2">
+                                                <code className="text-xs text-gray-600 break-all">{rec.action}</code>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Keyword Snapshot from Latest Audit */}
+                    {latestAudit?.content_analysis?.detected_keywords?.length > 0 && (
+                        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <h2 className="text-lg font-semibold text-gray-900">Top Keywords Detected</h2>
+                                {latestAudit?.id && (
+                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-flame-orange-600 hover:underline">Full Analysis</a>
+                                )}
+                            </div>
+                            <div className="flex flex-wrap gap-1.5 mb-3">
+                                {latestAudit.content_analysis.detected_keywords.slice(0, 15).map((kw, i) => (
+                                    <span key={i} className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-flame-orange-50 text-flame-orange-700">{kw}</span>
+                                ))}
+                            </div>
+                            {(latestAudit.content_analysis.keywords_missing_from_title?.length > 0 || latestAudit.content_analysis.keywords_missing_from_description?.length > 0) && (
+                                <div className="bg-yellow-50 rounded-lg p-3 mt-2">
+                                    <p className="text-sm font-medium text-yellow-800">Keywords missing from your meta tags:</p>
+                                    <div className="flex flex-wrap gap-1.5 mt-1.5">
+                                        {[...(latestAudit.content_analysis.keywords_missing_from_title || []), ...(latestAudit.content_analysis.keywords_missing_from_description || [])]
+                                            .filter((v, i, a) => a.indexOf(v) === i)
+                                            .map((kw, i) => (
+                                                <span key={i} className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-200 text-yellow-800">{kw}</span>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {/* Top Rankings */}
                     {topRankings.length > 0 && (
                         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">

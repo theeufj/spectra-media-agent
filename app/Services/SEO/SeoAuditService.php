@@ -52,6 +52,7 @@ class SeoAuditService
         $schema = $this->analyzeSchema($html);
         $security = $this->analyzeSecurity($url);
         $performance = $this->analyzePerformance($url);
+        $content = $this->analyzeContent($html, $meta, $headings);
 
         $issues = [];
         $recommendations = [];
@@ -123,8 +124,19 @@ class SeoAuditService
             $issues[] = ['severity' => 'warning', 'category' => 'performance', 'message' => 'Page load time exceeds 3 seconds'];
         }
 
-        // AI-powered recommendations
-        $aiRecommendations = $this->getAiRecommendations($url, $meta, $headings, $issues);
+        // Content analysis issues
+        if (($content['word_count'] ?? 0) < 300) {
+            $issues[] = ['severity' => 'warning', 'category' => 'content', 'message' => "Thin content: only {$content['word_count']} words (aim for 600+)"];
+        }
+        if (empty($content['detected_keywords'])) {
+            $issues[] = ['severity' => 'warning', 'category' => 'content', 'message' => 'No strong keyword themes detected in page content'];
+        }
+        if (!$meta['has_og']) {
+            $issues[] = ['severity' => 'info', 'category' => 'social', 'message' => 'Missing Open Graph tags for social media sharing'];
+        }
+
+        // AI-powered recommendations (enhanced with content analysis)
+        $aiRecommendations = $this->getAiRecommendations($url, $meta, $headings, $content, $issues);
         $recommendations = array_merge($recommendations, $aiRecommendations);
 
         // Calculate score
@@ -138,6 +150,7 @@ class SeoAuditService
             'schema' => $schema,
             'security' => $security,
             'performance' => $performance,
+            'content' => $content,
         ]);
 
         Log::info('SEO Audit: Complete', [
@@ -350,30 +363,67 @@ class SeoAuditService
         }
     }
 
-    protected function getAiRecommendations(string $url, array $meta, array $headings, array $issues): array
+    protected function getAiRecommendations(string $url, array $meta, array $headings, array $content, array $issues): array
     {
         try {
             $issueList = collect($issues)->pluck('message')->implode("\n- ");
+            $topKeywords = implode(', ', array_slice($content['detected_keywords'] ?? [], 0, 10));
+            $headingTexts = collect($content['heading_texts'] ?? [])->take(10)->implode(', ');
 
             $prompt = <<<PROMPT
-You are an SEO expert analyzing this webpage:
-URL: {$url}
-Title: {$meta['title']}
-Description: {$meta['description']}
-H1 Count: {$headings['h1_count']}
-Total headings: {$headings['total_headings']}
+You are an expert SEO consultant performing a deep analysis of this webpage. Provide SPECIFIC, COPY-PASTE READY recommendations.
 
-Current issues found:
+URL: {$url}
+Current Title: {$meta['title']}
+Current Meta Description: {$meta['description']}
+H1 Tags: {$headings['h1_count']}
+Heading Text Samples: {$headingTexts}
+Word Count: {$content['word_count']}
+Top Keywords Detected: {$topKeywords}
+Has Schema Markup: {$content['has_schema']}
+Has Open Graph: {$meta['has_og']}
+
+Current Issues:
 - {$issueList}
 
-Provide 3-5 specific, actionable SEO recommendations as a JSON array:
-[{"category": "content|technical|performance|backlinks", "message": "recommendation", "priority": "high|medium|low"}]
-Return ONLY valid JSON.
+Return a JSON array of 5-8 actionable recommendations. Each MUST include an "action" field with exact text/code the user can copy and use. Categories: meta_tags, keywords, content, technical, schema, social.
+
+Example format:
+[
+  {
+    "category": "meta_tags",
+    "message": "Your title tag is missing target keywords. Use this optimized title instead.",
+    "action": "Proveably - AI-Powered Digital Marketing Platform | Analytics & Automation",
+    "priority": "high"
+  },
+  {
+    "category": "keywords",
+    "message": "Add these high-value keywords to your meta description and H2 headings.",
+    "action": "digital marketing, analytics, automation, campaign management, ROI tracking",
+    "priority": "high"
+  },
+  {
+    "category": "schema",
+    "message": "Add Organization schema markup to improve search appearance.",
+    "action": "<script type=\"application/ld+json\">{\"@context\":\"https://schema.org\",\"@type\":\"Organization\",\"name\":\"...\",\"url\":\"...\"}</script>",
+    "priority": "medium"
+  }
+]
+
+Rules:
+- The "action" field MUST contain exact text, markup, or keywords the user can directly copy and implement
+- For meta_tags: provide the exact optimized title and description text
+- For keywords: list specific keywords to add and WHERE to add them (title, description, H2s, body)
+- For content: suggest specific sections or topics to add to the page
+- For schema: provide the exact JSON-LD markup to add
+- For social: provide exact og:title, og:description values
+- Be specific to THIS page — no generic advice
+- Return ONLY valid JSON
 PROMPT;
 
             $result = $this->gemini->generateContent('gemini-3-flash-preview', $prompt, [
                 'temperature' => 0.3,
-                'maxOutputTokens' => 1024,
+                'maxOutputTokens' => 2048,
             ]);
 
             $text = $result['text'] ?? '';
@@ -385,6 +435,82 @@ PROMPT;
             Log::debug('SEO Audit: AI recommendations failed', ['error' => $e->getMessage()]);
             return [];
         }
+    }
+
+    /**
+     * Analyze page content: extract keywords, word count, keyword density.
+     */
+    protected function analyzeContent(string $html, array $meta, array $headings): array
+    {
+        $dom = new \DOMDocument();
+        @$dom->loadHTML($html, LIBXML_NOERROR);
+
+        // Remove script and style tags
+        foreach (['script', 'style', 'noscript'] as $tag) {
+            $nodes = $dom->getElementsByTagName($tag);
+            while ($nodes->length > 0) {
+                $nodes->item(0)->parentNode->removeChild($nodes->item(0));
+            }
+        }
+
+        $bodyNodes = $dom->getElementsByTagName('body');
+        $bodyText = '';
+        if ($bodyNodes->length > 0) {
+            $bodyText = $bodyNodes->item(0)->textContent;
+        }
+
+        // Clean up whitespace
+        $bodyText = preg_replace('/\s+/', ' ', trim($bodyText));
+        $words = array_filter(str_word_count(strtolower($bodyText), 1), fn ($w) => strlen($w) > 2);
+        $wordCount = count($words);
+
+        // Extract keyword frequency (exclude common stop words)
+        $stopWords = ['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was', 'one', 'our', 'out',
+            'with', 'that', 'this', 'from', 'have', 'has', 'will', 'your', 'what', 'there', 'each', 'which', 'their',
+            'how', 'about', 'more', 'been', 'would', 'them', 'they', 'than', 'other', 'into', 'could', 'also', 'these',
+            'some', 'just', 'its', 'over', 'such', 'only', 'very', 'when', 'where', 'does', 'did', 'get', 'who'];
+
+        $wordFreq = array_count_values($words);
+        $wordFreq = array_filter($wordFreq, fn ($count, $word) => !in_array($word, $stopWords) && $count >= 2, ARRAY_FILTER_USE_BOTH);
+        arsort($wordFreq);
+
+        $topKeywords = array_slice(array_keys($wordFreq), 0, 20);
+
+        // Build 2-word phrases (bigrams)
+        $wordList = array_values($words);
+        $bigrams = [];
+        for ($i = 0; $i < count($wordList) - 1; $i++) {
+            if (in_array($wordList[$i], $stopWords) || in_array($wordList[$i + 1], $stopWords)) continue;
+            $phrase = $wordList[$i] . ' ' . $wordList[$i + 1];
+            $bigrams[$phrase] = ($bigrams[$phrase] ?? 0) + 1;
+        }
+        $bigrams = array_filter($bigrams, fn ($count) => $count >= 2);
+        arsort($bigrams);
+        $topPhrases = array_slice(array_keys($bigrams), 0, 10);
+
+        // Check keyword presence in meta tags
+        $titleLower = strtolower($meta['title'] ?? '');
+        $descLower = strtolower($meta['description'] ?? '');
+        $keywordsInTitle = array_filter($topKeywords, fn ($kw) => str_contains($titleLower, $kw));
+        $keywordsInDesc = array_filter($topKeywords, fn ($kw) => str_contains($descLower, $kw));
+        $keywordsMissingFromTitle = array_diff(array_slice($topKeywords, 0, 5), $keywordsInTitle);
+        $keywordsMissingFromDesc = array_diff(array_slice($topKeywords, 0, 5), $keywordsInDesc);
+
+        // Extract heading texts
+        $headingTexts = collect($headings['headings'] ?? [])->pluck('text')->toArray();
+
+        return [
+            'word_count' => $wordCount,
+            'detected_keywords' => $topKeywords,
+            'keyword_phrases' => $topPhrases,
+            'keyword_density' => array_slice($wordFreq, 0, 15, true),
+            'keywords_in_title' => array_values($keywordsInTitle),
+            'keywords_in_description' => array_values($keywordsInDesc),
+            'keywords_missing_from_title' => array_values($keywordsMissingFromTitle),
+            'keywords_missing_from_description' => array_values($keywordsMissingFromDesc),
+            'heading_texts' => $headingTexts,
+            'has_schema' => !empty($this->analyzeSchema($html)['types']),
+        ];
     }
 
     protected function calculateScore(array $issues): float
@@ -418,6 +544,7 @@ PROMPT;
             'schema_analysis' => $details['schema'] ?? null,
             'security_analysis' => $details['security'] ?? null,
             'performance_analysis' => $details['performance'] ?? null,
+            'content_analysis' => $details['content'] ?? null,
         ]);
     }
 }

@@ -23,6 +23,7 @@ class SeoAudit extends Model
         'schema_analysis',
         'security_analysis',
         'performance_analysis',
+        'content_analysis',
     ];
 
     protected function casts(): array
@@ -38,6 +39,7 @@ class SeoAudit extends Model
             'schema_analysis' => 'array',
             'security_analysis' => 'array',
             'performance_analysis' => 'array',
+            'content_analysis' => 'array',
         ];
     }
 
