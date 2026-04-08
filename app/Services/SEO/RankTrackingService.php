@@ -4,23 +4,24 @@ namespace App\Services\SEO;
 
 use App\Models\Customer;
 use App\Models\SeoRanking;
-use App\Services\GeminiService;
-use Illuminate\Support\Facades\Http;
+use App\Services\FirecrawlService;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Keyword rank tracking service.
  *
  * Tracks daily search engine ranking positions for target keywords
- * using Google Search Console API and fallback estimation methods.
+ * using Firecrawl search API.
  */
 class RankTrackingService
 {
     protected Customer $customer;
+    protected FirecrawlService $firecrawl;
 
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
+        $this->firecrawl = app(FirecrawlService::class);
     }
 
     /**
@@ -74,19 +75,19 @@ class RankTrackingService
 
         $previousPosition = $previous?->position;
 
-        // Use Google Custom Search API for position checking
-        $position = $this->searchGoogleForPosition($keyword, $domain);
+        // Use Firecrawl search to find ranking position
+        $result = $this->searchForPosition($keyword, $domain);
 
         $change = null;
-        if ($previousPosition !== null && $position !== null) {
-            $change = $previousPosition - $position; // Positive = improved
+        if ($previousPosition !== null && $result['position'] !== null) {
+            $change = $previousPosition - $result['position']; // Positive = improved
         }
 
         return [
             'keyword' => $keyword,
             'domain' => $domain,
-            'position' => $position,
-            'url' => null,
+            'position' => $result['position'],
+            'url' => $result['url'],
             'previous_position' => $previousPosition,
             'change' => $change,
             'tracked_at' => now()->toIso8601String(),
@@ -94,43 +95,37 @@ class RankTrackingService
     }
 
     /**
-     * Search Google Custom Search API to find ranking position.
+     * Search via Firecrawl to find the domain's ranking position for a keyword.
      */
-    protected function searchGoogleForPosition(string $keyword, string $domain): ?int
+    protected function searchForPosition(string $keyword, string $domain): array
     {
         try {
-            $apiKey = config('services.google_cse.api_key');
-            $cseId = config('services.google_cse.search_engine_id');
-
-            if (!$apiKey || !$cseId) {
-                return null;
+            if (!$this->firecrawl->isConfigured()) {
+                Log::debug('RankTracking: Firecrawl not configured');
+                return ['position' => null, 'url' => null];
             }
 
-            // Search up to 100 results (10 pages of 10)
-            for ($start = 1; $start <= 91; $start += 10) {
-                $response = Http::get('https://www.googleapis.com/customsearch/v1', [
-                    'key' => $apiKey,
-                    'cx' => $cseId,
-                    'q' => $keyword,
-                    'start' => $start,
-                    'num' => 10,
-                ]);
+            // Fetch up to 100 results to find position
+            $response = $this->firecrawl->search($keyword, 100);
 
-                if (!$response->successful()) break;
+            if (!$response['success']) {
+                return ['position' => null, 'url' => null];
+            }
 
-                $items = $response->json('items', []);
-                foreach ($items as $index => $item) {
-                    $link = $item['link'] ?? '';
-                    if (str_contains($link, $domain)) {
-                        return $start + $index;
-                    }
+            foreach ($response['results'] as $index => $item) {
+                $url = $item['url'] ?? '';
+                if (str_contains($url, $domain)) {
+                    return [
+                        'position' => $index + 1,
+                        'url' => $url,
+                    ];
                 }
             }
 
-            return null; // Not found in top 100
+            return ['position' => null, 'url' => null]; // Not found in results
         } catch (\Exception $e) {
-            Log::debug('RankTracking: Google search failed', ['keyword' => $keyword, 'error' => $e->getMessage()]);
-            return null;
+            Log::debug('RankTracking: Search failed', ['keyword' => $keyword, 'error' => $e->getMessage()]);
+            return ['position' => null, 'url' => null];
         }
     }
 

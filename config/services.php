@@ -96,4 +96,8 @@ return [
         'api_key' => env('FIRECRAWL_API_KEY'),
     ],
 
+    'moz' => [
+        'api_key' => env('MOZ_API_KEY'),
+    ],
+
 ];

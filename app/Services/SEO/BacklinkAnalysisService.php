@@ -3,6 +3,7 @@
 namespace App\Services\SEO;
 
 use App\Models\Customer;
+use App\Services\FirecrawlService;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -18,11 +19,13 @@ class BacklinkAnalysisService
 {
     protected Customer $customer;
     protected GeminiService $gemini;
+    protected FirecrawlService $firecrawl;
 
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
         $this->gemini = app(GeminiService::class);
+        $this->firecrawl = app(FirecrawlService::class);
     }
 
     /**
@@ -94,7 +97,7 @@ class BacklinkAnalysisService
             return $this->fetchFromMoz($domain, $mozApiKey);
         }
 
-        // Fallback: use Common Crawl / Google search operator estimation
+        // Fallback: use Firecrawl search to find pages linking to the domain
         return $this->estimateBacklinks($domain);
     }
 
@@ -129,67 +132,56 @@ class BacklinkAnalysisService
     }
 
     /**
-     * Estimate backlinks using Google Custom Search API link: operator.
+     * Estimate backlinks using Firecrawl search API.
      *
-     * This is a limited fallback when no Moz API key is configured.
-     * Uses Google CSE to find pages linking to the domain.
+     * Searches for pages that mention/link to the domain using
+     * query operators supported by Firecrawl.
      */
     protected function estimateBacklinks(string $domain): array
     {
-        $apiKey = config('services.google_cse.api_key') ?: config('services.google.search_api_key');
-        $cseId = config('services.google_cse.search_engine_id') ?: config('services.google.search_engine_id');
-
-        if (!$apiKey || !$cseId) {
-            Log::debug('BacklinkAnalysis: No Moz or Google CSE API key configured, cannot fetch backlinks');
+        if (!$this->firecrawl->isConfigured()) {
+            Log::debug('BacklinkAnalysis: Firecrawl not configured, cannot estimate backlinks');
             return [];
         }
 
         try {
             $backlinks = [];
             $queries = [
-                "link:{$domain} -site:{$domain}",
                 "\"{$domain}\" -site:{$domain}",
+                "link:{$domain} -site:{$domain}",
             ];
 
             foreach ($queries as $query) {
-                for ($start = 1; $start <= 21; $start += 10) {
-                    $response = Http::get('https://www.googleapis.com/customsearch/v1', [
-                        'key' => $apiKey,
-                        'cx' => $cseId,
-                        'q' => $query,
-                        'start' => $start,
-                        'num' => 10,
-                    ]);
+                $response = $this->firecrawl->search($query, 50);
 
-                    if (!$response->successful()) break;
+                if (!$response['success']) continue;
 
-                    foreach ($response->json('items', []) as $item) {
-                        $sourceUrl = $item['link'] ?? '';
-                        $sourceHost = parse_url($sourceUrl, PHP_URL_HOST) ?: '';
+                foreach ($response['results'] as $item) {
+                    $sourceUrl = $item['url'] ?? '';
+                    $sourceHost = parse_url($sourceUrl, PHP_URL_HOST) ?: '';
 
-                        // Skip self-referencing results
-                        if (str_contains($sourceHost, $domain)) continue;
+                    // Skip self-referencing results
+                    if (str_contains($sourceHost, $domain)) continue;
 
-                        $backlinks[] = [
-                            'source_url' => $sourceUrl,
-                            'source_domain' => $sourceHost,
-                            'target_url' => "https://{$domain}",
-                            'anchor_text' => $item['title'] ?? '',
-                            'rel' => 'dofollow', // Cannot determine via CSE
-                            'domain_authority' => null,
-                            'first_seen' => null,
-                        ];
-                    }
+                    $backlinks[] = [
+                        'source_url' => $sourceUrl,
+                        'source_domain' => $sourceHost,
+                        'target_url' => "https://{$domain}",
+                        'anchor_text' => $item['title'] ?? $item['description'] ?? '',
+                        'rel' => 'dofollow',
+                        'domain_authority' => null,
+                        'first_seen' => null,
+                    ];
                 }
             }
 
-            // Deduplicate by source domain
+            // Deduplicate by source URL
             return collect($backlinks)
                 ->unique('source_url')
                 ->values()
                 ->toArray();
         } catch (\Exception $e) {
-            Log::debug('BacklinkAnalysis: CSE fallback failed', ['error' => $e->getMessage()]);
+            Log::debug('BacklinkAnalysis: Firecrawl fallback failed', ['error' => $e->getMessage()]);
             return [];
         }
     }

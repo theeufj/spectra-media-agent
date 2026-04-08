@@ -77,4 +77,54 @@ class FirecrawlService
 
         return $result;
     }
+
+    /**
+     * Search the web via Firecrawl's search endpoint.
+     *
+     * Supports query operators: "", -, site:, -site:, inurl:, intitle:, filetype:
+     *
+     * @param string $query The search query (max 500 chars)
+     * @param int $limit Max results (1-100, default 10)
+     * @return array{results: array, success: bool}
+     */
+    public function search(string $query, int $limit = 10): array
+    {
+        if (!$this->isConfigured()) {
+            Log::debug('FirecrawlService: API key not configured, skipping search');
+            return ['results' => [], 'success' => false];
+        }
+
+        try {
+            $response = Http::withHeaders([
+                'Authorization' => 'Bearer ' . $this->apiKey,
+            ])->timeout(60)->post('https://api.firecrawl.dev/v2/search', [
+                'query' => substr($query, 0, 500),
+                'limit' => min(max($limit, 1), 100),
+            ]);
+
+            if (!$response->successful()) {
+                Log::warning('FirecrawlService: Search API error', [
+                    'query' => $query,
+                    'status' => $response->status(),
+                ]);
+                return ['results' => [], 'success' => false];
+            }
+
+            $data = $response->json('data', []);
+            $webResults = $data['web'] ?? $data ?? [];
+
+            Log::info('FirecrawlService: Search completed', [
+                'query' => $query,
+                'results_count' => count($webResults),
+            ]);
+
+            return ['results' => $webResults, 'success' => true];
+        } catch (\Exception $e) {
+            Log::warning('FirecrawlService: Search exception', [
+                'query' => $query,
+                'error' => $e->getMessage(),
+            ]);
+            return ['results' => [], 'success' => false];
+        }
+    }
 }

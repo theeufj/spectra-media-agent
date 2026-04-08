@@ -119,6 +119,11 @@ class Customer extends Model
         return $this->hasMany(Campaign::class);
     }
 
+    public function keywords()
+    {
+        return $this->hasMany(Keyword::class);
+    }
+
     /**
      * Get the brand guideline for the customer.
      */
