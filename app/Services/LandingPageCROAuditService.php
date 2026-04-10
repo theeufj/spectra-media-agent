@@ -192,23 +192,39 @@ class LandingPageCROAuditService
     {
         $ctaButtons = [];
         $hasAboveFoldCTA = false;
+        $seen = []; // deduplicate by text
 
-        // Look for common CTA patterns
+        // Common CTA selectors (element + class-based)
         $ctaSelectors = [
             'button',
             'a.button',
             'a.btn',
+            'a[class*="btn-"]',
+            'a[class*="btn_"]',
             'input[type="submit"]',
+            'input[type="button"]',
             '[role="button"]',
             '.cta',
             '.call-to-action',
+            'a[class*="cta"]',
+            // Tailwind-style links styled as buttons
+            'a[class*="bg-"]',
+            'a[class*="rounded"]',
+            // WordPress block buttons
+            '.wp-block-button__link',
+            '.wp-block-buttons a',
+            // Common frameworks
+            '.elementor-button',
+            '.vc_btn',
+            '.uagb-button__link',
         ];
 
         foreach ($ctaSelectors as $selector) {
             try {
-                $crawler->filter($selector)->each(function (Crawler $node) use (&$ctaButtons) {
+                $crawler->filter($selector)->each(function (Crawler $node) use (&$ctaButtons, &$seen) {
                     $text = trim($node->text());
-                    if (!empty($text)) {
+                    if (!empty($text) && !isset($seen[$text])) {
+                        $seen[$text] = true;
                         $ctaButtons[] = [
                             'text' => $text,
                             'type' => $node->nodeName(),
@@ -221,8 +237,52 @@ class LandingPageCROAuditService
             }
         }
 
-        // Check for above-the-fold CTA (first 3 CTAs are likely above fold)
-        $hasAboveFoldCTA = count($ctaButtons) > 0;
+        // Text-based CTA detection: find links/spans whose text matches action phrases
+        $ctaPhrases = '/^(get started|sign up|start|buy now|shop now|try|order|subscribe|download|join|book|schedule|request|contact us|learn more|free trial|add to cart|checkout|register|apply now|claim|enroll|donate|explore|view demo|watch demo)/i';
+
+        try {
+            $crawler->filter('a, span[onclick], div[onclick]')->each(function (Crawler $node) use (&$ctaButtons, &$seen, $ctaPhrases) {
+                $text = trim($node->text());
+                if (!empty($text) && strlen($text) < 60 && !isset($seen[$text]) && preg_match($ctaPhrases, $text)) {
+                    $seen[$text] = true;
+                    $ctaButtons[] = [
+                        'text' => $text,
+                        'type' => $node->nodeName(),
+                        'classes' => $node->attr('class'),
+                    ];
+                }
+            });
+        } catch (\Exception $e) {
+            // Continue
+        }
+
+        // Above-the-fold heuristic: check if a CTA appears within the first major section
+        if (count($ctaButtons) > 0) {
+            // Check if any CTA lives inside a hero/header/first section
+            $aboveFoldSelectors = ['header', 'section:first-of-type', '.hero', '[class*="hero"]', '[class*="banner"]', '#hero'];
+            foreach ($aboveFoldSelectors as $selector) {
+                try {
+                    $section = $crawler->filter($selector);
+                    if ($section->count() > 0) {
+                        $sectionText = $section->text();
+                        foreach ($ctaButtons as $cta) {
+                            if (str_contains($sectionText, $cta['text'])) {
+                                $hasAboveFoldCTA = true;
+                                break 2;
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    continue;
+                }
+            }
+
+            // Fallback: if we found CTAs but couldn't identify a hero section,
+            // assume the first CTA is above the fold
+            if (!$hasAboveFoldCTA) {
+                $hasAboveFoldCTA = true;
+            }
+        }
 
         // Identify primary CTA (usually the first button or most prominent)
         $primaryCTA = !empty($ctaButtons) ? $ctaButtons[0]['text'] : null;
@@ -260,24 +320,30 @@ class LandingPageCROAuditService
                       "3. Top 5 keywords/phrases detected\n\n" .
                       "Format as JSON with keys: score, analysis, keywords";
 
-            $response = $this->geminiService->generateContent('gemini-3.1-flash-lite-preview', $prompt);
+            $response = $this->geminiService->generateContent('gemini-3-flash-preview', $prompt);
             $text = $response['text'] ?? '';
 
-            // Try to parse JSON response
+            // Strip markdown code fences if present
+            $text = preg_replace('/^```(?:json)?\s*/m', '', $text);
+            $text = preg_replace('/```\s*$/m', '', $text);
+
+            // Try to parse JSON response (handles nested objects/arrays)
             $jsonMatch = [];
-            if (preg_match('/\{[^}]+\}/', $text, $jsonMatch)) {
+            if (preg_match('/\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/s', $text, $jsonMatch)) {
                 $data = json_decode($jsonMatch[0], true);
-                return [
-                    'score' => $data['score'] ?? 50,
-                    'analysis' => $data['analysis'] ?? 'Analysis unavailable',
-                    'keywords' => $data['keywords'] ?? [],
-                ];
+                if (is_array($data)) {
+                    return [
+                        'score' => (int) ($data['score'] ?? 50),
+                        'analysis' => $data['analysis'] ?? 'Analysis unavailable',
+                        'keywords' => $data['keywords'] ?? [],
+                    ];
+                }
             }
 
             // Fallback if AI response is not JSON
             return [
                 'score' => 50,
-                'analysis' => $text,
+                'analysis' => $text ?: 'Analysis unavailable',
                 'keywords' => $this->extractKeywords($h1 . ' ' . $metaDescription),
             ];
 
