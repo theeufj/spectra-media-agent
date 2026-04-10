@@ -18,7 +18,7 @@ class FeatureFlagController extends Controller
     {
         $features = $this->discoverFeatures();
 
-        $users = User::select('id', 'name', 'email', 'is_admin')
+        $users = User::select('id', 'name', 'email')
             ->orderBy('name')
             ->get()
             ->map(function (User $user) use ($features) {
@@ -30,7 +30,7 @@ class FeatureFlagController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
-                    'is_admin' => $user->is_admin,
+                    'is_admin' => $user->hasRole('admin'),
                     'plan' => optional($user->resolveCurrentPlan())->name,
                     'flags' => $flags,
                 ];

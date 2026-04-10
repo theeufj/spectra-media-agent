@@ -132,7 +132,7 @@ class User extends Authenticatable implements MustVerifyEmail
     public function hasFeature(string $feature): bool
     {
         // Admins always have access
-        if ($this->is_admin) {
+        if ($this->hasRole('admin')) {
             return true;
         }
 
@@ -152,7 +152,7 @@ class User extends Authenticatable implements MustVerifyEmail
      */
     public function allowedPlatforms(): array
     {
-        if ($this->is_admin) {
+        if ($this->hasRole('admin')) {
             return ['google', 'facebook', 'microsoft', 'linkedin'];
         }
 
