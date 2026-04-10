@@ -27,14 +27,16 @@ use App\Notifications\ScheduledJobFailed;
 /**
  * Notify admin users when a critical scheduled job fails.
  */
-function notifyAdminOnFailure(string $jobName): \Closure
-{
-    return function () use ($jobName) {
-        $admins = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-        foreach ($admins as $admin) {
-            $admin->notify(new ScheduledJobFailed($jobName, 'Scheduled execution failed'));
-        }
-    };
+if (!function_exists('notifyAdminOnFailure')) {
+    function notifyAdminOnFailure(string $jobName): \Closure
+    {
+        return function () use ($jobName) {
+            $admins = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new ScheduledJobFailed($jobName, 'Scheduled execution failed'));
+            }
+        };
+    }
 }
 
 Artisan::command('inspire', function () {
