@@ -119,6 +119,10 @@ class WarRoomController extends Controller
                 'variants' => $t->variants,
             ]);
 
+        // 7. Competitive strategy summary
+        $competitiveStrategy = $customer->competitive_strategy;
+        $strategyUpdatedAt = $customer->competitive_strategy_updated_at?->toIso8601String();
+
         return Inertia::render('Strategy/WarRoom', [
             'canAccessWarRoom' => true,
             'health' => $health,
@@ -127,6 +131,8 @@ class WarRoomController extends Controller
             'performance' => $performance,
             'alerts' => $alerts,
             'abTests' => $abTests,
+            'competitiveStrategy' => $competitiveStrategy,
+            'strategyUpdatedAt' => $strategyUpdatedAt,
         ]);
     }
 

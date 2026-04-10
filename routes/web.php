@@ -621,6 +621,7 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::post('/seo/rankings/track', [SeoController::class, 'trackKeywords'])->name('seo.rankings.track');
     Route::get('/seo/backlinks', [SeoController::class, 'backlinks'])->name('seo.backlinks');
     Route::get('/seo/competitors', [SeoController::class, 'competitorComparison'])->name('seo.competitors');
+    Route::post('/seo/competitors/refresh', [SeoController::class, 'refreshCompetitors'])->name('seo.competitors.refresh');
 
     // CRO Audits
     Route::get('/seo/cro', [App\Http\Controllers\CroController::class, 'index'])->name('seo.cro');

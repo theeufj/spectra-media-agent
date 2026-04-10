@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\RunCompetitorIntelligence;
 use App\Jobs\RunSeoAudit;
 use App\Jobs\TrackKeywordRankings;
 use App\Models\Competitor;
@@ -184,6 +185,38 @@ class SeoController extends Controller
             'domain' => $domain,
             'competitors' => $competitors,
             'canAccessCompetitors' => $canAccess,
+            'competitiveStrategy' => $canAccess ? $customer->competitive_strategy : null,
+            'strategyUpdatedAt' => $canAccess ? $customer->competitive_strategy_updated_at?->toIso8601String() : null,
+            'lastAnalyzedAt' => $canAccess ? $customer->competitor_analysis_at?->toIso8601String() : null,
+        ]);
+    }
+
+    public function refreshCompetitors(Request $request)
+    {
+        $customer = $this->resolveCustomer($request);
+
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
+
+        if (!$request->user()->hasFeature('competitor_analysis')) {
+            abort(403);
+        }
+
+        // Rate limit: once per 24 hours
+        $lastRun = $customer->competitor_analysis_at;
+        if ($lastRun && $lastRun->diffInHours(now()) < 24) {
+            return back()->with('flash', [
+                'type' => 'warning',
+                'message' => 'Competitor analysis was run recently. Please wait 24 hours between refreshes.',
+            ]);
+        }
+
+        RunCompetitorIntelligence::dispatch($customer, true);
+
+        return back()->with('flash', [
+            'type' => 'success',
+            'message' => 'Competitor analysis started. Results will appear within a few minutes.',
         ]);
     }
 }
