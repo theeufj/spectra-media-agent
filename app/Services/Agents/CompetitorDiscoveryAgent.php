@@ -66,6 +66,8 @@ class CompetitorDiscoveryAgent
                 'customer_id' => $customer->id,
                 'website' => $customer->website,
                 'existing_competitors' => count($existingCompetitors),
+                'has_knowledge_base' => !empty($knowledgeBaseContent),
+                'search_api_configured' => $this->searchService->isConfigured(),
             ]);
 
             // Step 3: Try Google Custom Search API first (structured results)
@@ -84,8 +86,17 @@ class CompetitorDiscoveryAgent
             }
 
             // Step 4: Use Gemini with Google Search grounding for AI-enhanced discovery
-            if (!empty($knowledgeBaseContent)) {
-                $aiResults = $this->discoverViaGemini($customer, $knowledgeBaseContent, $existingCompetitors);
+            // Fall back to website + business type context when knowledge base is empty
+            $geminiContext = $knowledgeBaseContent;
+            if (empty($geminiContext) && !empty($customer->website)) {
+                $geminiContext = "Website: {$customer->website}\n"
+                    . "Business: {$customer->name}\n"
+                    . "Type: " . ($customer->business_type ?? $customer->industry ?? 'unknown') . "\n"
+                    . "Description: " . ($customer->description ?? '');
+            }
+
+            if (!empty($geminiContext)) {
+                $aiResults = $this->discoverViaGemini($customer, $geminiContext, $existingCompetitors);
                 
                 foreach ($aiResults as $competitorData) {
                     $saved = $this->saveCompetitor($customer, $competitorData);
@@ -189,15 +200,17 @@ class CompetitorDiscoveryAgent
         try {
             // Use Gemini with Google Search grounding enabled
             $response = $this->gemini->generateContent(
-                $prompt,
                 $this->config['discovery_model'] ?? 'gemini-3-flash-preview',
+                $prompt,
                 [
-                    'enableGoogleSearch' => true, // Enable Google Search grounding
                     'temperature' => 0.3, // Lower temperature for more focused results
-                ]
+                ],
+                null,  // systemInstruction
+                false, // enableThinking
+                true,  // enableGoogleSearch
             );
 
-            $responseText = $response['candidates'][0]['content']['parts'][0]['text'] ?? '';
+            $responseText = $response['text'] ?? '';
 
             if (empty($responseText)) {
                 Log::warning('CompetitorDiscoveryAgent: Empty Gemini response');
