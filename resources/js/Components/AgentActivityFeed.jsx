@@ -93,8 +93,8 @@ export default function AgentActivityFeed({ initialActivities = [], campaignId =
 
     if (loading) {
         return (
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Agent Activity</h3>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Agent Activity</h3>
                 <div className="animate-pulse space-y-3">
                     {[1, 2, 3].map(i => (
                         <div key={i} className="flex items-center space-x-3">
@@ -111,9 +111,9 @@ export default function AgentActivityFeed({ initialActivities = [], campaignId =
     }
 
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Agent Activity</h3>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Agent Activity</h3>
                 {activities.length > 0 && (
                     <span className="flex items-center text-xs text-green-600">
                         <span className="w-2 h-2 bg-green-400 rounded-full mr-1 animate-pulse"></span>

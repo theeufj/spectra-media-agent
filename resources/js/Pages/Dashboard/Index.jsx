@@ -73,8 +73,8 @@ export default function Dashboard({ auth }) {
             user={auth.user}
             header={
                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
-                    <h2 className="font-semibold text-xl text-gray-800 leading-tight">
-                        Performance Dashboard
+                    <h2 className="font-semibold text-lg text-gray-800 leading-tight">
+                        Dashboard
                     </h2>
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4">
                         {campaigns.length > 0 && (
@@ -125,8 +125,8 @@ export default function Dashboard({ auth }) {
                     
                     {/* Usage Meters for Free Tier */}
                     {usageStats && usageStats.subscription_status !== 'active' && (
-                        <div className="mb-6 bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                            <h3 className="text-lg font-medium text-gray-900 mb-4">Free Tier Usage</h3>
+                        <div className="mb-6 bg-white overflow-hidden shadow-sm sm:rounded-lg p-5">
+                            <h3 className="text-sm font-medium text-gray-700 mb-3">Free Tier Usage</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {/* Image Generations Meter */}
                                 <div>

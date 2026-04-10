@@ -102,8 +102,20 @@ const DropdownLink = ({ className = '', children, ...props }) => {
     );
 };
 
+const DropdownHeader = ({ children }) => (
+    <p className="px-4 pt-2 pb-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+        {children}
+    </p>
+);
+
+const DropdownDivider = () => (
+    <div className="my-1 border-t border-gray-100" />
+);
+
 Dropdown.Trigger = Trigger;
 Dropdown.Content = Content;
 Dropdown.Link = DropdownLink;
+Dropdown.Header = DropdownHeader;
+Dropdown.Divider = DropdownDivider;
 
 export default Dropdown;

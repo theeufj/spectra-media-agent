@@ -61,8 +61,8 @@ export default function QuickActions() {
     ];
     
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Quick Actions</h3>
             <div className="space-y-3">
                 {actions.map((action) => (
                     <Link
@@ -101,8 +101,8 @@ export default function QuickActions() {
 export function PendingTasks({ tasks = [] }) {
     if (tasks.length === 0) {
         return (
-            <div className="bg-white rounded-lg shadow-md p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Pending Tasks</h3>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Pending Tasks</h3>
                 <div className="text-center py-4 text-gray-500">
                     <svg className="w-12 h-12 mx-auto mb-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -134,10 +134,10 @@ export function PendingTasks({ tasks = [] }) {
     };
     
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Pending Tasks</h3>
-                <span className="px-2 py-1 text-xs font-medium bg-flame-orange-100 text-flame-orange-700 rounded-full">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-medium text-gray-700">Pending Tasks</h3>
+                <span className="px-2 py-0.5 text-xs font-medium bg-flame-orange-100 text-flame-orange-700 rounded-full">
                     {tasks.length}
                 </span>
             </div>
@@ -199,8 +199,8 @@ export function CampaignHealthAlerts({ alerts = [] }) {
     };
     
     return (
-        <div className="bg-white rounded-lg shadow-md p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Campaign Health</h3>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Campaign Health</h3>
             <div className="space-y-3">
                 {alerts.slice(0, 4).map((alert, index) => (
                     <div

@@ -4,6 +4,7 @@ import NavLink from '@/Components/NavLink';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import NotificationBell from '@/Components/NotificationBell';
 import ImpersonationBanner from '@/Components/ImpersonationBanner';
+import OnboardingTour from '@/Components/OnboardingTour';
 import { useToast } from '@/Components/Toast';
 import { Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect, useRef } from 'react';
@@ -128,16 +129,18 @@ export default function AuthenticatedLayout({ header, children }) {
                             </Link>
 
                             <div className="hidden md:flex items-center gap-1">
-                                <NavLink href={route('dashboard')} active={route().current('dashboard')}>
+                                <NavLink href={route('dashboard')} active={route().current('dashboard')} data-tour="dashboard">
                                     Dashboard
                                 </NavLink>
 
                                 {/* Campaigns Dropdown */}
                                 <Dropdown>
                                     <Dropdown.Trigger>
+                                        <span data-tour="campaigns">
                                         <NavDropdownButton active={route().current('campaigns.*')}>
                                             Campaigns
                                         </NavDropdownButton>
+                                        </span>
                                     </Dropdown.Trigger>
                                     <Dropdown.Content align="left">
                                         <Dropdown.Link href={route('campaigns.index')}>All Campaigns</Dropdown.Link>
@@ -148,81 +151,62 @@ export default function AuthenticatedLayout({ header, children }) {
                                 {/* Content Dropdown */}
                                 <Dropdown>
                                     <Dropdown.Trigger>
-                                        <NavDropdownButton active={route().current('knowledge-base.*') || route().current('brand-guidelines.*')}>
+                                        <span data-tour="content">
+                                        <NavDropdownButton active={route().current('knowledge-base.*') || route().current('brand-guidelines.*') || route().current('products.*')}>
                                             Content
                                         </NavDropdownButton>
+                                        </span>
                                     </Dropdown.Trigger>
                                     <Dropdown.Content align="left">
                                         <Dropdown.Link href={route('knowledge-base.index')}>Knowledge Base</Dropdown.Link>
                                         <Dropdown.Link href={route('brand-guidelines.index')}>Brand Guidelines</Dropdown.Link>
+                                        <Dropdown.Link href={route('products.index')}>Products</Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
 
-                                {/* Keywords Dropdown */}
+                                {/* Insights Dropdown (Keywords + SEO + Budget + Reports + Analytics) */}
                                 <Dropdown>
                                     <Dropdown.Trigger>
-                                        <NavDropdownButton active={route().current('keywords.*')}>
-                                            Keywords
+                                        <span data-tour="insights">
+                                        <NavDropdownButton active={route().current('keywords.*') || route().current('seo.*') || route().current('budget.*') || route().current('reports.*') || route().current('analytics.*')}>
+                                            Insights
                                         </NavDropdownButton>
+                                        </span>
                                     </Dropdown.Trigger>
-                                    <Dropdown.Content align="left">
+                                    <Dropdown.Content align="left" width="64" contentClasses="py-1 bg-white max-h-[70vh] overflow-y-auto">
+                                        <Dropdown.Header>Keywords</Dropdown.Header>
                                         <Dropdown.Link href={route('keywords.index')}>Portfolio</Dropdown.Link>
                                         <Dropdown.Link href={route('keywords.research')}>Research</Dropdown.Link>
                                         <Dropdown.Link href={route('keywords.competitor-gap')}>Competitor Gap</Dropdown.Link>
                                         <Dropdown.Link href={route('keywords.negative-lists')}>Negative Lists</Dropdown.Link>
-                                    </Dropdown.Content>
-                                </Dropdown>
-
-                                {/* Budget Dropdown */}
-                                <Dropdown>
-                                    <Dropdown.Trigger>
-                                        <NavDropdownButton active={route().current('budget.*')}>
-                                            Budget
-                                        </NavDropdownButton>
-                                    </Dropdown.Trigger>
-                                    <Dropdown.Content align="left">
-                                        <Dropdown.Link href={route('budget.allocator')}>Allocator</Dropdown.Link>
-                                        <Dropdown.Link href={route('budget.history')}>History</Dropdown.Link>
-                                    </Dropdown.Content>
-                                </Dropdown>
-
-                                {/* SEO Dropdown */}
-                                <Dropdown>
-                                    <Dropdown.Trigger>
-                                        <NavDropdownButton active={route().current('seo.*')}>
-                                            SEO
-                                        </NavDropdownButton>
-                                    </Dropdown.Trigger>
-                                    <Dropdown.Content align="left">
+                                        <Dropdown.Divider />
+                                        <Dropdown.Header>SEO</Dropdown.Header>
                                         <Dropdown.Link href={route('seo.index')}>SEO Audit</Dropdown.Link>
                                         <Dropdown.Link href={route('seo.rankings')}>Rankings</Dropdown.Link>
                                         <Dropdown.Link href={route('seo.backlinks')}>Backlinks</Dropdown.Link>
                                         <Dropdown.Link href={route('seo.competitors')}>Competitors</Dropdown.Link>
                                         <Dropdown.Link href={route('seo.cro')}>CRO Audit</Dropdown.Link>
+                                        <Dropdown.Divider />
+                                        <Dropdown.Header>Performance</Dropdown.Header>
+                                        <Dropdown.Link href={route('budget.allocator')}>Budget Allocator</Dropdown.Link>
+                                        <Dropdown.Link href={route('budget.history')}>Budget History</Dropdown.Link>
+                                        <Dropdown.Link href={route('reports.index')}>Reports</Dropdown.Link>
+                                        <Dropdown.Link href={route('analytics.index')}>Analytics</Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
 
-                                <NavLink href={route('strategy.war-room')} active={route().current('strategy.war-room')}>
-                                    War Room
-                                </NavLink>
-
-                                <NavLink href={route('reports.index')} active={route().current('reports.*')}>
-                                    Reports
-                                </NavLink>
-
-                                {/* More Dropdown */}
+                                {/* Strategy Dropdown */}
                                 <Dropdown>
                                     <Dropdown.Trigger>
-                                        <NavDropdownButton active={route().current('integrations.*') || route().current('products.*') || route().current('support-tickets.*') || route().current('analytics.*') || route().current('proposals.*')}>
-                                            More
+                                        <span data-tour="strategy">
+                                        <NavDropdownButton active={route().current('strategy.*') || route().current('proposals.*')}>
+                                            Strategy
                                         </NavDropdownButton>
+                                        </span>
                                     </Dropdown.Trigger>
                                     <Dropdown.Content align="left">
-                                        <Dropdown.Link href={route('analytics.index')}>Analytics</Dropdown.Link>
+                                        <Dropdown.Link href={route('strategy.war-room')}>War Room</Dropdown.Link>
                                         <Dropdown.Link href={route('proposals.index')}>Proposals</Dropdown.Link>
-                                        <Dropdown.Link href={route('integrations.index')}>Integrations</Dropdown.Link>
-                                        <Dropdown.Link href={route('products.index')}>Products</Dropdown.Link>
-                                        <Dropdown.Link href={route('support-tickets.index')}>Support</Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
                             </div>
@@ -233,6 +217,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             {/* New Campaign CTA */}
                             <Link
                                 href={route('campaigns.wizard')}
+                                data-tour="new-campaign"
                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -314,6 +299,12 @@ export default function AuthenticatedLayout({ header, children }) {
                                     <Dropdown.Link href={route('subscription.portal')}>Subscription</Dropdown.Link>
                                     <Dropdown.Link href={route('billing.ad-spend')}>Ad Spend Credits</Dropdown.Link>
                                     <Dropdown.Link href={route('subscription.pricing')}>Pricing</Dropdown.Link>
+
+                                    <div className="border-b border-gray-100 my-1" />
+
+                                    {/* Tools & Support */}
+                                    <Dropdown.Link href={route('integrations.index')}>Integrations</Dropdown.Link>
+                                    <Dropdown.Link href={route('support-tickets.index')}>Support</Dropdown.Link>
 
                                     {user.isAdmin && (
                                         <>
@@ -454,9 +445,16 @@ export default function AuthenticatedLayout({ header, children }) {
                             >
                                 Brand Guidelines
                             </MobileNavLink>
+                            <MobileNavLink
+                                href={route('products.index')}
+                                active={route().current('products.*')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>}
+                            >
+                                Products
+                            </MobileNavLink>
                         </MobileNavSection>
 
-                        <MobileNavSection title="Keywords">
+                        <MobileNavSection title="Insights">
                             <MobileNavLink
                                 href={route('keywords.index')}
                                 active={route().current('keywords.index')}
@@ -469,21 +467,8 @@ export default function AuthenticatedLayout({ header, children }) {
                                 active={route().current('keywords.research')}
                                 icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
                             >
-                                Research
+                                Keyword Research
                             </MobileNavLink>
-                        </MobileNavSection>
-
-                        <MobileNavSection title="Reports">
-                            <MobileNavLink
-                                href={route('reports.index')}
-                                active={route().current('reports.*')}
-                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-                            >
-                                Performance Reports
-                            </MobileNavLink>
-                        </MobileNavSection>
-
-                        <MobileNavSection title="SEO">
                             <MobileNavLink
                                 href={route('seo.index')}
                                 active={route().current('seo.index')}
@@ -499,25 +484,32 @@ export default function AuthenticatedLayout({ header, children }) {
                                 Rankings
                             </MobileNavLink>
                             <MobileNavLink
-                                href={route('seo.backlinks')}
-                                active={route().current('seo.backlinks')}
-                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>}
-                            >
-                                Backlinks
-                            </MobileNavLink>
-                            <MobileNavLink
-                                href={route('seo.competitors')}
-                                active={route().current('seo.competitors')}
-                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>}
-                            >
-                                Competitors
-                            </MobileNavLink>
-                            <MobileNavLink
                                 href={route('seo.cro')}
                                 active={route().current('seo.cro*')}
                                 icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
                             >
                                 CRO Audit
+                            </MobileNavLink>
+                            <MobileNavLink
+                                href={route('budget.allocator')}
+                                active={route().current('budget.*')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+                            >
+                                Budget
+                            </MobileNavLink>
+                            <MobileNavLink
+                                href={route('reports.index')}
+                                active={route().current('reports.*')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+                            >
+                                Reports
+                            </MobileNavLink>
+                            <MobileNavLink
+                                href={route('analytics.index')}
+                                active={route().current('analytics.*')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
+                            >
+                                Analytics
                             </MobileNavLink>
                         </MobileNavSection>
 
@@ -539,6 +531,13 @@ export default function AuthenticatedLayout({ header, children }) {
                         </MobileNavSection>
 
                         <MobileNavSection title="Support & Setup">
+                            <MobileNavLink
+                                href={route('integrations.index')}
+                                active={route().current('integrations.*')}
+                                icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>}
+                            >
+                                Integrations
+                            </MobileNavLink>
                             <MobileNavLink
                                 href={route('support-tickets.index')}
                                 active={route().current('support-tickets.*')}
@@ -651,6 +650,9 @@ export default function AuthenticatedLayout({ header, children }) {
             )}
 
             <main>{children}</main>
+
+            {/* Onboarding tour for new users */}
+            <OnboardingTour />
         </div>
     );
 }

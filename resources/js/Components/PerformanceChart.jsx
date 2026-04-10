@@ -27,8 +27,8 @@ const PerformanceChart = ({ data }) => {
     if (!data || Object.keys(data).length === 0) {
         return (
             <Card>
-                <h3 className="text-lg font-semibold mb-4">Performance Over Time</h3>
-                <p className="text-gray-500 text-center py-8">
+                <h3 className="text-sm font-medium text-gray-700 mb-4">Performance Over Time</h3>
+                <p className="text-gray-500 text-center py-8 text-sm">
                     Daily performance data will appear here once your campaign starts running.
                 </p>
             </Card>
@@ -55,7 +55,7 @@ const PerformanceChart = ({ data }) => {
 
     return (
         <Card>
-            <h3 className="text-lg font-semibold mb-4">Performance Over Time</h3>
+            <h3 className="text-sm font-medium text-gray-700 mb-4">Performance Over Time</h3>
             <Line data={chartData} />
         </Card>
     );
