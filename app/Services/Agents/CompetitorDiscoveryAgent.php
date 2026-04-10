@@ -254,7 +254,7 @@ class CompetitorDiscoveryAgent
         }
 
         // Get key pages from knowledge base
-        $pages = $user->knowledgeBase()
+        $pages = $user->knowledgeBases()
             ->take(10)
             ->get(['title', 'content', 'url']);
 

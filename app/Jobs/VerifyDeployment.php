@@ -86,7 +86,12 @@ class VerifyDeployment implements ShouldQueue
         }
 
         $customerId = str_replace('-', '', $customer->google_ads_customer_id);
-        $resourceName = "customers/{$customerId}/campaigns/{$googleCampaignId}";
+
+        // google_ads_campaign_id stores the full resource name (customers/X/campaigns/Y)
+        $resourceName = $googleCampaignId;
+        if (!str_starts_with($resourceName, 'customers/')) {
+            $resourceName = "customers/{$customerId}/campaigns/{$googleCampaignId}";
+        }
 
         $service = new GetCampaignStatus($customer);
         $status = $service($customerId, $resourceName);
