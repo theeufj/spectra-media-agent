@@ -7,6 +7,7 @@ import InputLabel from '@/Components/InputLabel';
 import TextInput from '@/Components/TextInput';
 import PrimaryButton from '@/Components/PrimaryButton';
 import DangerButton from '@/Components/DangerButton';
+import { startTour } from '@/Components/OnboardingTour';
 import { useState } from 'react';
 
 export default function Edit({ auth, mustVerifyEmail, status }) {
@@ -78,6 +79,30 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
 
                     <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
                         <UpdatePasswordForm className="max-w-xl" />
+                    </div>
+
+                    <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                        <section className="max-w-xl">
+                            <header>
+                                <h2 className="text-lg font-medium text-gray-900">Site Tour</h2>
+                                <p className="mt-1 text-sm text-gray-600">
+                                    Replay the guided walkthrough to familiarise yourself with Spectra's features.
+                                </p>
+                            </header>
+                            <div className="mt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => { router.visit(route('dashboard'), { onFinish: () => setTimeout(startTour, 400) }); }}
+                                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
+                                >
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Restart Site Tour
+                                </button>
+                            </div>
+                        </section>
                     </div>
 
                                         <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">

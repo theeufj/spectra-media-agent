@@ -4,7 +4,7 @@ import NavLink from '@/Components/NavLink';
 import ApplicationLogo from '@/Components/ApplicationLogo';
 import NotificationBell from '@/Components/NotificationBell';
 import ImpersonationBanner from '@/Components/ImpersonationBanner';
-import OnboardingTour from '@/Components/OnboardingTour';
+import OnboardingTour, { startTour } from '@/Components/OnboardingTour';
 import { useToast } from '@/Components/Toast';
 import { Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect, useRef } from 'react';
@@ -314,6 +314,13 @@ export default function AuthenticatedLayout({ header, children }) {
                                     )}
 
                                     <div className="border-b border-gray-100 my-1" />
+                                    <button
+                                        type="button"
+                                        onClick={startTour}
+                                        className="block w-full px-4 py-2 text-start text-sm leading-5 text-gray-700 transition duration-150 ease-in-out hover:bg-gray-50 focus:bg-gray-50 focus:outline-none"
+                                    >
+                                        Site Tour
+                                    </button>
                                     <Dropdown.Link href={route('logout')} method="post" as="button">
                                         Log Out
                                     </Dropdown.Link>

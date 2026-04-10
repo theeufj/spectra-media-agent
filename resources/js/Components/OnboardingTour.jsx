@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { router } from '@inertiajs/react';
 
+/** Dispatch this from anywhere to restart the tour */
+export function startTour() {
+    window.dispatchEvent(new Event('start-onboarding-tour'));
+}
+
 const TOUR_STEPS = [
     {
         target: '[data-tour="dashboard"]',
@@ -79,23 +84,33 @@ export default function OnboardingTour({ forceShow = false }) {
     const [pos, setPos] = useState(null);
     const tooltipRef = useRef(null);
 
-    // Determine if the tour should show
+    const startTour = useCallback(() => {
+        setStep(0);
+        setActive(true);
+    }, []);
+
+    // Determine if the tour should show on first visit
     useEffect(() => {
         if (forceShow) {
-            setActive(true);
-            setStep(0);
+            startTour();
             return;
         }
         try {
             const completed = localStorage.getItem(STORAGE_KEY);
             if (!completed) {
-                setActive(true);
-                setStep(0);
+                startTour();
             }
         } catch {
             // localStorage not available
         }
-    }, [forceShow]);
+    }, [forceShow, startTour]);
+
+    // Listen for custom event so any button can trigger the tour
+    useEffect(() => {
+        const handler = () => startTour();
+        window.addEventListener('start-onboarding-tour', handler);
+        return () => window.removeEventListener('start-onboarding-tour', handler);
+    }, [startTour]);
 
     const positionTooltip = useCallback(() => {
         if (!active) return;
