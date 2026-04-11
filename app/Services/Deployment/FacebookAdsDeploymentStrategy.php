@@ -112,7 +112,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         Log::info("Created Facebook ad set: {$fbAdSet['id']}");
 
         // 3. Upload Images and Create Creative
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
         $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
 
         if ($imageCollaterals->isEmpty() || !$adCopy) {
@@ -202,7 +202,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $strategy->save();
 
         // 3. Upload Video and Create Creative
-        $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->get();
+        $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
         $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
 
         if ($videoCollaterals->isEmpty() || !$adCopy) {

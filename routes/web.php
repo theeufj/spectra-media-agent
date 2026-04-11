@@ -366,13 +366,29 @@ Route::middleware(['auth'])->group(function () {
     // POST /image-collaterals/{image_collateral}
     Route::post('/image-collaterals/{image_collateral}', [App\Http\Controllers\ImageCollateralController::class, 'update'])->name('image-collaterals.update');
 
+    // Route to upload user-provided images for a specific campaign and strategy.
+    Route::post('/campaigns/{campaign}/strategies/{strategy}/image/upload', [App\Http\Controllers\ImageCollateralController::class, 'upload'])
+        ->middleware('throttle:20,1')
+        ->name('campaigns.collateral.image.upload');
+
+    // Route to delete an uploaded image collateral.
+    Route::delete('/image-collaterals/{image_collateral}', [App\Http\Controllers\ImageCollateralController::class, 'destroy'])->name('image-collaterals.destroy');
+
     // Route to generate and store a video for a specific campaign and strategy.
     // POST /campaigns/{campaign}/strategies/{strategy}/video
     Route::post('/campaigns/{campaign}/strategies/{strategy}/video', [App\Http\Controllers\VideoCollateralController::class, 'store'])->name('campaigns.collateral.video.store');
+
+    // Route to upload a user-provided video for a specific campaign and strategy.
+    Route::post('/campaigns/{campaign}/strategies/{strategy}/video/upload', [App\Http\Controllers\VideoCollateralController::class, 'upload'])
+        ->middleware('throttle:10,1')
+        ->name('campaigns.collateral.video.upload');
     
     // Route to extend an existing Veo-generated video by up to 7 seconds
     // POST /video-collaterals/{video}/extend
     Route::post('/video-collaterals/{video}/extend', [App\Http\Controllers\VideoCollateralController::class, 'extend'])->name('video-collaterals.extend');
+
+    // Route to delete an uploaded video collateral.
+    Route::delete('/video-collaterals/{video}', [App\Http\Controllers\VideoCollateralController::class, 'destroy'])->name('video-collaterals.destroy');
 });
 
 /*

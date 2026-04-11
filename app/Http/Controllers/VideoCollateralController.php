@@ -8,9 +8,11 @@ use App\Jobs\CheckVideoStatus;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class VideoCollateralController extends Controller
 {
@@ -147,5 +149,86 @@ class VideoCollateralController extends Controller
                 'message' => 'Failed to start video extension: ' . $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * Upload a user-provided video for a campaign strategy.
+     */
+    public function upload(Request $request, Campaign $campaign, Strategy $strategy)
+    {
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($strategy->campaign_id !== $campaign->id) {
+            abort(403, 'Strategy does not belong to this campaign.');
+        }
+
+        $request->validate([
+            'video' => 'required|file|mimes:mp4,mov,webm|max:102400', // 100MB
+        ]);
+
+        // Enforce per-campaign upload limit (3 uploaded videos)
+        $existingUploads = VideoCollateral::where('campaign_id', $campaign->id)
+            ->where('source', 'uploaded')
+            ->count();
+
+        if ($existingUploads >= 3) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Upload limit: 3 videos per campaign. Delete an existing upload to add more.',
+            ]);
+        }
+
+        $file = $request->file('video');
+        $contents = file_get_contents($file->getPathname());
+        $ext = $file->getClientOriginalExtension() ?: 'mp4';
+        $path = 'collateral/videos/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+        $contentType = $file->getMimeType() ?: 'video/mp4';
+
+        [$s3Path, $url] = StorageHelper::put($path, $contents, $contentType);
+
+        VideoCollateral::create([
+            'campaign_id' => $campaign->id,
+            'strategy_id' => $strategy->id,
+            'platform' => $strategy->platform,
+            's3_path' => $s3Path,
+            'cloudfront_url' => $url,
+            'status' => 'completed',
+            'is_active' => true,
+            'source' => 'uploaded',
+        ]);
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => 'Video uploaded successfully.',
+        ]);
+    }
+
+    /**
+     * Delete an uploaded video collateral.
+     */
+    public function destroy(VideoCollateral $video)
+    {
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $video->campaign->customer_id)->exists()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($video->source !== 'uploaded') {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Only uploaded videos can be deleted.',
+            ]);
+        }
+
+        StorageHelper::delete($video->s3_path);
+        $video->delete();
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => 'Video deleted.',
+        ]);
     }
 }

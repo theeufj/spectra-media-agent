@@ -20,6 +20,7 @@ class VideoCollateral extends Model
         'extension_count',
         'parent_id',
         'is_active',
+        'source',
     ];
 
     protected $casts = [

@@ -29,6 +29,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [showAdSpendSetupModal, setShowAdSpendSetupModal] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
+    const [uploadingImages, setUploadingImages] = useState(false);
+    const [uploadingVideo, setUploadingVideo] = useState(false);
+    const [imageUploadErrors, setImageUploadErrors] = useState([]);
 
     // Refs for values accessed inside the polling interval to avoid stale closures
     // and prevent the effect from restarting (which resets the safety timeout).
@@ -180,6 +183,74 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             onError: (errors) => {
                 console.error('Failed to toggle collateral status:', errors);
             },
+        });
+    };
+
+    const handleImageUpload = (strategyId, files) => {
+        if (!files || files.length === 0) return;
+        setUploadingImages(true);
+        setImageUploadErrors([]);
+
+        const formData = new FormData();
+        Array.from(files).forEach((file) => {
+            formData.append('images[]', file);
+        });
+
+        router.post(route('campaigns.collateral.image.upload', { campaign: campaign.id, strategy: strategyId }), formData, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setUploadingImages(false);
+                setIsPolling(true);
+            },
+            onError: (errors) => {
+                setUploadingImages(false);
+                const msgs = Object.values(errors).flat();
+                setImageUploadErrors(msgs);
+                toast.error('Upload failed: ' + msgs.join(' '));
+            },
+        });
+    };
+
+    const handleVideoUpload = (strategyId, file) => {
+        if (!file) return;
+        setUploadingVideo(true);
+
+        const formData = new FormData();
+        formData.append('video', file);
+
+        router.post(route('campaigns.collateral.video.upload', { campaign: campaign.id, strategy: strategyId }), formData, {
+            forceFormData: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setUploadingVideo(false);
+                setIsPolling(true);
+            },
+            onError: (errors) => {
+                setUploadingVideo(false);
+                const msgs = Object.values(errors).flat();
+                toast.error('Upload failed: ' + msgs.join(' '));
+            },
+        });
+    };
+
+    const handleDeleteCollateral = (type, id, name) => {
+        setConfirmModal({
+            show: true,
+            title: `Delete ${type === 'image' ? 'Image' : 'Video'}`,
+            message: `Are you sure you want to delete this uploaded ${type}? This cannot be undone.`,
+            onConfirm: () => {
+                setConfirmModal({ ...confirmModal, show: false });
+                const routeName = type === 'image' ? 'image-collaterals.destroy' : 'video-collaterals.destroy';
+                const param = type === 'image' ? { image_collateral: id } : { video: id };
+                router.delete(route(routeName, param), {
+                    preserveScroll: true,
+                    onSuccess: () => {
+                        setIsPolling(true);
+                    },
+                });
+            },
+            isDestructive: true,
         });
     };
 
@@ -435,23 +506,53 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <hr className="my-8" />
 
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Image Collateral</h3>
-                                        <p>Generate a unique image based on the imagery strategy for {strategyItem.platform}.</p>
+                                        <p>Generate a unique image based on the imagery strategy for {strategyItem.platform}, or upload your own.</p>
 
-                                        <button
-                                            onClick={() => handleGenerateImage(strategyItem.id)}
-                                            disabled={generatingImage}
-                                            className="mt-4 px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
-                                        >
-                                            {generatingImage && (
-                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                            )}
-                                            {generatingImage ? 'Generating Image...' : 'Generate Image'}
-                                        </button>
+                                        <div className="flex flex-wrap gap-3 mt-4">
+                                            <button
+                                                onClick={() => handleGenerateImage(strategyItem.id)}
+                                                disabled={generatingImage}
+                                                className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                            >
+                                                {generatingImage && (
+                                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                )}
+                                                {generatingImage ? 'Generating...' : '✨ Generate Image'}
+                                            </button>
 
-                                        {/* Display generated images here */}
+                                            <label className={`px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-blue-400 hover:text-blue-600 cursor-pointer transition flex items-center gap-2 ${uploadingImages ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                {uploadingImages ? (
+                                                    <>
+                                                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        </svg>
+                                                        Uploading...
+                                                    </>
+                                                ) : (
+                                                    <>📁 Upload Images</>
+                                                )}
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    accept="image/jpeg,image/png,image/webp"
+                                                    className="hidden"
+                                                    onChange={(e) => handleImageUpload(strategyItem.id, e.target.files)}
+                                                    disabled={uploadingImages}
+                                                />
+                                            </label>
+                                            <span className="text-xs text-gray-400 self-center">
+                                                JPG, PNG, or WebP · max 10MB each · {(() => {
+                                                    const uploaded = collateral.imageCollaterals?.filter(i => i.source === 'uploaded').length || 0;
+                                                    return `${uploaded}/10 uploaded`;
+                                                })()}
+                                            </span>
+                                        </div>
+
+                                        {/* Display generated + uploaded images */}
                                         {collateral.imageCollaterals && collateral.imageCollaterals.length > 0 && (
                                             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.imageCollaterals.map((image) => (
@@ -460,7 +561,13 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         className={`border-2 ${image.should_deploy ? 'border-green-500' : 'border-transparent'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer`}
                                                         onClick={() => handleToggleCollateral('image', image.id)}
                                                     >
-                                                        <img src={image.cloudfront_url} alt={`Generated collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
+                                                        <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
+                                                        {/* Source badge */}
+                                                        <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium shadow ${
+                                                            image.source === 'uploaded' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                                                        }`}>
+                                                            {image.source === 'uploaded' ? '📁 Uploaded' : '✨ AI'}
+                                                        </div>
                                                         {!isSubscribed && (
                                                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
                                                                 <p className="text-white text-xs font-medium">Preview - Upgrade to download</p>
@@ -468,10 +575,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         )}
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                             {isSubscribed ? (
-                                                                <>
-                                                                    <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700 mr-2">
-                                                                        Edit Image
-                                                                    </button>
+                                                                <div className="flex gap-2">
+                                                                    {image.source !== 'uploaded' && (
+                                                                        <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700">
+                                                                            Edit Image
+                                                                        </button>
+                                                                    )}
                                                                     <a 
                                                                         href={image.cloudfront_url} 
                                                                         download 
@@ -480,7 +589,15 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     >
                                                                         Download
                                                                     </a>
-                                                                </>
+                                                                    {image.source === 'uploaded' && (
+                                                                        <button 
+                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteCollateral('image', image.id); }}
+                                                                            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                                                                        >
+                                                                            Delete
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             ) : (
                                                                 <a 
                                                                     href={route('subscription.pricing')}
@@ -499,23 +616,52 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <hr className="my-8" />
 
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Video Collateral</h3>
-                                        <p>Generate a unique video based on the video strategy for {strategyItem.platform}.</p>
+                                        <p>Generate a unique video based on the video strategy for {strategyItem.platform}, or upload your own.</p>
 
-                                        <button
-                                            onClick={() => handleGenerateVideo(strategyItem.id, strategyItem.platform)}
-                                            disabled={generatingVideo}
-                                            className="mt-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
-                                        >
-                                            {generatingVideo && (
-                                                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                            )}
-                                            {generatingVideo ? 'Generating Video...' : 'Generate Video'}
-                                        </button>
+                                        <div className="flex flex-wrap gap-3 mt-4">
+                                            <button
+                                                onClick={() => handleGenerateVideo(strategyItem.id, strategyItem.platform)}
+                                                disabled={generatingVideo}
+                                                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                            >
+                                                {generatingVideo && (
+                                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                )}
+                                                {generatingVideo ? 'Generating...' : '✨ Generate Video'}
+                                            </button>
 
-                                        {/* Display generated videos here */}
+                                            <label className={`px-4 py-2 border-2 border-dashed border-gray-300 text-gray-600 rounded-lg hover:border-purple-400 hover:text-purple-600 cursor-pointer transition flex items-center gap-2 ${uploadingVideo ? 'opacity-50 pointer-events-none' : ''}`}>
+                                                {uploadingVideo ? (
+                                                    <>
+                                                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        </svg>
+                                                        Uploading...
+                                                    </>
+                                                ) : (
+                                                    <>📁 Upload Video</>
+                                                )}
+                                                <input
+                                                    type="file"
+                                                    accept="video/mp4,video/quicktime,video/webm"
+                                                    className="hidden"
+                                                    onChange={(e) => handleVideoUpload(strategyItem.id, e.target.files?.[0])}
+                                                    disabled={uploadingVideo}
+                                                />
+                                            </label>
+                                            <span className="text-xs text-gray-400 self-center">
+                                                MP4, MOV, or WebM · max 100MB · {(() => {
+                                                    const uploaded = collateral.videoCollaterals?.filter(v => v.source === 'uploaded').length || 0;
+                                                    return `${uploaded}/3 uploaded`;
+                                                })()}
+                                            </span>
+                                        </div>
+
+                                        {/* Display generated + uploaded videos */}
                                         {collateral.videoCollaterals && collateral.videoCollaterals.length > 0 && (
                                             <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.videoCollaterals.map((video) => (
@@ -536,9 +682,16 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 </div>
                                                             )}
                                                         </div>
+
+                                                        {/* Source badge */}
+                                                        <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium shadow ${
+                                                            video.source === 'uploaded' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                                                        }`}>
+                                                            {video.source === 'uploaded' ? '📁 Uploaded' : '✨ AI'}
+                                                        </div>
                                                         
-                                                        {/* Extend Video Button - Only show for completed Veo videos */}
-                                                        {video.status === 'completed' && video.gemini_video_uri && (video.extension_count || 0) < 20 && (
+                                                        {/* Extend Video Button - Only show for completed Veo videos (AI-generated) */}
+                                                        {video.source !== 'uploaded' && video.status === 'completed' && video.gemini_video_uri && (video.extension_count || 0) < 20 && (
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
@@ -554,9 +707,19 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             </button>
                                                         )}
 
+                                                        {/* Delete button for uploaded videos */}
+                                                        {video.source === 'uploaded' && (
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleDeleteCollateral('video', video.id); }}
+                                                                className="absolute bottom-2 right-2 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                <span>Delete</span>
+                                                            </button>
+                                                        )}
+
                                                         {/* Extension Count Badge */}
                                                         {(video.extension_count || 0) > 0 && (
-                                                            <div className="absolute top-2 left-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full shadow-lg">
+                                                            <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full shadow-lg">
                                                                 Extended {video.extension_count}x
                                                             </div>
                                                         )}

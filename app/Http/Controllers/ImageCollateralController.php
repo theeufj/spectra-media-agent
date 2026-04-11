@@ -7,9 +7,11 @@ use App\Jobs\RefineImage;
 use App\Models\Campaign;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class ImageCollateralController extends Controller
 {
@@ -90,6 +92,130 @@ class ImageCollateralController extends Controller
         return redirect()->back()->with('flash', [
             'type' => 'success',
             'message' => 'Image refinement has been queued. Please check back in a few moments.'
+        ]);
+    }
+
+    /**
+     * Upload user-provided images for a campaign strategy.
+     */
+    public function upload(Request $request, Campaign $campaign, Strategy $strategy)
+    {
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($strategy->campaign_id !== $campaign->id) {
+            abort(403, 'Strategy does not belong to this campaign.');
+        }
+
+        $request->validate([
+            'images' => 'required|array|min:1|max:20',
+            'images.*' => 'required|file|mimes:jpeg,jpg,png,webp|max:10240',
+        ]);
+
+        // Enforce per-campaign upload limit (10 uploaded images)
+        $existingUploads = ImageCollateral::where('campaign_id', $campaign->id)
+            ->where('source', 'uploaded')
+            ->count();
+
+        $incoming = count($request->file('images'));
+        if ($existingUploads + $incoming > 10) {
+            $remaining = max(0, 10 - $existingUploads);
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => "Upload limit: 10 images per campaign. You have {$existingUploads} uploaded, can add {$remaining} more.",
+            ]);
+        }
+
+        // Platform dimension requirements
+        $platform = strtolower($strategy->platform);
+        $dimensionRules = [
+            'google' => ['min_width' => 600, 'min_height' => 314, 'rec_width' => 1200, 'rec_height' => 628, 'label' => '1200×628 (landscape)'],
+            'google.sem' => ['min_width' => 600, 'min_height' => 314, 'rec_width' => 1200, 'rec_height' => 628, 'label' => '1200×628 (landscape)'],
+            'facebook' => ['min_width' => 1080, 'min_height' => 1080, 'rec_width' => 1080, 'rec_height' => 1080, 'label' => '1080×1080 (square)'],
+            'linkedin' => ['min_width' => 1200, 'min_height' => 627, 'rec_width' => 1200, 'rec_height' => 627, 'label' => '1200×627 (landscape)'],
+            'microsoft' => ['min_width' => 703, 'min_height' => 368, 'rec_width' => 1200, 'rec_height' => 628, 'label' => '1200×628 (landscape)'],
+        ];
+
+        $rules = $dimensionRules[$platform] ?? $dimensionRules['google'];
+        $created = 0;
+        $errors = [];
+
+        foreach ($request->file('images') as $i => $file) {
+            $imageSize = @getimagesize($file->getPathname());
+            if (!$imageSize) {
+                $errors[] = "{$file->getClientOriginalName()}: could not read image dimensions.";
+                continue;
+            }
+
+            [$width, $height] = $imageSize;
+            if ($width < $rules['min_width'] || $height < $rules['min_height']) {
+                $errors[] = "{$file->getClientOriginalName()}: {$width}×{$height} is too small. Minimum: {$rules['min_width']}×{$rules['min_height']} for {$platform}.";
+                continue;
+            }
+
+            $contents = file_get_contents($file->getPathname());
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $path = 'collateral/images/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            $contentType = $file->getMimeType() ?: 'image/jpeg';
+
+            [$s3Path, $url] = StorageHelper::put($path, $contents, $contentType);
+
+            ImageCollateral::create([
+                'campaign_id' => $campaign->id,
+                'strategy_id' => $strategy->id,
+                'platform' => $strategy->platform,
+                's3_path' => $s3Path,
+                'cloudfront_url' => $url,
+                'is_active' => true,
+                'source' => 'uploaded',
+            ]);
+
+            $created++;
+        }
+
+        if ($created === 0 && !empty($errors)) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'No images uploaded. ' . implode(' ', $errors),
+            ]);
+        }
+
+        $msg = "{$created} image" . ($created !== 1 ? 's' : '') . ' uploaded successfully.';
+        if (!empty($errors)) {
+            $msg .= ' ' . count($errors) . ' skipped: ' . implode(' ', $errors);
+        }
+
+        return redirect()->back()->with('flash', [
+            'type' => $errors ? 'warning' : 'success',
+            'message' => $msg,
+        ]);
+    }
+
+    /**
+     * Delete an uploaded image collateral.
+     */
+    public function destroy(ImageCollateral $imageCollateral)
+    {
+        $user = Auth::user();
+        if (!$user->customers()->where('customers.id', $imageCollateral->campaign->customer_id)->exists()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($imageCollateral->source !== 'uploaded') {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Only uploaded images can be deleted.',
+            ]);
+        }
+
+        StorageHelper::delete($imageCollateral->s3_path);
+        $imageCollateral->delete();
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => 'Image deleted.',
         ]);
     }
 }

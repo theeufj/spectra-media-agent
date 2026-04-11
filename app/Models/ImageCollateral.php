@@ -22,6 +22,7 @@ class ImageCollateral extends Model
         'cloudfront_url',
         'parent_id',
         'is_active',
+        'source',
     ];
 
     /**

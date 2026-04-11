@@ -117,7 +117,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         $strategy->save();
 
         // 3. Upload Assets and Create Ad
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
         $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
         $imageAssetResourceNames = [];
 
