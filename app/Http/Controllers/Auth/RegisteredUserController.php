@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Customer;
-use App\Models\AuditSession;
 use App\Rules\CloudflareTurnstile;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -71,14 +70,6 @@ class RegisteredUserController extends Controller
         }
 
         event(new Registered($user));
-
-        // Track audit conversion if user came from free audit
-        if ($request->has('audit_token')) {
-            $auditSession = AuditSession::where('token', $request->audit_token)->first();
-            if ($auditSession) {
-                $auditSession->markConverted($user);
-            }
-        }
 
         Auth::login($user);
 

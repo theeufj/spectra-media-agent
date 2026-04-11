@@ -8,7 +8,6 @@ export default function Header({ auth }) {
         { label: 'Features', href: '/features' },
         { label: 'How It Works', href: '/how-it-works' },
         { label: 'Pricing', href: '/pricing' },
-        { label: 'Free Audit', href: '/free-audit' },
         { label: 'About', href: '/about' },
     ];
 

@@ -5,12 +5,9 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\Customer;
-use App\Models\AuditSession;
 use App\Mail\WelcomeEmail;
-use App\Jobs\RunAccountAudit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -81,70 +78,6 @@ class FacebookController extends Controller
         } catch (\Exception $e) {
             \Log::error('Facebook OAuth error: ' . $e->getMessage());
             return redirect()->route('login')->with('error', 'Facebook authentication failed. Please try again.');
-        }
-    }
-
-    /**
-     * Redirect to Facebook OAuth with read-only scopes for the free audit.
-     */
-    public function redirectForAudit()
-    {
-        return Socialite::driver('facebook')
-            ->scopes(['ads_read'])
-            ->with(['state' => 'audit'])
-            ->redirect();
-    }
-
-    /**
-     * Handle the Facebook OAuth callback for audit sessions.
-     */
-    public function callbackForAudit()
-    {
-        try {
-            $facebookUser = Socialite::driver('facebook')->user();
-
-            $token = Str::random(64);
-
-            // Discover ad accounts via the Graph API
-            $adAccountId = null;
-            try {
-                $response = \Illuminate\Support\Facades\Http::get('https://graph.facebook.com/v22.0/me/adaccounts', [
-                    'access_token' => $facebookUser->token,
-                    'fields' => 'id,name,account_status',
-                    'limit' => 1,
-                ]);
-
-                $data = $response->json();
-                if (!empty($data['data'])) {
-                    $adAccountId = $data['data'][0]['id'];
-                }
-            } catch (\Exception $e) {
-                Log::warning('Could not discover Facebook Ad Account during audit OAuth', [
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            $auditSession = AuditSession::create([
-                'token' => $token,
-                'email' => $facebookUser->getEmail(),
-                'platform' => 'facebook',
-                'access_token_encrypted' => Crypt::encryptString($facebookUser->token),
-                'facebook_ad_account_id' => $adAccountId,
-                'status' => 'pending',
-            ]);
-
-            if (!$adAccountId) {
-                $auditSession->update(['status' => 'failed']);
-                return redirect('/free-audit')->with('error', 'No Facebook Ad Account found. Please ensure your Facebook account has an active ad account.');
-            }
-
-            RunAccountAudit::dispatch($auditSession);
-
-            return redirect("/free-audit/{$token}");
-
-        } catch (\Exception $e) {
-            Log::error('Facebook Audit OAuth Error: ' . $e->getMessage());
-            return redirect('/free-audit')->with('error', 'Something went wrong connecting your Facebook account. Please try again.');
         }
     }
 }

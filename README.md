@@ -262,7 +262,6 @@ sequenceDiagram
 | Agent | Trigger | Purpose |
 |-------|---------|---------|
 | **HealthCheckAgent** | Every 6 hours `RunHealthChecks` job | Comprehensive health monitoring: API connectivity, token validity, campaign delivery, performance anomalies, budget pacing, creative fatigue, billing status. |
-| **AccountAuditAgent** | Manual `RunAccountAudit` job | Full account audit scoring 0–100 with findings by severity and AI recommendations. |
 
 ---
 

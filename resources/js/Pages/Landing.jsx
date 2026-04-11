@@ -104,8 +104,8 @@ export default function Landing({ auth, plans = [] }) {
                                             <a href="/register" className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border border-transparent text-sm sm:text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg transition-colors w-full sm:w-auto">
                                                 Start Generating for Free
                                             </a>
-                                            <a href="/free-audit" className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border-2 border-flame-orange-600 text-sm sm:text-base font-medium rounded-md text-flame-orange-600 bg-white hover:bg-flame-orange-50 transition-colors w-full sm:w-auto">
-                                                Free Ad Account Audit
+                                            <a href="/how-it-works" className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border-2 border-flame-orange-600 text-sm sm:text-base font-medium rounded-md text-flame-orange-600 bg-white hover:bg-flame-orange-50 transition-colors w-full sm:w-auto">
+                                                See How It Works
                                             </a>
                                         </div>
                                         <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Generous free tier · ✓ Cancel anytime</p>

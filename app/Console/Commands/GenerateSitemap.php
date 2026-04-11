@@ -42,7 +42,6 @@ class GenerateSitemap extends Command
             ->add(Url::create($baseUrl . '/how-it-works')->setPriority(0.9)->setChangeFrequency(Url::CHANGE_FREQUENCY_WEEKLY))
             ->add(Url::create($baseUrl . '/pricing')->setPriority(0.9)->setChangeFrequency(Url::CHANGE_FREQUENCY_WEEKLY))
             ->add(Url::create($baseUrl . '/about')->setPriority(0.8)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))
-            ->add(Url::create($baseUrl . '/free-audit')->setPriority(0.8)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))
             ->add(Url::create($baseUrl . '/register')->setPriority(0.8)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))
             ->add(Url::create($baseUrl . '/login')->setPriority(0.7)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))
             ->add(Url::create($baseUrl . '/terms-of-service')->setPriority(0.3)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))

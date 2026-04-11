@@ -161,9 +161,9 @@ export default function HowItWorks({ auth }) {
                                 <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
                                     Start Free Trial
                                 </a>
-                                <Link href="/free-audit" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700">
-                                    Free Ad Account Audit
-                                </Link>
+                                <a href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700">
+                                    View Pricing
+                                </a>
                             </div>
                             <p className="mt-8 text-flame-orange-100">✓ No credit card required · ✓ Generous free tier · ✓ Deploy in minutes</p>
                         </div>

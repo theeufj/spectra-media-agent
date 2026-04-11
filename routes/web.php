@@ -59,15 +59,6 @@ Route::get('/health', function () {
     ], $status === 'ok' ? 200 : 503);
 })->name('health');
 
-/*
-|--------------------------------------------------------------------------
-| Free Audit Routes (Public — no auth required)
-|--------------------------------------------------------------------------
-*/
-Route::get('/free-audit', [App\Http\Controllers\AuditController::class, 'index'])->name('audit.index');
-Route::get('/free-audit/{token}', [App\Http\Controllers\AuditController::class, 'show'])->name('audit.show');
-Route::get('/api/audit/{token}/status', [App\Http\Controllers\AuditController::class, 'status'])->name('audit.status');
-
 Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified', 'ensureUserHasCustomer'])->name('dashboard');
 
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
