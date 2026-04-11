@@ -8,7 +8,7 @@ export default function Pricing({ auth, plans = [] }) {
 
     const faqs = [
         { question: "What's included in the free tier?", answer: "Our free tier lets you explore the platform before committing. You get: 3 brand sources (URLs or files) for brand extraction, 4 AI-generated images per campaign (with watermark), 3 landing page CRO audits, and unlimited ad copy generation. Deployment to Google/Facebook requires a subscription. Upgrade anytime to unlock unlimited generation, watermark-free images, and live campaign deployment." },
-        { question: "Does the subscription price include my ad budget?", answer: "No. Your subscription covers the Site to Spend AI platform, the creative generation, and the autonomous management agents. You will connect your own credit card to Google/Facebook, so you pay the ad networks directly for your media spend. This ensures total transparency—we never mark up your ad costs." },
+        { question: "Does the subscription price include my ad budget?", answer: "No. Your subscription covers the sitetospend AI platform, the creative generation, and the autonomous management agents. Your ad spend is billed separately—we charge a prepay credit to ensure your campaigns are always funded, then deduct actual daily spend. You can see exactly what's being spent in your dashboard. We never mark up your ad costs." },
         { question: "How does ad spend billing work?", answer: "When you launch your first campaign, we charge 7 days of estimated ad spend upfront as credit. This ensures your campaigns have guaranteed funding from day one. We then bill your actual daily spend each morning at 6 AM, deducting from your credit balance. When your balance gets low (less than 3 days remaining), we automatically top it up to keep your campaigns running smoothly." },
         { question: "What happens if a payment fails?", answer: "We give you a 24-hour grace period to update your payment method. If the payment still fails after Day 1, we reduce campaign budgets by 50% to minimize spend. If payment hasn't been resolved by Day 2, we pause all campaigns to protect both parties. Once payment is successful, campaigns are automatically resumed at full budget—no action needed from you." },
         { question: "How do I update my payment method?", answer: "You can update your payment method anytime in your dashboard under Billing → Ad Spend. If a payment has failed, you'll see a 'Retry Payment' button that will immediately attempt to charge your new card and resume your campaigns if successful." },
@@ -145,7 +145,7 @@ export default function Pricing({ auth, plans = [] }) {
                             {/* Trust Seals */}
                             <div className="mt-12 flex justify-center gap-8 text-sm text-gray-500">
                                 <div className="flex items-center gap-2"><span>🔒</span> Secure Stripe Payment</div>
-                                <div className="flex items-center gap-2"><span>⚡</span> Approved Google Partner</div>
+                                <div className="flex items-center gap-2"><span>⚡</span> Instant Campaign Deployment</div>
                                 <div className="flex items-center gap-2"><span>🛡️</span> Data Encrypted & Private</div>
                             </div>
                         </div>
@@ -189,7 +189,7 @@ export default function Pricing({ auth, plans = [] }) {
                                 Ready to transform your marketing?
                             </h2>
                             <p className="mt-6 text-xl text-flame-orange-100">
-                                Join hundreds of marketing teams creating smarter, faster campaigns with AI-powered optimization.
+                                Start creating smarter, faster campaigns with AI-powered optimization.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
                                 <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
