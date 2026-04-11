@@ -7,11 +7,19 @@ export default function Settings({ settings, campaignModeDescription }) {
     const deploymentSetting = settings.find(s => s.key === 'deployment_enabled');
     const campaignTestingModeSetting = settings.find(s => s.key === 'campaign_testing_mode');
     const managedBillingSetting = settings.find(s => s.key === 'managed_billing_enabled');
+    const boostPriceSetting = settings.find(s => s.key === 'creative_boost_price_cents');
+    const boostImagesSetting = settings.find(s => s.key === 'creative_boost_image_generations');
+    const boostVideosSetting = settings.find(s => s.key === 'creative_boost_video_generations');
+    const boostRefinementsSetting = settings.find(s => s.key === 'creative_boost_refinements');
     
     const { data, setData, post, processing } = useForm({
         deployment_enabled: deploymentSetting ? deploymentSetting.value === '1' : false,
         campaign_testing_mode: campaignTestingModeSetting ? campaignTestingModeSetting.value === '1' : false,
         managed_billing_enabled: managedBillingSetting ? managedBillingSetting.value === '1' : true,
+        creative_boost_price_cents: parseInt(boostPriceSetting?.value) || 2900,
+        creative_boost_image_generations: parseInt(boostImagesSetting?.value) || 25,
+        creative_boost_video_generations: parseInt(boostVideosSetting?.value) || 5,
+        creative_boost_refinements: parseInt(boostRefinementsSetting?.value) || 25,
     });
 
     const handleSubmit = (e) => {
@@ -255,6 +263,60 @@ export default function Settings({ settings, campaignModeDescription }) {
                                                 </>
                                             )}
                                         </div>
+                                    </div>
+                                </div>
+
+                                {/* Creative Boost Pack Settings */}
+                                <div className="border-b border-gray-200 pb-6">
+                                    <h4 className="text-lg font-medium text-gray-900 mb-2">Creative Boost Pack</h4>
+                                    <p className="text-sm text-gray-500 mb-4">Configure the one-time purchasable Creative Boost Pack that users can buy for additional generations.</p>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Price (cents)</label>
+                                            <input
+                                                type="number"
+                                                min="100"
+                                                value={data.creative_boost_price_cents}
+                                                onChange={(e) => setData('creative_boost_price_cents', parseInt(e.target.value) || 0)}
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">${(data.creative_boost_price_cents / 100).toFixed(2)}</p>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Image Generations</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={data.creative_boost_image_generations}
+                                                onChange={(e) => setData('creative_boost_image_generations', parseInt(e.target.value) || 0)}
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Video Generations</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={data.creative_boost_video_generations}
+                                                onChange={(e) => setData('creative_boost_video_generations', parseInt(e.target.value) || 0)}
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Refinements</label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                value={data.creative_boost_refinements}
+                                                onChange={(e) => setData('creative_boost_refinements', parseInt(e.target.value) || 0)}
+                                                className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+                                        Current pack: <strong>${(data.creative_boost_price_cents / 100).toFixed(2)}</strong> for {data.creative_boost_image_generations} images + {data.creative_boost_video_generations} videos + {data.creative_boost_refinements} refinements
                                     </div>
                                 </div>
 

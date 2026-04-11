@@ -29,6 +29,8 @@ function PlanForm({ plan, onClose, isEdit }) {
         billing_interval: plan.billing_interval || 'month',
         stripe_price_id: plan.stripe_price_id || '',
         features: plan.features?.length ? plan.features : [''],
+        creative_limits: plan.creative_limits || null,
+        is_unlimited: plan.creative_limits === null,
         is_active: plan.is_active ?? true,
         is_free: plan.is_free ?? false,
         is_popular: plan.is_popular ?? false,
@@ -37,9 +39,18 @@ function PlanForm({ plan, onClose, isEdit }) {
         sort_order: plan.sort_order || 0,
     });
 
+    const defaultLimits = { image_generations: 0, video_generations: 0, refinements: 0, max_refinements_per_item: 3, max_extensions_per_video: 3 };
+    const limits = data.creative_limits || defaultLimits;
+    const setLimit = (key, val) => setData('creative_limits', { ...limits, [key]: parseInt(val) || 0 });
+
     const handleSubmit = (e) => {
         e.preventDefault();
-        const filtered = { ...data, features: data.features.filter(f => f.trim() !== '') };
+        const { is_unlimited, ...rest } = data;
+        const filtered = {
+            ...rest,
+            features: data.features.filter(f => f.trim() !== ''),
+            creative_limits: is_unlimited ? null : data.creative_limits,
+        };
         if (isEdit) {
             put(route('admin.plans.update', plan.id), {
                 data: filtered,
@@ -206,6 +217,48 @@ function PlanForm({ plan, onClose, isEdit }) {
                         </label>
                     </div>
 
+                    {/* Creative Limits */}
+                    <div className="border-t border-gray-200 pt-4">
+                        <h4 className="text-sm font-semibold text-gray-900 mb-3">Creative Limits (monthly)</h4>
+                        <label className="flex items-center cursor-pointer mb-3">
+                            <input
+                                type="checkbox"
+                                checked={data.is_unlimited}
+                                onChange={(e) => {
+                                    setData('is_unlimited', e.target.checked);
+                                    if (e.target.checked) setData('creative_limits', null);
+                                    else setData('creative_limits', defaultLimits);
+                                }}
+                                className="rounded border-gray-300 text-purple-600 shadow-sm mr-2"
+                            />
+                            <span className="text-sm text-gray-700">Unlimited (Agency tier)</span>
+                        </label>
+                        {!data.is_unlimited && (
+                            <div className="grid grid-cols-3 gap-3">
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Image Generations</label>
+                                    <input type="number" min="0" value={limits.image_generations} onChange={(e) => setLimit('image_generations', e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Video Generations</label>
+                                    <input type="number" min="0" value={limits.video_generations} onChange={(e) => setLimit('video_generations', e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Refinements</label>
+                                    <input type="number" min="0" value={limits.refinements} onChange={(e) => setLimit('refinements', e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Max Edits / Image</label>
+                                    <input type="number" min="0" max="10" value={limits.max_refinements_per_item} onChange={(e) => setLimit('max_refinements_per_item', e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">Max Extensions / Video</label>
+                                    <input type="number" min="0" max="10" value={limits.max_extensions_per_video} onChange={(e) => setLimit('max_extensions_per_video', e.target.value)} className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm" />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">CTA Button Text</label>
@@ -307,6 +360,7 @@ export default function Plans({ plans }) {
                                                     <th className="pb-3 font-medium">Stripe Price ID</th>
                                                     <th className="pb-3 font-medium">Status</th>
                                                     <th className="pb-3 font-medium">Features</th>
+                                                    <th className="pb-3 font-medium">Creative Limits</th>
                                                     <th className="pb-3 font-medium text-right">Actions</th>
                                                 </tr>
                                             </thead>
@@ -339,6 +393,13 @@ export default function Plans({ plans }) {
                                                         </td>
                                                         <td className="py-3">
                                                             <span className="text-gray-600">{plan.features?.length || 0} features</span>
+                                                        </td>
+                                                        <td className="py-3">
+                                                            {plan.creative_limits ? (
+                                                                <span className="text-xs text-gray-600">{plan.creative_limits.image_generations}img / {plan.creative_limits.video_generations}vid / {plan.creative_limits.refinements}ref</span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">Unlimited</span>
+                                                            )}
                                                         </td>
                                                         <td className="py-3 text-right space-x-2">
                                                             <button

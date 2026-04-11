@@ -452,6 +452,21 @@ class AdminController extends Controller
     {
         $settings = Setting::all();
         
+        // Ensure boost pack defaults exist for the UI
+        $boostDefaults = [
+            'creative_boost_price_cents' => ['value' => 2900, 'type' => 'integer', 'description' => 'Creative Boost Pack price in cents'],
+            'creative_boost_image_generations' => ['value' => 25, 'type' => 'integer', 'description' => 'Image generations per boost pack'],
+            'creative_boost_video_generations' => ['value' => 5, 'type' => 'integer', 'description' => 'Video generations per boost pack'],
+            'creative_boost_refinements' => ['value' => 25, 'type' => 'integer', 'description' => 'Refinements per boost pack'],
+        ];
+
+        $existingKeys = $settings->pluck('key')->toArray();
+        foreach ($boostDefaults as $key => $meta) {
+            if (!in_array($key, $existingKeys)) {
+                $settings->push(new Setting(['key' => $key, 'value' => (string) $meta['value'], 'type' => $meta['type'], 'description' => $meta['description']]));
+            }
+        }
+
         return Inertia::render('Admin/Settings', [
             'settings' => $settings,
             'campaignModeDescription' => \App\Services\CampaignStatusHelper::getModeDescription(),
@@ -464,6 +479,10 @@ class AdminController extends Controller
             'deployment_enabled' => 'required|boolean',
             'campaign_testing_mode' => 'sometimes|boolean',
             'managed_billing_enabled' => 'sometimes|boolean',
+            'creative_boost_price_cents' => 'sometimes|integer|min:100',
+            'creative_boost_image_generations' => 'sometimes|integer|min:0',
+            'creative_boost_video_generations' => 'sometimes|integer|min:0',
+            'creative_boost_refinements' => 'sometimes|integer|min:0',
         ]);
 
         Setting::set('deployment_enabled', $request->deployment_enabled, 'boolean');
@@ -475,6 +494,13 @@ class AdminController extends Controller
 
         if ($request->has('managed_billing_enabled')) {
             Setting::set('managed_billing_enabled', $request->managed_billing_enabled, 'boolean');
+        }
+
+        // Creative Boost Pack settings
+        foreach (['creative_boost_price_cents', 'creative_boost_image_generations', 'creative_boost_video_generations', 'creative_boost_refinements'] as $key) {
+            if ($request->has($key)) {
+                Setting::set($key, $request->integer($key), 'integer');
+            }
         }
 
         return redirect()->back()->with('flash', [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CreativeBoostPurchase;
+use App\Models\Setting;
 use App\Services\CreativeQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -12,14 +13,20 @@ use Inertia\Inertia;
 class CreativeBoostController extends Controller
 {
     /**
-     * Create a Stripe Checkout session for a Creative Boost pack ($29).
-     * Pack contents: 25 image generations + 5 video generations + 25 refinements.
+     * Create a Stripe Checkout session for a Creative Boost pack.
+     * Pack contents and price are configurable in Admin Settings.
      */
     public function checkout(Request $request)
     {
         $user = Auth::user();
         $quotaService = app(CreativeQuotaService::class);
         $period = $quotaService->getCurrentPeriod();
+
+        // Read configurable boost pack settings
+        $priceCents = (int) Setting::get('creative_boost_price_cents', 2900);
+        $imageGens = (int) Setting::get('creative_boost_image_generations', 25);
+        $videoGens = (int) Setting::get('creative_boost_video_generations', 5);
+        $refinements = (int) Setting::get('creative_boost_refinements', 25);
 
         // Ensure user is a Stripe customer
         if (!$user->hasStripeId()) {
@@ -29,13 +36,15 @@ class CreativeBoostController extends Controller
         // Create a pending purchase record
         $purchase = CreativeBoostPurchase::create([
             'user_id' => $user->id,
-            'image_generations' => 25,
-            'video_generations' => 5,
-            'refinements' => 25,
-            'amount_cents' => 2900,
+            'image_generations' => $imageGens,
+            'video_generations' => $videoGens,
+            'refinements' => $refinements,
+            'amount_cents' => $priceCents,
             'period' => $period,
             'status' => 'pending',
         ]);
+
+        $description = "{$imageGens} image generations + {$videoGens} video generations + {$refinements} refinements";
 
         try {
             $stripe = new \Stripe\StripeClient(config('services.stripe.secret'));
@@ -48,9 +57,9 @@ class CreativeBoostController extends Controller
                         'currency' => 'usd',
                         'product_data' => [
                             'name' => 'Creative Boost Pack',
-                            'description' => '25 image generations + 5 video generations + 25 refinements',
+                            'description' => $description,
                         ],
-                        'unit_amount' => 2900,
+                        'unit_amount' => $priceCents,
                     ],
                     'quantity' => 1,
                 ]],
@@ -88,6 +97,12 @@ class CreativeBoostController extends Controller
 
         return Inertia::render('CreativeUsage', [
             'creativeUsage' => $quotaService->getUsageSummary($user),
+            'boostConfig' => [
+                'price_cents' => (int) Setting::get('creative_boost_price_cents', 2900),
+                'image_generations' => (int) Setting::get('creative_boost_image_generations', 25),
+                'video_generations' => (int) Setting::get('creative_boost_video_generations', 5),
+                'refinements' => (int) Setting::get('creative_boost_refinements', 25),
+            ],
             'purchases' => CreativeBoostPurchase::where('user_id', $user->id)
                 ->where('status', 'completed')
                 ->orderByDesc('created_at')

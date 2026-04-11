@@ -2,7 +2,8 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, usePage } from '@inertiajs/react';
 
 export default function CreativeUsage({ auth }) {
-    const { creativeUsage, purchases, flash } = usePage().props;
+    const { creativeUsage, boostConfig, purchases, flash } = usePage().props;
+    const boost = boostConfig || { price_cents: 2900, image_generations: 25, video_generations: 5, refinements: 25 };
 
     const handleBuyBoost = () => {
         router.post(route('creative-boost.checkout'));
@@ -95,20 +96,20 @@ export default function CreativeUsage({ auth }) {
                             <div>
                                 <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                                     🚀 Creative Boost Pack
-                                    <span className="text-flame-orange-600 text-xl font-black">$29</span>
+                                    <span className="text-flame-orange-600 text-xl font-black">${(boost.price_cents / 100).toFixed(0)}</span>
                                 </h2>
                                 <p className="text-gray-600 text-sm mt-1">
                                     Instantly add more credits to your current billing period.
                                 </p>
                                 <div className="flex flex-wrap gap-3 mt-3">
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg text-sm font-medium text-gray-700 shadow-sm">
-                                        🖼️ 25 images
+                                        🖼️ {boost.image_generations} images
                                     </span>
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg text-sm font-medium text-gray-700 shadow-sm">
-                                        🎬 5 videos
+                                        🎬 {boost.video_generations} videos
                                     </span>
                                     <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-white rounded-lg text-sm font-medium text-gray-700 shadow-sm">
-                                        ✏️ 25 refinements
+                                        ✏️ {boost.refinements} refinements
                                     </span>
                                 </div>
                             </div>
