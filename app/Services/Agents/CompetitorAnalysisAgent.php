@@ -96,12 +96,12 @@ class CompetitorAnalysisAgent
                 return $result;
             }
 
-            // Update raw content
+            // Update raw content (guard against non-string Firecrawl metadata)
             $this->persistAnalysis($competitor, [
-                'raw_content' => $scrapedContent['content'],
-                'title' => $scrapedContent['title'] ?? $competitor->title,
-                'meta_description' => $scrapedContent['meta_description'] ?? $competitor->meta_description,
-                'headings' => $scrapedContent['headings'] ?? [],
+                'raw_content' => is_string($scrapedContent['content']) ? $scrapedContent['content'] : json_encode($scrapedContent['content']),
+                'title' => is_string($scrapedContent['title'] ?? null) ? $scrapedContent['title'] : ($competitor->title ?? null),
+                'meta_description' => is_string($scrapedContent['meta_description'] ?? null) ? $scrapedContent['meta_description'] : ($competitor->meta_description ?? null),
+                'headings' => is_array($scrapedContent['headings'] ?? null) ? $scrapedContent['headings'] : [],
             ]);
 
             // Step 2: Get our business context

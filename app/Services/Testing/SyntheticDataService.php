@@ -341,6 +341,8 @@ class SyntheticDataService
                 KeywordQualityScore::create([
                     'customer_id' => $campaign->customer_id,
                     'campaign_google_id' => $campaign->google_ads_campaign_id ?? $campaign->microsoft_ads_campaign_id,
+                    'ad_group_resource_name' => 'sandbox/adGroup/' . $campaign->id . '_' . $keyword->id,
+                    'criterion_resource_name' => 'sandbox/criterion/' . $campaign->id . '_' . $keyword->id,
                     'keyword_text' => $keyword->keyword_text,
                     'match_type' => $keyword->match_type,
                     'quality_score' => $qs,

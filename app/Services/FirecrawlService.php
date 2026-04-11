@@ -58,9 +58,10 @@ class FirecrawlService
 
             $data = $response->json('data', []);
 
-            $result['markdown'] = $data['markdown'] ?? null;
-            $result['title'] = $data['metadata']['title'] ?? null;
-            $result['meta_description'] = $data['metadata']['description'] ?? null;
+            $result['markdown'] = is_string($data['markdown'] ?? null) ? $data['markdown'] : null;
+            $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
+            $result['title'] = is_string($metadata['title'] ?? null) ? $metadata['title'] : null;
+            $result['meta_description'] = is_string($metadata['description'] ?? null) ? $metadata['description'] : null;
             $result['success'] = !empty($result['markdown']);
 
             Log::info('FirecrawlService: Scraped successfully', [

@@ -23,7 +23,7 @@ class CustomerObserver
             $customer->updateQuietly(['tracking_signing_secret' => Str::random(64)]);
         }
 
-        if ($customer->website) {
+        if ($customer->website && !$customer->is_sandbox) {
             Log::info('New customer created with website - dispatching scrape job', [
                 'customer_id' => $customer->id,
                 'website' => $customer->website,
@@ -42,8 +42,8 @@ class CustomerObserver
      */
     public function updated(Customer $customer): void
     {
-        // Check if website was changed and is now populated
-        if ($customer->isDirty('website') && $customer->website) {
+        // Check if website was changed and is now populated (skip sandbox customers)
+        if ($customer->isDirty('website') && $customer->website && !$customer->is_sandbox) {
             Log::info('Customer website updated - dispatching scrape job', [
                 'customer_id' => $customer->id,
                 'old_website' => $customer->getOriginal('website'),
