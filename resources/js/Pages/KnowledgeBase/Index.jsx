@@ -4,6 +4,7 @@ import axios from 'axios';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import { useToast } from '@/Components/Toast';
+import { MagnifyingGlassIcon, TrashIcon, PlusIcon, GlobeAltIcon, DocumentTextIcon, DocumentIcon } from '@heroicons/react/24/outline';
 
 export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
     const { props } = usePage();
@@ -93,20 +94,38 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
 
     const getSourceTypeLabel = (sourceType) => {
         const labels = {
-            'url': '🌐 Website',
-            'pdf': '📄 PDF',
-            'text': '📝 Text',
+            'url': 'Website',
+            'pdf': 'PDF',
+            'text': 'Text',
         };
         return labels[sourceType] || sourceType;
     };
 
+    const getSourceTypeIcon = (sourceType) => {
+        const icons = {
+            'url': <GlobeAltIcon className="h-4 w-4" />,
+            'pdf': <DocumentTextIcon className="h-4 w-4" />,
+            'text': <DocumentIcon className="h-4 w-4" />,
+        };
+        return icons[sourceType] || null;
+    };
+
     const getSourceTypeColor = (sourceType) => {
         const colors = {
-            'url': 'bg-blue-100 text-blue-800',
-            'pdf': 'bg-red-100 text-red-800',
-            'text': 'bg-green-100 text-green-800',
+            'url': 'bg-blue-50 text-blue-700 ring-1 ring-inset ring-blue-600/20',
+            'pdf': 'bg-red-50 text-red-700 ring-1 ring-inset ring-red-600/20',
+            'text': 'bg-green-50 text-green-700 ring-1 ring-inset ring-green-600/20',
         };
-        return colors[sourceType] || 'bg-gray-100 text-gray-800';
+        return colors[sourceType] || 'bg-gray-50 text-gray-700 ring-1 ring-inset ring-gray-600/20';
+    };
+
+    const getSourceBorderColor = (sourceType) => {
+        const colors = {
+            'url': 'border-l-blue-500',
+            'pdf': 'border-l-red-500',
+            'text': 'border-l-green-500',
+        };
+        return colors[sourceType] || 'border-l-gray-400';
     };
 
     const truncateUrl = (url, maxLength = 50) => {
@@ -129,9 +148,10 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                     <h2 className="text-xl font-semibold text-gray-800">Knowledge Base</h2>
                     <Link
                         href={route('knowledge-base.create')}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                        className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white text-sm font-medium rounded-lg hover:from-delft-blue/90 hover:to-air-superiority-blue/90 shadow-sm transition"
                     >
-                        + Add Source
+                        <PlusIcon className="h-4 w-4" />
+                        Add Source
                     </Link>
                 </div>
             }
@@ -153,31 +173,35 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {/* Search Section */}
                     <div className="mb-8">
-                        <form onSubmit={handleSearch} className="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                            <div className="mb-4">
+                        <form onSubmit={handleSearch} className="bg-white overflow-hidden shadow-sm rounded-xl p-6 border border-gray-100">
+                            <div>
                                 <label htmlFor="search" className="block text-sm font-medium text-gray-700 mb-2">
                                     Search Your Knowledge Base
                                 </label>
                                 <div className="flex gap-2">
-                                    <div className="flex-1">
+                                    <div className="flex-1 relative">
+                                        <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                                            <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                                        </div>
                                         <input
                                             id="search"
                                             type="text"
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             placeholder="Search for topics, keywords, or specific information..."
-                                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-flame-orange-500 focus:border-flame-orange-500 text-sm"
                                         />
                                     </div>
                                     <button
                                         type="submit"
                                         disabled={searching || !searchQuery.trim()}
-                                        className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                        className="px-5 py-2.5 bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white text-sm font-medium rounded-lg hover:from-delft-blue/90 hover:to-air-superiority-blue/90 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition"
                                     >
                                         {searching ? (
                                             <span className="flex items-center gap-2">
-                                                <svg className="w-4 h-4 animate-spin" fill="currentColor" viewBox="0 0 20 20">
-                                                    <path fillRule="evenodd" d="M4.293 5.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                                 </svg>
                                                 Searching...
                                             </span>
@@ -189,7 +213,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                         <button
                                             type="button"
                                             onClick={clearSearch}
-                                            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition"
+                                            className="px-4 py-2.5 bg-gray-100 text-gray-600 text-sm rounded-lg hover:bg-gray-200 transition"
                                         >
                                             Clear
                                         </button>
@@ -211,7 +235,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                                 <div
                                                     key={idx}
                                                     onClick={() => setSelectedResult(selectedResult === idx ? null : idx)}
-                                                    className="bg-white border-l-4 border-blue-500 p-4 rounded-lg shadow-sm hover:shadow-md cursor-pointer transition"
+                                                    className="bg-white border-l-4 border-delft-blue p-4 rounded-xl shadow-sm hover:shadow-md cursor-pointer transition-all duration-200"
                                                 >
                                                     <div className="flex items-start justify-between mb-2">
                                                         <div>
@@ -262,64 +286,68 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                             {knowledgeBases.map((kb) => (
                                 <div
                                     key={kb.id}
-                                    className="bg-white overflow-hidden shadow-sm sm:rounded-lg hover:shadow-lg transition"
+                                    className={`group bg-white overflow-hidden rounded-xl border border-gray-100 border-l-4 ${getSourceBorderColor(kb.source_type)} shadow-sm hover:shadow-lg hover:scale-[1.02] transition-all duration-200`}
                                 >
-                                    <div className="p-6">
+                                    <div className="p-5">
                                         {/* Source Type Badge */}
                                         <div className="flex items-start justify-between mb-3">
-                                            <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getSourceTypeColor(kb.source_type)}`}>
+                                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getSourceTypeColor(kb.source_type)}`}>
+                                                {getSourceTypeIcon(kb.source_type)}
                                                 {getSourceTypeLabel(kb.source_type)}
                                             </span>
                                             <button
                                                 onClick={() => handleDelete(kb.id)}
                                                 disabled={deleting === kb.id || loading}
-                                                className="text-red-600 hover:text-red-900 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
                                                 title="Delete"
                                             >
                                                 {deleting === kb.id ? (
-                                                    <svg className="w-5 h-5 animate-spin" fill="currentColor" viewBox="0 0 20 20">
-                                                        <path fillRule="evenodd" d="M4.293 5.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                    <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                                     </svg>
                                                 ) : (
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                                    </svg>
+                                                    <TrashIcon className="w-4 h-4" />
                                                 )}
                                             </button>
                                         </div>
 
                                         {/* Title/Filename */}
-                                        <h3 className="text-lg font-semibold text-gray-900 mb-2 line-clamp-2">
+                                        <h3 className="text-sm font-semibold text-gray-900 mb-1.5 line-clamp-2">
                                             {kb.original_filename || kb.url}
                                         </h3>
 
                                         {/* URL Display */}
-                                        <p className="text-sm text-gray-600 mb-3 truncate" title={kb.url}>
-                                            {truncateUrl(kb.url)}
-                                        </p>
+                                        {kb.url && (
+                                            <p className="text-xs text-gray-400 mb-3 truncate font-mono" title={kb.url}>
+                                                {truncateUrl(kb.url)}
+                                            </p>
+                                        )}
 
                                         {/* Content Preview */}
                                         {kb.content ? (
-                                            <div className="mb-3 p-2 bg-gray-50 rounded border border-gray-200">
-                                                <p className="text-xs font-medium text-gray-500 mb-1">Content Preview:</p>
-                                                <p className="text-sm text-gray-700 line-clamp-3">
+                                            <div className="mb-3 p-3 bg-gray-50/80 rounded-lg border border-gray-100">
+                                                <p className="text-xs text-gray-500 font-medium mb-1">Preview</p>
+                                                <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">
                                                     {kb.content.substring(0, 150)}...
                                                 </p>
                                             </div>
                                         ) : (
-                                            <div className="mb-3 p-2 bg-yellow-50 rounded border border-yellow-200">
-                                                <p className="text-xs font-medium text-yellow-700">
-                                                    ⏳ Processing... Content extraction in progress
-                                                </p>
+                                            <div className="mb-3 p-3 bg-amber-50/80 rounded-lg border border-amber-100">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex gap-1">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:0ms]" />
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:150ms]" />
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-bounce [animation-delay:300ms]" />
+                                                    </div>
+                                                    <p className="text-xs font-medium text-amber-700">Processing content...</p>
+                                                </div>
                                             </div>
                                         )}
 
                                         {/* Metadata */}
-                                        <div className="text-xs text-gray-500 space-y-1">
-                                            <p>Added: {formatDate(kb.created_at)}</p>
-                                            {kb.updated_at && kb.updated_at !== kb.created_at && (
-                                                <p>Updated: {formatDate(kb.updated_at)}</p>
-                                            )}
+                                        <div className="text-xs text-gray-400">
+                                            <p>Added {formatDate(kb.created_at)}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -328,45 +356,43 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
 
                             {/* Pagination */}
                             {pagination.last_page > 1 && (
-                                <div className="mt-6 flex items-center justify-between">
-                                    <div className="text-sm text-gray-600">
-                                        Showing <span className="font-semibold">{pagination.from}</span> to <span className="font-semibold">{pagination.to}</span> of <span className="font-semibold">{pagination.total}</span> results
+                                <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="text-sm text-gray-500">
+                                        Showing <span className="font-medium text-gray-700">{pagination.from}</span> to <span className="font-medium text-gray-700">{pagination.to}</span> of <span className="font-medium text-gray-700">{pagination.total}</span> sources
                                     </div>
-                                    <div className="flex gap-2">
+                                    <div className="flex items-center gap-1.5">
                                         {/* Previous Button */}
                                         {pagination.current_page > 1 && (
                                             <Link
                                                 href={`/knowledge-base?page=${pagination.current_page - 1}`}
-                                                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                                                className="px-3 py-1.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition"
                                             >
-                                                ← Previous
+                                                Previous
                                             </Link>
                                         )}
 
                                         {/* Page Numbers */}
-                                        <div className="flex gap-1">
-                                            {Array.from({ length: pagination.last_page }, (_, i) => i + 1).map((page) => (
-                                                <Link
-                                                    key={page}
-                                                    href={`/knowledge-base?page=${page}`}
-                                                    className={`px-3 py-2 rounded-lg transition ${
-                                                        pagination.current_page === page
-                                                            ? 'bg-blue-600 text-white'
-                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                    }`}
-                                                >
-                                                    {page}
-                                                </Link>
-                                            ))}
-                                        </div>
+                                        {Array.from({ length: pagination.last_page }, (_, i) => i + 1).map((page) => (
+                                            <Link
+                                                key={page}
+                                                href={`/knowledge-base?page=${page}`}
+                                                className={`w-9 h-9 flex items-center justify-center text-sm rounded-lg transition ${
+                                                    pagination.current_page === page
+                                                        ? 'bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white shadow-sm font-medium'
+                                                        : 'text-gray-600 bg-white border border-gray-200 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {page}
+                                            </Link>
+                                        ))}
 
                                         {/* Next Button */}
                                         {pagination.current_page < pagination.last_page && (
                                             <Link
                                                 href={`/knowledge-base?page=${pagination.current_page + 1}`}
-                                                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+                                                className="px-3 py-1.5 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition"
                                             >
-                                                Next →
+                                                Next
                                             </Link>
                                         )}
                                     </div>
@@ -374,22 +400,21 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                             )}
                         </div>
                     ) : (
-                        <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
-                            <div className="p-6 text-center">
-                                <div className="mb-4">
-                                    <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                    </svg>
+                        <div className="bg-white overflow-hidden rounded-xl border border-gray-100 shadow-sm">
+                            <div className="p-10 text-center">
+                                <div className="mx-auto w-16 h-16 flex items-center justify-center rounded-2xl bg-gradient-to-br from-delft-blue/10 to-air-superiority-blue/10 mb-5">
+                                    <DocumentTextIcon className="h-8 w-8 text-delft-blue" />
                                 </div>
-                                <h3 className="text-lg font-medium text-gray-900 mb-2">No Knowledge Base Sources</h3>
-                                <p className="text-gray-600 mb-6">
-                                    Get started by adding a website, PDF, or text document to your knowledge base.
+                                <h3 className="text-lg font-semibold text-gray-900 mb-2">No sources yet</h3>
+                                <p className="text-sm text-gray-500 mb-8 max-w-sm mx-auto">
+                                    Add a website, PDF, or text document to start building your knowledge base.
                                 </p>
                                 <Link
                                     href={route('knowledge-base.create')}
-                                    className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+                                    className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-delft-blue to-air-superiority-blue text-white text-sm font-medium rounded-lg hover:from-delft-blue/90 hover:to-air-superiority-blue/90 shadow-sm transition"
                                 >
-                                    + Add Your First Source
+                                    <PlusIcon className="h-4 w-4" />
+                                    Add Your First Source
                                 </Link>
                             </div>
                         </div>
