@@ -238,7 +238,7 @@
             @if(!empty($branding['logo_url']))
                 <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['company_name'] ?? $report['customer_name'] }}">
             @else
-                SPECTRA
+                SITE TO SPEND
             @endif
         </div>
         <h1>{{ ucfirst($report['period']['type']) }} Performance Report</h1>
@@ -482,7 +482,7 @@
     {{-- Footer --}}
     <div class="page-footer">
         <span>Generated {{ now()->format('M j, Y g:i A') }}</span>
-        <span>{{ $branding['company_name'] ?? 'Spectra' }} — Autonomous Advertising Platform</span>
+        <span>{{ $branding['company_name'] ?? 'Site to Spend' }} — Autonomous Advertising Platform</span>
     </div>
 </body>
 </html>

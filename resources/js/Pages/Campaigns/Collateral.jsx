@@ -463,7 +463,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         <img src={image.cloudfront_url} alt={`Generated collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
                                                         {!isSubscribed && (
                                                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                                                                <p className="text-white text-xs font-medium">Spectra Preview - Upgrade to download</p>
+                                                                <p className="text-white text-xs font-medium">Preview - Upgrade to download</p>
                                                             </div>
                                                         )}
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">

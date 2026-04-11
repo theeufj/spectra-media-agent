@@ -234,7 +234,7 @@ function TouchpointJourney({ touchpoints }) {
         return (
             <div className="bg-white rounded-lg shadow-md p-6 mb-8">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Touchpoints</h3>
-                <p className="text-gray-400 text-sm">No touchpoints recorded yet. Install the Spectra Pixel to start tracking.</p>
+                <p className="text-gray-400 text-sm">No touchpoints recorded yet. Install the tracking pixel to start tracking.</p>
             </div>
         );
     }
@@ -377,7 +377,7 @@ export default function Attribution({ campaign, summary, channelBreakdown, recen
                         </svg>
                         <h3 className="mt-4 text-lg font-medium text-gray-900">No attribution data yet</h3>
                         <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
-                            Install the Spectra Pixel on your website to start tracking touchpoints and conversions.
+                            Install the tracking pixel on your website to start tracking touchpoints and conversions.
                             Attribution data will appear here once visitors begin interacting with your campaigns.
                         </p>
                         <div className="mt-6 bg-gray-50 rounded-lg p-4 max-w-lg mx-auto text-left">

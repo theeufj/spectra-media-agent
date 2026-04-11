@@ -303,7 +303,7 @@ JAVASCRIPT;
 
         $tagConfig = [
             'type' => 'html',
-            'name' => 'Spectra Attribution Pixel',
+            'name' => 'Site to Spend Attribution Pixel',
             'parameter' => [
                 [
                     'type' => 'template',
@@ -319,7 +319,7 @@ JAVASCRIPT;
             unset($tagConfig['firingTriggerId']);
         }
 
-        Log::info('Generated Spectra Attribution Pixel tag', [
+        Log::info('Generated Site to Spend Attribution Pixel tag', [
             'customer_id' => $customerId,
         ]);
 

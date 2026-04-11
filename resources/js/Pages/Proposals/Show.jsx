@@ -233,7 +233,7 @@ function ProposalPreview({ proposal, data }) {
             {data.why_us?.length > 0 && (
                 <div className="bg-white rounded-lg shadow-md overflow-hidden">
                     <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-4">
-                        <h2 className="text-lg font-semibold text-white">Why Spectra Media?</h2>
+                        <h2 className="text-lg font-semibold text-white">Why Site to Spend?</h2>
                     </div>
                     <div className="p-6">
                         <ul className="space-y-3">

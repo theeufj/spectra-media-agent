@@ -177,7 +177,7 @@ class RevenueController extends Controller
             $breakdown = [];
             foreach ($subscriptions->data as $sub) {
                 $priceId = $sub->items->data[0]->price->id ?? 'unknown';
-                $productName = $sub->items->data[0]->price->nickname ?? 'Spectra Pro';
+                $productName = $sub->items->data[0]->price->nickname ?? 'Site to Spend Pro';
                 $amount = ($sub->items->data[0]->price->unit_amount ?? 0) / 100;
                 
                 if (!isset($breakdown[$priceId])) {

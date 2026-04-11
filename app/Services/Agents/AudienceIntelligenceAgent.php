@@ -95,7 +95,7 @@ class AudienceIntelligenceAgent
             $userListResourceName = $customerMatchService->createUserList(
                 $customerId,
                 $listName,
-                $description ?: "Customer Match list created via Spectra"
+                $description ?: "Customer Match list created via Site to Spend"
             );
 
             if (!$userListResourceName) {
@@ -155,7 +155,7 @@ class AudienceIntelligenceAgent
             $audience = $audienceService->createCustomerListAudience(
                 $accountId,
                 $listName,
-                $description ?: "Custom audience created via Spectra",
+                $description ?: "Custom audience created via Site to Spend",
                 $emails
             );
 

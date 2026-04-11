@@ -74,7 +74,7 @@ class GTMContainerService
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $containerName = $customer->name . ' — Spectra';
+            $containerName = $customer->name . ' — Site to Spend';
             $response = $this->makeApiCall('POST', "/accounts/{$accountId}/containers", $accessToken, [
                 'name' => $containerName,
                 'usageContext' => ['WEB'],
@@ -264,7 +264,7 @@ HTML;
             $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
 
             $createVersionResponse = $this->makeApiCall('POST', "/{$workspacePath}/version", $accessToken, [
-                'name'  => $notes ?: 'Published by Spectra — ' . now()->toDateTimeString(),
+                'name'  => $notes ?: 'Published by Site to Spend — ' . now()->toDateTimeString(),
                 'notes' => $notes,
             ]);
 

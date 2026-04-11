@@ -169,7 +169,7 @@ export default function FreeAuditResults({ auth, audit }) {
                                 <div className="space-y-6">
                                     {/* CTA Card */}
                                     <div className="bg-flame-orange-600 rounded-xl p-6 text-white">
-                                        <h3 className="text-lg font-bold">Let Spectra Fix These Automatically</h3>
+                                        <h3 className="text-lg font-bold">Let Site to Spend Fix These Automatically</h3>
                                         <p className="mt-2 text-sm text-flame-orange-100">
                                             Our AI agents can deploy optimized campaigns, fix policy violations, and manage your budget 24/7.
                                         </p>

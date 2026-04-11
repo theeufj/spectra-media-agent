@@ -69,7 +69,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                             <label className="flex items-center justify-between">
                                 <div>
                                     <span className="text-sm font-medium text-gray-900">Enable White-Label Branding</span>
-                                    <p className="text-sm text-gray-500">Replace Spectra branding with your own on all reports.</p>
+                                    <p className="text-sm text-gray-500">Replace Site to Spend branding with your own on all reports.</p>
                                 </div>
                                 <button
                                     type="button"

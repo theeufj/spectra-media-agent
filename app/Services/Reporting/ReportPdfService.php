@@ -93,7 +93,7 @@ class ReportPdfService
 
             if ($primaryHex) {
                 return [
-                    'company_name' => 'Spectra',
+                    'company_name' => 'Site to Spend',
                     'logo_url' => null,
                     'primary_color' => $primaryHex,
                     'primary_dark' => $this->darkenColor($primaryHex, 30),
@@ -102,9 +102,9 @@ class ReportPdfService
             }
         }
 
-        // Default Spectra branding
+        // Default Site to Spend branding
         return [
-            'company_name' => 'Spectra',
+            'company_name' => 'Site to Spend',
             'logo_url' => null,
             'primary_color' => '#ff4d00',
             'primary_dark' => '#992e00',

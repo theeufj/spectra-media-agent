@@ -86,7 +86,7 @@ export default function Edit({ auth, mustVerifyEmail, status }) {
                             <header>
                                 <h2 className="text-lg font-medium text-gray-900">Site Tour</h2>
                                 <p className="mt-1 text-sm text-gray-600">
-                                    Replay the guided walkthrough to familiarise yourself with Spectra's features.
+                                    Replay the guided walkthrough to familiarise yourself with Site to Spend's features.
                                 </p>
                             </header>
                             <div className="mt-4">

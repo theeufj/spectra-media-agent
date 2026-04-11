@@ -170,7 +170,7 @@ class GenerateImage implements ShouldQueue
                         $image = Image::read($decodedImage);
                         
                         // Add semi-transparent watermark in bottom right
-                        $image->text('Spectra Preview', $image->width() - 20, $image->height() - 20, function($font) {
+                        $image->text('Preview', $image->width() - 20, $image->height() - 20, function($font) {
                             $font->filename(public_path('fonts/Arial.ttf')); // Use system font as fallback
                             $font->size(24);
                             $font->color('ffffff');

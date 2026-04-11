@@ -9,7 +9,7 @@ export function startTour() {
 const TOUR_STEPS = [
     {
         target: '[data-tour="dashboard"]',
-        title: 'Welcome to Spectra',
+        title: 'Welcome to Site to Spend',
         body: 'This is your dashboard — a quick overview of campaign performance, tasks, and AI agent activity.',
         placement: 'bottom',
     },
