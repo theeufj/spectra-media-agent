@@ -5,7 +5,7 @@
  * and reports touchpoints to the Spectra attribution API.
  *
  * Usage: Include via GTM or directly:
- *   <script src="/js/spectra-pixel.js" data-customer="CUSTOMER_ID"></script>
+ *   <script src="/js/spectra-pixel.js" data-customer="CUSTOMER_ID" data-secret="SIGNING_SECRET"></script>
  */
 (function () {
     'use strict';
@@ -15,17 +15,19 @@
     var VISITOR_COOKIE = '_spectra_vid';
     var API_ENDPOINT = '/api/tracking/touchpoint';
 
-    // Get customer ID from script tag
+    // Get customer ID and signing secret from script tag
     var scripts = document.getElementsByTagName('script');
     var customerId = null;
+    var signingSecret = null;
     for (var i = 0; i < scripts.length; i++) {
         if (scripts[i].src && scripts[i].src.indexOf('spectra-pixel') !== -1) {
             customerId = scripts[i].getAttribute('data-customer');
+            signingSecret = scripts[i].getAttribute('data-secret');
             break;
         }
     }
 
-    if (!customerId) return;
+    if (!customerId || !signingSecret) return;
 
     /**
      * Parse URL query parameters
@@ -97,6 +99,47 @@
     }
 
     /**
+     * Generate HMAC-SHA256 signature using Web Crypto API.
+     * Message format: customerId + '|' + timestamp (matches server-side verification).
+     * Returns a hex-encoded signature string via Promise.
+     */
+    function generateSignature(message, secret) {
+        var encoder = new TextEncoder();
+        return crypto.subtle.importKey(
+            'raw',
+            encoder.encode(secret),
+            { name: 'HMAC', hash: 'SHA-256' },
+            false,
+            ['sign']
+        ).then(function (key) {
+            return crypto.subtle.sign('HMAC', key, encoder.encode(message));
+        }).then(function (sig) {
+            return Array.from(new Uint8Array(sig)).map(function (b) {
+                return ('0' + b.toString(16)).slice(-2);
+            }).join('');
+        });
+    }
+
+    /**
+     * Send a signed XHR request with HMAC signature header.
+     */
+    function sendSigned(url, payload) {
+        var timestamp = payload.timestamp;
+        var message = customerId + '|' + timestamp;
+
+        generateSignature(message, signingSecret).then(function (signature) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', url, true);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.setRequestHeader('X-Tracking-Signature', signature);
+            xhr.send(JSON.stringify(payload));
+        }).catch(function () {
+            // Silently fail — don't break the host page
+        });
+    }
+
+    /**
      * Record touchpoint
      */
     function recordTouchpoint(utmParams) {
@@ -125,16 +168,8 @@
         }
         setCookie(COOKIE_NAME, JSON.stringify(touchpoints), COOKIE_DAYS);
 
-        // Send to server
-        try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('POST', API_ENDPOINT, true);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('Accept', 'application/json');
-            xhr.send(JSON.stringify(touchpoint));
-        } catch (e) {
-            // Silently fail — don't break the host page
-        }
+        // Send to server with HMAC signature
+        sendSigned(API_ENDPOINT, touchpoint);
     }
 
     // Main: check for UTM parameters
@@ -152,21 +187,16 @@
             var existing = getCookie(COOKIE_NAME);
             var touchpoints = existing ? JSON.parse(existing) : [];
 
-            try {
-                var xhr = new XMLHttpRequest();
-                xhr.open('POST', API_ENDPOINT.replace('touchpoint', 'conversion'), true);
-                xhr.setRequestHeader('Content-Type', 'application/json');
-                xhr.setRequestHeader('Accept', 'application/json');
-                xhr.send(JSON.stringify({
-                    customer_id: customerId,
-                    visitor_id: visitorId,
-                    conversion_type: conversionType || 'purchase',
-                    conversion_value: conversionValue || 0,
-                    touchpoints: touchpoints
-                }));
-            } catch (e) {
-                // Silently fail
-            }
+            var payload = {
+                customer_id: customerId,
+                visitor_id: visitorId,
+                conversion_type: conversionType || 'purchase',
+                conversion_value: conversionValue || 0,
+                touchpoints: touchpoints,
+                timestamp: new Date().toISOString()
+            };
+
+            sendSigned(API_ENDPOINT.replace('touchpoint', 'conversion'), payload);
         }
     };
 })();

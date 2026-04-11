@@ -1,102 +1,374 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head } from '@inertiajs/react';
+import { useState, useMemo } from 'react';
 
-const MODEL_INFO = {
-    last_click: { name: 'Last Click', description: '100% credit to the final touchpoint before conversion.' },
-    first_click: { name: 'First Click', description: '100% credit to the first touchpoint in the journey.' },
-    linear: { name: 'Linear', description: 'Equal credit distributed across all touchpoints.' },
-    time_decay: { name: 'Time Decay', description: 'More credit to recent touchpoints (7-day half-life).' },
-    position_based: { name: 'Position Based', description: '40% first touch, 40% last touch, 20% distributed among middle.' },
+const MODEL_LABELS = {
+    last_click: 'Last Click',
+    first_click: 'First Click',
+    linear: 'Linear',
+    time_decay: 'Time Decay',
+    position_based: 'Position Based',
 };
 
-function TouchpointTimeline({ touchpoints }) {
+const MODEL_DESCRIPTIONS = {
+    last_click: '100% credit to the final touchpoint before conversion.',
+    first_click: '100% credit to the first touchpoint in the journey.',
+    linear: 'Equal credit distributed across all touchpoints.',
+    time_decay: 'More credit to touchpoints closer to conversion (7-day half-life).',
+    position_based: '40% first touch, 40% last touch, 20% split among middle.',
+};
+
+const CHANNEL_COLORS = {
+    'google / cpc': { bg: 'bg-blue-100', text: 'text-blue-800', bar: 'bg-blue-500' },
+    'facebook / cpc': { bg: 'bg-flame-orange-100', text: 'text-flame-orange-800', bar: 'bg-flame-orange-500' },
+    'microsoft / cpc': { bg: 'bg-teal-100', text: 'text-teal-800', bar: 'bg-teal-500' },
+    'linkedin / cpc': { bg: 'bg-sky-100', text: 'text-sky-800', bar: 'bg-sky-500' },
+    'google / organic': { bg: 'bg-green-100', text: 'text-green-800', bar: 'bg-green-500' },
+    'direct / none': { bg: 'bg-gray-100', text: 'text-gray-800', bar: 'bg-gray-500' },
+    'email / email': { bg: 'bg-yellow-100', text: 'text-yellow-800', bar: 'bg-yellow-500' },
+    'referral / referral': { bg: 'bg-purple-100', text: 'text-purple-800', bar: 'bg-purple-500' },
+};
+
+function getChannelColor(channel) {
+    const key = channel.toLowerCase();
+    return CHANNEL_COLORS[key] || { bg: 'bg-teal-100', text: 'text-teal-800', bar: 'bg-teal-500' };
+}
+
+function formatCurrency(value) {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value);
+}
+
+function SummaryCards({ summary }) {
+    const cards = [
+        {
+            label: 'Total Conversions',
+            value: summary.total_conversions,
+            icon: (
+                <svg className="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            ),
+        },
+        {
+            label: 'Total Value',
+            value: formatCurrency(summary.total_value),
+            icon: (
+                <svg className="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            ),
+        },
+        {
+            label: 'Avg. Touchpoints',
+            value: summary.avg_touchpoints,
+            icon: (
+                <svg className="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
+            ),
+        },
+    ];
+
     return (
-        <div className="flex items-center gap-1 overflow-x-auto py-4">
-            {touchpoints.map((tp, i) => (
-                <div key={i} className="flex items-center">
-                    <div className="flex flex-col items-center min-w-[120px]">
-                        <div className="w-10 h-10 rounded-full bg-flame-orange-100 text-flame-orange-700 flex items-center justify-center text-xs font-bold">{i + 1}</div>
-                        <p className="text-xs font-medium text-gray-900 mt-1">{tp.channel}</p>
-                        <p className="text-[10px] text-gray-500">{tp.campaign}</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            {cards.map((card) => (
+                <div key={card.label} className="bg-white rounded-lg shadow-md p-6 flex items-center space-x-4">
+                    <div className="flex-shrink-0">{card.icon}</div>
+                    <div>
+                        <p className="text-sm text-gray-500">{card.label}</p>
+                        <p className="text-2xl font-bold text-gray-900">{card.value}</p>
                     </div>
-                    {i < touchpoints.length - 1 && (
-                        <div className="w-8 h-px bg-gray-300 mx-1" />
-                    )}
                 </div>
             ))}
-            <div className="flex flex-col items-center min-w-[80px]">
-                <div className="w-10 h-10 rounded-full bg-green-100 text-green-700 flex items-center justify-center text-xs font-bold">$</div>
-                <p className="text-xs font-medium text-green-700 mt-1">Conversion</p>
-            </div>
         </div>
     );
 }
 
-function ModelCard({ modelKey, attributions }) {
-    const info = MODEL_INFO[modelKey] || { name: modelKey, description: '' };
-    if (!attributions || attributions.length === 0) return null;
-
-    const maxCredit = Math.max(...attributions.map((a) => a.credit || 0));
+function ChannelBar({ channels, maxValue }) {
+    if (!channels.length) {
+        return <p className="text-gray-400 text-sm py-4">No data available for this model.</p>;
+    }
 
     return (
-        <div className="bg-white rounded-lg border border-gray-200 p-5">
-            <h3 className="text-sm font-semibold text-gray-900">{info.name}</h3>
-            <p className="text-xs text-gray-500 mb-3">{info.description}</p>
-            <div className="space-y-2">
-                {attributions.map((a, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                        <span className="text-xs text-gray-600 w-32 truncate">{a.channel || `Touch ${i + 1}`}</span>
-                        <div className="flex-1 bg-gray-200 rounded-full h-3">
+        <div className="space-y-3">
+            {channels.map((ch) => {
+                const pct = maxValue > 0 ? (ch.value / maxValue) * 100 : 0;
+                const colors = getChannelColor(ch.channel);
+                return (
+                    <div key={ch.channel}>
+                        <div className="flex justify-between items-center mb-1">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
+                                {ch.channel}
+                            </span>
+                            <div className="flex items-center space-x-4 text-sm">
+                                <span className="text-gray-500">{ch.conversions.toFixed(1)} conv.</span>
+                                <span className="font-semibold text-gray-900">{formatCurrency(ch.value)}</span>
+                            </div>
+                        </div>
+                        <div className="w-full bg-gray-100 rounded-full h-2.5">
                             <div
-                                className="bg-flame-orange-500 h-3 rounded-full"
-                                style={{ width: `${maxCredit > 0 ? (a.credit / maxCredit * 100) : 0}%` }}
+                                className={`h-2.5 rounded-full ${colors.bar} transition-all duration-500`}
+                                style={{ width: `${Math.max(pct, 1)}%` }}
                             />
                         </div>
-                        <span className="text-xs font-medium text-gray-900 w-16 text-right">
-                            {((a.credit || 0) * 100).toFixed(1)}%
-                        </span>
-                        <span className="text-xs text-gray-500 w-16 text-right">
-                            ${(a.value || 0).toFixed(2)}
-                        </span>
                     </div>
-                ))}
+                );
+            })}
+        </div>
+    );
+}
+
+function ModelComparison({ channelBreakdown }) {
+    const [selectedModel, setSelectedModel] = useState('position_based');
+
+    const channels = channelBreakdown[selectedModel] || [];
+    const maxValue = channels.reduce((max, ch) => Math.max(max, ch.value), 0);
+
+    return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+            <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-4">
+                <h3 className="text-lg font-semibold text-white flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                    Channel Attribution by Model
+                </h3>
+            </div>
+
+            <div className="p-6">
+                <div className="flex flex-wrap gap-2 mb-6">
+                    {Object.entries(MODEL_LABELS).map(([key, label]) => (
+                        <button
+                            key={key}
+                            onClick={() => setSelectedModel(key)}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                selectedModel === key
+                                    ? 'bg-flame-orange-600 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
+                <p className="text-sm text-gray-500 mb-4 italic">
+                    {MODEL_DESCRIPTIONS[selectedModel]}
+                </p>
+
+                <ChannelBar channels={channels} maxValue={maxValue} />
             </div>
         </div>
     );
 }
 
-export default function Attribution({ models = {}, touchpoints = [] }) {
-    const modelKeys = Object.keys(models);
+function ModelComparisonTable({ channelBreakdown }) {
+    const allChannels = useMemo(() => {
+        const set = new Set();
+        Object.values(channelBreakdown).forEach(channels => {
+            channels.forEach(ch => set.add(ch.channel));
+        });
+        return Array.from(set).sort();
+    }, [channelBreakdown]);
 
+    if (!allChannels.length) return null;
+
+    function getValueForChannel(model, channel) {
+        const channels = channelBreakdown[model] || [];
+        const found = channels.find(ch => ch.channel === channel);
+        return found ? found.value : 0;
+    }
+
+    return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+            <div className="bg-gradient-to-r from-purple-600 to-purple-700 px-6 py-4">
+                <h3 className="text-lg font-semibold text-white flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Side-by-Side Model Comparison
+                </h3>
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                            {Object.entries(MODEL_LABELS).map(([key, label]) => (
+                                <th key={key} className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">{label}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                        {allChannels.map((channel) => {
+                            const colors = getChannelColor(channel);
+                            return (
+                                <tr key={channel} className="hover:bg-gray-50">
+                                    <td className="px-4 py-3 whitespace-nowrap">
+                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
+                                            {channel}
+                                        </span>
+                                    </td>
+                                    {Object.keys(MODEL_LABELS).map((model) => (
+                                        <td key={model} className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium text-gray-900">
+                                            {formatCurrency(getValueForChannel(model, channel))}
+                                        </td>
+                                    ))}
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+function TouchpointJourney({ touchpoints }) {
+    if (!touchpoints.length) {
+        return (
+            <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Touchpoints</h3>
+                <p className="text-gray-400 text-sm">No touchpoints recorded yet. Install the tracking pixel to start tracking.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+            <div className="bg-gradient-to-r from-green-600 to-green-700 px-6 py-4">
+                <h3 className="text-lg font-semibold text-white flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Recent Touchpoints
+                </h3>
+            </div>
+
+            <div className="p-6">
+                <div className="relative">
+                    <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gray-200" />
+
+                    <div className="space-y-4">
+                        {touchpoints.slice(0, 20).map((tp, idx) => {
+                            const colors = getChannelColor(`${tp.utm_source || 'direct'} / ${tp.utm_medium || 'none'}`);
+                            return (
+                                <div key={tp.id || idx} className="relative flex items-start pl-10">
+                                    <div className={`absolute left-2.5 w-3 h-3 rounded-full ${colors.bar} ring-2 ring-white`} />
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center space-x-2 mb-1">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${colors.bg} ${colors.text}`}>
+                                                {tp.utm_source || 'direct'} / {tp.utm_medium || 'none'}
+                                            </span>
+                                            {tp.utm_campaign && (
+                                                <span className="text-xs text-gray-400">{tp.utm_campaign}</span>
+                                            )}
+                                        </div>
+                                        <p className="text-sm text-gray-600 truncate">{tp.page_url}</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            {new Date(tp.touched_at).toLocaleString()}
+                                        </p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {touchpoints.length > 20 && (
+                    <p className="text-sm text-gray-400 mt-4 text-center">
+                        Showing 20 of {touchpoints.length} touchpoints
+                    </p>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function RecentConversions({ conversions }) {
+    if (!conversions.length) return null;
+
+    return (
+        <div className="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+            <div className="bg-gradient-to-r from-amber-600 to-amber-700 px-6 py-4">
+                <h3 className="text-lg font-semibold text-white flex items-center">
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Recent Conversions
+                </h3>
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                        <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Value</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Touchpoints</th>
+                            <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Date</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                        {conversions.map((conv, idx) => (
+                            <tr key={conv.id || idx} className="hover:bg-gray-50">
+                                <td className="px-4 py-3 whitespace-nowrap">
+                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                        {conv.conversion_type}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-right text-sm font-semibold text-gray-900">
+                                    {formatCurrency(conv.conversion_value)}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-center text-sm text-gray-600">
+                                    {(conv.touchpoints || []).length}
+                                </td>
+                                <td className="px-4 py-3 whitespace-nowrap text-right text-sm text-gray-500">
+                                    {new Date(conv.created_at).toLocaleDateString()}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
+}
+
+export default function Attribution({ summary, channelBreakdown, recentTouchpoints, conversions }) {
     return (
         <AuthenticatedLayout>
             <Head title="Attribution Models" />
             <div className="py-8">
-                <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-                    <a href={route('analytics.index')} className="text-sm text-flame-orange-600 hover:underline mb-1 inline-block">← Back to Analytics</a>
-                    <h1 className="text-2xl font-bold text-gray-900 mb-1">Attribution Models</h1>
-                    <p className="text-sm text-gray-500 mb-6">Compare how different attribution models distribute conversion credit across touchpoints.</p>
+                <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                    <a href={route('analytics.index')} className="text-sm text-flame-orange-600 hover:underline mb-1 inline-block">&larr; Back to Analytics</a>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">Multi-Touch Attribution</h1>
+                    <p className="text-sm text-gray-500 mb-6">Cross-campaign attribution analysis — see how each channel contributes to conversions.</p>
 
-                    {/* Journey Timeline */}
-                    {touchpoints.length > 0 && (
-                        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-2">Sample Conversion Journey</h2>
-                            <TouchpointTimeline touchpoints={touchpoints} />
-                        </div>
-                    )}
+                    <SummaryCards summary={summary} />
 
-                    {/* Attribution Models */}
-                    {modelKeys.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {modelKeys.map((key) => (
-                                <ModelCard key={key} modelKey={key} attributions={models[key]} />
-                            ))}
+                    {summary.total_conversions === 0 ? (
+                        <div className="bg-white rounded-lg shadow-md p-12 text-center">
+                            <svg className="mx-auto h-16 w-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <h3 className="mt-4 text-lg font-medium text-gray-900">No attribution data yet</h3>
+                            <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
+                                Install the tracking pixel on your website to start collecting attribution data.
+                                Conversion data will appear here once visitors begin converting.
+                            </p>
                         </div>
                     ) : (
-                        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-                            <p className="text-gray-500">No attribution data available. Set up conversion tracking to see attribution models.</p>
-                        </div>
+                        <>
+                            <ModelComparison channelBreakdown={channelBreakdown} />
+                            <ModelComparisonTable channelBreakdown={channelBreakdown} />
+                            <RecentConversions conversions={conversions} />
+                        </>
                     )}
+
+                    <TouchpointJourney touchpoints={recentTouchpoints} />
                 </div>
             </div>
         </AuthenticatedLayout>

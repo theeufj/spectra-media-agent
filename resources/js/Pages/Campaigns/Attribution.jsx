@@ -343,7 +343,7 @@ function RecentConversions({ conversions }) {
     );
 }
 
-export default function Attribution({ campaign, summary, channelBreakdown, recentTouchpoints, conversions }) {
+export default function Attribution({ campaign, pixelConfig, summary, channelBreakdown, recentTouchpoints, conversions }) {
     return (
         <AuthenticatedLayout>
             <Head title={`Attribution — ${campaign.name}`} />
@@ -384,7 +384,8 @@ export default function Attribution({ campaign, summary, channelBreakdown, recen
                             <p className="text-sm font-medium text-gray-700 mb-2">Add this snippet before &lt;/body&gt;:</p>
                             <pre className="text-xs bg-gray-900 text-green-400 rounded p-3 overflow-x-auto">
 {`<script src="${window.location.origin}/js/spectra-pixel.js"
-        data-customer="${campaign.id}"
+        data-customer="${pixelConfig.customer_id}"
+        data-secret="${pixelConfig.signing_secret}"
         defer></script>`}
                             </pre>
                         </div>

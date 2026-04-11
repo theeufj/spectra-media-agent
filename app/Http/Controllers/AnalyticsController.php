@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AttributionConversion;
+use App\Models\AttributionTouchpoint;
 use App\Services\Attribution\AttributionService;
 use App\Services\Reporting\CrossPlatformAnalyticsService;
 use App\Services\Reporting\ExecutiveReportService;
@@ -54,19 +56,42 @@ class AnalyticsController extends Controller
         $customer = $this->getActiveCustomer($request);
         if (!$customer) return redirect()->route('dashboard');
 
-        // Demo touchpoints for visualization — in production these come from conversion tracking
-        $sampleTouchpoints = [
-            ['channel' => 'Google Ads', 'timestamp' => now()->subDays(7)->timestamp, 'campaign' => 'Brand Search'],
-            ['channel' => 'Facebook Ads', 'timestamp' => now()->subDays(5)->timestamp, 'campaign' => 'Retargeting'],
-            ['channel' => 'LinkedIn Ads', 'timestamp' => now()->subDays(3)->timestamp, 'campaign' => 'B2B Awareness'],
-            ['channel' => 'Google Ads', 'timestamp' => now()->subDays(1)->timestamp, 'campaign' => 'Non-Brand Search'],
-        ];
+        $conversions = AttributionConversion::forCustomer($customer->id)
+            ->orderBy('created_at', 'desc')
+            ->limit(500)
+            ->get()
+            ->toArray();
 
-        $models = $this->attribution->attributeAll($sampleTouchpoints, 100.0);
+        // Aggregate by channel for each attribution model
+        $models = ['last_click', 'first_click', 'linear', 'time_decay', 'position_based'];
+        $channelBreakdown = [];
+        foreach ($models as $model) {
+            $channelBreakdown[$model] = $this->attribution->aggregateByChannel($conversions, $model);
+        }
+
+        // Recent touchpoints for journey visualization
+        $recentTouchpoints = AttributionTouchpoint::forCustomer($customer->id)
+            ->orderBy('touched_at', 'desc')
+            ->limit(100)
+            ->get()
+            ->toArray();
+
+        // Summary stats
+        $totalConversions = count($conversions);
+        $totalValue = array_sum(array_column($conversions, 'conversion_value'));
+        $avgTouchpoints = $totalConversions > 0
+            ? array_sum(array_map(fn($c) => count($c['touchpoints'] ?? []), $conversions)) / $totalConversions
+            : 0;
 
         return Inertia::render('Analytics/Attribution', [
-            'models' => $models,
-            'touchpoints' => $sampleTouchpoints,
+            'summary' => [
+                'total_conversions' => $totalConversions,
+                'total_value' => round($totalValue, 2),
+                'avg_touchpoints' => round($avgTouchpoints, 1),
+            ],
+            'channelBreakdown' => $channelBreakdown,
+            'recentTouchpoints' => $recentTouchpoints,
+            'conversions' => array_slice($conversions, 0, 50),
         ]);
     }
 }

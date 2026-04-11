@@ -64,6 +64,10 @@ class AttributionController extends Controller
 
         return Inertia::render('Campaigns/Attribution', [
             'campaign' => $campaign->only('id', 'name'),
+            'pixelConfig' => [
+                'customer_id' => $campaign->customer_id,
+                'signing_secret' => $campaign->customer->tracking_signing_secret,
+            ],
             'summary' => [
                 'total_conversions' => $totalConversions,
                 'total_value' => round($totalValue, 2),
