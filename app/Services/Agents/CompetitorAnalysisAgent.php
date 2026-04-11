@@ -145,7 +145,7 @@ class CompetitorAnalysisAgent
                     $analysis['messaging'] ?? []
                 ),
                 'value_propositions' => $analysis['value_propositions'] ?? [],
-                'keywords_detected' => $analysis['keywords_themes']['primary_keywords'] ?? [],
+                'keywords_detected' => $this->extractAllKeywords($analysis),
                 'pricing_info' => $analysis['pricing'] ?? [],
                 'last_analyzed_at' => now(),
             ];
@@ -301,6 +301,42 @@ class CompetitorAnalysisAgent
         }
 
         return $context;
+    }
+
+    /**
+     * Extract keywords from all relevant fields in the AI analysis.
+     */
+    protected function extractAllKeywords(array $analysis): array
+    {
+        $keywords = [];
+
+        // Primary source: keywords_themes.primary_keywords
+        foreach ($analysis['keywords_themes']['primary_keywords'] ?? [] as $kw) {
+            $keywords[] = $kw;
+        }
+
+        // Secondary source: counter_strategy.keywords_to_target
+        foreach ($analysis['counter_strategy']['keywords_to_target'] ?? [] as $kw) {
+            $keywords[] = $kw;
+        }
+
+        // Tertiary source: keywords_themes.pain_points_addressed
+        foreach ($analysis['keywords_themes']['pain_points_addressed'] ?? [] as $kw) {
+            $keywords[] = $kw;
+        }
+
+        // Deduplicate case-insensitively, keep first occurrence
+        $seen = [];
+        $unique = [];
+        foreach ($keywords as $kw) {
+            $lower = strtolower(trim($kw));
+            if ($lower && !isset($seen[$lower])) {
+                $seen[$lower] = true;
+                $unique[] = trim($kw);
+            }
+        }
+
+        return $unique;
     }
 
     /**

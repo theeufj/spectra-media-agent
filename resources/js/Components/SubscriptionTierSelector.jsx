@@ -39,6 +39,12 @@ const SubscriptionTierSelector = ({ plans = [] }) => {
                                 <SecondaryButton disabled={true} className="w-full justify-center">
                                     {currentPlan === plan.name ? 'Your Current Plan' : 'Included'}
                                 </SecondaryButton>
+                            ) : plan.cta_text === 'Contact Sales' ? (
+                                <a href="mailto:hello@sitetospend.com?subject=Agency Plan Inquiry" className="w-full">
+                                    <PrimaryButton className="w-full justify-center">
+                                        Contact Sales
+                                    </PrimaryButton>
+                                </a>
                             ) : (
                                 <form onSubmit={(e) => handleSubmit(e, plan.stripe_price_id)} className="w-full">
                                     {currentPlan === plan.name ? (

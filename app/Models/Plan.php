@@ -42,6 +42,10 @@ class Plan extends Model
             return '$0 / month';
         }
 
+        if ($this->price_cents === 0) {
+            return 'Contact Us';
+        }
+
         $dollars = number_format($this->price_cents / 100, 0);
         return "\${$dollars} / {$this->billing_interval}";
     }

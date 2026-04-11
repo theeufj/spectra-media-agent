@@ -194,7 +194,11 @@ class KeywordController extends Controller
         }
 
         $competitors = $customer->competitors()
-            ->whereNotNull('keywords_detected')
+            ->where(function ($q) {
+                $q->whereNotNull('keywords_detected')
+                  ->orWhereNotNull('messaging_analysis');
+            })
+            ->whereNotNull('last_analyzed_at')
             ->latest('last_analyzed_at')
             ->take(5)
             ->get();
@@ -207,7 +211,16 @@ class KeywordController extends Controller
 
         $gaps = [];
         foreach ($competitors as $competitor) {
+            // Primary: keywords_detected field
             $detected = $competitor->keywords_detected ?? [];
+
+            // Fallback: pull from messaging_analysis.counter_strategy.keywords_to_target
+            // for competitors analyzed before the keyword extraction fix
+            if (empty($detected)) {
+                $messaging = $competitor->messaging_analysis ?? [];
+                $detected = $messaging['counter_strategy']['keywords_to_target'] ?? [];
+            }
+
             foreach ($detected as $kw) {
                 $kwLower = strtolower($kw);
                 if (!in_array($kwLower, $ourKeywords)) {
