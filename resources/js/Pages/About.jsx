@@ -76,7 +76,7 @@ export default function About({ auth }) {
                                 {[
                                     { icon: '🔍', title: 'Transparency', desc: 'No hidden fees, no markup on ad spend. You pay the platforms directly and always see exactly where your money goes.' },
                                     { icon: '🤖', title: 'Automation First', desc: "We believe the best marketing is autonomous. Our agents don't rest—they optimize budgets, fix issues, and test creatives while you focus on your business." },
-                                    { icon: '🛡️', title: 'Your Data, Your Control', desc: 'Your ad accounts, customer data, and brand assets stay yours. We connect via secure OAuth—we never store your credentials.' },
+                                    { icon: '🛡️', title: 'Your Data, Your Control', desc: 'Your customer data and brand assets stay yours. We create and manage your ad accounts under our management umbrella—you always retain full ownership and visibility.' },
                                 ].map((value) => (
                                     <div key={value.title} className="bg-white rounded-xl p-8 shadow-sm ring-1 ring-gray-900/5">
                                         <span className="text-4xl">{value.icon}</span>
