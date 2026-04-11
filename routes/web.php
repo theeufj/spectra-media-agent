@@ -649,4 +649,17 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
     Route::get('/analytics/cross-platform', [AnalyticsController::class, 'crossPlatform'])->name('analytics.cross-platform');
     Route::get('/analytics/attribution', [AnalyticsController::class, 'attribution'])->name('analytics.attribution');
+    Route::get('/analytics/roi', [App\Http\Controllers\RoiDashboardController::class, 'index'])->name('analytics.roi');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Sandbox Simulation Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth'])->group(function () {
+    Route::get('/sandbox', [App\Http\Controllers\SandboxController::class, 'index'])->name('sandbox.index');
+    Route::post('/sandbox/launch', [App\Http\Controllers\SandboxController::class, 'launch'])->name('sandbox.launch');
+    Route::get('/sandbox/{customer}/results', [App\Http\Controllers\SandboxController::class, 'results'])->name('sandbox.results');
+    Route::delete('/sandbox/{customer}', [App\Http\Controllers\SandboxController::class, 'destroy'])->name('sandbox.destroy');
 });

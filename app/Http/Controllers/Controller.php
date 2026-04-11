@@ -14,10 +14,11 @@ abstract class Controller
 
         if ($customerId) {
             return Customer::where('id', $customerId)
+                ->where('is_sandbox', false)
                 ->whereHas('users', fn($q) => $q->where('user_id', $user->id))
                 ->first();
         }
 
-        return $user->customers()->first();
+        return $user->customers()->where('is_sandbox', false)->first();
     }
 }

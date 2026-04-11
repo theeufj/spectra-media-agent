@@ -50,6 +50,9 @@ class Customer extends Model
         'agent_thresholds',
         'report_branding',
         'tracking_signing_secret',
+        'is_sandbox',
+        'sandbox_results',
+        'sandbox_expires_at',
     ];
 
     protected $casts = [
@@ -69,12 +72,25 @@ class Customer extends Model
         'average_order_value' => 'float',
         'agent_thresholds' => 'array',
         'report_branding' => 'array',
+        'is_sandbox' => 'boolean',
+        'sandbox_results' => 'array',
+        'sandbox_expires_at' => 'datetime',
     ];
 
     protected $hidden = [
         'facebook_ads_access_token',
         'tracking_signing_secret',
     ];
+
+    public function scopeSandbox($query)
+    {
+        return $query->where('is_sandbox', true);
+    }
+
+    public function scopeReal($query)
+    {
+        return $query->where('is_sandbox', false);
+    }
 
     /**
      * Prevent google_ads_customer_id from being set to the platform MCC account.

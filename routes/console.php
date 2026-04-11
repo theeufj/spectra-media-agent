@@ -188,3 +188,6 @@ Schedule::call(function () {
 // Weekly cleanup - remove expired proposals and temp files
 Schedule::job(new \App\Jobs\CleanupTemporaryFiles)->weeklyOn(0, '03:00')->withoutOverlapping();
 
+// Daily sandbox cleanup - remove expired sandbox environments
+Schedule::job(new \App\Jobs\CleanupExpiredSandboxes)->dailyAt('03:30')->withoutOverlapping();
+
