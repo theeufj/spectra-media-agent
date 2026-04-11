@@ -54,5 +54,5 @@ The {{ config('app.name') }} Team
 
 ---
 
-<small>P.S. Fixing just ONE of these issues could pay for a year of Spectra. [See the full report →]({{ route('subscription.pricing') }})</small>
+<small>P.S. Fixing just ONE of these issues could pay for a year of Site to Spend. [See the full report →]({{ route('subscription.pricing') }})</small>
 </x-mail::message>

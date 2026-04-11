@@ -27,10 +27,12 @@ class StrategyGenerationFailed extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Strategy Generation Failed: ' . $this->campaign->name)
             ->error()
+            ->greeting('Hi ' . $notifiable->name . ',')
             ->line("We were unable to generate a strategy for your campaign \"{$this->campaign->name}\".")
             ->line('Reason: ' . $this->error)
             ->action('View Campaign', url('/campaigns/' . $this->campaign->id))
-            ->line('Please check your knowledge base content and try again.');
+            ->line('Please check your knowledge base content and try again.')
+            ->salutation('— Site to Spend');
     }
 
     public function toArray(object $notifiable): array

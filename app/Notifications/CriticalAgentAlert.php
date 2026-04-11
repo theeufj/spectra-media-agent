@@ -42,6 +42,7 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
     {
         $mail = (new MailMessage)
             ->subject("⚠️ {$this->title}")
+            ->greeting('Hi ' . $notifiable->name . ',')
             ->line($this->message);
 
         if (!empty($this->details['campaign_name'])) {
@@ -56,7 +57,7 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
             $mail->action('View Campaign', url('/campaigns/' . $this->details['campaign_id']));
         }
 
-        return $mail;
+        return $mail->salutation('— Site to Spend');
     }
 
     public function toArray(object $notifiable): array

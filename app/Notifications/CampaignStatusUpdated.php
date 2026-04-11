@@ -39,10 +39,11 @@ class CampaignStatusUpdated extends Notification
     {
         return (new MailMessage)
                     ->subject('Campaign Status Update: ' . $this->campaign->name)
+                    ->greeting('Hi ' . $notifiable->name . ',')
                     ->line('The status of your campaign "' . $this->campaign->name . '" has changed.')
                     ->line('New Status: ' . $this->campaign->primary_status)
                     ->action('View Campaign', url('/campaigns/' . $this->campaign->id))
-                    ->line('Thank you for using our application!');
+                    ->salutation('— Site to Spend');
     }
 
     /**

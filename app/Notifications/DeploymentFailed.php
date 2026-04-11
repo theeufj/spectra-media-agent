@@ -27,10 +27,12 @@ class DeploymentFailed extends Notification implements ShouldQueue
         return (new MailMessage)
             ->subject('Deployment Failed: ' . $this->campaign->name)
             ->error()
+            ->greeting('Hi ' . $notifiable->name . ',')
             ->line("Your campaign \"{$this->campaign->name}\" failed to deploy.")
             ->line('Error: ' . $this->error)
             ->action('View Details', url('/campaigns/' . $this->campaign->id))
-            ->line('Our team has been notified. You can also try redeploying from the campaign page.');
+            ->line('Our team has been notified. You can also try redeploying from the campaign page.')
+            ->salutation('— Site to Spend');
     }
 
     public function toArray(object $notifiable): array

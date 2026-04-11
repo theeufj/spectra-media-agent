@@ -23,7 +23,7 @@ class ScheduledJobFailed extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject("[Spectra] Scheduled Job Failed: {$this->jobName}")
+            ->subject("[Site to Spend] Scheduled Job Failed: {$this->jobName}")
             ->error()
             ->greeting('Scheduled Job Failure Alert')
             ->line("The scheduled job **{$this->jobName}** has failed.")

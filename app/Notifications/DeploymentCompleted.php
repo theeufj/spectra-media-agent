@@ -26,7 +26,8 @@ class DeploymentCompleted extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject('Campaign Deployed: ' . $this->campaign->name);
+            ->subject('Campaign Deployed: ' . $this->campaign->name)
+            ->greeting('Hi ' . $notifiable->name . ',');
 
         if ($this->failureCount === 0) {
             $mail->line("Your campaign \"{$this->campaign->name}\" has been successfully deployed to all platforms.")
@@ -38,7 +39,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
 
         return $mail
             ->action('View Campaign', url('/campaigns/' . $this->campaign->id))
-            ->line('Thank you for using Spectra!');
+            ->salutation('— Site to Spend');
     }
 
     public function toArray(object $notifiable): array

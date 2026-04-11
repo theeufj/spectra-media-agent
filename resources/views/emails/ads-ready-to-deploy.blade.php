@@ -32,7 +32,7 @@ Traditional Agency:
 - Creative revisions: **$500 each**
 - **Total first month: ~$5,500**
 
-Spectra:
+Site to Spend:
 - Setup: **$0** (you just did it for free)
 - Platform fee: **$99-249/month**
 - Unlimited revisions: **Included**
