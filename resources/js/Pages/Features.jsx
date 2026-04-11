@@ -13,6 +13,21 @@ export default function Features({ auth }) {
                 <meta property="og:description" content="Competitor discovery, self-healing campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction—all on autopilot." />
                 <meta name="twitter:title" content="Features — 6 Autonomous AI Marketing Agents | sitetospend" />
                 <meta name="twitter:description" content="Competitor discovery, self-healing campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction." />
+                <script type="application/ld+json">{JSON.stringify({
+                    "@context": "https://schema.org",
+                    "@type": "ItemList",
+                    "name": "sitetospend AI Marketing Features",
+                    "description": "6 autonomous AI agents and a full suite of campaign management tools for Google Ads, Facebook Ads, and Microsoft Ads.",
+                    "numberOfItems": 6,
+                    "itemListElement": [
+                        { "@type": "ListItem", "position": 1, "name": "Competitor Discovery Agent", "description": "Uses Google Search AI to find real competitors based on your website content." },
+                        { "@type": "ListItem", "position": 2, "name": "Competitor Analysis Agent", "description": "Scrapes competitor websites, extracts messaging and pricing, generates counter-strategies." },
+                        { "@type": "ListItem", "position": 3, "name": "Self-Healing Agent", "description": "Automatically detects and fixes disapproved ads while maintaining brand voice." },
+                        { "@type": "ListItem", "position": 4, "name": "Budget Intelligence Agent", "description": "Dynamically adjusts budgets based on time-of-day and day-of-week performance." },
+                        { "@type": "ListItem", "position": 5, "name": "Creative Intelligence Agent", "description": "Tracks A/B test performance, identifies winners, and generates new ad variations." },
+                        { "@type": "ListItem", "position": 6, "name": "Audience Intelligence Agent", "description": "Manages Customer Match lists, segments audiences, and recommends lookalike expansion." }
+                    ]
+                })}</script>
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />
@@ -37,7 +52,7 @@ export default function Features({ auth }) {
                             <div className="mx-auto max-w-2xl lg:text-center">
                                 <h2 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">One-Click Deployment to All Your Platforms</h2>
                                 <p className="mt-6 text-lg leading-8 text-gray-600">
-                                    Connect your accounts and let our AI agents handle the rest. We're constantly adding new platforms to our roster.
+                                    We set up and manage your ad accounts under our platform. Our AI agents handle the rest. We're constantly adding new platforms to our roster.
                                 </p>
                             </div>
                             <div className="mt-16 flex justify-center">

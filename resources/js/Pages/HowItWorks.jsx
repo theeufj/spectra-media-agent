@@ -13,6 +13,35 @@ export default function HowItWorks({ auth }) {
                 <meta property="og:description" content="Enter your URL, let AI extract your brand, discover competitors, and deploy optimized campaigns in minutes." />
                 <meta name="twitter:title" content="How It Works — From URL to ROI in 3 Steps | sitetospend" />
                 <meta name="twitter:description" content="Enter your URL, let AI extract your brand, discover competitors, and deploy optimized campaigns in minutes." />
+                <script type="application/ld+json">{JSON.stringify({
+                    "@context": "https://schema.org",
+                    "@type": "HowTo",
+                    "name": "How to Launch AI-Powered Ad Campaigns with sitetospend",
+                    "description": "From URL to ROI in 3 simple steps: Vision AI brand extraction, competitive intelligence, and autonomous campaign optimization.",
+                    "step": [
+                        {
+                            "@type": "HowToStep",
+                            "position": 1,
+                            "name": "Vision AI Brand Extraction",
+                            "text": "Enter your website URL. Our Crawler takes a high-resolution screenshot, and Gemini Vision AI instantly extracts your hex codes, fonts, and brand voice.",
+                            "url": "https://sitetospend.com/how-it-works"
+                        },
+                        {
+                            "@type": "HowToStep",
+                            "position": 2,
+                            "name": "Competitive Intelligence",
+                            "text": "Our Competitor Discovery Agent uses Google Search to find your real competitors. The Analysis Agent scrapes their sites, extracts their messaging, and generates counter-strategies.",
+                            "url": "https://sitetospend.com/how-it-works"
+                        },
+                        {
+                            "@type": "HowToStep",
+                            "position": 3,
+                            "name": "Autonomous Optimization",
+                            "text": "Deploy with one click. Self-Healing Agents fix disapproved ads automatically. Budget Intelligence shifts spend to peak hours. Creative Testing identifies winners and generates new variations—all autonomously, 24/7.",
+                            "url": "https://sitetospend.com/how-it-works"
+                        }
+                    ]
+                })}</script>
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />

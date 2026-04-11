@@ -15,7 +15,7 @@ export default function Terms({ auth }) {
                         <div className="min-h-screen flex flex-col items-center pt-6 sm:pt-0">
                             <div className="w-full sm:max-w-4xl mt-6 p-8 bg-white shadow-md overflow-hidden sm:rounded-lg">
                             <h1 className="text-3xl lg:text-4xl font-bold text-gray-800">Terms of Service</h1>
-                            <p className="mt-2 text-sm text-gray-500">Last updated: November 23, 2025</p>
+                            <p className="mt-2 text-sm text-gray-500">Last updated: April 12, 2026</p>
 
                             <div className="mt-8 space-y-6 text-gray-700 leading-relaxed">
                                 <p>Please read these Terms of Service ("Terms", "Terms of Service") carefully before using the sitetospend application (the "Service") operated by sitetospend ("us", "we", or "our").</p>
@@ -28,18 +28,18 @@ export default function Terms({ auth }) {
                                 <p>You are responsible for safeguarding the password that you use to access the Service and for any activities or actions under your password, whether your password is with our Service or a third-party service.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">2. Service Description</h2>
-                                <p>sitetospend is an AI-powered digital marketing platform specializing in multi-channel advertising across Search Engine Marketing (SEM) and Social Media Advertising. Our AI agents autonomously generate, manage, and optimize advertising campaigns on your behalf across Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads. The Service includes:</p>
+                                <p>sitetospend is an AI-powered digital marketing platform specializing in multi-channel advertising across Search Engine Marketing (SEM) and Social Media Advertising. Our AI agents autonomously generate, manage, and optimize advertising campaigns on your behalf across Google Ads, Meta/Facebook Ads, Microsoft Ads, and LinkedIn Ads. The Service includes:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>AI-driven campaign strategy and creation</li>
                                     <li>Automated ad copy generation and optimization</li>
                                     <li>Keyword research and bid management</li>
-                                    <li>Campaign deployment and management on Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads</li>
+                                    <li>Campaign deployment and management on Google Ads, Meta/Facebook Ads, Microsoft Ads, and LinkedIn Ads</li>
                                     <li>Performance monitoring and autonomous optimization</li>
                                     <li>Reporting and analytics</li>
                                 </ul>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">3. Advertising Platform Account Access</h2>
-                                <p>To provide our services, you must grant us access to your advertising platform accounts or authorize us to create and manage accounts on your behalf. Supported platforms include Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads. By using our Service, you:</p>
+                                <p>To provide our services, you must grant us access to your advertising platform accounts or authorize us to create and manage accounts on your behalf. Supported platforms include Google Ads, Meta/Facebook Ads, Microsoft Ads, and LinkedIn Ads. By using our Service, you:</p>
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>Authorize us to access, create, modify, and manage campaigns, ad groups, ads, keywords, targeting, and other elements within your advertising platform accounts</li>
                                     <li>Grant us permission to link your advertising platform accounts to our platform through their respective APIs</li>
@@ -53,8 +53,9 @@ export default function Terms({ auth }) {
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">4. Subscriptions and Billing</h2>
                                 <p>Our Service is billed on a subscription basis. You will be billed in advance on a recurring and periodic basis ("Billing Cycle"). Billing cycles are set on a monthly basis.</p>
                                 <p>A valid payment method is required to process the payment for your subscription. By submitting such payment information, you automatically authorize us to charge all subscription fees incurred through your account to any such payment instruments.</p>
-                                <p><strong className="font-semibold text-gray-800">Advertising Platform Spend:</strong> In addition to our subscription fee, you are responsible for all advertising spend on each platform (Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads). Each platform will bill you directly for ad spend according to their respective billing terms. Our subscription fee is separate from and in addition to any charges from these advertising platforms.</p>
-                                <p>Our fees are based on a percentage of ad spend and/or a flat monthly rate as specified in your subscription plan. We reserve the right to adjust pricing with 30 days' notice.</p>
+                                <p><strong className="font-semibold text-gray-800">Ad Spend Prepaid Credits:</strong> In addition to your subscription fee, ad spend is billed through a prepaid credit system. When you deploy campaigns, we charge an initial credit equal to 7 days of estimated ad spend. Your actual daily ad spend (as reported by Google Ads, Meta/Facebook Ads, Microsoft Ads, and LinkedIn Ads APIs) is deducted from this credit balance each day. When your balance falls below 3 days of average spend, we automatically replenish it. You are only ever charged for actual spend, not estimates.</p>
+                                <p>If a credit replenishment payment fails, we will retry and notify you by email. After 24 hours, campaign budgets may be reduced; after 48 hours, campaigns may be paused until the payment issue is resolved. Upon cancellation, any remaining ad spend credit (minus pending charges) will be refunded to your original payment method within 5–7 business days.</p>
+                                <p>Our subscription fees are based on a flat monthly rate as specified in your plan. We reserve the right to adjust pricing with 30 days' notice.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">5. Autonomous Campaign Management</h2>
                                 <p>Our Service utilizes AI agents that operate autonomously to manage your advertising campaigns across multiple platforms. While we strive for optimal performance, you acknowledge and agree that:</p>
@@ -71,7 +72,7 @@ export default function Terms({ auth }) {
                                 <ul className="list-disc list-inside pl-4 space-y-2">
                                     <li>All information you provide is accurate, current, and complete</li>
                                     <li>Your products and services comply with all applicable laws and regulations</li>
-                                    <li>Your business and advertising practices comply with all applicable advertising platform policies (Google Ads, Meta/Facebook Ads, Microsoft Ads, and Reddit Ads)</li>
+                                    <li>Your business and advertising practices comply with all applicable advertising platform policies (Google Ads, Meta/Facebook Ads, Microsoft Ads, and LinkedIn Ads)</li>
                                     <li>You have all necessary rights and permissions to advertise the products or services you specify</li>
                                 </ul>
                                 <p>You retain all rights to your business information and brand assets. We will use this information solely to provide our Service.</p>
@@ -128,9 +129,16 @@ export default function Terms({ auth }) {
                                 </ul>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">14. Governing Law</h2>
-                                <p>These Terms shall be governed and construed in accordance with the laws of [Your State/Country], without regard to its conflict of law provisions.</p>
+                                <p>These Terms shall be governed by and construed in accordance with the laws of New South Wales, Australia. You irrevocably submit to the exclusive jurisdiction of the courts of New South Wales, Australia for any disputes arising out of or in connection with these Terms.</p>
 
-                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">15. Changes</h2>
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">15. Australian Consumer Law</h2>
+                                <p>Nothing in these Terms excludes, restricts, or modifies any consumer guarantee, right, or remedy conferred on you by the <em>Australian Consumer Law</em> (Schedule 2 of the <em>Competition and Consumer Act 2010</em> (Cth)) or any other applicable law that cannot be excluded, restricted, or modified by agreement. If the Australian Consumer Law applies to you as a consumer, and we supply goods or services to you that are not of a kind ordinarily acquired for personal, domestic, or household use or consumption, our liability for failure to comply with a consumer guarantee is limited, at our option, to:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li>In the case of services: re-supplying the services or paying the cost of having the services re-supplied</li>
+                                    <li>In the case of goods: replacing the goods, supplying equivalent goods, or paying the cost of replacement</li>
+                                </ul>
+
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">16. Changes</h2>
                                 <p>We reserve the right, at our sole discretion, to modify or replace these Terms at any time. If a revision is material we will try to provide at least 30 days' notice prior to any new terms taking effect. What constitutes a material change will be determined at our sole discretion.</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Contact Us</h2>

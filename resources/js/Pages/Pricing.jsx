@@ -28,6 +28,18 @@ export default function Pricing({ auth, plans = [] }) {
                 <meta property="og:description" content="Starter $99/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial. No credit card required." />
                 <meta name="twitter:title" content="Pricing — AI Ad Management from $99/mo | sitetospend" />
                 <meta name="twitter:description" content="Starter $99/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial." />
+                <script type="application/ld+json">{JSON.stringify({
+                    "@context": "https://schema.org",
+                    "@type": "FAQPage",
+                    "mainEntity": faqs.map(faq => ({
+                        "@type": "Question",
+                        "name": faq.question,
+                        "acceptedAnswer": {
+                            "@type": "Answer",
+                            "text": faq.answer
+                        }
+                    }))
+                })}</script>
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />

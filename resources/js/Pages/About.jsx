@@ -13,6 +13,22 @@ export default function About({ auth }) {
                 <meta property="og:description" content="Our mission: agency-level marketing results at a fraction of the cost, powered by autonomous AI agents." />
                 <meta name="twitter:title" content="About sitetospend — Democratizing Digital Advertising with AI" />
                 <meta name="twitter:description" content="Our mission: agency-level marketing results at a fraction of the cost, powered by autonomous AI agents." />
+                <script type="application/ld+json">{JSON.stringify({
+                    "@context": "https://schema.org",
+                    "@type": "AboutPage",
+                    "name": "About sitetospend",
+                    "description": "sitetospend is on a mission to democratize digital advertising with autonomous AI agents.",
+                    "url": "https://sitetospend.com/about",
+                    "mainEntity": {
+                        "@type": "Organization",
+                        "name": "sitetospend",
+                        "url": "https://sitetospend.com",
+                        "logo": "https://sitetospend.com/og-image.png",
+                        "description": "AI-powered digital advertising platform with 6 autonomous agents that manage and optimize ad campaigns across Google, Facebook, and Microsoft.",
+                        "foundingDate": "2026",
+                        "knowsAbout": ["Digital Advertising", "AI Marketing", "Google Ads", "Facebook Ads", "Campaign Optimization"]
+                    }
+                })}</script>
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />
