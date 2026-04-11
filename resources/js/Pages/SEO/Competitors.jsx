@@ -92,7 +92,30 @@ function CompetitorCard({ competitor }) {
             {c.messaging_analysis && (
                 <div className="mb-3">
                     <p className="text-xs font-medium text-gray-700 mb-1">Messaging Analysis</p>
-                    <p className="text-xs text-gray-500">{typeof c.messaging_analysis === 'string' ? c.messaging_analysis : (c.messaging_analysis.summary || c.messaging_analysis.tone || JSON.stringify(c.messaging_analysis))}</p>
+                    {typeof c.messaging_analysis === 'string' ? (
+                        <p className="text-xs text-gray-500">{c.messaging_analysis}</p>
+                    ) : (
+                        <div className="space-y-1">
+                            {c.messaging_analysis.competition_type && (
+                                <p className="text-xs text-gray-500">
+                                    <span className="font-medium capitalize">{c.messaging_analysis.competition_type}</span> competitor
+                                    {c.messaging_analysis.estimated_size && <span className="text-gray-400"> · {c.messaging_analysis.estimated_size}</span>}
+                                </p>
+                            )}
+                            {c.messaging_analysis.why_competitor && (
+                                <p className="text-xs text-gray-500">{c.messaging_analysis.why_competitor}</p>
+                            )}
+                            {c.messaging_analysis.summary && (
+                                <p className="text-xs text-gray-500">{c.messaging_analysis.summary}</p>
+                            )}
+                            {c.messaging_analysis.tone && (
+                                <p className="text-xs text-gray-500">Tone: {c.messaging_analysis.tone}</p>
+                            )}
+                            {c.messaging_analysis.counter_strategy && (
+                                <p className="text-xs text-gray-500 italic">Counter: {typeof c.messaging_analysis.counter_strategy === 'string' ? c.messaging_analysis.counter_strategy : c.messaging_analysis.counter_strategy.recommendation || JSON.stringify(c.messaging_analysis.counter_strategy)}</p>
+                            )}
+                        </div>
+                    )}
                 </div>
             )}
 

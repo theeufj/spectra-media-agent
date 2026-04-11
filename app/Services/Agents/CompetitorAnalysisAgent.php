@@ -293,7 +293,10 @@ class CompetitorAnalysisAgent
             }
             
             if ($brandGuideline->target_audience) {
-                $context .= "Target Audience: {$brandGuideline->target_audience}\n";
+                $audience = is_array($brandGuideline->target_audience)
+                    ? implode(', ', $brandGuideline->target_audience)
+                    : $brandGuideline->target_audience;
+                $context .= "Target Audience: {$audience}\n";
             }
         }
 
