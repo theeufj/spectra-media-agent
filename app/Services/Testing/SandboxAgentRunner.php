@@ -328,12 +328,13 @@ class SandboxAgentRunner
     {
         try {
             $hourlyData = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
-                ->where('recorded_at', '>=', now()->subDays(7))
-                ->orderBy('recorded_at')
+                ->where('date', '>=', now()->subDays(7)->toDateString())
+                ->orderBy('date')
+                ->orderBy('hour')
                 ->get();
 
             // Find peak and trough hours
-            $hourlyAgg = $hourlyData->groupBy(fn($r) => $r->recorded_at->format('H'))
+            $hourlyAgg = $hourlyData->groupBy('hour')
                 ->map(fn($rows) => [
                     'avg_spend' => $rows->avg('spend'),
                     'avg_conversions' => $rows->avg('conversions'),
