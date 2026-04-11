@@ -134,6 +134,12 @@ class SubscriptionController extends Controller
                 'type' => 'info',
                 'message' => 'You do not have an active subscription. Please select a plan to continue.'
             ]);
+        } catch (\Stripe\Exception\InvalidRequestException $e) {
+            Log::warning('Invalid Stripe customer ID for user ' . Auth::id() . ': ' . $e->getMessage());
+            return redirect()->route('subscription.pricing')->with('flash', [
+                'type' => 'info',
+                'message' => 'Your billing account needs to be set up. Please select a plan to continue.'
+            ]);
         }
     }
 }
