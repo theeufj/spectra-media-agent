@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
-use App\Models\EnabledPlatform;
 use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,22 +19,15 @@ class AuthenticatedSessionController extends Controller
      */
     public function create(): Response
     {
-        // Only include platforms that have implemented login logic
-        $supportedProviders = ['google', 'facebook'];
+        // OAuth login providers (separate from ad platform EnabledPlatform table)
+        $oauthProviders = [
+            ['name' => 'Google', 'slug' => 'google'],
+        ];
 
         return Inertia::render('Auth/Login', [
             'canResetPassword' => Route::has('password.request'),
             'status' => session('status'),
-            'enabledPlatforms' => EnabledPlatform::where('is_enabled', true)
-                ->whereIn('slug', $supportedProviders)
-                ->orderBy('sort_order')
-                ->get()
-                ->map(function ($platform) {
-                    return [
-                        'name' => $platform->name,
-                        'slug' => $platform->slug,
-                    ];
-                })->values()->toArray(),
+            'enabledPlatforms' => $oauthProviders,
         ]);
     }
 
