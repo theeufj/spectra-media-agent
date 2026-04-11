@@ -191,8 +191,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                         <Dropdown.Link href={route('budget.allocator')}>Budget Allocator</Dropdown.Link>
                                         <Dropdown.Link href={route('budget.history')}>Budget History</Dropdown.Link>
                                         <Dropdown.Link href={route('reports.index')}>Reports</Dropdown.Link>
-                                        <Dropdown.Link href={route('analytics.index')}>Analytics</Dropdown.Link>
-                                        <Dropdown.Link href={route('analytics.roi')}>ROI Dashboard</Dropdown.Link>
+                                        <Dropdown.Link href={route('analytics.attribution')}>Attribution</Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
 
@@ -519,11 +518,11 @@ export default function AuthenticatedLayout({ header, children }) {
                                 Reports
                             </MobileNavLink>
                             <MobileNavLink
-                                href={route('analytics.index')}
-                                active={route().current('analytics.*')}
+                                href={route('analytics.attribution')}
+                                active={route().current('analytics.attribution')}
                                 icon={<svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>}
                             >
-                                Analytics
+                                Attribution
                             </MobileNavLink>
                         </MobileNavSection>
 

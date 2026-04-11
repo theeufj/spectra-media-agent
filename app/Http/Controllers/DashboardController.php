@@ -3,8 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\AgentActivity;
+use App\Models\GoogleAdsPerformanceData;
+use App\Models\FacebookAdsPerformanceData;
+use App\Models\MicrosoftAdsPerformanceData;
+use App\Models\LinkedInAdsPerformanceData;
 use App\Services\CreativeQuotaService;
+use App\Services\Reporting\CrossPlatformAnalyticsService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
@@ -31,9 +37,25 @@ class DashboardController extends Controller
             ->orderBy('created_at', 'desc')
             ->get();
 
+        // Build ROI / analytics data for all campaigns
+        $days = (int) $request->get('days', 30);
+        $since = now()->subDays($days);
+        $campaignIds = $campaigns->pluck('id');
+
+        $platformData = $this->aggregatePlatformData($campaignIds, $since);
+        $campaignBreakdown = $this->buildCampaignBreakdown($campaigns, $since);
+        $dailyTrend = $this->buildDailyTrend($campaignIds, $since);
+        $projections = $this->buildProjections($platformData, $activeCustomer, $days);
+
+        // Cross-platform comparison
+        $analytics = app(CrossPlatformAnalyticsService::class);
+        $crossPlatformComparison = $analytics->getPlatformComparison($activeCustomer, $days);
+        $funnel = $analytics->getFunnelAnalysis($activeCustomer, $days);
+
         return Inertia::render('Dashboard/Index', [
             'campaigns' => $campaigns,
             'defaultCampaign' => $campaigns->first(),
+            'days' => $days,
             'usageStats' => [
                 'free_generations_used' => $user->free_generations_used,
                 'cro_audits_used' => $activeCustomer->cro_audits_used,
@@ -46,6 +68,48 @@ class DashboardController extends Controller
                 ->orderBy('created_at', 'desc')
                 ->limit(20)
                 ->get(),
+            // Analytics data
+            'platformData' => $platformData,
+            'campaignBreakdown' => $campaignBreakdown,
+            'dailyTrend' => $dailyTrend,
+            'projections' => $projections,
+            'crossPlatformComparison' => $crossPlatformComparison,
+            'funnel' => $funnel,
+        ]);
+    }
+
+    /**
+     * Per-campaign ROI data (called client-side when campaign changes).
+     */
+    public function campaignRoi(Request $request, \App\Models\Campaign $campaign)
+    {
+        $user = $request->user();
+        $isOwner = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
+        if (!$isOwner && !$user->hasRole('admin')) {
+            abort(403);
+        }
+
+        $days = (int) $request->get('days', 30);
+        $since = now()->subDays($days);
+        $cIds = collect([$campaign->id]);
+
+        $platformData = $this->aggregatePlatformData($cIds, $since);
+        $dailyTrend   = $this->buildDailyTrend($cIds, $since);
+
+        $totalCost = collect($platformData)->sum('cost');
+        $totalRevenue = collect($platformData)->sum('revenue');
+        $totalConversions = collect($platformData)->sum('conversions');
+
+        return response()->json([
+            'platformData' => $platformData,
+            'dailyTrend'   => $dailyTrend,
+            'summary' => [
+                'cost'        => round($totalCost, 2),
+                'revenue'     => round($totalRevenue, 2),
+                'conversions' => $totalConversions,
+                'roas'        => $totalCost > 0 ? round($totalRevenue / $totalCost, 2) : 0,
+                'cpa'         => $totalConversions > 0 ? round($totalCost / $totalConversions, 2) : 0,
+            ],
         ]);
     }
 
@@ -175,5 +239,159 @@ class DashboardController extends Controller
         }
 
         return $alerts;
+    }
+
+    // ── Analytics data aggregation ──────────────────────────────────
+
+    private function aggregatePlatformData($campaignIds, Carbon $since): array
+    {
+        $platforms = [];
+        $models = [
+            'google'   => GoogleAdsPerformanceData::class,
+            'facebook' => FacebookAdsPerformanceData::class,
+            'microsoft' => MicrosoftAdsPerformanceData::class,
+            'linkedin' => LinkedInAdsPerformanceData::class,
+        ];
+
+        foreach ($models as $name => $modelClass) {
+            $data = $modelClass::whereIn('campaign_id', $campaignIds)
+                ->where('date', '>=', $since->toDateString())
+                ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as revenue')
+                ->first();
+
+            if ($data && $data->cost > 0) {
+                $platforms[$name] = [
+                    'impressions' => (int) $data->impressions,
+                    'clicks'      => (int) $data->clicks,
+                    'cost'        => round((float) $data->cost, 2),
+                    'conversions' => (int) $data->conversions,
+                    'revenue'     => round((float) $data->revenue, 2),
+                    'roas'        => round($data->revenue / $data->cost, 2),
+                    'cpa'         => $data->conversions > 0 ? round($data->cost / $data->conversions, 2) : 0,
+                ];
+            }
+        }
+
+        return $platforms;
+    }
+
+    private function buildCampaignBreakdown($campaigns, Carbon $since): array
+    {
+        $breakdown = [];
+        $models = [
+            GoogleAdsPerformanceData::class,
+            FacebookAdsPerformanceData::class,
+            MicrosoftAdsPerformanceData::class,
+            LinkedInAdsPerformanceData::class,
+        ];
+
+        foreach ($campaigns as $campaign) {
+            $totalCost = 0;
+            $totalRevenue = 0;
+            $totalConversions = 0;
+
+            foreach ($models as $modelClass) {
+                $data = $modelClass::where('campaign_id', $campaign->id)
+                    ->where('date', '>=', $since->toDateString())
+                    ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as revenue')
+                    ->first();
+
+                if ($data) {
+                    $totalCost += (float) $data->cost;
+                    $totalRevenue += (float) $data->revenue;
+                    $totalConversions += (int) $data->conversions;
+                }
+            }
+
+            if ($totalCost > 0) {
+                $breakdown[] = [
+                    'id'   => $campaign->id,
+                    'name' => $campaign->name,
+                    'daily_budget' => $campaign->daily_budget,
+                    'cost' => round($totalCost, 2),
+                    'revenue' => round($totalRevenue, 2),
+                    'conversions' => $totalConversions,
+                    'roas' => round($totalRevenue / $totalCost, 2),
+                    'cpa'  => $totalConversions > 0 ? round($totalCost / $totalConversions, 2) : 0,
+                    'budget_utilization' => $campaign->daily_budget > 0
+                        ? round(($totalCost / ($campaign->daily_budget * 30)) * 100, 1)
+                        : 0,
+                ];
+            }
+        }
+
+        usort($breakdown, fn ($a, $b) => $b['cost'] <=> $a['cost']);
+
+        return $breakdown;
+    }
+
+    private function buildDailyTrend($campaignIds, Carbon $since): array
+    {
+        $models = [
+            GoogleAdsPerformanceData::class,
+            FacebookAdsPerformanceData::class,
+            MicrosoftAdsPerformanceData::class,
+            LinkedInAdsPerformanceData::class,
+        ];
+
+        $dailyMap = [];
+
+        foreach ($models as $modelClass) {
+            $rows = $modelClass::whereIn('campaign_id', $campaignIds)
+                ->where('date', '>=', $since->toDateString())
+                ->selectRaw('date, SUM(cost) as cost, SUM(conversion_value) as revenue, SUM(conversions) as conversions')
+                ->groupBy('date')
+                ->orderBy('date')
+                ->get();
+
+            foreach ($rows as $row) {
+                $date = $row->date;
+                if (!isset($dailyMap[$date])) {
+                    $dailyMap[$date] = ['date' => $date, 'cost' => 0, 'revenue' => 0, 'conversions' => 0];
+                }
+                $dailyMap[$date]['cost'] += (float) $row->cost;
+                $dailyMap[$date]['revenue'] += (float) $row->revenue;
+                $dailyMap[$date]['conversions'] += (int) $row->conversions;
+            }
+        }
+
+        ksort($dailyMap);
+
+        return array_map(fn ($d) => [
+            'date'        => $d['date'],
+            'cost'        => round($d['cost'], 2),
+            'revenue'     => round($d['revenue'], 2),
+            'conversions' => $d['conversions'],
+            'roas'        => $d['cost'] > 0 ? round($d['revenue'] / $d['cost'], 2) : 0,
+        ], array_values($dailyMap));
+    }
+
+    private function buildProjections(array $platformData, $customer, int $days): array
+    {
+        $totalCostPerDay = 0;
+        $totalRevenuePerDay = 0;
+
+        foreach ($platformData as $platform) {
+            $totalCostPerDay += $platform['cost'] / max(1, $days);
+            $totalRevenuePerDay += $platform['revenue'] / max(1, $days);
+        }
+
+        $totalBudgetPerDay = $customer->campaigns()
+            ->where('platform_status', 'ENABLED')
+            ->sum('daily_budget');
+
+        return [
+            'daily_avg_spend'            => round($totalCostPerDay, 2),
+            'daily_avg_revenue'          => round($totalRevenuePerDay, 2),
+            'daily_budget_total'         => round($totalBudgetPerDay, 2),
+            'monthly_projected_spend'    => round($totalCostPerDay * 30, 2),
+            'monthly_projected_revenue'  => round($totalRevenuePerDay * 30, 2),
+            'monthly_projected_profit'   => round(($totalRevenuePerDay - $totalCostPerDay) * 30, 2),
+            'quarterly_projected_spend'  => round($totalCostPerDay * 90, 2),
+            'quarterly_projected_revenue' => round($totalRevenuePerDay * 90, 2),
+            'budget_utilization'         => $totalBudgetPerDay > 0
+                ? round(($totalCostPerDay / $totalBudgetPerDay) * 100, 1)
+                : 0,
+        ];
     }
 }

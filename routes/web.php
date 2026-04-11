@@ -405,6 +405,7 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth:sanctum', 'verified'])->prefix('api')->group(function () {
     Route::get('/strategies/{strategy}/collateral', [App\Http\Controllers\CollateralController::class, 'getCollateralJson'])->name('api.collateral.show');
     Route::get('/campaigns/{campaign}/performance', [App\Http\Controllers\CampaignController::class, 'performance'])->name('api.campaigns.performance');
+    Route::get('/campaigns/{campaign}/roi', [App\Http\Controllers\DashboardController::class, 'campaignRoi'])->name('api.campaigns.roi');
 });
 
 /*
@@ -668,10 +669,12 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
-    Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
-    Route::get('/analytics/cross-platform', [AnalyticsController::class, 'crossPlatform'])->name('analytics.cross-platform');
+    // Redirect old analytics pages to the unified dashboard
+    Route::get('/analytics', fn () => redirect()->route('dashboard'))->name('analytics.index');
+    Route::get('/analytics/cross-platform', fn () => redirect()->route('dashboard'))->name('analytics.cross-platform');
+    Route::get('/analytics/roi', fn () => redirect()->route('dashboard'))->name('analytics.roi');
+    // Attribution stays as its own page
     Route::get('/analytics/attribution', [AnalyticsController::class, 'attribution'])->name('analytics.attribution');
-    Route::get('/analytics/roi', [App\Http\Controllers\RoiDashboardController::class, 'index'])->name('analytics.roi');
 });
 
 /*
