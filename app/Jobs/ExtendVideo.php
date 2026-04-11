@@ -70,6 +70,7 @@ class ExtendVideo implements ShouldQueue
                 'is_active' => true,
                 'parent_video_id' => $this->sourceVideo->id,
                 'extension_count' => $extensionCount + 1,
+                'refinement_depth' => ($this->sourceVideo->refinement_depth ?? 0) + 1,
             ]);
 
             Log::info("Created extended video record with ID: {$extendedVideo->id}");

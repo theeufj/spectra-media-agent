@@ -103,6 +103,12 @@ Route::middleware(['auth'])->group(function () {
     // Route to redirect the user to the Stripe Billing Portal.
     // GET /subscription/portal
     Route::get('/subscription/portal', [App\Http\Controllers\SubscriptionController::class, 'portal'])->name('subscription.portal');
+
+    // Creative Usage & Boost Pack
+    Route::get('/creative-usage', [App\Http\Controllers\CreativeBoostController::class, 'index'])->name('creative-usage');
+    Route::post('/creative-boost/checkout', [App\Http\Controllers\CreativeBoostController::class, 'checkout'])
+        ->middleware('throttle:5,1')
+        ->name('creative-boost.checkout');
 });
 
 /*

@@ -18,6 +18,7 @@ class VideoCollateral extends Model
         'gemini_video_uri',
         'parent_video_id',
         'extension_count',
+        'refinement_depth',
         'parent_id',
         'is_active',
         'source',
@@ -26,6 +27,7 @@ class VideoCollateral extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'extension_count' => 'integer',
+        'refinement_depth' => 'integer',
     ];
 
     public function campaign()

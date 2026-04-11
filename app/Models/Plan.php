@@ -15,6 +15,7 @@ class Plan extends Model
         'stripe_price_id',
         'stripe_ad_spend_price_id',
         'features',
+        'creative_limits',
         'is_active',
         'is_free',
         'is_popular',
@@ -25,6 +26,7 @@ class Plan extends Model
 
     protected $casts = [
         'features' => 'array',
+        'creative_limits' => 'array',
         'is_active' => 'boolean',
         'is_free' => 'boolean',
         'is_popular' => 'boolean',

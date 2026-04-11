@@ -95,6 +95,7 @@ class RefineImage implements ShouldQueue
                 's3_path' => $s3Path,
                 'cloudfront_url' => $cloudFrontUrl,
                 'parent_id' => $this->originalImage->id,
+                'refinement_depth' => ($this->originalImage->refinement_depth ?? 0) + 1,
                 'is_active' => true,
             ]);
 

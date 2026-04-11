@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierController;
+use App\Models\CreativeBoostPurchase;
 use App\Models\User;
+use App\Services\CreativeQuotaService;
 
 class StripeWebhookController extends CashierController
 {
@@ -97,6 +99,30 @@ class StripeWebhookController extends CashierController
                 'payment_status' => $session['payment_status'],
                 'amount_total' => $session['amount_total'] ?? 0,
             ]);
+
+            // Handle Creative Boost purchase
+            $metadata = $session['metadata'] ?? [];
+            if (($metadata['type'] ?? null) === 'creative_boost' && $session['payment_status'] === 'paid') {
+                $purchaseId = $metadata['purchase_id'] ?? null;
+                $purchase = $purchaseId ? CreativeBoostPurchase::find($purchaseId) : null;
+
+                if ($purchase && $purchase->status === 'pending') {
+                    $purchase->update([
+                        'stripe_checkout_session_id' => $session['id'],
+                        'status' => 'completed',
+                    ]);
+
+                    app(CreativeQuotaService::class)->applyBoost($user, $purchase);
+
+                    Log::info('🚀 Creative Boost applied', [
+                        'user_id' => $user->id,
+                        'purchase_id' => $purchase->id,
+                        'images' => $purchase->image_generations,
+                        'videos' => $purchase->video_generations,
+                        'refinements' => $purchase->refinements,
+                    ]);
+                }
+            }
         } else {
             Log::warning('⚠️ Checkout Completed but User Not Found', [
                 'stripe_customer_id' => $stripeCustomerId,

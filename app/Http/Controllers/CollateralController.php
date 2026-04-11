@@ -6,6 +6,7 @@ use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\Setting;
+use App\Services\CreativeQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -66,6 +67,7 @@ class CollateralController extends Controller
             'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod(),
             'deploymentEnabled' => Setting::get('deployment_enabled', true),
             'managedBillingEnabled' => Setting::get('managed_billing_enabled', true),
+            'creativeUsage' => app(CreativeQuotaService::class)->getUsageSummary($user),
             'adSpendCredit' => $adSpendCredit ? [
                 'id' => $adSpendCredit->id,
                 'status' => $adSpendCredit->status,

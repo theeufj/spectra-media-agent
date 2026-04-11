@@ -13,7 +13,9 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
         prompt: '',
     });
 
-    const extensionsRemaining = 20 - (video.extension_count || 0);
+    const maxExtensions = 3;
+    const extensionsUsed = video.refinement_depth ?? 0;
+    const extensionsRemaining = maxExtensions - extensionsUsed;
     const canExtend = video.status === 'completed' && 
                      video.gemini_video_uri && 
                      extensionsRemaining > 0;
@@ -74,7 +76,7 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                             <ul className="text-sm text-blue-800 space-y-1">
                                 <li>• Extends your video by up to 7 additional seconds</li>
                                 <li>• Creates a seamless continuation of the current video</li>
-                                <li>• Extensions remaining: <span className="font-semibold">{extensionsRemaining}/20</span></li>
+                                <li>• Extensions remaining: <span className="font-semibold">{extensionsRemaining}/{maxExtensions}</span></li>
                                 <li>• Current duration: ~{video.duration_seconds || 8} seconds</li>
                             </ul>
                         </div>
@@ -87,7 +89,7 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                             {!video.gemini_video_uri 
                                 ? "This video cannot be extended. Only Veo-generated videos support extension."
                                 : extensionsRemaining <= 0
-                                ? "Maximum extension limit (20) reached for this video."
+                                ? `Maximum extension limit (${maxExtensions}) reached for this video.`
                                 : "Video must be completed before it can be extended."}
                         </p>
                     </div>

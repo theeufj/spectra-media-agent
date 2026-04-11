@@ -7,6 +7,7 @@ use App\Jobs\RefineImage;
 use App\Models\Campaign;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Services\CreativeQuotaService;
 use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -39,19 +40,19 @@ class ImageCollateralController extends Controller
             abort(403, 'Strategy does not belong to this campaign.');
         }
 
-        // Check free tier limits
-        if (!$user->subscribed('default') && $user->subscription_status !== 'active') {
-            $imageCount = ImageCollateral::where('campaign_id', $campaign->id)->count();
-            if ($imageCount >= 4) {
-                return redirect()->back()->with('flash', [
-                    'type' => 'error',
-                    'message' => 'Free tier limit reached (4 images per campaign). Please upgrade to generate more.'
-                ]);
-            }
+        // Check creative quota
+        $quotaService = app(CreativeQuotaService::class);
+        if (!$quotaService->canGenerate($user, 'image')) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Monthly image generation limit reached. Purchase a Creative Boost pack for more.',
+            ]);
         }
 
         // Dispatch the job to handle the image generation in the background.
         GenerateImage::dispatch($campaign, $strategy);
+
+        $quotaService->recordUsage($user, 'image');
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
@@ -79,6 +80,22 @@ class ImageCollateralController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        // Check creative quota for refinements
+        $quotaService = app(CreativeQuotaService::class);
+        if (!$quotaService->canGenerate($user, 'refinement')) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Monthly refinement limit reached. Purchase a Creative Boost pack for more.',
+            ]);
+        }
+
+        if (!$quotaService->canRefineImage($imageCollateral, $user)) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'This image has reached its maximum refinement limit (3 edits).',
+            ]);
+        }
+
         $contextImagePath = null;
         if ($request->hasFile('context_image')) {
             // Store the uploaded context image locally temporarily.
@@ -88,6 +105,8 @@ class ImageCollateralController extends Controller
 
         // Dispatch the job to handle the refinement.
         RefineImage::dispatch($imageCollateral, $request->prompt, $contextImagePath);
+
+        $quotaService->recordUsage($user, 'refinement');
 
         return redirect()->back()->with('flash', [
             'type' => 'success',

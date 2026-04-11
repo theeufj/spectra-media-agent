@@ -21,6 +21,7 @@ class ImageCollateral extends Model
         's3_path',
         'cloudfront_url',
         'parent_id',
+        'refinement_depth',
         'is_active',
         'source',
     ];

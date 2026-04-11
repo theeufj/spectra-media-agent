@@ -15,7 +15,7 @@ import QuickActions, { PendingTasks, CampaignHealthAlerts } from '@/Components/Q
 import AgentActivityFeed from '@/Components/AgentActivityFeed';
 
 export default function Dashboard({ auth }) {
-    const { campaigns, defaultCampaign, usageStats, pendingTasks, healthAlerts, agentActivities, flash } = usePage().props;
+    const { campaigns, defaultCampaign, usageStats, creativeUsage, pendingTasks, healthAlerts, agentActivities, flash } = usePage().props;
     const activeCustomer = auth.user?.active_customer;
     const [selectedCampaign, setSelectedCampaign] = useState(defaultCampaign);
     const [performanceData, setPerformanceData] = useState(null);
@@ -123,36 +123,19 @@ export default function Dashboard({ auth }) {
                         </div>
                     )}
                     
-                    {/* Usage Meters for Free Tier */}
-                    {usageStats && usageStats.subscription_status !== 'active' && (
+                    {/* Creative Usage Meters */}
+                    {creativeUsage && !creativeUsage.is_unlimited && (
                         <div className="mb-6 bg-white overflow-hidden shadow-sm sm:rounded-lg p-5">
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">Free Tier Usage</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {/* Image Generations Meter */}
-                                <div>
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-sm font-medium text-gray-700">Image Generations</span>
-                                        <span className="text-sm font-medium text-gray-700">{usageStats.free_generations_used} / 5</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div className="bg-flame-orange-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.free_generations_used / 5) * 100, 100)}%` }}></div>
-                                    </div>
-                                </div>
-                                {/* CRO Audits Meter */}
-                                <div>
-                                    <div className="flex justify-between mb-1">
-                                        <span className="text-sm font-medium text-gray-700">CRO Audits</span>
-                                        <span className="text-sm font-medium text-gray-700">{usageStats.cro_audits_used} / 3</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div className="bg-flame-orange-600 h-2.5 rounded-full" style={{ width: `${Math.min((usageStats.cro_audits_used / 3) * 100, 100)}%` }}></div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="mt-4 text-center">
-                                <a href={route('subscription.pricing')} className="text-flame-orange-600 hover:text-flame-orange-900 font-medium text-sm">
-                                    Upgrade to Unlimited &rarr;
+                            <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-sm font-medium text-gray-700">Creative Usage — {creativeUsage.plan_name} Plan</h3>
+                                <a href={route('creative-usage')} className="text-flame-orange-600 hover:text-flame-orange-900 font-medium text-xs">
+                                    View Details →
                                 </a>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <DashboardUsageBar label="Images" used={creativeUsage.image_generations.used} limit={creativeUsage.image_generations.limit} bonus={creativeUsage.image_generations.bonus} />
+                                <DashboardUsageBar label="Videos" used={creativeUsage.video_generations.used} limit={creativeUsage.video_generations.limit} bonus={creativeUsage.video_generations.bonus} />
+                                <DashboardUsageBar label="Refinements" used={creativeUsage.refinements.used} limit={creativeUsage.refinements.limit} bonus={creativeUsage.refinements.bonus} />
                             </div>
                         </div>
                     )}
@@ -182,5 +165,25 @@ export default function Dashboard({ auth }) {
                 </div>
             </div>
         </AuthenticatedLayout>
+    );
+}
+
+function DashboardUsageBar({ label, used, limit, bonus }) {
+    const total = limit + bonus;
+    const pct = total > 0 ? Math.min((used / total) * 100, 100) : 0;
+    let color = 'bg-green-500';
+    if (pct >= 80) color = 'bg-red-500';
+    else if (pct >= 50) color = 'bg-yellow-500';
+
+    return (
+        <div>
+            <div className="flex justify-between mb-1">
+                <span className="text-sm font-medium text-gray-700">{label}</span>
+                <span className="text-sm font-medium text-gray-700">{used} / {total}</span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2.5">
+                <div className={`${color} h-2.5 rounded-full transition-all`} style={{ width: `${pct}%` }}></div>
+            </div>
+        </div>
     );
 }

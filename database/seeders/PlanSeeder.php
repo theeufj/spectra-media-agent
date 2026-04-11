@@ -31,6 +31,13 @@ class PlanSeeder extends Seeder
                 'is_popular' => false,
                 'cta_text' => 'Get Started Free',
                 'sort_order' => 0,
+                'creative_limits' => [
+                    'image_generations' => 4,
+                    'video_generations' => 0,
+                    'refinements' => 0,
+                    'max_refinements_per_item' => 0,
+                    'max_extensions_per_video' => 0,
+                ],
             ]
         );
 
@@ -58,6 +65,13 @@ class PlanSeeder extends Seeder
                 'cta_text' => 'Start Free Trial',
                 'badge_text' => null,
                 'sort_order' => 1,
+                'creative_limits' => [
+                    'image_generations' => 50,
+                    'video_generations' => 10,
+                    'refinements' => 50,
+                    'max_refinements_per_item' => 3,
+                    'max_extensions_per_video' => 3,
+                ],
             ]
         );
 
@@ -86,6 +100,13 @@ class PlanSeeder extends Seeder
                 'cta_text' => 'Start Scaling Now',
                 'badge_text' => 'MOST POPULAR',
                 'sort_order' => 2,
+                'creative_limits' => [
+                    'image_generations' => 150,
+                    'video_generations' => 30,
+                    'refinements' => 150,
+                    'max_refinements_per_item' => 3,
+                    'max_extensions_per_video' => 3,
+                ],
             ]
         );
 
@@ -110,6 +131,7 @@ class PlanSeeder extends Seeder
                 'cta_text' => 'Contact Sales',
                 'badge_text' => null,
                 'sort_order' => 3,
+                'creative_limits' => null,
             ]
         );
     }

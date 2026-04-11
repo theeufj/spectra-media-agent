@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AgentActivity;
+use App\Services\CreativeQuotaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -38,6 +39,7 @@ class DashboardController extends Controller
                 'cro_audits_used' => $activeCustomer->cro_audits_used,
                 'subscription_status' => $user->subscribed('default') ? 'active' : 'inactive',
             ],
+            'creativeUsage' => app(CreativeQuotaService::class)->getUsageSummary($user),
             'pendingTasks' => $this->getPendingTasks($campaigns),
             'healthAlerts' => $this->getHealthAlerts($campaigns),
             'agentActivities' => AgentActivity::where('customer_id', $activeCustomer->id)

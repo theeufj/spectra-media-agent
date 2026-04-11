@@ -11,7 +11,7 @@ import Modal from '@/Components/Modal';
 import AdPreviewPanel from '@/Components/AdPreview';
 import { useToast } from '@/Components/Toast';
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, managedBillingEnabled, adSpendCredit }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage }) {
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const toast = useToast();
@@ -508,10 +508,22 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Image Collateral</h3>
                                         <p>Generate a unique image based on the imagery strategy for {strategyItem.platform}, or upload your own.</p>
 
+                                        {/* Quota indicator */}
+                                        {creativeUsage && !creativeUsage.is_unlimited && (
+                                            <div className="mt-2 flex items-center gap-2 text-sm">
+                                                <span className={`font-medium ${creativeUsage.image_generations.remaining <= 0 ? 'text-red-600' : creativeUsage.image_generations.remaining <= 5 ? 'text-yellow-600' : 'text-green-600'}`}>
+                                                    {creativeUsage.image_generations.remaining} image generation{creativeUsage.image_generations.remaining !== 1 ? 's' : ''} remaining
+                                                </span>
+                                                {creativeUsage.image_generations.remaining <= 0 && (
+                                                    <a href={route('creative-usage')} className="text-flame-orange-600 hover:underline text-xs font-medium">Buy Boost →</a>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div className="flex flex-wrap gap-3 mt-4">
                                             <button
                                                 onClick={() => handleGenerateImage(strategyItem.id)}
-                                                disabled={generatingImage}
+                                                disabled={generatingImage || (creativeUsage && !creativeUsage.is_unlimited && creativeUsage.image_generations.remaining <= 0)}
                                                 className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
                                                 {generatingImage && (
@@ -568,6 +580,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         }`}>
                                                             {image.source === 'uploaded' ? '📁 Uploaded' : '✨ AI'}
                                                         </div>
+                                                        {/* Refinement depth badge */}
+                                                        {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (
+                                                            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium shadow bg-amber-100 text-amber-700">
+                                                                {image.refinement_depth}/{creativeUsage.max_refinements_per_item} edits
+                                                            </div>
+                                                        )}
                                                         {!isSubscribed && (
                                                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
                                                                 <p className="text-white text-xs font-medium">Preview - Upgrade to download</p>
@@ -577,8 +595,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             {isSubscribed ? (
                                                                 <div className="flex gap-2">
                                                                     {image.source !== 'uploaded' && (
-                                                                        <button onClick={(e) => { e.stopPropagation(); setEditingImage(image); }} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700">
-                                                                            Edit Image
+                                                                        <button
+                                                                            onClick={(e) => { e.stopPropagation(); setEditingImage(image); }}
+                                                                            disabled={creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item}
+                                                                            className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                        >
+                                                                            {creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item ? 'Max Edits Reached' : 'Edit Image'}
                                                                         </button>
                                                                     )}
                                                                     <a 
@@ -618,10 +640,22 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         <h3 className="text-lg font-semibold text-gray-900 mb-4">Video Collateral</h3>
                                         <p>Generate a unique video based on the video strategy for {strategyItem.platform}, or upload your own.</p>
 
+                                        {/* Quota indicator */}
+                                        {creativeUsage && !creativeUsage.is_unlimited && (
+                                            <div className="mt-2 flex items-center gap-2 text-sm">
+                                                <span className={`font-medium ${creativeUsage.video_generations.remaining <= 0 ? 'text-red-600' : creativeUsage.video_generations.remaining <= 3 ? 'text-yellow-600' : 'text-green-600'}`}>
+                                                    {creativeUsage.video_generations.remaining} video generation{creativeUsage.video_generations.remaining !== 1 ? 's' : ''} remaining
+                                                </span>
+                                                {creativeUsage.video_generations.remaining <= 0 && (
+                                                    <a href={route('creative-usage')} className="text-flame-orange-600 hover:underline text-xs font-medium">Buy Boost →</a>
+                                                )}
+                                            </div>
+                                        )}
+
                                         <div className="flex flex-wrap gap-3 mt-4">
                                             <button
                                                 onClick={() => handleGenerateVideo(strategyItem.id, strategyItem.platform)}
-                                                disabled={generatingVideo}
+                                                disabled={generatingVideo || (creativeUsage && !creativeUsage.is_unlimited && creativeUsage.video_generations.remaining <= 0)}
                                                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
                                                 {generatingVideo && (
@@ -691,19 +725,19 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         </div>
                                                         
                                                         {/* Extend Video Button - Only show for completed Veo videos (AI-generated) */}
-                                                        {video.source !== 'uploaded' && video.status === 'completed' && video.gemini_video_uri && (video.extension_count || 0) < 20 && (
+                                                        {video.source !== 'uploaded' && video.status === 'completed' && video.gemini_video_uri && (video.refinement_depth ?? 0) < (creativeUsage?.max_extensions_per_video ?? 3) && (
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     setExtendingVideo(video);
                                                                 }}
                                                                 className="absolute bottom-2 right-2 bg-purple-600 hover:bg-purple-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                title={`Extend video by 7 seconds (${20 - (video.extension_count || 0)} extensions remaining)`}
+                                                                title={`Extend video by 7 seconds (${(creativeUsage?.max_extensions_per_video ?? 3) - (video.refinement_depth ?? 0)} extensions remaining)`}
                                                             >
                                                                 <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                                                                 </svg>
-                                                                <span>Extend</span>
+                                                                <span>Extend ({(video.refinement_depth ?? 0)}/{creativeUsage?.max_extensions_per_video ?? 3})</span>
                                                             </button>
                                                         )}
 

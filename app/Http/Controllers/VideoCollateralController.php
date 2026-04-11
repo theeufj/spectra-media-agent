@@ -8,6 +8,7 @@ use App\Jobs\CheckVideoStatus;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Services\CreativeQuotaService;
 use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -60,9 +61,20 @@ class VideoCollateralController extends Controller
             ]);
             Log::info("Request payload validated successfully for platform: {$validated['platform']}.");
 
+            // Check creative quota
+            $quotaService = app(CreativeQuotaService::class);
+            if (!$quotaService->canGenerate($user, 'video')) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
+                ]);
+            }
+
             Log::info("Dispatching GenerateVideo job for Strategy ID: {$strategy->id}...");
             GenerateVideo::dispatch($campaign, $strategy, $validated['platform']);
             Log::info("GenerateVideo job dispatched successfully.");
+
+            $quotaService->recordUsage($user, 'video');
 
             return redirect()->back()->with('flash', [
                 'type' => 'success',
@@ -126,6 +138,22 @@ class VideoCollateralController extends Controller
                 ]);
             }
 
+            // Check creative quota (extensions count against video budget)
+            $quotaService = app(CreativeQuotaService::class);
+            if (!$quotaService->canGenerate($user, 'video')) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
+                ]);
+            }
+
+            if (!$quotaService->canExtendVideo($video, $user)) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'This video has reached its maximum extension limit (3 extensions).',
+                ]);
+            }
+
             // Validate request
             $validated = $request->validate([
                 'prompt' => 'required|string|max:1000',
@@ -133,6 +161,8 @@ class VideoCollateralController extends Controller
 
             Log::info("Dispatching ExtendVideo job for VideoCollateral ID: {$video->id}");
             ExtendVideo::dispatch($video, $validated['prompt']);
+
+            $quotaService->recordUsage($user, 'video');
 
             return redirect()->back()->with('flash', [
                 'type' => 'success',
