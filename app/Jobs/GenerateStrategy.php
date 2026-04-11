@@ -108,9 +108,16 @@ class GenerateStrategy implements ShouldQueue
                 return;
             }
 
+            // Step 1.9: Load competitor intelligence if available
+            $competitors = $this->campaign->customer->competitors()
+                ->whereNotNull('last_analyzed_at')
+                ->take(10)
+                ->get();
+            Log::info("Found {$competitors->count()} analyzed competitors for campaign {$this->campaign->id}");
+
             // Step 2: Construct the prompt using our dedicated prompt builder class.
             Log::info("Building strategy prompt for campaign {$this->campaign->id}");
-            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray(), $brandGuidelines, $enabledPlatforms);
+            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray(), $brandGuidelines, $enabledPlatforms, $competitors);
             Log::info("Generated prompt length: " . strlen($prompt) . " characters");
 
             // Step 3: Call Gemini API with Gemini 3 Pro Preview with extended thinking and Google Search.

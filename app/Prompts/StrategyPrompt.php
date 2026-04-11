@@ -40,9 +40,10 @@ class StrategyPrompt
      * @param array $enabledPlatforms Array of enabled platform names.
      * @return string The fully constructed prompt.
      */
-    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = []): string
+    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = [], $competitors = null): string
     {
         $brandContext = self::formatBrandContext($brandGuidelines);
+        $competitorContext = self::formatCompetitorContext($competitors);
         
         if ($brandGuidelines) {
             Log::info("StrategyPrompt: Using brand guidelines for customer ID: {$brandGuidelines->customer_id}");
@@ -225,6 +226,7 @@ This is the context about the business, its brand voice, and its products, extra
 ---
 {$knowledgeBaseContent}
 ---
+{$competitorContext}
 
 **2. CAMPAIGN BRIEF (The Goal):**
 This is the specific goal for the marketing campaign.
@@ -303,5 +305,57 @@ PROMPT;
 ---
 
 BRAND;
+    }
+
+    /**
+     * Format competitor intelligence into context for the prompt.
+     */
+    private static function formatCompetitorContext($competitors): string
+    {
+        if (!$competitors || $competitors->isEmpty()) {
+            return '';
+        }
+
+        $lines = [];
+        foreach ($competitors as $c) {
+            $entry = "- **{$c->name}** ({$c->domain})";
+
+            $type = $c->messaging_analysis['competition_type'] ?? null;
+            $size = $c->messaging_analysis['estimated_size'] ?? null;
+            if ($type) {
+                $entry .= " — {$type} competitor" . ($size ? " ({$size})" : '');
+            }
+
+            if (!empty($c->value_propositions)) {
+                $vps = is_array($c->value_propositions) ? implode('; ', array_slice($c->value_propositions, 0, 3)) : $c->value_propositions;
+                $entry .= "\n  Value Props: {$vps}";
+            }
+
+            if (!empty($c->keywords_detected)) {
+                $kws = is_array($c->keywords_detected) ? implode(', ', array_slice($c->keywords_detected, 0, 8)) : $c->keywords_detected;
+                $entry .= "\n  Keywords: {$kws}";
+            }
+
+            if (!empty($c->pricing_info)) {
+                $pricing = is_array($c->pricing_info)
+                    ? ($c->pricing_info['summary'] ?? $c->pricing_info['positioning'] ?? json_encode($c->pricing_info))
+                    : $c->pricing_info;
+                $entry .= "\n  Pricing: {$pricing}";
+            }
+
+            $lines[] = $entry;
+        }
+
+        $competitorList = implode("\n\n", $lines);
+
+        return <<<COMPETITORS
+
+**COMPETITIVE INTELLIGENCE (Use this to differentiate your strategy):**
+The following competitors have been identified and analyzed. Use this intelligence to craft ad copy that differentiates from competitors, target gaps in their positioning, and avoid overlapping keywords where appropriate.
+---
+{$competitorList}
+---
+
+COMPETITORS;
     }
 }

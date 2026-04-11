@@ -26,15 +26,16 @@ class CompetitorIntelligenceComplete extends Notification implements ShouldQueue
     {
         $mail = (new MailMessage)
             ->subject('Competitor Intelligence Report: ' . $this->customer->name)
-            ->line('Your competitor intelligence analysis is complete.');
+            ->greeting('Hi ' . $notifiable->name . ',')
+            ->line('Your competitor intelligence analysis for **' . $this->customer->name . '** is complete.');
 
         foreach ($this->summary as $item) {
             $mail->line('• ' . $item);
         }
 
         return $mail
-            ->action('View Dashboard', url('/customers/' . $this->customer->id))
-            ->line('Thank you for using Spectra!');
+            ->action('View Competitor Analysis', url('/seo/competitors'))
+            ->salutation('— Site to Spend');
     }
 
     public function toArray(object $notifiable): array
