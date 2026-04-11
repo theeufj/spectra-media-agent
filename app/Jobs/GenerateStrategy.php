@@ -92,14 +92,23 @@ class GenerateStrategy implements ShouldQueue
             $enabledPlatforms = EnabledPlatform::getEnabledPlatformNames();
             Log::info("Found " . count($enabledPlatforms) . " enabled platforms: " . implode(', ', $enabledPlatforms));
 
-            // Step 1.8: Filter by user's plan-allowed platforms
-            $user = $this->campaign->customer->users()->first();
-            if ($user) {
-                $allowed = $user->allowedPlatforms();
-                $enabledPlatforms = array_values(array_filter($enabledPlatforms, function ($p) use ($allowed) {
-                    return in_array(strtolower($p), $allowed, true);
+            // Step 1.8: Use campaign's user-selected platforms if available, otherwise fall back to plan-allowed filter
+            if (!empty($this->campaign->platforms)) {
+                // Filter user selection to only include system-enabled platforms (safety check)
+                $enabledPlatforms = array_values(array_filter($this->campaign->platforms, function ($p) use ($enabledPlatforms) {
+                    return in_array(strtolower($p), array_map('strtolower', $enabledPlatforms), true);
                 }));
-                Log::info("Plan-filtered platforms for campaign {$this->campaign->id}: " . implode(', ', $enabledPlatforms));
+                Log::info("Using campaign-selected platforms for campaign {$this->campaign->id}: " . implode(', ', $enabledPlatforms));
+            } else {
+                // Legacy fallback: filter by user's plan-allowed platforms
+                $user = $this->campaign->customer->users()->first();
+                if ($user) {
+                    $allowed = $user->allowedPlatforms();
+                    $enabledPlatforms = array_values(array_filter($enabledPlatforms, function ($p) use ($allowed) {
+                        return in_array(strtolower($p), $allowed, true);
+                    }));
+                    Log::info("Plan-filtered platforms for campaign {$this->campaign->id}: " . implode(', ', $enabledPlatforms));
+                }
             }
 
             if (empty($enabledPlatforms)) {

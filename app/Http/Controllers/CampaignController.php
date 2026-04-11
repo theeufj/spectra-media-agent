@@ -77,11 +77,24 @@ class CampaignController extends Controller
         $brandGuideline = \App\Models\BrandGuideline::where('customer_id', $customer->id)
             ->latest('extracted_at')
             ->first();
-        
+
+        // Compute selectable platforms: intersection of system-enabled, plan-allowed, and customer-configured
+        $enabledPlatforms = \App\Models\EnabledPlatform::getEnabledPlatformNames();
+        $allowedPlatforms = $request->user()->allowedPlatforms();
+        $configuredPlatforms = $customer->configuredPlatforms();
+
+        $selectablePlatforms = array_values(array_intersect(
+            array_map('strtolower', $enabledPlatforms),
+            $allowedPlatforms,
+            $configuredPlatforms
+        ));
+
         return Inertia::render('Campaigns/CreateWizard', [
             'pages' => $pages,
             'brandGuideline' => $brandGuideline,
-            'allowedPlatforms' => $request->user()->allowedPlatforms(),
+            'allowedPlatforms' => $allowedPlatforms,
+            'selectablePlatforms' => $selectablePlatforms,
+            'configuredPlatforms' => $configuredPlatforms,
         ]);
     }
 

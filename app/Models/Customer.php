@@ -93,6 +93,29 @@ class Customer extends Model
     }
 
     /**
+     * Get the list of platforms that have account IDs configured for this customer.
+     */
+    public function configuredPlatforms(): array
+    {
+        $platforms = [];
+
+        if (!empty($this->google_ads_customer_id)) {
+            $platforms[] = 'google';
+        }
+        if (!empty($this->facebook_ads_account_id)) {
+            $platforms[] = 'facebook';
+        }
+        if (!empty($this->microsoft_ads_customer_id) && !empty($this->microsoft_ads_account_id)) {
+            $platforms[] = 'microsoft';
+        }
+        if (!empty($this->linkedin_ads_account_id)) {
+            $platforms[] = 'linkedin';
+        }
+
+        return $platforms;
+    }
+
+    /**
      * Prevent google_ads_customer_id from being set to the platform MCC account.
      * All customer accounts must be sub-accounts created under the MCC.
      */

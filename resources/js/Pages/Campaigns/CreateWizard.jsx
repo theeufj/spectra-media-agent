@@ -78,6 +78,11 @@ const WIZARD_STEPS = [
         description: 'Name & objectives'
     },
     { 
+        id: 'platforms', 
+        title: 'Platforms',
+        description: 'Where to advertise'
+    },
+    { 
         id: 'audience', 
         title: 'Target Audience',
         description: 'Who to reach'
@@ -128,7 +133,7 @@ const HelpText = ({ text }) => (
     <p className="mt-1 text-sm text-gray-500">{text}</p>
 );
 
-export default function CreateWizard({ auth, pages = [], brandGuideline }) {
+export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [] }) {
     const [currentStep, setCurrentStep] = useState(0);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [creationMode, setCreationMode] = useState(null); // 'template' or 'ai'
@@ -174,6 +179,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
         exclusions: brandDefaults.exclusions || '',
         selected_pages: [],
         keywords: [],
+        platforms: selectablePlatforms,
     });
     
     // Auto-scroll chat to bottom
@@ -276,15 +282,17 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
         switch (step) {
             case 1: // Basics
                 return data.name && data.reason && data.goals;
-            case 2: // Audience
+            case 2: // Platforms
+                return data.platforms && data.platforms.length > 0;
+            case 3: // Audience
                 return data.target_market && data.voice;
-            case 3: // Budget
+            case 4: // Budget
                 return data.total_budget && data.start_date && data.end_date && data.primary_kpi;
-            case 4: // Products
+            case 5: // Products
                 return true; // Optional step
-            case 5: // Keywords
+            case 6: // Keywords
                 return true; // Optional step
-            case 6: // Review
+            case 7: // Review
                 return true;
             default:
                 return true;
@@ -560,7 +568,88 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                     </div>
                 );
                 
-            case 2: // Audience
+            case 2: // Platforms
+                return (
+                    <div className="space-y-6 max-w-2xl mx-auto">
+                        <div className="text-center mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Where do you want to advertise?</h3>
+                            <p className="text-sm text-gray-500 mt-1">Select the platforms to run this campaign on. Only platforms configured for your account are available.</p>
+                        </div>
+
+                        {selectablePlatforms.length === 0 && (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+                                <strong>No platforms available.</strong> Please contact your admin to set up ad platform accounts for your business.
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {[
+                                { id: 'google', name: 'Google Ads', icon: '🔍', desc: 'Search, Display, YouTube, Shopping, Performance Max' },
+                                { id: 'facebook', name: 'Facebook Ads', icon: '📘', desc: 'Facebook & Instagram feeds, stories, reels' },
+                                { id: 'microsoft', name: 'Microsoft Ads', icon: '🪟', desc: 'Bing Search, Microsoft Audience Network' },
+                                { id: 'linkedin', name: 'LinkedIn Ads', icon: '💼', desc: 'Sponsored content, InMail, lead gen forms' },
+                            ].map(platform => {
+                                const isSelectable = selectablePlatforms.includes(platform.id);
+                                const isSelected = data.platforms.includes(platform.id);
+                                const isAllowed = allowedPlatforms.includes(platform.id);
+                                const isConfigured = configuredPlatforms.includes(platform.id);
+
+                                let disabledReason = null;
+                                if (!isAllowed) disabledReason = 'Upgrade your plan to unlock';
+                                else if (!isConfigured) disabledReason = 'Contact admin to set up';
+                                else if (!isSelectable) disabledReason = 'Not available';
+
+                                return (
+                                    <button
+                                        key={platform.id}
+                                        type="button"
+                                        disabled={!isSelectable}
+                                        onClick={() => {
+                                            if (!isSelectable) return;
+                                            const updated = isSelected
+                                                ? data.platforms.filter(p => p !== platform.id)
+                                                : [...data.platforms, platform.id];
+                                            setData('platforms', updated);
+                                        }}
+                                        className={`relative flex flex-col items-start p-5 rounded-xl border-2 text-left transition-all ${
+                                            isSelected
+                                                ? 'border-flame-orange-500 bg-flame-orange-50 ring-2 ring-flame-orange-200'
+                                                : isSelectable
+                                                    ? 'border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm'
+                                                    : 'border-gray-100 bg-gray-50 opacity-60 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        {isSelected && (
+                                            <div className="absolute top-3 right-3">
+                                                <svg className="w-5 h-5 text-flame-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                                </svg>
+                                            </div>
+                                        )}
+                                        <span className="text-2xl mb-2">{platform.icon}</span>
+                                        <span className="font-semibold text-gray-900">{platform.name}</span>
+                                        <span className="text-xs text-gray-500 mt-1">{platform.desc}</span>
+                                        {disabledReason && (
+                                            <span className="text-xs text-yellow-600 mt-2 font-medium">{disabledReason}</span>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {data.platforms.length > 0 && (
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                                <p className="text-sm text-green-700">
+                                    <strong>{data.platforms.length} platform{data.platforms.length > 1 ? 's' : ''} selected</strong> — strategies will be generated for each.
+                                </p>
+                            </div>
+                        )}
+
+                        <InputError message={errors.platforms} className="mt-2" />
+                    </div>
+                );
+
+            case 3: // Audience
                 return (
                     <div className="space-y-6 max-w-2xl mx-auto">
                         <div>
@@ -606,7 +695,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                     </div>
                 );
                 
-            case 3: // Budget & Schedule
+            case 4: // Budget & Schedule
                 return (
                     <div className="space-y-6 max-w-2xl mx-auto">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -681,7 +770,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                     </div>
                 );
                 
-            case 4: // Products
+            case 5: // Products
                 return (
                     <div className="space-y-6 max-w-2xl mx-auto">
                         <div>
@@ -728,7 +817,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                     </div>
                 );
                 
-            case 5: // Keywords
+            case 6: // Keywords
                 return (
                     <div className="space-y-6 max-w-3xl mx-auto">
                         <div className="mb-4">
@@ -745,7 +834,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                     </div>
                 );
 
-            case 6: // Review
+            case 7: // Review
                 return (
                     <div className="space-y-6 max-w-3xl mx-auto">
                         <div className="text-center mb-8">
@@ -759,25 +848,29 @@ export default function CreateWizard({ auth, pages = [], brandGuideline }) {
                                 <ReviewItem label="Reason" value={data.reason} />
                                 <ReviewItem label="Goals" value={data.goals} />
                             </ReviewSection>
+
+                            <ReviewSection title="Platforms" step={2} onEdit={() => goToStep(2)}>
+                                <ReviewItem label="Selected Platforms" value={data.platforms.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(', ') || 'None'} />
+                            </ReviewSection>
                             
-                            <ReviewSection title="Target Audience" step={2} onEdit={() => goToStep(2)}>
+                            <ReviewSection title="Target Audience" step={3} onEdit={() => goToStep(3)}>
                                 <ReviewItem label="Target Market" value={data.target_market} />
                                 <ReviewItem label="Brand Voice" value={data.voice} />
                             </ReviewSection>
                             
-                            <ReviewSection title="Budget & Schedule" step={3} onEdit={() => goToStep(3)}>
+                            <ReviewSection title="Budget & Schedule" step={4} onEdit={() => goToStep(4)}>
                                 <ReviewItem label="Total Budget" value={`$${data.total_budget}`} />
                                 <ReviewItem label="Primary KPI" value={data.primary_kpi} />
                                 <ReviewItem label="Duration" value={`${data.start_date} to ${data.end_date}`} />
                             </ReviewSection>
                             
-                            <ReviewSection title="Product Focus" step={4} onEdit={() => goToStep(4)}>
+                            <ReviewSection title="Product Focus" step={5} onEdit={() => goToStep(5)}>
                                 <ReviewItem label="Product Focus" value={data.product_focus || 'Not specified'} />
                                 <ReviewItem label="Selected Pages" value={data.selected_pages?.length ? `${data.selected_pages.length} pages selected` : 'None'} />
                                 <ReviewItem label="Exclusions" value={data.exclusions || 'None'} />
                             </ReviewSection>
                             
-                            <ReviewSection title="Keywords" step={5} onEdit={() => goToStep(5)}>
+                            <ReviewSection title="Keywords" step={6} onEdit={() => goToStep(6)}>
                                 <ReviewItem label="Keywords" value={data.keywords?.length ? `${data.keywords.length} keywords selected` : 'None (AI will choose)'} />
                                 {data.keywords?.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1">

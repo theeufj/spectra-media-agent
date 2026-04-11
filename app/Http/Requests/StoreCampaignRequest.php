@@ -53,6 +53,8 @@ class StoreCampaignRequest extends FormRequest
             'keywords.*.intent' => 'nullable|string|max:50',
             'keywords.*.cluster' => 'nullable|string|max:200',
             'keywords.*.funnel_stage' => 'nullable|string|max:50',
+            'platforms' => 'required|array|min:1',
+            'platforms.*' => 'string|in:google,facebook,microsoft,linkedin',
         ];
     }
 
