@@ -38,6 +38,12 @@ const TOUR_STEPS = [
         placement: 'bottom',
     },
     {
+        target: '[data-tour="sandbox"]',
+        title: 'AI Sandbox',
+        body: 'Not ready to go live? Launch a sandbox to test all 7 AI optimisation agents against realistic simulated campaigns — no real ad spend required.',
+        placement: 'bottom',
+    },
+    {
         target: '[data-tour="new-campaign"]',
         title: 'Ready to start?',
         body: 'Click here to create your first campaign. Our AI will guide you through setup step by step.',

@@ -197,7 +197,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                 </Dropdown>
 
                                 {/* Sandbox */}
-                                <NavLink href={route('sandbox.index')} active={route().current('sandbox.*')}>
+                                <NavLink href={route('sandbox.index')} active={route().current('sandbox.*')} data-tour="sandbox">
                                     Sandbox
                                 </NavLink>
 
