@@ -9,6 +9,10 @@ export default function About({ auth }) {
             <Head>
                 <title>About Us - AI-Powered Marketing for Everyone | sitetospend</title>
                 <meta name="description" content="sitetospend is on a mission to democratize digital advertising. Our AI agents deliver agency-level results at a fraction of the cost—so every business can compete." />
+                <meta property="og:title" content="About sitetospend — Democratizing Digital Advertising with AI" />
+                <meta property="og:description" content="Our mission: agency-level marketing results at a fraction of the cost, powered by autonomous AI agents." />
+                <meta name="twitter:title" content="About sitetospend — Democratizing Digital Advertising with AI" />
+                <meta name="twitter:description" content="Our mission: agency-level marketing results at a fraction of the cost, powered by autonomous AI agents." />
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />

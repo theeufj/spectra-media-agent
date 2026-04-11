@@ -9,8 +9,78 @@ export default function Landing({ auth, plans = [] }) {
     return (
         <>
             <Head>
-                <title>sitetospend - AI-Powered Digital Marketing</title>
-                <meta name="description" content={`Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads 24/7—competitor discovery, self-healing campaigns, budget intelligence, and more. From $${lowestPrice}/mo.`} />
+                <title>AI-Powered Ad Campaign Management | sitetospend</title>
+                <meta name="description" content={`Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads & Facebook Ads 24/7—competitor discovery, self-healing campaigns, budget intelligence, and more. From $${lowestPrice}/mo.`} />
+                <meta property="og:title" content="sitetospend — AI-Powered Ad Campaign Management" />
+                <meta property="og:description" content={`6 autonomous AI agents optimize your ad campaigns 24/7. Agency-level results from $${lowestPrice}/mo. No credit card required.`} />
+                <meta property="og:type" content="website" />
+                <meta name="twitter:title" content="sitetospend — AI-Powered Ad Campaign Management" />
+                <meta name="twitter:description" content={`6 autonomous AI agents optimize your ad campaigns 24/7. Agency-level results from $${lowestPrice}/mo.`} />
+                <script type="application/ld+json">{JSON.stringify({
+                    "@context": "https://schema.org",
+                    "@graph": [
+                        {
+                            "@type": "Organization",
+                            "name": "sitetospend",
+                            "url": "https://sitetospend.com",
+                            "logo": "https://sitetospend.com/og-image.png",
+                            "description": "AI-powered digital advertising platform with autonomous agents that manage and optimize ad campaigns across Google, Facebook, Microsoft, and LinkedIn.",
+                            "sameAs": []
+                        },
+                        {
+                            "@type": "SoftwareApplication",
+                            "name": "sitetospend",
+                            "applicationCategory": "BusinessApplication",
+                            "operatingSystem": "Web",
+                            "url": "https://sitetospend.com",
+                            "description": "Autonomous AI agents that create, manage, and optimize digital ad campaigns across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn Ads.",
+                            "offers": {
+                                "@type": "AggregateOffer",
+                                "lowPrice": lowestPrice,
+                                "highPrice": "249",
+                                "priceCurrency": "USD",
+                                "offerCount": paidPlans.length
+                            },
+                            "featureList": [
+                                "AI Competitor Discovery",
+                                "Self-Healing Campaigns",
+                                "Budget Intelligence",
+                                "Creative A/B Testing",
+                                "Audience Intelligence",
+                                "Vision AI Brand Extraction"
+                            ]
+                        },
+                        {
+                            "@type": "FAQPage",
+                            "mainEntity": [
+                                {
+                                    "@type": "Question",
+                                    "name": "How does sitetospend work?",
+                                    "acceptedAnswer": {
+                                        "@type": "Answer",
+                                        "text": "Enter your website URL. Our Vision AI extracts your brand identity, competitive intelligence discovers your rivals, and 6 autonomous agents optimize your campaigns 24/7."
+                                    }
+                                },
+                                {
+                                    "@type": "Question",
+                                    "name": "Which ad platforms does sitetospend support?",
+                                    "acceptedAnswer": {
+                                        "@type": "Answer",
+                                        "text": "sitetospend manages campaigns across Google Ads, Facebook Ads, Microsoft Ads (Bing), and LinkedIn Ads from a single dashboard."
+                                    }
+                                },
+                                {
+                                    "@type": "Question",
+                                    "name": "Do I need a credit card to start?",
+                                    "acceptedAnswer": {
+                                        "@type": "Answer",
+                                        "text": "No. sitetospend offers a generous free tier with no credit card required. You can upgrade to a paid plan at any time."
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                })}</script>
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />
@@ -22,7 +92,7 @@ export default function Landing({ auth, plans = [] }) {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 lg:gap-8">
                                 <div className="mx-auto max-w-sm px-2 sm:max-w-md sm:px-4 md:max-w-none md:px-0 text-center sm:text-center md:text-left md:flex md:items-center">
                                     <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
-                                        <p className="text-xs sm:text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">AI That Understands Your Brand</p>
+                                        <p className="text-xs sm:text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">AI-Powered Ad Campaign Management</p>
                                         <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
                                             <span className="block whitespace-normal">The results of a top-tier agency.</span>
                                             <span className="block text-flame-orange-600 whitespace-normal">The cost of a utility bill.</span>

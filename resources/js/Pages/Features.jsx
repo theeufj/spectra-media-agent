@@ -9,6 +9,10 @@ export default function Features({ auth }) {
             <Head>
                 <title>Features - AI Marketing Agents & Automation | sitetospend</title>
                 <meta name="description" content="Discover sitetospend's 6 autonomous AI agents: competitor discovery, self-healing campaigns, budget intelligence, creative A/B testing, audience management, and Vision AI brand extraction." />
+                <meta property="og:title" content="Features — 6 Autonomous AI Marketing Agents | sitetospend" />
+                <meta property="og:description" content="Competitor discovery, self-healing campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction—all on autopilot." />
+                <meta name="twitter:title" content="Features — 6 Autonomous AI Marketing Agents | sitetospend" />
+                <meta name="twitter:description" content="Competitor discovery, self-healing campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction." />
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />

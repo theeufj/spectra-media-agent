@@ -19,21 +19,22 @@
         <link rel="canonical" href="{{ str_replace('http://', 'https://', url()->current()) }}" />
 
         <!-- SEO Meta Tags -->
-        <meta name="description" content="Site to Spend offers agentic digital marketing services, leveraging AI to create and manage ad campaigns across platforms like Google, Facebook, and more.">
-        <meta name="keywords" content="AI marketing, digital marketing, ad campaign management, Google Ads, Facebook Ads, automated advertising, agentic marketing">
-        <meta name="author" content="Site to Spend">
+        <meta name="description" content="AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.">
+        <meta name="keywords" content="AI ad management, AI marketing platform, Google Ads automation, Facebook Ads AI, automated ad campaigns, digital advertising AI, campaign optimization, ad spend management">
+        <meta name="author" content="sitetospend">
 
         <!-- Open Graph Meta Tags (for social sharing) -->
-        <meta property="og:title" content="Site to Spend - Agentic Digital Marketing">
-        <meta property="og:description" content="Automated ad campaigns powered by AI. Site to Spend creates, manages, and optimizes your digital advertising across all major platforms.">
+        <meta property="og:title" content="sitetospend — AI-Powered Ad Campaign Management">
+        <meta property="og:description" content="6 autonomous AI agents create, manage, and optimize your digital ad campaigns across Google, Facebook, Microsoft, and LinkedIn 24/7.">
         <meta property="og:image" content="{{ url('/og-image.png') }}">
         <meta property="og:url" content="{{ url()->current() }}">
         <meta property="og:type" content="website">
+        <meta property="og:site_name" content="sitetospend">
 
         <!-- Twitter Card Meta Tags -->
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="Site to Spend - Agentic Digital Marketing">
-        <meta name="twitter:description" content="Leverage the power of AI for your ad campaigns. Site to Spend offers a fully autonomous digital marketing solution.">
+        <meta name="twitter:title" content="sitetospend — AI-Powered Ad Campaign Management">
+        <meta name="twitter:description" content="6 autonomous AI agents create, manage, and optimize your digital ad campaigns across Google, Facebook, Microsoft, and LinkedIn.">
         <meta name="twitter:image" content="{{ url('/twitter-image.png') }}">
 
         <!-- Fonts -->

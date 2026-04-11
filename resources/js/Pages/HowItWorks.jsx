@@ -9,6 +9,10 @@ export default function HowItWorks({ auth }) {
             <Head>
                 <title>How It Works - From URL to ROI in 3 Steps | sitetospend</title>
                 <meta name="description" content="Learn how sitetospend works: Vision AI extracts your brand, competitive intelligence discovers your rivals, and autonomous agents optimize your campaigns 24/7." />
+                <meta property="og:title" content="How It Works — From URL to ROI in 3 Steps | sitetospend" />
+                <meta property="og:description" content="Enter your URL, let AI extract your brand, discover competitors, and deploy optimized campaigns in minutes." />
+                <meta name="twitter:title" content="How It Works — From URL to ROI in 3 Steps | sitetospend" />
+                <meta name="twitter:description" content="Enter your URL, let AI extract your brand, discover competitors, and deploy optimized campaigns in minutes." />
             </Head>
             <div className="min-h-screen bg-gray-50 text-gray-800">
                 <Header auth={auth} />
