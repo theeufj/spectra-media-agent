@@ -27,6 +27,10 @@ class SyncProductFeed implements ShouldQueue
         try {
             $feed->update(['status' => 'processing']);
 
+            if ($feed->source_type !== 'api') {
+                throw new \RuntimeException("Source type '{$feed->source_type}' is not yet supported. Only Merchant Center API is available.");
+            }
+
             $service = new MerchantCenterService($feed->customer);
             $synced = $service->syncToDatabase($feed);
 
@@ -40,13 +44,14 @@ class SyncProductFeed implements ShouldQueue
                 'products_synced' => $synced,
             ]);
         } catch (\Exception $e) {
+            $errorMsg = $e->getMessage();
             $feed->update([
                 'status' => 'error',
-                'last_error' => $e->getMessage(),
+                'last_error' => strlen($errorMsg) > 500 ? substr($errorMsg, 0, 500) . '...' : $errorMsg,
             ]);
             Log::error('SyncProductFeed: Failed', [
                 'feed_id' => $feed->id,
-                'error' => $e->getMessage(),
+                'error' => $errorMsg,
             ]);
         }
     }

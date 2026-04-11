@@ -39,7 +39,7 @@ class ProductController extends Controller
         $validated = $request->validate([
             'feed_name' => 'required|string|max:255',
             'merchant_id' => 'required|string',
-            'source_type' => 'required|in:manual,url,api,shopify,woocommerce',
+            'source_type' => 'required|in:api',
             'source_url' => 'nullable|url',
             'sync_frequency' => 'in:hourly,daily,weekly',
         ]);

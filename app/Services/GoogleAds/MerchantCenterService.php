@@ -154,34 +154,38 @@ class MerchantCenterService
 
     protected function apiCall(string $path, ?array $params = null, ?array $body = null, string $method = 'GET'): ?array
     {
-        try {
-            // Get OAuth token from BaseGoogleAdsService pattern
-            $accessToken = $this->getAccessToken();
-            if (!$accessToken) return null;
+        $accessToken = $this->getAccessToken();
 
-            $url = "{$this->baseUrl}/{$path}";
+        $url = "{$this->baseUrl}/{$path}";
 
-            $request = Http::withToken($accessToken)->timeout(30);
+        $request = Http::withToken($accessToken)->timeout(30);
 
-            $response = match ($method) {
-                'POST' => $request->post($url, $body),
-                'DELETE' => $request->delete($url),
-                default => $request->get($url, $params ?? []),
-            };
+        $response = match ($method) {
+            'POST' => $request->post($url, $body),
+            'DELETE' => $request->delete($url),
+            default => $request->get($url, $params ?? []),
+        };
 
-            if ($response->successful()) {
-                return $response->json();
-            }
-
-            Log::warning('Merchant Center API error', ['path' => $path, 'status' => $response->status()]);
-            return null;
-        } catch (\Exception $e) {
-            Log::error('Merchant Center API exception', ['path' => $path, 'error' => $e->getMessage()]);
-            return null;
+        if ($response->successful()) {
+            return $response->json();
         }
+
+        $status = $response->status();
+        $errorBody = $response->json('error.message') ?? $response->body();
+        Log::warning('Merchant Center API error', ['path' => $path, 'status' => $status, 'error' => $errorBody]);
+
+        if ($status === 401 || $status === 403) {
+            throw new \RuntimeException("Merchant Center authentication failed (HTTP {$status}). Check your MCC credentials and merchant ID.");
+        }
+
+        if ($status === 404) {
+            throw new \RuntimeException("Merchant Center account or resource not found. Verify your Merchant Center ID.");
+        }
+
+        throw new \RuntimeException("Merchant Center API error (HTTP {$status}): {$errorBody}");
     }
 
-    protected function getAccessToken(): ?string
+    protected function getAccessToken(): string
     {
         // Reuse Google Ads OAuth token since Merchant Center uses the same credentials
         try {
@@ -191,10 +195,17 @@ class MerchantCenterService
                     return $this->client?->getOAuth2Credential()?->fetchAuthToken()['access_token'] ?? null;
                 }
             };
-            return $base->getToken();
+            $token = $base->getToken();
+
+            if (!$token) {
+                throw new \RuntimeException('Could not obtain Merchant Center access token. Check Google Ads MCC credentials.');
+            }
+
+            return $token;
+        } catch (\RuntimeException $e) {
+            throw $e;
         } catch (\Exception $e) {
-            Log::debug('Could not get Merchant Center access token', ['error' => $e->getMessage()]);
-            return null;
+            throw new \RuntimeException('Merchant Center authentication failed: ' . $e->getMessage(), 0, $e);
         }
     }
 

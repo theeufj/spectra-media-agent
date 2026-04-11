@@ -85,7 +85,7 @@ class ProductControllerTest extends TestCase
         $response = $this->authenticatedPost('/products/feeds', [
             'feed_name' => 'My Store Feed',
             'merchant_id' => '12345678',
-            'source_type' => 'shopify',
+            'source_type' => 'api',
             'sync_frequency' => 'daily',
         ]);
 
@@ -94,7 +94,7 @@ class ProductControllerTest extends TestCase
             'customer_id' => $this->customer->id,
             'feed_name' => 'My Store Feed',
             'merchant_id' => '12345678',
-            'source_type' => 'shopify',
+            'source_type' => 'api',
             'status' => 'pending',
         ]);
     }

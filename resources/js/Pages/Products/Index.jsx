@@ -107,10 +107,6 @@ export default function Index({ feeds = [], stats }) {
                                     <label className="block text-xs font-medium text-gray-700 mb-1">Source Type</label>
                                     <select value={form.source_type} onChange={e => setForm({...form, source_type: e.target.value})} className="w-full rounded-lg border-gray-300 text-sm">
                                         <option value="api">Merchant Center API</option>
-                                        <option value="url">Feed URL</option>
-                                        <option value="shopify">Shopify</option>
-                                        <option value="woocommerce">WooCommerce</option>
-                                        <option value="manual">Manual</option>
                                     </select>
                                 </div>
                                 <div>
