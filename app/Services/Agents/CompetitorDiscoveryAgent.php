@@ -269,7 +269,7 @@ class CompetitorDiscoveryAgent
         // Get key pages from knowledge base
         $pages = $user->knowledgeBases()
             ->take(10)
-            ->get(['title', 'content', 'url']);
+            ->get(['url', 'content']);
 
         if ($pages->isEmpty()) {
             return '';
@@ -279,7 +279,7 @@ class CompetitorDiscoveryAgent
         $summary = [];
         foreach ($pages as $page) {
             $content = substr($page->content, 0, 1000); // First 1000 chars
-            $summary[] = "Page: {$page->title}\nURL: {$page->url}\nContent: {$content}";
+            $summary[] = "URL: {$page->url}\nContent: {$content}";
         }
 
         return implode("\n\n---\n\n", $summary);
