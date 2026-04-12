@@ -67,9 +67,7 @@ class SupportTicketController extends Controller
      */
     public function show(Request $request, SupportTicket $supportTicket)
     {
-        if ($supportTicket->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorize('view', $supportTicket);
 
         $supportTicket->load(['user', 'customer', 'assignee']);
 

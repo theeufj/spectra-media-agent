@@ -27,8 +27,6 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $customer = $customer ?? new Customer(array_merge([
             'name' => 'B2B Corp',
             'linkedin_ads_account_id' => '508123456',
-            'linkedin_oauth_access_token' => 'test-access-token',
-            'linkedin_token_expires_at' => now()->addDays(30),
         ], $overrides));
         if (!$customer->id) {
             $customer->id = 1;
@@ -70,7 +68,6 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $customer = new Customer([
             'name' => 'No LinkedIn Corp',
             'linkedin_ads_account_id' => null,
-            'linkedin_oauth_access_token' => 'tok',
         ]);
         $customer->id = 2;
 
