@@ -9,6 +9,7 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\KeywordController;
 use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\PersonaController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SeoController;
 use App\Http\Controllers\AnalyticsController;
@@ -597,6 +598,19 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::put('/budget', [BudgetController::class, 'updateAllocation'])->name('budget.update');
     Route::post('/budget/rebalance', [BudgetController::class, 'rebalance'])->name('budget.rebalance');
     Route::get('/budget/history', [BudgetController::class, 'history'])->name('budget.history');
+});
+
+/*
+|--------------------------------------------------------------------------
+| Persona Routes
+|--------------------------------------------------------------------------
+*/
+Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
+    Route::get('/personas', [PersonaController::class, 'index'])->name('personas.index');
+    Route::post('/personas/generate', [PersonaController::class, 'generate'])->name('personas.generate');
+    Route::post('/personas', [PersonaController::class, 'store'])->name('personas.store');
+    Route::put('/personas/{persona}', [PersonaController::class, 'update'])->name('personas.update');
+    Route::delete('/personas/{persona}', [PersonaController::class, 'destroy'])->name('personas.destroy');
 });
 
 /*

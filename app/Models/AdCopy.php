@@ -17,6 +17,7 @@ class AdCopy extends Model
      */
     protected $fillable = [
         'strategy_id',
+        'persona_id',
         'platform',
         'headlines',
         'descriptions',
@@ -40,5 +41,10 @@ class AdCopy extends Model
     public function strategy(): BelongsTo
     {
         return $this->belongsTo(Strategy::class);
+    }
+
+    public function persona(): BelongsTo
+    {
+        return $this->belongsTo(Persona::class);
     }
 }

@@ -108,11 +108,47 @@ class DeployCampaign implements ShouldQueue
         }
 
         if ($strategies->count() > 0 && $this->campaign->daily_budget) {
-            DB::transaction(function () use ($strategies) {
-                $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
-                foreach ($strategies as $strategy) {
-                    if (!$strategy->daily_budget) {
-                        $strategy->update(['daily_budget' => $budgetPerStrategy]);
+            DB::transaction(function () use ($strategies, $customer) {
+                // Try to use cross-channel budget allocation for smart splits
+                $allocation = \App\Models\PlatformBudgetAllocation::where('customer_id', $customer->id)->first();
+
+                if ($allocation && $allocation->strategy !== 'manual') {
+                    $platformMap = [
+                        'google' => 'google_ads_pct',
+                        'facebook' => 'facebook_ads_pct',
+                        'microsoft' => 'microsoft_ads_pct',
+                        'linkedin' => 'linkedin_ads_pct',
+                    ];
+
+                    // Calculate allocated budget per strategy based on platform percentages
+                    $totalPct = 0;
+                    $strategyPcts = [];
+                    foreach ($strategies as $strategy) {
+                        $platform = strtolower($strategy->platform);
+                        $pctField = $platformMap[$platform] ?? null;
+                        $pct = $pctField ? (float) $allocation->$pctField : 0;
+                        $strategyPcts[$strategy->id] = $pct;
+                        $totalPct += $pct;
+                    }
+
+                    foreach ($strategies as $strategy) {
+                        if (!$strategy->daily_budget) {
+                            if ($totalPct > 0) {
+                                $share = $strategyPcts[$strategy->id] / $totalPct;
+                                $budget = round($this->campaign->daily_budget * $share, 2);
+                            } else {
+                                $budget = round($this->campaign->daily_budget / $strategies->count(), 2);
+                            }
+                            $strategy->update(['daily_budget' => max($budget, 1.00)]);
+                        }
+                    }
+                } else {
+                    // Fallback: even split
+                    $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
+                    foreach ($strategies as $strategy) {
+                        if (!$strategy->daily_budget) {
+                            $strategy->update(['daily_budget' => $budgetPerStrategy]);
+                        }
                     }
                 }
             });

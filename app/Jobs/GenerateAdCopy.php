@@ -43,7 +43,8 @@ class GenerateAdCopy implements ShouldQueue
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
-        protected string $platform
+        protected string $platform,
+        protected ?int $personaId = null
     ) {
     }
 
@@ -59,6 +60,9 @@ class GenerateAdCopy implements ShouldQueue
             // Initialize services
             $geminiService = new GeminiService();
             $adminMonitorService = new AdminMonitorService($geminiService);
+
+            // Load persona if specified
+            $persona = $this->personaId ? \App\Models\Persona::find($this->personaId) : null;
 
             // Get brand guidelines for this customer
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
@@ -102,7 +106,8 @@ class GenerateAdCopy implements ShouldQueue
                     $rules,
                     $lastFeedback,
                     $brandGuidelines,
-                    $productContext
+                    $productContext,
+                    $persona
                 ))->getPrompt();
                 $generatedResponse = $geminiService->generateContent('gemini-3-flash-preview', $adCopyPrompt);
                 Log::info("Received raw response from Gemini for attempt {$attempt}.", ['response' => $generatedResponse]);
@@ -166,9 +171,14 @@ class GenerateAdCopy implements ShouldQueue
                 throw new \Exception("Failed to generate approved ad copy after {$maxAttempts} attempts. Last violations: " . json_encode($lastFeedback));
             }
 
+            $uniqueKeys = ['strategy_id' => $this->strategy->id, 'platform' => $this->platform];
+            if ($persona) {
+                $uniqueKeys['persona_id'] = $persona->id;
+            }
+
             AdCopy::updateOrCreate(
-                ['strategy_id' => $this->strategy->id, 'platform' => $this->platform],
-                ['headlines' => $approvedAdCopyData['headlines'], 'descriptions' => $approvedAdCopyData['descriptions']]
+                $uniqueKeys,
+                ['headlines' => $approvedAdCopyData['headlines'], 'descriptions' => $approvedAdCopyData['descriptions'], 'persona_id' => $persona?->id]
             );
 
             Log::info("Successfully generated and stored approved ad copy for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}");

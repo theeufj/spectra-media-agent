@@ -3,6 +3,7 @@
 namespace App\Prompts;
 
 use App\Models\BrandGuideline;
+use App\Models\Persona;
 use Illuminate\Support\Facades\Log;
 
 class AdCopyPrompt
@@ -13,6 +14,7 @@ class AdCopyPrompt
     private ?array $feedback;
     private ?BrandGuideline $brandGuidelines;
     private ?array $productContext;
+    private ?Persona $persona;
 
     public function __construct(
         string $strategyContent,
@@ -20,7 +22,8 @@ class AdCopyPrompt
         ?array $rules = null,
         ?array $feedback = null,
         ?BrandGuideline $brandGuidelines = null,
-        ?array $productContext = null
+        ?array $productContext = null,
+        ?Persona $persona = null
     ) {
         $this->strategyContent = $strategyContent;
         $this->platform = $platform;
@@ -28,6 +31,7 @@ class AdCopyPrompt
         $this->feedback = $feedback ?? [];
         $this->brandGuidelines = $brandGuidelines;
         $this->productContext = $productContext;
+        $this->persona = $persona;
     }
 
     public function getPrompt(): string
@@ -47,11 +51,37 @@ class AdCopyPrompt
                 json_encode($this->productContext, JSON_PRETTY_PRINT);
         }
 
+        // Include persona context if available
+        $personaContext = '';
+        if ($this->persona) {
+            $personaContext = "\n\n--- TARGET PERSONA ---\n" .
+                "Write this ad copy specifically for the following audience persona. Tailor the messaging angle, tone, and pain points addressed.\n" .
+                "Persona: {$this->persona->name}\n" .
+                "Description: {$this->persona->description}\n";
+
+            if ($this->persona->pain_points) {
+                $personaContext .= "Pain Points: " . implode(', ', $this->persona->pain_points) . "\n";
+            }
+            if ($this->persona->messaging_angle) {
+                $personaContext .= "Messaging Angle: {$this->persona->messaging_angle}\n";
+            }
+            if ($this->persona->tone_adjustments) {
+                $tone = $this->persona->tone_adjustments;
+                $personaContext .= "Tone: " . ($tone['formality'] ?? 'balanced') . " formality, " . ($tone['urgency'] ?? 'medium') . " urgency, " . ($tone['emotion'] ?? 'balanced') . " emotion\n";
+            }
+            if ($this->persona->demographics) {
+                $demo = $this->persona->demographics;
+                $personaContext .= "Demographics: " . ($demo['age_range'] ?? '') . ", " . ($demo['income_level'] ?? '') . "\n";
+            }
+            $personaContext .= "--- END PERSONA ---";
+        }
+
         $basePrompt = "You are an expert copywriter specializing in {$this->platform} advertising.\n\n" .
                       $brandContext . "\n\n" .
                       "--- PLATFORM RULES ---\n" .
                       $rulesString . 
-                      $productContextString . "\n\n" .
+                      $productContextString .
+                      $personaContext . "\n\n" .
                       "--- RESPONSE FORMAT ---\n" .
                       "Return the output as a JSON object with two keys: 'headlines' (an array of strings) and 'descriptions' (an array of strings). " .
                       "Do NOT include any conversational text, explanations, or additional formatting outside the JSON object. " .

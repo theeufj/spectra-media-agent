@@ -33,6 +33,7 @@ class BudgetController extends Controller
             'google_ads_pct' => 'required|numeric|min:0|max:100',
             'facebook_ads_pct' => 'required|numeric|min:0|max:100',
             'microsoft_ads_pct' => 'required|numeric|min:0|max:100',
+            'linkedin_ads_pct' => 'required|numeric|min:0|max:100',
             'strategy' => 'required|in:performance,equal,manual,roas_target',
             'target_roas' => 'nullable|numeric|min:0',
             'target_cpa' => 'nullable|numeric|min:0',
@@ -41,11 +42,12 @@ class BudgetController extends Controller
         ]);
 
         // Normalize percentages to 100
-        $total = $validated['google_ads_pct'] + $validated['facebook_ads_pct'] + $validated['microsoft_ads_pct'];
+        $total = $validated['google_ads_pct'] + $validated['facebook_ads_pct'] + $validated['microsoft_ads_pct'] + $validated['linkedin_ads_pct'];
         if ($total > 0 && abs($total - 100) > 0.5) {
             $validated['google_ads_pct'] = round($validated['google_ads_pct'] / $total * 100, 1);
             $validated['facebook_ads_pct'] = round($validated['facebook_ads_pct'] / $total * 100, 1);
             $validated['microsoft_ads_pct'] = round($validated['microsoft_ads_pct'] / $total * 100, 1);
+            $validated['linkedin_ads_pct'] = round($validated['linkedin_ads_pct'] / $total * 100, 1);
         }
 
         PlatformBudgetAllocation::updateOrCreate(

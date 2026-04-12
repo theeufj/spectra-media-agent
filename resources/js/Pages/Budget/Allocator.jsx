@@ -27,6 +27,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
         google_ads_pct: allocation?.google_ads_pct || 100,
         facebook_ads_pct: allocation?.facebook_ads_pct || 0,
         microsoft_ads_pct: allocation?.microsoft_ads_pct || 0,
+        linkedin_ads_pct: allocation?.linkedin_ads_pct || 0,
         strategy: allocation?.strategy || 'performance',
         target_roas: allocation?.target_roas || '',
         target_cpa: allocation?.target_cpa || '',
@@ -52,11 +53,12 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                 google_ads_pct: recommendations.suggested_splits.google_ads_pct,
                 facebook_ads_pct: recommendations.suggested_splits.facebook_ads_pct,
                 microsoft_ads_pct: recommendations.suggested_splits.microsoft_ads_pct,
+                linkedin_ads_pct: recommendations.suggested_splits.linkedin_ads_pct || 0,
             }));
         }
     };
 
-    const totalPct = parseFloat(data.google_ads_pct || 0) + parseFloat(data.facebook_ads_pct || 0) + parseFloat(data.microsoft_ads_pct || 0);
+    const totalPct = parseFloat(data.google_ads_pct || 0) + parseFloat(data.facebook_ads_pct || 0) + parseFloat(data.microsoft_ads_pct || 0) + parseFloat(data.linkedin_ads_pct || 0);
 
     return (
         <AuthenticatedLayout>
@@ -75,13 +77,14 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                     </div>
 
                     {/* Platform Performance Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
                         <PlatformCard name="Google Ads" color="bg-blue-100 text-blue-700" data={snapshot?.google_ads || {}} pct={data.google_ads_pct} />
                         <PlatformCard name="Facebook Ads" color="bg-indigo-100 text-indigo-700" data={snapshot?.facebook_ads || {}} pct={data.facebook_ads_pct} />
                         <PlatformCard name="Microsoft Ads" color="bg-teal-100 text-teal-700" data={snapshot?.microsoft_ads || {}} pct={data.microsoft_ads_pct} />
+                        <PlatformCard name="LinkedIn Ads" color="bg-sky-100 text-sky-700" data={snapshot?.linkedin_ads || {}} pct={data.linkedin_ads_pct} />
                     </div>
 
-                    {/* Recommendations */}
+                    {/* AI Recommendation */}
                     {recommendations?.suggested_splits && (
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-5 mb-8">
                             <div className="flex items-center justify-between mb-3">
@@ -94,6 +97,38 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                                 {recommendations.reasons?.map((r, i) => <li key={i} className="text-sm text-amber-800">• {r}</li>)}
                             </ul>
                             <button onClick={handleApplySuggested} className="px-4 py-2 text-sm font-medium text-amber-800 bg-amber-100 rounded-lg hover:bg-amber-200">Apply Suggestion</button>
+                        </div>
+                    )}
+
+                    {/* Gemini AI Insights */}
+                    {recommendations?.ai_reasoning && (
+                        <div className="bg-purple-50 border border-purple-200 rounded-lg p-5 mb-8">
+                            <h3 className="text-sm font-semibold text-purple-900 mb-2">AI Strategy Insights</h3>
+                            <p className="text-sm text-purple-800 mb-3">{recommendations.ai_reasoning.summary}</p>
+                            {recommendations.ai_reasoning.insights?.length > 0 && (
+                                <div className="mb-3">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Insights</h4>
+                                    <ul className="space-y-1">
+                                        {recommendations.ai_reasoning.insights.map((insight, i) => <li key={i} className="text-sm text-purple-700">• {insight}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                            {recommendations.ai_reasoning.action_items?.length > 0 && (
+                                <div className="mb-3">
+                                    <h4 className="text-xs font-semibold text-purple-700 uppercase mb-1">Action Items</h4>
+                                    <ul className="space-y-1">
+                                        {recommendations.ai_reasoning.action_items.map((item, i) => <li key={i} className="text-sm text-purple-700">• {item}</li>)}
+                                    </ul>
+                                </div>
+                            )}
+                            {recommendations.ai_reasoning.risk_flags?.length > 0 && (
+                                <div>
+                                    <h4 className="text-xs font-semibold text-red-700 uppercase mb-1">Risk Flags</h4>
+                                    <ul className="space-y-1">
+                                        {recommendations.ai_reasoning.risk_flags.map((flag, i) => <li key={i} className="text-sm text-red-600">⚠ {flag}</li>)}
+                                    </ul>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -128,8 +163,9 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                                 <div className="bg-blue-500" style={{width: `${data.google_ads_pct}%`}} />
                                 <div className="bg-indigo-500" style={{width: `${data.facebook_ads_pct}%`}} />
                                 <div className="bg-teal-500" style={{width: `${data.microsoft_ads_pct}%`}} />
+                                <div className="bg-sky-500" style={{width: `${data.linkedin_ads_pct}%`}} />
                             </div>
-                            <div className="grid grid-cols-3 gap-4">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                 <div>
                                     <label className="block text-xs text-blue-600 mb-1">Google Ads %</label>
                                     <input type="number" step="0.1" min="0" max="100" value={data.google_ads_pct} onChange={e => setData('google_ads_pct', parseFloat(e.target.value) || 0)} className="w-full rounded-lg border-gray-300 text-sm" />
@@ -141,6 +177,10 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                                 <div>
                                     <label className="block text-xs text-teal-600 mb-1">Microsoft Ads %</label>
                                     <input type="number" step="0.1" min="0" max="100" value={data.microsoft_ads_pct} onChange={e => setData('microsoft_ads_pct', parseFloat(e.target.value) || 0)} className="w-full rounded-lg border-gray-300 text-sm" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs text-sky-600 mb-1">LinkedIn Ads %</label>
+                                    <input type="number" step="0.1" min="0" max="100" value={data.linkedin_ads_pct} onChange={e => setData('linkedin_ads_pct', parseFloat(e.target.value) || 0)} className="w-full rounded-lg border-gray-300 text-sm" />
                                 </div>
                             </div>
                         </div>

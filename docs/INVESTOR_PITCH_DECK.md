@@ -66,6 +66,10 @@ These are not rule-based automations. Each agent uses Google's Gemini 3.x large 
 | **Multi-Platform Campaigns** | Google Search, Display, Video, PMax, Shopping · Facebook/Meta · Microsoft/Bing · LinkedIn |
 | **Landing Page CRO Audits** | Automated conversion rate optimization analysis with actionable recommendations |
 | **Collateral Sign-Off** | Review and approve all AI-generated copy, images, and video before deployment |
+| **Competitor War Room** | Pin up to 3 competitor URLs; AI gap analysis across keywords, messaging, strengths, and counter-strategies |
+| **Smart Asset Harvesting** | Scrape website images, AI classification, on-demand background removal and platform-specific resizing |
+| **Omni-Channel Budget Allocator** | AI-recommended cross-platform budget splits with Gemini reasoning, auto-rebalance, and smart DeployCampaign integration |
+| **Audience Persona Builder** | AI-generated audience personas with demographics, psychographics, pain points, and messaging angles that tailor ad copy per segment |
 | **Conversion Tracking** | Automatic GTM tag deployment — no developer required |
 | **Real-Time Reporting** | Unified analytics dashboard across all platforms with ROI tracking |
 | **Customer Match** | Email list upload with AI-powered audience segmentation |
@@ -149,7 +153,8 @@ Customers prepay 7 days of estimated ad spend. Actual daily spend is deducted fr
 2. **Vision AI Brand Extraction** — No competitor extracts brand identity from a URL in 30 seconds. This removes the #1 onboarding bottleneck.
 3. **Self-Healing** — No competitor automatically rewrites disapproved ads. This prevents revenue loss from policy violations.
 4. **Cross-Platform Intelligence** — Agents share data across platforms. Competitor insights from Google Search inform Facebook targeting. Budget intelligence spans all channels.
-5. **Management Account Architecture** — We own the MCC/Business Manager accounts. Customers get sub-accounts under our management. This gives us platform-level data advantages and simplifies onboarding to minutes.
+5. **Smart Asset Harvesting** — No competitor scrapes your existing website assets, classifies them with AI vision, and auto-generates platform-ready variants on demand. Zero manual creative prep.
+6. **Management Account Architecture** — We own the MCC/Business Manager accounts. Customers get sub-accounts under our management. This gives us platform-level data advantages and simplifies onboarding to minutes.
 
 ---
 
@@ -218,19 +223,19 @@ Customers prepay 7 days of estimated ad spend. Actual daily spend is deducted fr
 - Ad spend prepaid billing system
 - Collateral sign-off workflow
 - Competitor discovery and analysis
+- Competitor War Room (gap analysis dashboard for up to 3 competitor URLs)
+- Smart Asset Harvesting (website image scraping, AI classification, on-demand bg removal + resizing)
+- Omni-Channel Budget Allocator (AI-recommended cross-platform budget splits with Gemini reasoning)
+- Audience Persona Builder (AI-generated audience personas that tailor ad copy per segment)
 
 ### Near-Term (Q2–Q3 2026)
 
 - Reddit Ads integration
-- Competitor War Room (gap analysis dashboard for 3 competitor URLs)
-- Smart Asset Harvesting (scrape existing assets, AI background removal, auto-resize)
 - Microsoft/Bing Ads full parity
 
 ### Mid-Term (Q4 2026 – Q1 2027)
 
 - Dynamic Video Generation (product pages → video ads with AI voiceover)
-- Omni-Channel Budget Allocator (AI-recommended platform-level budget splits)
-- Audience Persona Builder (analyze reviews → tailor copy per persona)
 - TikTok Ads, Pinterest Ads, Amazon Ads
 
 ### Long-Term (2027+)

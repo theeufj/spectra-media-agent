@@ -13,6 +13,7 @@ class PlatformBudgetAllocation extends Model
         'google_ads_pct',
         'facebook_ads_pct',
         'microsoft_ads_pct',
+        'linkedin_ads_pct',
         'per_campaign_splits',
         'strategy',
         'target_roas',
@@ -21,6 +22,8 @@ class PlatformBudgetAllocation extends Model
         'rebalance_frequency',
         'last_rebalanced_at',
         'constraints',
+        'ai_reasoning',
+        'last_ai_analysis_at',
     ];
 
     protected $casts = [
@@ -28,7 +31,10 @@ class PlatformBudgetAllocation extends Model
         'google_ads_pct' => 'decimal:2',
         'facebook_ads_pct' => 'decimal:2',
         'microsoft_ads_pct' => 'decimal:2',
+        'linkedin_ads_pct' => 'decimal:2',
         'per_campaign_splits' => 'array',
+        'ai_reasoning' => 'array',
+        'last_ai_analysis_at' => 'datetime',
         'target_roas' => 'decimal:2',
         'target_cpa' => 'decimal:2',
         'auto_rebalance' => 'boolean',

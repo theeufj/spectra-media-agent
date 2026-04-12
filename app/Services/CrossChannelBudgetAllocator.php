@@ -7,8 +7,10 @@ use App\Models\Customer;
 use App\Models\CrossChannelRebalanceLog;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
+use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Models\PlatformBudgetAllocation;
+use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
 
 class CrossChannelBudgetAllocator
@@ -32,8 +34,18 @@ class CrossChannelBudgetAllocator
         $snapshot = $this->getPerformanceSnapshot($customer);
         $recommendations = $this->generateRecommendations($allocation, $snapshot);
 
+        // Enrich with Gemini AI reasoning if enough data
+        $aiReasoning = $this->getAiReasoning($snapshot, $allocation);
+        if ($aiReasoning) {
+            $recommendations['ai_reasoning'] = $aiReasoning;
+            $allocation->update([
+                'ai_reasoning' => $aiReasoning,
+                'last_ai_analysis_at' => now(),
+            ]);
+        }
+
         return [
-            'allocation' => $allocation,
+            'allocation' => $allocation->fresh(),
             'snapshot' => $snapshot,
             'recommendations' => $recommendations,
         ];
@@ -60,6 +72,7 @@ class CrossChannelBudgetAllocator
             'google_ads_pct' => $allocation->google_ads_pct,
             'facebook_ads_pct' => $allocation->facebook_ads_pct,
             'microsoft_ads_pct' => $allocation->microsoft_ads_pct,
+            'linkedin_ads_pct' => $allocation->linkedin_ads_pct,
         ];
 
         $suggested = $recommendations['suggested_splits'];
@@ -67,6 +80,7 @@ class CrossChannelBudgetAllocator
             'google_ads_pct' => $suggested['google_ads_pct'],
             'facebook_ads_pct' => $suggested['facebook_ads_pct'],
             'microsoft_ads_pct' => $suggested['microsoft_ads_pct'],
+            'linkedin_ads_pct' => $suggested['linkedin_ads_pct'] ?? 0,
             'last_rebalanced_at' => now(),
         ]);
 
@@ -106,6 +120,7 @@ class CrossChannelBudgetAllocator
             'google_ads' => ['spend' => 0, 'conversions' => 0, 'conversion_value' => 0, 'clicks' => 0, 'impressions' => 0, 'campaigns' => 0],
             'facebook_ads' => ['spend' => 0, 'conversions' => 0, 'conversion_value' => 0, 'clicks' => 0, 'impressions' => 0, 'campaigns' => 0],
             'microsoft_ads' => ['spend' => 0, 'conversions' => 0, 'conversion_value' => 0, 'clicks' => 0, 'impressions' => 0, 'campaigns' => 0],
+            'linkedin_ads' => ['spend' => 0, 'conversions' => 0, 'conversion_value' => 0, 'clicks' => 0, 'impressions' => 0, 'campaigns' => 0],
             'period_days' => 30,
         ];
 
@@ -159,10 +174,27 @@ class CrossChannelBudgetAllocator
                     $snapshot['microsoft_ads']['campaigns']++;
                 }
             }
+
+            // LinkedIn Ads performance
+            if ($campaign->linkedin_ads_campaign_id) {
+                $liPerf = LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->where('date', '>=', $since)
+                    ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value, SUM(clicks) as clicks, SUM(impressions) as impressions')
+                    ->first();
+
+                if ($liPerf) {
+                    $snapshot['linkedin_ads']['spend'] += (float) $liPerf->cost;
+                    $snapshot['linkedin_ads']['conversions'] += (float) $liPerf->conversions;
+                    $snapshot['linkedin_ads']['conversion_value'] += (float) $liPerf->conversion_value;
+                    $snapshot['linkedin_ads']['clicks'] += (int) $liPerf->clicks;
+                    $snapshot['linkedin_ads']['impressions'] += (int) $liPerf->impressions;
+                    $snapshot['linkedin_ads']['campaigns']++;
+                }
+            }
         }
 
         // Compute derived metrics
-        foreach (['google_ads', 'facebook_ads', 'microsoft_ads'] as $platform) {
+        foreach (['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'] as $platform) {
             $p = &$snapshot[$platform];
             $p['roas'] = $p['spend'] > 0 ? round($p['conversion_value'] / $p['spend'], 2) : 0;
             $p['cpa'] = $p['conversions'] > 0 ? round($p['spend'] / $p['conversions'], 2) : 0;
@@ -177,7 +209,7 @@ class CrossChannelBudgetAllocator
      */
     protected function generateRecommendations(PlatformBudgetAllocation $allocation, array $snapshot): array
     {
-        $activePlatforms = collect(['google_ads', 'facebook_ads', 'microsoft_ads'])
+        $activePlatforms = collect(['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'])
             ->filter(fn ($p) => $snapshot[$p]['campaigns'] > 0);
 
         if ($activePlatforms->count() < 2) {
@@ -207,7 +239,7 @@ class CrossChannelBudgetAllocator
         $suggested = [];
         $reasons = [];
 
-        foreach (['google_ads', 'facebook_ads', 'microsoft_ads'] as $platform) {
+        foreach (['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'] as $platform) {
             $pctField = str_replace('_ads', '_ads_pct', $platform);
             if (isset($scores[$platform])) {
                 $rawPct = ($scores[$platform] / $total) * 100;
@@ -228,9 +260,9 @@ class CrossChannelBudgetAllocator
         $suggested = $this->applyConstraints($suggested, $allocation->constraints);
 
         // Normalize to 100%
-        $sum = $suggested['google_ads_pct'] + $suggested['facebook_ads_pct'] + $suggested['microsoft_ads_pct'];
+        $sum = $suggested['google_ads_pct'] + $suggested['facebook_ads_pct'] + $suggested['microsoft_ads_pct'] + $suggested['linkedin_ads_pct'];
         if ($sum > 0 && abs($sum - 100) > 0.1) {
-            foreach (['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct'] as $field) {
+            foreach (['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct', 'linkedin_ads_pct'] as $field) {
                 $suggested[$field] = round($suggested[$field] / $sum * 100, 1);
             }
         }
@@ -238,7 +270,7 @@ class CrossChannelBudgetAllocator
         // Estimate improvement
         $currentWeightedRoas = 0;
         $newWeightedRoas = 0;
-        foreach (['google_ads', 'facebook_ads', 'microsoft_ads'] as $platform) {
+        foreach (['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'] as $platform) {
             $pctField = str_replace('_ads', '_ads_pct', $platform);
             $roas = $snapshot[$platform]['roas'];
             $currentWeightedRoas += $roas * ((float) $allocation->$pctField / 100);
@@ -271,7 +303,7 @@ class CrossChannelBudgetAllocator
         }
 
         $totalAbove = array_sum($above);
-        foreach (['google_ads', 'facebook_ads', 'microsoft_ads'] as $platform) {
+        foreach (['google_ads', 'facebook_ads', 'microsoft_ads', 'linkedin_ads'] as $platform) {
             $pctField = str_replace('_ads', '_ads_pct', $platform);
             if (isset($above[$platform])) {
                 $suggested[$pctField] = $totalAbove > 0 ? round(($above[$platform] / $totalAbove) * 85, 1) : 0;
@@ -294,7 +326,7 @@ class CrossChannelBudgetAllocator
     protected function equalSplits($activePlatforms): array
     {
         $pct = round(100 / $activePlatforms->count(), 1);
-        $splits = ['google_ads_pct' => 0, 'facebook_ads_pct' => 0, 'microsoft_ads_pct' => 0];
+        $splits = ['google_ads_pct' => 0, 'facebook_ads_pct' => 0, 'microsoft_ads_pct' => 0, 'linkedin_ads_pct' => 0];
         foreach ($activePlatforms as $platform) {
             $splits[str_replace('_ads', '_ads_pct', $platform)] = $pct;
         }
@@ -305,7 +337,7 @@ class CrossChannelBudgetAllocator
     {
         if (!$constraints) return $splits;
 
-        foreach (['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct'] as $field) {
+        foreach (['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct', 'linkedin_ads_pct'] as $field) {
             $platform = str_replace('_pct', '', $field);
             if (isset($constraints[$platform]['min'])) {
                 $splits[$field] = max($splits[$field], $constraints[$platform]['min']);
@@ -316,5 +348,60 @@ class CrossChannelBudgetAllocator
         }
 
         return $splits;
+    }
+
+    /**
+     * Get Gemini AI reasoning for budget allocation decisions.
+     */
+    protected function getAiReasoning(array $snapshot, PlatformBudgetAllocation $allocation): ?array
+    {
+        try {
+            $gemini = app(GeminiService::class);
+
+            $prompt = "You are an expert digital advertising strategist. Analyze this cross-platform ad performance data and provide actionable budget allocation insights.\n\n";
+            $prompt .= "Current Allocation:\n";
+            $prompt .= "- Google Ads: {$allocation->google_ads_pct}%\n";
+            $prompt .= "- Facebook/Instagram: {$allocation->facebook_ads_pct}%\n";
+            $prompt .= "- Microsoft/Bing: {$allocation->microsoft_ads_pct}%\n";
+            $prompt .= "- LinkedIn: {$allocation->linkedin_ads_pct}%\n";
+            $prompt .= "- Monthly Budget: \${$allocation->total_monthly_budget}\n";
+            $prompt .= "- Strategy: {$allocation->strategy}\n\n";
+            $prompt .= "30-Day Performance by Platform:\n";
+
+            foreach (['google_ads' => 'Google Ads', 'facebook_ads' => 'Facebook/Instagram', 'microsoft_ads' => 'Microsoft/Bing', 'linkedin_ads' => 'LinkedIn'] as $key => $name) {
+                $p = $snapshot[$key];
+                if ($p['campaigns'] > 0) {
+                    $prompt .= "- {$name}: Spend \${$p['spend']}, ROAS {$p['roas']}x, CPA \${$p['cpa']}, Conversions {$p['conversions']}, CTR " . ($p['ctr'] * 100) . "%, {$p['campaigns']} campaigns\n";
+                } else {
+                    $prompt .= "- {$name}: No active campaigns\n";
+                }
+            }
+
+            $prompt .= "\nRespond in JSON with exactly these keys:\n";
+            $prompt .= "- \"summary\": 2-3 sentence executive summary\n";
+            $prompt .= "- \"insights\": array of 3-5 specific insights about performance\n";
+            $prompt .= "- \"action_items\": array of 2-3 specific recommended actions\n";
+            $prompt .= "- \"risk_flags\": array of any concerning metrics (empty array if none)\n";
+
+            $response = $gemini->generateContent($prompt);
+            $json = json_decode($response, true);
+
+            if ($json && isset($json['summary'])) {
+                return $json;
+            }
+
+            // Try to extract JSON from response
+            if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
+                $json = json_decode($matches[0], true);
+                if ($json && isset($json['summary'])) {
+                    return $json;
+                }
+            }
+
+            return null;
+        } catch (\Exception $e) {
+            Log::warning('CrossChannelBudgetAllocator: AI reasoning failed', ['error' => $e->getMessage()]);
+            return null;
+        }
     }
 }
