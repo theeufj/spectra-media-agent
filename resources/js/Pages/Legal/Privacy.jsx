@@ -15,7 +15,7 @@ export default function Privacy({ auth }) {
                         <div className="min-h-screen flex flex-col items-center pt-6 sm:pt-0">
                             <div className="w-full sm:max-w-4xl mt-6 p-8 bg-white shadow-md overflow-hidden sm:rounded-lg">
                                 <h1 className="text-3xl lg:text-4xl font-bold text-gray-800">Privacy Policy</h1>
-                                <p className="mt-2 text-sm text-gray-500">Last updated: November 23, 2025</p>
+                                <p className="mt-2 text-sm text-gray-500">Last updated: April 12, 2026</p>
 
                                 <div className="mt-8 space-y-6 text-gray-700 leading-relaxed">
                                 <p>sitetospend ("us", "we", or "our") operates the sitetospend application (the "Service"). This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.</p>
@@ -123,11 +123,26 @@ export default function Privacy({ auth }) {
                                     <li><strong className="font-semibold text-gray-800">Google Tag Manager:</strong> We configure tracking tags and conversion pixels to measure campaign performance. Review <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Google's Privacy Policy</a>.</li>
                                     <li><strong className="font-semibold text-gray-800">Meta Ads:</strong> Campaign data and creative assets are shared with Meta to deploy and manage Facebook and Instagram advertising campaigns. Review <a href="https://www.facebook.com/privacy/explanation" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Meta's Privacy Policy</a>.</li>
                                     <li><strong className="font-semibold text-gray-800">Microsoft Ads:</strong> Campaign information is shared with Microsoft to manage advertising campaigns on the Microsoft Advertising platform. Review <a href="https://privacy.microsoft.com/privacystatement" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Microsoft's Privacy Policy</a>.</li>
-                                    <li><strong className="font-semibold text-gray-800">Reddit Ads:</strong> Campaign information is shared with Reddit to manage advertising campaigns on the Reddit platform. Review <a href="https://www.reddit.com/privacy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Reddit's Privacy Policy</a>.</li>
+                                    <li><strong className="font-semibold text-gray-800">LinkedIn Ads:</strong> Campaign information is shared with LinkedIn to manage advertising campaigns on the LinkedIn platform. Review <a href="https://www.linkedin.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">LinkedIn's Privacy Policy</a>.</li>
                                 </ul>
                                 
                                 <p className="mt-4 font-semibold text-gray-800">Important:</p>
                                 <p>Except for the advertising platform integrations described above (which are necessary to provide our core service), we do not sell, trade, or transfer your personal data to third parties. Your Google user data is never shared with any third party except Google's own services.</p>
+
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Australian Privacy Act</h2>
+                                <p>sitetospend is based in New South Wales, Australia and is committed to complying with the <em>Privacy Act 1988</em> (Cth) and the Australian Privacy Principles (APPs). In accordance with the APPs:</p>
+                                <ul className="list-disc list-inside pl-4 space-y-2">
+                                    <li>We only collect personal information that is reasonably necessary for, or directly related to, our functions and activities as described in this Privacy Policy.</li>
+                                    <li>We will take reasonable steps to notify you of the collection of your personal information, including the purposes for which it is collected, at or before the time of collection (or as soon as practicable afterwards).</li>
+                                    <li>We will not use or disclose your personal information for a purpose other than the primary purpose for which it was collected, unless you consent or an exception under the APPs applies.</li>
+                                    <li>We will take reasonable steps to ensure the personal information we collect, use, and disclose is accurate, up-to-date, and complete.</li>
+                                    <li>We will take reasonable steps to protect your personal information from misuse, interference, loss, and unauthorised access, modification, or disclosure.</li>
+                                    <li>You have the right to access your personal information held by us and to request correction of that information. To make a request, contact us at support@sitetospend.com.</li>
+                                </ul>
+                                <p className="mt-4">If you are not satisfied with our response to a privacy complaint, you may contact the Office of the Australian Information Commissioner (OAIC) at <a href="https://www.oaic.gov.au" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">www.oaic.gov.au</a>.</p>
+
+                                <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Cross-Border Data Transfers</h2>
+                                <p>Some of our service providers (including cloud hosting, AI processing, and advertising platforms) are located outside Australia. Before disclosing your personal information to an overseas recipient, we take reasonable steps to ensure that the recipient handles your information in accordance with the APPs, or that you consent to the transfer, or that an exception under the APPs applies. Key overseas locations where your data may be processed include the United States (Google, Meta, Microsoft, LinkedIn, AWS, Stripe).</p>
 
                                 <h2 className="text-2xl lg:text-3xl font-bold text-gray-800 pt-6 border-t mt-8">Changes to This Privacy Policy</h2>
                                 <p>We may update our Privacy Policy from time to time. We will notify you of any changes by posting the new Privacy Policy on this page.</p>
