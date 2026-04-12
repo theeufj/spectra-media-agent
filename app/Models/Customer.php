@@ -27,12 +27,8 @@ class Customer extends Model
         'google_ads_manager_customer_id',
         'google_ads_customer_is_manager',
         'facebook_ads_account_id',
-        'facebook_ads_access_token',
         'facebook_page_id',
         'facebook_page_name',
-        'facebook_token_expires_at',
-        'facebook_token_refreshed_at',
-        'facebook_token_is_long_lived',
         'facebook_bm_owned',
         'microsoft_ads_customer_id',
         'microsoft_ads_account_id',
@@ -64,9 +60,6 @@ class Customer extends Model
         'competitive_strategy' => 'array',
         'competitive_strategy_updated_at' => 'datetime',
         'competitor_analysis_at' => 'datetime',
-        'facebook_token_expires_at' => 'datetime',
-        'facebook_token_refreshed_at' => 'datetime',
-        'facebook_token_is_long_lived' => 'boolean',
         'facebook_bm_owned' => 'boolean',
         'google_ads_customer_is_manager' => 'boolean',
         'average_order_value' => 'float',
@@ -78,7 +71,6 @@ class Customer extends Model
     ];
 
     protected $hidden = [
-        'facebook_ads_access_token',
         'tracking_signing_secret',
     ];
 

@@ -674,7 +674,7 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
 | Sandbox Simulation Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/sandbox', [App\Http\Controllers\SandboxController::class, 'index'])->name('sandbox.index');
     Route::post('/sandbox/launch', [App\Http\Controllers\SandboxController::class, 'launch'])->name('sandbox.launch');
     Route::get('/sandbox/{customer}/results', [App\Http\Controllers\SandboxController::class, 'results'])->name('sandbox.results');

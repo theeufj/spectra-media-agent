@@ -101,7 +101,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $this->assertStringContainsString('credentials not configured', $result->message);
     }
 
-    public function test_validation_fails_without_oauth_token(): void
+    public function test_validation_fails_without_management_credential(): void
     {
         config([
             'linkedinads.client_id' => 'test-id',
@@ -112,8 +112,6 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $customer = new Customer([
             'name' => 'No Token Corp',
             'linkedin_ads_account_id' => '508123456',
-            'linkedin_oauth_access_token' => null,
-            'linkedin_oauth_refresh_token' => null,
         ]);
         $customer->id = 3;
 
@@ -125,7 +123,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $result = $agent->execute($context);
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('OAuth token available', $result->message);
+        $this->assertStringContainsString('management credential configured', $result->message);
     }
 
     public function test_validation_fails_without_ad_copies(): void

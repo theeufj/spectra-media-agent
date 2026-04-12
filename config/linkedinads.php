@@ -13,7 +13,6 @@ return [
 
     'client_id' => env('LINKEDIN_ADS_CLIENT_ID'),
     'client_secret' => env('LINKEDIN_ADS_CLIENT_SECRET'),
-    'redirect_uri' => env('LINKEDIN_ADS_REDIRECT_URI'),
     'refresh_token' => env('LINKEDIN_ADS_REFRESH_TOKEN'),
 
     'api_version' => env('LINKEDIN_ADS_API_VERSION', '202404'),

@@ -2,167 +2,54 @@
 
 namespace App\Jobs;
 
-use App\Models\Customer;
 use App\Services\FacebookAds\TokenService;
-use App\Mail\FacebookTokenExpiringMail;
-use App\Mail\FacebookTokenExpiredMail;
+use App\Notifications\CriticalAgentAlert;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Carbon\Carbon;
 
 /**
- * Job to refresh Facebook tokens that are expiring soon.
- * Should be scheduled to run daily.
+ * Verify the platform System User token is still valid.
+ *
+ * This replaced the per-customer token refresh job. Under the management
+ * account pattern, there is a single System User token for all API calls.
+ * This job simply verifies it hasn't expired and alerts admins if it has.
+ *
+ * Schedule: daily at 3:00 AM (existing schedule slot).
  */
 class RefreshFacebookTokens implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    /**
-     * The number of times the job may be attempted.
-     *
-     * @var int
-     */
     public $tries = 3;
 
-    /**
-     * Execute the job.
-     */
     public function handle(): void
     {
-        Log::info('RefreshFacebookTokens: Starting token refresh job');
-
         $tokenService = new TokenService();
-        
-        // Get all customers with Facebook tokens (skip BM-owned — they use System User token)
-        $customers = Customer::whereNotNull('facebook_ads_access_token')
-            ->where('facebook_bm_owned', false)
-            ->get();
-        
-        $stats = [
-            'total' => $customers->count(),
-            'refreshed' => 0,
-            'failed' => 0,
-            'not_needed' => 0,
-            'expired' => 0,
-        ];
+        $health = $tokenService->checkSystemTokenHealth();
 
-        foreach ($customers as $customer) {
-            try {
-                $status = $tokenService->checkTokenStatus($customer);
+        if (!$health['valid']) {
+            Log::critical('Facebook System User token is invalid or missing', $health);
 
-                // Token already expired or invalid
-                if (!$status['valid']) {
-                    $stats['expired']++;
-                    $this->notifyTokenExpired($customer);
-                    continue;
-                }
-
-                // Token expiring within 7 days - needs refresh
-                if ($status['needs_refresh']) {
-                    $result = $tokenService->refreshCustomerTokenIfNeeded($customer);
-                    
-                    if ($result['refreshed']) {
-                        $stats['refreshed']++;
-                        Log::info('RefreshFacebookTokens: Token refreshed', [
-                            'customer_id' => $customer->id,
-                        ]);
-                    } elseif (!$result['success']) {
-                        $stats['failed']++;
-                        
-                        // If refresh failed and token expires within 3 days, notify user
-                        if (($status['expires_in_days'] ?? 0) <= 3) {
-                            $this->notifyTokenExpiring($customer, $status['expires_in_days'] ?? 0);
-                        }
-                        
-                        Log::warning('RefreshFacebookTokens: Token refresh failed', [
-                            'customer_id' => $customer->id,
-                            'error' => $result['error'] ?? 'Unknown error',
-                        ]);
-                    }
-                } else {
-                    $stats['not_needed']++;
-                }
-
-            } catch (\Exception $e) {
-                $stats['failed']++;
-                Log::error('RefreshFacebookTokens: Exception processing customer', [
-                    'customer_id' => $customer->id,
-                    'error' => $e->getMessage(),
-                ]);
+            // Notify admin users
+            $admins = \App\Models\User::where('is_admin', true)->get();
+            foreach ($admins as $admin) {
+                $admin->notify(new CriticalAgentAlert(
+                    'facebook',
+                    'Facebook System User token is invalid: ' . ($health['error'] ?? 'unknown error'),
+                    ['action_required' => 'Regenerate the System User token in Business Manager and update FACEBOOK_SYSTEM_USER_TOKEN in .env']
+                ));
             }
+
+            return;
         }
 
-        Log::info('RefreshFacebookTokens: Job completed', $stats);
-    }
-
-    /**
-     * Notify users that their token is expiring soon.
-     */
-    protected function notifyTokenExpiring(Customer $customer, int $daysRemaining): void
-    {
-        try {
-            $user = $customer->users()->first();
-            
-            if ($user) {
-                // Check if we've already notified recently (prevent spam)
-                $lastNotified = cache()->get("fb_token_expiring_notified:{$customer->id}");
-                
-                if (!$lastNotified) {
-                    Mail::to($user->email)->queue(new FacebookTokenExpiringMail($customer, $daysRemaining));
-                    cache()->put("fb_token_expiring_notified:{$customer->id}", true, now()->addHours(24));
-                    
-                    Log::info('Sent Facebook token expiring notification', [
-                        'customer_id' => $customer->id,
-                        'user_email' => $user->email,
-                        'days_remaining' => $daysRemaining,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send token expiring notification: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Notify users that their token has expired.
-     */
-    protected function notifyTokenExpired(Customer $customer): void
-    {
-        try {
-            $user = $customer->users()->first();
-            
-            if ($user) {
-                // Check if we've already notified recently
-                $lastNotified = cache()->get("fb_token_expired_notified:{$customer->id}");
-                
-                if (!$lastNotified) {
-                    Mail::to($user->email)->queue(new FacebookTokenExpiredMail($customer));
-                    cache()->put("fb_token_expired_notified:{$customer->id}", true, now()->addDays(3));
-                    
-                    Log::info('Sent Facebook token expired notification', [
-                        'customer_id' => $customer->id,
-                        'user_email' => $user->email,
-                    ]);
-                }
-            }
-        } catch (\Exception $e) {
-            Log::error('Failed to send token expired notification: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Handle a job failure.
-     */
-    public function failed(\Throwable $exception): void
-    {
-        Log::error('RefreshFacebookTokens failed: ' . $exception->getMessage(), [
-            'exception' => $exception->getTraceAsString(),
+        Log::info('Facebook System User token health check passed', [
+            'type' => $health['type'] ?? 'unknown',
+            'scopes' => $health['scopes'] ?? [],
         ]);
     }
 }
