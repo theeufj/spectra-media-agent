@@ -172,7 +172,7 @@ Route::middleware(['auth'])->group(function () {
 | Routes for creating and managing marketing campaigns.
 |
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'subscribed'])->group(function () {
     // Route to display the campaign creation form.
     // GET /campaigns/create
     Route::get('/campaigns/create', [App\Http\Controllers\CampaignController::class, 'create'])->name('campaigns.create');
@@ -226,12 +226,10 @@ Route::middleware(['auth'])->group(function () {
     Route::delete('/api/campaigns/{campaign}/chat', [\App\Http\Controllers\CampaignCopilotController::class, 'clear'])->name('campaigns.copilot.clear');
 
     // Deployment routes
-    Route::middleware(['subscribed'])->group(function () {
-        Route::post('/deployment/toggle-collateral', [\App\Http\Controllers\DeploymentController::class, 'toggleCollateral'])
-            ->name('deployment.toggle-collateral');
-        Route::post('/deployment/deploy', [\App\Http\Controllers\DeploymentController::class, 'deploy'])
-            ->name('deployment.deploy');
-    });
+    Route::post('/deployment/toggle-collateral', [\App\Http\Controllers\DeploymentController::class, 'toggleCollateral'])
+        ->name('deployment.toggle-collateral');
+    Route::post('/deployment/deploy', [\App\Http\Controllers\DeploymentController::class, 'deploy'])
+        ->name('deployment.deploy');
 
     // AI-Generated Proposals
     Route::get('/proposals', [\App\Http\Controllers\ProposalController::class, 'index'])->name('proposals.index');
@@ -250,7 +248,7 @@ Route::middleware(['auth'])->group(function () {
 | Routes for managing ad spend credits and billing.
 |
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'subscribed'])->group(function () {
     // Dashboard view for ad spend billing
     Route::get('/billing/ad-spend', [App\Http\Controllers\AdSpendBillingController::class, 'index'])->name('billing.ad-spend');
     

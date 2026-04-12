@@ -191,3 +191,16 @@ Schedule::job(new \App\Jobs\CleanupTemporaryFiles)->weeklyOn(0, '03:00')->withou
 // Daily sandbox cleanup - remove expired sandbox environments
 Schedule::job(new \App\Jobs\CleanupExpiredSandboxes)->dailyAt('03:30')->withoutOverlapping();
 
+// ============================================================
+// DATABASE BACKUPS
+// ============================================================
+
+// Daily database backup — runs at 02:00 before maintenance window
+Schedule::command('backup:run --only-db')->dailyAt('02:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('backup:run'));
+
+// Cleanup old backups per retention policy (7d all, 16d daily, 8w weekly, 4m monthly, 2y yearly)
+Schedule::command('backup:clean')->dailyAt('02:30')->withoutOverlapping();
+
+// Monitor backup health — alerts if latest backup is missing or too old
+Schedule::command('backup:monitor')->dailyAt('03:00')->withoutOverlapping();
+
