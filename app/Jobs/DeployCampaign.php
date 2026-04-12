@@ -15,6 +15,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Models\Setting;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class DeployCampaign implements ShouldQueue
@@ -107,12 +108,14 @@ class DeployCampaign implements ShouldQueue
         }
 
         if ($strategies->count() > 0 && $this->campaign->daily_budget) {
-            $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
-            foreach ($strategies as $strategy) {
-                if (!$strategy->daily_budget) {
-                    $strategy->update(['daily_budget' => $budgetPerStrategy]);
+            DB::transaction(function () use ($strategies) {
+                $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
+                foreach ($strategies as $strategy) {
+                    if (!$strategy->daily_budget) {
+                        $strategy->update(['daily_budget' => $budgetPerStrategy]);
+                    }
                 }
-            }
+            });
         }
 
         $deploymentResults = [];

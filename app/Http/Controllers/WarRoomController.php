@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\AnalyzeWarRoomCompetitor;
 use App\Models\ABTest;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\Competitor;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\LinkedInAdsPerformanceData;
@@ -123,6 +125,31 @@ class WarRoomController extends Controller
         $competitiveStrategy = $customer->competitive_strategy;
         $strategyUpdatedAt = $customer->competitive_strategy_updated_at?->toIso8601String();
 
+        // 8. War Room pinned competitors
+        $pinnedIds = $customer->war_room_competitors ?? [];
+        $warRoomCompetitors = !empty($pinnedIds)
+            ? Competitor::whereIn('id', $pinnedIds)
+                ->where('customer_id', $customer->id)
+                ->get()
+                ->map(fn ($c) => [
+                    'id' => $c->id,
+                    'url' => $c->url,
+                    'domain' => $c->domain,
+                    'name' => $c->name,
+                    'messaging_analysis' => $c->messaging_analysis,
+                    'value_propositions' => $c->value_propositions,
+                    'keywords_detected' => $c->keywords_detected,
+                    'pricing_info' => $c->pricing_info,
+                    'impression_share' => $c->impression_share,
+                    'last_analyzed_at' => $c->last_analyzed_at?->toIso8601String(),
+                    'is_analyzing' => is_null($c->messaging_analysis),
+                ])
+            : [];
+
+        // 9. Gap analysis
+        $gapAnalysis = $customer->war_room_gap_analysis;
+        $gapAnalysisAt = $customer->war_room_gap_analysis_at?->toIso8601String();
+
         return Inertia::render('Strategy/WarRoom', [
             'canAccessWarRoom' => true,
             'health' => $health,
@@ -133,6 +160,9 @@ class WarRoomController extends Controller
             'abTests' => $abTests,
             'competitiveStrategy' => $competitiveStrategy,
             'strategyUpdatedAt' => $strategyUpdatedAt,
+            'warRoomCompetitors' => $warRoomCompetitors,
+            'gapAnalysis' => $gapAnalysis,
+            'gapAnalysisAt' => $gapAnalysisAt,
         ]);
     }
 
@@ -153,6 +183,93 @@ class WarRoomController extends Controller
         return redirect()->back()->with('flash', [
             'type' => 'success',
             'message' => 'Recommendation dismissed.',
+        ]);
+    }
+
+    /**
+     * Add a competitor URL to the War Room (max 3).
+     */
+    public function addCompetitor(Request $request)
+    {
+        $request->validate([
+            'url' => ['required', 'url', 'max:500'],
+        ]);
+
+        $customer = $this->resolveCustomer($request);
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
+
+        $pinnedIds = $customer->war_room_competitors ?? [];
+
+        if (count($pinnedIds) >= 3) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'You can pin up to 3 competitors. Remove one first.',
+            ]);
+        }
+
+        $url = $request->input('url');
+        $domain = Competitor::extractDomain($url);
+
+        // Check for duplicate by domain
+        $existing = Competitor::where('customer_id', $customer->id)
+            ->where('domain', $domain)
+            ->whereIn('id', $pinnedIds)
+            ->first();
+
+        if ($existing) {
+            return redirect()->back()->with('flash', [
+                'type' => 'warning',
+                'message' => 'This competitor is already pinned.',
+            ]);
+        }
+
+        // Create or reuse a competitor record
+        $competitor = Competitor::firstOrCreate(
+            ['customer_id' => $customer->id, 'domain' => $domain],
+            [
+                'url' => $url,
+                'name' => $domain,
+                'discovery_source' => 'war_room',
+            ],
+        );
+
+        // Pin it
+        $pinnedIds[] = $competitor->id;
+        $customer->update(['war_room_competitors' => array_values($pinnedIds)]);
+
+        // Dispatch analysis job
+        AnalyzeWarRoomCompetitor::dispatch($customer, $competitor);
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => "Added {$domain} — analysis is running in the background.",
+        ]);
+    }
+
+    /**
+     * Remove a competitor from the War Room.
+     */
+    public function removeCompetitor(Request $request, Competitor $competitor)
+    {
+        $customer = $this->resolveCustomer($request);
+        if (!$customer) {
+            return redirect()->route('customers.create');
+        }
+
+        // Ensure the competitor belongs to this customer
+        if ($competitor->customer_id !== $customer->id) {
+            abort(403);
+        }
+
+        $pinnedIds = $customer->war_room_competitors ?? [];
+        $pinnedIds = array_values(array_filter($pinnedIds, fn ($id) => $id !== $competitor->id));
+        $customer->update(['war_room_competitors' => $pinnedIds]);
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => "Removed {$competitor->domain} from War Room.",
         ]);
     }
 

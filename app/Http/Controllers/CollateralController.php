@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AdCopy;
 use App\Models\Campaign;
+use App\Models\HarvestedAsset;
 use App\Models\Strategy;
 use App\Models\Setting;
 use App\Services\CreativeQuotaService;
@@ -57,6 +58,12 @@ class CollateralController extends Controller
         $customer = $campaign->customer;
         $adSpendCredit = $customer->adSpendCredit;
 
+        // Harvested assets count for this customer
+        $harvestedAssetCount = HarvestedAsset::where('customer_id', $customer->id)
+            ->whereIn('classification', ['product', 'lifestyle', 'team'])
+            ->whereIn('status', ['classified', 'processed'])
+            ->count();
+
         return Inertia::render('Campaigns/Collateral', [
             'campaign' => $campaign,
             'currentStrategy' => $strategy,
@@ -74,6 +81,7 @@ class CollateralController extends Controller
                 'current_balance' => $adSpendCredit->current_balance,
                 'payment_status' => $adSpendCredit->payment_status,
             ] : null,
+            'harvestedAssetCount' => $harvestedAssetCount,
         ]);
     }
 

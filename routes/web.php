@@ -369,6 +369,11 @@ Route::middleware(['auth'])->group(function () {
     // Route to delete an uploaded image collateral.
     Route::delete('/image-collaterals/{image_collateral}', [App\Http\Controllers\ImageCollateralController::class, 'destroy'])->name('image-collaterals.destroy');
 
+    // Smart Asset Harvesting
+    Route::get('/harvested-assets', [App\Http\Controllers\HarvestedAssetController::class, 'index'])->name('harvested-assets.index');
+    Route::post('/harvested-assets/harvest', [App\Http\Controllers\HarvestedAssetController::class, 'harvest'])->name('harvested-assets.harvest');
+    Route::post('/harvested-assets/{asset}/use', [App\Http\Controllers\HarvestedAssetController::class, 'useAsCollateral'])->name('harvested-assets.use');
+
     // Route to generate and store a video for a specific campaign and strategy.
     // POST /campaigns/{campaign}/strategies/{strategy}/video
     Route::post('/campaigns/{campaign}/strategies/{strategy}/video', [App\Http\Controllers\VideoCollateralController::class, 'store'])->name('campaigns.collateral.video.store');
@@ -651,6 +656,8 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::get('/strategy/war-room', [App\Http\Controllers\WarRoomController::class, 'index'])->name('strategy.war-room');
     Route::post('/strategy/war-room/recommendations/{recommendation}/approve', [App\Http\Controllers\WarRoomController::class, 'approveRecommendation'])->name('strategy.war-room.recommendations.approve');
     Route::post('/strategy/war-room/recommendations/{recommendation}/reject', [App\Http\Controllers\WarRoomController::class, 'rejectRecommendation'])->name('strategy.war-room.recommendations.reject');
+    Route::post('/strategy/war-room/competitors', [App\Http\Controllers\WarRoomController::class, 'addCompetitor'])->name('strategy.war-room.competitors.add');
+    Route::delete('/strategy/war-room/competitors/{competitor}', [App\Http\Controllers\WarRoomController::class, 'removeCompetitor'])->name('strategy.war-room.competitors.remove');
 });
 
 /*

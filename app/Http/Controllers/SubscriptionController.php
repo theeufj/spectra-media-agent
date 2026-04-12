@@ -81,6 +81,7 @@ class SubscriptionController extends Controller
             }
 
             $checkout = $user->newSubscription('default', $priceId)
+                ->allowPromotionCodes()
                 ->checkout($checkoutOptions);
         } else {
             // Testing mode - only collect payment method without charging

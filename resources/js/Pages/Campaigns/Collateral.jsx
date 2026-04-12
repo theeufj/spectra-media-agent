@@ -11,7 +11,7 @@ import Modal from '@/Components/Modal';
 import AdPreviewPanel from '@/Components/AdPreview';
 import { useToast } from '@/Components/Toast';
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, hasActiveSubscription, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0 }) {
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const toast = useToast();
@@ -28,6 +28,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [showDeploymentDisabledModal, setShowDeploymentDisabledModal] = useState(false);
     const [showAdSpendSetupModal, setShowAdSpendSetupModal] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
+    const [harvestedAssets, setHarvestedAssets] = useState([]);
+    const [showHarvestedPanel, setShowHarvestedPanel] = useState(false);
+    const [loadingHarvested, setLoadingHarvested] = useState(false);
+    const [harvestingInProgress, setHarvestingInProgress] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
     const [uploadingImages, setUploadingImages] = useState(false);
     const [uploadingVideo, setUploadingVideo] = useState(false);
@@ -251,6 +255,44 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 });
             },
             isDestructive: true,
+        });
+    };
+
+    // --- Harvested Assets ---
+    const loadHarvestedAssets = () => {
+        setLoadingHarvested(true);
+        fetch(route('harvested-assets.index'))
+            .then(r => r.json())
+            .then(data => {
+                setHarvestedAssets(data.assets || []);
+                setLoadingHarvested(false);
+            })
+            .catch(() => setLoadingHarvested(false));
+    };
+
+    const handleHarvest = () => {
+        setHarvestingInProgress(true);
+        router.post(route('harvested-assets.harvest'), {}, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setHarvestingInProgress(false);
+                toast.success('Asset harvesting started — images will appear as they are processed.');
+            },
+            onError: () => setHarvestingInProgress(false),
+        });
+    };
+
+    const handleUseHarvestedAsset = (assetId, variant = 'original') => {
+        router.post(route('harvested-assets.use', { asset: assetId }), {
+            campaign_id: campaign.id,
+            strategy_id: currentStrategy.id,
+            variant,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsPolling(true);
+                toast.success('Asset added to collateral.');
+            },
         });
     };
 
@@ -562,7 +604,140 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     return `${uploaded}/10 uploaded`;
                                                 })()}
                                             </span>
+
+                                            {/* Harvested Assets Button */}
+                                            {isSubscribed && (
+                                                <button
+                                                    onClick={() => {
+                                                        setShowHarvestedPanel(!showHarvestedPanel);
+                                                        if (!showHarvestedPanel && harvestedAssets.length === 0) loadHarvestedAssets();
+                                                    }}
+                                                    className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition flex items-center gap-2 text-sm font-medium"
+                                                >
+                                                    🌐 Website Assets {harvestedAssetCount > 0 && <span className="bg-green-200 text-green-800 px-1.5 py-0.5 rounded-full text-xs">{harvestedAssetCount}</span>}
+                                                </button>
+                                            )}
                                         </div>
+
+                                        {/* Harvested Assets Panel */}
+                                        {showHarvestedPanel && isSubscribed && (
+                                            <div className="mt-4 border border-green-200 rounded-lg p-4 bg-green-50/50">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <div>
+                                                        <h4 className="text-sm font-semibold text-gray-900">Smart Asset Harvesting</h4>
+                                                        <p className="text-xs text-gray-500 mt-0.5">Images scraped from your website, classified and resized for ads</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={handleHarvest}
+                                                        disabled={harvestingInProgress}
+                                                        className="text-xs px-3 py-1.5 bg-green-600 text-white rounded-md hover:bg-green-700 disabled:opacity-50 font-medium transition"
+                                                    >
+                                                        {harvestingInProgress ? 'Harvesting...' : harvestedAssetCount > 0 ? '🔄 Re-harvest' : '🌐 Harvest from Website'}
+                                                    </button>
+                                                </div>
+
+                                                {loadingHarvested ? (
+                                                    <div className="text-center py-6 text-gray-400 text-sm">Loading assets...</div>
+                                                ) : harvestedAssets.length === 0 ? (
+                                                    <div className="text-center py-6 text-gray-400 text-sm">
+                                                        {harvestedAssetCount > 0
+                                                            ? 'Loading your harvested assets...'
+                                                            : 'No assets harvested yet. Click "Harvest from Website" to scan your site for usable images.'}
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                                                        {harvestedAssets.map((asset) => (
+                                                            <div key={asset.id} className="bg-white rounded-lg border border-gray-200 overflow-hidden group relative">
+                                                                <img src={asset.cloudfront_url} alt={asset.description || 'Harvested asset'} className="w-full h-32 object-cover" />
+                                                                <div className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px] font-medium shadow ${
+                                                                    asset.classification === 'product' ? 'bg-orange-100 text-orange-700' :
+                                                                    asset.classification === 'lifestyle' ? 'bg-blue-100 text-blue-700' :
+                                                                    'bg-gray-100 text-gray-600'
+                                                                }`}>
+                                                                    {asset.classification}
+                                                                </div>
+                                                                {asset.status === 'processed' && (
+                                                                    <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-100 text-green-700 shadow">
+                                                                        ✓ Ready
+                                                                    </div>
+                                                                )}
+                                                                <div className="p-2">
+                                                                    <p className="text-[10px] text-gray-400 truncate">{asset.width}×{asset.height}</p>
+                                                                    <div className="flex flex-wrap gap-1 mt-1.5">
+                                                                        <button
+                                                                            onClick={() => handleUseHarvestedAsset(asset.id, 'original')}
+                                                                            className="text-[10px] px-2 py-0.5 bg-flame-orange-50 text-flame-orange-700 rounded hover:bg-flame-orange-100 font-medium"
+                                                                        >
+                                                                            Use Original
+                                                                        </button>
+                                                                        {asset.bg_removed_url ? (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'bg_removed')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 font-medium"
+                                                                            >
+                                                                                No BG
+                                                                            </button>
+                                                                        ) : asset.classification === 'product' && (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'bg_removed')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-purple-50/50 text-purple-500 rounded hover:bg-purple-100 font-medium border border-dashed border-purple-200"
+                                                                            >
+                                                                                ✂ Remove BG
+                                                                            </button>
+                                                                        )}
+                                                                        {asset.variants?.landscape ? (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'landscape')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
+                                                                            >
+                                                                                16:9
+                                                                            </button>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'landscape')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-400 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
+                                                                            >
+                                                                                ✦ 16:9
+                                                                            </button>
+                                                                        )}
+                                                                        {asset.variants?.square ? (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'square')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
+                                                                            >
+                                                                                1:1
+                                                                            </button>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'square')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-400 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
+                                                                            >
+                                                                                ✦ 1:1
+                                                                            </button>
+                                                                        )}
+                                                                        {asset.variants?.vertical ? (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'vertical')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-gray-100 text-gray-600 rounded hover:bg-gray-200 font-medium"
+                                                                            >
+                                                                                9:16
+                                                                            </button>
+                                                                        ) : (
+                                                                            <button
+                                                                                onClick={() => handleUseHarvestedAsset(asset.id, 'vertical')}
+                                                                                className="text-[10px] px-2 py-0.5 bg-gray-50 text-gray-400 rounded hover:bg-gray-100 font-medium border border-dashed border-gray-200"
+                                                                            >
+                                                                                ✦ 9:16
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
 
                                         {/* Display generated + uploaded images */}
                                         {collateral.imageCollaterals && collateral.imageCollaterals.length > 0 && (
@@ -576,9 +751,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
                                                         {/* Source badge */}
                                                         <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium shadow ${
-                                                            image.source === 'uploaded' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                                                            image.source === 'uploaded' ? 'bg-blue-100 text-blue-700' :
+                                                            image.source === 'harvested' ? 'bg-green-100 text-green-700' :
+                                                            'bg-purple-100 text-purple-700'
                                                         }`}>
-                                                            {image.source === 'uploaded' ? '📁 Uploaded' : '✨ AI'}
+                                                            {image.source === 'uploaded' ? '📁 Uploaded' : image.source === 'harvested' ? '🌐 Harvested' : '✨ AI'}
                                                         </div>
                                                         {/* Refinement depth badge */}
                                                         {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (

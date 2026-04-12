@@ -186,7 +186,8 @@ Digital advertising is broken for small and mid-size businesses:
 ### Completed ✅
 - Vision AI brand extraction
 - Google Ads full deployment (Search, Display, Video, PMax)
-- Facebook/Meta campaign deployment
+- Facebook & Instagram campaign deployment (Feed, Stories, Reels, Explore)
+- Microsoft Ads and LinkedIn Ads integration
 - 6 autonomous AI agents
 - AI image + video generation
 - Landing page CRO audits
@@ -194,9 +195,7 @@ Digital advertising is broken for small and mid-size businesses:
 - Collateral sign-off workflow
 
 ### Near-Term (Q2–Q3 2026)
-- **Instagram Ads** integration
 - **Reddit Ads** integration
-- **Microsoft/Bing Ads** integration
 - **Competitor War Room** — user provides 3 competitor URLs, gets gap analysis + counter-strategy dashboard
 - **Smart Asset Harvesting** — scrape existing high-quality assets, AI removes backgrounds, auto-resize for all formats
 
@@ -204,7 +203,7 @@ Digital advertising is broken for small and mid-size businesses:
 - **Dynamic Video Generation** — convert product pages into video ads with zoom effects, text overlays, AI voiceover
 - **Omni-Channel Budget Allocator** — AI recommends platform-level budget splits based on business type
 - **Audience Persona Builder** — analyze testimonials/reviews, generate detailed user personas, tailor ad copy per persona
-- **TikTok Ads, LinkedIn Ads, Pinterest Ads, Amazon Ads**
+- **TikTok Ads, Pinterest Ads, Amazon Ads**
 
 ### Long-Term (2027+)
 - **Natural Language Interface** — "Increase budget 20%, target younger audiences"

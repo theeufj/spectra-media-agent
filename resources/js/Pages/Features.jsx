@@ -57,7 +57,7 @@ export default function Features({ auth }) {
                             </div>
                             <div className="mt-16 flex justify-center">
                                 <div className="flex flex-wrap justify-center gap-8">
-                                    {['Google Ads', 'Meta Ads', 'Microsoft Ads'].map((platform) => (
+                                    {['Google Ads', 'Meta Ads', 'Microsoft Ads', 'LinkedIn Ads'].map((platform) => (
                                         <div key={platform} className="flex flex-col items-center text-center">
                                             <div className="flex h-24 w-24 items-center justify-center rounded-full bg-green-100">
                                                 <svg className="h-12 w-12 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -66,7 +66,7 @@ export default function Features({ auth }) {
                                             <p className="text-sm text-green-600 font-medium">Available Now</p>
                                         </div>
                                     ))}
-                                    {['Instagram Ads', 'Reddit Ads'].map((platform) => (
+                                    {['Reddit Ads', 'TikTok Ads'].map((platform) => (
                                         <div key={platform} className="flex flex-col items-center text-center grayscale">
                                             <div className="relative flex h-24 w-24 items-center justify-center rounded-full bg-gray-100">
                                                 <span className="absolute -top-1 -right-1 inline-flex items-center rounded-full bg-yellow-50 px-2 py-1 text-xs font-medium text-yellow-800 ring-1 ring-inset ring-yellow-600/20">Coming Soon</span>
