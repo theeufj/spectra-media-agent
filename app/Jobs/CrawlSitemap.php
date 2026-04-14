@@ -5,6 +5,7 @@ namespace App\Jobs;
 // importing the relvant classes
 use App\Mail\SitemapCrawlCompleted;
 use App\Models\Customer;
+use App\Models\CustomerPage;
 use App\Models\User;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
@@ -16,8 +17,13 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Spatie\Browsershot\Browsershot;
 use Spatie\Sitemap\SitemapIndex;
 use Spatie\Sitemap\Sitemap;
+use Symfony\Component\DomCrawler\Crawler;
+
+// DiscoverNavigationUrls is dispatched in the batch callback to find nav links missing from sitemap
+use App\Jobs\DiscoverNavigationUrls;
 
 class CrawlSitemap implements ShouldQueue
 {
@@ -218,20 +224,24 @@ class CrawlSitemap implements ShouldQueue
                     $customer = Customer::find($this->customerId);
                     $sitemapUrl = $this->sitemapUrl;
                     $user = $this->user;
+                    $sitemapUrls = array_map(fn($job) => $job->url, $jobs);
                     
                     $batch = Bus::batch($jobs)
                         ->name("Crawl Sitemap: {$this->sitemapUrl}")
-                        ->then(function (Batch $batch) use ($customer, $sitemapUrl, $user) {
+                        ->then(function (Batch $batch) use ($customer, $sitemapUrl, $user, $sitemapUrls) {
                             if ($customer) {
-                                Log::info("CrawlSitemap batch completed. Dispatching brand extraction.", [
+                                Log::info("CrawlSitemap batch completed. Discovering navigation URLs.", [
                                     'customer_id' => $customer->id,
                                     'batch_id' => $batch->id,
                                     'total_jobs' => $batch->totalJobs,
                                     'processed_jobs' => $batch->processedJobs(),
                                 ]);
                                 
+                                // Discover and crawl internal navigation links missing from sitemap
+                                DiscoverNavigationUrls::dispatch($customer, $user, $sitemapUrls);
+                                
                                 // Dispatch brand guideline extraction now that knowledge base is populated
-                                ExtractBrandGuidelines::dispatch($customer);
+                                ExtractBrandGuidelines::dispatch($customer)->delay(now()->addMinutes(2));
                                 
                                 // Send completion email to user
                                 Mail::to($user->email)->send(

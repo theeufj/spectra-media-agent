@@ -101,6 +101,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
         { id: 'visual', name: 'Visual Identity', icon: '🎨' },
         { id: 'messaging', name: 'Messaging', icon: '💬' },
         { id: 'audience', name: 'Target Audience', icon: '👥' },
+        { id: 'services', name: 'Service Lines', icon: '🏢' },
         { id: 'differentiation', name: 'Differentiation', icon: '🎯' },
     ];
 
@@ -958,6 +959,74 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                                     )}
                                                 </div>
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {/* Service Lines Section */}
+                                    {activeSection === 'services' && (
+                                        <div className="space-y-6">
+                                            <h2 className="text-2xl font-bold text-gray-900">Service Lines</h2>
+                                            <p className="text-sm text-gray-600">All distinct business verticals and service areas identified from your website content.</p>
+
+                                            {(!brandGuideline.service_lines || brandGuideline.service_lines.length === 0) ? (
+                                                <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                                                    <p className="text-gray-500">No service lines detected yet. Re-extract your brand guidelines to populate this section.</p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    {brandGuideline.service_lines.map((service, index) => (
+                                                        <div key={index} className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+                                                            <div className="px-5 py-4 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+                                                                <h3 className="text-lg font-semibold text-gray-900">{service.name}</h3>
+                                                                {service.content_volume && (
+                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                                        service.content_volume === 'high'
+                                                                            ? 'bg-green-100 text-green-800'
+                                                                            : service.content_volume === 'medium'
+                                                                            ? 'bg-yellow-100 text-yellow-800'
+                                                                            : 'bg-red-100 text-red-800'
+                                                                    }`}>
+                                                                        {service.content_volume} content
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                            <div className="px-5 py-4 space-y-3">
+                                                                {service.description && (
+                                                                    <p className="text-sm text-gray-700">{service.description}</p>
+                                                                )}
+                                                                {service.target_audience && (
+                                                                    <div>
+                                                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Target Audience</span>
+                                                                        <p className="text-sm text-gray-700 mt-1">{service.target_audience}</p>
+                                                                    </div>
+                                                                )}
+                                                                {service.messaging_themes?.length > 0 && (
+                                                                    <div>
+                                                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Messaging Themes</span>
+                                                                        <div className="flex flex-wrap gap-2 mt-1">
+                                                                            {service.messaging_themes.map((theme, i) => (
+                                                                                <span key={i} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                                                                    {theme}
+                                                                                </span>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                                {service.pain_points?.length > 0 && (
+                                                                    <div>
+                                                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Pain Points Addressed</span>
+                                                                        <ul className="list-disc list-inside mt-1 space-y-1">
+                                                                            {service.pain_points.map((point, i) => (
+                                                                                <li key={i} className="text-sm text-gray-700">{point}</li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 

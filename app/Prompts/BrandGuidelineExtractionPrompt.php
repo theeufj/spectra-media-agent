@@ -132,6 +132,16 @@ Analyze the provided content deeply and extract structured brand guidelines that
     "Words, phrases, or approaches they explicitly avoid",
     "Industry jargon they steer clear of"
   ],
+  "service_lines": [
+    {
+      "name": "Primary service or business vertical",
+      "description": "What this service line covers and how the brand positions it",
+      "target_audience": "Who specifically this service line serves",
+      "messaging_themes": ["Key message 1 for this service", "Key message 2"],
+      "content_volume": "high",
+      "pain_points": ["Pain point addressed by this service line"]
+    }
+  ],
   "extraction_quality_score": 85,
   "extraction_notes": "Brief notes on extraction quality, any missing information, or areas of uncertainty"
 }
@@ -195,7 +205,15 @@ Analyze the provided content deeply and extract structured brand guidelines that
     - List competitor names (don't mention in our content)
     - Flag any language that would contradict their brand
 
-11. **Quality Score:**
+11. **Service Lines / Business Verticals:**
+    - Identify EVERY distinct service line, product category, or business vertical the company offers
+    - For businesses with multiple service areas (e.g., a law firm offering both family law AND employment law), create a SEPARATE entry for EACH
+    - Do NOT merge multiple distinct services into a single generic description
+    - Estimate content_volume as "high" (many pages/articles), "medium" (some coverage), or "low" (minimal mention)
+    - Each service line should have its OWN target audience and messaging themes even if they overlap
+    - Look at navigation menus, service pages, and blog categories for clues about distinct service areas
+
+12. **Quality Score:**
     - Rate your confidence in the extraction (0-100)
     - 90-100: Exceptional clarity and consistency in source material
     - 70-89: Good extraction, some inference required
@@ -212,6 +230,8 @@ Analyze the provided content deeply and extract structured brand guidelines that
 - The JSON must be valid and parseable
 - Do NOT include markdown code fences (```json) in your response
 - Response must start with { and end with }
+- Pages marked as "SERVICE PAGE" represent core business offerings and should carry MORE WEIGHT in your analysis than blog posts or news articles
+- Pay close attention to ALL service areas mentioned in navigation links, headings, and service page content — do not overlook minor service lines
 
 **OUTPUT:**
 Provide ONLY the JSON object, no additional text, explanations, or markdown formatting.

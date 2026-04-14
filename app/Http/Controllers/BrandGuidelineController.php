@@ -107,6 +107,16 @@ class BrandGuidelineController extends Controller
             
             'do_not_use' => 'nullable|array',
             'do_not_use.*' => 'string|max:255',
+
+            'service_lines' => 'nullable|array',
+            'service_lines.*.name' => 'nullable|string|max:255',
+            'service_lines.*.description' => 'nullable|string|max:1000',
+            'service_lines.*.target_audience' => 'nullable|string|max:500',
+            'service_lines.*.messaging_themes' => 'nullable|array',
+            'service_lines.*.messaging_themes.*' => 'string|max:255',
+            'service_lines.*.content_volume' => 'nullable|string|in:high,medium,low',
+            'service_lines.*.pain_points' => 'nullable|array',
+            'service_lines.*.pain_points.*' => 'string|max:255',
         ]);
         
         $brandGuideline->update($validated);

@@ -69,9 +69,20 @@ class BrandGuidelineExtractorService
             }
 
             // Step 1: Gather content from CustomerPage (primary) and KnowledgeBase (fallback)
-            $customerPageContent = \App\Models\CustomerPage::where('customer_id', $customer->id)
-                ->pluck('content')
-                ->implode("\n\n---PAGE BREAK---\n\n");
+            // Sort pages so service/money pages come first for higher weight in extraction
+            $pages = \App\Models\CustomerPage::where('customer_id', $customer->id)
+                ->orderByRaw("CASE
+                    WHEN page_type IN ('service', 'money', 'product') THEN 1
+                    WHEN page_type IN ('landing', 'about') THEN 2
+                    WHEN page_type IN ('category', 'homepage') THEN 3
+                    ELSE 4
+                END")
+                ->get(['url', 'content', 'page_type']);
+
+            $customerPageContent = $pages->map(function ($page) {
+                $typeLabel = strtoupper($page->page_type ?? 'UNKNOWN');
+                return "--- PAGE TYPE: {$typeLabel} | URL: {$page->url} ---\n\n{$page->content}";
+            })->implode("\n\n---PAGE BREAK---\n\n");
 
             $websiteContent = $customerPageContent;
 
@@ -151,6 +162,7 @@ class BrandGuidelineExtractorService
                     'competitor_differentiation' => $guidelines['competitor_differentiation'] ?? null,
                     'brand_personality' => $guidelines['brand_personality'],
                     'do_not_use' => $guidelines['do_not_use'] ?? [],
+                    'service_lines' => $guidelines['service_lines'] ?? [],
                     'extraction_quality_score' => $guidelines['extraction_quality_score'] ?? 50,
                     'extracted_at' => now(),
                 ]
