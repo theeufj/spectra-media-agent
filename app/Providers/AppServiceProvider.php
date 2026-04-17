@@ -20,6 +20,8 @@ use App\Policies\StrategyPolicy;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Support\Facades\Queue;
 use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
@@ -58,6 +60,29 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Proposal::class, ProposalPolicy::class);
         Gate::policy(BrandGuideline::class, BrandGuidelinePolicy::class);
         Gate::policy(KnowledgeBase::class, KnowledgeBasePolicy::class);
+
+        // Log queue job failures to runtime_exceptions table
+        Queue::failing(function (JobFailed $event) {
+            try {
+                $e = $event->exception;
+                \App\Models\RuntimeException::create([
+                    'type' => get_class($e),
+                    'source' => 'queue',
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'message' => mb_substr($e->getMessage(), 0, 65535),
+                    'trace' => mb_substr($e->getTraceAsString(), 0, 65535),
+                    'job_class' => $event->job->resolveName(),
+                    'context' => [
+                        'connection' => $event->connectionName,
+                        'queue' => $event->job->getQueue(),
+                        'attempts' => $event->job->attempts(),
+                    ],
+                ]);
+            } catch (\Throwable $logException) {
+                // Silently fail
+            }
+        });
     }
 }
 

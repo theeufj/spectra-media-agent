@@ -44,5 +44,55 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Log all runtime exceptions to the database for the admin portal
+        $exceptions->report(function (\Throwable $e) {
+            try {
+                $request = request();
+                $source = 'http';
+                $jobClass = null;
+
+                // Detect if this is a queue job failure
+                if (app()->runningInConsole()) {
+                    $source = 'console';
+                }
+
+                // Check if the exception context indicates a queue job
+                if ($e instanceof \Illuminate\Queue\MaxAttemptsExceededException ||
+                    $e->getPrevious() instanceof \Illuminate\Queue\MaxAttemptsExceededException) {
+                    $source = 'queue';
+                }
+
+                // Try to detect job class from the trace
+                foreach ($e->getTrace() as $frame) {
+                    if (isset($frame['class']) && str_starts_with($frame['class'], 'App\\Jobs\\')) {
+                        $source = 'queue';
+                        $jobClass = $frame['class'];
+                        break;
+                    }
+                }
+
+                \App\Models\RuntimeException::create([
+                    'type' => get_class($e),
+                    'source' => $source,
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'message' => mb_substr($e->getMessage(), 0, 65535),
+                    'trace' => mb_substr($e->getTraceAsString(), 0, 65535),
+                    'url' => $source === 'http' ? $request?->fullUrl() : null,
+                    'method' => $source === 'http' ? $request?->method() : null,
+                    'job_class' => $jobClass,
+                    'user_id' => $request?->user()?->id,
+                    'customer_id' => session('active_customer_id'),
+                    'context' => [
+                        'input' => $source === 'http' ? $request?->except(['password', 'password_confirmation', 'token']) : null,
+                        'headers' => $source === 'http' ? collect($request?->headers?->all())->only(['user-agent', 'referer', 'accept'])->toArray() : null,
+                    ],
+                ]);
+            } catch (\Throwable $logException) {
+                // Silently fail — never let exception logging break the app
+            }
+
+            // Return false to allow Laravel's default logging to continue
+            return false;
+        });
     })->create();

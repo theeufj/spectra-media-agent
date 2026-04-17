@@ -524,6 +524,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('feature-flags', [App\Http\Controllers\Admin\FeatureFlagController::class, 'index'])->name('admin.feature-flags.index');
     Route::post('feature-flags/{feature}/toggle', [App\Http\Controllers\Admin\FeatureFlagController::class, 'toggle'])->name('admin.feature-flags.toggle');
     Route::post('feature-flags/{feature}/purge', [App\Http\Controllers\Admin\FeatureFlagController::class, 'purge'])->name('admin.feature-flags.purge');
+
+    // Runtime Exceptions
+    Route::get('runtime-exceptions', [App\Http\Controllers\Admin\RuntimeExceptionController::class, 'index'])->name('admin.runtime-exceptions.index');
+    Route::get('runtime-exceptions/{runtimeException}', [App\Http\Controllers\Admin\RuntimeExceptionController::class, 'show'])->name('admin.runtime-exceptions.show');
+    Route::delete('runtime-exceptions/{runtimeException}', [App\Http\Controllers\Admin\RuntimeExceptionController::class, 'destroy'])->name('admin.runtime-exceptions.destroy');
+    Route::post('runtime-exceptions/flush', [App\Http\Controllers\Admin\RuntimeExceptionController::class, 'flush'])->name('admin.runtime-exceptions.flush');
 });
 
 /*
