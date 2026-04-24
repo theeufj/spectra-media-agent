@@ -39,7 +39,7 @@ const PaymentForm = ({ campaign, onSuccess, onCancel }) => {
             const startDate = new Date(campaign.start_date);
             const endDate = new Date(campaign.end_date);
             const diffTime = endDate.getTime() - startDate.getTime();
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1; // +1 to include both start and end days (matches backend)
             return diffDays > 0 ? diffDays : 30;
         }
         return 30; // Default assumption
