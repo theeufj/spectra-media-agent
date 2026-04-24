@@ -46,6 +46,7 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                     'subscription_plan' => $user->subscription_plan,
+                    'subscription_status' => $user->subscription_status,
                     'isAdmin' => $user->hasRole('admin'),
                     'customers' => $user->customers->map(function ($customer) {
                         return [

@@ -71,7 +71,7 @@ class CollateralController extends Controller
             'adCopy' => $adCopy,
             'imageCollaterals' => $imageCollaterals,
             'videoCollaterals' => $videoCollaterals,
-            'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod(),
+            'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod() || $user->subscription_status === 'active',
             'deploymentEnabled' => Setting::get('deployment_enabled', true),
             'managedBillingEnabled' => Setting::get('managed_billing_enabled', true),
             'creativeUsage' => app(CreativeQuotaService::class)->getUsageSummary($user),

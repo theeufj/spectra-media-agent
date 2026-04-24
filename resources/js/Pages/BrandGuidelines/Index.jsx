@@ -1,13 +1,15 @@
 import React, { useState, Fragment } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Dialog, Transition } from '@headlessui/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 
 export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit }) {
+    const { flash } = usePage().props;
     const [isEditing, setIsEditing] = useState(false);
     const [activeSection, setActiveSection] = useState('overview');
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
+    const [isExtracting, setIsExtracting] = useState(false);
     
     const { data, setData, put, processing, errors } = useForm({
         brand_voice: brandGuideline?.brand_voice || { primary_tone: '', description: '', examples: [] },
@@ -39,14 +41,25 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
     };
 
     const handleReExtract = () => {
+        if (!brandGuideline) {
+            setIsExtracting(true);
+            router.post(route('brand-guidelines.re-extract'), {}, {
+                preserveScroll: true,
+                onFinish: () => setIsExtracting(false),
+            });
+            return;
+        }
+
         setConfirmModal({
             show: true,
             title: 'Re-analyze Website',
             message: 'This will re-analyze your website and update the brand guidelines. Your manual edits will be preserved. Continue?',
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
+                setIsExtracting(true);
                 router.post(route('brand-guidelines.re-extract'), {}, {
                     preserveScroll: true,
+                    onFinish: () => setIsExtracting(false),
                 });
             },
         });
@@ -72,6 +85,11 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                 <Head title="Brand Guidelines" />
                 <div className="py-12">
                     <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                        {flash?.success && (
+                            <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
+                                <p className="text-sm font-medium">{flash.success}</p>
+                            </div>
+                        )}
                         <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                             <div className="p-6 text-center">
                                 <h2 className="text-2xl font-bold text-gray-900 mb-4">No Brand Guidelines Yet</h2>
@@ -80,12 +98,25 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                 </p>
                                 <button
                                     onClick={handleReExtract}
-                                    className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                    disabled={isExtracting}
+                                    className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                 >
-                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                    </svg>
-                                    Extract Brand Guidelines
+                                    {isExtracting ? (
+                                        <>
+                                            <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Extracting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                            Extract Brand Guidelines
+                                        </>
+                                    )}
                                 </button>
                             </div>
                         </div>
@@ -111,6 +142,12 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
             
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+                    {/* Flash Message */}
+                    {flash?.success && (
+                        <div className="mb-6 bg-green-50 border border-green-200 text-green-800 rounded-lg p-4">
+                            <p className="text-sm font-medium">{flash.success}</p>
+                        </div>
+                    )}
                     {/* Header */}
                     <div className="mb-8">
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
@@ -164,12 +201,25 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                         </a>
                                         <button
                                             onClick={handleReExtract}
-                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150"
+                                            disabled={isExtracting}
+                                            className="inline-flex items-center px-4 py-2 bg-blue-600 border border-transparent rounded-md font-semibold text-xs text-white uppercase tracking-widest hover:bg-blue-700 focus:bg-blue-700 active:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition ease-in-out duration-150 disabled:opacity-50"
                                         >
-                                            <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                                            </svg>
-                                            Re-Extract
+                                            {isExtracting ? (
+                                                <>
+                                                    <svg className="animate-spin w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Extracting...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                    </svg>
+                                                    Re-Extract
+                                                </>
+                                            )}
                                         </button>
                                     </>
                                 )}
