@@ -205,10 +205,10 @@ class DeployCampaign implements ShouldQueue
             $this->notifyUsers(new DeploymentFailed($this->campaign, 'All platform deployments failed.'));
         } elseif ($failureCount > 0) {
             Log::warning("Partial deployment failure for Campaign ID: {$this->campaign->id}");
-            $this->notifyUsers(new DeploymentCompleted($this->campaign, $successCount, $failureCount));
+            $this->notifyUsers(new DeploymentCompleted($this->campaign, $successCount, $failureCount, $strategies->toArray()));
         } else {
             Log::info("All deployments successful for Campaign ID: {$this->campaign->id}");
-            $this->notifyUsers(new DeploymentCompleted($this->campaign, $successCount, $failureCount));
+            $this->notifyUsers(new DeploymentCompleted($this->campaign, $successCount, $failureCount, $strategies->toArray()));
         }
 
         AgentActivity::record(
