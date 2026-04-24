@@ -336,10 +336,7 @@ class AdSpendBillingService
                     'customer_id' => $customer->id,
                     'type' => 'ad_spend_credit',
                 ],
-                'automatic_payment_methods' => [
-                    'enabled' => true,
-                    'allow_redirects' => 'never',
-                ],
+                'payment_method_types' => ['card'],
             ]);
 
             return [
