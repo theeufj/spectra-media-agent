@@ -309,6 +309,11 @@ class AdSpendBillingController extends Controller
         }
 
         try {
+            // Ensure user exists as a Stripe customer (required for admin-promoted users without Stripe subscriptions)
+            if (!$user->stripe_id) {
+                $user->createAsStripeCustomer();
+            }
+
             // First, update the payment method
             $user->updateDefaultPaymentMethod($request->payment_method_id);
 

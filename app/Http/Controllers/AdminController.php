@@ -39,6 +39,9 @@ class AdminController extends Controller
         ]);
 
         $user->assigned_plan_id = $validated['plan_id'];
+        // When admin promotes a user to a plan, mark them as active so they pass subscription gates.
+        // When a plan is removed, revert to guest.
+        $user->subscription_status = $validated['plan_id'] ? 'active' : 'guest';
         $user->save();
 
         $planName = $validated['plan_id'] ? \App\Models\Plan::find($validated['plan_id'])->name : 'None';
