@@ -96,6 +96,9 @@ class ActivityLog extends Model
             'campaign_deleted' => 'Campaign deleted',
             'campaign_paused' => 'Campaign paused',
             'campaign_started' => 'Campaign started',
+            'campaign_deployed' => 'Campaign deployed',
+            'campaign_deploy_blocked' => 'Campaign deploy blocked',
+            'ad_spend_billing_setup' => 'Ad spend billing set up',
             'customer_created' => 'Customer created',
             'customer_deleted' => 'Customer deleted',
             'subscription_created' => 'Subscription created',
@@ -116,9 +119,9 @@ class ActivityLog extends Model
             'login', 'logout' => 'key',
             'impersonate_start', 'impersonate_stop' => 'user-circle',
             'user_created', 'user_updated', 'user_banned', 'user_unbanned', 'user_promoted' => 'user',
-            'campaign_created', 'campaign_updated', 'campaign_deleted', 'campaign_paused', 'campaign_started' => 'megaphone',
+            'campaign_created', 'campaign_updated', 'campaign_deleted', 'campaign_paused', 'campaign_started', 'campaign_deployed', 'campaign_deploy_blocked' => 'megaphone',
             'customer_created', 'customer_deleted' => 'building',
-            'subscription_created', 'subscription_cancelled' => 'credit-card',
+            'subscription_created', 'subscription_cancelled', 'ad_spend_billing_setup' => 'credit-card',
             'settings_updated' => 'cog',
             default => 'information-circle',
         };
@@ -134,8 +137,9 @@ class ActivityLog extends Model
             'logout' => 'gray',
             'impersonate_start', 'impersonate_stop' => 'yellow',
             'user_banned', 'campaign_deleted', 'customer_deleted', 'subscription_cancelled' => 'red',
-            'user_unbanned', 'user_promoted', 'campaign_started' => 'green',
+            'user_unbanned', 'user_promoted', 'campaign_started', 'campaign_deployed', 'ad_spend_billing_setup' => 'green',
             'campaign_paused' => 'orange',
+            'campaign_deploy_blocked' => 'red',
             default => 'blue',
         };
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Jobs\DeployCampaign;
 use App\Http\Requests\DeployCollateralRequest;
+use App\Models\ActivityLog;
 use App\Models\Campaign;
 use App\Models\Setting;
 use Illuminate\Http\Request;
@@ -93,10 +94,16 @@ class DeploymentController extends Controller
             ]);
         }
 
-        // 1. Subscription Check (or payment method in testing mode)
-        $hasAccess = $user->subscribed('default') || $user->hasDefaultPaymentMethod();
-        
+        // 1. Subscription Check
+        $hasAccess = $user->subscribed('default')
+            || $user->hasDefaultPaymentMethod()
+            || $user->subscription_status === 'active';
+
         if (!$hasAccess) {
+            ActivityLog::log('campaign_deploy_blocked', "Deploy blocked — no active subscription for campaign '{$campaign->name}'", $campaign, [
+                'campaign_id' => $campaign->id,
+                'reason' => 'no_subscription',
+            ]);
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'error',
                 'message' => 'You must have an active subscription to deploy campaigns.',
@@ -140,6 +147,12 @@ class DeploymentController extends Controller
 
         // Dispatch the deployment job with execution agents enabled
         DeployCampaign::dispatch($campaign, useAgents: true);
+
+        ActivityLog::log('campaign_deployed', "Campaign '{$campaign->name}' deployment initiated ({$signedOffCount} strategies)", $campaign, [
+            'campaign_id' => $campaign->id,
+            'customer_id' => $customer->id,
+            'signed_off_strategies' => $signedOffCount,
+        ]);
         
         Log::info("📤 DeployCampaign job dispatched for Campaign ID: {$campaign->id}");
         

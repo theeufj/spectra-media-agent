@@ -198,8 +198,16 @@ class AdminController extends Controller
             $strategy->load(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         }
 
+        // Get recent activity logs for this campaign
+        $activityLogs = \App\Models\ActivityLog::where('subject_type', \App\Models\Campaign::class)
+            ->where('subject_id', $campaign->id)
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
         return Inertia::render('Admin/CampaignDetail', [
             'campaign' => $campaign,
+            'activityLogs' => $activityLogs,
         ]);
     }
 

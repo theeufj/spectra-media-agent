@@ -45,7 +45,7 @@ const PerformanceStats = ({ stats, loading }) => {
 };
 
 export default function CampaignDetail({ auth }) {
-    const { campaign, flash } = usePage().props;
+    const { campaign, flash, activityLogs = [] } = usePage().props;
     const [isEditing, setIsEditing] = useState(false);
     const [expandedStrategy, setExpandedStrategy] = useState(null);
     const [performanceData, setPerformanceData] = useState(null);
@@ -388,6 +388,57 @@ export default function CampaignDetail({ auth }) {
                                                 )}
                                             </div>
                                         ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Activity Log */}
+                        <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                            <div className="p-6">
+                                <h3 className="text-lg font-semibold text-gray-900 mb-4">Activity Log</h3>
+                                {activityLogs.length === 0 ? (
+                                    <p className="text-sm text-gray-500">No activity recorded for this campaign yet.</p>
+                                ) : (
+                                    <div className="flow-root">
+                                        <ul className="-mb-8">
+                                            {activityLogs.map((log, idx) => (
+                                                <li key={log.id}>
+                                                    <div className="relative pb-8">
+                                                        {idx < activityLogs.length - 1 && (
+                                                            <span className="absolute top-5 left-5 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
+                                                        )}
+                                                        <div className="relative flex items-start space-x-3">
+                                                            <div className={`flex h-10 w-10 items-center justify-center rounded-full ring-8 ring-white flex-shrink-0 ${
+                                                                log.action_color === 'green' ? 'bg-green-100 text-green-600' :
+                                                                log.action_color === 'red' ? 'bg-red-100 text-red-600' :
+                                                                log.action_color === 'orange' ? 'bg-orange-100 text-orange-600' :
+                                                                log.action_color === 'yellow' ? 'bg-yellow-100 text-yellow-600' :
+                                                                'bg-blue-100 text-blue-600'
+                                                            }`}>
+                                                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                                                                </svg>
+                                                            </div>
+                                                            <div className="min-w-0 flex-1">
+                                                                <div className="text-sm text-gray-900">
+                                                                    <span className="font-medium">{log.action_label}</span>
+                                                                    {log.user_email && (
+                                                                        <span className="text-gray-500"> by {log.user_email}</span>
+                                                                    )}
+                                                                </div>
+                                                                {log.description && (
+                                                                    <p className="mt-0.5 text-sm text-gray-600">{log.description}</p>
+                                                                )}
+                                                                <p className="mt-0.5 text-xs text-gray-400">
+                                                                    {new Date(log.created_at).toLocaleString()}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
                                 )}
                             </div>

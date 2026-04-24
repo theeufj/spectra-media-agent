@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Http\Requests\AddAdSpendCreditRequest;
 use App\Http\Requests\SetupAdSpendBillingRequest;
@@ -336,6 +337,12 @@ class AdSpendBillingController extends Controller
                 'customer_id' => $customer->id,
                 'daily_budget' => $dailyBudget,
                 'initial_credit' => $credit->initial_credit_amount,
+            ]);
+
+            ActivityLog::log('ad_spend_billing_setup', "Ad spend billing set up for customer '{$customer->business_name}' — \${$credit->initial_credit_amount} charged", $customer, [
+                'customer_id' => $customer->id,
+                'daily_budget' => $dailyBudget,
+                'credit_amount' => $credit->initial_credit_amount,
             ]);
 
             return response()->json([
