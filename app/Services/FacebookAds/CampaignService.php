@@ -161,7 +161,7 @@ class CampaignService extends BaseFacebookAdsService
     public function updateCampaign(string $campaignId, array $updateData): bool
     {
         try {
-            $response = $this->put("/{$campaignId}", $updateData);
+            $response = $this->post("/{$campaignId}", $updateData);
 
             if ($response && isset($response['success']) && $response['success']) {
                 Log::info("Updated campaign {$campaignId}", [
