@@ -12,6 +12,7 @@ use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CreativeService;
 use App\Services\FacebookAds\AdService;
 use App\Services\Agents\Traits\RetryableApiOperation;
+use App\Services\CampaignStatusHelper;
 use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -386,14 +387,14 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): array {
         $campaignStructure = $plan->getCampaignStructure();
-        $dailyBudgetCents = (int)(($campaignStructure['daily_budget'] ?? $campaign->total_budget / 30) * 100);
+        $dailyBudgetCents = (int)(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
         
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
             $campaign->name,
             $campaignStructure['objective'] ?? 'OUTCOME_TRAFFIC',
             $dailyBudgetCents,
-            'PAUSED' // Start paused for review
+            CampaignStatusHelper::getFacebookAdsStatus()
         );
         
         if (!$fbCampaign || !isset($fbCampaign['id'])) {
@@ -422,7 +423,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): array {
         $campaignStructure = $plan->getCampaignStructure();
-        $dailyBudgetCents = (int)(($campaignStructure['daily_budget'] ?? $campaign->total_budget / 30) * 100);
+        $dailyBudgetCents = (int)(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
         
         // Build targeting from plan
         $targeting = $this->buildTargeting($plan);
@@ -436,7 +437,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $campaign->name . ' - Ad Set',
             $targeting,
             $campaignStructure['optimization_goal'] ?? 'LANDING_PAGE_VIEWS',
-            'PAUSED'
+            CampaignStatusHelper::getFacebookAdsStatus()
         );
         
         if (!$fbAdSet || !isset($fbAdSet['id'])) {
