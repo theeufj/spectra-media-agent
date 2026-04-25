@@ -3,16 +3,16 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
+use App\Models\Notification;
 use App\Services\Agents\HealthCheckAgent;
 use App\Services\GeminiService;
-use App\Mail\HealthCheckAlert;
+use App\Notifications\CriticalAgentAlert;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Cache;
 
 /**
@@ -131,19 +131,40 @@ class RunHealthChecks implements ShouldQueue
     protected function sendCriticalAlert(Customer $customer, array $results): void
     {
         try {
-            // Get the user associated with this customer
-            $user = $customer->user;
-            
-            if ($user && $user->email) {
-                // Queue the alert email
-                // Mail::to($user)->queue(new HealthCheckAlert($customer, $results));
-                
-                Log::info("RunHealthChecks: Critical alert queued", [
-                    'customer_id' => $customer->id,
-                    'email' => $user->email,
-                    'issues_count' => count($results['issues'] ?? []),
-                ]);
+            $title = 'Critical Campaign Health Alert';
+            $message = 'Critical issues were detected during automated health checks.';
+            $details = [
+                'severity' => 'critical',
+                'customer_id' => $customer->id,
+                'issues' => $results['issues'] ?? [],
+                'warnings' => $results['warnings'] ?? [],
+            ];
+
+            foreach ($customer->users as $user) {
+                $user->notify(new CriticalAgentAlert(
+                    'health_check_critical',
+                    $title,
+                    $message,
+                    $details
+                ));
+
+                Notification::notify(
+                    $user,
+                    Notification::TYPE_HEALTH_CRITICAL,
+                    $title,
+                    $message,
+                    url('/dashboard'),
+                    'Review Health Status',
+                    $customer,
+                    $details
+                );
             }
+
+            Log::info("RunHealthChecks: Critical alert queued", [
+                'customer_id' => $customer->id,
+                'recipients' => $customer->users->pluck('email')->filter()->values()->all(),
+                'issues_count' => count($results['issues'] ?? []),
+            ]);
         } catch (\Exception $e) {
             Log::error("RunHealthChecks: Failed to send critical alert", [
                 'customer_id' => $customer->id,
