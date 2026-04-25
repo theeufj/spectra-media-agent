@@ -108,6 +108,23 @@ class Campaign extends Model
     }
 
     /**
+     * Scope campaigns that have been deployed to at least one ad platform.
+     */
+    public function scopeWithDeployedPlatforms($query)
+    {
+        return $query->where(function ($campaignQuery) {
+            $campaignQuery
+                ->whereNotNull('google_ads_campaign_id')
+                ->orWhereNotNull('facebook_ads_campaign_id')
+                ->orWhereNotNull('microsoft_ads_campaign_id')
+                ->orWhereNotNull('linkedin_campaign_id')
+                ->orWhereHas('strategies', function ($strategyQuery) {
+                    $strategyQuery->whereIn('deployment_status', ['deployed', 'verified']);
+                });
+        });
+    }
+
+    /**
      * The pages selected for this campaign.
      */
     public function pages()

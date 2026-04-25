@@ -59,7 +59,7 @@ Schedule::job(new RunHealthChecks)->everySixHours()->withoutOverlapping()->onFai
 
 // Performance data fetch - pull metrics from all ad platforms for active campaigns
 Schedule::call(function () {
-    Campaign::where('platform_status', 'ENABLED')->each(function ($campaign) {
+    Campaign::withDeployedPlatforms()->each(function ($campaign) {
         if ($campaign->google_ads_campaign_id) {
             FetchGoogleAdsPerformanceData::dispatch($campaign);
         }
@@ -93,14 +93,14 @@ Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00')->withoutOverlap
 
 // Policy compliance checks - detects disapprovals and policy violations
 Schedule::call(function () {
-    \App\Models\Campaign::where('platform_status', 'ENABLED')->each(function ($campaign) {
+    \App\Models\Campaign::withDeployedPlatforms()->each(function ($campaign) {
         CheckCampaignPolicyViolations::dispatch($campaign->id);
     });
 })->name('check-campaign-policy-violations')->daily()->withoutOverlapping();
 
 // Keyword Quality Score tracking - captures daily QS snapshots for trending
 Schedule::call(function () {
-    Campaign::where('platform_status', 'ENABLED')
+    Campaign::withDeployedPlatforms()
         ->whereNotNull('google_ads_campaign_id')
         ->each(function ($campaign) {
             GetKeywordQualityScore::dispatch($campaign->id);
@@ -114,7 +114,7 @@ Schedule::call(function () {
 // Competitive intelligence - runs weekly for all customers with active campaigns
 Schedule::call(function () {
     Customer::whereHas('campaigns', function ($q) {
-        $q->where('platform_status', 'ENABLED');
+        $q->withDeployedPlatforms();
     })->each(function ($customer) {
         RunCompetitorIntelligence::dispatch($customer);
     });
@@ -123,7 +123,7 @@ Schedule::call(function () {
 // Weekly executive reports - AI-generated performance summaries per customer
 Schedule::call(function () {
     Customer::whereHas('campaigns', function ($q) {
-        $q->where('platform_status', 'ENABLED');
+        $q->withDeployedPlatforms();
     })->each(function ($customer) {
         GenerateExecutiveReport::dispatch($customer->id, 'weekly');
     });
@@ -136,7 +136,7 @@ Schedule::call(function () {
 // Monthly executive reports - detailed monthly performance summaries with PDF
 Schedule::call(function () {
     Customer::whereHas('campaigns', function ($q) {
-        $q->where('platform_status', 'ENABLED');
+        $q->withDeployedPlatforms();
     })->each(function ($customer) {
         GenerateMonthlyReport::dispatch($customer->id);
     });

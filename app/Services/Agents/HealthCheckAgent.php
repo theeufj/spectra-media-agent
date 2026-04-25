@@ -354,7 +354,7 @@ class HealthCheckAgent
         ];
 
         $activeCampaigns = Campaign::where('customer_id', $customer->id)
-            ->where('status', 'active')
+            ->withDeployedPlatforms()
             ->get();
 
         foreach ($activeCampaigns as $campaign) {
@@ -395,6 +395,15 @@ class HealthCheckAgent
         ];
 
         try {
+            // Check whether campaigns are actually serving on-platform.
+            $deliveryHealth = $this->checkCampaignDeliveryStatus($campaign);
+            if (!empty($deliveryHealth['issues'])) {
+                $health['issues'] = array_merge($health['issues'], $deliveryHealth['issues']);
+            }
+            if (!empty($deliveryHealth['warnings'])) {
+                $health['warnings'] = array_merge($health['warnings'], $deliveryHealth['warnings']);
+            }
+
             // Check budget pacing
             $pacingHealth = $this->checkBudgetPacing($campaign);
             if (!empty($pacingHealth['issues'])) {
@@ -434,6 +443,103 @@ class HealthCheckAgent
         }
 
         $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+        return $health;
+    }
+
+    /**
+     * Check whether deployed campaigns are serving normally on each platform.
+     */
+    protected function checkCampaignDeliveryStatus(Campaign $campaign): array
+    {
+        $health = ['issues' => [], 'warnings' => []];
+
+        if ($campaign->google_ads_campaign_id && $campaign->customer?->google_ads_customer_id) {
+            try {
+                $customerId = str_replace('-', '', $campaign->customer->google_ads_customer_id);
+                $resourceName = $campaign->google_ads_campaign_id;
+
+                if (!str_starts_with($resourceName, 'customers/')) {
+                    $resourceName = "customers/{$customerId}/campaigns/{$resourceName}";
+                }
+
+                $getCampaignStatus = new \App\Services\GoogleAds\CommonServices\GetCampaignStatus($campaign->customer);
+                $statusData = $getCampaignStatus($customerId, $resourceName);
+
+                if ($statusData) {
+                    $campaignStatus = match ($statusData['status']) {
+                        2 => 'ENABLED',
+                        3 => 'PAUSED',
+                        4 => 'REMOVED',
+                        default => 'UNKNOWN',
+                    };
+
+                    $primaryStatus = match ($statusData['primary_status']) {
+                        2 => 'ELIGIBLE',
+                        3 => 'PAUSED',
+                        4 => 'REMOVED',
+                        5 => 'ENDED',
+                        6 => 'PENDING',
+                        7 => 'MISCONFIGURED',
+                        8 => 'LIMITED',
+                        default => 'UNKNOWN',
+                    };
+
+                    if ($campaignStatus !== 'ENABLED' || in_array($primaryStatus, ['PAUSED', 'REMOVED', 'ENDED', 'MISCONFIGURED'], true)) {
+                        $health['issues'][] = [
+                            'type' => 'google_campaign_not_serving',
+                            'severity' => 'critical',
+                            'message' => "Google campaign is not serving normally ({$campaignStatus} / {$primaryStatus})",
+                            'details' => 'Check campaign status, policy issues, and billing in Google Ads.',
+                        ];
+                    } elseif (in_array($primaryStatus, ['PENDING', 'LIMITED', 'UNKNOWN'], true)) {
+                        $health['warnings'][] = [
+                            'type' => 'google_campaign_limited',
+                            'severity' => 'high',
+                            'message' => "Google campaign requires attention ({$campaignStatus} / {$primaryStatus})",
+                            'details' => 'The campaign is enabled but not yet fully serving normally.',
+                        ];
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('HealthCheckAgent: Could not check Google campaign delivery status', [
+                    'campaign_id' => $campaign->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        if ($campaign->facebook_ads_campaign_id && $campaign->customer?->facebook_ads_account_id) {
+            try {
+                $campaignService = new FacebookCampaignService($campaign->customer);
+                $fbCampaign = $campaignService->getCampaign($campaign->facebook_ads_campaign_id);
+
+                if ($fbCampaign) {
+                    $effectiveStatus = $fbCampaign['effective_status'] ?? 'UNKNOWN';
+
+                    if (in_array($effectiveStatus, ['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'DISAPPROVED', 'DELETED', 'ARCHIVED'], true)) {
+                        $health['issues'][] = [
+                            'type' => 'facebook_campaign_not_serving',
+                            'severity' => 'critical',
+                            'message' => "Facebook campaign is not serving normally ({$effectiveStatus})",
+                            'details' => 'Check campaign, ad set, and policy status in Facebook Ads Manager.',
+                        ];
+                    } elseif (in_array($effectiveStatus, ['WITH_ISSUES', 'PENDING_REVIEW', 'PENDING_BILLING_INFO', 'IN_PROCESS', 'UNKNOWN'], true)) {
+                        $health['warnings'][] = [
+                            'type' => 'facebook_campaign_limited',
+                            'severity' => 'high',
+                            'message' => "Facebook campaign requires attention ({$effectiveStatus})",
+                            'details' => 'The campaign is not yet fully serving normally.',
+                        ];
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::warning('HealthCheckAgent: Could not check Facebook campaign delivery status', [
+                    'campaign_id' => $campaign->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
         return $health;
     }
 

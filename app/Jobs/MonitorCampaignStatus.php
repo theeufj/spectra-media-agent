@@ -82,6 +82,10 @@ class MonitorCampaignStatus implements ShouldQueue
             ]);
 
             $this->notifyIfBecameActive($campaign, $oldStatus, 'ELIGIBLE');
+
+            if ($campaign->primary_status !== 'ELIGIBLE') {
+                $this->notifyIfStatusChanged($campaign, $oldStatus, $campaign->primary_status);
+            }
         }
     }
 

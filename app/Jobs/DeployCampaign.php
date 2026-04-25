@@ -223,6 +223,10 @@ class DeployCampaign implements ShouldQueue
             $failureCount === 0 ? 'completed' : 'failed'
         );
 
+        if ($successCount > 0 && $this->campaign->status !== 'active') {
+            $this->campaign->update(['status' => 'active']);
+        }
+
         // Dispatch verification job after 60s to confirm objects exist on platforms
         if ($successCount > 0) {
             VerifyDeployment::dispatch($this->campaign)->delay(now()->addSeconds(60));
