@@ -136,7 +136,11 @@ class SelfHealingAgent
     protected function healGoogleAdsCampaign(Campaign $campaign, Customer $customer, array &$results): void
     {
         $customerId = $customer->google_ads_customer_id;
-        $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $campaignResourceName = $campaign->google_ads_campaign_id;
+
+        if (!str_starts_with($campaignResourceName, 'customers/')) {
+            $campaignResourceName = "customers/{$customerId}/campaigns/{$campaignResourceName}";
+        }
 
         // 1. Check for disapproved ads
         $this->healGoogleDisapprovedAds($customer, $customerId, $campaignResourceName, $results);

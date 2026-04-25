@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Campaign;
+use App\Services\Agents\SelfHealingAgent;
 use App\Services\GoogleAds\AccountStructureService;
 use App\Services\FacebookAds\AdService as FacebookAdService;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
@@ -30,17 +31,23 @@ class CheckCampaignPolicyViolations implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(): void
+    public function handle(SelfHealingAgent $selfHealingAgent): void
     {
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
 
+            $hasViolation = false;
+
             if ($campaign->google_ads_campaign_id) {
-                $this->checkGoogleAdsPolicyViolations($campaign);
+                $hasViolation = $this->checkGoogleAdsPolicyViolations($campaign) || $hasViolation;
             }
 
             if ($campaign->facebook_ads_campaign_id) {
-                $this->checkFacebookAdsPolicyViolations($campaign);
+                $hasViolation = $this->checkFacebookAdsPolicyViolations($campaign) || $hasViolation;
+            }
+
+            if ($hasViolation) {
+                $selfHealingAgent->heal($campaign);
             }
         } catch (\Exception $e) {
             Log::error("Error checking for policy violations for campaign {$this->campaignId}: " . $e->getMessage(), [
@@ -49,13 +56,18 @@ class CheckCampaignPolicyViolations implements ShouldQueue
         }
     }
 
-    private function checkGoogleAdsPolicyViolations(Campaign $campaign): void
+    private function checkGoogleAdsPolicyViolations(Campaign $campaign): bool
     {
         $service = new AccountStructureService($campaign->customer);
         $client = $service->getClient();
         $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
 
-        $query = "SELECT ad_group_ad.policy_summary FROM ad_group_ad WHERE campaign.id = {$campaign->google_ads_campaign_id}";
+        $campaignResourceName = $campaign->google_ads_campaign_id;
+        if (!str_starts_with($campaignResourceName, 'customers/')) {
+            $campaignResourceName = "customers/{$campaign->customer->google_ads_customer_id}/campaigns/{$campaignResourceName}";
+        }
+
+        $query = "SELECT ad_group_ad.policy_summary FROM ad_group_ad WHERE campaign.resource_name = '{$campaignResourceName}'";
 
         $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
             'customer_id' => $campaign->customer->google_ads_customer_id,
@@ -69,16 +81,18 @@ class CheckCampaignPolicyViolations implements ShouldQueue
                     'policy_summary' => $policySummary->serializeToJsonString(),
                 ]);
                 $campaign->update(['status' => 'PAUSED']);
-                break;
+                return true;
             }
         }
+
+        return false;
     }
 
-    private function checkFacebookAdsPolicyViolations(Campaign $campaign): void
+    private function checkFacebookAdsPolicyViolations(Campaign $campaign): bool
     {
         $customer = $campaign->customer;
         if (!$customer || !$customer->facebook_ads_account_id) {
-            return;
+            return false;
         }
 
         $adService = new FacebookAdService($customer);
@@ -115,7 +129,11 @@ class CheckCampaignPolicyViolations implements ShouldQueue
                 Log::warning("All ads disapproved for Facebook campaign {$this->campaignId}. Pausing campaign.");
                 $campaign->update(['status' => 'PAUSED']);
             }
+
+            return true;
         }
+
+        return false;
     }
 
     /**

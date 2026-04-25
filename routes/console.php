@@ -96,7 +96,7 @@ Schedule::call(function () {
     \App\Models\Campaign::withDeployedPlatforms()->each(function ($campaign) {
         CheckCampaignPolicyViolations::dispatch($campaign->id);
     });
-})->name('check-campaign-policy-violations')->daily()->withoutOverlapping();
+})->name('check-campaign-policy-violations')->hourly()->withoutOverlapping();
 
 // Keyword Quality Score tracking - captures daily QS snapshots for trending
 Schedule::call(function () {
