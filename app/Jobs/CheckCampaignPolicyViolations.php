@@ -4,15 +4,15 @@ namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Services\Agents\SelfHealingAgent;
-use App\Services\GoogleAds\AccountStructureService;
+use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use App\Services\FacebookAds\AdService as FacebookAdService;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 
 class CheckCampaignPolicyViolations implements ShouldQueue
 {
@@ -58,27 +58,19 @@ class CheckCampaignPolicyViolations implements ShouldQueue
 
     private function checkGoogleAdsPolicyViolations(Campaign $campaign): bool
     {
-        $service = new AccountStructureService($campaign->customer);
-        $client = $service->getClient();
-        $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
-
         $campaignResourceName = $campaign->google_ads_campaign_id;
         if (!str_starts_with($campaignResourceName, 'customers/')) {
             $campaignResourceName = "customers/{$campaign->customer->google_ads_customer_id}/campaigns/{$campaignResourceName}";
         }
 
-        $query = "SELECT ad_group_ad.policy_summary FROM ad_group_ad WHERE campaign.resource_name = '{$campaignResourceName}'";
+        $getAdStatus = new GetAdStatus($campaign->customer, true);
+        $ads = $getAdStatus($campaign->customer->google_ads_customer_id, $campaignResourceName);
 
-        $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
-            'customer_id' => $campaign->customer->google_ads_customer_id,
-            'query' => $query,
-        ]));
-
-        foreach ($response->getIterator() as $googleAdsRow) {
-            $policySummary = $googleAdsRow->getAdGroupAd()->getPolicySummary();
-            if (count($policySummary->getPolicyTopicEntries()) > 0) {
+        foreach ($ads as $ad) {
+            if (($ad['approval_status'] ?? null) === PolicyApprovalStatus::DISAPPROVED) {
                 Log::warning("Google Ads policy violation found for campaign {$this->campaignId}. Pausing campaign.", [
-                    'policy_summary' => $policySummary->serializeToJsonString(),
+                    'ad' => $ad['resource_name'] ?? null,
+                    'policy_topics' => $ad['policy_topics'] ?? [],
                 ]);
                 $campaign->update(['status' => 'PAUSED']);
                 return true;
