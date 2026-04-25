@@ -579,7 +579,7 @@ class HealthCheckAgent
     protected function testFacebookAdsConnectivity(Customer $customer): array
     {
         try {
-            if (!$customer->facebook_ads_access_token) {
+            if (!$this->getFacebookSystemUserToken()) {
                 return ['connected' => false, 'error' => 'No access token configured'];
             }
 
@@ -637,36 +637,14 @@ class HealthCheckAgent
     {
         $health = ['issues' => [], 'warnings' => []];
 
-        if (!$customer->facebook_ads_access_token) {
+        if (!$this->getFacebookSystemUserToken()) {
             $health['issues'][] = [
                 'type' => 'token',
                 'severity' => 'critical',
                 'message' => 'Facebook Ads access token is missing',
-                'details' => 'Reconnect Facebook account to restore access',
+                'details' => 'Configure the platform system user token to restore access',
             ];
             return $health;
-        }
-
-        // Check token expiry if stored
-        if ($customer->facebook_token_expires_at) {
-            $expiresAt = Carbon::parse($customer->facebook_token_expires_at);
-            $daysUntilExpiry = now()->diffInDays($expiresAt, false);
-
-            if ($daysUntilExpiry <= 0) {
-                $health['issues'][] = [
-                    'type' => 'token_expired',
-                    'severity' => 'critical',
-                    'message' => 'Facebook access token has expired',
-                    'details' => 'Reconnect Facebook account immediately',
-                ];
-            } elseif ($daysUntilExpiry <= $this->tokenExpiryWarningDays) {
-                $health['warnings'][] = [
-                    'type' => 'token_expiring',
-                    'severity' => 'high',
-                    'message' => "Facebook access token expires in {$daysUntilExpiry} days",
-                    'details' => 'Reconnect Facebook account to refresh token',
-                ];
-            }
         }
 
         return $health;
@@ -704,22 +682,22 @@ class HealthCheckAgent
             $status = $service->getAccountStatus($customerId);
 
             if ($status) {
-                // Status enum: 1=ENABLED, 2=CANCELED, 3=SUSPENDED, 4=CLOSED
-                if ($status['status'] === 3) {
+                // Status enum: 2=ENABLED, 3=CANCELED, 4=SUSPENDED, 5=CLOSED
+                if ($status['status'] === 4) {
                     $health['issues'][] = [
                         'type' => 'account_suspended',
                         'severity' => 'critical',
                         'message' => 'Google Ads account is suspended',
                         'details' => 'Contact Google Ads support to resolve account suspension',
                     ];
-                } elseif ($status['status'] === 2) {
+                } elseif ($status['status'] === 3) {
                     $health['issues'][] = [
                         'type' => 'account_canceled',
                         'severity' => 'critical',
                         'message' => 'Google Ads account is canceled',
                         'details' => 'The account has been canceled and cannot run ads',
                     ];
-                } elseif ($status['status'] === 4) {
+                } elseif ($status['status'] === 5) {
                     $health['issues'][] = [
                         'type' => 'account_closed',
                         'severity' => 'critical',
@@ -747,7 +725,7 @@ class HealthCheckAgent
 
         try {
             $accountId = $customer->facebook_ads_account_id;
-            $accessToken = $customer->facebook_ads_access_token;
+            $accessToken = $this->getFacebookSystemUserToken();
 
             if (!$accountId || !$accessToken) {
                 return $health;
@@ -804,6 +782,11 @@ class HealthCheckAgent
         }
 
         return $health;
+    }
+
+    protected function getFacebookSystemUserToken(): ?string
+    {
+        return config('services.facebook.system_user_token');
     }
 
     /**
