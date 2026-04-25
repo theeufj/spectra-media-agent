@@ -404,6 +404,14 @@ class HealthCheckAgent
                 $health['warnings'] = array_merge($health['warnings'], $deliveryHealth['warnings']);
             }
 
+            $zeroDeliveryHealth = $this->checkZeroDelivery($campaign);
+            if (!empty($zeroDeliveryHealth['issues'])) {
+                $health['issues'] = array_merge($health['issues'], $zeroDeliveryHealth['issues']);
+            }
+            if (!empty($zeroDeliveryHealth['warnings'])) {
+                $health['warnings'] = array_merge($health['warnings'], $zeroDeliveryHealth['warnings']);
+            }
+
             // Check budget pacing
             $pacingHealth = $this->checkBudgetPacing($campaign);
             if (!empty($pacingHealth['issues'])) {
@@ -443,6 +451,47 @@ class HealthCheckAgent
         }
 
         $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+        return $health;
+    }
+
+    protected function checkZeroDelivery(Campaign $campaign): array
+    {
+        $health = ['issues' => [], 'warnings' => []];
+        $deployedAt = $campaign->strategies()
+            ->whereIn('deployment_status', ['deployed', 'verified'])
+            ->whereNotNull('deployed_at')
+            ->min('deployed_at');
+
+        if (!$deployedAt || Carbon::parse($deployedAt)->gt(now()->subHours(6))) {
+            return $health;
+        }
+
+        if ($campaign->google_ads_campaign_id) {
+            $googleMetrics = $this->getGoogleCampaignMetricsSummary($campaign);
+
+            if ($googleMetrics && ($googleMetrics['impressions'] ?? 0) === 0) {
+                $health['warnings'][] = [
+                    'type' => 'google_zero_delivery',
+                    'severity' => 'high',
+                    'message' => 'Google campaign has not recorded impressions since deployment',
+                    'details' => 'Check ad approval, bidding, targeting, and billing before spend is lost to delay.',
+                ];
+            }
+        }
+
+        if ($campaign->facebook_ads_campaign_id) {
+            $facebookMetrics = $this->getFacebookCampaignMetricsSummary($campaign);
+
+            if ($facebookMetrics && ($facebookMetrics['impressions'] ?? 0) === 0) {
+                $health['warnings'][] = [
+                    'type' => 'facebook_zero_delivery',
+                    'severity' => 'high',
+                    'message' => 'Facebook campaign has not recorded impressions since deployment',
+                    'details' => 'Check ad set delivery, review state, audience restrictions, and billing.',
+                ];
+            }
+        }
+
         return $health;
     }
 
@@ -1057,7 +1106,11 @@ class HealthCheckAgent
             try {
                 $getAdStatus = new GetAdStatus($campaign->customer, true);
                 $customerId = $campaign->customer->google_ads_customer_id;
-                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resourceName = $campaign->google_ads_campaign_id;
+
+                if (!str_starts_with($resourceName, 'customers/')) {
+                    $resourceName = "customers/{$customerId}/campaigns/{$resourceName}";
+                }
                 
                 $ads = $getAdStatus($customerId, $resourceName);
 
@@ -1125,6 +1178,89 @@ class HealthCheckAgent
         }
 
         return $health;
+    }
+
+    protected function getGoogleCampaignMetricsSummary(Campaign $campaign): ?array
+    {
+        try {
+            $customer = $campaign->customer;
+            if (!$customer || !$campaign->google_ads_campaign_id) {
+                return null;
+            }
+
+            preg_match('/campaigns\/(\d+)$/', $campaign->google_ads_campaign_id, $matches);
+            $campaignId = $matches[1] ?? $campaign->google_ads_campaign_id;
+
+            $service = new class($customer) extends \App\Services\GoogleAds\BaseGoogleAdsService {
+                public function getCampaignMetrics(string $customerId, string $campaignId): ?array
+                {
+                    $this->ensureClient();
+                    $query = "SELECT metrics.impressions, metrics.clicks, metrics.cost_micros FROM campaign WHERE campaign.id = {$campaignId} AND segments.date BETWEEN '"
+                        . now()->subDays(1)->toDateString() . "' AND '" . now()->toDateString() . "'";
+
+                    $response = $this->searchQuery($customerId, $query);
+                    $metrics = ['impressions' => 0, 'clicks' => 0, 'cost' => 0.0];
+
+                    foreach ($response->getIterator() as $row) {
+                        $googleMetrics = $row->getMetrics();
+                        $metrics['impressions'] += $googleMetrics->getImpressions();
+                        $metrics['clicks'] += $googleMetrics->getClicks();
+                        $metrics['cost'] += $googleMetrics->getCostMicros() / 1000000;
+                    }
+
+                    return $metrics;
+                }
+            };
+
+            return $service->getCampaignMetrics(str_replace('-', '', $customer->google_ads_customer_id), (string) $campaignId);
+        } catch (\Exception $e) {
+            Log::debug('HealthCheckAgent: Could not fetch Google campaign metrics', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    protected function getFacebookCampaignMetricsSummary(Campaign $campaign): ?array
+    {
+        try {
+            $customer = $campaign->customer;
+            if (!$customer || !$campaign->facebook_ads_campaign_id) {
+                return null;
+            }
+
+            $insightService = new InsightService($customer);
+            $adSetService = new \App\Services\FacebookAds\AdSetService($customer);
+            $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+            $metrics = ['impressions' => 0, 'clicks' => 0, 'cost' => 0.0];
+
+            foreach ($adSets as $adSet) {
+                if (empty($adSet['id'])) {
+                    continue;
+                }
+
+                $insights = $insightService->getAdSetInsights(
+                    $adSet['id'],
+                    now()->subDays(1)->toDateString(),
+                    now()->toDateString()
+                ) ?? [];
+
+                foreach ($insights as $insight) {
+                    $metrics['impressions'] += (int) ($insight['impressions'] ?? 0);
+                    $metrics['clicks'] += (int) ($insight['clicks'] ?? 0);
+                    $metrics['cost'] += (float) ($insight['spend'] ?? 0);
+                }
+            }
+
+            return $metrics;
+        } catch (\Exception $e) {
+            Log::debug('HealthCheckAgent: Could not fetch Facebook campaign metrics', [
+                'campaign_id' => $campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     /**

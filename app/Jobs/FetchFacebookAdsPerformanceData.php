@@ -6,6 +6,7 @@ use App\Models\Campaign;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\Recommendation;
 use App\Services\CircuitBreaker\CircuitBreakerService;
+use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\InsightService;
 use App\Services\GoogleAds\RecommendationGenerationService;
 use Illuminate\Bus\Queueable;
@@ -60,6 +61,10 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     $dateEnd
                 );
 
+                if (is_array($insights) && empty($insights)) {
+                    $insights = $this->getFallbackAdSetInsights($customer, $insightService, $dateStart, $dateEnd);
+                }
+
                 if ($insights === null) {
                     $circuitBreaker->recordFailure();
                     $this->fail(new \Exception("Failed to fetch Facebook Ads insights"));
@@ -85,7 +90,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                         'date' => $date,
                         'impressions' => (int) ($insight['impressions'] ?? 0),
                         'clicks' => (int) ($insight['clicks'] ?? 0),
-                        'cost' => (float) ($insight['spend'] ?? 0) / 100, // Facebook returns spend in cents
+                        'cost' => (float) ($insight['spend'] ?? 0),
                         'conversions' => $conversions,
                         'reach' => (int) ($insight['reach'] ?? null),
                         'frequency' => (float) ($insight['frequency'] ?? null),
@@ -158,5 +163,59 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
         Log::error('FetchFacebookAdsPerformanceData failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+    }
+
+    protected function getFallbackAdSetInsights(
+        Campaign $campaign,
+        InsightService $insightService,
+        string $dateStart,
+        string $dateEnd
+    ): array {
+        $adSetService = new AdSetService($campaign->customer);
+        $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+        $aggregated = [];
+
+        foreach ($adSets as $adSet) {
+            if (empty($adSet['id'])) {
+                continue;
+            }
+
+            $adSetInsights = $insightService->getAdSetInsights($adSet['id'], $dateStart, $dateEnd) ?? [];
+
+            foreach ($adSetInsights as $insight) {
+                $date = $insight['date_start'] ?? $insight['date_stop'] ?? null;
+                if (!$date) {
+                    continue;
+                }
+
+                if (!isset($aggregated[$date])) {
+                    $aggregated[$date] = [
+                        'date_start' => $date,
+                        'date_stop' => $date,
+                        'impressions' => 0,
+                        'clicks' => 0,
+                        'spend' => 0.0,
+                        'reach' => 0,
+                        'frequency' => 0.0,
+                        'cpc' => 0.0,
+                        'cpm' => 0.0,
+                        'cpa' => 0.0,
+                        'actions' => [],
+                    ];
+                }
+
+                $aggregated[$date]['impressions'] += (int) ($insight['impressions'] ?? 0);
+                $aggregated[$date]['clicks'] += (int) ($insight['clicks'] ?? 0);
+                $aggregated[$date]['spend'] += (float) ($insight['spend'] ?? 0);
+                $aggregated[$date]['reach'] += (int) ($insight['reach'] ?? 0);
+                $aggregated[$date]['frequency'] = max($aggregated[$date]['frequency'], (float) ($insight['frequency'] ?? 0));
+                $aggregated[$date]['cpc'] = (float) ($insight['cpc'] ?? $aggregated[$date]['cpc']);
+                $aggregated[$date]['cpm'] = (float) ($insight['cpm'] ?? $aggregated[$date]['cpm']);
+                $aggregated[$date]['cpa'] = (float) ($insight['cpa'] ?? $aggregated[$date]['cpa']);
+                $aggregated[$date]['actions'] = array_merge($aggregated[$date]['actions'], $insight['actions'] ?? []);
+            }
+        }
+
+        return array_values($aggregated);
     }
 }
