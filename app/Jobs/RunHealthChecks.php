@@ -94,9 +94,9 @@ class RunHealthChecks implements ShouldQueue
                     default => null,
                 };
 
-                // Send alert if critical issues detected
-                if ($results['overall_health'] === 'critical') {
-                    $this->sendCriticalAlert($customer, $results);
+                // Send alert if severe issues detected.
+                if (in_array($results['overall_health'], ['critical', 'unhealthy'], true)) {
+                    $this->sendHealthAlert($customer, $results);
                     $summary['alerts_sent']++;
                 }
 
@@ -128,13 +128,19 @@ class RunHealthChecks implements ShouldQueue
     /**
      * Send critical alert for immediate attention.
      */
-    protected function sendCriticalAlert(Customer $customer, array $results): void
+    protected function sendHealthAlert(Customer $customer, array $results): void
     {
         try {
-            $title = 'Critical Campaign Health Alert';
-            $message = 'Critical issues were detected during automated health checks.';
+            $isCritical = $results['overall_health'] === 'critical';
+            $title = $isCritical ? 'Critical Campaign Health Alert' : 'Campaign Health Alert';
+            $message = $isCritical
+                ? 'Critical issues were detected during automated health checks.'
+                : 'Actionable issues were detected during automated health checks.';
+            $notificationType = $isCritical
+                ? Notification::TYPE_HEALTH_CRITICAL
+                : Notification::TYPE_HEALTH_WARNING;
             $details = [
-                'severity' => 'critical',
+                'severity' => $results['overall_health'],
                 'customer_id' => $customer->id,
                 'issues' => $results['issues'] ?? [],
                 'warnings' => $results['warnings'] ?? [],
@@ -150,7 +156,7 @@ class RunHealthChecks implements ShouldQueue
 
                 Notification::notify(
                     $user,
-                    Notification::TYPE_HEALTH_CRITICAL,
+                    $notificationType,
                     $title,
                     $message,
                     url('/dashboard'),
@@ -160,13 +166,14 @@ class RunHealthChecks implements ShouldQueue
                 );
             }
 
-            Log::info("RunHealthChecks: Critical alert queued", [
+            Log::info("RunHealthChecks: Health alert queued", [
                 'customer_id' => $customer->id,
+                'overall_health' => $results['overall_health'],
                 'recipients' => $customer->users->pluck('email')->filter()->values()->all(),
                 'issues_count' => count($results['issues'] ?? []),
             ]);
         } catch (\Exception $e) {
-            Log::error("RunHealthChecks: Failed to send critical alert", [
+            Log::error("RunHealthChecks: Failed to send health alert", [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
             ]);
