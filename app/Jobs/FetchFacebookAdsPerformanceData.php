@@ -62,7 +62,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 );
 
                 if (is_array($insights) && empty($insights)) {
-                    $insights = $this->getFallbackAdSetInsights($customer, $insightService, $dateStart, $dateEnd);
+                    $insights = $this->getFallbackAdSetInsights($this->campaign, $insightService, $dateStart, $dateEnd);
                 }
 
                 if ($insights === null) {
