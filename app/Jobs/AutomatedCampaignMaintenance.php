@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\SearchTermMiningAgent;
 use App\Services\Agents\BudgetIntelligenceAgent;
+use App\Services\Agents\CreativeIntelligenceAgent;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,7 +25,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
     public function handle(
         SelfHealingAgent $selfHealingAgent,
         SearchTermMiningAgent $searchTermAgent,
-        BudgetIntelligenceAgent $budgetAgent
+        BudgetIntelligenceAgent $budgetAgent,
+        CreativeIntelligenceAgent $creativeAgent
     ): void {
         Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
 
@@ -43,6 +45,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             'keywords_added' => 0,
             'negatives_added' => 0,
             'budget_adjustments' => 0,
+            'creative_adjustments' => 0,
             'errors' => 0,
         ];
 
@@ -86,6 +89,13 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 ));
                 $summary['errors'] += count($budgetResults['errors'] ?? []);
 
+                // 4. Run Creative Intelligence
+                $creativeResults = $creativeAgent->analyze($campaign);
+                $summary['creative_adjustments'] += count($creativeResults['recommendations'] ?? []);
+                // If it generated variations, that's an action
+                $summary['creative_adjustments'] += count($creativeResults['generated_variations']['headlines'] ?? []);
+                $summary['creative_adjustments'] += count($creativeResults['generated_variations']['descriptions'] ?? []);
+
                 $summary['campaigns_processed']++;
 
                 // Store maintenance results on the campaign
@@ -95,6 +105,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                         'healing' => $healingResults,
                         'mining' => $miningResults,
                         'budget' => $budgetResults,
+                        'creative' => $creativeResults,
                     ],
                 ]);
 
@@ -103,6 +114,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $keywordsAdded = count($miningResults['keywords_added'] ?? []);
                 $negativesAdded = count($miningResults['negatives_added'] ?? []);
                 $budgetChangeCount = count(array_filter($budgetResults['adjustments'] ?? [], fn($a) => $a['type'] === 'budget_updated'));
+                $creativeGenCount = count($creativeResults['generated_variations']['headlines'] ?? []) + count($creativeResults['generated_variations']['descriptions'] ?? []);
 
                 if ($healingActionCount > 0) {
                     AgentActivity::record('maintenance', 'self_healed', "Fixed {$healingActionCount} issue(s) in \"{$campaign->name}\"", $campaign->customer_id, $campaign->id, ['actions' => $healingResults['actions_taken'] ?? []]);
@@ -112,6 +124,9 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 }
                 if ($budgetChangeCount > 0) {
                     AgentActivity::record('budget', 'adjusted_budget', "Made {$budgetChangeCount} budget adjustment(s) for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id, ['adjustments' => $budgetResults['adjustments'] ?? []]);
+                }
+                if ($creativeGenCount > 0) {
+                    AgentActivity::record('creative', 'creative_optimized', "Generated {$creativeGenCount} new ad variations based on performance data for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id);
                 }
 
             } catch (\Exception $e) {

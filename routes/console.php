@@ -82,6 +82,9 @@ Schedule::call(function () {
 // AI-powered optimization analysis - reviews performance and suggests improvements
 Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(notifyAdminOnFailure('OptimizeCampaigns'));
 
+// Autonomous A/B Test evaluation - tracks significance and drops losers
+Schedule::job(new \App\Jobs\EvaluateABTests)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('EvaluateABTests'));
+
 // Autonomous campaign maintenance - self-healing, keyword mining, budget intelligence
 Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('AutomatedCampaignMaintenance'));
 
@@ -119,6 +122,9 @@ Schedule::call(function () {
         RunCompetitorIntelligence::dispatch($customer);
     });
 })->name('run-competitor-intelligence')->weekly()->sundays()->at('02:00')->withoutOverlapping(); // Run Sunday nights
+
+// Audience intelligence - segment and sync customer match lists
+Schedule::job(new \App\Jobs\RunAudienceIntelligence)->weekly()->sundays()->at('03:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunAudienceIntelligence'));
 
 // Weekly executive reports - AI-generated performance summaries per customer
 Schedule::call(function () {
