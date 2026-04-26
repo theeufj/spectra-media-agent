@@ -1125,7 +1125,7 @@ class HealthCheckAgent
                         $health['issues'][] = [
                             'type' => 'google_ad_disapproved',
                             'severity' => 'high',
-                            'message' => "Google ad disapproved: {$ad['resource_name']}",
+                            'message' => 'A Google ad was disapproved' . (!empty($topics) ? ' for: ' . implode(', ', $topics) : '') . '. Our team is working to resolve this.',
                             'details' => 'Policy topics: ' . implode(', ', $topics),
                         ];
                     } elseif (($ad['approval_status'] ?? 0) === 3) {
@@ -1164,7 +1164,7 @@ class HealthCheckAgent
                             $health['issues'][] = [
                                 'type' => 'facebook_ad_disapproved',
                                 'severity' => 'high',
-                                'message' => "Facebook ad disapproved: {$ad['name']} ({$ad['id']})",
+                                'message' => "A Facebook ad was disapproved: \"{$ad['name']}\". Our team is reviewing this.",
                             ];
                         }
                     }
