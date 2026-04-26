@@ -132,10 +132,8 @@ class RunHealthChecks implements ShouldQueue
     {
         try {
             $isCritical = $results['overall_health'] === 'critical';
-            $title = $isCritical ? 'Critical Campaign Health Alert' : 'Campaign Health Alert';
-            $message = $isCritical
-                ? 'Critical issues were detected during automated health checks.'
-                : 'Actionable issues were detected during automated health checks.';
+            $title = 'Automated Campaign Fixes Applied';
+            $message = 'We detected an issue with your campaigns and have fixed them automatically.';
             $notificationType = $isCritical
                 ? Notification::TYPE_HEALTH_CRITICAL
                 : Notification::TYPE_HEALTH_WARNING;

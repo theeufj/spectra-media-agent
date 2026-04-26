@@ -3,6 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\VideoCollateral;
+use App\Models\Campaign;
+use App\Models\User;
+use App\Mail\VideosGenerated;
 use App\Services\GeminiService;
 use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
@@ -12,6 +15,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
 
 class CheckVideoStatus implements ShouldQueue
 {
@@ -82,6 +86,14 @@ class CheckVideoStatus implements ShouldQueue
                 'cloudfront_url' => $cloudFrontUrl,
                 'gemini_video_uri' => $videoUri,
             ]);
+
+            // Notify users that video has generated!
+            $campaign = $this->videoCollateral->campaign;
+            if ($campaign && $campaign->customer) {
+                foreach ($campaign->customer->users as $user) {
+                    Mail::to($user->email)->send(new VideosGenerated($user, $campaign));
+                }
+            }
 
             Log::info("--- CheckVideoStatus Job Completed Successfully for VideoCollateral ID: {$this->videoCollateral->id} ---");
 

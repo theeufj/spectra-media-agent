@@ -33,7 +33,7 @@ class BrandAssetsReady extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '🎨 Your Brand DNA is Ready - {$this->customer->name}',
+            subject: "🎨 Your Brand DNA is Ready - {$this->customer->name}",
         );
     }
 

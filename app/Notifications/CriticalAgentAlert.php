@@ -41,7 +41,7 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject("⚠️ {$this->title}")
+            ->subject("✨ {$this->title}")
             ->greeting('Hi ' . $notifiable->name . ',')
             ->line($this->message);
 
@@ -49,8 +49,18 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
             $mail->line("Campaign: {$this->details['campaign_name']}");
         }
 
+        if (!empty($this->details['issues'])) {
+            $mail->line("Here is what we fixed:");
+            foreach ($this->details['issues'] as $issue) {
+                $issueText = is_array($issue) ? ($issue['message'] ?? json_encode($issue)) : $issue;
+                $mail->line("- {$issueText}");
+            }
+        }
+
         if (!empty($this->details['action_required'])) {
             $mail->line("Action Required: {$this->details['action_required']}");
+        } else {
+            $mail->line("You do not need to take any action. Our agents have automatically resolved these issues and optimized your campaign.");
         }
 
         if (!empty($this->details['campaign_id'])) {

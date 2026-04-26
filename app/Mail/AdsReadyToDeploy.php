@@ -33,7 +33,7 @@ class AdsReadyToDeploy extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '🚀 Your {$this->totalAssets} Ads Are Ready to Launch',
+            subject: "🚀 Your {$this->totalAssets} Ads Are Ready to Launch",
         );
     }
 

@@ -71,6 +71,8 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
+        \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\WelcomeEmail($user->name));
+
         Auth::login($user);
 
         // Redirect to email verification page for email/password signups

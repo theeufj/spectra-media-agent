@@ -29,11 +29,11 @@ Creative Strategy: {$this->strategy}
    - Ensure scenes flow naturally and align with the pacing of the script
    - Include high-quality, professional imagery appropriate for advertising
 
-2. NO TEXT RENDERING:
-   - Do NOT generate, display, or render any text, words, letters, numbers, or written content
-   - No text overlays, captions, subtitles, titles, labels, or on-screen text of any kind
-   - Focus entirely on visual imagery, scenes, motion, and cinematography
-   - Text rendering in AI-generated videos often contains errors - avoid completely
+2. NO TEXT RENDERING (CRITICAL):
+   - You MUST NOT generate, display, or render any text, words, letters, numbers, or written content anywhere in the video.
+   - Absolutely NO text overlays, captions, subtitles, titles, labels, or on-screen text of any kind.
+   - The video MUST consist purely of visual imagery, scenes, motion, and cinematography.
+   - Any AI-generated text will contain spelling mistakes - this is strictly forbidden.
 
 3. STYLE & TONE:
    - Match the emotional tone and energy level suggested by the script

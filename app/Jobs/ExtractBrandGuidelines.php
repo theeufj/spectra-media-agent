@@ -3,6 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
+use App\Mail\BrandAssetsReady;
+use Illuminate\Support\Facades\Mail;
 use App\Services\BrandGuidelineExtractorService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -48,6 +50,11 @@ class ExtractBrandGuidelines implements ShouldQueue
                     'guideline_id' => $brandGuideline->id,
                     'quality_score' => $brandGuideline->extraction_quality_score,
                 ]);
+
+                // Notify all users in the customer account that brand assets are ready
+                foreach ($this->customer->users as $user) {
+                    Mail::to($user->email)->send(new BrandAssetsReady($user, $this->customer, 1));
+                }
             } else {
                 Log::warning("Brand guideline extraction returned null", [
                     'customer_id' => $this->customer->id,
