@@ -13,10 +13,14 @@ use Illuminate\Support\Facades\Log;
  * Automatically graduates campaigns up the bidding strategy ladder as
  * conversion data matures, unlocking smarter Google Smart Bidding.
  *
- * Ladder:
- *   MANUAL_CPC  →  ENHANCED_CPC  (≥30 conversions / 30 days)
- *   ENHANCED_CPC → TARGET_CPA    (≥50 conversions / 30 days)
- *   TARGET_CPA   → TARGET_ROAS   (≥100 conversions / 30 days + stable CPA σ<20%)
+ * Performance Max path (default for new campaigns with assets):
+ *   MAXIMIZE_CONVERSIONS → TARGET_CPA    (≥30 conversions / 30 days)
+ *   TARGET_CPA           → TARGET_ROAS   (≥100 conversions / 30 days + stable CPA σ<20%)
+ *
+ * Legacy Search path (campaigns without assets):
+ *   MANUAL_CPC    → ENHANCED_CPC  (≥30 conversions / 30 days)
+ *   ENHANCED_CPC  → TARGET_CPA    (≥50 conversions / 30 days)
+ *   TARGET_CPA    → TARGET_ROAS   (≥100 conversions / 30 days + stable CPA σ<20%)
  *
  * Target CPA is set to 90% of the current average (stretch but achievable).
  * Target ROAS is set to 90% of the current average ROAS (conservative start).
@@ -24,9 +28,13 @@ use Illuminate\Support\Facades\Log;
 class BiddingStrategyProgressionAgent
 {
     private const THRESHOLDS = [
-        'MANUAL_CPC'   => ['min_conversions' => 30, 'next' => 'ENHANCED_CPC'],
-        'ENHANCED_CPC' => ['min_conversions' => 50, 'next' => 'TARGET_CPA'],
-        'TARGET_CPA'   => ['min_conversions' => 100, 'next' => 'TARGET_ROAS'],
+        // PMax / MaximizeConversions path
+        'MAXIMIZE_CONVERSIONS' => ['min_conversions' => 30,  'next' => 'TARGET_CPA'],
+        // Legacy Search path
+        'MANUAL_CPC'           => ['min_conversions' => 30,  'next' => 'ENHANCED_CPC'],
+        'ENHANCED_CPC'         => ['min_conversions' => 50,  'next' => 'TARGET_CPA'],
+        // Shared graduation step for both paths
+        'TARGET_CPA'           => ['min_conversions' => 100, 'next' => 'TARGET_ROAS'],
     ];
 
     public function evaluate(Campaign $campaign): array
@@ -43,11 +51,14 @@ class BiddingStrategyProgressionAgent
             return ['skipped' => true, 'reason' => 'no strategy'];
         }
 
-        $biddingData    = is_string($strategy->bidding_strategy)
+        $biddingData = is_string($strategy->bidding_strategy)
             ? json_decode($strategy->bidding_strategy, true)
             : (array) $strategy->bidding_strategy;
 
-        $currentStrategy = strtoupper($biddingData['bid_strategy'] ?? $biddingData['bidding_strategy_type'] ?? 'MANUAL_CPC');
+        // Strategy name is stored under 'name' (from AI generation) or legacy keys.
+        // Normalise to uppercase and strip camelCase variants (e.g. "MaximizeConversions" → "MAXIMIZE_CONVERSIONS").
+        $rawName = $biddingData['name'] ?? $biddingData['bid_strategy'] ?? $biddingData['bidding_strategy_type'] ?? 'MANUAL_CPC';
+        $currentStrategy = strtoupper(preg_replace('/([a-z])([A-Z])/', '$1_$2', $rawName));
 
         if (!array_key_exists($currentStrategy, self::THRESHOLDS)) {
             return ['skipped' => true, 'reason' => "Strategy {$currentStrategy} not in progression ladder"];

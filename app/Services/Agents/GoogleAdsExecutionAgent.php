@@ -388,7 +388,23 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
             $campaignStructure = $plan->getCampaignStructure();
             $campaignType = $campaignStructure['type'] ?? 'search';
-            
+
+            // Prefer Performance Max over plain Search when assets are ready.
+            // PMax runs across all Google surfaces (Search, Display, YouTube, Gmail, Maps)
+            // from day one — more efficient than a Search-only campaign for new accounts.
+            if (in_array($campaignType, ['search', 'display'], true)) {
+                $hasImages  = $strategy->imageCollaterals()->where('is_active', true)->count() >= 3;
+                $hasAdCopy  = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
+                $minBudget  = ($strategy->daily_budget ?: ($campaign->daily_budget ?: 0)) >= 10;
+                if ($hasImages && $hasAdCopy && $minBudget) {
+                    Log::info("GoogleAdsExecutionAgent: Upgrading {$campaignType} → performance_max (assets ready)", [
+                        'campaign_id' => $campaign->id,
+                    ]);
+                    $campaignType = 'performance_max';
+                    $result->addWarning('campaign_type_upgraded', 'Campaign type upgraded to Performance Max — all Google surfaces will be targeted using your uploaded assets.');
+                }
+            }
+
             // Execute based on campaign type
             switch ($campaignType) {
                 case 'search':
@@ -819,12 +835,23 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $timestamp = now()->format('Ymd_His');
         $campaignName = $campaign->name . ' - PMax - ' . $timestamp;
 
+        // Only set a Target CPA if the account has enough conversion history.
+        // Below 30 conversions, PMax uses MaximizeConversions automatically (no target CPA).
+        // BiddingStrategyProgressionAgent will add the target once data matures.
+        $conversionCount = $this->getConversionCountForCustomer($customerId);
+        $targetCpaMicros = null;
+        if ($strategy->cpa_target && $conversionCount >= 30) {
+            $targetCpaMicros = $strategy->cpa_target;
+        } elseif ($strategy->cpa_target && $conversionCount < 30) {
+            $result->addWarning('pmax_bidding_downgraded', "Performance Max will use Maximize Conversions until 30 conversions are recorded ({$conversionCount} so far). Target CPA will be applied automatically by the Bidding Progression Agent.");
+        }
+
         $campaignData = [
-            'businessName' => $campaignName,
-            'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'),
-            'targetCpaMicros' => $strategy->cpa_target ?? null,
+            'businessName'   => $campaignName,
+            'budget'         => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+            'startDate'      => now()->format('Y-m-d'),
+            'endDate'        => now()->addMonth()->format('Y-m-d'),
+            'targetCpaMicros' => $targetCpaMicros,
         ];
 
         $campaignResourceName = ($createCampaignService)($customerId, $campaignData);

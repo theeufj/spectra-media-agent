@@ -38,18 +38,48 @@ class ConversionSetupService
 
         $customerId = str_replace('-', '', $customer->google_ads_customer_id);
 
-        // Step 0: Auto-detect GTM container from the live site to ensure we target
-        // the correct container regardless of what's stored in the database.
+        // Step 0: Ensure we have the correct GTM container to wire the conversion tag into.
+        //
+        // a) Crawl the live site and extract the GTM ID from the page source.
+        //    If the detected ID differs from what's stored, correct the record.
+        //
+        // b) If no GTM container is found on the site at all, provision a fresh one
+        //    via the GTM API and return the installation snippet so the customer can
+        //    add it to their site. The conversion tag is added to the new container
+        //    before it's published.
         if ($customer->website) {
             $detectedGtmId = $this->detectGtmContainer($customer->website);
-            if ($detectedGtmId && $detectedGtmId !== $customer->gtm_container_id) {
-                Log::info('ConversionSetupService: Detected different GTM container on live site', [
+
+            if ($detectedGtmId) {
+                if ($detectedGtmId !== $customer->gtm_container_id) {
+                    Log::info('ConversionSetupService: Detected different GTM container on live site — correcting stored ID', [
+                        'customer_id' => $customer->id,
+                        'stored'      => $customer->gtm_container_id,
+                        'detected'    => $detectedGtmId,
+                    ]);
+                    $customer->update(['gtm_container_id' => $detectedGtmId]);
+                    $customer->refresh();
+                }
+            } elseif (!$customer->gtm_container_id) {
+                // No GTM found on the live site and none stored — provision one now.
+                Log::info('ConversionSetupService: No GTM container found on site — provisioning new container', [
                     'customer_id' => $customer->id,
-                    'stored'      => $customer->gtm_container_id,
-                    'detected'    => $detectedGtmId,
+                    'website'     => $customer->website,
                 ]);
-                $customer->update(['gtm_container_id' => $detectedGtmId]);
-                $customer->refresh();
+                $provision = $this->gtm->provisionContainerForCustomer($customer);
+                if ($provision['success'] ?? false) {
+                    $customer->refresh();
+                    Log::info('ConversionSetupService: GTM container provisioned', [
+                        'customer_id'  => $customer->id,
+                        'container_id' => $customer->gtm_container_id,
+                    ]);
+                } else {
+                    $errors[] = 'GTM container could not be provisioned: ' . ($provision['error'] ?? 'unknown error') . '. Install Google Tag Manager manually and re-run setup.';
+                    Log::warning('ConversionSetupService: GTM provisioning failed', [
+                        'customer_id' => $customer->id,
+                        'error'       => $provision['error'] ?? 'unknown',
+                    ]);
+                }
             }
         }
 
