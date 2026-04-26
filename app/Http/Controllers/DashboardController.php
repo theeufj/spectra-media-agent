@@ -345,7 +345,9 @@ class DashboardController extends Controller
                 ->get();
 
             foreach ($rows as $row) {
-                $date = $row->date;
+                // Ensure date is a string to safely use as an array key
+                $date = $row->date instanceof \Carbon\Carbon ? $row->date->format('Y-m-d') : (string) $row->date;
+                
                 if (!isset($dailyMap[$date])) {
                     $dailyMap[$date] = ['date' => $date, 'cost' => 0, 'revenue' => 0, 'conversions' => 0];
                 }

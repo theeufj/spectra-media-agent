@@ -39,6 +39,49 @@ class Notification extends Model
         'read_at' => 'datetime',
     ];
 
+    protected static function booted()
+    {
+        static::creating(function ($notification) {
+            $data = $notification->data;
+            if (is_string($data)) {
+                $data = json_decode($data, true);
+            }
+
+            if (is_array($data)) {
+                if (empty($notification->title) && !empty($data['title'])) {
+                    $notification->title = $data['title'];
+                }
+                if (empty($notification->message) && !empty($data['message'])) {
+                    $notification->message = $data['message'];
+                }
+                if (empty($notification->action_url) && !empty($data['action_url'])) {
+                    $notification->action_url = $data['action_url'];
+                }
+                if (empty($notification->action_text) && !empty($data['action_text'])) {
+                    $notification->action_text = $data['action_text'];
+                }
+                if (empty($notification->customer_id) && !empty($data['customer_id'])) {
+                    $notification->customer_id = $data['customer_id'];
+                } elseif (empty($notification->customer_id) && !empty($data['details']['customer_id'])) {
+                    $notification->customer_id = $data['details']['customer_id'];
+                }
+                
+                // Adjust type from Laravel class name to standard string if configured that way
+                if (!empty($data['alert_type'])) {
+                    $notification->type = $data['alert_type'];
+                }
+            }
+
+            // Fallbacks for NOT NULL constraints
+            if (empty($notification->title)) {
+                $notification->title = 'Notification';
+            }
+            if (empty($notification->message)) {
+                $notification->message = '';
+            }
+        });
+    }
+
     /**
      * Notification types constants.
      */
