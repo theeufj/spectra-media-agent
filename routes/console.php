@@ -151,6 +151,21 @@ Schedule::call(function () {
 // Cross-channel budget rebalance - check all auto-rebalance allocations
 Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->dailyAt('06:00')->withoutOverlapping();
 
+// Seasonal strategy shift — adjusts budgets and bidding for current season at the start of each month
+Schedule::call(function () {
+    $month = now()->month;
+    $season = match (true) {
+        in_array($month, [3, 4, 5])   => 'spring',
+        in_array($month, [6, 7, 8])   => 'summer',
+        in_array($month, [9, 10, 11]) => 'autumn',
+        default                        => 'winter',
+    };
+
+    \App\Models\Campaign::withDeployedPlatforms()->each(function ($campaign) use ($season) {
+        \App\Jobs\ApplySeasonalStrategyShift::dispatch($campaign->id, $season);
+    });
+})->name('apply-seasonal-strategy-shift')->monthly()->withoutOverlapping();
+
 // CRM sync - sync offline conversions from connected CRMs
 Schedule::call(function () {
     \App\Models\CrmIntegration::where('status', 'connected')->each(function ($integration) {
@@ -209,4 +224,10 @@ Schedule::command('backup:clean')->dailyAt('02:30')->withoutOverlapping();
 
 // Monitor backup health — alerts if latest backup is missing or too old
 Schedule::command('backup:monitor')->dailyAt('03:00')->withoutOverlapping();
+
+// Facebook System User token health check — alert admins if token is expired/invalid
+Schedule::job(new \App\Jobs\RefreshFacebookTokens)
+    ->dailyAt('03:00')
+    ->withoutOverlapping()
+    ->onFailure(notifyAdminOnFailure('RefreshFacebookTokens'));
 

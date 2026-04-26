@@ -8,6 +8,7 @@ use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\SearchTermMiningAgent;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\CreativeIntelligenceAgent;
+use App\Jobs\FindUnderperformingKeywords;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -92,6 +93,12 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     $summary['keywords_added'] += count($miningResults['keywords_added'] ?? []);
                     $summary['negatives_added'] += count($miningResults['negatives_added'] ?? []);
                     $summary['errors'] += count($miningResults['errors'] ?? []);
+                }
+
+                // 2b. Negate underperforming keywords (Google only — stagger to avoid API rate limits)
+                if ($campaign->google_ads_campaign_id) {
+                    FindUnderperformingKeywords::dispatch($campaign->id)
+                        ->delay(now()->addSeconds($summary['campaigns_processed'] * 5));
                 }
 
                 // 3. Run Budget Intelligence

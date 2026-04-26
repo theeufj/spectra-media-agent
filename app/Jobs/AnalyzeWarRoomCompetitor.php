@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Customer;
 use App\Models\Competitor;
+use App\Jobs\CrawlCompetitorWebsite;
 use App\Services\Agents\CompetitorAnalysisAgent;
 use App\Services\CompetitorGapAnalysisService;
 use App\Services\GeminiService;
@@ -49,7 +50,15 @@ class AnalyzeWarRoomCompetitor implements ShouldQueue
             return;
         }
 
-        // Step 2: Regenerate gap analysis for all pinned War Room competitors
+        // Step 2: Crawl the competitor's website to populate the knowledge base
+        if ($this->competitor->url) {
+            $user = $this->customer->users()->first();
+            if ($user) {
+                CrawlCompetitorWebsite::dispatch($user, $this->competitor->url, $this->customer->id);
+            }
+        }
+
+        // Step 3: Regenerate gap analysis for all pinned War Room competitors
         $pinnedIds = $this->customer->war_room_competitors ?? [];
 
         if (!empty($pinnedIds)) {
