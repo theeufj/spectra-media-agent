@@ -36,7 +36,7 @@ class DeployCampaignTest extends TestCase
 
     public function test_deployment_fails_without_customer(): void
     {
-        $campaign = Campaign::factory()->create(['customer_id' => null]);
+        $campaign = Campaign::factory()->make(['customer_id' => null]);
 
         $job = new DeployCampaign($campaign);
 

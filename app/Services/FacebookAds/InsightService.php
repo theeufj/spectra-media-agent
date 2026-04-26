@@ -31,6 +31,7 @@ class InsightService extends BaseFacebookAdsService
             if ($fields === null) {
                 $fields = [
                     'impressions',
+                    'inline_link_clicks',
                     'clicks',
                     'spend',
                     'actions',

@@ -66,4 +66,75 @@ class AdGroupService extends BaseMicrosoftAdsService
             'Ads' => ['Ad' => $adObjects],
         ]);
     }
+
+    /**
+     * Add a target keyword to an ad group.
+     */
+    public function addKeyword(string $adGroupId, string $text, string $matchType = 'Broad'): ?string
+    {
+        Log::info("Microsoft Ads: Adding {$matchType} keyword '{$text}' to {$adGroupId}");
+        
+        $request = [
+            'AdGroupId' => $adGroupId,
+            'Keywords' => [
+                'Keyword' => [
+                    [
+                        'MatchType' => $matchType,
+                        'Text' => $text,
+                        'Status' => 'Active'
+                    ]
+                ]
+            ],
+        ];
+
+        try {
+            $response = $this->apiCall('AddKeywords', $request);
+            if (isset($response['KeywordIds']['long'][0])) {
+                return (string) $response['KeywordIds']['long'][0];
+            }
+            return null;
+        } catch (\Exception $e) {
+            Log::error("Microsoft Ads: Failed to add keyword '{$text}'", ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
+
+    /**
+     * Add a negative keyword to a campaign or ad group.
+     */
+    public function addNegativeKeyword(string $entityId, string $text, string $matchType = 'Exact', bool $isCampaign = true): ?string
+    {
+        $entityType = $isCampaign ? 'Campaign' : 'AdGroup';
+        Log::info("Microsoft Ads: Adding negative {$matchType} keyword '{$text}' to {$entityType} {$entityId}");
+        
+        // This generally works by creating a negative keyword list and associating or directly adding EntityNegativeKeywords
+        // For simplicity we will log an alert since native direct add without lists is more complex in Bing SOAP,
+        // but we can provide a simulated API call here.
+        $request = [
+            'EntityNegativeKeywords' => [
+                'EntityNegativeKeyword' => [
+                    [
+                        'EntityId' => $entityId,
+                        'EntityType' => $entityType,
+                        'NegativeKeywords' => [
+                            'NegativeKeyword' => [
+                                [
+                                    'MatchType' => $matchType,
+                                    'Text' => $text
+                                ]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ];
+
+        try {
+            $response = $this->apiCall('AddNegativeKeywordsToEntities', $request);
+            return 'added';
+        } catch (\Exception $e) {
+            Log::error("Microsoft Ads: Failed to add negative keyword '{$text}'", ['error' => $e->getMessage()]);
+            return null;
+        }
+    }
 }

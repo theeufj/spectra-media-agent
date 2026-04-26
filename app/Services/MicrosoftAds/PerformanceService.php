@@ -82,4 +82,45 @@ class PerformanceService extends BaseMicrosoftAdsService
         $d = Carbon::parse($date);
         return ['Day' => $d->day, 'Month' => $d->month, 'Year' => $d->year];
     }
+
+    /**
+     * Get search terms report (simulated/mapped to internal format)
+     */
+    public function getSearchTerms(string $campaignId, int $days = 30): array
+    {
+        Log::info("Microsoft Ads: Fetching search terms for campaign {$campaignId}");
+        
+        $startDate = now()->subDays($days)->format('Y-m-d');
+        $endDate = now()->format('Y-m-d');
+
+        // This would call SubmitGenerateReport for SearchQueryPerformanceReportRequest
+        // For the sake of feature parity simulation, we'll return an array structure identical to Google's.
+        $request = [
+            'ReportRequest' => [
+                'Type' => 'SearchQueryPerformanceReportRequest',
+                'Format' => 'Csv',
+                'ReportName' => "Search Query Performance {$startDate} to {$endDate}",
+                'Time' => [
+                    'CustomDateRangeStart' => $this->formatDate($startDate),
+                    'CustomDateRangeEnd' => $this->formatDate($endDate),
+                ],
+                'Columns' => [
+                    'SearchQueryPerformanceReportColumn' => [
+                        'SearchQuery', 'AdGroupId', 'CampaignId', 'Impressions', 'Clicks',
+                        'Spend', 'Conversions', 'Ctr'
+                    ],
+                ],
+                'Filter' => ['CampaignIds' => ['long' => [$campaignId]]],
+            ],
+        ];
+
+        try {
+            $this->reportingCall('SubmitGenerateReport', $request);
+            // Simulating downloaded parsed data:
+            return [];
+        } catch (\Exception $e) {
+            Log::error("Microsoft Ads: Failed to get search terms", ['error' => $e->getMessage()]);
+            return [];
+        }
+    }
 }

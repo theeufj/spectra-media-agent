@@ -89,7 +89,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                         'facebook_campaign_id' => $this->campaign->facebook_ads_campaign_id,
                         'date' => $date,
                         'impressions' => (int) ($insight['impressions'] ?? 0),
-                        'clicks' => (int) ($insight['clicks'] ?? 0),
+                        'clicks' => (int) ($insight['inline_link_clicks'] ?? $insight['clicks'] ?? 0),
                         'cost' => (float) ($insight['spend'] ?? 0),
                         'conversions' => $conversions,
                         'reach' => (int) ($insight['reach'] ?? null),

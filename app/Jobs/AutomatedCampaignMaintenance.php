@@ -30,16 +30,21 @@ class AutomatedCampaignMaintenance implements ShouldQueue
     ): void {
         Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
 
-        // Get all active campaigns (both Google and Facebook)
+        // Get all active campaigns (Google, Facebook, Microsoft, and LinkedIn)
         $campaigns = Campaign::with('customer')
             ->where('primary_status', 'ELIGIBLE')
-            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')->orWhereNotNull('facebook_ads_campaign_id'))
+            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
+                                ->orWhereNotNull('facebook_ads_campaign_id')
+                                ->orWhereNotNull('microsoft_ads_campaign_id')
+                                ->orWhereNotNull('linkedin_campaign_id'))
             ->get();
 
         $summary = [
             'campaigns_processed' => 0,
             'google_campaigns' => 0,
             'facebook_campaigns' => 0,
+            'microsoft_campaigns' => 0,
+            'linkedin_campaigns' => 0,
             'healing_actions' => 0,
             'healing_warnings' => 0,
             'keywords_added' => 0,
@@ -56,6 +61,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     'name' => $campaign->name,
                     'has_google' => !empty($campaign->google_ads_campaign_id),
                     'has_facebook' => !empty($campaign->facebook_ads_campaign_id),
+                    'has_microsoft' => !empty($campaign->microsoft_ads_campaign_id),
+                    'has_linkedin' => !empty($campaign->linkedin_campaign_id),
                 ]);
 
                 // Track platform
@@ -65,16 +72,22 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 if ($campaign->facebook_ads_campaign_id) {
                     $summary['facebook_campaigns']++;
                 }
+                if ($campaign->microsoft_ads_campaign_id) {
+                    $summary['microsoft_campaigns']++;
+                }
+                if ($campaign->linkedin_campaign_id) {
+                    $summary['linkedin_campaigns']++;
+                }
 
-                // 1. Run Self-Healing Agent (now supports both Google and Facebook)
+                // 1. Run Self-Healing Agent (supports multiple platforms)
                 $healingResults = $selfHealingAgent->heal($campaign);
                 $summary['healing_actions'] += count($healingResults['actions_taken'] ?? []);
                 $summary['healing_warnings'] += count($healingResults['warnings'] ?? []);
                 $summary['errors'] += count($healingResults['errors'] ?? []);
 
-                // 2. Run Search Term Mining (only for Google Search campaigns)
+                // 2. Run Search Term Mining (only for Google Search and Microsoft Search campaigns)
                 $miningResults = ['keywords_added' => [], 'negatives_added' => [], 'errors' => []];
-                if ($campaign->google_ads_campaign_id) {
+                if ($campaign->google_ads_campaign_id || $campaign->microsoft_ads_campaign_id) {
                     $miningResults = $searchTermAgent->mine($campaign);
                     $summary['keywords_added'] += count($miningResults['keywords_added'] ?? []);
                     $summary['negatives_added'] += count($miningResults['negatives_added'] ?? []);

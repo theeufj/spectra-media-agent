@@ -61,10 +61,38 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
 
     protected function generateExecutionPlan(ExecutionContext $context): ExecutionPlan
     {
-        $campaign = $context->campaign;
-        $strategy = $context->strategy;
+        $prompt = \App\Prompts\MicrosoftAdsExecutionPrompt::generate($context);
+        $systemInstruction = \App\Prompts\MicrosoftAdsExecutionPrompt::getSystemInstruction();
 
-        // Decide: import from Google or create fresh
+        $this->logExecution('Generating execution plan via Gemini AI');
+
+        try {
+            $response = $this->gemini->generateContent(
+                model: 'gemini-3-flash-preview',
+                prompt: $prompt,
+                config: [
+                    'temperature' => 0.7,
+                    'responseMimeType' => 'application/json',
+                ],
+                systemInstruction: $systemInstruction
+            );
+
+            if (!$response || !isset($response['text'])) {
+                throw new \Exception('Empty response from AI model');
+            }
+
+            return ExecutionPlan::fromJson($response['text']);
+        } catch (\Exception $e) {
+            $this->logError('Failed to generate execution plan', ['error' => $e->getMessage()]);
+
+            // Fallback plan if AI fails
+            return $this->generateFallbackPlan($context);
+        }
+    }
+
+    protected function generateFallbackPlan(ExecutionContext $context): ExecutionPlan
+    {
+        $campaign = $context->campaign;
         $useImport = $campaign && $campaign->google_ads_campaign_id
             && $this->customer->microsoft_ads_account_id;
 
@@ -101,8 +129,8 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
         return new ExecutionPlan(
             steps: $steps,
             reasoning: $useImport
-                ? 'Importing from existing Google Ads campaign for fastest deployment'
-                : 'Creating fresh campaign — no Google Ads source to import from',
+                ? 'Fallback: Importing from existing Google Ads campaign for fastest deployment'
+                : 'Fallback: Creating fresh campaign — no Google Ads source to import from',
             estimatedDuration: $useImport ? '5 minutes' : '15 minutes',
         );
     }
@@ -166,7 +194,39 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
     protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
     {
         $message = $error->getMessage();
+        $this->logError('Analyzing execution error with AI', ['error' => $message]);
 
+        $prompt = <<<PROMPT
+Analyze this Microsoft Advertising API error and provide a recovery plan in JSON format.
+Error Message: {$message}
+
+Return a valid JSON object matching this structure EXACTLY:
+{
+    "actions": ["array", "of", "strings", "representing", "recovery", "steps"],
+    "canAutoRecover": boolean,
+    "reasoning": "string explaining why this error occurred and how to fix it"
+}
+PROMPT;
+
+        try {
+            $response = $this->gemini->generateContent(
+                model: 'gemini-3-flash-preview',
+                prompt: $prompt,
+                config: [
+                    'temperature' => 0.3,
+                    'responseMimeType' => 'application/json',
+                ],
+                systemInstruction: 'You are an expert at diagnosing Microsoft Ads API errors. Provide actionable recovery steps.'
+            );
+
+            if ($response && isset($response['text'])) {
+                return RecoveryPlan::fromJson($response['text']);
+            }
+        } catch (\Exception $e) {
+            $this->logError('Failed to generate recovery plan via AI', ['error' => $e->getMessage()]);
+        }
+
+        // Fallback to static rules
         $actions = [];
         if (str_contains($message, 'auth') || str_contains($message, 'token')) {
             $actions[] = 'Refresh OAuth token and retry';
@@ -181,7 +241,7 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
         return new RecoveryPlan(
             actions: $actions,
             canAutoRecover: str_contains($message, 'rate') || str_contains($message, 'timeout'),
-            reasoning: "Error analysis for: {$message}",
+            reasoning: "Static fallback analysis for: {$message}",
         );
     }
 
