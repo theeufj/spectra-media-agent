@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V22\Common\MaximizeClicks;
 use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
 use Google\Ads\GoogleAds\V22\Common\MaximizeConversionValue;
 use Google\Ads\GoogleAds\V22\Common\TargetCpa;
@@ -57,14 +58,19 @@ class UpdateCampaignBiddingStrategy extends BaseGoogleAdsService
                 $updateMask->setPaths(['target_roas.target_roas']);
                 break;
 
+            case 'MAXIMIZE_CLICKS':
+                $campaign->setMaximizeClicks(new MaximizeClicks());
+                $updateMask->setPaths(['maximize_clicks.target_spend_micros']);
+                break;
+
             case 'MAXIMIZE_CONVERSIONS':
-                $campaign->setMaximizeConversions(new MaximizeConversions());
-                $updateMask->setPaths(['maximize_conversions']);
+                $campaign->setMaximizeConversions(new MaximizeConversions(['target_cpa_micros' => 0]));
+                $updateMask->setPaths(['maximize_conversions.target_cpa_micros']);
                 break;
 
             case 'MAXIMIZE_CONVERSION_VALUE':
-                $campaign->setMaximizeConversionValue(new MaximizeConversionValue());
-                $updateMask->setPaths(['maximize_conversion_value']);
+                $campaign->setMaximizeConversionValue(new MaximizeConversionValue(['target_roas' => 0]));
+                $updateMask->setPaths(['maximize_conversion_value.target_roas']);
                 break;
 
             default:
