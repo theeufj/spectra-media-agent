@@ -7,6 +7,7 @@ use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 class ConversionSetupService
@@ -17,11 +18,12 @@ class ConversionSetupService
 
     /**
      * Run the full conversion tracking setup pipeline for a customer:
-     * 1. Create Google Ads conversion action
-     * 2. Retrieve conversion ID + label from tag snippets
-     * 3. Add conversion tag + trigger to GTM container (if provisioned)
-     * 4. Publish the GTM container
-     * 5. Persist conversion details on the customer record
+     * 1. Auto-detect GTM container from live site (overrides stored ID if different)
+     * 2. Create Google Ads conversion action
+     * 3. Retrieve conversion ID + label from tag snippets
+     * 4. Add conversion tag + trigger to the detected GTM container
+     * 5. Publish the GTM container
+     * 6. Persist conversion details on the customer record
      *
      * Returns an array with 'success', 'snippet' (manual fallback HTML), and 'errors'.
      */
@@ -35,6 +37,21 @@ class ConversionSetupService
         }
 
         $customerId = str_replace('-', '', $customer->google_ads_customer_id);
+
+        // Step 0: Auto-detect GTM container from the live site to ensure we target
+        // the correct container regardless of what's stored in the database.
+        if ($customer->website) {
+            $detectedGtmId = $this->detectGtmContainer($customer->website);
+            if ($detectedGtmId && $detectedGtmId !== $customer->gtm_container_id) {
+                Log::info('ConversionSetupService: Detected different GTM container on live site', [
+                    'customer_id' => $customer->id,
+                    'stored'      => $customer->gtm_container_id,
+                    'detected'    => $detectedGtmId,
+                ]);
+                $customer->update(['gtm_container_id' => $detectedGtmId]);
+                $customer->refresh();
+            }
+        }
 
         // Step 1: Create conversion action
         $createService = new CreateConversionAction($customer);
@@ -96,19 +113,51 @@ class ConversionSetupService
         ]);
 
         Log::info('ConversionSetupService: Setup complete', [
-            'customer_id'       => $customer->id,
-            'resource_name'     => $resourceName,
-            'conversion_id'     => $conversionId,
-            'gtm_wired'         => $customer->gtm_container_id && $conversionId,
-            'errors'            => $errors,
+            'customer_id'    => $customer->id,
+            'resource_name'  => $resourceName,
+            'conversion_id'  => $conversionId,
+            'gtm_id'         => $customer->gtm_container_id,
+            'gtm_wired'      => $customer->gtm_container_id && $conversionId,
+            'errors'         => $errors,
         ]);
 
         return [
-            'success' => true,
+            'success'        => true,
             'resource_name'  => $resourceName,
             'conversion_id'  => $conversionId,
             'snippet'        => $snippet,
             'errors'         => $errors,
         ];
+    }
+
+    /**
+     * Detect the GTM container ID from a live website by scraping its HTML.
+     * Handles both the gtm.js script tag and the noscript iframe fallback.
+     */
+    public function detectGtmContainer(string $url): ?string
+    {
+        try {
+            $response = Http::timeout(10)
+                ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; Spectra/1.0)'])
+                ->get($url);
+
+            if (!$response->successful()) {
+                return null;
+            }
+
+            $html = $response->body();
+
+            // Match GTM-XXXXXXXX from googletagmanager.com URLs in the page source
+            if (preg_match('/GTM-[A-Z0-9]+/', $html, $matches)) {
+                return $matches[0];
+            }
+        } catch (\Exception $e) {
+            Log::warning('ConversionSetupService: Could not detect GTM container from site', [
+                'url'   => $url,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        return null;
     }
 }

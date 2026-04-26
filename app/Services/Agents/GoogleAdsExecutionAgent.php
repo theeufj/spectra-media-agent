@@ -588,8 +588,92 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
         // 6. Add Ad Extensions (Sitelinks, Callouts)
         $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
+
+        // 7. Apply bidding strategy from strategy record, with a safety guard:
+        // TargetCPA and TargetRoas require conversion history — fall back to
+        // MaximizeConversions on accounts with fewer than 30 recorded conversions.
+        $this->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
     }
-    
+
+    /**
+     * Apply the strategy's recommended bidding strategy to a campaign.
+     * Automatically downgrades Smart Bidding strategies to MaximizeConversions
+     * when the account has insufficient conversion history.
+     */
+    protected function applyBiddingStrategy(
+        string $customerId,
+        string $campaignResourceName,
+        Strategy $strategy,
+        ExecutionResult $result
+    ): void {
+        $biddingData = $strategy->bidding_strategy ?? [];
+        $strategyName = strtoupper($biddingData['name'] ?? '');
+
+        if (empty($strategyName) || $strategyName === 'MANUAL_CPC') {
+            return;
+        }
+
+        // Smart Bidding strategies that need conversion data to work effectively
+        $smartBiddingStrategies = ['TARGET_CPA', 'TARGETCPA', 'TARGET_ROAS', 'TARGETROAS'];
+        $needsConversionData = in_array($strategyName, $smartBiddingStrategies, true);
+
+        if ($needsConversionData) {
+            $conversionCount = $this->getConversionCountForCustomer($customerId);
+            if ($conversionCount < 30) {
+                Log::info("GoogleAdsExecutionAgent: Downgrading {$strategyName} to MaximizeConversions — only {$conversionCount} conversions recorded", [
+                    'campaign' => $campaignResourceName,
+                ]);
+                $result->addWarning(
+                    'bidding_strategy_downgraded',
+                    "Bidding strategy changed from {$strategyName} to Maximize Conversions — account needs 30+ conversions before Smart Bidding is effective. Strategy will auto-upgrade via BiddingStrategyProgressionAgent."
+                );
+                $strategyName = 'MAXIMIZE_CONVERSIONS';
+            }
+        }
+
+        $mappedStrategy = match ($strategyName) {
+            'TARGET_CPA', 'TARGETCPA'   => 'TARGET_CPA',
+            'TARGET_ROAS', 'TARGETROAS' => 'TARGET_ROAS',
+            'MAXIMIZE_CONVERSIONS'       => 'MAXIMIZE_CONVERSIONS',
+            'MAXIMIZE_CLICKS'            => 'MAXIMIZE_CLICKS',
+            default                      => null,
+        };
+
+        if (!$mappedStrategy) {
+            return;
+        }
+
+        $targetCpa  = isset($biddingData['parameters']['targetCpaMicros'])
+            ? $biddingData['parameters']['targetCpaMicros'] / 1_000_000
+            : null;
+        $targetRoas = $biddingData['parameters']['targetRoas'] ?? null;
+
+        $updateService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy($this->customer);
+        $success = $updateService($customerId, $campaignResourceName, $mappedStrategy, $targetCpa, $targetRoas);
+
+        if ($success) {
+            Log::info("GoogleAdsExecutionAgent: Applied bidding strategy {$mappedStrategy} to campaign {$campaignResourceName}");
+        } else {
+            $result->addWarning('bidding_strategy_not_applied', "Could not apply {$mappedStrategy} bidding strategy — campaign will run on Manual CPC until next optimisation cycle.");
+        }
+    }
+
+    /**
+     * Get 30-day conversion count for a Google Ads customer account.
+     */
+    protected function getConversionCountForCustomer(string $customerId): int
+    {
+        try {
+            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
+            return $conversionService->getConversionCountLast30Days($customerId);
+        } catch (\Exception $e) {
+            Log::warning('GoogleAdsExecutionAgent: Could not fetch conversion count, assuming 0', [
+                'error' => $e->getMessage(),
+            ]);
+            return 0;
+        }
+    }
+
     /**
      * Execute Display campaign deployment
      */
