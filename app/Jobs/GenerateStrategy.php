@@ -165,19 +165,13 @@ class GenerateStrategy implements ShouldQueue
             }
 
             Log::info("Found JSON text content for campaign {$this->campaign->id}, length: " . strlen($jsonText));
-            
-            // Clean up the JSON response (remove markdown code blocks if present)
-            $cleanedJson = trim($jsonText);
-            $cleanedJson = preg_replace('/^```json\s*/', '', $cleanedJson);
-            $cleanedJson = preg_replace('/\s*```$/', '', $cleanedJson);
-            $cleanedJson = trim($cleanedJson);
-            
-            Log::info("Attempting to decode JSON for campaign {$this->campaign->id}");
-            $strategyData = json_decode($cleanedJson, true);
 
-            if (json_last_error() !== JSON_ERROR_NONE || !isset($strategyData['strategies'])) {
-                Log::error("Failed to parse JSON response for campaign {$this->campaign->id}: " . json_last_error_msg());
-                Log::debug("Raw JSON for campaign {$this->campaign->id}: " . substr($cleanedJson, 0, 500) . '...');
+            $strategyData = $this->extractStrategyJson($jsonText);
+
+            if (!$strategyData || !isset($strategyData['strategies'])) {
+                Log::error("Failed to parse JSON response for campaign {$this->campaign->id}", [
+                    'raw_preview' => substr($jsonText, 0, 500),
+                ]);
                 $this->failWithError('Failed to parse AI response. Please try again.');
                 return;
             }
@@ -267,6 +261,63 @@ class GenerateStrategy implements ShouldQueue
     /**
      * Record the error and notify the campaign's users.
      */
+    /**
+     * Robustly extract the strategy JSON object from the model's raw text.
+     *
+     * Handles three common failure modes:
+     *   1. Clean JSON — returned as-is after trimming.
+     *   2. Markdown fenced JSON — strips ```json ... ``` wrappers.
+     *   3. JSON embedded in prose — extracts the outermost { ... } block,
+     *      which occurs when the model prefixes or suffixes with commentary
+     *      despite being instructed not to.
+     */
+    private function extractStrategyJson(string $raw): ?array
+    {
+        $text = trim($raw);
+
+        // Pass 1: strip markdown fences anywhere in the string
+        $text = preg_replace('/```json\s*/i', '', $text);
+        $text = preg_replace('/```/', '', $text);
+        $text = trim($text);
+
+        // Pass 2: try a straight decode first (fast path for well-behaved responses)
+        $data = json_decode($text, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+            return $data;
+        }
+
+        // Pass 3: extract the outermost JSON object using brace counting
+        // Handles prose before/after the JSON block
+        $start = strpos($text, '{');
+        if ($start !== false) {
+            $depth = 0;
+            $end   = null;
+            for ($i = $start; $i < strlen($text); $i++) {
+                if ($text[$i] === '{') $depth++;
+                elseif ($text[$i] === '}') {
+                    $depth--;
+                    if ($depth === 0) { $end = $i; break; }
+                }
+            }
+
+            if ($end !== null) {
+                $candidate = substr($text, $start, $end - $start + 1);
+                $data = json_decode($candidate, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+                    Log::info("GenerateStrategy: JSON extracted via brace-counting fallback for campaign {$this->campaign->id}");
+                    return $data;
+                }
+            }
+        }
+
+        Log::error("GenerateStrategy: All JSON extraction passes failed for campaign {$this->campaign->id}", [
+            'json_error' => json_last_error_msg(),
+            'raw_preview' => substr($raw, 0, 300),
+        ]);
+
+        return null;
+    }
+
     protected function failWithError(string $message): void
     {
         $this->campaign->update([
