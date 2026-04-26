@@ -85,6 +85,18 @@ Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(n
 // Autonomous A/B Test evaluation - tracks significance and drops losers
 Schedule::job(new \App\Jobs\EvaluateABTests)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('EvaluateABTests'));
 
+// Bidding strategy progression — graduates campaigns to smarter Smart Bidding as data matures
+Schedule::job(new \App\Jobs\EvaluateBiddingStrategyProgression)
+    ->weekly()->tuesdays()->at('05:00')
+    ->withoutOverlapping()
+    ->onFailure(notifyAdminOnFailure('EvaluateBiddingStrategyProgression'));
+
+// DSA campaign management — creates/expands Dynamic Search Ads from website knowledge base
+Schedule::job(new \App\Jobs\ManageDSACampaigns)
+    ->weekly()->wednesdays()->at('04:00')
+    ->withoutOverlapping()
+    ->onFailure(notifyAdminOnFailure('ManageDSACampaigns'));
+
 // Autonomous campaign maintenance - self-healing, keyword mining, budget intelligence
 Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('AutomatedCampaignMaintenance'));
 
@@ -224,6 +236,12 @@ Schedule::command('backup:clean')->dailyAt('02:30')->withoutOverlapping();
 
 // Monitor backup health — alerts if latest backup is missing or too old
 Schedule::command('backup:monitor')->dailyAt('03:00')->withoutOverlapping();
+
+// Conversion tracking health check — alert admins if active campaigns have 0 conversions in 30 days
+Schedule::job(new \App\Jobs\VerifyConversionTracking)
+    ->weekly()->sundays()->at('04:00')
+    ->withoutOverlapping()
+    ->onFailure(notifyAdminOnFailure('VerifyConversionTracking'));
 
 // Facebook System User token health check — alert admins if token is expired/invalid
 Schedule::job(new \App\Jobs\RefreshFacebookTokens)

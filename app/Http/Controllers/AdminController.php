@@ -172,6 +172,11 @@ class AdminController extends Controller
             'google_ads_manager_customer_id' => $managerId,
         ]);
 
+        // Trigger conversion tracking setup when a Google Ads account is connected for the first time
+        if ($customerId && !$customer->conversion_action_id) {
+            \App\Jobs\SetupConversionTracking::dispatch($customer)->delay(now()->addSeconds(10));
+        }
+
         Log::info('Admin updated Google Ads settings', [
             'customer_id' => $customer->id,
             'google_ads_customer_id' => $customer->google_ads_customer_id,

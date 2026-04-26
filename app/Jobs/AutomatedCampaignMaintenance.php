@@ -7,6 +7,9 @@ use App\Models\Campaign;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\SearchTermMiningAgent;
 use App\Services\Agents\BudgetIntelligenceAgent;
+use App\Services\Agents\AdExtensionAgent;
+use App\Services\Agents\BidAdjustmentAgent;
+use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\Agents\CreativeIntelligenceAgent;
 use App\Jobs\FindUnderperformingKeywords;
 use Illuminate\Bus\Queueable;
@@ -27,7 +30,10 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         SelfHealingAgent $selfHealingAgent,
         SearchTermMiningAgent $searchTermAgent,
         BudgetIntelligenceAgent $budgetAgent,
-        CreativeIntelligenceAgent $creativeAgent
+        CreativeIntelligenceAgent $creativeAgent,
+        AdExtensionAgent $extensionAgent,
+        BidAdjustmentAgent $bidAgent,
+        QualityScoreImprovementAgent $qsAgent
     ): void {
         Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
 
@@ -99,6 +105,24 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 if ($campaign->google_ads_campaign_id) {
                     FindUnderperformingKeywords::dispatch($campaign->id)
                         ->delay(now()->addSeconds($summary['campaigns_processed'] * 5));
+                }
+
+                // 2c. Ad extension coverage + rotation (Google only)
+                if ($campaign->google_ads_campaign_id) {
+                    $extensionResults = $extensionAgent->manage($campaign);
+                    $summary['creative_adjustments'] += count($extensionResults['created'] ?? []) + count($extensionResults['rotated'] ?? []);
+                }
+
+                // 2d. Bid adjustments by device and daypart (Google only)
+                if ($campaign->google_ads_campaign_id) {
+                    $bidResults = $bidAgent->optimize($campaign);
+                    $summary['budget_adjustments'] += count($bidResults['adjustments'] ?? []);
+                }
+
+                // 2e. Quality Score improvement — diagnose and act on low-QS keywords (Google only)
+                if ($campaign->google_ads_campaign_id) {
+                    $qsResults = $qsAgent->improve($campaign);
+                    $summary['keywords_added'] += count($qsResults['actions'] ?? []);
                 }
 
                 // 3. Run Budget Intelligence

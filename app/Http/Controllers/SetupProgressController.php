@@ -24,11 +24,11 @@ class SetupProgressController extends Controller
                     'steps' => [],
                     'is_new_user' => true,
                     'completed_steps' => 0,
-                    'total_steps' => 3,
+                    'total_steps' => 4,
                     'current_step' => null,
                 ]);
             }
-            
+
             $customer = $user->customers()->find(session('active_customer_id'));
             
             if (!$customer) {
@@ -37,7 +37,7 @@ class SetupProgressController extends Controller
                     'steps' => [],
                     'is_new_user' => true,
                     'completed_steps' => 0,
-                    'total_steps' => 3,
+                    'total_steps' => 4,
                     'current_step' => null,
                 ]);
             }
@@ -47,7 +47,8 @@ class SetupProgressController extends Controller
             $hasKnowledgeBase = \App\Models\KnowledgeBase::where('user_id', $user->id)->count() > 0;
             $hasBrandGuidelines = $customer->brandGuideline?->user_verified ?? false;
             $hasCampaign = $customer->campaigns()->count() > 0;
-            
+            $hasConversionTracking = !empty($customer->conversion_action_id);
+
             $steps = [
                 [
                     'key' => 'knowledge_base',
@@ -72,6 +73,14 @@ class SetupProgressController extends Controller
                     'completed' => $hasCampaign,
                     'action_url' => route('campaigns.wizard'),
                     'action_text' => 'Create Campaign',
+                ],
+                [
+                    'key' => 'conversion_tracking',
+                    'title' => 'Set Up Conversion Tracking',
+                    'description' => 'Connect Google Ads conversion tracking so AI agents can optimise for real results',
+                    'completed' => $hasConversionTracking,
+                    'action_url' => route('integrations.index'),
+                    'action_text' => 'Connect Google Ads',
                 ],
             ];
 
