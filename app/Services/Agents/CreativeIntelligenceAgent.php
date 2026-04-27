@@ -3,6 +3,7 @@
 namespace App\Services\Agents;
 
 use App\Models\Campaign;
+use App\Models\CreativeBrief;
 use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
@@ -120,7 +121,106 @@ class CreativeIntelligenceAgent
             $this->analyzeLinkedInAdsCampaign($campaign, $results);
         }
 
+        // Create creative briefs for fatigue detections and AB winners
+        $this->createBriefsFromResults($campaign, $results);
+
+        // Proactive rotation: brief campaigns running >45 days with no creative change
+        $this->scheduleProactiveRotation($campaign);
+
         return $results;
+    }
+
+    /**
+     * Create CreativeBrief records from analysis results.
+     * One pending brief per campaign at a time to avoid flooding the review queue.
+     */
+    protected function createBriefsFromResults(Campaign $campaign, array $results): void
+    {
+        // Skip if campaign already has a pending brief
+        if (CreativeBrief::where('campaign_id', $campaign->id)->where('status', 'pending')->exists()) {
+            return;
+        }
+
+        $platform = $results['platform'] ?? 'unknown';
+
+        // Fatigue detection → refresh brief
+        $fatigueRec = collect($results['recommendations'] ?? [])
+            ->firstWhere('type', 'creative_fatigue');
+
+        if ($fatigueRec) {
+            $this->createBrief($campaign, $platform, 'fatigue_refresh', $fatigueRec['message'] ?? 'Creative fatigue detected', [
+                'recommendation' => $fatigueRec,
+            ]);
+            return;
+        }
+
+        // Winning headlines detected → AB winner brief with new variation suggestions
+        $headlineWinners = $results['headlines']['winners'] ?? [];
+        $adWinners       = $results['ads']['winners'] ?? [];
+        $winners         = array_merge($headlineWinners, $adWinners);
+
+        if (!empty($winners) && !empty($results['new_variations'])) {
+            $winningTexts = array_column(array_slice($winners, 0, 3), 'text');
+            $this->createBrief($campaign, $platform, 'ab_winner', "A/B winner brief: test next-gen variations based on winning creative", [
+                'winning_examples'  => $winningTexts,
+                'generated_variants' => $results['new_variations'],
+            ]);
+        }
+    }
+
+    /**
+     * If a campaign has been running >45 days with no creative update, create a scheduled refresh brief.
+     */
+    protected function scheduleProactiveRotation(Campaign $campaign): void
+    {
+        $campaignAge = $campaign->created_at?->diffInDays(now()) ?? 0;
+        if ($campaignAge < 45) {
+            return;
+        }
+
+        // Check if a brief already exists (pending or recent)
+        if (CreativeBrief::where('campaign_id', $campaign->id)
+            ->whereIn('status', ['pending', 'in_review'])
+            ->exists()) {
+            return;
+        }
+
+        // Also skip if actioned within last 30 days
+        if (CreativeBrief::where('campaign_id', $campaign->id)
+            ->where('status', 'actioned')
+            ->where('actioned_at', '>=', now()->subDays(30))
+            ->exists()) {
+            return;
+        }
+
+        $platform = null;
+        if ($campaign->google_ads_campaign_id)   $platform = 'google';
+        elseif ($campaign->facebook_ads_campaign_id) $platform = 'facebook';
+        elseif ($campaign->microsoft_ads_campaign_id) $platform = 'microsoft';
+        elseif ($campaign->linkedin_campaign_id)  $platform = 'linkedin';
+
+        $this->createBrief($campaign, $platform ?? 'unknown', 'scheduled_refresh',
+            "Campaign has been running {$campaignAge} days — proactive creative refresh recommended before fatigue sets in.",
+            ['campaign_age_days' => $campaignAge]
+        );
+    }
+
+    private function createBrief(Campaign $campaign, string $platform, string $type, string $briefContent, array $context = []): void
+    {
+        try {
+            CreativeBrief::create([
+                'campaign_id'     => $campaign->id,
+                'customer_id'     => $campaign->customer_id,
+                'platform'        => $platform,
+                'brief_type'      => $type,
+                'status'          => 'pending',
+                'created_by_agent' => 'CreativeIntelligenceAgent',
+                'ai_brief'        => $briefContent,
+                'context'         => $context,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning("CreativeIntelligenceAgent: Failed to create creative brief for campaign {$campaign->id}: " . $e->getMessage());
+        }
     }
 
     /**
