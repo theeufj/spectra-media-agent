@@ -58,11 +58,10 @@ class MonitorCampaignStatus implements ShouldQueue
 
     private function checkGoogleAdsStatus(Campaign $campaign, GetCampaignStatus $getCampaignStatus): void
     {
-        $customerId = $campaign->customer?->google_ads_customer_id;
-        if (!$customerId) {
+        if (!$campaign->customer?->google_ads_customer_id) {
             return;
         }
-        $customerId = str_replace('-', '', $customerId);
+        $customerId = $campaign->customer->cleanGoogleCustomerId();
 
         // google_ads_campaign_id stores the full resource name (customers/X/campaigns/Y)
         $resourceName = $campaign->google_ads_campaign_id;

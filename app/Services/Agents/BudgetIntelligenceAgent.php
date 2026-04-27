@@ -350,10 +350,10 @@ class BudgetIntelligenceAgent
 
         // Use adaptive ROAS threshold if available, otherwise config default
         $adaptiveThresholds = AdaptiveThresholds::forCustomer($customer);
-        $minRoas = $adaptiveThresholds['min_roas_threshold'] ?? $reallocationRules['min_roas_threshold'] ?? 1.5;
-        $maxShift = $reallocationRules['max_shift_percentage'] ?? 20;
-        $minDays = $reallocationRules['min_data_days'] ?? 7;
-        $minConversions = $reallocationRules['min_conversions'] ?? 5;
+        $minRoas        = $adaptiveThresholds['min_roas_threshold'] ?? $reallocationRules['min_roas_threshold'] ?? config('optimization.budget_intelligence.reallocation_roas_ratio', 2.0);
+        $maxShift       = $reallocationRules['max_shift_percentage'] ?? 20;
+        $minDays        = $reallocationRules['min_data_days'] ?? 7;
+        $minConversions = $reallocationRules['min_conversions'] ?? config('optimization.budget_intelligence.reallocation_min_conversions', 15);
 
         $recommendations = [];
         $performers = ['winners' => [], 'losers' => []];
@@ -431,9 +431,17 @@ class BudgetIntelligenceAgent
             $conversions = $metrics['conversions'] ?? 0;
             $conversionValue = $metrics['conversion_value'] ?? 0;
 
-            // Use actual conversion value from API if available, otherwise customer's AOV, finally fallback to $50
-            $aov = $customer->average_order_value ?? 50.00;
-            $revenue = $conversionValue > 0 ? $conversionValue : ($conversions * $aov);
+            // Use actual conversion value from API if available, then customer AOV.
+            // Without AOV the ROAS calculation is meaningless — skip reallocation for this campaign.
+            $aov = $customer->average_order_value;
+            if (!$aov && $conversionValue <= 0) {
+                Log::info('BudgetIntelligenceAgent: Skipping campaign for reallocation — average_order_value not set and no conversion value from API', [
+                    'campaign_id' => $campaign->id,
+                    'customer_id' => $customer->id,
+                ]);
+                continue;
+            }
+            $revenue = $conversionValue > 0 ? $conversionValue : ($conversions * ($aov ?? 0));
             $roas = $cost > 0 ? $revenue / $cost : 0;
 
             if ($conversions >= $minConversions) {

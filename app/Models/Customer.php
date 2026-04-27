@@ -132,6 +132,11 @@ class Customer extends Model
         $this->attributes['google_ads_customer_id'] = $value;
     }
 
+    public function cleanGoogleCustomerId(): string
+    {
+        return str_replace('-', '', $this->google_ads_customer_id ?? '');
+    }
+
     /**
      * The users that belong to the customer.
      */

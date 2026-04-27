@@ -106,7 +106,7 @@ class ActivateCampaigns extends Command
             return false;
         }
 
-        $customerId = str_replace('-', '', $customer->google_ads_customer_id);
+        $customerId = $customer->cleanGoogleCustomerId();
         $resourceName = "customers/{$customerId}/campaigns/{$googleCampaignId}";
 
         $service = new UpdateCampaignStatus($customer);

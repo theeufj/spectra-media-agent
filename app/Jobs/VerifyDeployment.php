@@ -85,7 +85,7 @@ class VerifyDeployment implements ShouldQueue
             return false;
         }
 
-        $customerId = str_replace('-', '', $customer->google_ads_customer_id);
+        $customerId = $customer->cleanGoogleCustomerId();
 
         // google_ads_campaign_id stores the full resource name (customers/X/campaigns/Y)
         $resourceName = $googleCampaignId;

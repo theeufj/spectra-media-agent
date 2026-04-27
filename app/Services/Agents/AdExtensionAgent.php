@@ -44,7 +44,7 @@ class AdExtensionAgent
             return ['skipped' => true];
         }
 
-        $customerId       = str_replace('-', '', $customer->google_ads_customer_id);
+        $customerId       = $customer->cleanGoogleCustomerId();
         $campaignResource = $campaign->google_ads_campaign_id;
 
         $created  = [];

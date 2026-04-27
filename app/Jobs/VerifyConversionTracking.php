@@ -28,7 +28,7 @@ class VerifyConversionTracking implements ShouldQueue
 
         foreach ($customers as $customer) {
             try {
-                $customerId = str_replace('-', '', $customer->google_ads_customer_id);
+                $customerId = $customer->cleanGoogleCustomerId();
                 $service    = new ConversionTrackingService($customer);
                 $count      = $service->getConversionCountLast30Days($customerId);
 

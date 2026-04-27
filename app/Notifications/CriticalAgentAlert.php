@@ -6,6 +6,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * CriticalAgentAlert
@@ -35,6 +36,14 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
+        // Deduplicate: same alert type + campaign within 24 hours sends only once per user
+        $campaignId = $this->details['campaign_id'] ?? 'global';
+        $cacheKey   = "notif:critical:{$this->alertType}:{$campaignId}:{$notifiable->id}";
+        if (Cache::has($cacheKey)) {
+            return [];
+        }
+        Cache::put($cacheKey, true, now()->addHours(24));
+
         return ['mail'];
     }
 

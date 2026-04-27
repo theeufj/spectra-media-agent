@@ -9,6 +9,7 @@ use App\Models\KeywordQualityScore;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -19,13 +20,11 @@ use Illuminate\Support\Facades\Log;
  *   creative_quality_score: BELOW_AVERAGE → flag for SKAG review (keyword in wrong ad group)
  *   post_click_quality_score: BELOW_AVERAGE → log landing page improvement recommendation
  *
- * Pauses keywords stuck at QS <5 for >14 consecutive days with no improvement.
+ * Pauses keywords stuck at QS < threshold for > pause_min_days consecutive days.
+ * Thresholds are configured in config/optimization.php.
  */
 class QualityScoreImprovementAgent
 {
-    private const PAUSE_AFTER_DAYS = 14;
-    private const QS_THRESHOLD    = 5;
-
     public function __construct(private GeminiService $gemini) {}
 
     public function improve(Campaign $campaign): array
@@ -36,19 +35,20 @@ class QualityScoreImprovementAgent
             return ['skipped' => true];
         }
 
-        $customerId = str_replace('-', '', $customer->google_ads_customer_id);
+        $customerId  = $customer->cleanGoogleCustomerId();
+        $pauseDays   = config('optimization.quality_score.pause_min_days', 21);
+        $qsThreshold = config('optimization.quality_score.pause_qs_threshold', 5);
 
-        // Find all keywords with QS <5 in the last 14 days for this campaign
         $decliners = KeywordQualityScore::where('customer_id', $campaign->customer_id)
             ->where('campaign_google_id', $campaign->google_ads_campaign_id)
-            ->declining(self::PAUSE_AFTER_DAYS)
+            ->declining($pauseDays)
             ->get()
             ->groupBy('keyword_text');
 
-        $actions      = [];
-        $flagged      = [];
-        $paused       = [];
-        $errors       = [];
+        $actions = [];
+        $flagged  = [];
+        $paused   = [];
+        $errors   = [];
 
         foreach ($decliners as $keywordText => $records) {
             $latest = $records->sortByDesc('recorded_at')->first();
@@ -60,6 +60,8 @@ class QualityScoreImprovementAgent
                     $customerId,
                     $latest,
                     $records,
+                    $pauseDays,
+                    $qsThreshold,
                     $actions,
                     $flagged,
                     $paused,
@@ -83,11 +85,16 @@ class QualityScoreImprovementAgent
             );
         }
 
+        // Send ONE aggregated alert if any keywords were paused this run
+        if (!empty($paused)) {
+            $this->notifyPaused($campaign, $paused, $qsThreshold, $pauseDays);
+        }
+
         return [
-            'actions'  => $actions,
-            'flagged'  => $flagged,
-            'paused'   => $paused,
-            'errors'   => $errors,
+            'actions' => $actions,
+            'flagged' => $flagged,
+            'paused'  => $paused,
+            'errors'  => $errors,
         ];
     }
 
@@ -97,6 +104,8 @@ class QualityScoreImprovementAgent
         string $customerId,
         KeywordQualityScore $latest,
         $allRecords,
+        int $pauseDays,
+        int $qsThreshold,
         array &$actions,
         array &$flagged,
         array &$paused,
@@ -104,14 +113,13 @@ class QualityScoreImprovementAgent
     ): void {
         $keyword   = $latest->keyword_text;
         $qs        = $latest->quality_score;
-        $ctr       = $latest->search_predicted_ctr;        // ABOVE_AVERAGE | AVERAGE | BELOW_AVERAGE
-        $creative  = $latest->creative_quality_score;      // ABOVE_AVERAGE | AVERAGE | BELOW_AVERAGE
-        $postClick = $latest->post_click_quality_score;    // ABOVE_AVERAGE | AVERAGE | BELOW_AVERAGE
+        $ctr       = $latest->search_predicted_ctr;
+        $creative  = $latest->creative_quality_score;
+        $postClick = $latest->post_click_quality_score;
 
-        // Check if stuck (all records in window have QS < threshold)
         $isStuck = $allRecords->count() >= 2
-            && $allRecords->every(fn($r) => ($r->quality_score ?? 10) < self::QS_THRESHOLD)
-            && $allRecords->min('recorded_at') <= now()->subDays(self::PAUSE_AFTER_DAYS);
+            && $allRecords->every(fn($r) => ($r->quality_score ?? 10) < $qsThreshold)
+            && $allRecords->min('recorded_at') <= now()->subDays($pauseDays);
 
         // Root cause 1: Low expected CTR → generate tighter ad copy
         if ($ctr === 'BELOW_AVERAGE' && !$isStuck) {
@@ -155,8 +163,8 @@ class QualityScoreImprovementAgent
         // Root cause 2: Poor ad relevance → flag for SKAG review
         if ($creative === 'BELOW_AVERAGE') {
             $flagged[] = [
-                'keyword' => $keyword,
-                'issue'   => 'creative_quality_score: BELOW_AVERAGE',
+                'keyword'        => $keyword,
+                'issue'          => 'creative_quality_score: BELOW_AVERAGE',
                 'recommendation' => "Consider moving '{$keyword}' to a dedicated single-keyword ad group (SKAG) for tighter ad relevance.",
             ];
 
@@ -172,8 +180,8 @@ class QualityScoreImprovementAgent
         // Root cause 3: Poor landing page → log improvement recommendation
         if ($postClick === 'BELOW_AVERAGE') {
             $flagged[] = [
-                'keyword' => $keyword,
-                'issue'   => 'post_click_quality_score: BELOW_AVERAGE',
+                'keyword'        => $keyword,
+                'issue'          => 'post_click_quality_score: BELOW_AVERAGE',
                 'recommendation' => "Landing page for '{$keyword}' needs: keyword in H1/title, faster load time, and content that directly addresses search intent.",
             ];
 
@@ -192,21 +200,39 @@ class QualityScoreImprovementAgent
             $success = $service->pause($customerId, $latest->criterion_resource_name);
 
             if ($success) {
-                $paused[] = ['keyword' => $keyword, 'qs' => $qs, 'days' => self::PAUSE_AFTER_DAYS];
-
-                // Notify admins
-                $admins = \App\Models\User::where('is_admin', true)->get();
-                foreach ($admins as $admin) {
-                    $admin->notify(new CriticalAgentAlert(
-                        'quality_score',
-                        "Keyword '{$keyword}' paused in campaign \"{$campaign->name}\" — stuck at QS {$qs} for 14+ days.",
-                        ['customer_id' => $campaign->customer_id, 'campaign_id' => $campaign->id]
-                    ));
-                }
+                $paused[] = ['keyword' => $keyword, 'qs' => $qs, 'days' => $pauseDays];
             } else {
                 $errors[] = "Failed to pause keyword '{$keyword}'";
             }
         }
+    }
+
+    private function notifyPaused(Campaign $campaign, array $paused, int $qsThreshold, int $pauseDays): void
+    {
+        $cacheKey = "notif:qs_paused:{$campaign->id}";
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+
+        $keywordList = implode(', ', array_column($paused, 'keyword'));
+        $count       = count($paused);
+        $message     = "{$count} keyword(s) were paused in \"{$campaign->name}\" after remaining below QS {$qsThreshold} for {$pauseDays}+ days: {$keywordList}.";
+
+        $admins = \App\Models\User::where('is_admin', true)->get();
+        foreach ($admins as $admin) {
+            $admin->notify(new CriticalAgentAlert(
+                'quality_score',
+                'Low-QS Keywords Paused',
+                $message,
+                [
+                    'campaign_name' => $campaign->name,
+                    'campaign_id'   => $campaign->id,
+                    'paused'        => $paused,
+                ]
+            ));
+        }
+
+        Cache::put($cacheKey, true, now()->addHours(24));
     }
 
     private function generateAdCopyVariations(Campaign $campaign, object $customer, string $keyword): array

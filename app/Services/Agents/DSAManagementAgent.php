@@ -32,7 +32,7 @@ class DSAManagementAgent
             return ['skipped' => true, 'reason' => 'No Google Ads account or website'];
         }
 
-        $customerId = str_replace('-', '', $customer->google_ads_customer_id);
+        $customerId = $customer->cleanGoogleCustomerId();
         $domain     = parse_url($customer->website, PHP_URL_HOST) ?? $customer->website;
         $language   = 'en';
 

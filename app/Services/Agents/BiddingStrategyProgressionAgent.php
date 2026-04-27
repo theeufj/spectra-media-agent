@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Notifications\CampaignStatusUpdated;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
+use App\Support\Json;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -19,23 +20,26 @@ use Illuminate\Support\Facades\Log;
  *
  * Legacy Search path (campaigns without assets):
  *   MANUAL_CPC    → ENHANCED_CPC  (≥30 conversions / 30 days)
- *   ENHANCED_CPC  → TARGET_CPA    (≥50 conversions / 30 days)
+ *   ENHANCED_CPC  → TARGET_CPA    (≥50 conversions / 30 days + stable CPA σ<20%)
  *   TARGET_CPA    → TARGET_ROAS   (≥100 conversions / 30 days + stable CPA σ<20%)
  *
+ * Thresholds are configured in config/optimization.php.
  * Target CPA is set to 90% of the current average (stretch but achievable).
  * Target ROAS is set to 90% of the current average ROAS (conservative start).
  */
 class BiddingStrategyProgressionAgent
 {
-    private const THRESHOLDS = [
-        // PMax / MaximizeConversions path
-        'MAXIMIZE_CONVERSIONS' => ['min_conversions' => 30,  'next' => 'TARGET_CPA'],
-        // Legacy Search path
-        'MANUAL_CPC'           => ['min_conversions' => 30,  'next' => 'ENHANCED_CPC'],
-        'ENHANCED_CPC'         => ['min_conversions' => 50,  'next' => 'TARGET_CPA'],
-        // Shared graduation step for both paths
-        'TARGET_CPA'           => ['min_conversions' => 100, 'next' => 'TARGET_ROAS'],
-    ];
+    private function thresholds(): array
+    {
+        $cfg = config('optimization.bidding_strategy.thresholds', []);
+
+        return [
+            'MAXIMIZE_CONVERSIONS' => ['min_conversions' => $cfg['MAXIMIZE_CONVERSIONS'] ?? 30,  'next' => 'TARGET_CPA',   'stability_check' => false],
+            'MANUAL_CPC'           => ['min_conversions' => $cfg['MANUAL_CPC']           ?? 30,  'next' => 'ENHANCED_CPC', 'stability_check' => false],
+            'ENHANCED_CPC'         => ['min_conversions' => $cfg['ENHANCED_CPC']         ?? 50,  'next' => 'TARGET_CPA',   'stability_check' => true],
+            'TARGET_CPA'           => ['min_conversions' => $cfg['TARGET_CPA']           ?? 100, 'next' => 'TARGET_ROAS',  'stability_check' => true],
+        ];
+    }
 
     public function evaluate(Campaign $campaign): array
     {
@@ -51,21 +55,21 @@ class BiddingStrategyProgressionAgent
             return ['skipped' => true, 'reason' => 'no strategy'];
         }
 
-        $biddingData = is_string($strategy->bidding_strategy)
-            ? json_decode($strategy->bidding_strategy, true)
-            : (array) $strategy->bidding_strategy;
+        $biddingData = Json::safeDecode($strategy->bidding_strategy) ?? (array) $strategy->bidding_strategy;
 
         // Strategy name is stored under 'name' (from AI generation) or legacy keys.
         // Normalise to uppercase and strip camelCase variants (e.g. "MaximizeConversions" → "MAXIMIZE_CONVERSIONS").
         $rawName = $biddingData['name'] ?? $biddingData['bid_strategy'] ?? $biddingData['bidding_strategy_type'] ?? 'MANUAL_CPC';
         $currentStrategy = strtoupper(preg_replace('/([a-z])([A-Z])/', '$1_$2', $rawName));
 
-        if (!array_key_exists($currentStrategy, self::THRESHOLDS)) {
+        $thresholds = $this->thresholds();
+
+        if (!array_key_exists($currentStrategy, $thresholds)) {
             return ['skipped' => true, 'reason' => "Strategy {$currentStrategy} not in progression ladder"];
         }
 
-        $threshold   = self::THRESHOLDS[$currentStrategy];
-        $customerId  = str_replace('-', '', $customer->google_ads_customer_id);
+        $threshold   = $thresholds[$currentStrategy];
+        $customerId  = $customer->cleanGoogleCustomerId();
         $perfService = new GetCampaignPerformance($customer);
         $perf        = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_30_DAYS');
 
@@ -77,36 +81,35 @@ class BiddingStrategyProgressionAgent
 
         if ($conversions < $threshold['min_conversions']) {
             Log::info("BiddingStrategyProgressionAgent: Not enough conversions for graduation", [
-                'campaign_id'     => $campaign->id,
-                'current'         => $currentStrategy,
-                'conversions'     => $conversions,
-                'needed'          => $threshold['min_conversions'],
+                'campaign_id' => $campaign->id,
+                'current'     => $currentStrategy,
+                'conversions' => $conversions,
+                'needed'      => $threshold['min_conversions'],
             ]);
             return ['skipped' => true, 'reason' => "Need {$threshold['min_conversions']} conversions, have {$conversions}"];
         }
 
-        // Extra stability check for TARGET_CPA → TARGET_ROAS
-        if ($currentStrategy === 'TARGET_CPA') {
-            if (!$this->hasStagleCpa($campaign)) {
-                return ['skipped' => true, 'reason' => 'CPA not stable enough for TARGET_ROAS'];
-            }
+        // Stability check gates any graduation that involves setting a CPA target.
+        // Graduating with a volatile CPA means Google picks an unrealistic target.
+        if ($threshold['stability_check'] && !$this->hasStableCpa($campaign)) {
+            return ['skipped' => true, 'reason' => 'CPA not stable enough for next strategy'];
         }
 
         $nextStrategy = $threshold['next'];
         $targetCpa    = null;
         $targetRoas   = null;
+        $cpaMult      = config('optimization.bidding_strategy.cpa_target_multiplier', 0.9);
+        $roasMult     = config('optimization.bidding_strategy.roas_target_multiplier', 0.9);
 
         if ($nextStrategy === 'TARGET_CPA' && ($perf['cost_per_conversion'] ?? 0) > 0) {
-            // Set target at 90% of current average CPA (stretch goal)
-            $targetCpa = round($perf['cost_per_conversion'] * 0.9, 2);
+            $targetCpa = round($perf['cost_per_conversion'] * $cpaMult, 2);
         }
 
         if ($nextStrategy === 'TARGET_ROAS' && ($perf['cost_micros'] ?? 0) > 0 && ($perf['conversions'] ?? 0) > 0) {
-            // Infer current ROAS from conversion value if available, or use a safe default
             $currentRoas = isset($perf['conversion_value']) && $perf['cost_micros'] > 0
                 ? ($perf['conversion_value'] * 1_000_000) / $perf['cost_micros']
                 : 2.0;
-            $targetRoas = round($currentRoas * 0.9, 2);
+            $targetRoas = round($currentRoas * $roasMult, 2);
         }
 
         $updateService = new UpdateCampaignBiddingStrategy($customer);
@@ -124,8 +127,8 @@ class BiddingStrategyProgressionAgent
 
         // Update strategy model
         $biddingData['bid_strategy'] = $nextStrategy;
-        if ($targetCpa)   $biddingData['target_cpa']  = $targetCpa;
-        if ($targetRoas)  $biddingData['target_roas'] = $targetRoas;
+        if ($targetCpa)  $biddingData['target_cpa']  = $targetCpa;
+        if ($targetRoas) $biddingData['target_roas'] = $targetRoas;
 
         $strategy->update(['bidding_strategy' => $biddingData]);
 
@@ -136,23 +139,13 @@ class BiddingStrategyProgressionAgent
             $campaign->customer_id,
             $campaign->id,
             [
-                'from'          => $currentStrategy,
-                'to'            => $nextStrategy,
-                'conversions'   => $conversions,
-                'target_cpa'    => $targetCpa,
-                'target_roas'   => $targetRoas,
+                'from'        => $currentStrategy,
+                'to'          => $nextStrategy,
+                'conversions' => $conversions,
+                'target_cpa'  => $targetCpa,
+                'target_roas' => $targetRoas,
             ]
         );
-
-        // Notify the customer's primary user
-        $user = $customer->users()->first();
-        if ($user) {
-            try {
-                $user->notify(new CampaignStatusUpdated($campaign));
-            } catch (\Exception $e) {
-                Log::warning('BiddingStrategyProgressionAgent: Failed to notify user', ['error' => $e->getMessage()]);
-            }
-        }
 
         Log::info("BiddingStrategyProgressionAgent: Graduated campaign", [
             'campaign_id' => $campaign->id,
@@ -169,11 +162,11 @@ class BiddingStrategyProgressionAgent
         ];
     }
 
-    private function hasStagleCpa(Campaign $campaign): bool
+    private function hasStableCpa(Campaign $campaign): bool
     {
         // Compare last 14 days CPA vs prior 14 days CPA — stable means <20% variance
         $customer    = $campaign->customer;
-        $customerId  = str_replace('-', '', $customer->google_ads_customer_id);
+        $customerId  = $customer->cleanGoogleCustomerId();
         $perfService = new GetCampaignPerformance($customer);
 
         $recent = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_14_DAYS');

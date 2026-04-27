@@ -17,7 +17,11 @@ class SearchTermMiningAgent
 
     public function __construct()
     {
-        $this->config = config('budget_rules.search_term_mining', []);
+        // Merge legacy budget_rules config with new optimization config (optimization takes precedence)
+        $this->config = array_merge(
+            config('budget_rules.search_term_mining', []),
+            config('optimization.search_terms', [])
+        );
     }
 
     /**
@@ -120,12 +124,13 @@ class SearchTermMiningAgent
         array &$results,
         string $platform = 'google'
     ): void {
-        $minImpressions = $this->config['min_impressions'] ?? 100;
-        $minClicks = $this->config['min_clicks'] ?? 5;
-        $promoteCtrThreshold = $this->config['promote_ctr_threshold'] ?? 0.05;
-        $negativeCostThreshold = $this->config['negative_cost_threshold'] ?? 20.00;
-        $negativeCtrThreshold = $this->config['negative_ctr_threshold'] ?? 0.002;
+        $minImpressions        = $this->config['min_impressions']          ?? 300;
+        $minClicks             = $this->config['min_clicks']               ?? 5;
+        $promoteCtrThreshold   = $this->config['promote_ctr_threshold']    ?? 0.05;
+        $negativeCostThreshold = $this->config['negative_cost_threshold']  ?? 50.00;
+        $negativeCtrThreshold  = $this->config['negative_ctr_threshold']   ?? 0.002;
         $negativeMinImpressions = $this->config['negative_min_impressions'] ?? 500;
+        $negativeMatchType     = $this->config['negative_match_type']      ?? 'PHRASE';
 
         $searchTerm = $term['search_term'];
         $impressions = $term['impressions'];
@@ -151,9 +156,10 @@ class SearchTermMiningAgent
         }
 
         // Check if this is WASTING MONEY → Add as negative
+        // Safety: never auto-negative a term that has converted, regardless of other signals
         if ($cost >= $negativeCostThreshold && $conversions == 0) {
             if ($platform === 'google') {
-                $this->addAsNegative($customer, $customerId, $campaignResourceName, $searchTerm, 'High cost, no conversions', $results);
+                $this->addAsNegative($customer, $customerId, $campaignResourceName, $searchTerm, 'High cost, no conversions', $results, $negativeMatchType);
             } else {
                 $this->addAsMicrosoftNegative($customer, $campaignResourceName, $searchTerm, 'High cost, no conversions', $results);
             }
@@ -163,7 +169,7 @@ class SearchTermMiningAgent
         // Check if this has LOW CTR with high impressions → Add as negative
         if ($impressions >= $negativeMinImpressions && $ctr < $negativeCtrThreshold && $conversions == 0) {
             if ($platform === 'google') {
-                $this->addAsNegative($customer, $customerId, $campaignResourceName, $searchTerm, 'Low CTR, no conversions', $results);
+                $this->addAsNegative($customer, $customerId, $campaignResourceName, $searchTerm, 'Low CTR, no conversions', $results, $negativeMatchType);
             } else {
                 $this->addAsMicrosoftNegative($customer, $campaignResourceName, $searchTerm, 'Low CTR, no conversions', $results);
             }
@@ -315,11 +321,17 @@ class SearchTermMiningAgent
     /**
      * Add a search term as a negative keyword.
      */
-    protected function addAsNegative(Customer $customer, string $customerId, string $campaignResourceName, string $keyword, string $reason, array &$results): void
+    protected function addAsNegative(Customer $customer, string $customerId, string $campaignResourceName, string $keyword, string $reason, array &$results, string $matchTypeName = 'PHRASE'): void
     {
+        $matchType = match (strtoupper($matchTypeName)) {
+            'EXACT' => KeywordMatchType::EXACT,
+            'BROAD' => KeywordMatchType::BROAD,
+            default => KeywordMatchType::PHRASE,
+        };
+
         try {
             $addNegative = new AddNegativeKeyword($customer, true);
-            $resourceName = ($addNegative)($customerId, $campaignResourceName, $keyword, KeywordMatchType::EXACT);
+            $resourceName = ($addNegative)($customerId, $campaignResourceName, $keyword, $matchType);
 
             if ($resourceName) {
                 $results['negatives_added'][] = [

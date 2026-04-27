@@ -504,7 +504,7 @@ class HealthCheckAgent
 
         if ($campaign->google_ads_campaign_id && $campaign->customer?->google_ads_customer_id) {
             try {
-                $customerId = str_replace('-', '', $campaign->customer->google_ads_customer_id);
+                $customerId = $campaign->customer->cleanGoogleCustomerId();
                 $resourceName = $campaign->google_ads_campaign_id;
 
                 if (!str_starts_with($resourceName, 'customers/')) {
@@ -960,6 +960,12 @@ class HealthCheckAgent
                 return $health;
             }
 
+            // Require minimum impressions before flagging anomalies — small samples cause false positives
+            $anomalyMinImpressions = config('optimization.health_check.anomaly_min_impressions', 1000);
+            if (($recent->impressions ?? 0) < $anomalyMinImpressions) {
+                return $health;
+            }
+
             $health['metrics'] = [
                 'recent_impressions' => (int) $recent->impressions,
                 'previous_impressions' => (int) $previous->impressions,
@@ -1212,7 +1218,7 @@ class HealthCheckAgent
                 }
             };
 
-            return $service->getCampaignMetrics(str_replace('-', '', $customer->google_ads_customer_id), (string) $campaignId);
+            return $service->getCampaignMetrics($customer->cleanGoogleCustomerId(), (string) $campaignId);
         } catch (\Exception $e) {
             Log::debug('HealthCheckAgent: Could not fetch Google campaign metrics', [
                 'campaign_id' => $campaign->id,

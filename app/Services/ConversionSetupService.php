@@ -36,7 +36,7 @@ class ConversionSetupService
             return ['success' => false, 'errors' => ['Google Ads account not connected']];
         }
 
-        $customerId = str_replace('-', '', $customer->google_ads_customer_id);
+        $customerId = $customer->cleanGoogleCustomerId();
 
         // Step 0: Ensure we have the correct GTM container to wire the conversion tag into.
         //

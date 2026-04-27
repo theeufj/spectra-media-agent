@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Notifications\MaintenanceSummaryNotification;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\SearchTermMiningAgent;
 use App\Services\Agents\BudgetIntelligenceAgent;
@@ -36,6 +37,9 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         QualityScoreImprovementAgent $qsAgent
     ): void {
         Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
+
+        // Per-customer digest: customer_id → [campaign_name => changes]
+        $customerDigests = [];
 
         // Get all active campaigns (Google, Facebook, Microsoft, and LinkedIn)
         $campaigns = Campaign::with('customer')
@@ -142,6 +146,25 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
                 $summary['campaigns_processed']++;
 
+                // Accumulate per-customer digest
+                $customerId = $campaign->customer_id;
+                $healed     = count($healingResults['actions_taken'] ?? []);
+                $kwAdded    = count($miningResults['keywords_added'] ?? []);
+                $negAdded   = count($miningResults['negatives_added'] ?? []);
+                $budgetAdj  = count(array_filter($budgetResults['adjustments'] ?? [], fn($a) => ($a['type'] ?? '') === 'budget_updated'));
+                $creative   = count($creativeResults['recommendations'] ?? [])
+                            + count($creativeResults['generated_variations']['headlines'] ?? [])
+                            + count($creativeResults['generated_variations']['descriptions'] ?? []);
+
+                $customerDigests[$customerId][$campaign->name] = [
+                    'total_changes'      => $healed + $kwAdded + $negAdded + $budgetAdj + $creative,
+                    'healed'             => $healed ?: null,
+                    'keywords_added'     => $kwAdded ?: null,
+                    'negatives_added'    => $negAdded ?: null,
+                    'budget_adjustments' => $budgetAdj ?: null,
+                    'creative_adjustments' => $creative ?: null,
+                ];
+
                 // Store maintenance results on the campaign
                 $campaign->update([
                     'last_maintenance_at' => now(),
@@ -183,6 +206,19 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         }
 
         Log::info("AutomatedCampaignMaintenance: Completed daily maintenance", $summary);
+
+        // Send one summary email per customer covering all their campaigns
+        foreach ($customerDigests as $customerId => $campaignChanges) {
+            $customer = \App\Models\Customer::find($customerId);
+            if (!$customer) {
+                continue;
+            }
+            $processed = count($campaignChanges);
+            $user = $customer->users()->first();
+            if ($user) {
+                $user->notify(new MaintenanceSummaryNotification($campaignChanges, $processed));
+            }
+        }
     }
 
     /**
