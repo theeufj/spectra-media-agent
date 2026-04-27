@@ -10,6 +10,7 @@ use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class BudgetIntelligenceAgent
@@ -522,20 +523,30 @@ class BudgetIntelligenceAgent
     ): bool {
         try {
             $fromBudget = $fromCampaign->daily_budget ?? 0;
-            $toBudget = $toCampaign->daily_budget ?? 0;
+            $toBudget   = $toCampaign->daily_budget ?? 0;
 
-            $newFromBudget = max(5.0, $fromBudget - $shiftAmount); // Never go below $5
-            $newToBudget = $toBudget + $shiftAmount;
+            $newFromBudget = max(5.0, $fromBudget - $shiftAmount);
+            $newToBudget   = $toBudget + $shiftAmount;
 
-            // Execute on the appropriate platform(s)
-            $fromSuccess = $this->updateCampaignBudget($fromCampaign, $customer, $newFromBudget);
-            $toSuccess = $this->updateCampaignBudget($toCampaign, $customer, $newToBudget);
+            // Wrap DB writes in a transaction so both campaigns update atomically.
+            // API calls happen after so a DB failure rolls back local state.
+            return DB::transaction(function () use ($fromCampaign, $toCampaign, $customer, $newFromBudget, $newToBudget) {
+                $fromCampaign->update(['daily_budget' => $newFromBudget]);
+                $toCampaign->update(['daily_budget' => $newToBudget]);
 
-            return $fromSuccess && $toSuccess;
+                $fromSuccess = $this->updateCampaignBudget($fromCampaign, $customer, $newFromBudget);
+                $toSuccess   = $this->updateCampaignBudget($toCampaign, $customer, $newToBudget);
+
+                if (!$fromSuccess || !$toSuccess) {
+                    throw new \RuntimeException('API budget update failed during reallocation');
+                }
+
+                return true;
+            });
         } catch (\Exception $e) {
             Log::error('BudgetIntelligenceAgent: Failed to execute reallocation', [
-                'from' => $fromCampaign->id,
-                'to' => $toCampaign->id,
+                'from'  => $fromCampaign->id,
+                'to'    => $toCampaign->id,
                 'error' => $e->getMessage(),
             ]);
             return false;

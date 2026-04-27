@@ -18,6 +18,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class AutomatedCampaignMaintenance implements ShouldQueue
@@ -66,6 +67,13 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         ];
 
         foreach ($campaigns as $campaign) {
+            // Skip if another worker is already processing this campaign
+            $lock = Cache::lock("maintenance:campaign:{$campaign->id}", 3600);
+            if (!$lock->get()) {
+                Log::info("AutomatedCampaignMaintenance: Campaign {$campaign->id} already being processed, skipping");
+                continue;
+            }
+
             try {
                 Log::info("AutomatedCampaignMaintenance: Processing campaign", [
                     'campaign_id' => $campaign->id,
@@ -202,6 +210,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
                 ]);
+            } finally {
+                $lock->release();
             }
         }
 

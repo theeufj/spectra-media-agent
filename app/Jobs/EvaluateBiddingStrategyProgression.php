@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -25,6 +26,21 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
     public $timeout = 600;
 
     public function handle(BiddingStrategyProgressionAgent $agent): void
+    {
+        $lock = Cache::lock('job:bidding_progression', 3600);
+        if (!$lock->get()) {
+            Log::info('EvaluateBiddingStrategyProgression: Already running, skipping');
+            return;
+        }
+
+        try {
+            $this->run($agent);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function run(BiddingStrategyProgressionAgent $agent): void
     {
         $campaigns = Campaign::with(['customer', 'strategies'])
             ->where('status', 'active')
@@ -53,6 +69,7 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
 
         Log::info('EvaluateBiddingStrategyProgression: Complete', $summary);
     }
+
 
     public function failed(\Throwable $exception): void
     {
