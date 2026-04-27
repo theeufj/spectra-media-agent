@@ -84,6 +84,7 @@ class ExecutiveReportService
         ];
 
         $report['ai_executive_summary'] = $this->generateNarrative($report);
+        $report['ai_insights']          = $this->generateWoWInsights($report, $customer, $days);
 
         Log::info("Generated {$period} executive report for customer {$customer->id}", [
             'campaigns_analyzed' => count($campaigns),
@@ -453,5 +454,115 @@ class ExecutiveReportService
             'completed' => $activities->where('status', 'completed')->count(),
             'by_agent' => $byType,
         ];
+    }
+
+    /**
+     * Generate structured WoW bullet insights for the current vs prior period.
+     *
+     * Returns an array of bullets like:
+     *   ['metric' => 'CPA', 'change' => -18, 'direction' => 'improved', 'insight' => '...']
+     *
+     * These are rendered above the data tables in WeeklyExecutiveReport.
+     */
+    protected function generateWoWInsights(array $report, Customer $customer, int $days): array
+    {
+        // Build prior period on-the-fly for weekly reports (monthly already has it)
+        $prior = $report['prior_period'] ?? $this->getPriorPeriodComparison($customer, $days);
+
+        if (!$prior || ($prior['total_impressions'] ?? 0) === 0) {
+            return [];
+        }
+
+        $current = $report['summary'];
+
+        // Compute deltas
+        $metrics = [
+            'spend'       => ['current' => $current['total_cost'],        'prior' => $prior['total_cost'],        'label' => 'Total Spend',       'higher_is' => 'neutral'],
+            'impressions' => ['current' => $current['total_impressions'],  'prior' => $prior['total_impressions'],  'label' => 'Impressions',       'higher_is' => 'good'],
+            'clicks'      => ['current' => $current['total_clicks'],       'prior' => $prior['total_clicks'],       'label' => 'Clicks',            'higher_is' => 'good'],
+            'ctr'         => ['current' => $current['blended_ctr'],        'prior' => $prior['blended_ctr'],        'label' => 'CTR',               'higher_is' => 'good'],
+            'cpc'         => ['current' => $current['blended_cpc'],        'prior' => $prior['blended_cpc'],        'label' => 'CPC',               'higher_is' => 'bad'],
+            'conversions' => ['current' => $current['total_conversions'],  'prior' => $prior['total_conversions'],  'label' => 'Conversions',       'higher_is' => 'good'],
+            'cpa'         => ['current' => $current['blended_cpa'],        'prior' => $prior['blended_cpa'],        'label' => 'CPA',               'higher_is' => 'bad'],
+        ];
+
+        $movers = [];
+        foreach ($metrics as $key => $m) {
+            if (($m['prior'] ?? 0) <= 0) {
+                continue;
+            }
+            $changePct = round(($m['current'] - $m['prior']) / $m['prior'] * 100, 1);
+            if (abs($changePct) < 5) {
+                continue; // Skip flat metrics — not worth reporting
+            }
+
+            $direction = match (true) {
+                $changePct > 0 && $m['higher_is'] === 'good' => 'improved',
+                $changePct < 0 && $m['higher_is'] === 'bad'  => 'improved',
+                $changePct > 0 && $m['higher_is'] === 'bad'  => 'declined',
+                $changePct < 0 && $m['higher_is'] === 'good' => 'declined',
+                default => 'changed',
+            };
+
+            $movers[] = [
+                'metric'    => $key,
+                'label'     => $m['label'],
+                'current'   => $m['current'],
+                'prior'     => $m['prior'],
+                'change'    => $changePct,
+                'direction' => $direction,
+            ];
+        }
+
+        if (empty($movers)) {
+            return [];
+        }
+
+        // Sort by absolute change descending — biggest movers first
+        usort($movers, fn($a, $b) => abs($b['change']) <=> abs($a['change']));
+        $movers = array_slice($movers, 0, 5);
+
+        // Ask Gemini to add likely cause + action for each mover
+        return $this->enrichMoversWithInsights($movers, $report['customer_name'], $report['period']['type']);
+    }
+
+    private function enrichMoversWithInsights(array $movers, string $customerName, string $period): array
+    {
+        $moveSummary = implode("\n", array_map(fn($m) =>
+            "- {$m['label']}: {$m['change']}% ({$m['direction']}) — was {$m['prior']}, now {$m['current']}",
+        $movers));
+
+        $prompt = <<<PROMPT
+You are a senior SEM analyst writing a {$period} performance brief for {$customerName}.
+
+These metrics moved significantly vs the prior period:
+{$moveSummary}
+
+For each metric, write ONE bullet in this exact format:
+• [Metric] [changed X%]: [likely cause in ≤8 words] → [recommended action in ≤8 words]
+
+Return ONLY a JSON array of strings, one per metric, in the same order:
+["• CPA improved 18%: ...", "• CTR declined 12%: ..."]
+PROMPT;
+
+        try {
+            $response = $this->gemini->generateContent(
+                'gemini-2.0-flash',
+                $prompt,
+                ['temperature' => 0.3, 'maxOutputTokens' => 400]
+            );
+            $text    = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
+            $bullets = json_decode(trim($text), true);
+
+            if (is_array($bullets) && !empty($bullets)) {
+                foreach ($movers as $i => $mover) {
+                    $movers[$i]['insight'] = $bullets[$i] ?? null;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::debug("ExecutiveReportService: WoW insight generation failed: " . $e->getMessage());
+        }
+
+        return $movers;
     }
 }

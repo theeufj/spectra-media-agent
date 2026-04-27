@@ -12,6 +12,8 @@ use App\Services\Agents\AdExtensionAgent;
 use App\Services\Agents\BidAdjustmentAgent;
 use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\Agents\CreativeIntelligenceAgent;
+use App\Services\Agents\FacebookLearningPhaseAgent;
+use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use App\Jobs\FindUnderperformingKeywords;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -35,7 +37,9 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         CreativeIntelligenceAgent $creativeAgent,
         AdExtensionAgent $extensionAgent,
         BidAdjustmentAgent $bidAgent,
-        QualityScoreImprovementAgent $qsAgent
+        QualityScoreImprovementAgent $qsAgent,
+        FacebookLearningPhaseAgent $fbLearningAgent,
+        FacebookAdRelevanceDiagnosticsAgent $fbRelevanceAgent
     ): void {
         Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
 
@@ -103,6 +107,16 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $summary['healing_actions'] += count($healingResults['actions_taken'] ?? []);
                 $summary['healing_warnings'] += count($healingResults['warnings'] ?? []);
                 $summary['errors'] += count($healingResults['errors'] ?? []);
+
+                // 1b. Facebook learning phase management (before any other Facebook mutations)
+                if ($campaign->facebook_ads_campaign_id) {
+                    $fbLearningAgent->analyze($campaign);
+                }
+
+                // 1c. Facebook Ad Relevance Diagnostics (Facebook equivalent of QS improvement)
+                if ($campaign->facebook_ads_campaign_id && !FacebookLearningPhaseAgent::isOnHold($campaign)) {
+                    $fbRelevanceAgent->analyze($campaign);
+                }
 
                 // 2. Run Search Term Mining (only for Google Search and Microsoft Search campaigns)
                 $miningResults = ['keywords_added' => [], 'negatives_added' => [], 'errors' => []];

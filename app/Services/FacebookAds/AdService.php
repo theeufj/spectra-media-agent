@@ -221,4 +221,40 @@ class AdService extends BaseFacebookAdsService
     {
         return $this->updateAd($adId, ['status' => 'ACTIVE']);
     }
+
+    /**
+     * List ads for an ad set including Ad Relevance Diagnostics sub-scores and impression count.
+     * Used by FacebookAdRelevanceDiagnosticsAgent.
+     */
+    public function listAdsWithDiagnostics(string $adSetId): ?array
+    {
+        try {
+            $response = $this->get("/{$adSetId}/ads", [
+                'fields' => 'id,name,status,insights{impressions,quality_ranking,engagement_rate_ranking,conversion_rate_ranking}',
+                'effective_status' => json_encode(['ACTIVE']),
+            ]);
+
+            if (!$response || !isset($response['data'])) {
+                return [];
+            }
+
+            return array_map(function (array $ad) {
+                $insights = $ad['insights']['data'][0] ?? [];
+                return [
+                    'id'                        => $ad['id'],
+                    'name'                      => $ad['name'] ?? $ad['id'],
+                    'status'                    => $ad['status'] ?? 'UNKNOWN',
+                    'impressions'               => (int) ($insights['impressions'] ?? 0),
+                    'quality_ranking'           => $insights['quality_ranking']          ?? 'UNKNOWN',
+                    'engagement_rate_ranking'   => $insights['engagement_rate_ranking']  ?? 'UNKNOWN',
+                    'conversion_rate_ranking'   => $insights['conversion_rate_ranking']  ?? 'UNKNOWN',
+                ];
+            }, $response['data']);
+        } catch (\Exception $e) {
+            Log::error("AdService: Error fetching ads with diagnostics for ad set {$adSetId}: " . $e->getMessage(), [
+                'customer_id' => $this->customer->id,
+            ]);
+            return null;
+        }
+    }
 }
