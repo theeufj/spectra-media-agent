@@ -4,12 +4,15 @@ namespace App\Services\Agents;
 
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\FacebookAdsPerformanceData;
 use App\Services\GoogleAds\CommonServices\GetPerformanceBySegment;
 use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
 use App\Services\GoogleAds\CommonServices\SetAdSchedule;
+use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device;
 use Google\Ads\GoogleAds\V22\Enums\DayOfWeekEnum\DayOfWeek;
 use Google\Ads\GoogleAds\V22\Enums\MinuteOfHourEnum\MinuteOfHour;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -41,7 +44,39 @@ class BidAdjustmentAgent
     public function optimize(Campaign $campaign): array
     {
         $customer = $campaign->customer;
+        $results  = ['adjustments' => [], 'errors' => []];
 
+        // Google Ads: device + daypart bid modifiers
+        if ($customer?->google_ads_customer_id && $campaign->google_ads_campaign_id) {
+            $googleResults = $this->optimizeGoogle($campaign, $customer);
+            $results['adjustments'] = array_merge($results['adjustments'], $googleResults['adjustments']);
+            $results['errors']      = array_merge($results['errors'],      $googleResults['errors']);
+        }
+
+        // Facebook Ads: ad-set schedule exclusions for poor-performing hours
+        if ($customer?->facebook_ads_account_id && $campaign->facebook_ads_campaign_id
+            && config('optimization.bid_adjustment.facebook_daypart_enabled', false)) {
+            $fbResults = $this->optimizeFacebook($campaign, $customer);
+            $results['adjustments'] = array_merge($results['adjustments'], $fbResults['adjustments']);
+            $results['errors']      = array_merge($results['errors'],      $fbResults['errors']);
+        }
+
+        if (!empty($results['adjustments'])) {
+            AgentActivity::record(
+                'bidding',
+                'bid_adjustments_applied',
+                'Applied ' . count($results['adjustments']) . ' bid modifier(s) for "' . $campaign->name . '"',
+                $campaign->customer_id,
+                $campaign->id,
+                $results
+            );
+        }
+
+        return $results;
+    }
+
+    private function optimizeGoogle(Campaign $campaign, object $customer): array
+    {
         if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
             return ['skipped' => true];
         }
@@ -62,15 +97,116 @@ class BidAdjustmentAgent
         $hourData = $segmentService->byHour($customerId, $campaignResource);
         $adjustments = array_merge($adjustments, $this->applyDaypartingModifiers($customer, $customerId, $campaignResource, $hourData, $errors));
 
-        if (!empty($adjustments)) {
-            AgentActivity::record(
-                'bidding',
-                'bid_adjustments_applied',
-                'Applied ' . count($adjustments) . ' bid modifier(s) for "' . $campaign->name . '"',
-                $campaign->customer_id,
-                $campaign->id,
-                ['adjustments' => $adjustments, 'errors' => $errors]
-            );
+        return ['adjustments' => $adjustments, 'errors' => $errors];
+    }
+
+    /**
+     * Facebook dayparting: identify hours with CPA >2x average and pause ad sets during those windows.
+     * Facebook doesn't support bid modifiers so we use ad_schedule on ad sets instead.
+     * Gate: config('optimization.bid_adjustment.facebook_daypart_enabled', false)
+     */
+    private function optimizeFacebook(Campaign $campaign, object $customer): array
+    {
+        $adjustments = [];
+        $errors      = [];
+
+        // Need at least 14 days of hourly data — use stored performance data grouped by hour
+        $data = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->where('date', '>=', now()->subDays(14)->toDateString())
+            ->get();
+
+        if ($data->isEmpty()) {
+            return ['adjustments' => [], 'errors' => []];
+        }
+
+        // Aggregate by hour-of-day (we store daily data, so group by created_at hour as proxy)
+        // Real hourly breakdown would require the Insights API with time_increment=hourly.
+        // Here we use the daily rows' created_at hour as an approximation until hourly sync is added.
+        $hourlyStats = [];
+        foreach ($data as $row) {
+            $hour = (int) $row->created_at->format('G');
+            if (!isset($hourlyStats[$hour])) {
+                $hourlyStats[$hour] = ['cost' => 0, 'conversions' => 0, 'impressions' => 0];
+            }
+            $hourlyStats[$hour]['cost']        += $row->cost;
+            $hourlyStats[$hour]['conversions']  += $row->conversions;
+            $hourlyStats[$hour]['impressions']  += $row->impressions;
+        }
+
+        $totalCost        = array_sum(array_column($hourlyStats, 'cost'));
+        $totalConversions = array_sum(array_column($hourlyStats, 'conversions'));
+
+        if ($totalConversions < 5 || $totalCost <= 0) {
+            return ['adjustments' => [], 'errors' => []];
+        }
+
+        $avgCpa = $totalCost / $totalConversions;
+
+        // Identify exclusion windows: hours where CPA > 2x average and impressions > 200
+        $exclusionHours = [];
+        foreach ($hourlyStats as $hour => $stats) {
+            if ($stats['impressions'] < 200 || $stats['conversions'] < 1) {
+                continue;
+            }
+            $hourCpa = $stats['cost'] / $stats['conversions'];
+            if ($hourCpa > $avgCpa * 2.0) {
+                $exclusionHours[] = $hour;
+            }
+        }
+
+        if (empty($exclusionHours)) {
+            return ['adjustments' => [], 'errors' => []];
+        }
+
+        // Cache to avoid pushing the same schedule every maintenance run
+        $cacheKey = "fb_daypart_schedule:{$campaign->id}";
+        $existing = Cache::get($cacheKey, []);
+        sort($exclusionHours);
+        if ($existing === $exclusionHours) {
+            return ['adjustments' => [], 'errors' => []];
+        }
+
+        try {
+            $adSetService = new FacebookAdSetService($customer);
+            $adSets       = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+
+            foreach ($adSets as $adSet) {
+                // Build 24-hour schedule excluding poor-performing hours
+                $schedule = [];
+                $days = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'];
+                for ($h = 0; $h < 24; $h++) {
+                    if (in_array($h, $exclusionHours, true)) {
+                        continue; // exclude this hour
+                    }
+                    foreach ($days as $day) {
+                        $schedule[] = [
+                            'start_minute' => $h * 60,
+                            'end_minute'   => ($h + 1) * 60,
+                            'days'         => [$day],
+                        ];
+                    }
+                }
+
+                if (!empty($schedule)) {
+                    $adSetService->updateAdSet($adSet['id'], ['adset_schedule' => $schedule]);
+                }
+            }
+
+            Cache::put($cacheKey, $exclusionHours, now()->addDays(7));
+
+            $adjustments[] = [
+                'type'            => 'facebook_daypart',
+                'exclusion_hours' => $exclusionHours,
+                'adsets_updated'  => count($adSets),
+                'avg_cpa'         => round($avgCpa, 2),
+            ];
+
+            Log::info("BidAdjustmentAgent: Facebook daypart schedule applied for campaign {$campaign->id}", [
+                'exclusion_hours' => $exclusionHours,
+            ]);
+        } catch (\Exception $e) {
+            $errors[] = "Facebook daypart failed: " . $e->getMessage();
+            Log::warning("BidAdjustmentAgent: Facebook daypart error for campaign {$campaign->id}: " . $e->getMessage());
         }
 
         return ['adjustments' => $adjustments, 'errors' => $errors];

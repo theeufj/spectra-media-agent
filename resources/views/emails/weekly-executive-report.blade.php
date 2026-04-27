@@ -47,6 +47,20 @@
         </tr>
     </table>
 
+    {{-- AI WoW Insights (bullet insights with cause + action) --}}
+    @if(!empty($report['ai_insights']))
+        <div style="background: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0;">
+            <div style="font-size: 13px; font-weight: 700; color: #1e40af; margin-bottom: 10px; text-transform: uppercase;">Week-on-Week Insights</div>
+            <ul style="margin: 0; padding: 0; list-style: none;">
+                @foreach($report['ai_insights'] as $insight)
+                    <li style="font-size: 14px; color: #1e3a5f; line-height: 1.6; padding: 4px 0; border-bottom: 1px solid #dbeafe;">
+                        {!! e($insight) !!}
+                    </li>
+                @endforeach
+            </ul>
+        </div>
+    @endif
+
     {{-- AI Executive Summary --}}
     @if(!empty($report['ai_executive_summary']))
         <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0;">

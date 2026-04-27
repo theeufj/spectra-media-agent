@@ -124,6 +124,11 @@ class CreativeIntelligenceAgent
         // Create creative briefs for fatigue detections and AB winners
         $this->createBriefsFromResults($campaign, $results);
 
+        // Promote Google RSA winners to Facebook as cross-platform briefs
+        if ($hasGoogle && $hasFacebook) {
+            $this->promoteGoogleWinnersToFacebook($campaign, $results);
+        }
+
         // Proactive rotation: brief campaigns running >45 days with no creative change
         $this->scheduleProactiveRotation($campaign);
 
@@ -203,6 +208,105 @@ class CreativeIntelligenceAgent
             "Campaign has been running {$campaignAge} days — proactive creative refresh recommended before fatigue sets in.",
             ['campaign_age_days' => $campaignAge]
         );
+    }
+
+    /**
+     * When a Google RSA headline wins by >20% CTR over the campaign median,
+     * generate a Facebook-adapted copy variant and queue a cross_platform_winner brief.
+     */
+    protected function promoteGoogleWinnersToFacebook(Campaign $campaign, array $results): void
+    {
+        $winners = $results['headlines']['winners'] ?? [];
+        if (empty($winners)) {
+            return;
+        }
+
+        // Compute campaign median CTR from all qualified headlines
+        $allHeadlines = array_merge(
+            $results['headlines']['winners'] ?? [],
+            $results['headlines']['losers'] ?? [],
+            $results['headlines']['learning'] ?? []
+        );
+
+        $ctrs = array_filter(array_column($allHeadlines, 'ctr'));
+        if (empty($ctrs)) {
+            return;
+        }
+        sort($ctrs);
+        $medianCtr = $ctrs[(int) floor(count($ctrs) / 2)];
+
+        if ($medianCtr <= 0) {
+            return;
+        }
+
+        // Only promote headlines beating the median by >20%
+        $strongWinners = array_filter($winners, fn($h) =>
+            ($h['ctr'] ?? 0) > $medianCtr * 1.20
+        );
+
+        if (empty($strongWinners)) {
+            return;
+        }
+
+        // One cross-platform brief per campaign at a time
+        if (CreativeBrief::where('campaign_id', $campaign->id)
+            ->where('brief_type', 'cross_platform_winner')
+            ->where('status', 'pending')
+            ->exists()) {
+            return;
+        }
+
+        $winnerTexts = array_column(array_slice(array_values($strongWinners), 0, 3), 'text');
+        $winnerList  = implode("\n- ", $winnerTexts);
+        $customer    = $campaign->customer;
+
+        $brandContext = '';
+        if ($customer->brandGuideline) {
+            $brandContext  = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
+            $brandContext .= "USPs: " . implode(', ', $customer->brandGuideline->unique_selling_propositions ?? []);
+        }
+
+        $prompt = <<<PROMPT
+These Google Search Ad headlines are top performers (CTR >20% above campaign median):
+- {$winnerList}
+
+Adapt their themes for Facebook Ads for {$customer->name}.
+Requirements:
+1. Primary text (intro): 3 variations, max 125 characters each
+2. Headline: 3 variations, max 40 characters each
+3. Keep the core message / hook but make it feel native to Facebook (less direct-response, more engaging)
+
+Return JSON:
+{"primary_texts": ["...", "...", "..."], "headlines": ["...", "...", "..."]}
+PROMPT;
+
+        $facebookVariants = [];
+        try {
+            $response = $this->gemini->generateContent(
+                'gemini-2.0-flash',
+                $prompt,
+                ['responseMimeType' => 'application/json']
+            );
+
+            if ($response && isset($response['text'])) {
+                $facebookVariants = json_decode($response['text'], true) ?? [];
+            }
+        } catch (\Exception $e) {
+            Log::warning("CreativeIntelligenceAgent: Cross-platform winner Gemini call failed for campaign {$campaign->id}: " . $e->getMessage());
+        }
+
+        $briefContent = "Google RSA headlines are outperforming by >20% CTR. Adapt winning themes for Facebook: " . implode('; ', $winnerTexts);
+
+        $this->createBrief($campaign, 'facebook', 'cross_platform_winner', $briefContent, [
+            'source_platform'   => 'google',
+            'winning_headlines' => $winnerTexts,
+            'winner_ctr_delta'  => '>20% above median',
+            'facebook_variants' => $facebookVariants,
+        ]);
+
+        Log::info("CreativeIntelligenceAgent: Cross-platform winner brief created for campaign {$campaign->id}", [
+            'google_winners' => count($strongWinners),
+        ]);
     }
 
     private function createBrief(Campaign $campaign, string $platform, string $type, string $briefContent, array $context = []): void

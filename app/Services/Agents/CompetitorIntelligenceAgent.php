@@ -7,7 +7,9 @@ use App\Models\Campaign;
 use App\Models\Competitor;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAuctionInsights;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Notification;
 
 /**
  * CompetitorIntelligenceAgent
@@ -70,6 +72,7 @@ class CompetitorIntelligenceAgent
         if ($customer->google_ads_customer_id) {
             try {
                 $results['auction_insights'] = $this->fetchAuctionInsights($customer);
+                $results['auction_trend_actions'] = $this->analyzeAuctionTrends($customer, $results['auction_insights']);
             } catch (\Exception $e) {
                 $results['errors'][] = 'Auction insights failed: ' . $e->getMessage();
             }
@@ -104,9 +107,18 @@ class CompetitorIntelligenceAgent
             $auctionInsightsService = new GetAuctionInsights($customer, true);
             $allInsights = $auctionInsightsService->getAllCampaigns($customer->google_ads_customer_id);
 
+            $ownIsSum   = 0;
+            $ownIsCount = 0;
+
             foreach ($allInsights as $campaignInsights) {
                 $results['campaigns_analyzed']++;
-                
+
+                // Track own impression share for trend analysis
+                if (!empty($campaignInsights['our_metrics']['impression_share'])) {
+                    $ownIsSum += $campaignInsights['our_metrics']['impression_share'];
+                    $ownIsCount++;
+                }
+
                 // Extract competitor domains and match with our database
                 foreach ($campaignInsights['competitors'] ?? [] as $competitorData) {
                     $domain = $competitorData['domain'];
@@ -117,8 +129,23 @@ class CompetitorIntelligenceAgent
                         ->first();
 
                     if ($competitor) {
+                        // Record WoW impression_share delta before overwriting
+                        $prevIs  = (float) ($competitor->impression_share ?? 0);
+                        $newIs   = (float) ($competitorData['impression_share'] ?? 0);
+                        $trends  = $competitor->auction_trends ?? [];
+                        $trends[] = [
+                            'date'             => now()->toDateString(),
+                            'impression_share' => $newIs,
+                            'delta'            => round($newIs - $prevIs, 2),
+                        ];
+                        // Keep only last 8 snapshots
+                        if (count($trends) > 8) {
+                            $trends = array_slice($trends, -8);
+                        }
+
                         $competitor->update([
                             'auction_insights' => $competitorData,
+                            'auction_trends'   => $trends,
                             'impression_share' => $competitorData['impression_share'] ?? null,
                             'overlap_rate' => $competitorData['overlap_rate'] ?? null,
                             'position_above_rate' => $competitorData['position_above_rate'] ?? null,
@@ -143,6 +170,12 @@ class CompetitorIntelligenceAgent
 
             $results['competitors_found'] = array_unique($results['competitors_found']);
 
+            if ($ownIsCount > 0) {
+                $avgOwnIs = $ownIsSum / $ownIsCount;
+                $this->recordOwnImpressionShare($customer, round($avgOwnIs, 2));
+                $results['own_impression_share'] = round($avgOwnIs, 2);
+            }
+
         } catch (\Exception $e) {
             Log::error('CompetitorIntelligenceAgent: Auction insights failed', [
                 'customer_id' => $customer->id,
@@ -152,6 +185,165 @@ class CompetitorIntelligenceAgent
         }
 
         return $results;
+    }
+
+    /**
+     * Analyze WoW auction insight trends and surface bid/budget recommendations.
+     *
+     * - Competitor IS +15% WoW → push BIDDING recommendation into CampaignOptimizationAgent cache
+     * - Own IS dropped >10% (non-budget-limited) → push BIDDING escalation recommendation
+     */
+    protected function analyzeAuctionTrends(Customer $customer, array $insightsResult): array
+    {
+        $actions = [];
+
+        $competitors = $customer->competitors()
+            ->whereNotNull('auction_trends')
+            ->get();
+
+        foreach ($competitors as $competitor) {
+            $trends = $competitor->auction_trends ?? [];
+            if (count($trends) < 2) {
+                continue;
+            }
+
+            $latest = end($trends);
+            $prior  = $trends[count($trends) - 2];
+
+            $delta = ($latest['impression_share'] ?? 0) - ($prior['impression_share'] ?? 0);
+
+            if ($delta >= 15.0) {
+                $this->pushBidRecommendation($customer, $competitor, $delta);
+                $actions[] = [
+                    'type'       => 'competitor_is_surge',
+                    'competitor' => $competitor->domain,
+                    'delta'      => $delta,
+                ];
+            }
+        }
+
+        // Own IS drop is detected from rolling cache populated during fetchAuctionInsights
+        $this->checkOwnImpressionShareDrop($customer, $actions);
+
+        return $actions;
+    }
+
+    private function pushBidRecommendation(Customer $customer, Competitor $competitor, float $delta): void
+    {
+        $cacheKey = "competitor_is_surge:{$customer->id}:{$competitor->id}";
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+        Cache::put($cacheKey, true, now()->addDays(7));
+
+        // Inject into each active campaign's optimization cache as an additional BIDDING recommendation
+        $campaigns = $customer->campaigns()
+            ->where('status', 'active')
+            ->whereNotNull('google_ads_campaign_id')
+            ->get();
+
+        foreach ($campaigns as $campaign) {
+            $existing = Cache::get("optimization:campaign:{$campaign->id}", []);
+            $existing['competitor_bid_alerts'][] = [
+                'priority'        => 'HIGH',
+                'category'        => 'BIDDING',
+                'recommendation'  => "Competitor {$competitor->domain} grew impression share by {$delta}% WoW. Review bids on overlapping keywords and consider raising target IS or tCPA to defend position.",
+                'source'          => 'CompetitorIntelligenceAgent',
+                'competitor'      => $competitor->domain,
+                'is_delta'        => $delta,
+                'recorded_at'     => now()->toIso8601String(),
+            ];
+            Cache::put("optimization:campaign:{$campaign->id}", $existing, now()->addHours(12));
+        }
+
+        Log::info("CompetitorIntelligenceAgent: Competitor IS surge — {$competitor->domain} +{$delta}%", [
+            'customer_id' => $customer->id,
+        ]);
+    }
+
+    private function checkOwnImpressionShareDrop(Customer $customer, array &$actions): void
+    {
+        // We store the customer's own IS in auction_insights on each competitor marked as 'you'.
+        // Instead, we track it via a dedicated cache key that persists week-over-week.
+        $ownIsHistory = Cache::get("own_impression_share:{$customer->id}", []);
+
+        if (count($ownIsHistory) < 2) {
+            return;
+        }
+
+        $latest = end($ownIsHistory);
+        $prior  = $ownIsHistory[count($ownIsHistory) - 2];
+
+        $latestIs = $latest['impression_share'] ?? 0;
+        $priorIs  = $prior['impression_share']  ?? 0;
+
+        if ($priorIs <= 0) {
+            return;
+        }
+
+        $dropPct = (($priorIs - $latestIs) / $priorIs) * 100;
+
+        if ($dropPct < 10.0) {
+            return;
+        }
+
+        // Only escalate if budget is not the limiting factor (check budget pacing)
+        $budgetLimited = $customer->campaigns()
+            ->where('status', 'active')
+            ->whereNotNull('google_ads_campaign_id')
+            ->where(function ($q) {
+                $q->whereRaw('daily_budget_utilization > 0.95'); // proxy: campaigns nearly exhausting budget
+            })
+            ->exists();
+
+        if ($budgetLimited) {
+            return;
+        }
+
+        $actions[] = [
+            'type'     => 'own_is_drop',
+            'drop_pct' => round($dropPct, 1),
+            'prior_is' => $priorIs,
+            'latest_is' => $latestIs,
+        ];
+
+        $campaigns = $customer->campaigns()
+            ->where('status', 'active')
+            ->whereNotNull('google_ads_campaign_id')
+            ->get();
+
+        foreach ($campaigns as $campaign) {
+            $existing = Cache::get("optimization:campaign:{$campaign->id}", []);
+            $existing['competitor_bid_alerts'][] = [
+                'priority'       => 'HIGH',
+                'category'       => 'BIDDING',
+                'recommendation' => "Own impression share dropped {$dropPct}% WoW (from {$priorIs}% to {$latestIs}%) with budget not limiting. Review bid strategy and consider increasing target IS or tCPA.",
+                'source'         => 'CompetitorIntelligenceAgent',
+                'own_is_drop'    => $dropPct,
+                'recorded_at'    => now()->toIso8601String(),
+            ];
+            Cache::put("optimization:campaign:{$campaign->id}", $existing, now()->addHours(12));
+        }
+
+        Log::warning("CompetitorIntelligenceAgent: Own IS dropped {$dropPct}% WoW (budget not limiting)", [
+            'customer_id' => $customer->id,
+            'prior_is'    => $priorIs,
+            'latest_is'   => $latestIs,
+        ]);
+    }
+
+    /**
+     * Record current own impression share snapshot (called after fetching auction insights).
+     * Stores in a rolling cache so trend analysis can compare WoW.
+     */
+    public function recordOwnImpressionShare(Customer $customer, float $impressionShare): void
+    {
+        $history   = Cache::get("own_impression_share:{$customer->id}", []);
+        $history[] = ['date' => now()->toDateString(), 'impression_share' => $impressionShare];
+        if (count($history) > 8) {
+            $history = array_slice($history, -8);
+        }
+        Cache::put("own_impression_share:{$customer->id}", $history, now()->addDays(60));
     }
 
     /**

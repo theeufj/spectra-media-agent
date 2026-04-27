@@ -14,6 +14,8 @@ use App\Services\Agents\QualityScoreImprovementAgent;
 use App\Services\Agents\CreativeIntelligenceAgent;
 use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
+use App\Services\Agents\LinkedInCampaignOptimizationAgent;
+use App\Services\Agents\AudienceIntelligenceAgent;
 use App\Jobs\FindUnderperformingKeywords;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -39,7 +41,9 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         BidAdjustmentAgent $bidAgent,
         QualityScoreImprovementAgent $qsAgent,
         FacebookLearningPhaseAgent $fbLearningAgent,
-        FacebookAdRelevanceDiagnosticsAgent $fbRelevanceAgent
+        FacebookAdRelevanceDiagnosticsAgent $fbRelevanceAgent,
+        LinkedInCampaignOptimizationAgent $linkedInAgent,
+        AudienceIntelligenceAgent $audienceAgent
     ): void {
         Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
 
@@ -116,6 +120,11 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 // 1c. Facebook Ad Relevance Diagnostics (Facebook equivalent of QS improvement)
                 if ($campaign->facebook_ads_campaign_id && !FacebookLearningPhaseAgent::isOnHold($campaign)) {
                     $fbRelevanceAgent->analyze($campaign);
+                }
+
+                // 1d. LinkedIn campaign optimization (frequency fatigue, message ad open rates, CPL benchmarks)
+                if ($campaign->linkedin_campaign_id) {
+                    $linkedInAgent->analyze($campaign);
                 }
 
                 // 2. Run Search Term Mining (only for Google Search and Microsoft Search campaigns)
@@ -231,12 +240,27 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
         Log::info("AutomatedCampaignMaintenance: Completed daily maintenance", $summary);
 
-        // Send one summary email per customer covering all their campaigns
+        // Per-customer post-processing: cross-platform reallocation check + summary email
         foreach ($customerDigests as $customerId => $campaignChanges) {
             $customer = \App\Models\Customer::find($customerId);
             if (!$customer) {
                 continue;
             }
+
+            // Check cross-platform budget reallocation opportunity (Google vs Facebook)
+            try {
+                $budgetAgent->checkCrossPlatformReallocation($customer);
+            } catch (\Exception $e) {
+                Log::warning("AutomatedCampaignMaintenance: Cross-platform reallocation check failed for customer {$customerId}: " . $e->getMessage());
+            }
+
+            // Facebook audience refresh cycle (stale lookalikes + frequency expansion)
+            try {
+                $audienceAgent->refreshFacebookAudiences($customer);
+            } catch (\Exception $e) {
+                Log::warning("AutomatedCampaignMaintenance: Audience refresh failed for customer {$customerId}: " . $e->getMessage());
+            }
+
             $processed = count($campaignChanges);
             $user = $customer->users()->first();
             if ($user) {

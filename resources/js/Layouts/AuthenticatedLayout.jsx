@@ -137,7 +137,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                 <Dropdown>
                                     <Dropdown.Trigger>
                                         <span data-tour="campaigns">
-                                        <NavDropdownButton active={route().current('campaigns.*')}>
+                                        <NavDropdownButton active={route().current('campaigns.*') || route().current('creative-briefs.*')}>
                                             Campaigns
                                         </NavDropdownButton>
                                         </span>
@@ -145,6 +145,8 @@ export default function AuthenticatedLayout({ header, children }) {
                                     <Dropdown.Content align="left">
                                         <Dropdown.Link href={route('campaigns.index')}>All Campaigns</Dropdown.Link>
                                         <Dropdown.Link href={route('campaigns.wizard')}>Create New</Dropdown.Link>
+                                        <Dropdown.Divider />
+                                        <Dropdown.Link href={route('creative-briefs.index')}>Creative Briefs</Dropdown.Link>
                                     </Dropdown.Content>
                                 </Dropdown>
 

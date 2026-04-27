@@ -68,6 +68,11 @@ Route::middleware(['auth', 'ensureUserHasCustomer'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
     Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'page'])->name('notifications.index');
+
+    // Creative Briefs — agent-generated creative tasks for human review
+    Route::get('/creative-briefs', [\App\Http\Controllers\CreativeBriefController::class, 'index'])->name('creative-briefs.index');
+    Route::post('/creative-briefs/{creativeBrief}/action', [\App\Http\Controllers\CreativeBriefController::class, 'action'])->name('creative-briefs.action');
+    Route::post('/creative-briefs/{creativeBrief}/dismiss', [\App\Http\Controllers\CreativeBriefController::class, 'dismiss'])->name('creative-briefs.dismiss');
 });
 
 require __DIR__.'/auth.php';

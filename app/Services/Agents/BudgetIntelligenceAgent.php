@@ -5,11 +5,14 @@ namespace App\Services\Agents;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\CampaignHourlyPerformance;
+use App\Models\GoogleAdsPerformanceData;
+use App\Models\FacebookAdsPerformanceData;
 use App\Services\Agents\AdaptiveThresholds;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
@@ -45,10 +48,12 @@ class BudgetIntelligenceAgent
             return $results;
         }
 
-        $hasGoogle = $campaign->google_ads_campaign_id && $campaign->customer->google_ads_customer_id;
-        $hasFacebook = $campaign->facebook_ads_campaign_id && $campaign->customer->facebook_ads_account_id;
+        $hasGoogle    = $campaign->google_ads_campaign_id    && $campaign->customer->google_ads_customer_id;
+        $hasFacebook  = $campaign->facebook_ads_campaign_id  && $campaign->customer->facebook_ads_account_id;
+        $hasMicrosoft = $campaign->microsoft_ads_campaign_id && $campaign->customer->microsoft_ads_account_id;
+        $hasLinkedIn  = $campaign->linkedin_campaign_id       && $campaign->customer->linkedin_ads_account_id;
 
-        if (!$hasGoogle && !$hasFacebook) {
+        if (!$hasGoogle && !$hasFacebook && !$hasMicrosoft && !$hasLinkedIn) {
             return $results;
         }
 
@@ -93,7 +98,74 @@ class BudgetIntelligenceAgent
             $this->optimizeFacebookAdsCampaign($campaign, $combinedMultiplier, $timeMultiplier, $effectiveDayMultiplier, $seasonalMultiplier, $results);
         }
 
+        // Optimize Microsoft Ads campaign
+        if ($hasMicrosoft) {
+            $results['platform'] = ($hasGoogle || $hasFacebook) ? 'multi_platform' : 'microsoft_ads';
+            $this->optimizeMicrosoftAdsCampaign($campaign, $combinedMultiplier, $results);
+        }
+
+        // Optimize LinkedIn Ads campaign
+        if ($hasLinkedIn) {
+            $results['platform'] = ($hasGoogle || $hasFacebook || $hasMicrosoft) ? 'multi_platform' : 'linkedin_ads';
+            $this->optimizeLinkedInAdsCampaign($campaign, $combinedMultiplier, $results);
+        }
+
         return $results;
+    }
+
+    protected function optimizeMicrosoftAdsCampaign(Campaign $campaign, float $combinedMultiplier, array &$results): void
+    {
+        $baseDailyBudget = $campaign->daily_budget ?? 0;
+        if ($baseDailyBudget <= 0) {
+            return;
+        }
+
+        $adjustedBudget = round($baseDailyBudget * $combinedMultiplier, 2);
+
+        try {
+            $service = new \App\Services\MicrosoftAds\CampaignService($campaign->customer);
+            $ok = $service->updateBudget($campaign->microsoft_ads_campaign_id, $adjustedBudget);
+
+            if ($ok) {
+                $results['adjustments'][] = [
+                    'type'           => 'budget_updated',
+                    'platform'       => 'microsoft_ads',
+                    'base_budget'    => $baseDailyBudget,
+                    'adjusted_budget' => $adjustedBudget,
+                    'multiplier'     => $combinedMultiplier,
+                ];
+            }
+        } catch (\Exception $e) {
+            $results['errors'][] = "Microsoft Ads budget update failed: " . $e->getMessage();
+        }
+    }
+
+    protected function optimizeLinkedInAdsCampaign(Campaign $campaign, float $combinedMultiplier, array &$results): void
+    {
+        $baseDailyBudget = $campaign->daily_budget ?? 0;
+        if ($baseDailyBudget <= 0) {
+            return;
+        }
+
+        // LinkedIn minimum daily budget is $10
+        $adjustedBudget = max(10.0, round($baseDailyBudget * $combinedMultiplier, 2));
+
+        try {
+            $service = new \App\Services\LinkedInAds\CampaignService($campaign->customer);
+            $ok = $service->updateBudget($campaign->linkedin_campaign_id, $adjustedBudget);
+
+            if ($ok) {
+                $results['adjustments'][] = [
+                    'type'           => 'budget_updated',
+                    'platform'       => 'linkedin_ads',
+                    'base_budget'    => $baseDailyBudget,
+                    'adjusted_budget' => $adjustedBudget,
+                    'multiplier'     => $combinedMultiplier,
+                ];
+            }
+        } catch (\Exception $e) {
+            $results['errors'][] = "LinkedIn Ads budget update failed: " . $e->getMessage();
+        }
     }
 
     /**
@@ -551,6 +623,125 @@ class BudgetIntelligenceAgent
             ]);
             return false;
         }
+    }
+
+    /**
+     * Compare Google vs Facebook ROAS over the last 3 days.
+     * If one platform is >2x the other with sufficient volume, push a reallocation
+     * recommendation into the CampaignOptimizationAgent cache for dashboard display.
+     *
+     * Does NOT auto-apply — cross-platform budget moves are too risky to automate.
+     */
+    public function checkCrossPlatformReallocation(Customer $customer): ?array
+    {
+        $cacheKey = "cross_platform_reallocation:{$customer->id}";
+
+        $campaignIds = $customer->campaigns()
+            ->where('status', 'active')
+            ->pluck('id');
+
+        if ($campaignIds->isEmpty()) {
+            return null;
+        }
+
+        $since = now()->subDays(3)->toDateString();
+
+        $google = GoogleAdsPerformanceData::whereIn('campaign_id', $campaignIds)
+            ->where('date', '>=', $since)
+            ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value')
+            ->first();
+
+        $facebook = FacebookAdsPerformanceData::whereIn('campaign_id', $campaignIds)
+            ->where('date', '>=', $since)
+            ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value')
+            ->first();
+
+        $gCost  = (float) ($google->cost  ?? 0);
+        $fCost  = (float) ($facebook->cost ?? 0);
+        $totalSpend = $gCost + $fCost;
+
+        if ($totalSpend < 100) {
+            return null;
+        }
+
+        $gConv = (float) ($google->conversions  ?? 0);
+        $fConv = (float) ($facebook->conversions ?? 0);
+
+        if ($gConv < 15 || $fConv < 15) {
+            return null;
+        }
+
+        $aov    = (float) ($customer->average_order_value ?? 0);
+        $gValue = (float) ($google->conversion_value   ?? 0) ?: ($gConv * $aov);
+        $fValue = (float) ($facebook->conversion_value ?? 0) ?: ($fConv * $aov);
+
+        if ($gValue <= 0 || $fValue <= 0) {
+            return null;
+        }
+
+        $gRoas = $gCost > 0 ? $gValue / $gCost : 0;
+        $fRoas = $fCost > 0 ? $fValue / $fCost : 0;
+
+        if ($gRoas <= 0 || $fRoas <= 0) {
+            return null;
+        }
+
+        $ratio         = $gRoas / $fRoas;
+        $strongPlatform = null;
+        $weakPlatform   = null;
+        $strongRoas     = 0;
+        $weakRoas       = 0;
+        $weakDailySpend = 0;
+
+        if ($ratio >= 2.0) {
+            $strongPlatform  = 'google_ads';
+            $weakPlatform    = 'facebook_ads';
+            $strongRoas      = $gRoas;
+            $weakRoas        = $fRoas;
+            $weakDailySpend  = $fCost / 3;
+        } elseif ((1 / $ratio) >= 2.0) {
+            $strongPlatform  = 'facebook_ads';
+            $weakPlatform    = 'google_ads';
+            $strongRoas      = $fRoas;
+            $weakRoas        = $gRoas;
+            $weakDailySpend  = $gCost / 3;
+        }
+
+        if (!$strongPlatform) {
+            Cache::forget($cacheKey);
+            return null;
+        }
+
+        $shiftAmount = round($weakDailySpend * 0.10, 2);
+        $recommendation = [
+            'type'            => 'cross_platform_reallocation',
+            'strong_platform' => $strongPlatform,
+            'weak_platform'   => $weakPlatform,
+            'strong_roas'     => round($strongRoas, 2),
+            'weak_roas'       => round($weakRoas, 2),
+            'ratio'           => round(max($ratio, 1 / $ratio), 2),
+            'suggested_shift' => $shiftAmount,
+            'shift_direction' => "Move \${$shiftAmount}/day from {$weakPlatform} → {$strongPlatform}",
+            'reason'          => ucfirst(str_replace('_', ' ', $strongPlatform)) . " ROAS is " . round(max($ratio, 1 / $ratio), 1) . "x higher than " . ucfirst(str_replace('_', ' ', $weakPlatform)) . " over the last 3 days",
+            'google_roas'     => round($gRoas, 2),
+            'facebook_roas'   => round($fRoas, 2),
+            'google_spend_3d' => round($gCost, 2),
+            'facebook_spend_3d' => round($fCost, 2),
+            'recorded_at'     => now()->toIso8601String(),
+            'auto_applied'    => false,
+        ];
+
+        Cache::put($cacheKey, $recommendation, now()->addHours(24));
+
+        Log::info("BudgetIntelligenceAgent: Cross-platform reallocation opportunity detected", [
+            'customer_id'     => $customer->id,
+            'strong_platform' => $strongPlatform,
+            'strong_roas'     => round($strongRoas, 2),
+            'weak_roas'       => round($weakRoas, 2),
+            'suggested_shift' => $shiftAmount,
+        ]);
+
+        return $recommendation;
     }
 
     /**

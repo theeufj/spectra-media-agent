@@ -3,6 +3,8 @@
 namespace App\Services\Agents;
 
 use App\Models\Customer;
+use App\Models\AgentActivity;
+use App\Models\FacebookAdsPerformanceData;
 use App\Models\CampaignHourlyPerformance;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\CustomerMatchService;
@@ -599,6 +601,140 @@ PROMPT;
         }
 
         return $context;
+    }
+
+    /**
+     * Facebook audience refresh cycle.
+     *
+     * - Audiences with approximate_count < 1000: flag as too small
+     * - Lookalike audiences active >60 days: queue refresh (create a new lookalike from same source)
+     * - Campaigns with frequency >3.0 in last 7 days: create a broader 2–5% lookalike
+     */
+    public function refreshFacebookAudiences(Customer $customer): array
+    {
+        if (!$customer->facebook_ads_account_id) {
+            return ['skipped' => true];
+        }
+
+        $results = [
+            'flagged_small'    => [],
+            'lookalikes_queued' => [],
+            'frequency_expansions' => [],
+            'errors'           => [],
+        ];
+
+        $audienceService = new FacebookCustomAudienceService($customer);
+        $accountId       = $customer->facebook_ads_account_id;
+
+        try {
+            $audiences = $audienceService->listAudiences($accountId) ?? [];
+        } catch (\Exception $e) {
+            $results['errors'][] = "Could not list audiences: " . $e->getMessage();
+            return $results;
+        }
+
+        foreach ($audiences as $audience) {
+            $audienceId   = $audience['id'] ?? null;
+            $count        = (int) ($audience['approximate_count'] ?? 0);
+            $subtype      = $audience['subtype'] ?? '';
+            $createdTime  = $audience['time_created'] ?? null;
+            $name         = $audience['name'] ?? $audienceId;
+
+            if (!$audienceId) continue;
+
+            // Flag under-sized audiences
+            if ($count < 1000 && $count > 0) {
+                $results['flagged_small'][] = ['id' => $audienceId, 'name' => $name, 'size' => $count];
+            }
+
+            // Refresh stale lookalike audiences (>60 days old)
+            if ($subtype === 'LOOKALIKE' && $createdTime) {
+                $ageInDays = now()->diffInDays(\Carbon\Carbon::createFromTimestamp($createdTime));
+                if ($ageInDays > 60) {
+                    try {
+                        // Derive source audience from lookalike name convention (e.g. "Lookalike of X")
+                        $sourceName = preg_replace('/^Lookalike \(.*?\) of /i', '', $name);
+                        $source = collect($audiences)->firstWhere('name', $sourceName);
+
+                        if ($source && isset($source['id'])) {
+                            $newName = $name . ' (Refreshed ' . now()->format('M Y') . ')';
+                            $audienceService->createLookalikeAudience($accountId, $source['id'], $newName, 'US', 0.01);
+                            $results['lookalikes_queued'][] = [
+                                'original_id'  => $audienceId,
+                                'original_name' => $name,
+                                'age_days'     => $ageInDays,
+                                'refreshed_as' => $newName,
+                            ];
+                            Log::info("AudienceIntelligenceAgent: Refreshed lookalike audience", [
+                                'customer_id' => $customer->id,
+                                'audience'    => $name,
+                                'age_days'    => $ageInDays,
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        $results['errors'][] = "Lookalike refresh failed for {$name}: " . $e->getMessage();
+                    }
+                }
+            }
+        }
+
+        // Frequency fatigue expansion: find campaigns with frequency >3.0 → create broader 2–5% lookalike
+        $campaigns = $customer->campaigns()
+            ->where('status', 'active')
+            ->whereNotNull('facebook_ads_campaign_id')
+            ->get();
+
+        foreach ($campaigns as $campaign) {
+            $avgFrequency = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', '>=', now()->subDays(7)->toDateString())
+                ->whereNotNull('frequency')
+                ->avg('frequency');
+
+            if (!$avgFrequency || $avgFrequency < 3.0) {
+                continue;
+            }
+
+            // Find the best seed audience for this customer
+            $seedAudience = collect($audiences)
+                ->where('subtype', 'CUSTOM')
+                ->sortByDesc('approximate_count')
+                ->first();
+
+            if (!$seedAudience) {
+                continue;
+            }
+
+            try {
+                $broadName = "Broad Lookalike 2-5% — {$campaign->name} (" . now()->format('M Y') . ")";
+                $audienceService->createLookalikeAudience($accountId, $seedAudience['id'], $broadName, 'US', 0.05);
+
+                $results['frequency_expansions'][] = [
+                    'campaign_id'      => $campaign->id,
+                    'campaign_name'    => $campaign->name,
+                    'avg_frequency'    => round($avgFrequency, 1),
+                    'new_audience'     => $broadName,
+                ];
+
+                Log::info("AudienceIntelligenceAgent: Created broad lookalike for frequency-fatigued campaign", [
+                    'campaign_id'  => $campaign->id,
+                    'frequency'    => round($avgFrequency, 1),
+                ]);
+            } catch (\Exception $e) {
+                $results['errors'][] = "Frequency expansion failed for campaign {$campaign->id}: " . $e->getMessage();
+            }
+        }
+
+        if (!empty($results['lookalikes_queued']) || !empty($results['frequency_expansions'])) {
+            AgentActivity::create([
+                'campaign_id' => null,
+                'agent'       => 'AudienceIntelligenceAgent',
+                'action'      => 'facebook_audience_refresh',
+                'details'     => $results,
+                'status'      => 'completed',
+            ]);
+        }
+
+        return $results;
     }
 
     /**
