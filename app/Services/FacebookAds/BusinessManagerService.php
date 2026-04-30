@@ -81,9 +81,6 @@ class BusinessManagerService
         $customer->update([
             'facebook_ads_account_id'      => $accountId,
             'facebook_bm_owned'            => true,
-            'facebook_ads_access_token'    => null,
-            'facebook_token_expires_at'    => null,
-            'facebook_token_refreshed_at'  => null,
             'facebook_token_is_long_lived' => false,
         ]);
 

@@ -64,7 +64,6 @@ return [
     'facebook' => [
         'client_id' => env('FACEBOOK_APP_ID'),
         'client_secret' => env('FACEBOOK_APP_SECRET'),
-        'redirect' => env('APP_URL') . '/auth/facebook/callback',
         'config_id' => env('FACEBOOK_CONFIG_ID'),
 
         // Platform Business Manager (Path A — zero OAuth for new clients)

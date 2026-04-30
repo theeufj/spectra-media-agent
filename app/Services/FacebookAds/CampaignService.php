@@ -34,6 +34,10 @@ class CampaignService extends BaseFacebookAdsService
                 return $response['data'];
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error listing campaigns: " . $e->getMessage(), [
@@ -211,6 +215,10 @@ class CampaignService extends BaseFacebookAdsService
                 return $response['data'];
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error getting campaign insights: " . $e->getMessage(), [

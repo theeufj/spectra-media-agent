@@ -63,6 +63,10 @@ class InsightService extends BaseFacebookAdsService
                 return $response['data'];
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error getting campaign insights: " . $e->getMessage(), [
@@ -122,6 +126,10 @@ class InsightService extends BaseFacebookAdsService
                 return $response['data'];
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error getting ad set insights: " . $e->getMessage(), [
@@ -181,6 +189,10 @@ class InsightService extends BaseFacebookAdsService
                 return $response['data'];
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error getting ad insights: " . $e->getMessage(), [
@@ -240,6 +252,10 @@ class InsightService extends BaseFacebookAdsService
                 return $response['data'];
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error getting account insights: " . $e->getMessage(), [

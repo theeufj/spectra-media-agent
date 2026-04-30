@@ -405,6 +405,10 @@ class CreativeService extends BaseFacebookAdsService
                 return array_column($response['data'], 'id');
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error getting pages: " . $e->getMessage());

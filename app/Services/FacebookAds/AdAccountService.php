@@ -32,6 +32,10 @@ class AdAccountService extends BaseFacebookAdsService
             }
 
             Log::warning("No ad accounts found for customer {$this->customer->id}");
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error listing ad accounts: " . $e->getMessage(), [
@@ -138,6 +142,10 @@ class AdAccountService extends BaseFacebookAdsService
                 return $response['data'];
             }
 
+            Log::warning("Empty or invalid data returned.", [
+                'customer_id' => $this->customer->id,
+                'response' => $response ?? null
+            ]);
             return [];
         } catch (\Exception $e) {
             Log::error("Error getting spend insights: " . $e->getMessage(), [

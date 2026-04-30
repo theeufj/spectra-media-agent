@@ -47,23 +47,13 @@ class ConversionsApiService
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
-        $this->accessToken = $this->getAccessToken();
+        $this->accessToken = config('services.facebook.system_user_token');
     }
 
     /**
      * Get the Facebook access token from the customer record.
      */
-    protected function getAccessToken(): ?string
-    {
-        try {
-            if ($this->customer->facebook_ads_access_token) {
-                return \Illuminate\Support\Facades\Crypt::decryptString($this->customer->facebook_ads_access_token);
-            }
-        } catch (\Exception $e) {
-            Log::error("Failed to decrypt Facebook access token: " . $e->getMessage());
-        }
-        return null;
-    }
+    
 
     /**
      * Send a single event to the Conversions API.
