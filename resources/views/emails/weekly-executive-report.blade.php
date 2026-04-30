@@ -87,6 +87,30 @@
         </table>
     @endif
 
+    {{-- Attribution Summary --}}
+    @if(!empty($report['attribution_summary']))
+        <h2 style="font-size: 16px; color: #2d3748; margin-top: 32px; margin-bottom: 12px;">Attribution Overview</h2>
+        <p style="font-size: 13px; color: #718096; margin-bottom: 12px;">Conversion credit by attribution model and platform for this period.</p>
+        <table width="100%" cellpadding="6" cellspacing="0" style="border-collapse: collapse; font-size: 12px; margin-bottom: 24px;">
+            <tr style="background: #edf2f7;">
+                <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: left;">Model</th>
+                <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: left;">Platform</th>
+                <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Conversions</th>
+                <th style="padding: 8px; border: 1px solid #e2e8f0; text-align: right;">Value</th>
+            </tr>
+            @foreach($report['attribution_summary'] as $model => $platforms)
+                @foreach($platforms as $platform => $data)
+                    <tr>
+                        <td style="padding: 7px 8px; border: 1px solid #e2e8f0; color: #4a5568;">{{ str_replace('_', ' ', ucfirst($model)) }}</td>
+                        <td style="padding: 7px 8px; border: 1px solid #e2e8f0; color: #4a5568;">{{ ucfirst($platform) }}</td>
+                        <td style="padding: 7px 8px; border: 1px solid #e2e8f0; text-align: right;">{{ number_format($data['conversions'] ?? 0) }}</td>
+                        <td style="padding: 7px 8px; border: 1px solid #e2e8f0; text-align: right;">${{ number_format($data['value'] ?? 0, 2) }}</td>
+                    </tr>
+                @endforeach
+            @endforeach
+        </table>
+    @endif
+
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
         <a href="{{ url('/dashboard') }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Full Dashboard</a>
     </p>

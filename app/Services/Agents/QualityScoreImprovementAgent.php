@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\KeywordQualityScore;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\GeminiService;
+use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -278,6 +279,131 @@ PROMPT;
             }
         } catch (\Exception $e) {
             Log::error('QualityScoreImprovementAgent: Ad copy generation failed: ' . $e->getMessage());
+        }
+
+        return [];
+    }
+
+    /**
+     * Fetch RSA ad strength for all ads in the campaign and improve POOR/AVERAGE ones
+     * by generating additional headline/description assets via Gemini.
+     *
+     * Ad strength enum: POOR=1, AVERAGE=2, GOOD=3, EXCELLENT=4
+     */
+    public function checkAdStrength(Campaign $campaign): array
+    {
+        $customer = $campaign->customer;
+
+        if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
+            return ['skipped' => true];
+        }
+
+        $cacheKey = "ad_strength_check:{$campaign->id}";
+        if (Cache::has($cacheKey)) {
+            return ['skipped' => 'recently_checked'];
+        }
+        Cache::put($cacheKey, true, now()->addHours(23));
+
+        $customerId = $customer->cleanGoogleCustomerId();
+        $actions    = [];
+        $errors     = [];
+
+        try {
+            // Fetch ad strength via GAQL
+            $service = new class($customer) extends BaseGoogleAdsService {
+                public function fetchAdStrength(string $customerId, string $campaignResource): array
+                {
+                    $this->ensureClient();
+                    $query = "SELECT ad_group_ad.ad.id, ad_group_ad.ad_strength, ad_group.resource_name "
+                           . "FROM ad_group_ad "
+                           . "WHERE campaign.resource_name = '{$campaignResource}' "
+                           . "AND ad_group_ad.status = 'ENABLED' "
+                           . "AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD'";
+
+                    $results = [];
+                    foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
+                        $results[] = [
+                            'ad_id'        => $row->getAdGroupAd()->getAd()->getId(),
+                            'ad_strength'  => $row->getAdGroupAd()->getAdStrength(),
+                            'ad_group'     => $row->getAdGroup()->getResourceName(),
+                        ];
+                    }
+                    return $results;
+                }
+            };
+
+            $resourceName = $campaign->google_ads_campaign_id;
+            if (!str_starts_with($resourceName, 'customers/')) {
+                $resourceName = "customers/{$customerId}/campaigns/{$resourceName}";
+            }
+
+            $ads = $service->fetchAdStrength($customerId, $resourceName);
+
+            // Ad strength enum: 0=UNSPECIFIED, 1=PENDING, 2=NO_ADS, 3=POOR, 4=AVERAGE, 5=GOOD, 6=EXCELLENT
+            $weakAds = array_filter($ads, fn($ad) => in_array($ad['ad_strength'], [3, 4], true));
+
+            foreach ($weakAds as $ad) {
+                $strengthLabel = $ad['ad_strength'] === 3 ? 'POOR' : 'AVERAGE';
+                Log::info("QualityScoreImprovementAgent: RSA ad {$ad['ad_id']} has {$strengthLabel} strength", [
+                    'campaign_id' => $campaign->id,
+                ]);
+
+                $newCopy = $this->generateAdStrengthCopy($campaign, $customer);
+                if (!empty($newCopy)) {
+                    $actions[] = [
+                        'ad_id'    => $ad['ad_id'],
+                        'strength' => $strengthLabel,
+                        'copy'     => $newCopy,
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            $errors[] = $e->getMessage();
+            Log::warning("QualityScoreImprovementAgent: Ad strength check failed for campaign {$campaign->id}: " . $e->getMessage());
+        }
+
+        if (!empty($actions)) {
+            AgentActivity::record(
+                'quality_score',
+                'ad_strength_improved',
+                "Generated " . count($actions) . " ad copy improvement(s) for weak RSA ads in \"{$campaign->name}\"",
+                $campaign->customer_id,
+                $campaign->id,
+                ['actions' => $actions]
+            );
+        }
+
+        return ['actions' => $actions, 'errors' => $errors];
+    }
+
+    private function generateAdStrengthCopy(Campaign $campaign, object $customer): array
+    {
+        $prompt = <<<PROMPT
+You are a Google Ads copywriter. Generate 3 additional RSA headlines and 2 additional descriptions for this campaign to improve its Ad Strength rating.
+
+Business: {$customer->name}
+Campaign: {$campaign->name}
+Goal: {$campaign->goals}
+
+Requirements:
+- Headlines: max 30 characters each
+- Descriptions: max 90 characters each
+- Be specific, use numbers and CTAs
+- Vary messaging angles (price, quality, urgency, benefit)
+
+Return ONLY valid JSON:
+[{"headlines": ["...", "...", "..."], "descriptions": ["...", "..."]}]
+PROMPT;
+
+        try {
+            $response = $this->gemini->generateContent('gemini-2.0-flash', $prompt);
+            $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
+            $data = json_decode(trim($text), true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
+                return $data;
+            }
+        } catch (\Exception $e) {
+            Log::error('QualityScoreImprovementAgent: Ad strength copy generation failed: ' . $e->getMessage());
         }
 
         return [];

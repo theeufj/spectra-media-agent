@@ -8,6 +8,7 @@ use App\Notifications\DeploymentCompleted;
 use App\Notifications\DeploymentFailed;
 use App\Services\DeploymentService;
 use App\Services\AdSpendBillingService;
+use App\Services\Agents\PreLaunchComplianceAgent;
 use App\Jobs\VerifyDeployment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -43,6 +44,19 @@ class DeployCampaign implements ShouldQueue
 
         if (!$customer) {
             Log::error("No customer found for campaign {$this->campaign->id}. Skipping deployment.");
+            return;
+        }
+
+        // Pre-launch compliance check — abort if any check fails
+        $complianceResult = (new PreLaunchComplianceAgent())->check($this->campaign);
+        if (!$complianceResult['passed']) {
+            Log::warning("DeployCampaign: Campaign {$this->campaign->id} failed compliance check, aborting deployment.", [
+                'failures' => $complianceResult['failures'],
+            ]);
+            $this->notifyUsers(new \App\Notifications\DeploymentFailed(
+                $this->campaign,
+                'Pre-launch compliance check failed: ' . implode('; ', array_column($complianceResult['failures'], 'message'))
+            ));
             return;
         }
 

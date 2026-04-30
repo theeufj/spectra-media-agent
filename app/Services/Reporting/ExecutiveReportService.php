@@ -2,6 +2,7 @@
 
 namespace App\Services\Reporting;
 
+use App\Models\AttributionConversion;
 use App\Models\Customer;
 use App\Models\Campaign;
 use App\Models\AgentActivity;
@@ -34,13 +35,17 @@ class ExecutiveReportService
      */
     public function generate(Customer $customer, string $period = 'weekly'): array
     {
-        $days = $period === 'monthly' ? 30 : 7;
+        $days = match ($period) {
+            'monthly'   => 30,
+            'quarterly' => 90,
+            default     => 7,
+        };
         $startDate = now()->subDays($days)->toDateString();
         $endDate = now()->toDateString();
 
-        // For monthly reports, also gather prior period data for comparisons
+        // For monthly/quarterly reports, also gather prior period data for comparisons
         $priorPeriodData = null;
-        if ($period === 'monthly') {
+        if (in_array($period, ['monthly', 'quarterly'], true)) {
             $priorPeriodData = $this->getPriorPeriodComparison($customer, $days);
         }
 
@@ -80,6 +85,7 @@ class ExecutiveReportService
             'hourly_insights' => $hourlyInsights,
             'prior_period' => $priorPeriodData,
             'agent_activity_summary' => $this->getAgentActivitySummary($customer, $days),
+            'attribution_summary'    => $this->getAttributionSummary($customer, $startDate, $endDate),
             'generated_at' => now()->toIso8601String(),
         ];
 
@@ -564,5 +570,45 @@ PROMPT;
         }
 
         return $movers;
+    }
+
+    /**
+     * Build an attribution summary from AttributionConversion records for the report period.
+     *
+     * Returns per-model (last_click, linear, time_decay) conversion counts and value per platform.
+     */
+    protected function getAttributionSummary(Customer $customer, string $startDate, string $endDate): array
+    {
+        try {
+            $conversions = AttributionConversion::forCustomer($customer->id)
+                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->get();
+
+            if ($conversions->isEmpty()) {
+                return [];
+            }
+
+            $models   = ['last_click', 'linear', 'time_decay', 'first_click', 'position_based'];
+            $summary  = [];
+
+            foreach ($models as $model) {
+                $byPlatform = [];
+                foreach ($conversions as $conv) {
+                    $attribution = $conv->getAttributionFor($model);
+                    foreach ($attribution as $platform => $value) {
+                        $byPlatform[$platform]['conversions'] = ($byPlatform[$platform]['conversions'] ?? 0) + 1;
+                        $byPlatform[$platform]['value']       = ($byPlatform[$platform]['value'] ?? 0) + (float) $value;
+                    }
+                }
+                if (!empty($byPlatform)) {
+                    $summary[$model] = $byPlatform;
+                }
+            }
+
+            return $summary;
+        } catch (\Exception $e) {
+            Log::debug("ExecutiveReportService: Attribution summary failed: " . $e->getMessage());
+            return [];
+        }
     }
 }

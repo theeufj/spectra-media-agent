@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Models\Customer;
 use App\Models\Notification;
 use App\Services\Agents\HealthCheckAgent;
-use App\Services\GeminiService;
 use App\Notifications\CriticalAgentAlert;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -53,11 +52,9 @@ class RunHealthChecks implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(GeminiService $geminiService): void
+    public function handle(HealthCheckAgent $healthCheckAgent): void
     {
         Log::info("RunHealthChecks: Starting health check run");
-
-        $healthCheckAgent = new HealthCheckAgent($geminiService);
 
         // Get all customers with active subscriptions or active campaigns
         $customers = Customer::query()

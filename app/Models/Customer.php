@@ -52,6 +52,8 @@ class Customer extends Model
         'is_sandbox',
         'sandbox_results',
         'sandbox_expires_at',
+        'account_health_score',
+        'health_score_updated_at',
     ];
 
     protected $casts = [
@@ -74,6 +76,8 @@ class Customer extends Model
         'is_sandbox' => 'boolean',
         'sandbox_results' => 'array',
         'sandbox_expires_at' => 'datetime',
+        'account_health_score' => 'integer',
+        'health_score_updated_at' => 'datetime',
     ];
 
     protected $hidden = [

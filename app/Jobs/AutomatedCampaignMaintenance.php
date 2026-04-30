@@ -160,6 +160,11 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     $summary['keywords_added'] += count($qsResults['actions'] ?? []);
                 }
 
+                // 2f. RSA Ad Strength optimizer — push POOR/AVERAGE ads toward EXCELLENT (Google only)
+                if ($campaign->google_ads_campaign_id) {
+                    $qsAgent->checkAdStrength($campaign);
+                }
+
                 // 3. Run Budget Intelligence
                 $budgetResults = $budgetAgent->optimize($campaign);
                 $summary['budget_adjustments'] += count(array_filter(
