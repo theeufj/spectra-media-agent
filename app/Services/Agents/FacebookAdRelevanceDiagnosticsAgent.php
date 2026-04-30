@@ -212,7 +212,7 @@ Return ONLY valid JSON:
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent('gemini-2.0-flash', $prompt);
+            $response = $this->gemini->generateContent('gemini-2.5-flash', $prompt);
             $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
             $data = json_decode(trim($text), true);
             return (json_last_error() === JSON_ERROR_NONE && is_array($data)) ? $data : [];

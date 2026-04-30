@@ -269,7 +269,7 @@ Return ONLY valid JSON array:
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent('gemini-2.0-flash', $prompt);
+            $response = $this->gemini->generateContent('gemini-2.5-flash', $prompt);
             $text = $response['text'] ?? '';
             $text = preg_replace('/```json\s*|\s*```/', '', $text);
             $data = json_decode(trim($text), true);
@@ -339,11 +339,11 @@ PROMPT;
 
             $ads = $service->fetchAdStrength($customerId, $resourceName);
 
-            // Ad strength enum: 0=UNSPECIFIED, 1=PENDING, 2=NO_ADS, 3=POOR, 4=AVERAGE, 5=GOOD, 6=EXCELLENT
-            $weakAds = array_filter($ads, fn($ad) => in_array($ad['ad_strength'], [3, 4], true));
+            // Ad strength enum: 0=UNSPECIFIED, 1=UNKNOWN, 2=PENDING, 3=NO_ADS, 4=POOR, 5=AVERAGE, 6=GOOD, 7=EXCELLENT
+            $weakAds = array_filter($ads, fn($ad) => in_array($ad['ad_strength'], [4, 5], true));
 
             foreach ($weakAds as $ad) {
-                $strengthLabel = $ad['ad_strength'] === 3 ? 'POOR' : 'AVERAGE';
+                $strengthLabel = $ad['ad_strength'] === 4 ? 'POOR' : 'AVERAGE';
                 Log::info("QualityScoreImprovementAgent: RSA ad {$ad['ad_id']} has {$strengthLabel} strength", [
                     'campaign_id' => $campaign->id,
                 ]);
@@ -396,7 +396,7 @@ Return ONLY valid JSON:
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent('gemini-2.0-flash', $prompt);
+            $response = $this->gemini->generateContent('gemini-2.5-flash', $prompt);
             $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
             $data = json_decode(trim($text), true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {

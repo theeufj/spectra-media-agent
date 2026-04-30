@@ -283,7 +283,7 @@ PROMPT;
         $facebookVariants = [];
         try {
             $response = $this->gemini->generateContent(
-                'gemini-2.0-flash',
+                'gemini-2.5-flash',
                 $prompt,
                 ['responseMimeType' => 'application/json']
             );
