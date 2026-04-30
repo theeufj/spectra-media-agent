@@ -325,7 +325,7 @@ Classification guide:
 PROMPT;
 
         $response = $this->gemini->generateContent(
-            'gemini-3-flash-preview',
+            config('ai.models.default'),
             $prompt,
             ['responseMimeType' => 'application/json'],
             'You are an expert image classifier for digital advertising. Be strict about quality.',

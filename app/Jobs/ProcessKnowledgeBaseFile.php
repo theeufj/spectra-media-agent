@@ -68,7 +68,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
 
                 // Step 3: Use Gemini's Generative Content API to break content into semantically meaningful chunks.
                 $chunkingPrompt = (new ChunkingPrompt($content))->getPrompt();
-                $generatedResponse = $geminiService->generateContent('gemini-3-flash-preview', $chunkingPrompt);
+                $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $chunkingPrompt);
 
                 if (is_null($generatedResponse)) {
                     Log::error("Failed to get chunks from Gemini for KB ID {$this->knowledgeBase->id}: Generated text was null.");
@@ -118,7 +118,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                         continue;
                     }
 
-                    $embedding = $geminiService->embedContent('gemini-embedding-2-preview', $chunk);
+                    $embedding = $geminiService->embedContent(config('ai.models.embedding'), $chunk);
 
                     if (is_null($embedding)) {
                         Log::warning("Failed to get embedding for a chunk from KB ID {$this->knowledgeBase->id}. Skipping chunk.", [

@@ -68,7 +68,7 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
 
         try {
             $response = $this->gemini->generateContent(
-                model: 'gemini-3-flash-preview',
+                model: config('ai.models.default'),
                 prompt: $prompt,
                 config: [
                     'temperature' => 0.7,
@@ -210,7 +210,7 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                model: 'gemini-3-flash-preview',
+                model: config('ai.models.default'),
                 prompt: $prompt,
                 config: [
                     'temperature' => 0.3,

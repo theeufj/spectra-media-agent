@@ -203,7 +203,7 @@ Return ONLY valid JSON array:
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent('gemini-2.5-flash', $prompt);
+            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
             $text = $response['text'] ?? '';
             $text = preg_replace('/```json\s*|\s*```/', '', $text);
             $data = json_decode(trim($text), true);
@@ -237,7 +237,7 @@ Return ONLY a valid JSON array of strings: ["...", "..."]
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent('gemini-2.5-flash', $prompt);
+            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
             $text = $response['text'] ?? '';
             $text = preg_replace('/```json\s*|\s*```/', '', $text);
             $data = json_decode(trim($text), true);
@@ -266,7 +266,7 @@ Return ONLY valid JSON: {"header":"...","values":["value1","value2","value3","va
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent('gemini-2.5-flash', $prompt);
+            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
             $text = $response['text'] ?? '';
             $text = preg_replace('/```json\s*|\s*```/', '', $text);
             $data = json_decode(trim($text), true);

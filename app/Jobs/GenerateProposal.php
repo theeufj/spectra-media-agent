@@ -47,7 +47,7 @@ class GenerateProposal implements ShouldQueue
             );
 
             $response = $geminiService->generateContent(
-                model: 'gemini-3-flash-preview',
+                model: config('ai.models.default'),
                 prompt: $prompt,
                 config: ['temperature' => 0.7, 'maxOutputTokens' => 8192],
                 systemInstruction: ProposalPrompt::getSystemInstruction(),
@@ -155,7 +155,7 @@ class GenerateProposal implements ShouldQueue
                 . "connected nodes, and a warm gradient from flame-orange to amber-gold color palette. "
                 . "Industry: {$this->proposal->industry}. Minimalist corporate style. No text.";
 
-            $result = $geminiService->generateImage($imagePrompt, 'gemini-3.1-flash-image-preview', '1K');
+            $result = $geminiService->generateImage($imagePrompt, config('ai.models.image'), '1K');
 
             if ($result && !empty($result['data'])) {
                 return 'data:' . ($result['mimeType'] ?? 'image/png') . ';base64,' . $result['data'];

@@ -290,7 +290,7 @@ class ExecutiveReportService
 
         try {
             $result = $this->gemini->generateContent(
-                'gemini-3-flash-preview',
+                config('ai.models.default'),
                 $prompt,
                 ['temperature' => 0.3, 'maxOutputTokens' => 1024],
                 'You are a professional digital marketing analyst writing executive reports for business stakeholders.'
@@ -553,7 +553,7 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                'gemini-2.5-flash',
+                config('ai.models.default'),
                 $prompt,
                 ['temperature' => 0.3, 'maxOutputTokens' => 400]
             );

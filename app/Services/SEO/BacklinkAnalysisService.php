@@ -258,7 +258,7 @@ Suggest 3-5 link building opportunities as JSON:
 Return ONLY valid JSON.
 PROMPT;
 
-            $result = $this->gemini->generateContent('gemini-3-flash-preview', $prompt, [
+            $result = $this->gemini->generateContent(config('ai.models.default'), $prompt, [
                 'temperature' => 0.4,
                 'maxOutputTokens' => 1024,
             ]);

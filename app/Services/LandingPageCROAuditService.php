@@ -320,7 +320,7 @@ class LandingPageCROAuditService
                       "3. Top 5 keywords/phrases detected\n\n" .
                       "Format as JSON with keys: score, analysis, keywords";
 
-            $response = $this->geminiService->generateContent('gemini-3-flash-preview', $prompt);
+            $response = $this->geminiService->generateContent(config('ai.models.default'), $prompt);
             $text = $response['text'] ?? '';
 
             // Strip markdown code fences if present

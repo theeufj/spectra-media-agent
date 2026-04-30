@@ -283,7 +283,7 @@ PROMPT;
         $facebookVariants = [];
         try {
             $response = $this->gemini->generateContent(
-                'gemini-2.5-flash',
+                config('ai.models.default'),
                 $prompt,
                 ['responseMimeType' => 'application/json']
             );
@@ -696,7 +696,7 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                'gemini-3.1-flash-lite-preview',
+                config('ai.models.lite'),
                 $prompt,
                 ['responseMimeType' => 'application/json']
             );
@@ -751,7 +751,7 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                'gemini-3.1-flash-lite-preview',
+                config('ai.models.lite'),
                 $prompt,
                 ['responseMimeType' => 'application/json']
             );
@@ -831,7 +831,7 @@ Return as JSON array of strings:
 PROMPT;
 
                     $headlineResponse = $this->gemini->generateContent(
-                        'gemini-3-flash-preview',
+                        config('ai.models.default'),
                         $headlinePrompt,
                         ['responseMimeType' => 'application/json']
                     );
@@ -849,7 +849,7 @@ Return as JSON array of strings:
 PROMPT;
 
                     $descResponse = $this->gemini->generateContent(
-                        'gemini-3-flash-preview',
+                        config('ai.models.default'),
                         $descriptionPrompt,
                         ['responseMimeType' => 'application/json']
                     );
@@ -950,7 +950,7 @@ Return as JSON array of strings:
 PROMPT;
 
                     $headlineResponse = $this->gemini->generateContent(
-                        'gemini-3-flash-preview',
+                        config('ai.models.default'),
                         $headlinePrompt,
                         ['responseMimeType' => 'application/json']
                     );
@@ -969,7 +969,7 @@ Return as JSON array of strings:
 PROMPT;
 
                     $descResponse = $this->gemini->generateContent(
-                        'gemini-3-flash-preview',
+                        config('ai.models.default'),
                         $descriptionPrompt,
                         ['responseMimeType' => 'application/json']
                     );

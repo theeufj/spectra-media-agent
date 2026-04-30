@@ -121,7 +121,7 @@ class SendDailyPerformanceReports implements ShouldQueue
                 $priorCpaStr = $priorCpa ? "\${$priorCpa}" : 'N/A';
                 $cpaStr      = $cpa      ? "\${$cpa}"      : 'N/A';
                 $response = $gemini->generateContent(
-                    'gemini-2.5-flash',
+                    config('ai.models.default'),
                     "Write one sentence (≤20 words) summarising this week's " . ucfirst($name) . " Ads performance for {$customer->name}: spend \${$spend}, {$convs} conversions, CPA {$cpaStr} vs last week {$priorCpaStr}.",
                     ['temperature' => 0.3, 'maxOutputTokens' => 60]
                 );

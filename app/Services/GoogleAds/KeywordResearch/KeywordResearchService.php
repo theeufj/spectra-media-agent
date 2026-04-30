@@ -94,7 +94,7 @@ class KeywordResearchService
         $prompt .= "\nReturn ONLY a JSON array of keyword strings, no explanation. Example: [\"keyword one\", \"keyword two\"]";
 
         $result = $this->gemini->generateContent(
-            'gemini-3-flash-preview',
+            config('ai.models.default'),
             $prompt,
             ['temperature' => 0.7, 'maxOutputTokens' => 1024],
         );
@@ -226,7 +226,7 @@ class KeywordResearchService
         $prompt .= "\nReturn ONLY a JSON array of keyword strings. Example: [\"free\", \"jobs\", \"salary\"]";
 
         $result = $this->gemini->generateContent(
-            'gemini-3-flash-preview',
+            config('ai.models.default'),
             $prompt,
             ['temperature' => 0.5, 'maxOutputTokens' => 512],
         );

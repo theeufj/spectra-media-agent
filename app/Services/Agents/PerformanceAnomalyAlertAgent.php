@@ -173,7 +173,7 @@ class PerformanceAnomalyAlertAgent
 
         try {
             $response = $this->gemini->generateContent(
-                'gemini-2.5-flash',
+                config('ai.models.default'),
                 $prompt,
                 ['temperature' => 0.3, 'maxOutputTokens' => 100]
             );

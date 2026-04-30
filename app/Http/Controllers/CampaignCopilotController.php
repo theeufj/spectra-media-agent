@@ -55,7 +55,7 @@ class CampaignCopilotController extends Controller
             $prompt = CampaignCopilotPrompt::generate($contextString, $historyForPrompt, $userMessage);
 
             $response = $this->gemini->generateContent(
-                model: 'gemini-3-flash-preview',
+                model: config('ai.models.default'),
                 prompt: $prompt,
                 config: [
                     'temperature' => 0.7,

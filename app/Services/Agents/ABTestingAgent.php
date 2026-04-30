@@ -534,7 +534,7 @@ Return ONLY a JSON array of strings, e.g.: [\"Variation 1\", \"Variation 2\"]";
 
         try {
             $response = $this->gemini->generateContent(
-                model: 'gemini-3-flash-preview',
+                model: config('ai.models.default'),
                 prompt: $prompt,
                 config: ['temperature' => 0.9, 'maxOutputTokens' => 1024],
             );

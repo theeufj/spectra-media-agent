@@ -58,7 +58,7 @@ PROMPT;
 
         try {
             $result = $this->gemini->generateContent(
-                'gemini-3-flash-preview',
+                config('ai.models.default'),
                 $prompt,
                 ['temperature' => 0.3, 'maxOutputTokens' => 4096],
             );

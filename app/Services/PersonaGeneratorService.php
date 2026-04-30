@@ -65,7 +65,7 @@ class PersonaGeneratorService
         $prompt .= "Make each persona distinctly different to cover different audience segments. Return ONLY the JSON array.";
 
         try {
-            $response = $this->gemini->generateContent('gemini-3-flash-preview', $prompt);
+            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
             $text = $response['text'] ?? $response;
             $cleaned = preg_replace('/^```json\s*|\s*```$/', '', trim($text));
             $personas = json_decode($cleaned, true);

@@ -380,7 +380,7 @@ class CompetitorIntelligenceAgent
         $prompt = $this->buildCounterStrategyPrompt($ourContext, $competitorContext);
 
         $response = $this->gemini->generateContent(
-            'gemini-3-flash-preview',
+            config('ai.models.default'),
             $prompt,
             ['responseMimeType' => 'application/json'],
             'You are an expert advertising strategist specializing in competitive positioning and counter-messaging.',

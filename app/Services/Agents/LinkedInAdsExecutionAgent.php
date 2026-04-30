@@ -128,7 +128,7 @@ Focus on B2B targeting capabilities that make LinkedIn unique.
 Return ONLY valid JSON.
 PROMPT;
 
-        $result = $this->gemini->generateContent('gemini-3-flash-preview', $prompt, [
+        $result = $this->gemini->generateContent(config('ai.models.default'), $prompt, [
             'temperature' => 0.3,
             'maxOutputTokens' => 2048,
         ]);

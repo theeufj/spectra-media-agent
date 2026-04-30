@@ -118,7 +118,7 @@ class CompetitorAnalysisAgent
 
             // Step 4: Call AI for analysis
             $response = $this->gemini->generateContent(
-                'gemini-3-flash-preview',
+                config('ai.models.default'),
                 $prompt,
                 ['responseMimeType' => 'application/json'],
                 $systemInstruction,

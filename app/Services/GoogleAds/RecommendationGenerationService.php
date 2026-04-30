@@ -56,7 +56,7 @@ class RecommendationGenerationService
         $prompt = $googleAdsRecommendationPrompt->getPrompt();
 
         try {
-            $generatedResponse = $geminiService->generateContent('gemini-3-flash-preview', $prompt);
+            $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $prompt);
 
             if (is_null($generatedResponse) || !isset($generatedResponse['text'])) {
                 Log::error("LLM failed to generate recommendations: Generated text was null or missing.", [

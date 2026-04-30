@@ -81,7 +81,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             ];
 
             $prompt = (new SeasonalStrategyPrompt($campaignData, $this->season, $baselineStrategy))->getPrompt();
-            $generatedResponse = $geminiService->generateContent('gemini-3-flash-preview', $prompt);
+            $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $prompt);
 
             if (is_null($generatedResponse) || !isset($generatedResponse['text'])) {
                 Log::error("LLM failed to generate a seasonal strategy shift.");

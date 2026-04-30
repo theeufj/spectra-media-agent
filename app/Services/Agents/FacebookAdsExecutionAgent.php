@@ -283,7 +283,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         try {
             // Use Google Search grounding for real-time API documentation access
             $response = $this->gemini->generateContent(
-                model: 'gemini-3-flash-preview',
+                model: config('ai.models.default'),
                 prompt: $prompt,
                 config: [
                     'temperature' => 0.7,
@@ -789,7 +789,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         
         try {
             $response = $this->geminiService->generateContent(
-                model: 'gemini-3-flash-preview',
+                model: config('ai.models.default'),
                 prompt: $recoveryPrompt,
                 config: ['temperature' => 0.3, 'maxOutputTokens' => 2048],
                 systemInstruction: 'You are an expert at diagnosing and recovering from Facebook/Meta Ads API errors. Provide specific, actionable recovery steps.'

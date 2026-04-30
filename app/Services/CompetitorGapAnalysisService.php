@@ -33,7 +33,7 @@ class CompetitorGapAnalysisService
         $prompt = $this->buildPrompt($customer, $competitors);
 
         $response = $this->gemini->generateContent(
-            'gemini-3-flash-preview',
+            config('ai.models.default'),
             $prompt,
             ['responseMimeType' => 'application/json'],
             'You are an expert competitive intelligence analyst specializing in digital advertising strategy. Produce precise, actionable gap analysis.',

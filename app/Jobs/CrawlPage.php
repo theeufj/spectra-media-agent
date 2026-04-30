@@ -181,7 +181,7 @@ class CrawlPage implements ShouldQueue
                 // Initialize Gemini Service for embedding
                 $geminiService = new GeminiService();
                 $embeddingText = substr($title . "\n" . $metaDescription . "\n" . $cleanedContent, 0, 8000); // Limit context
-                $embedding = $geminiService->embedContent('gemini-embedding-2-preview', $embeddingText);
+                $embedding = $geminiService->embedContent(config('ai.models.embedding'), $embeddingText);
 
                 CustomerPage::updateOrCreate(
                     [
@@ -281,7 +281,7 @@ class CrawlPage implements ShouldQueue
 
             // Step 3: Use Gemini's Generative Content API to break content into semantically meaningful chunks.
             $chunkingPrompt = (new ChunkingPrompt($cleanedContent))->getPrompt();
-            $generatedResponse = $geminiService->generateContent('gemini-3-flash-preview', $chunkingPrompt, [
+            $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $chunkingPrompt, [
                 'maxOutputTokens' => 65535,
             ]);
 
@@ -344,7 +344,7 @@ class CrawlPage implements ShouldQueue
                     continue;
                 }
 
-                $embedding = $geminiService->embedContent('gemini-embedding-2-preview', $chunk);
+                $embedding = $geminiService->embedContent(config('ai.models.embedding'), $chunk);
 
                 if (is_null($embedding)) {
                     Log::warning("Failed to get embedding for a chunk from {$this->url}. Skipping chunk.", [
