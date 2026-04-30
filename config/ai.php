@@ -40,6 +40,11 @@ return [
          */
         'image' => env('AI_MODEL_IMAGE', 'gemini-3.1-flash-image-preview'),
 
+        /*
+         * Video generation model.
+         */
+        'video' => env('AI_MODEL_VIDEO', 'veo-3.1-generate-preview'),
+
     ],
 
 ];

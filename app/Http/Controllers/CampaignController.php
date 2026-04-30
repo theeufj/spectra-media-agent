@@ -346,7 +346,7 @@ class CampaignController extends Controller
             }
             
             $response = \Illuminate\Support\Facades\Http::post(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key={$apiKey}",
+                "https://generativelanguage.googleapis.com/v1beta/models/" . config('ai.models.default') . ":generateContent?key={$apiKey}",
                 [
                     'contents' => $contents,
                     'systemInstruction' => [

@@ -383,15 +383,16 @@ class CrossChannelBudgetAllocator
             $prompt .= "- \"action_items\": array of 2-3 specific recommended actions\n";
             $prompt .= "- \"risk_flags\": array of any concerning metrics (empty array if none)\n";
 
-            $response = $gemini->generateContent($prompt);
-            $json = json_decode($response, true);
+            $response = $gemini->generateContent(config('ai.models.default'), $prompt);
+            $responseText = $response['text'] ?? null;
+            $json = $responseText ? json_decode($responseText, true) : null;
 
             if ($json && isset($json['summary'])) {
                 return $json;
             }
 
             // Try to extract JSON from response
-            if (preg_match('/\{[\s\S]*\}/', $response, $matches)) {
+            if ($responseText && preg_match('/\{[\s\S]*\}/', $responseText, $matches)) {
                 $json = json_decode($matches[0], true);
                 if ($json && isset($json['summary'])) {
                     return $json;

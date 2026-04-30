@@ -26,7 +26,7 @@ class VideoGenerationService
     {
         try {
             $prompt = VideoGenerationPrompt::create($topic);
-            $operationName = $this->geminiService->startVideoGeneration($prompt, 'veo-3.1-generate-preview', $parameters);
+            $operationName = $this->geminiService->startVideoGeneration($prompt, config('ai.models.video'), $parameters);
 
             if (is_null($operationName)) {
                 Log::error("Video generation failed to start: GeminiService returned null operation name.");
