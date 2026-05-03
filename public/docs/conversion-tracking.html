@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>How Conversion Tracking Works — Spectra</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f8f9fc;
+      color: #1a1a2e;
+      line-height: 1.6;
+    }
+
+    .page { max-width: 960px; margin: 0 auto; padding: 48px 24px 80px; }
+
+    /* ── Typography ── */
+    h1 { font-size: 2.25rem; font-weight: 800; color: #0f0f23; margin-bottom: 8px; }
+    h2 { font-size: 1.4rem; font-weight: 700; color: #0f0f23; margin-bottom: 16px; }
+    h3 { font-size: 1.1rem; font-weight: 600; color: #3730a3; margin-bottom: 10px; }
+    p  { color: #374151; margin-bottom: 14px; }
+    p:last-child { margin-bottom: 0; }
+
+    .subtitle {
+      font-size: 1.1rem;
+      color: #6b7280;
+      margin-bottom: 48px;
+      max-width: 620px;
+    }
+
+    /* ── Section cards ── */
+    .section {
+      background: #fff;
+      border-radius: 16px;
+      padding: 36px;
+      margin-bottom: 32px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.06), 0 4px 16px rgba(0,0,0,.04);
+    }
+
+    .section-label {
+      display: inline-block;
+      font-size: .72rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: #7c3aed;
+      background: #f5f3ff;
+      border-radius: 999px;
+      padding: 3px 12px;
+      margin-bottom: 12px;
+    }
+
+    /* ── Callout box ── */
+    .callout {
+      background: #f0fdf4;
+      border-left: 4px solid #22c55e;
+      border-radius: 0 12px 12px 0;
+      padding: 16px 20px;
+      margin: 20px 0;
+    }
+    .callout.blue  { background: #eff6ff; border-color: #3b82f6; }
+    .callout.amber { background: #fffbeb; border-color: #f59e0b; }
+    .callout.purple{ background: #f5f3ff; border-color: #7c3aed; }
+    .callout strong { display: block; margin-bottom: 4px; color: #111827; }
+
+    /* ── Responsibility table ── */
+    .resp-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+    .resp-col {
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .resp-col.customer { background: #eff6ff; }
+    .resp-col.spectra  { background: #f5f3ff; }
+    .resp-col h3 { margin-bottom: 12px; }
+    .resp-col.customer h3 { color: #1d4ed8; }
+    .resp-col.spectra  h3 { color: #6d28d9; }
+    .resp-col ul { list-style: none; }
+    .resp-col ul li {
+      padding: 6px 0;
+      font-size: .93rem;
+      color: #374151;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .resp-col ul li::before { flex-shrink: 0; margin-top: 2px; }
+    .resp-col.customer ul li::before { content: '✅'; }
+    .resp-col.spectra  ul li::before { content: '🤖'; }
+
+    /* ── Flow diagram ── */
+    .flow {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin: 24px 0;
+    }
+    .flow-step {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .flow-left {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex-shrink: 0;
+      width: 48px;
+    }
+    .flow-dot {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+    }
+    .flow-line {
+      width: 2px;
+      flex: 1;
+      min-height: 28px;
+      background: linear-gradient(to bottom, #c4b5fd, #e5e7eb);
+      margin: 4px 0;
+    }
+    .flow-body {
+      padding: 8px 0 28px;
+      flex: 1;
+    }
+    .flow-body h3 { font-size: 1rem; margin-bottom: 4px; }
+    .flow-body p  { font-size: .9rem; color: #6b7280; margin: 0; }
+    .flow-body .tag {
+      display: inline-block;
+      font-size: .75rem;
+      font-weight: 600;
+      background: #ddd6fe;
+      color: #5b21b6;
+      border-radius: 999px;
+      padding: 2px 10px;
+      margin-top: 6px;
+    }
+    .flow-body .tag.green  { background: #bbf7d0; color: #166534; }
+    .flow-body .tag.blue   { background: #bfdbfe; color: #1e40af; }
+    .flow-body .tag.orange { background: #fed7aa; color: #9a3412; }
+
+    /* ── GTM Container diagram ── */
+    .container-diagram {
+      border: 2px dashed #d1d5db;
+      border-radius: 16px;
+      padding: 20px;
+      margin: 24px 0;
+      position: relative;
+    }
+    .container-diagram .cd-label {
+      position: absolute;
+      top: -12px;
+      left: 20px;
+      background: #fff;
+      padding: 0 8px;
+      font-size: .8rem;
+      font-weight: 700;
+      color: #6b7280;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
+    .website-box {
+      background: #f8f9fc;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+    }
+    .website-box .wl { font-size: .8rem; font-weight: 600; color: #6b7280; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .05em; }
+    .website-box .tag-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      background: #fff;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      margin-bottom: 8px;
+      font-size: .9rem;
+    }
+    .website-box .tag-row:last-child { margin-bottom: 0; }
+    .website-box .tag-row .badge {
+      font-size: .7rem;
+      font-weight: 700;
+      border-radius: 999px;
+      padding: 2px 8px;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+    .badge.managed { background: #ddd6fe; color: #5b21b6; }
+    .badge.manual  { background: #e5e7eb; color: #6b7280; }
+    .badge.once    { background: #bbf7d0; color: #166534; }
+
+    .arrow-down {
+      text-align: center;
+      font-size: 1.4rem;
+      color: #9ca3af;
+      margin: 8px 0;
+    }
+
+    /* ── Trigger examples ── */
+    .trigger-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .trigger-card {
+      background: #f8f9fc;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    .trigger-card .icon { font-size: 1.8rem; margin-bottom: 8px; }
+    .trigger-card .name { font-size: .85rem; font-weight: 600; color: #111827; margin-bottom: 4px; }
+    .trigger-card .value { font-size: .8rem; color: #7c3aed; font-weight: 700; }
+    .trigger-card .desc { font-size: .78rem; color: #9ca3af; margin-top: 4px; }
+
+    /* ── gclid explanation ── */
+    .url-bar {
+      background: #1e1e2e;
+      border-radius: 10px;
+      padding: 14px 18px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: .85rem;
+      color: #a6accd;
+      margin: 16px 0;
+      overflow-x: auto;
+      white-space: nowrap;
+    }
+    .url-bar .domain { color: #89ddff; }
+    .url-bar .path   { color: #c3e88d; }
+    .url-bar .key    { color: #f78c6c; }
+    .url-bar .val    { color: #c792ea; }
+
+    /* ── Value ladder ── */
+    .ladder {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 20px 0;
+    }
+    .ladder-row {
+      display: grid;
+      grid-template-columns: 180px 1fr 80px;
+      align-items: center;
+      gap: 12px;
+    }
+    .ladder-event {
+      font-size: .85rem;
+      font-weight: 600;
+      color: #374151;
+    }
+    .ladder-bar-wrap { position: relative; height: 28px; }
+    .ladder-bar {
+      height: 100%;
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      padding-left: 12px;
+      font-size: .75rem;
+      font-weight: 600;
+      color: #fff;
+      transition: width .3s;
+    }
+    .ladder-value {
+      font-size: .9rem;
+      font-weight: 700;
+      color: #374151;
+      text-align: right;
+    }
+
+    /* ── Two-col layout ── */
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px; }
+
+    /* ── Code block ── */
+    .code {
+      background: #1e1e2e;
+      border-radius: 10px;
+      padding: 16px 20px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: .82rem;
+      color: #cdd6f4;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+    .code .cm  { color: #6c7086; }
+    .code .kw  { color: #cba6f7; }
+    .code .str { color: #a6e3a1; }
+    .code .fn  { color: #89b4fa; }
+    .code .num { color: #fab387; }
+
+    /* ── Summary box ── */
+    .summary {
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border-radius: 16px;
+      padding: 32px;
+      color: #fff;
+      margin-top: 40px;
+    }
+    .summary h2 { color: #fff; font-size: 1.3rem; margin-bottom: 16px; }
+    .summary ul { list-style: none; }
+    .summary ul li {
+      padding: 6px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: .95rem;
+      color: #e0e7ff;
+    }
+    .summary ul li::before { content: '→'; color: #a5b4fc; flex-shrink: 0; }
+
+    @media (max-width: 640px) {
+      .resp-grid { grid-template-columns: 1fr; }
+      .two-col   { grid-template-columns: 1fr; }
+      .ladder-row { grid-template-columns: 140px 1fr 60px; }
+      h1 { font-size: 1.7rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>How Conversion Tracking Works</h1>
+  <p class="subtitle">A plain-English guide to how Spectra tracks what happens after someone clicks your ad — and how we do it on behalf of your clients automatically.</p>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 1: The Big Picture -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">The Big Picture</div>
+    <h2>What is a "conversion" and why does it matter?</h2>
+    <p>When someone clicks a Google Ad and then does something valuable on your website — fills out a form, buys a product, signs up — that's a <strong>conversion</strong>. Google Ads uses conversions to understand which clicks are worth paying for.</p>
+    <p>Without conversion data, Google is flying blind. It shows your ad to <em>everyone</em> equally. With conversion data, it learns <em>who actually buys</em> and shows your ad more to those people. This is what Smart Bidding is — and it's why conversion tracking is the single most important setup task.</p>
+
+    <div class="callout purple">
+      <strong>The Core Idea</strong>
+      You tell Google "this action is worth $X." Google uses that signal to find more people who will do that action. The richer your conversion data, the smarter Google gets.
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 2: The gclid — how Google links clicks to conversions -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">The Linking Mechanism</div>
+    <h2>How Google connects a click to a conversion</h2>
+    <p>When someone clicks your Google Ad, Google secretly adds a tracking code — called a <code>gclid</code> — to the URL. It looks like this:</p>
+
+    <div class="url-bar">
+      <span class="domain">https://yoursite.com</span><span class="path">/pricing</span>?<span class="key">gclid</span>=<span class="val">CjwKCAiA85efBhBbEiwAD7oLQFa...</span>
+    </div>
+
+    <p>This <code>gclid</code> is Google's receipt for that specific click. When a conversion fires later, Google matches the conversion back to that original click using the gclid. That's how it knows <em>which ad, which keyword, and which audience</em> led to a sale.</p>
+
+    <div class="callout blue">
+      <strong>What Spectra does with this</strong>
+      Our <code>CaptureClickIds</code> middleware reads the gclid from the URL on first visit and saves it in the session. When the visitor registers, we store it on their user record. This means we can also upload server-side conversions later (e.g. when their first campaign goes live) even if they've long since closed their browser.
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 3: GTM — the remote control -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Google Tag Manager</div>
+    <h2>GTM is a remote control for your client's website</h2>
+    <p>Normally, adding tracking code to a website means editing the HTML every time. GTM removes that entirely. The client installs <strong>one small snippet</strong> into their website code once, and then Spectra can add, change, or remove tracking tags remotely — no developer involvement needed.</p>
+
+    <p>Think of GTM as an app store installed on their website. We push apps (tags) to it from our end. The client's site automatically runs whatever we publish.</p>
+
+    <div class="container-diagram">
+      <span class="cd-label">Client's Website</span>
+
+      <div class="website-box">
+        <div class="wl">HTML Source</div>
+        <div class="tag-row">
+          <span>🏷️</span>
+          <span style="flex:1">GTM Snippet — <code>&lt;script&gt;...GTM-XXXXXXXX...&lt;/script&gt;</code></span>
+          <span class="badge once">Installed once by client</span>
+        </div>
+      </div>
+
+      <div class="arrow-down">↕ Spectra manages everything below via API</div>
+
+      <div class="website-box">
+        <div class="wl">Inside the GTM Container (we control this)</div>
+        <div class="tag-row">
+          <span>📊</span>
+          <span style="flex:1">Google Ads Conversion Tag — fires when a goal is reached</span>
+          <span class="badge managed">Spectra managed</span>
+        </div>
+        <div class="tag-row">
+          <span>🔥</span>
+          <span style="flex:1">Trigger: "Form submitted" / "Page visited" / "Button clicked"</span>
+          <span class="badge managed">Spectra managed</span>
+        </div>
+        <div class="tag-row">
+          <span>➕</span>
+          <span style="flex:1">Any future tags (Facebook Pixel, LinkedIn, Microsoft UET…)</span>
+          <span class="badge managed">Spectra managed</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout">
+      <strong>The client's only job</strong>
+      Copy and paste the GTM snippet into their website's <code>&lt;head&gt;</code> and <code>&lt;body&gt;</code>. That's it. Spectra handles everything else — creating conversion actions, adding tags, setting up triggers, and publishing the container.
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 4: The full conversion flow -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">End-to-End Flow</div>
+    <h2>What actually happens when an ad click becomes a conversion</h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#fef3c7">🖱️</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>1. User clicks the Google Ad</h3>
+          <p>Google appends a <code>gclid</code> to the destination URL. This ID ties the click to everything that happens next.</p>
+          <span class="tag orange">gclid generated</span>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#dbeafe">🌐</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>2. User lands on the client's website</h3>
+          <p>The GTM snippet (installed once by the client) loads automatically. It fetches the current published container from Google's servers — including all the tags Spectra has configured.</p>
+          <span class="tag blue">GTM container loads</span>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#f0fdf4">⚙️</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>3. GTM watches for triggers</h3>
+          <p>GTM continuously watches the page for events we've defined — a form submission, a button click, a thank-you page loading, a minimum time on page, etc.</p>
+          <span class="tag">Trigger listening</span>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#fdf4ff">🎯</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>4. Trigger fires — conversion tag activates</h3>
+          <p>When the user does the tracked action (e.g. submits the contact form), the trigger condition is met. GTM fires the Google Ads conversion tag, sending the gclid and a dollar value to Google.</p>
+          <span class="tag">Conversion tag fires</span>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#fff7ed">📡</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>5. Google Ads records the conversion</h3>
+          <p>Google receives the signal: "the person who clicked ad X converted, and this action was worth $Y." It logs this against the original click, keyword, audience, and time of day.</p>
+          <span class="tag blue">Data recorded in Google Ads</span>
+        </div>
+      </div>
+
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#f0fdf4">🧠</div>
+        </div>
+        <div class="flow-body">
+          <h3>6. Smart Bidding learns and optimises</h3>
+          <p>Over time (typically after 30–50 conversions) Google's Smart Bidding has enough signal to start predicting who is likely to convert. It automatically bids higher for users who match the profile of past converters — and lower (or not at all) for users unlikely to convert.</p>
+          <span class="tag green">Campaign improves automatically</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 5: Trigger types -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Trigger Types</div>
+    <h2>What can trigger a conversion?</h2>
+    <p>GTM can watch for many different events on a page. Spectra configures the right trigger for each conversion based on what the client's site does.</p>
+
+    <div class="trigger-grid">
+      <div class="trigger-card">
+        <div class="icon">📄</div>
+        <div class="name">Page Load</div>
+        <div class="desc">Fires when a specific URL loads — e.g. <code>/thank-you</code> or <code>/order-confirmation</code></div>
+        <div class="value">Most reliable</div>
+      </div>
+      <div class="trigger-card">
+        <div class="icon">📝</div>
+        <div class="name">Form Submit</div>
+        <div class="desc">Fires when any (or a specific) form is submitted — contact forms, quote requests, bookings</div>
+        <div class="value">High intent</div>
+      </div>
+      <div class="trigger-card">
+        <div class="icon">🖱️</div>
+        <div class="name">Button / Link Click</div>
+        <div class="desc">Fires when a specific button or link is clicked — "Book Now", "Get a Quote", "Call Us"</div>
+        <div class="value">Mid-funnel</div>
+      </div>
+      <div class="trigger-card">
+        <div class="icon">📞</div>
+        <div class="name">Phone Click</div>
+        <div class="desc">Fires when a phone number link is tapped — especially on mobile</div>
+        <div class="value">High intent</div>
+      </div>
+      <div class="trigger-card">
+        <div class="icon">⏱️</div>
+        <div class="name">Time on Page</div>
+        <div class="desc">Fires after a user spends X seconds on the page — signals genuine engagement</div>
+        <div class="value">Engagement</div>
+      </div>
+      <div class="trigger-card">
+        <div class="icon">📜</div>
+        <div class="name">Scroll Depth</div>
+        <div class="desc">Fires when a user scrolls past 50% or 75% of a page — shows they read it</div>
+        <div class="value">Awareness</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 6: Value ladder -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Conversion Value Ladder</div>
+    <h2>Why we track multiple events — not just the sale</h2>
+    <p>A sale or sign-up might only happen every few days. Google needs at least 30 conversions per month to optimise well. By tracking <em>multiple points</em> in the funnel — each with an estimated dollar value — we give Google far more data to work with, faster.</p>
+
+    <div class="callout amber">
+      <strong>Important</strong>
+      These values don't have to be exact — they represent the <em>relative importance</em> of each action. A pricing page visit is less valuable than a sign-up, so it gets a lower value. Google uses this to understand the funnel.
+    </div>
+
+    <div class="ladder" style="margin-top:24px">
+      <div class="ladder-row" style="font-size:.75rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">
+        <div>Event</div><div>Relative Value</div><div>Value</div>
+      </div>
+      <div class="ladder-row">
+        <div class="ladder-event">📄 Pricing page visit</div>
+        <div class="ladder-bar-wrap"><div class="ladder-bar" style="width:5%;background:#bfdbfe">·</div></div>
+        <div class="ladder-value">$5</div>
+      </div>
+      <div class="ladder-row">
+        <div class="ladder-event">🧪 Sandbox launched</div>
+        <div class="ladder-bar-wrap"><div class="ladder-bar" style="width:35%;background:#a5b4fc"></div></div>
+        <div class="ladder-value">$35</div>
+      </div>
+      <div class="ladder-row">
+        <div class="ladder-event">✅ Sign-up verified</div>
+        <div class="ladder-bar-wrap"><div class="ladder-bar" style="width:99%;background:#818cf8"></div></div>
+        <div class="ladder-value">$99</div>
+      </div>
+      <div class="ladder-row">
+        <div class="ladder-event">🚀 First campaign live</div>
+        <div class="ladder-bar-wrap"><div class="ladder-bar" style="width:80%;background:#6366f1"></div></div>
+        <div class="ladder-value">$80</div>
+      </div>
+      <div class="ladder-row">
+        <div class="ladder-event">🔁 7-day return visit</div>
+        <div class="ladder-bar-wrap"><div class="ladder-bar" style="width:50%;background:#7c3aed"></div></div>
+        <div class="ladder-value">$50</div>
+      </div>
+    </div>
+
+    <p style="margin-top:16px;font-size:.88rem;color:#6b7280">Over time, as we collect real revenue data, these values can be updated to reflect actual customer lifetime value. The system is built to refine automatically.</p>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 7: Two modes — client vs server -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Two Tracking Modes</div>
+    <h2>Browser-side vs Server-side conversions</h2>
+    <p>Not all conversions happen while the user is on a webpage. Spectra uses two methods depending on the situation:</p>
+
+    <div class="two-col">
+      <div style="background:#eff6ff;border-radius:12px;padding:20px">
+        <h3 style="color:#1d4ed8;margin-bottom:8px">🌐 Browser-side (gtag)</h3>
+        <p style="font-size:.9rem">JavaScript runs in the user's browser and fires the conversion signal directly to Google Ads in real time.</p>
+        <p style="font-size:.88rem;color:#6b7280;margin-top:8px"><strong>Used for:</strong> Pricing page visit, Sandbox launch, Sign-up. Events that happen while the user is actively on the site.</p>
+        <div class="code" style="font-size:.78rem;margin-top:12px">
+<span class="fn">gtag</span>(<span class="str">'event'</span>, <span class="str">'conversion'</span>, {<br>
+&nbsp;&nbsp;<span class="str">'send_to'</span>: <span class="str">'AW-XXXX/label'</span>,<br>
+&nbsp;&nbsp;<span class="str">'value'</span>: <span class="num">99</span>, <span class="str">'currency'</span>: <span class="str">'USD'</span><br>
+});
+        </div>
+      </div>
+      <div style="background:#f5f3ff;border-radius:12px;padding:20px">
+        <h3 style="color:#6d28d9;margin-bottom:8px">🖥️ Server-side (Conversions API)</h3>
+        <p style="font-size:.9rem">Spectra's backend sends the conversion signal directly to Google's API — no browser required.</p>
+        <p style="font-size:.88rem;color:#6b7280;margin-top:8px"><strong>Used for:</strong> Campaign live, 7-day return. Events that happen in our system, not on a webpage. Also more reliable — ad blockers can't block it.</p>
+        <div class="code" style="font-size:.78rem;margin-top:12px">
+<span class="cm">// Backend: RecordSiteConversion job</span><br>
+<span class="fn">uploadClickConversions</span>([<br>
+&nbsp;&nbsp;<span class="str">'gclid'</span> => <span class="str">$user->gclid</span>,<br>
+&nbsp;&nbsp;<span class="str">'value'</span> => <span class="num">80.0</span><br>
+]);
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 8: Responsibilities -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Who Does What</div>
+    <h2>What the client does vs what Spectra does</h2>
+
+    <div class="resp-grid">
+      <div class="resp-col customer">
+        <h3>👤 Client (one-time, 5 minutes)</h3>
+        <ul>
+          <li>Paste GTM snippet into website <code>&lt;head&gt;</code></li>
+          <li>Paste GTM noscript snippet into website <code>&lt;body&gt;</code></li>
+          <li>Save and publish their website</li>
+        </ul>
+      </div>
+      <div class="resp-col spectra">
+        <h3>🤖 Spectra (automated)</h3>
+        <ul>
+          <li>Create Google Ads conversion actions via API</li>
+          <li>Detect which GTM container is on the client's site</li>
+          <li>Provision a new GTM container if none exists</li>
+          <li>Add conversion tags and triggers to GTM</li>
+          <li>Publish the GTM container</li>
+          <li>Verify the tag is live on the site</li>
+          <li>Capture click IDs and upload server-side conversions</li>
+          <li>Refine conversion values over time</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout" style="margin-top:20px">
+      <strong>What the GTM snippet looks like (the only thing the client installs)</strong>
+      The client copies two blocks of code from their Spectra dashboard. Block 1 goes in <code>&lt;head&gt;</code>, Block 2 goes immediately after <code>&lt;body&gt;</code>. Any competent web developer or WordPress admin can do this in under 5 minutes.
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Section 9: Customer-side flow (the agent pipeline) -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="section">
+    <div class="section-label">Spectra Customer Pipeline</div>
+    <h2>How Spectra sets up tracking for a client's website automatically</h2>
+
+    <div class="flow">
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#fef3c7">1️⃣</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>Client onboards and connects their Google Ads account</h3>
+          <p>Spectra links their Google Ads customer ID. The nightly maintenance job detects <code>conversion_action_id</code> is empty and queues <code>SetupConversionTracking</code>.</p>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#dbeafe">2️⃣</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>Spectra crawls the client's live website</h3>
+          <p><code>ConversionSetupService</code> makes an HTTP request to their domain and scans the HTML for an existing GTM container ID (e.g. <code>GTM-XXXXXXX</code>). If found, it uses that. If not, it provisions a new one via the GTM API.</p>
+          <span class="tag blue">Auto-detects GTM</span>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#f0fdf4">3️⃣</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>Creates a Google Ads conversion action via API</h3>
+          <p>A new conversion action is created in the client's Google Ads account. Spectra retrieves the conversion ID and label from the tag snippet.</p>
+          <span class="tag green">Conversion action live</span>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#fdf4ff">4️⃣</div>
+          <div class="flow-line"></div>
+        </div>
+        <div class="flow-body">
+          <h3>Adds the conversion tag + trigger to GTM</h3>
+          <p>Using the GTM API, Spectra adds the Google Ads conversion tag (with the client's conversion ID and label) and a trigger (e.g. "fires on all pages" or "fires on form submit"). The container is then published.</p>
+          <span class="tag">GTM published</span>
+        </div>
+      </div>
+      <div class="flow-step">
+        <div class="flow-left">
+          <div class="flow-dot" style="background:#fff7ed">5️⃣</div>
+        </div>
+        <div class="flow-body">
+          <h3>Client installs the GTM snippet (if not already present)</h3>
+          <p>If a GTM container was provisioned fresh, Spectra provides the HTML snippet for the client to paste into their site. Once installed, all tags in the container — including the conversion tag — are live immediately.</p>
+          <span class="tag orange">Client one-time action</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─────────────────────────────────────────── -->
+  <!-- Summary -->
+  <!-- ─────────────────────────────────────────── -->
+  <div class="summary">
+    <h2>Summary — The Key Points</h2>
+    <ul>
+      <li>Google tracks conversions by matching a <strong>gclid</strong> (click ID) to a later action on the site</li>
+      <li>GTM is installed once on the client's site — after that, Spectra controls all tags remotely via the API</li>
+      <li>Spectra automatically creates conversion actions, adds tags to GTM, and publishes the container — no manual steps</li>
+      <li>Tracking multiple funnel events (not just sales) gives Google more signal and makes Smart Bidding work faster</li>
+      <li>Browser-side events fire via <code>gtag()</code>; server-side events (that happen in Spectra's backend) upload via the Google Ads Conversions API</li>
+      <li>The client's only job is to paste a GTM snippet into their site once — everything else is Spectra</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>
