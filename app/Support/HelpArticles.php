@@ -12,6 +12,14 @@ class HelpArticles
             self::smartBidding(),
             self::competitorAnalysis(),
             self::gettingStarted(),
+            self::negativeKeywords(),
+            self::adRankExplained(),
+            self::responsiveSearchAds(),
+            self::aiAdCopywriting(),
+            self::audienceTargeting(),
+            self::budgetPacing(),
+            self::multiPlatformAdvertising(),
+            self::understandingRoas(),
         ];
     }
 
@@ -343,6 +351,424 @@ HTML,
 
 <h2>Getting help</h2>
 <p>Every action the agents take is logged in your Activity Feed with a clear explanation of what happened and why. If you have questions about any action, or want to understand a particular optimisation, you can submit a support ticket directly from the activity log.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function negativeKeywords(): array
+    {
+        return [
+            'slug'        => 'negative-keywords-explained',
+            'title'       => 'Negative Keywords Explained: Stop Paying for Clicks That Will Never Convert',
+            'description' => 'Negative keywords are the fastest way to cut wasted ad spend on Google Ads. Here\'s how they work, why most accounts have too few, and how sitetospend.com manages them automatically.',
+            'category'    => 'Google Ads',
+            'read_time'   => '6 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>What is a negative keyword?</h2>
+<p>A negative keyword tells Google: <em>do not show my ad when someone includes this word in their search</em>. Where regular keywords attract clicks, negative keywords repel irrelevant ones. They're a filter that stops your budget being consumed by searches that will never lead to a customer.</p>
+<p>Example: a plumber running Google Ads for "emergency plumber London" without a negative keyword for "job" or "course" will have their ad shown to people searching "plumber London job" or "plumbing course London." These people aren't going to hire a plumber — they're looking for employment or training. Every click from them is pure waste.</p>
+
+<h2>The three negative keyword match types</h2>
+<p>Like regular keywords, negative keywords come in three match types:</p>
+<ul>
+  <li><strong>Broad match negative</strong> — blocks searches containing all the words in any order. Negative broad <em>plumber job</em> would block "job for plumber" and "plumber wanted jobs London."</li>
+  <li><strong>Phrase match negative</strong> — blocks searches that contain the exact phrase in order. Negative phrase <em>"plumber job"</em> blocks "london plumber job" but not "job plumber london."</li>
+  <li><strong>Exact match negative</strong> — blocks only that exact search query. Negative exact <em>[plumber job]</em> blocks only the search "plumber job," nothing else.</li>
+</ul>
+<p>For most use cases, phrase match negatives offer the right balance of coverage and precision.</p>
+
+<h2>Why most Google Ads accounts have too few negatives</h2>
+<p>Setting up negatives requires you to look at your actual search terms report — the real queries that triggered your ads — and identify the bad ones. This is tedious, requires experience, and needs to be done every week as new irrelevant queries accumulate. Most businesses set up a handful of obvious negatives at launch and then never revisit them. After 6 months, a significant percentage of their budget is typically being wasted on irrelevant traffic.</p>
+<p>The Search Terms report consistently reveals surprises: competitor brand names, job-seeker queries, research queries, unrelated service terms. Without a systematic weekly review, waste compounds silently.</p>
+
+<h2>Campaign-level vs account-level negatives</h2>
+<p>Negative keywords can be applied at the ad group level, campaign level, or across the entire account via a <strong>negative keyword list</strong>. Account-level lists are the most powerful — you define them once and they apply everywhere. Common account-level negative lists include:</p>
+<ul>
+  <li>Job seekers — "jobs," "careers," "salary," "vacancy," "apply," "hiring"</li>
+  <li>DIY / free — "DIY," "free," "how to," "yourself," "tutorial"</li>
+  <li>Competitors — competitor brand names if you don't want to bid on them</li>
+  <li>Irrelevant industries — terms from adjacent industries that share keywords with yours</li>
+</ul>
+
+<h2>How sitetospend.com manages negatives automatically</h2>
+<p>Every week, sitetospend.com's agents review your Search Terms report and automatically identify search queries that:</p>
+<ul>
+  <li>Have generated more than 3 clicks with zero conversions</li>
+  <li>Match known irrelevant patterns (job seeker terms, DIY terms, competitor names)</li>
+  <li>Show up repeatedly across multiple weeks</li>
+</ul>
+<p>Identified waste terms are added to your campaign's negative keyword lists automatically. Over time, your campaign becomes increasingly efficient — the same budget reaches a progressively higher proportion of genuinely intent-driven searchers.</p>
+<p>You can review all automatically added negatives in your Activity Feed, and override any addition if you disagree with the categorisation.</p>
+
+<h2>How much can negatives save you?</h2>
+<p>In a typical Google Ads account that hasn't been actively managed, 15–30% of clicks can come from irrelevant queries. For a business spending £2,000/month on Google Ads, that's £300–£600 every month going to people who were never going to buy. Systematic negative keyword management typically produces a 20–40% improvement in cost-per-conversion in the first 60 days — without spending more money, purely by stopping waste.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function adRankExplained(): array
+    {
+        return [
+            'slug'        => 'what-is-ad-rank',
+            'title'       => 'What is Ad Rank? The Auction Mechanic That Decides Where Your Ad Shows',
+            'description' => 'Ad Rank determines your ad\'s position on Google\'s search results page — and it\'s not just about bid. Here\'s the full picture and how to improve it.',
+            'category'    => 'Google Ads',
+            'read_time'   => '5 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>The Google Ads auction isn't just about money</h2>
+<p>Many people assume the advertiser who bids the most wins the top spot in Google search results. This is wrong — and understanding why is one of the most important things you can learn about Google Ads.</p>
+<p>Google uses a formula called <strong>Ad Rank</strong> to decide who shows where. A business bidding £0.50 can outrank one bidding £2.00 if their ad quality is high enough. This is intentional: Google earns more from high-quality, relevant ads because people actually click them.</p>
+
+<h2>The Ad Rank formula</h2>
+<p>Ad Rank is calculated from five components at the time of each auction:</p>
+<ol>
+  <li><strong>Your bid</strong> — the maximum amount you're willing to pay per click</li>
+  <li><strong>Expected CTR</strong> — Google's prediction of how often your ad will be clicked when shown</li>
+  <li><strong>Ad relevance</strong> — how closely your ad matches the intent of the user's search query</li>
+  <li><strong>Landing page experience</strong> — how relevant, trustworthy, and fast your landing page is</li>
+  <li><strong>Ad extensions</strong> — whether you have sitelinks, callouts, and other extensions eligible to show</li>
+</ol>
+<p>Components 2, 3, and 4 together make up your <strong>Quality Score</strong> (rated 1–10 per keyword). A higher Quality Score means Google thinks your ad is genuinely useful to searchers — and rewards you with better position at lower cost.</p>
+
+<h2>What this means in practice: the auction</h2>
+<p>Every Google search triggers an instant auction among all advertisers who've bid on relevant keywords. The winner isn't necessarily the highest bidder — it's whoever has the highest Ad Rank. And crucially, the winner doesn't pay their maximum bid: they pay just enough to beat the Ad Rank of the advertiser below them.</p>
+<p>This means a high-Quality-Score advertiser can win auctions and pay less per click than a lower-quality competitor — sometimes dramatically less. A Quality Score of 8 vs 4 on the same keyword can mean paying 50% less for the same position.</p>
+
+<h2>How Ad Rank affects ad position and eligibility</h2>
+<p>There are typically 3–4 paid positions at the top of Google's search results, and 3 at the bottom. Your Ad Rank determines:</p>
+<ul>
+  <li>Whether your ad shows at all (your Ad Rank must exceed a minimum threshold)</li>
+  <li>Which position you appear in</li>
+  <li>Whether your ad extensions are eligible to show</li>
+  <li>How much you pay per click</li>
+</ul>
+<p>Ads that appear in position 1–3 at the top of the page get the most clicks. Position 1 (the very top) gets roughly 2–3x more clicks than position 3, which is why Ad Rank matters so much to your traffic volume.</p>
+
+<h2>Improving Ad Rank without increasing bids</h2>
+<p>The most cost-effective way to improve Ad Rank is to improve Quality Score — because it reduces what you need to pay to achieve the same position. The three Quality Score components each have specific levers:</p>
+<ul>
+  <li><strong>Expected CTR:</strong> Write tighter, more compelling headlines that include the exact keyword. Use emotional triggers and clear value propositions. Test multiple variations.</li>
+  <li><strong>Ad relevance:</strong> Ensure your ad copy directly addresses the intent behind each keyword. Avoid grouping loosely related keywords into the same ad group.</li>
+  <li><strong>Landing page experience:</strong> The keyword should appear in the page's H1. The page should load in under 3 seconds. The content should clearly deliver what the ad promised.</li>
+</ul>
+<p>Adding extensions also directly boosts Ad Rank. Google's own data shows that adding sitelinks increases Ad Rank — not just CTR — because extensions are factored into the formula separately.</p>
+
+<h2>How sitetospend.com optimises Ad Rank</h2>
+<p>The Quality Score Agent monitors every keyword's Ad Rank components weekly. When a keyword's Quality Score drops or stagnates, the agent diagnoses which component is the problem and takes specific action: new ad copy, keyword restructuring, or landing page recommendations. The Ad Extension Agent ensures every campaign always has full extension coverage — one of the easiest Ad Rank improvements available. Together, these agents progressively improve Ad Rank across your account, lowering your effective cost-per-click over time.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function responsiveSearchAds(): array
+    {
+        return [
+            'slug'        => 'how-responsive-search-ads-work',
+            'title'       => 'How Responsive Search Ads Work — and How AI Makes Them Better',
+            'description' => 'Responsive Search Ads let you write up to 15 headlines and 4 descriptions. Google tests combinations automatically. Here\'s how to make RSAs perform, and how sitetospend.com optimises them continuously.',
+            'category'    => 'Google Ads',
+            'read_time'   => '5 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>What is a Responsive Search Ad?</h2>
+<p>A Responsive Search Ad (RSA) is Google's standard ad format for Search campaigns. Instead of writing one fixed ad, you provide up to <strong>15 headlines</strong> and <strong>4 descriptions</strong>. Google automatically tests different combinations of these assets to discover which perform best for different searches and users.</p>
+<p>When your ad shows, Google picks 3 headlines and 2 descriptions from your pool, assembles them in an order it believes will perform best, and displays them. Over time, Google learns which combinations drive the most clicks and conversions — and shows those combinations more often.</p>
+
+<h2>Why RSAs replaced Expanded Text Ads</h2>
+<p>Google sunset Expanded Text Ads (ETAs) in June 2022. ETAs had fixed headlines and descriptions — you wrote exactly what would show, every time. RSAs are more flexible: they can adapt to the context of a search query, the device, and the user's characteristics. A user searching from a mobile device might see a headline emphasising speed. Someone searching a more specific query might see a headline containing their exact search term.</p>
+<p>The trade-off is control: with RSAs you can't guarantee which combination shows. The solution is to write assets that work well individually and in any combination.</p>
+
+<h2>Ad Strength — and why it matters</h2>
+<p>Google rates every RSA with an <strong>Ad Strength</strong> score: Poor, Average, Good, or Excellent. This score reflects how well your assets are optimised for the RSA format:</p>
+<ul>
+  <li>Are your headlines diverse (not repeating the same words)?</li>
+  <li>Do you include the keyword in at least one headline?</li>
+  <li>Have you filled as many asset slots as possible?</li>
+  <li>Are your descriptions unique and benefit-focused?</li>
+</ul>
+<p>Ad Strength is directly correlated with Ad Rank. An "Excellent" RSA will achieve a higher position at lower cost than a "Poor" one with the same bid. Getting to "Good" or "Excellent" should be the immediate goal for every RSA in your account.</p>
+
+<h2>How to write headlines that work in any combination</h2>
+<p>Because Google combines headlines in different orders, each headline must stand alone as a complete, coherent thought. Common mistakes:</p>
+<ul>
+  <li><strong>Fragmented headlines</strong> — "Get a Free" as one headline and "Quote Today" as another. If Google shows them non-consecutively, neither makes sense.</li>
+  <li><strong>Repetition</strong> — four headlines all saying "London's Best Plumber" in different wording. Google penalises this and your Ad Strength suffers.</li>
+  <li><strong>Missing keyword insertion</strong> — at least one headline should contain the primary keyword so searchers immediately recognise relevance.</li>
+</ul>
+<p>Aim for headlines that cover: the keyword (relevance), a unique benefit (why you), social proof (trust), urgency or offer (action trigger), and a brand name (memorability).</p>
+
+<h2>Pinning — and when to use it</h2>
+<p>Google allows you to "pin" a headline to position 1, 2, or 3 — guaranteeing it always shows. This trades flexibility for control. Use pinning sparingly: pinning too many assets reduces the combination pool and lowers Ad Strength. Reserve pinning for legally required text (e.g. "T&Cs apply"), brand names you always want visible, or a headline so high-performing you never want Google to rotate it out.</p>
+
+<h2>How sitetospend.com optimises RSAs continuously</h2>
+<p>The Creative Intelligence Agent monitors RSA asset performance weekly. Assets labelled "Low" performing by Google (shown less often because they underperform) are replaced with AI-generated alternatives that draw on your brand guidelines, competitor analysis, and conversion data. New combinations are continuously introduced and tested. Over time, your RSAs evolve toward a higher-performance set of assets — with no manual effort required. The agent also ensures every RSA has an "Excellent" or "Good" Ad Strength rating, and alerts when any ad drops below this threshold.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function aiAdCopywriting(): array
+    {
+        return [
+            'slug'        => 'how-ai-writes-your-ad-copy',
+            'title'       => 'How AI Writes and Continuously Improves Your Ad Copy',
+            'description' => 'sitetospend.com uses AI to generate, test, and improve your Google Ad copy automatically — informed by your brand, your competitors, and real conversion data.',
+            'category'    => 'Platform',
+            'read_time'   => '5 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>Why ad copy matters more than most advertisers realise</h2>
+<p>Two businesses targeting identical keywords with identical bids can get dramatically different results based purely on their ad copy. Copy that closely matches search intent gets clicked more — and a higher click-through rate improves Quality Score, which in turn lowers your cost-per-click and improves your position. The compounding effect of better ad copy is substantial.</p>
+<p>Despite this, most businesses write their initial ads at launch and rarely revisit them. Stale copy that was written 18 months ago, before the market shifted and before competitors changed their messaging, is quietly underperforming every day.</p>
+
+<h2>How sitetospend.com reads your business before writing a word</h2>
+<p>The AI doesn't generate generic marketing copy. Before writing anything, it builds a complete understanding of your business by crawling your website and extracting:</p>
+<ul>
+  <li><strong>Brand voice</strong> — formal vs. conversational, technical vs. plain-English, premium vs. accessible</li>
+  <li><strong>Value propositions</strong> — what you genuinely offer that others don't</li>
+  <li><strong>Services and products</strong> — the specific things you sell and their key benefits</li>
+  <li><strong>Social proof signals</strong> — years in business, customer count, reviews, guarantees</li>
+  <li><strong>Geographic targeting</strong> — location-specific terms that improve relevance</li>
+</ul>
+<p>This brief is stored in your account and used as the foundation for all copy generation. It's refreshed periodically as your site evolves.</p>
+
+<h2>Incorporating competitor intelligence</h2>
+<p>Copy written in a vacuum misses the most important question: <em>why should a customer choose you over the competitors showing ads right beside yours?</em> sitetospend.com's weekly competitor analysis feeds directly into copy generation. When the system knows that your main competitor emphasises price but not expertise, it generates headlines that lead with your credentials and experience. When a competitor runs a limited-time offer, the system can respond with a counter-offer headline.</p>
+<p>This means your copy is always positioned relative to the competitive landscape, not written as if you're advertising in isolation.</p>
+
+<h2>The continuous testing loop</h2>
+<p>AI-generated copy isn't assumed to be correct — it's tested. Every RSA runs with multiple headline and description variations. The Creative Intelligence Agent monitors performance weekly:</p>
+<ul>
+  <li>Assets with a "Low" performance label (Google's own signal that the asset underperforms) are identified</li>
+  <li>New replacement assets are generated using AI, informed by what's working well</li>
+  <li>The new assets are deployed, and the testing cycle continues</li>
+</ul>
+<p>Over time this produces a progressively better-performing set of assets. The account improves every week, not just at launch.</p>
+
+<h2>Character limits and Google's requirements</h2>
+<p>The AI is constrained to Google's technical requirements: headlines must be 30 characters or fewer, descriptions 90 characters or fewer. It also avoids common policy violations — excessive punctuation, prohibited claims, trademark misuse — that would trigger a disapproval. Headlines and descriptions are generated in batches to maximise diversity across the asset pool, specifically to achieve an "Excellent" Ad Strength rating.</p>
+
+<h2>What you can customise</h2>
+<p>While the AI handles ongoing generation and testing, you retain full control. You can pin specific headlines to guaranteed positions (e.g. your brand name always appears), add specific messaging you want included (a limited offer, a seasonal promotion), or pause any variation you don't want shown. Changes you make are respected by the optimisation system — it won't overwrite pinned or manually-specified assets.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function audienceTargeting(): array
+    {
+        return [
+            'slug'        => 'google-ads-audience-targeting',
+            'title'       => 'Google Ads Audience Targeting: Remarketing, RLSA, and Customer Match Explained',
+            'description' => 'Audience targeting lets you bid differently based on who is searching — not just what they\'re searching. Here\'s how Google\'s audience tools work and how sitetospend.com uses them.',
+            'category'    => 'Google Ads',
+            'read_time'   => '6 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>Why keywords alone aren't enough</h2>
+<p>Keyword targeting tells Google what topic to show your ad for. Audience targeting tells Google <em>who</em> to show your ad to. The combination is far more powerful than either alone. Two people can search the same keyword with very different purchase intent: someone who visited your pricing page yesterday is much more likely to convert than a first-time visitor who found you while comparing options.</p>
+<p>Audience targeting lets you recognise the difference — and bid accordingly.</p>
+
+<h2>Remarketing lists — reaching people who already know you</h2>
+<p>Remarketing lists are built from a tracking tag on your website (placed automatically by sitetospend.com via GTM). As visitors browse your site, they're added to audience lists based on their behaviour:</p>
+<ul>
+  <li><strong>All website visitors</strong> — everyone who landed on any page</li>
+  <li><strong>Pricing page visitors</strong> — high commercial intent</li>
+  <li><strong>Contact page visitors</strong> — very high intent</li>
+  <li><strong>Abandoned enquiry</strong> — started a form but didn't complete it</li>
+  <li><strong>Past customers</strong> — people who converted previously</li>
+</ul>
+<p>By default, Google's Search campaigns target anyone searching your keywords — including people who've never heard of you. Adding remarketing audiences lets you give these high-intent, familiar visitors a bid boost, ensuring you're more competitive for the searchers who already have a relationship with your brand.</p>
+
+<h2>RLSA — Remarketing Lists for Search Ads</h2>
+<p>RLSA (Remarketing Lists for Search Ads) is the specific feature that combines audience lists with search campaigns. When someone on your remarketing list then searches for your keywords, you can bid more aggressively — because you know they already know you.</p>
+<p>This is powerful in competitive markets where you can't afford to bid high for every search. By reserving your highest bids for searchers who've already shown interest, you spend more efficiently on the people most likely to convert.</p>
+
+<h2>Customer Match — uploading your customer list</h2>
+<p>Customer Match lets you upload a list of customer email addresses. Google matches them to signed-in Google accounts. You can then:</p>
+<ul>
+  <li>Bid more aggressively to win back lapsed customers</li>
+  <li>Exclude existing customers from campaigns designed to win new business</li>
+  <li>Create a "similar audiences" list — people who look like your existing customers, for prospecting</li>
+</ul>
+<p>Customer Match requires a minimum of 1,000 matched customers to be statistically usable, and a Google Ads account with a good compliance history.</p>
+
+<h2>In-Market and Affinity audiences</h2>
+<p>Beyond your own first-party data, Google offers:</p>
+<ul>
+  <li><strong>In-Market audiences</strong> — people Google has identified as actively researching purchases in a specific category. For example, "In-Market for Home Improvement Services" or "In-Market for B2B Software." Adding these as bid adjustments ensures you bid more aggressively when a qualified searcher sees your ad.</li>
+  <li><strong>Affinity audiences</strong> — people with longer-term interests aligned with your business. Less immediately intent-driven than In-Market, but useful for brand awareness.</li>
+</ul>
+
+<h2>How sitetospend.com sets up audience targeting</h2>
+<p>When your campaign launches, sitetospend.com automatically creates audience lists using the GTM tag deployed to your site, layers RLSA audiences onto your Search campaigns with appropriate bid adjustments, and adds relevant In-Market audiences based on your industry. As your remarketing lists grow (they start empty and build up over 30–60 days), the audience signals become increasingly powerful — and the agents automatically increase bid adjustments as conversion data confirms which audiences perform best.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function budgetPacing(): array
+    {
+        return [
+            'slug'        => 'how-budget-pacing-works',
+            'title'       => 'How Budget Pacing Works: Making Every Pound of Ad Spend Count',
+            'description' => 'Spending your daily Google Ads budget at the right times — not just as fast as possible — is critical to campaign performance. Here\'s how intelligent budget pacing works.',
+            'category'    => 'Platform',
+            'read_time'   => '5 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>The problem with "standard" budget delivery</h2>
+<p>By default, Google tries to spread your daily budget evenly throughout the day. This sounds sensible but ignores a critical reality: not all hours are equal. For most businesses, 8am–6pm on weekdays dramatically outperforms midnight on Sunday. Spreading spend evenly means wasting budget in low-value windows.</p>
+<p>Conversely, if your budget runs out by 2pm because mornings are busy, you're invisible to everyone searching in the afternoon and evening. Pacing matters in both directions.</p>
+
+<h2>How ad scheduling (dayparting) works</h2>
+<p>Google Ads lets you apply bid modifiers by hour of day and day of week. A +30% modifier at 8am means you're willing to bid 30% more during that hour — making you more competitive when conversion rates are highest. A -50% modifier at 2am means you're largely opting out of overnight traffic where your particular business sees few conversions.</p>
+<p>Setting these modifiers correctly requires a meaningful amount of conversion data — typically 60–90 days of account history — to identify genuine performance patterns rather than noise. Done well, dayparting is one of the most reliable levers for improving cost-per-conversion.</p>
+
+<h2>The Budget Intelligence Agent's approach</h2>
+<p>sitetospend.com's Budget Intelligence Agent performs a weekly analysis of your conversion data broken down by hour and day. It builds a performance heat map showing which time windows produce conversions at what cost. It then:</p>
+<ol>
+  <li>Identifies your top-performing windows (highest conversion rate, lowest CPA)</li>
+  <li>Identifies underperforming windows (spend with few or no conversions)</li>
+  <li>Adjusts bid modifiers to concentrate budget on high-value windows</li>
+  <li>Applies negative adjustments to low-value windows to preserve budget for better slots</li>
+</ol>
+<p>The analysis runs weekly so it adapts to seasonal patterns — your business may have very different peak hours in December versus June.</p>
+
+<h2>Device bid adjustments</h2>
+<p>Beyond time of day, conversion rates often vary significantly by device. A B2B service business may see much higher conversion rates on desktop (people at their desk, comparing suppliers) than mobile. A restaurant or consumer service may see the reverse (people checking their phone while on the go). The same bid adjustment logic applies:</p>
+<ul>
+  <li>Identify conversion rate and CPA by device</li>
+  <li>Increase bids on high-converting devices</li>
+  <li>Reduce bids on low-converting devices</li>
+</ul>
+<p>Device modifiers can range from -90% (effectively pausing a device type) to +900%.</p>
+
+<h2>Geographic bid adjustments</h2>
+<p>If you serve multiple locations, performance typically varies by area. A London-based business may find that searches from Zone 1 convert at twice the rate of searches from outer areas — reflecting proximity to the service. Geographic bid adjustments ensure your budget concentrates on the areas that produce the most business, rather than spreading equally across a wide radius.</p>
+
+<h2>Budget vs. bid — understanding the relationship</h2>
+<p>Budget sets the maximum daily spend. Bids determine how aggressively you compete in each auction. The two must work together: a high bid with a small budget means you win auctions but run out of budget early, missing afternoon and evening traffic. A low bid with a large budget means you never run out of budget but you're rarely winning competitive auctions. The Budget Intelligence Agent balances both — setting bids that keep you competitive in priority windows while ensuring the budget lasts across your full active day.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function multiPlatformAdvertising(): array
+    {
+        return [
+            'slug'        => 'multi-platform-advertising',
+            'title'       => 'Google, Facebook, Microsoft, and LinkedIn Ads: Why Multi-Platform Advertising Wins',
+            'description' => 'Running ads on multiple platforms reaches your customers at every stage of the buying journey. Here\'s how each platform works differently — and how sitetospend.com manages them all from one place.',
+            'category'    => 'Platform',
+            'read_time'   => '7 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>Why one platform is never enough</h2>
+<p>Google Ads reaches people who are actively searching for what you sell. That's powerful — but it only captures demand that already exists. What about the potential customers who don't yet know they need you, or who know they need a solution but haven't started searching for providers?</p>
+<p>A multi-platform strategy lets you capture existing demand (Google, Microsoft) <em>and</em> create new demand (Facebook, LinkedIn). Together, these platforms cover the full customer journey — from initial awareness to active purchase intent.</p>
+
+<h2>Google Ads — capturing purchase intent</h2>
+<p>Google Search is the gold standard for capturing high-intent demand. When someone searches "emergency plumber London" or "accountant for small business," they have an immediate, specific need. Google's Search network puts your ad directly in front of that intent at the moment it exists.</p>
+<p>Google also offers Display (banner ads across the web), Shopping (product listings), YouTube (video ads), and Performance Max (AI-driven cross-channel campaigns). For most businesses starting out, Search campaigns are the foundation.</p>
+<p>Google Ads' biggest strength: <strong>intent targeting</strong>. Its biggest weakness: it only reaches people actively searching — not the much larger pool of potential customers who aren't looking yet.</p>
+
+<h2>Microsoft Ads (Bing) — the overlooked opportunity</h2>
+<p>Microsoft Advertising runs on Bing, Yahoo, and DuckDuckGo. It's often dismissed because its search volume is lower than Google. But this misunderstands the opportunity:</p>
+<ul>
+  <li>Bing's audience skews older and higher-income — often a better demographic for B2B and premium consumer services</li>
+  <li>Competition is lower — many advertisers ignore Bing entirely, meaning lower cost-per-click for the same keywords</li>
+  <li>Import from Google — campaigns can be imported directly from Google Ads, keeping setup effort minimal</li>
+</ul>
+<p>For most businesses, Microsoft Ads delivers 15–30% more volume on top of Google, at a lower CPC. It's one of the most overlooked easy wins in digital advertising.</p>
+
+<h2>Facebook and Instagram Ads — creating demand</h2>
+<p>Facebook doesn't have a search bar waiting for purchase intent. Instead, it has extraordinary targeting: 2.9 billion people who have told Facebook their age, location, interests, job, and life events. You can show your ad to "homeowners aged 35–55 in London who are interested in home improvement" before they've thought about contacting anyone.</p>
+<p>Facebook Ads are most powerful for:</p>
+<ul>
+  <li><strong>Remarketing</strong> — showing ads to people who visited your website but didn't convert</li>
+  <li><strong>Lookalike audiences</strong> — reaching new people who share characteristics with your existing customers</li>
+  <li><strong>Brand awareness</strong> — reaching a broad qualified audience before they enter a search phase</li>
+  <li><strong>Lead generation</strong> — Facebook's native lead forms keep users on-platform and have high completion rates</li>
+</ul>
+
+<h2>LinkedIn Ads — B2B precision</h2>
+<p>LinkedIn Ads are the most expensive advertising platform on a CPM basis — and often worth every penny for B2B businesses. LinkedIn's unique advantage is professional targeting: you can reach people by job title, seniority, company size, industry, and skills. No other platform lets you show an ad specifically to "Finance Directors at companies with 200–1,000 employees in financial services."</p>
+<p>LinkedIn is particularly effective for high-value B2B products and services where reaching the right decision-maker is more important than reaching volume.</p>
+
+<h2>How sitetospend.com manages all platforms together</h2>
+<p>sitetospend.com manages campaigns on all four platforms from a single account. The AI agents — Self-Healing, Budget Intelligence, Quality Score, Creative Intelligence — work across all connected platforms, applying the same continuous optimisation to each. Your brand assets, messaging, and competitor intelligence are shared across platforms, ensuring a consistent voice and coherent strategy whether a customer encounters you on Google, Facebook, or LinkedIn.</p>
+<p>Attribution is unified: sitetospend.com tracks conversions across all platforms and reports total ad spend, total conversions, and blended ROAS — so you can see where your budget is working hardest across your entire advertising ecosystem.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function understandingRoas(): array
+    {
+        return [
+            'slug'        => 'understanding-roas',
+            'title'       => 'Understanding ROAS: What It Means, How to Calculate It, and What\'s a Good Target',
+            'description' => 'Return on Ad Spend (ROAS) is the core metric for measuring whether your advertising is profitable. Here\'s what it means, how to set a target, and how to improve it.',
+            'category'    => 'Google Ads',
+            'read_time'   => '5 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>What is ROAS?</h2>
+<p>Return on Ad Spend (ROAS) measures how much revenue you generate for every pound spent on advertising. It's the fundamental metric for determining whether your campaigns are profitable.</p>
+<p>The formula is simple:</p>
+<pre><code>ROAS = Revenue from Ads ÷ Ad Spend × 100
+
+Example: £10,000 revenue from £2,000 ad spend = 500% ROAS (or 5x ROAS)</code></pre>
+<p>A 500% ROAS means every £1 you spend returns £5 in revenue. Whether that's profitable depends on your margins — which is why ROAS is a starting point, not the finish line.</p>
+
+<h2>ROAS vs. ROI — understanding the difference</h2>
+<p>ROAS measures revenue relative to ad spend. ROI (Return on Investment) measures <em>profit</em> relative to total costs. A business with high ROAS can still have poor ROI if its margins are thin.</p>
+<p>Example: a business with 20% gross margins (e.g. a product that costs 80p to make and sells for £1) needs a 500% ROAS just to break even on ad spend. A business with 70% margins (software, services) might be highly profitable at 200% ROAS.</p>
+<p>Your <strong>target ROAS</strong> should be based on your margins, not on benchmarks from other industries. The minimum viable ROAS = 100% ÷ gross margin %.</p>
+
+<h2>How to calculate your target ROAS</h2>
+<p>Work through this calculation:</p>
+<ol>
+  <li><strong>Gross margin %</strong> — what percentage of revenue is gross profit? E.g. if you keep 40p from every £1 of revenue, your gross margin is 40%.</li>
+  <li><strong>Breakeven ROAS</strong> — 100 ÷ 40% = 250%. At 250% ROAS, ad spend exactly equals gross profit. You're covering the cost of the ads but making nothing extra.</li>
+  <li><strong>Target ROAS</strong> — add headroom above breakeven based on your profitability goals. If you want ad spend to represent no more than 20% of revenue, your target ROAS is 500%.</li>
+</ol>
+
+<h2>Why ROAS fluctuates — and what to do about it</h2>
+<p>ROAS changes based on competition (higher CPCs reduce ROAS), seasonality (Christmas boosts ecommerce ROAS dramatically), campaign structure, and ad quality. Common reasons ROAS falls:</p>
+<ul>
+  <li>CPC increases due to increased competition — more advertisers entering your market</li>
+  <li>Conversion rate drops — landing page issues, seasonal drop in demand, offer no longer compelling</li>
+  <li>Budget waste — irrelevant traffic draining spend that could go to converting searches</li>
+  <li>Ad fatigue — the same ads shown too many times to the same audience</li>
+</ul>
+
+<h2>How sitetospend.com reports and optimises ROAS</h2>
+<p>sitetospend.com tracks revenue values for each conversion event — not just counting conversions, but assigning values that reflect their real-world worth. This powers accurate ROAS reporting in your dashboard. More importantly, it enables Google's tROAS (Target ROAS) Smart Bidding strategy, where Google optimises bids specifically to hit your ROAS target.</p>
+<p>Once your account has 30+ conversions with value data in the past 30 days, the agents will recommend transitioning to tROAS bidding — typically producing 15–30% ROAS improvement over manual bidding for the same spend. The Budget Intelligence Agent also monitors ROAS by time of day, device, and geography, making bid adjustments wherever ROAS is consistently above or below target.</p>
+
+<h2>ROAS targets for different business types</h2>
+<p>While every business is different, these are rough starting points by category:</p>
+<ul>
+  <li><strong>Ecommerce (low margin, e.g. electronics)</strong> — 600–1,000% ROAS needed to be profitable</li>
+  <li><strong>Ecommerce (mid margin, e.g. fashion)</strong> — 300–500% ROAS target</li>
+  <li><strong>Lead generation (high-value B2B)</strong> — 200–400% ROAS, though often measured as cost-per-lead instead</li>
+  <li><strong>Local services (plumber, dentist)</strong> — £20–80 cost-per-lead target more useful than ROAS</li>
+  <li><strong>SaaS / software</strong> — ROAS often measured on LTV basis: a £200 acquisition cost for a £2,000/year customer is 1,000% ROAS on a 12-month view</li>
+</ul>
 HTML,
         ];
     }
