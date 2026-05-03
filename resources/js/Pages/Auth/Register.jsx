@@ -1,10 +1,22 @@
+import { useEffect } from 'react';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import PlatformIcon from '@/Components/PlatformIcon';
 import CloudflareTurnstile from '@/Components/CloudflareTurnstile';
+import { trackConversion } from '@/utils/conversions';
+
+function getDemoUrl() {
+    try {
+        return new URLSearchParams(window.location.search).get('demo_url') || '';
+    } catch {
+        return '';
+    }
+}
 
 export default function Register({ enabledPlatforms = [] }) {
     const { turnstileSiteKey } = usePage().props;
+    const demoUrl = getDemoUrl();
+    const demoDomain = demoUrl ? (new URL(demoUrl).hostname.replace(/^www\./, '')) : '';
 
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
@@ -12,7 +24,16 @@ export default function Register({ enabledPlatforms = [] }) {
         password: '',
         password_confirmation: '',
         cf_turnstile_response: '',
+        demo_url: demoUrl,
     });
+
+    // Fire a conversion for visitors arriving from the landing page demo — they've already
+    // seen value from the tool so this signup represents a higher-intent lead.
+    useEffect(() => {
+        if (demoUrl) {
+            trackConversion('sandbox_launched');
+        }
+    }, []);
 
     const submit = (e) => {
         e.preventDefault();
@@ -25,13 +46,23 @@ export default function Register({ enabledPlatforms = [] }) {
         <GuestLayout>
             <Head title="Register" />
 
-            <div className="w-full mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
+            {demoDomain && (
+                <div className="mb-4 flex items-center gap-2 rounded-lg bg-violet-50 border border-violet-200 px-4 py-3 text-sm text-violet-800">
+                    <svg className="h-4 w-4 shrink-0 text-violet-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                    </svg>
+                    <span>We'll analyse <strong>{demoDomain}</strong> and set up your brand guidelines automatically.</span>
+                </div>
+            )}
+
+            <div className="w-full mt-2 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
                 <div className="mb-4 text-sm text-gray-600 text-center">
                     Create your account to get started.
                 </div>
 
-                {/* Email/Password Registration Form */}
                 <form onSubmit={submit} className="space-y-4">
+                    <input type="hidden" name="demo_url" value={data.demo_url} />
+
                     <div>
                         <label htmlFor="name" className="block text-sm font-medium text-gray-700">
                             Name
@@ -109,7 +140,6 @@ export default function Register({ enabledPlatforms = [] }) {
                         )}
                     </div>
 
-                    {/* Cloudflare Turnstile Bot Detection */}
                     {turnstileSiteKey && (
                         <div className="flex justify-center">
                             <CloudflareTurnstile
@@ -132,7 +162,6 @@ export default function Register({ enabledPlatforms = [] }) {
                     </button>
                 </form>
 
-                {/* OAuth Divider */}
                 {enabledPlatforms.length > 0 && (
                     <>
                         <div className="relative my-6">
@@ -148,7 +177,7 @@ export default function Register({ enabledPlatforms = [] }) {
                             {enabledPlatforms.map((platform) => (
                                 <a
                                     key={platform.slug}
-                                    href={route(`${platform.slug}.redirect`)}
+                                    href={route(`${platform.slug}.redirect`) + (demoUrl ? `?demo_url=${encodeURIComponent(demoUrl)}` : '')}
                                     className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
                                 >
                                     <PlatformIcon slug={platform.slug} />

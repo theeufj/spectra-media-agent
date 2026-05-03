@@ -2,12 +2,17 @@
 
 namespace App\Services\Agents;
 
+use App\Jobs\GenerateAdCopy;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
+use App\Services\Agents\AdaptiveThresholds;
 use App\Services\GeminiService;
+use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -53,9 +58,9 @@ class PerformanceAnomalyAlertAgent
 
     public function checkCampaign(Campaign $campaign): array
     {
-        $today      = now()->toDateString();
-        $lastWeek   = now()->subDays(7)->toDateString();
-        $alerts     = [];
+        $today    = now()->toDateString();
+        $lastWeek = now()->subDays(7)->toDateString();
+        $alerts   = [];
 
         $model = $campaign->google_ads_campaign_id
             ? GoogleAdsPerformanceData::class
@@ -65,19 +70,33 @@ class PerformanceAnomalyAlertAgent
             return [];
         }
 
-        $todayData    = $model::where('campaign_id', $campaign->id)->where('date', $today)->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')->first();
-        $lastWeekData = $model::where('campaign_id', $campaign->id)->where('date', $lastWeek)->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')->first();
+        // Compute per-campaign thresholds from historical variance; falls back
+        // to config defaults when fewer than min_history_days of data exist.
+        $thresholds     = AdaptiveThresholds::forCampaign($campaign);
+        $minImpressions = $thresholds['min_impressions_anomaly'];
+        $minClicksCpc   = $thresholds['min_clicks_cpc'];
+        $minClicksCvr   = $thresholds['min_clicks_cvr'];
+        $ctrDrop        = $thresholds['ctr_drop_threshold'];
+        $cpcSpike       = $thresholds['cpc_spike_threshold'];
+        $cvrDrop        = $thresholds['cvr_drop_threshold'];
 
-        if (!$todayData || !$lastWeekData || ($lastWeekData->impressions ?? 0) < 100) {
+        $todayData    = $model::where('campaign_id', $campaign->id)->where('date', $today)
+            ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
+            ->first();
+        $lastWeekData = $model::where('campaign_id', $campaign->id)->where('date', $lastWeek)
+            ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
+            ->first();
+
+        if (!$todayData || !$lastWeekData || ($lastWeekData->impressions ?? 0) < $minImpressions) {
             return [];
         }
 
-        $todayImpressions   = (int) ($todayData->impressions   ?? 0);
-        $todayClicks        = (int) ($todayData->clicks        ?? 0);
+        $todayImpressions    = (int) ($todayData->impressions    ?? 0);
+        $todayClicks         = (int) ($todayData->clicks         ?? 0);
         $lastWeekImpressions = (int) ($lastWeekData->impressions ?? 0);
-        $lastWeekClicks      = (int) ($lastWeekData->clicks     ?? 0);
+        $lastWeekClicks      = (int) ($lastWeekData->clicks      ?? 0);
 
-        $todayCtr    = $todayImpressions   > 0 ? $todayClicks / $todayImpressions   : 0;
+        $todayCtr    = $todayImpressions    > 0 ? $todayClicks    / $todayImpressions    : 0;
         $lastWeekCtr = $lastWeekImpressions > 0 ? $lastWeekClicks / $lastWeekImpressions : 0;
 
         $todayCpc    = $todayClicks    > 0 ? ($todayData->cost    ?? 0) / $todayClicks    : 0;
@@ -86,44 +105,47 @@ class PerformanceAnomalyAlertAgent
         $todayCvr    = $todayClicks    > 0 ? ($todayData->conversions    ?? 0) / $todayClicks    : 0;
         $lastWeekCvr = $lastWeekClicks > 0 ? ($lastWeekData->conversions ?? 0) / $lastWeekClicks : 0;
 
-        // CTR drop >25%
-        if ($lastWeekCtr > 0 && $todayCtr < $lastWeekCtr * 0.75 && $todayImpressions >= 100) {
+        // CTR drop
+        if ($lastWeekCtr > 0 && $todayCtr < $lastWeekCtr * (1 - $ctrDrop) && $todayImpressions >= $minImpressions) {
             $dropPct = round((1 - $todayCtr / $lastWeekCtr) * 100);
             $alerts[] = $this->buildAlert($campaign, 'ctr_drop', "CTR dropped {$dropPct}% vs same day last week", [
-                'today_ctr'     => round($todayCtr * 100, 2),
-                'last_week_ctr' => round($lastWeekCtr * 100, 2),
-            ]);
+                'today_ctr'          => round($todayCtr * 100, 2),
+                'last_week_ctr'      => round($lastWeekCtr * 100, 2),
+                'threshold_used_pct' => round($ctrDrop * 100),
+            ], $thresholds);
         }
 
-        // CPC spike >50%
-        if ($lastWeekCpc > 0 && $todayCpc > $lastWeekCpc * 1.5 && $todayClicks >= 10) {
+        // CPC spike
+        if ($lastWeekCpc > 0 && $todayCpc > $lastWeekCpc * (1 + $cpcSpike) && $todayClicks >= $minClicksCpc) {
             $spikePct = round(($todayCpc / $lastWeekCpc - 1) * 100);
             $alerts[] = $this->buildAlert($campaign, 'cpc_spike', "CPC spiked {$spikePct}% vs same day last week", [
-                'today_cpc'     => round($todayCpc, 2),
-                'last_week_cpc' => round($lastWeekCpc, 2),
-            ]);
+                'today_cpc'          => round($todayCpc, 2),
+                'last_week_cpc'      => round($lastWeekCpc, 2),
+                'threshold_used_pct' => round($cpcSpike * 100),
+            ], $thresholds);
         }
 
-        // Conversion rate drop >30%
-        if ($lastWeekCvr > 0 && $todayCvr < $lastWeekCvr * 0.70 && $todayClicks >= 20) {
+        // CVR drop
+        if ($lastWeekCvr > 0 && $todayCvr < $lastWeekCvr * (1 - $cvrDrop) && $todayClicks >= $minClicksCvr) {
             $dropPct = round((1 - $todayCvr / $lastWeekCvr) * 100);
             $alerts[] = $this->buildAlert($campaign, 'cvr_drop', "Conversion rate dropped {$dropPct}% vs same day last week", [
-                'today_cvr'     => round($todayCvr * 100, 2),
-                'last_week_cvr' => round($lastWeekCvr * 100, 2),
-            ]);
+                'today_cvr'          => round($todayCvr * 100, 2),
+                'last_week_cvr'      => round($lastWeekCvr * 100, 2),
+                'threshold_used_pct' => round($cvrDrop * 100),
+            ], $thresholds);
         }
 
         // Zero delivery after 2pm (local server time)
-        if (now()->hour >= 14 && $todayImpressions === 0 && $lastWeekImpressions >= 100) {
+        if (now()->hour >= 14 && $todayImpressions === 0 && $lastWeekImpressions >= $minImpressions) {
             $alerts[] = $this->buildAlert($campaign, 'zero_delivery', "Zero impressions today despite normally serving at this time", [
                 'last_week_impressions' => $lastWeekImpressions,
-            ]);
+            ], $thresholds);
         }
 
         return $alerts;
     }
 
-    private function buildAlert(Campaign $campaign, string $type, string $summary, array $metrics): array
+    private function buildAlert(Campaign $campaign, string $type, string $summary, array $metrics, array $thresholds = []): array
     {
         $cacheKey = "anomaly:{$type}:{$campaign->id}";
         if (Cache::has($cacheKey)) {
@@ -154,7 +176,108 @@ class PerformanceAnomalyAlertAgent
             'summary' => $summary,
         ]);
 
+        $this->respondToAnomaly($campaign, $type, $metrics, $thresholds);
+
         return ['type' => $type, 'summary' => $summary, 'explanation' => $explanation, 'metrics' => $metrics];
+    }
+
+    private function respondToAnomaly(Campaign $campaign, string $type, array $metrics, array $thresholds = []): void
+    {
+        // Rate-limit auto-responses to once per 24 hours per anomaly type per campaign.
+        $responseKey = "anomaly_response:{$type}:{$campaign->id}";
+        if (Cache::has($responseKey)) {
+            return;
+        }
+
+        $action = null;
+
+        switch ($type) {
+            case 'ctr_drop':
+                // Stale creative is the most common cause of CTR decline — refresh it.
+                $strategy = $campaign->strategies()->latest()->first();
+                if ($strategy) {
+                    $platform = $campaign->google_ads_campaign_id ? 'google' : 'facebook';
+                    GenerateAdCopy::dispatch($campaign, $strategy, $platform);
+                    $action = 'Triggered creative refresh due to CTR drop';
+                }
+                break;
+
+            case 'cpc_spike':
+                // CPC spike burns budget quickly — pull back to limit exposure.
+                $action = $this->reduceDailyBudget($campaign, $thresholds['budget_cut_cpc'] ?? 0.20, 'CPC spike');
+                break;
+
+            case 'cvr_drop':
+                // CVR drop means clicks are wasted — pull back until investigated.
+                $action = $this->reduceDailyBudget($campaign, $thresholds['budget_cut_cvr'] ?? 0.25, 'conversion rate drop');
+                break;
+
+            case 'zero_delivery':
+                // Zero delivery is usually billing or policy — nothing safe to auto-fix.
+                break;
+        }
+
+        if ($action) {
+            AgentActivity::record(
+                'anomaly_response',
+                'auto_remediation',
+                "{$action} for \"{$campaign->name}\"",
+                $campaign->customer_id,
+                $campaign->id,
+                ['anomaly_type' => $type, 'metrics' => $metrics]
+            );
+
+            Log::info("PerformanceAnomalyAlertAgent: Auto-remediation applied for campaign {$campaign->id}", [
+                'type'   => $type,
+                'action' => $action,
+            ]);
+        }
+
+        Cache::put($responseKey, true, now()->addHours(24));
+    }
+
+    private function reduceDailyBudget(Campaign $campaign, float $reductionFraction, string $reason): ?string
+    {
+        $current = (float) ($campaign->daily_budget ?? 0);
+        if ($current <= 0) {
+            return null;
+        }
+
+        $newBudget = round($current * (1 - $reductionFraction), 2);
+        if ($newBudget < 1.00) {
+            return null; // safety floor — never reduce below $1/day
+        }
+
+        $customer = $campaign->customer;
+
+        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
+            try {
+                $customerId   = $customer->cleanGoogleCustomerId();
+                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $service      = app(UpdateCampaignBudget::class, ['customer' => $customer]);
+                $service($customerId, $resourceName, $newBudget * 1_000_000);
+            } catch (\Exception $e) {
+                Log::error("PerformanceAnomalyAlertAgent: Failed to reduce Google budget for campaign {$campaign->id}: " . $e->getMessage());
+                return null;
+            }
+        }
+
+        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
+            try {
+                $fbService = new FacebookCampaignService($customer);
+                $fbService->updateCampaign($campaign->facebook_ads_campaign_id, [
+                    'daily_budget' => (int) round($newBudget * 100),
+                ]);
+            } catch (\Exception $e) {
+                Log::error("PerformanceAnomalyAlertAgent: Failed to reduce Facebook budget for campaign {$campaign->id}: " . $e->getMessage());
+                return null;
+            }
+        }
+
+        $campaign->update(['daily_budget' => $newBudget]);
+
+        $pct = (int) ($reductionFraction * 100);
+        return "Reduced daily budget by {$pct}% (\${$current} → \${$newBudget}) due to {$reason}";
     }
 
     private function explainAnomaly(Campaign $campaign, string $type, string $summary, array $metrics): ?string

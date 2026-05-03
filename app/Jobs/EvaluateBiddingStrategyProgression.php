@@ -47,7 +47,7 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
             ->whereNotNull('google_ads_campaign_id')
             ->get();
 
-        $summary = ['evaluated' => 0, 'graduated' => 0, 'skipped' => 0, 'errors' => 0];
+        $summary = ['evaluated' => 0, 'graduated' => 0, 'reverted' => 0, 'skipped' => 0, 'errors' => 0];
 
         foreach ($campaigns as $campaign) {
             try {
@@ -64,6 +64,19 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
             } catch (\Exception $e) {
                 $summary['errors']++;
                 Log::error("EvaluateBiddingStrategyProgression: Error for campaign {$campaign->id}: " . $e->getMessage());
+            }
+
+            // Check for regression independently — a campaign that was just skipped for graduation
+            // may still be eligible to revert if it is underperforming its current target.
+            try {
+                $regressResult = $agent->checkForRegression($campaign);
+
+                if ($regressResult['success'] ?? false) {
+                    $summary['reverted']++;
+                    Log::info("EvaluateBiddingStrategyProgression: Reverted {$campaign->id}", $regressResult);
+                }
+            } catch (\Exception $e) {
+                Log::error("EvaluateBiddingStrategyProgression: Regression check error for campaign {$campaign->id}: " . $e->getMessage());
             }
         }
 

@@ -15,6 +15,7 @@ class AdCopyPrompt
     private ?BrandGuideline $brandGuidelines;
     private ?array $productContext;
     private ?Persona $persona;
+    private $competitors;
 
     public function __construct(
         string $strategyContent,
@@ -23,7 +24,8 @@ class AdCopyPrompt
         ?array $feedback = null,
         ?BrandGuideline $brandGuidelines = null,
         ?array $productContext = null,
-        ?Persona $persona = null
+        ?Persona $persona = null,
+        $competitors = null
     ) {
         $this->strategyContent = $strategyContent;
         $this->platform = $platform;
@@ -32,6 +34,7 @@ class AdCopyPrompt
         $this->brandGuidelines = $brandGuidelines;
         $this->productContext = $productContext;
         $this->persona = $persona;
+        $this->competitors = $competitors;
     }
 
     public function getPrompt(): string
@@ -50,6 +53,9 @@ class AdCopyPrompt
                 "The user has selected specific products to advertise. You MUST incorporate their details (Price, Title, Features) into the ad copy where appropriate.\n" .
                 json_encode($this->productContext, JSON_PRETTY_PRINT);
         }
+
+        // Include competitor intelligence if available
+        $competitorContext = $this->formatCompetitorContext();
 
         // Include persona context if available
         $personaContext = '';
@@ -78,8 +84,9 @@ class AdCopyPrompt
 
         $basePrompt = "You are an expert copywriter specializing in {$this->platform} advertising.\n\n" .
                       $brandContext . "\n\n" .
+                      $competitorContext .
                       "--- PLATFORM RULES ---\n" .
-                      $rulesString . 
+                      $rulesString .
                       $productContextString .
                       $personaContext . "\n\n" .
                       "--- RESPONSE FORMAT ---\n" .
@@ -102,6 +109,40 @@ class AdCopyPrompt
         ]);
 
         return $basePrompt;
+    }
+
+    private function formatCompetitorContext(): string
+    {
+        if (!$this->competitors || $this->competitors->isEmpty()) {
+            return '';
+        }
+
+        $lines = [];
+        foreach ($this->competitors as $c) {
+            $name = $c->name ?? $c->domain ?? 'Competitor';
+            $counterStrategy = $c->counter_strategy ?? null;
+            $keyMessages = $c->key_messages ?? [];
+
+            $entry = "**{$name}**";
+            if (!empty($keyMessages)) {
+                $entry .= "\n  Their messaging: " . implode('; ', array_slice((array) $keyMessages, 0, 3));
+            }
+            if ($counterStrategy) {
+                $strategy = is_array($counterStrategy) ? ($counterStrategy['strategy'] ?? '') : $counterStrategy;
+                if ($strategy) {
+                    $entry .= "\n  Counter-angle: {$strategy}";
+                }
+            }
+            $lines[] = $entry;
+        }
+
+        if (empty($lines)) {
+            return '';
+        }
+
+        return "--- COMPETITOR INTELLIGENCE ---\n" .
+               "Write copy that differentiates from these competitors. Use their weaknesses and messaging gaps as angles.\n\n" .
+               implode("\n\n", $lines) . "\n\n--- END COMPETITOR INTELLIGENCE ---\n\n";
     }
 
     private function formatBrandContext(): string

@@ -48,6 +48,13 @@ class ManageDSACampaigns implements ShouldQueue
                 $summary['errors']++;
                 Log::error("ManageDSACampaigns: Error for customer {$customer->id}: " . $e->getMessage());
             }
+
+            // Promote high-performing DSA search terms to regular campaigns (independent of setup result)
+            try {
+                $agent->promoteHighPerformingTerms($customer);
+            } catch (\Exception $e) {
+                Log::error("ManageDSACampaigns: Promotion error for customer {$customer->id}: " . $e->getMessage());
+            }
         }
 
         Log::info('ManageDSACampaigns: Complete', $summary);

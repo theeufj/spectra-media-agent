@@ -3,14 +3,18 @@
 namespace App\Services\Agents;
 
 use App\Models\AgentActivity;
+use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Services\GeminiService;
+use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\DSAServices\AddDSATarget;
 use App\Services\GoogleAds\DSAServices\CreateDSAAdGroup;
 use App\Services\GoogleAds\DSAServices\CreateDSACampaign;
 use App\Services\GoogleAds\DSAServices\CreateExpandedDynamicSearchAd;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
+use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -115,7 +119,7 @@ class DSAManagementAgent
             "Created DSA campaign with " . count($created) . " ad group(s) for \"{$customer->name}\"",
             $customer->id,
             null,
-            ['campaign' => $dsaCampaignName, 'ad_groups' => $created, 'errors' => $errors]
+            ['campaign' => $dsaCampaignName, 'dsa_campaign_resource' => $campaignResource, 'ad_groups' => $created, 'errors' => $errors]
         );
 
         Log::info('DSAManagementAgent: Setup complete', [
@@ -125,11 +129,101 @@ class DSAManagementAgent
         ]);
 
         return [
-            'success'   => true,
-            'campaign'  => $dsaCampaignName,
-            'created'   => $created,
-            'errors'    => $errors,
+            'success'               => true,
+            'campaign'              => $dsaCampaignName,
+            'dsa_campaign_resource' => $campaignResource,
+            'created'               => $created,
+            'errors'                => $errors,
         ];
+    }
+
+    /**
+     * Promote high-performing DSA search terms into regular search campaigns as phrase-match keywords.
+     * Runs after manage() so the DSA campaign resource name is available in AgentActivity.
+     */
+    public function promoteHighPerformingTerms(Customer $customer): array
+    {
+        if (!$customer->google_ads_customer_id) {
+            return ['skipped' => true, 'reason' => 'No Google Ads account'];
+        }
+
+        $dsaActivity = AgentActivity::where('customer_id', $customer->id)
+            ->where('action', 'dsa_campaign_setup')
+            ->latest()
+            ->first();
+
+        $dsaResource = $dsaActivity?->details['dsa_campaign_resource'] ?? null;
+
+        if (!$dsaResource) {
+            return ['skipped' => true, 'reason' => 'No DSA campaign resource found'];
+        }
+
+        $customerId   = $customer->cleanGoogleCustomerId();
+        $searchReport = new GetSearchTermsReport($customer);
+        $terms        = ($searchReport)($customerId, $dsaResource, 'LAST_30_DAYS');
+
+        $candidates = array_filter($terms, fn($t) => ($t['clicks'] ?? 0) >= 5 || ($t['conversions'] ?? 0) >= 1);
+
+        if (empty($candidates)) {
+            return ['promoted' => 0, 'reason' => 'No high-performing terms found'];
+        }
+
+        $campaigns = Campaign::where('customer_id', $customer->id)
+            ->where('primary_status', 'ELIGIBLE')
+            ->whereNotNull('google_ads_campaign_id')
+            ->get();
+
+        $addKeyword   = new AddKeyword($customer);
+        $promotedKey  = "dsa_promoted:{$customer->id}";
+        $alreadyAdded = Cache::get($promotedKey, []);
+        $promoted     = [];
+        $skipped      = 0;
+
+        foreach ($campaigns as $campaign) {
+            $adGroupResource = $campaign->strategies()
+                ->latest()
+                ->whereNotNull('google_ads_ad_group_id')
+                ->value('google_ads_ad_group_id');
+
+            if (!$adGroupResource) {
+                continue;
+            }
+
+            foreach ($candidates as $term) {
+                $text = $term['search_term'] ?? '';
+                if (!$text || in_array($text, $alreadyAdded, true)) {
+                    $skipped++;
+                    continue;
+                }
+
+                $result = ($addKeyword)($customerId, $adGroupResource, $text, KeywordMatchType::PHRASE);
+
+                if ($result) {
+                    $alreadyAdded[] = $text;
+                    $promoted[]     = ['keyword' => $text, 'campaign_id' => $campaign->id];
+                }
+            }
+        }
+
+        Cache::put($promotedKey, $alreadyAdded, now()->addDays(30));
+
+        if (!empty($promoted)) {
+            AgentActivity::record(
+                'dsa',
+                'dsa_terms_promoted',
+                "Promoted " . count($promoted) . " DSA search term(s) to regular campaign(s) for \"{$customer->name}\"",
+                $customer->id,
+                null,
+                ['promoted' => $promoted, 'skipped' => $skipped]
+            );
+
+            Log::info('DSAManagementAgent: Promoted high-performing terms', [
+                'customer_id' => $customer->id,
+                'promoted'    => count($promoted),
+            ]);
+        }
+
+        return ['promoted' => count($promoted), 'skipped' => $skipped, 'terms' => $promoted];
     }
 
     /**

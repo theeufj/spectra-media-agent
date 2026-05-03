@@ -16,6 +16,7 @@ use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Services\Agents\AudienceIntelligenceAgent;
+use App\Jobs\ExpandBroadMatchKeywords;
 use App\Jobs\FindUnderperformingKeywords;
 use App\Jobs\SetupConversionTracking;
 use Illuminate\Bus\Queueable;
@@ -164,6 +165,13 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 // 2f. RSA Ad Strength optimizer — push POOR/AVERAGE ads toward EXCELLENT (Google only)
                 if ($campaign->google_ads_campaign_id) {
                     $qsAgent->checkAdStrength($campaign);
+                }
+
+                // 2g. Broad match expansion — add BROAD variants of PHRASE/EXACT keywords
+                //     that have ≥3 clicks but no broad version yet (rate-limited to once/30d)
+                if ($campaign->google_ads_campaign_id) {
+                    ExpandBroadMatchKeywords::dispatch($campaign)
+                        ->delay(now()->addSeconds($summary['campaigns_processed'] * 10));
                 }
 
                 // 3. Run Budget Intelligence

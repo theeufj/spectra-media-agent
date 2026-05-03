@@ -52,10 +52,13 @@ class RegisteredUserController extends Controller
 
         $request->validate($rules);
 
+        $demoUrl = $request->input('demo_url');
+
         $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
+            'name'      => $request->name,
+            'email'     => $request->email,
+            'password'  => Hash::make($request->password),
+            'demo_url'  => $demoUrl ? filter_var($demoUrl, FILTER_VALIDATE_URL) ?: null : null,
         ]);
 
         if ($request->invitation_token) {

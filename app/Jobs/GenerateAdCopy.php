@@ -66,10 +66,15 @@ class GenerateAdCopy implements ShouldQueue
 
             // Get brand guidelines for this customer
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
-            
+
             if (!$brandGuidelines) {
                 Log::warning("No brand guidelines found for customer {$this->campaign->customer_id}. Content may lack brand consistency.");
             }
+
+            // Load analyzed competitors so ad copy differentiates from what they're saying
+            $competitors = $this->campaign->customer->competitors()
+                ->whereNotNull('counter_strategy')
+                ->get();
 
             // Fetch selected product pages
             $productContext = [];
@@ -107,7 +112,8 @@ class GenerateAdCopy implements ShouldQueue
                     $lastFeedback,
                     $brandGuidelines,
                     $productContext,
-                    $persona
+                    $persona,
+                    $competitors
                 ))->getPrompt();
                 $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $adCopyPrompt);
                 Log::info("Received raw response from Gemini for attempt {$attempt}.", ['response' => $generatedResponse]);

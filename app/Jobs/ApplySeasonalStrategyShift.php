@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\FacebookAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Prompts\SeasonalStrategyPrompt;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
@@ -117,9 +119,77 @@ class ApplySeasonalStrategyShift implements ShouldQueue
         }
     }
 
+    /**
+     * Compute a per-campaign seasonal budget multiplier by comparing this season's
+     * historical spend (same date range last year) to the 4-week pre-season baseline.
+     * Blends 50/50 with the global config multiplier. Falls back to config-only if
+     * fewer than 7 days of historical data exist.
+     */
+    private function computeSeasonalMultiplier(Campaign $campaign, string $season): float
+    {
+        $globalMultiplier = Config::get("seasonal_strategies.{$season}.budget_multiplier", 1.0);
+
+        // Map season names to approximate date ranges (MM-DD format)
+        $seasonRanges = [
+            'black_friday' => ['11-01', '11-30'],
+            'summer_sale'  => ['06-01', '08-31'],
+            'default'      => null,
+        ];
+
+        if (!isset($seasonRanges[$season]) || $seasonRanges[$season] === null) {
+            return $globalMultiplier;
+        }
+
+        [$startMD, $endMD] = $seasonRanges[$season];
+
+        $model = $campaign->google_ads_campaign_id
+            ? GoogleAdsPerformanceData::class
+            : ($campaign->facebook_ads_campaign_id ? FacebookAdsPerformanceData::class : null);
+
+        if (!$model) {
+            return $globalMultiplier;
+        }
+
+        $year = (int) now()->format('Y') - 1;
+
+        $seasonStart = "{$year}-" . str_replace('-', '-', $startMD);
+        $seasonEnd   = "{$year}-" . str_replace('-', '-', $endMD);
+
+        $seasonSpend = $model::where('campaign_id', $campaign->id)
+            ->whereBetween('date', [$seasonStart, $seasonEnd])
+            ->sum('cost');
+
+        $seasonDays = (int) round((strtotime($seasonEnd) - strtotime($seasonStart)) / 86400) + 1;
+
+        if ($seasonSpend <= 0 || $seasonDays < 7) {
+            return $globalMultiplier;
+        }
+
+        $seasonDailyAvg = $seasonSpend / $seasonDays;
+
+        // 4-week pre-season baseline (same year, prior to season start)
+        $baselineEnd   = date('Y-m-d', strtotime("{$year}-{$startMD} -1 day"));
+        $baselineStart = date('Y-m-d', strtotime("{$baselineEnd} -27 days"));
+
+        $baselineSpend = $model::where('campaign_id', $campaign->id)
+            ->whereBetween('date', [$baselineStart, $baselineEnd])
+            ->sum('cost');
+
+        $baselineDailyAvg = $baselineSpend / 28;
+
+        if ($baselineDailyAvg <= 0) {
+            return $globalMultiplier;
+        }
+
+        $historicalRatio = $seasonDailyAvg / $baselineDailyAvg;
+
+        // Blend: 50% historical signal + 50% global config guidance
+        return round(($historicalRatio * 0.5) + ($globalMultiplier * 0.5), 3);
+    }
+
     private function applyBudgetAdjustment(Campaign $campaign, array $strategyShift, array $baselineStrategy): void
     {
-        $budgetMultiplier = $baselineStrategy['budget_multiplier'] ?? 1.0;
+        $budgetMultiplier = $this->computeSeasonalMultiplier($campaign, $this->season);
         $currentBudget = $campaign->daily_budget ?? $campaign->total_budget ?? 0;
 
         // Use the AI-generated budget if available, otherwise apply the config multiplier

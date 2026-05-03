@@ -135,11 +135,15 @@ class ConversionSetupService
             }
         }
 
-        // Step 5: Persist on customer record
+        // Step 5: Persist on customer record.
+        // Only mark as verified when GTM published successfully — setting it here would
+        // hide the fact that the tag may not be live on the customer's site yet.
+        $gtmPublished = empty($errors);
+
         $customer->update([
-            'conversion_action_id'    => $resourceName,
-            'conversion_action_label' => $conversionLabel,
-            'conversion_tracking_verified_at' => now(),
+            'conversion_action_id'            => $resourceName,
+            'conversion_action_label'         => $conversionLabel,
+            'conversion_tracking_verified_at' => $gtmPublished ? now() : null,
         ]);
 
         Log::info('ConversionSetupService: Setup complete', [

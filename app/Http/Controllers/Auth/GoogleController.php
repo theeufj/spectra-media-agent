@@ -16,6 +16,12 @@ class GoogleController extends Controller
 {
     public function redirect()
     {
+        // Preserve demo_url across the OAuth round-trip via session.
+        $demoUrl = request()->query('demo_url');
+        if ($demoUrl && filter_var($demoUrl, FILTER_VALIDATE_URL)) {
+            session(['oauth_demo_url' => $demoUrl]);
+        }
+
         // Only request identity scopes — Google Ads is managed via platform MCC,
         // GTM is managed via platform service account. No per-user API access needed.
         return Socialite::driver('google')->redirect();
@@ -31,11 +37,14 @@ class GoogleController extends Controller
             ]);
         }
 
+        $demoUrl = session()->pull('oauth_demo_url');
+
         $user = User::firstOrCreate([
             'email' => $googleUser->getEmail(),
         ], [
-            'name' => $googleUser->getName(),
+            'name'     => $googleUser->getName(),
             'password' => Hash::make(Str::random(24)),
+            'demo_url' => $demoUrl,
         ]);
 
         // Always mark email as verified when signing in via Google (Google has verified it)
@@ -51,7 +60,7 @@ class GoogleController extends Controller
         }
 
         if ($user->customers()->doesntExist()) {
-            return redirect()->route('customers.create');
+            return redirect()->route('quick-start');
         }
 
         return redirect()->intended(route('dashboard'));

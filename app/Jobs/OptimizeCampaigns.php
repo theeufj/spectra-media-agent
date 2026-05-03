@@ -62,42 +62,68 @@ class OptimizeCampaigns implements ShouldQueue
                         ->where('status', 'pending')
                         ->delete();
 
-                    // Store each recommendation as a proper DB record
-                    $recommendationCount = 0;
-                    if (is_array($recommendations)) {
-                        foreach ($recommendations as $rec) {
-                            if (is_array($rec)) {
-                                Recommendation::create([
-                                    'campaign_id' => $campaign->id,
-                                    'type' => $rec['type'] ?? 'general',
-                                    'target_entity' => $rec['target_entity'] ?? $rec['target'] ?? null,
-                                    'parameters' => $rec['parameters'] ?? $rec['params'] ?? null,
-                                    'rationale' => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
-                                    'status' => 'pending',
-                                    'requires_approval' => $rec['requires_approval'] ?? true,
-                                ]);
-                                $recommendationCount++;
-                            }
+                    $categorized    = $recommendations['categorized'] ?? [];
+                    $autoApply      = $categorized['auto_apply'] ?? [];
+                    $needsReview    = array_merge(
+                        $categorized['recommended'] ?? [],
+                        $categorized['review_required'] ?? []
+                    );
+
+                    $appliedCount = 0;
+                    $pendingCount = 0;
+
+                    // Auto-apply high-confidence recommendations immediately
+                    foreach ($autoApply as $rec) {
+                        $result = $optimizationAgent->applyRecommendation($campaign, $rec);
+
+                        Recommendation::create([
+                            'campaign_id'      => $campaign->id,
+                            'type'             => $rec['type'] ?? 'general',
+                            'target_entity'    => $rec['target_entity'] ?? $rec['target'] ?? null,
+                            'parameters'       => $rec['parameters'] ?? $rec['params'] ?? null,
+                            'rationale'        => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
+                            'status'           => $result['applied'] ? 'applied' : 'failed',
+                            'requires_approval' => false,
+                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : 'facebook',
+                        ]);
+
+                        if ($result['applied']) {
+                            $appliedCount++;
                         }
                     }
 
-                    // Keep JSON summary on campaign for quick access
+                    // Store lower-confidence recommendations for human review
+                    foreach ($needsReview as $rec) {
+                        Recommendation::create([
+                            'campaign_id'      => $campaign->id,
+                            'type'             => $rec['type'] ?? 'general',
+                            'target_entity'    => $rec['target_entity'] ?? $rec['target'] ?? null,
+                            'parameters'       => $rec['parameters'] ?? $rec['params'] ?? null,
+                            'rationale'        => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
+                            'status'           => 'pending',
+                            'requires_approval' => true,
+                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : 'facebook',
+                        ]);
+                        $pendingCount++;
+                    }
+
                     $campaign->update([
                         'latest_optimization_analysis' => $recommendations,
-                        'last_optimized_at' => now(),
+                        'last_optimized_at'            => now(),
                     ]);
 
-                    Log::info("Optimization analysis completed for campaign {$campaign->id}", [
-                        'recommendations_stored' => $recommendationCount,
+                    Log::info("Optimization complete for campaign {$campaign->id}", [
+                        'auto_applied'  => $appliedCount,
+                        'pending_review' => $pendingCount,
                     ]);
 
                     AgentActivity::record(
                         'optimization',
                         'analyzed_campaign',
-                        "Analyzed \"{$campaign->name}\" and generated {$recommendationCount} optimization recommendations",
+                        "Optimised \"{$campaign->name}\": {$appliedCount} changes applied automatically, {$pendingCount} queued for review",
                         $campaign->customer_id,
                         $campaign->id,
-                        ['recommendations_count' => $recommendationCount]
+                        ['auto_applied' => $appliedCount, 'pending_review' => $pendingCount]
                     );
                 }
 
