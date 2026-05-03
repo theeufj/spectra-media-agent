@@ -13,8 +13,7 @@ class GetCampaignKeywords extends BaseGoogleAdsService
      * $segmented = true  → uses segments.date DURING $dateRange; keywords with zero
      *                      activity in the window are excluded. Useful for performance reports.
      * $segmented = false → no date segment; every keyword is returned (including zero-click
-     *                      ones) with all-time aggregated metrics and creation_time. Useful
-     *                      for expansion/pruning logic.
+     *                      ones) with all-time aggregated metrics. Useful for expansion/pruning.
      *
      * Each row contains:
      *   keyword_text, match_type (BROAD|PHRASE|EXACT), criterion_resource,
@@ -48,7 +47,6 @@ class GetCampaignKeywords extends BaseGoogleAdsService
                         ad_group_criterion.keyword.match_type,
                         ad_group_criterion.resource_name,
                         ad_group.resource_name,
-                        ad_group_criterion.creation_time,
                         metrics.clicks,
                         metrics.conversions
                       FROM ad_group_criterion
@@ -72,10 +70,6 @@ class GetCampaignKeywords extends BaseGoogleAdsService
                     'clicks'             => $row->getMetrics()->getClicks(),
                     'conversions'        => $row->getMetrics()->getConversions(),
                 ];
-
-                if (!$segmented) {
-                    $entry['creation_time'] = $row->getAdGroupCriterion()->getCreationTime();
-                }
 
                 $keywords[] = $entry;
             }

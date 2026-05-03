@@ -13,21 +13,21 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Phase 1 — EXPAND: adds a BROAD match variant for every EXACT/PHRASE keyword
+ * Phase 1 — PRUNE (only on re-runs): removes BROAD keywords that have accumulated
+ * zero all-time clicks. Pruning is skipped on the first run because keywords need
+ * time to accumulate data. The 30-day cache key doubles as the "has run before"
+ * signal — if it exists, every broad keyword has had ≥30 days to get a click.
+ *
+ * Phase 2 — EXPAND: adds a BROAD match variant for every EXACT/PHRASE keyword
  * that doesn't already have one. No click threshold — broad match is how the
- * campaign discovers what converts; waiting for clicks before adding it is
- * circular (the keyword can't get clicks if it doesn't exist).
+ * campaign discovers what converts; waiting for clicks before adding is circular
+ * (the keyword can't get clicks if it doesn't exist yet).
  *
- * Phase 2 — PRUNE: removes BROAD keywords that are older than PRUNE_AFTER_DAYS
- * and have accumulated zero clicks (all time). These are dead weight.
- *
- * Rate limit: once per 30 days per campaign (Cache key). Both phases run
- * together on each tick so pruning happens on the same cadence as expansion.
+ * Rate limit: once per 30 days per campaign (Cache key).
  */
 class ExpandBroadMatchKeywords implements ShouldQueue
 {
@@ -35,8 +35,6 @@ class ExpandBroadMatchKeywords implements ShouldQueue
 
     public $tries   = 2;
     public $timeout = 120;
-
-    private const PRUNE_AFTER_DAYS = 45;
 
     public function __construct(protected Campaign $campaign) {}
 
@@ -48,8 +46,10 @@ class ExpandBroadMatchKeywords implements ShouldQueue
             return;
         }
 
-        $cacheKey = "broad_match_expanded:{$this->campaign->id}";
-        if (Cache::has($cacheKey)) {
+        $cacheKey    = "broad_match_expanded:{$this->campaign->id}";
+        $hasRunBefore = Cache::has($cacheKey);
+
+        if ($hasRunBefore) {
             Log::info("ExpandBroadMatchKeywords: Rate-limited, skipping campaign {$this->campaign->id}");
             return;
         }
@@ -66,7 +66,32 @@ class ExpandBroadMatchKeywords implements ShouldQueue
             return;
         }
 
-        // ── Phase 1: EXPAND ──────────────────────────────────────────────────
+        // ── Phase 1: PRUNE (only on re-runs — keywords need ≥30 days to get clicks) ──
+        // $hasRunBefore being true means the cache expired, so it's been ≥30 days.
+        // On this first pass it's always false, so pruning is skipped intentionally.
+
+        $removeKeyword = new RemoveKeyword($customer);
+        $pruned        = [];
+
+        if ($hasRunBefore) {
+            foreach ($keywords as $kw) {
+                if ($kw['match_type'] !== KeywordMatchType::BROAD) {
+                    continue;
+                }
+
+                if (($kw['clicks'] ?? 0) > 0) {
+                    continue;
+                }
+
+                $ok = ($removeKeyword)($customerId, $kw['criterion_resource']);
+                if ($ok) {
+                    $pruned[] = $kw['keyword_text'];
+                    Log::info("ExpandBroadMatchKeywords: Pruned zero-click broad match \"{$kw['keyword_text']}\" from campaign {$this->campaign->id}");
+                }
+            }
+        }
+
+        // ── Phase 2: EXPAND ──────────────────────────────────────────────────
 
         // Index which keyword texts already have a BROAD variant
         $existingBroad = [];
@@ -107,37 +132,6 @@ class ExpandBroadMatchKeywords implements ShouldQueue
                 $existingBroad[strtolower($text)] = true;
                 $added[] = $text;
                 Log::info("ExpandBroadMatchKeywords: Added broad match for \"{$text}\" in campaign {$this->campaign->id}");
-            }
-        }
-
-        // ── Phase 2: PRUNE ───────────────────────────────────────────────────
-
-        $removeKeyword = new RemoveKeyword($customer);
-        $pruned        = [];
-        $cutoff        = Carbon::now()->subDays(self::PRUNE_AFTER_DAYS);
-
-        foreach ($keywords as $kw) {
-            if ($kw['match_type'] !== KeywordMatchType::BROAD) {
-                continue;
-            }
-
-            if (($kw['clicks'] ?? 0) > 0) {
-                continue;
-            }
-
-            if (empty($kw['creation_time'])) {
-                continue;
-            }
-
-            $createdAt = Carbon::parse($kw['creation_time']);
-            if ($createdAt->isAfter($cutoff)) {
-                continue;
-            }
-
-            $ok = ($removeKeyword)($customerId, $kw['criterion_resource']);
-            if ($ok) {
-                $pruned[] = $kw['keyword_text'];
-                Log::info("ExpandBroadMatchKeywords: Pruned zero-click broad match \"{$kw['keyword_text']}\" (created {$createdAt->toDateString()}) from campaign {$this->campaign->id}");
             }
         }
 
