@@ -35,7 +35,7 @@ class GenerateLlmsFull extends Command
         // Section: Marketing Copy
         $content .= "## 1. What We Do\n";
         $content .= "sitetospend.com is an AI-powered Google Ads management platform that automates campaign creation, optimisation, and scaling for small businesses and agencies. We remove the complexity of paid advertising by deploying AI agents that continuously monitor, optimise, and improve your campaigns. Instead of spending hours managing bids, keywords, and ad copy, you connect your account and let our system work around the clock.\n\n";
-        
+
         $content .= "### Core Features\n";
         $content .= "- **Automated Campaign Creation**: Build Search, Display, and Performance Max campaigns automatically.\n";
         $content .= "- **Smart Bidding Optimisation**: 24/7 adjustment of bids to hit ROAS and CPA targets.\n";
@@ -55,7 +55,7 @@ class GenerateLlmsFull extends Command
             if ($article) {
                 // Strip HTML tags for clean text, replace <p>, <h2>, etc. with plain text blocks
                 $cleanContent = strip_tags($article['content'], '<h1><h2><h3><h4><h5><h6><p><ul><ol><li><strong><em><blockquote>');
-                
+
                 // Formatter
                 $cleanContent = preg_replace('/<h[1-6]>(.*?)<\/h[1-6]>/', "\n### $1\n", $cleanContent);
                 $cleanContent = preg_replace('/<p>(.*?)<\/p>/', "$1\n\n", $cleanContent);
@@ -63,7 +63,7 @@ class GenerateLlmsFull extends Command
                 $cleanContent = strip_tags($cleanContent);
                 // Decode HTML entities
                 $cleanContent = html_entity_decode($cleanContent);
-                
+
                 $content .= "### Article: {$article['title']}\n";
                 $content .= "**Category:** {$article['category']} | **Read Time:** {$article['read_time']}\n";
                 $content .= "**Description:** {$article['description']}\n\n";

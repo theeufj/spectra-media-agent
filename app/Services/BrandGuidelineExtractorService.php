@@ -17,7 +17,7 @@ class BrandGuidelineExtractorService
     {
         $this->geminiService = $geminiService;
     }
-    
+
     /**
      * Check if customer can extract brand guidelines (plan-based limit).
      *
@@ -59,7 +59,7 @@ class BrandGuidelineExtractorService
     {
         try {
             Log::info("Starting brand guideline extraction for customer {$customer->id}");
-            
+
             // Check subscription limits
             if (!$this->canExtractGuidelines($customer)) {
                 Log::info("Brand guideline extraction skipped - limit reached for free users", [
@@ -189,7 +189,7 @@ class BrandGuidelineExtractorService
     /**
      * Analyze visual style from homepage HTML
      */
-    private function analyzeVisualStyle(string $websiteUrl): array
+    public function analyzeVisualStyle(string $websiteUrl): array
     {
         try {
             Log::info("Analyzing visual style for: {$websiteUrl}");
@@ -235,9 +235,9 @@ class BrandGuidelineExtractorService
 
                 // Call Gemini Vision
                 $prompt = "Analyze this website screenshot. Extract the visual brand identity. Return a JSON object with these keys: 'primary_colors' (array of hex codes), 'fonts' (array of font descriptions or names), 'image_style' (string description), 'layout_style' (string description).";
-                
+
                 $response = $this->geminiService->generateContent(
-                    config('ai.models.default'), 
+                    config('ai.models.default'),
                     $prompt,
                     ['responseMimeType' => 'application/json'],
                     null,
@@ -303,10 +303,10 @@ class BrandGuidelineExtractorService
     private function extractColors(string $html): array
     {
         $colors = [];
-        
+
         // Extract hex colors from inline styles and style tags
         preg_match_all('/#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})/', $html, $matches);
-        
+
         if (!empty($matches[0])) {
             // Normalize 3-digit hex to 6-digit
             $hexColors = array_map(function($color) {
@@ -316,20 +316,20 @@ class BrandGuidelineExtractorService
                 }
                 return '#' . $color;
             }, $matches[0]);
-            
+
             // Count occurrences and get most common colors
             $colorCounts = array_count_values($hexColors);
             arsort($colorCounts);
-            
+
             // Filter out near-white and near-black (usually backgrounds)
             $filteredColors = array_filter(array_keys($colorCounts), function($color) {
                 // Skip #FFFFFF, #000000, and very close variants
                 return !in_array($color, ['#FFFFFF', '#000000', '#FAFAFA', '#F5F5F5', '#111111']);
             });
-            
+
             $colors = array_slice($filteredColors, 0, 6); // Top 6 colors
         }
-        
+
         return !empty($colors) ? $colors : ['#0066CC', '#333333']; // Default fallback
     }
 
@@ -339,10 +339,10 @@ class BrandGuidelineExtractorService
     private function extractFonts(string $html): array
     {
         $fonts = [];
-        
+
         // Look for font-family declarations
         preg_match_all('/font-family:\s*([^;}"]+)/i', $html, $matches);
-        
+
         if (!empty($matches[1])) {
             foreach ($matches[1] as $fontDeclaration) {
                 // Split by comma and clean up
@@ -355,12 +355,12 @@ class BrandGuidelineExtractorService
                     }
                 }
             }
-            
+
             // Get unique fonts
             $fonts = array_unique($fonts);
             $fonts = array_slice($fonts, 0, 5); // Top 5 fonts
         }
-        
+
         return !empty($fonts) ? $fonts : ['Arial', 'Helvetica']; // Default fallback
     }
 
@@ -374,7 +374,7 @@ class BrandGuidelineExtractorService
         $pngCount = substr_count(strtolower($html), '.png');
         $svgCount = substr_count(strtolower($html), '.svg') + substr_count(strtolower($html), '<svg');
         $gifCount = substr_count(strtolower($html), '.gif');
-        
+
         // Determine dominant image type
         if ($svgCount > ($jpgCount + $pngCount)) {
             return 'illustrations and icons';
@@ -422,10 +422,10 @@ class BrandGuidelineExtractorService
     {
         // Remove markdown code fences
         $cleaned = preg_replace('/^```json\s*|\s*```$/m', '', $text);
-        
+
         // Trim whitespace
         $cleaned = trim($cleaned);
-        
+
         return $cleaned;
     }
 

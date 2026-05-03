@@ -11,7 +11,7 @@ const CollateralSummaryCard = ({ campaign }) => {
     const summary = campaign.collateral_summary || { ad_copies: 0, images: 0, videos: 0, total: 0 };
     const hasCollateral = summary.total > 0;
     const hasSignedOffStrategies = campaign.strategies?.some(s => s.signed_off_at);
-    
+
     if (!hasSignedOffStrategies) return null;
 
     return (
@@ -193,7 +193,7 @@ const GENERATION_STEPS = [
 const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
     const currentStepIndex = GENERATION_STEPS.findIndex(s => elapsedSeconds < s.duration);
     const activeStep = currentStepIndex === -1 ? GENERATION_STEPS.length - 1 : currentStepIndex;
-    
+
     const prevThreshold = activeStep > 0 ? GENERATION_STEPS[activeStep - 1].duration : 0;
     const nextThreshold = GENERATION_STEPS[activeStep].duration;
     const stepProgress = Math.min((elapsedSeconds - prevThreshold) / (nextThreshold - prevThreshold), 1);
@@ -221,7 +221,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                         </div>
                     </div>
                     <div className="mt-4 h-2 bg-flame-orange-900/30 rounded-full overflow-hidden">
-                        <div 
+                        <div
                             className="h-full bg-gradient-to-r from-flame-orange-300 to-white rounded-full transition-all duration-1000 ease-out"
                             style={{ width: `${overallProgress}%` }}
                         />
@@ -236,10 +236,10 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                             const isActive = idx === activeStep;
 
                             return (
-                                <div 
-                                    key={idx} 
+                                <div
+                                    key={idx}
                                     className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-all duration-500 ${
-                                        isActive ? 'bg-flame-orange-50 border border-flame-orange-200' : 
+                                        isActive ? 'bg-flame-orange-50 border border-flame-orange-200' :
                                         isComplete ? 'opacity-60' : 'opacity-40'
                                     }`}
                                 >
@@ -256,7 +256,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                                     </div>
                                     <span className="text-lg">{step.icon}</span>
                                     <span className={`text-sm font-medium ${
-                                        isActive ? 'text-flame-orange-700' : 
+                                        isActive ? 'text-flame-orange-700' :
                                         isComplete ? 'text-gray-500' : 'text-gray-400'
                                     }`}>
                                         {step.label}
@@ -286,7 +286,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
 export default function Show({ auth, campaign }) {
     const [campaigns, setCampaign] = useState(campaign);
     const [isPolling, setIsPolling] = useState(
-        campaign.is_generating_strategies || 
+        campaign.is_generating_strategies ||
         (campaign.strategies.length === 0 && campaign.strategy_generation_started_at)
     );
     const [showGenerationModal, setShowGenerationModal] = useState(false);
@@ -311,26 +311,26 @@ export default function Show({ auth, campaign }) {
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 });
-                
+
                 if (apiResponse.ok) {
                     const data = await apiResponse.json();
-                    
+
                     // Update campaign data
                     setCampaign(data);
-                    
+
                     // Check if generation failed
                     if (data.strategy_generation_error) {
                         setIsPolling(false);
                         setPollingError(true);
                         return true;
                     }
-                    
+
                     // Stop polling if strategies are available and generation is complete
                     if (data.strategies && data.strategies.length > 0 && !data.is_generating_strategies) {
                         setIsPolling(false);
                         return true; // Signal to stop polling
                     }
-                    
+
                     // Continue polling if generation is still in progress
                     if (data.is_generating_strategies) {
                         return false;
@@ -365,8 +365,8 @@ export default function Show({ auth, campaign }) {
     // Elapsed time counter for generation loading state
     useEffect(() => {
         if (!isPolling) return;
-        const startTime = campaigns.strategy_generation_started_at 
-            ? new Date(campaigns.strategy_generation_started_at).getTime() 
+        const startTime = campaigns.strategy_generation_started_at
+            ? new Date(campaigns.strategy_generation_started_at).getTime()
             : Date.now();
         const tick = () => setElapsedSeconds(Math.floor((Date.now() - startTime) / 1000));
         tick();
@@ -457,17 +457,17 @@ export default function Show({ auth, campaign }) {
                 confirmButtonClass={confirmModal.confirmButtonClass}
             />
 
-            <CollateralGenerationModal 
-                show={showGenerationModal} 
-                onClose={() => setShowGenerationModal(false)} 
+            <CollateralGenerationModal
+                show={showGenerationModal}
+                onClose={() => setShowGenerationModal(false)}
             />
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
                     {isPolling && (
-                        <StrategyGenerationLoader 
-                            elapsedSeconds={elapsedSeconds} 
-                            campaignName={campaigns.name} 
+                        <StrategyGenerationLoader
+                            elapsedSeconds={elapsedSeconds}
+                            campaignName={campaigns.name}
                         />
                     )}
 
@@ -479,12 +479,12 @@ export default function Show({ auth, campaign }) {
                                 </svg>
                                 <div>
                                     <p className="font-semibold">
-                                        {campaigns.strategy_generation_error 
-                                            ? 'Strategy generation failed' 
+                                        {campaigns.strategy_generation_error
+                                            ? 'Strategy generation failed'
                                             : 'Strategy generation is taking longer than expected'}
                                     </p>
                                     <p className="text-sm mt-1">
-                                        {campaigns.strategy_generation_error 
+                                        {campaigns.strategy_generation_error
                                             ? campaigns.strategy_generation_error
                                             : 'Please refresh the page in a moment or contact support if this persists.'}
                                     </p>
@@ -495,7 +495,7 @@ export default function Show({ auth, campaign }) {
 
                     {/* Collateral Summary */}
                     <CollateralSummaryCard campaign={campaigns} />
-                    
+
                     {campaigns.strategies && campaigns.strategies.length > 0 && (
                         <div className="mb-8 flex justify-end gap-3">
                             {!anyStrategiesSignedOff && (
@@ -519,9 +519,9 @@ export default function Show({ auth, campaign }) {
                     {campaigns.strategies && campaigns.strategies.length > 0 ? (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                             {campaigns.strategies.map(strategy => (
-                                <StrategyCard 
-                                    key={strategy.id} 
-                                    strategy={strategy} 
+                                <StrategyCard
+                                    key={strategy.id}
+                                    strategy={strategy}
                                     campaignId={campaigns.id}
                                     onSignOff={handleSignOffStrategy}
                                 />

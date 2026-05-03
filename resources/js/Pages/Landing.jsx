@@ -1,11 +1,66 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
+import DemoResultsPanel from '@/Components/DemoResultsPanel';
 
 export default function Landing({ auth, plans = [] }) {
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
     const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 99;
+
+    const [url, setUrl] = useState('');
+    const [loadingStage, setLoadingStage] = useState(0); 
+    const [demoResult, setDemoResult] = useState(null);
+    const [error, setError] = useState(null);
+
+    const handleDemoSubmit = async (e) => {
+        e.preventDefault();
+        if (!url) return;
+        
+        setError(null);
+        setDemoResult(null);
+        setLoadingStage(1);
+
+        const t1 = setTimeout(() => setLoadingStage(2), 5000);
+        const t2 = setTimeout(() => setLoadingStage(3), 10000);
+        const t3 = setTimeout(() => setLoadingStage(4), 18000);
+        
+        try {
+            const response = await fetch('/api/demo/generate-full', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({ url })
+            });
+            const data = await response.json();
+            
+            if (response.ok) {
+                setDemoResult(data);
+            } else {
+                setError(data.message || 'Something went wrong.');
+            }
+        } catch (err) {
+            setError('Failed to reach the server.');
+        } finally {
+            clearTimeout(t1);
+            clearTimeout(t2);
+            clearTimeout(t3);
+            setLoadingStage(0);
+        }
+    };
+
+    const getLoadingText = () => {
+        switch (loadingStage) {
+            case 1: return "Spinning up Headless Chrome browser...";
+            case 2: return "Navigating to site & extracting HTML/CSS...";
+            case 3: return "Running Gemini Vision AI on site screenshots...";
+            case 4: return "Writing multi-variant ad copy...";
+            default: return "Processing...";
+        }
+    };
+
     return (
         <>
             <Head>
@@ -89,6 +144,9 @@ export default function Landing({ auth, plans = [] }) {
                     {/* Hero Section */}
                     <div className="pt-6 px-4 sm:pt-10 md:pt-14 lg:pt-8 lg:pb-14 lg:overflow-hidden bg-gradient-to-b from-flame-orange-50 to-white">
                         <div className="mx-auto max-w-7xl lg:px-8">
+                            {demoResult ? (
+                                <DemoResultsPanel result={demoResult} />
+                            ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 lg:gap-8">
                                 <div className="mx-auto max-w-sm px-2 sm:max-w-md sm:px-4 md:max-w-none md:px-0 text-center sm:text-center md:text-left md:flex md:items-center">
                                     <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
@@ -100,19 +158,41 @@ export default function Landing({ auth, plans = [] }) {
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
                                             Stop paying thousands in retainer fees. Our AI agents discover your competitors, heal broken campaigns automatically, optimize budgets in real-time, and A/B test creatives 24/7—all while you sleep.
                                         </p>
-                                        <div className="mt-6 sm:mt-8 md:mt-10 lg:mt-10 flex flex-col xs:flex-col sm:flex-row gap-3 sm:gap-4">
-                                            <a href="/register" className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border border-transparent text-sm sm:text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg transition-colors w-full sm:w-auto">
-                                                Start Generating for Free
-                                            </a>
-                                            <a href="/how-it-works" className="inline-flex items-center justify-center px-4 sm:px-6 py-2 sm:py-3 border-2 border-flame-orange-600 text-sm sm:text-base font-medium rounded-md text-flame-orange-600 bg-white hover:bg-flame-orange-50 transition-colors w-full sm:w-auto">
-                                                See How It Works
-                                            </a>
+                                        
+                                        <div className="mt-8 bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                                            <form onSubmit={handleDemoSubmit} className="flex flex-col sm:flex-row gap-3">
+                                                <input 
+                                                    type="url" 
+                                                    required
+                                                    value={url}
+                                                    onChange={e => setUrl(e.target.value)}
+                                                    placeholder="Enter your website URL..."
+                                                    className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
+                                                    disabled={loadingStage > 0}
+                                                />
+                                                <button 
+                                                    type="submit"
+                                                    disabled={loadingStage > 0}
+                                                    className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-sm disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
+                                                >
+                                                    {loadingStage > 0 ? "Analyzing..." : "Build My Ads"}
+                                                </button>
+                                            </form>
+                                            {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+                                            {loadingStage > 0 && (
+                                                <div className="mt-4">
+                                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                                        <div className="bg-flame-orange-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(loadingStage / 4) * 100}%` }}></div>
+                                                    </div>
+                                                    <p className="text-sm mt-2 text-center text-flame-orange-700 font-medium animate-pulse">{getLoadingText()}</p>
+                                                </div>
+                                            )}
                                         </div>
                                         <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Generous free tier · ✓ Cancel anytime</p>
                                     </div>
                                 </div>
-                                
                             </div>
+                            )}
                         </div>
                     </div>
 

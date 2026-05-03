@@ -16,3 +16,9 @@ Route::middleware('throttle:60,1')->group(function () {
 });
 
 
+
+// Demo Endpoint (Rate limited)
+Route::middleware('throttle:3,1')->group(function () {
+    Route::post('/demo/generate-full', [\App\Http\Controllers\Api\DemoController::class, 'generateFull'])
+        ->name('demo.generate-full');
+});
