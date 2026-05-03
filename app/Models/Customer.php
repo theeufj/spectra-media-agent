@@ -54,6 +54,9 @@ class Customer extends Model
         'sandbox_expires_at',
         'account_health_score',
         'health_score_updated_at',
+        'conversion_action_id',
+        'conversion_action_label',
+        'conversion_tracking_verified_at',
     ];
 
     protected $casts = [
