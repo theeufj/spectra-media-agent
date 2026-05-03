@@ -69,6 +69,12 @@ class RegisteredUserController extends Controller
             // after email verification.
         }
 
+        // Capture any ad click IDs stored by CaptureClickIds middleware
+        $clickIds = \App\Http\Middleware\CaptureClickIds::all();
+        if (!empty($clickIds)) {
+            $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'fbclid', 'msclid'])));
+        }
+
         event(new Registered($user));
 
         \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\WelcomeEmail($user->name));

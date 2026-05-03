@@ -18,6 +18,7 @@ use Illuminate\Queue\SerializesModels;
 use App\Models\Setting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Jobs\RecordSiteConversion;
 
 class DeployCampaign implements ShouldQueue
 {
@@ -239,6 +240,7 @@ class DeployCampaign implements ShouldQueue
 
         if ($successCount > 0 && $this->campaign->status !== 'active') {
             $this->campaign->update(['status' => 'active']);
+            RecordSiteConversion::dispatch($this->campaign->customer, 'campaign_live');
         }
 
         // Dispatch verification job after 60s to confirm objects exist on platforms

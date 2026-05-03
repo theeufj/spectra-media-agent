@@ -2,6 +2,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import SitemapSubmittedModal from '@/Components/SitemapSubmittedModal';
+import { trackConversion } from '@/utils/conversions';
 
 export default function Dashboard() {
     const { flash } = usePage().props;
@@ -52,6 +53,7 @@ export default function Dashboard() {
                         </div>
                         <a
                             href={route('sandbox.index')}
+                            onClick={() => trackConversion('sandbox_launched')}
                             className="shrink-0 px-5 py-2.5 bg-white text-violet-700 font-semibold text-sm rounded-lg hover:bg-violet-50 transition"
                         >
                             Launch Sandbox

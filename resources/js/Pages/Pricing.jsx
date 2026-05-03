@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Head, Link } from '@inertiajs/react';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
+import { trackConversion } from '@/utils/conversions';
 
 export default function Pricing({ auth, plans = [] }) {
     const [openFAQ, setOpenFAQ] = React.useState(null);
+    useEffect(() => { trackConversion('pricing_visit'); }, []);
 
     const faqs = [
         { question: "What's included in the free tier?", answer: "Our free tier lets you explore the platform before committing. You get: 3 brand sources (URLs or files) for brand extraction, 4 AI-generated images per campaign (with watermark), 3 landing page CRO audits, and unlimited ad copy generation. Deployment to Google/Facebook requires a subscription. Upgrade anytime to unlock unlimited generation, watermark-free images, and live campaign deployment." },
