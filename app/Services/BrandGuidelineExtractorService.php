@@ -194,6 +194,33 @@ class BrandGuidelineExtractorService
         try {
             Log::info("Analyzing visual style for: {$websiteUrl}");
 
+            // Implement Robots.txt check before ethical scraping
+            try {
+                $parsedUrl = parse_url($websiteUrl);
+                $baseUrl = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? '');
+                $robotsUrl = $baseUrl . '/robots.txt';
+
+                $robotsTxtContent = \Illuminate\Support\Facades\Cache::remember("robots.txt.{$baseUrl}", 3600, function () use ($robotsUrl) {
+                    try {
+                        $response = Http::timeout(5)->get($robotsUrl);
+                        return $response->successful() ? $response->body() : '';
+                    } catch (\Exception $e) {
+                        return '';
+                    }
+                });
+
+                if (!empty($robotsTxtContent)) {
+                    $robots = new \Spatie\Robots\RobotsTxt($robotsTxtContent);
+                    $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
+                    if (!$robots->allows($websiteUrl, $userAgent)) {
+                        Log::warning("Robots.txt disallowed scraping for visual style analysis", ['url' => $websiteUrl]);
+                        return $this->getDefaultVisualAnalysis();
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::notice("Could not parse robots.txt, proceeding cautiously", ['error' => $e->getMessage()]);
+            }
+
             // Try Browsershot with Screenshot for Vision AI
             try {
                 $screenshot = Browsershot::url($websiteUrl)

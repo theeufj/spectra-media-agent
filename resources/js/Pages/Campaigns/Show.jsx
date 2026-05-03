@@ -298,15 +298,11 @@ export default function Show({ auth, campaign }) {
 
     useEffect(() => {
         if (!isPolling) {
-            console.log('Polling is disabled');
             return;
         }
 
-        console.log('Starting polling for campaign:', campaigns.id);
-
         // Poll immediately on mount
         const pollForStrategies = async () => {
-            console.log('Polling for strategies...');
             try {
                 const apiResponse = await fetch(`/api/campaigns/${campaigns.id}`, {
                     credentials: 'include',
@@ -316,20 +312,14 @@ export default function Show({ auth, campaign }) {
                     }
                 });
                 
-                console.log('Poll response status:', apiResponse.status);
-                
                 if (apiResponse.ok) {
                     const data = await apiResponse.json();
-                    console.log('Poll data received, strategies count:', data.strategies?.length || 0);
-                    console.log('Is generating:', data.is_generating_strategies);
-                    console.log('Generation error:', data.strategy_generation_error);
                     
                     // Update campaign data
                     setCampaign(data);
                     
                     // Check if generation failed
                     if (data.strategy_generation_error) {
-                        console.log('Strategy generation failed, stopping polling');
                         setIsPolling(false);
                         setPollingError(true);
                         return true;
@@ -337,14 +327,12 @@ export default function Show({ auth, campaign }) {
                     
                     // Stop polling if strategies are available and generation is complete
                     if (data.strategies && data.strategies.length > 0 && !data.is_generating_strategies) {
-                        console.log('Strategies loaded and generation complete, stopping polling');
                         setIsPolling(false);
                         return true; // Signal to stop polling
                     }
                     
                     // Continue polling if generation is still in progress
                     if (data.is_generating_strategies) {
-                        console.log('Generation still in progress, continuing to poll');
                         return false;
                     }
                 } else {
@@ -364,13 +352,11 @@ export default function Show({ auth, campaign }) {
 
         // Stop polling after 5 minutes if no strategies are generated
         const timeout = setTimeout(() => {
-            console.log('Polling timeout reached');
             setIsPolling(false);
             setPollingError(true);
         }, 300000); // 5 minutes
 
         return () => {
-            console.log('Cleaning up polling interval');
             clearInterval(pollInterval);
             clearTimeout(timeout);
         };
