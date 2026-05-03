@@ -9,28 +9,44 @@ const CATEGORY_COLORS = {
 };
 
 export default function HelpArticle({ auth, article, relatedArticles = [] }) {
+    const canonicalUrl = `https://sitetospend.com/help/${article.slug}`;
+
     const schema = {
         '@context': 'https://schema.org',
         '@type': 'Article',
         headline: article.title,
         description: article.description,
+        url: canonicalUrl,
+        mainEntityOfPage: { '@type': 'WebPage', '@id': canonicalUrl },
         datePublished: article.published,
-        publisher: {
-            '@type': 'Organization',
-            name: 'sitetospend.com',
-            url: 'https://sitetospend.com',
-        },
+        dateModified: article.published,
+        articleSection: article.category,
+        author: { '@type': 'Organization', name: 'sitetospend.com', url: 'https://sitetospend.com' },
+        publisher: { '@type': 'Organization', name: 'sitetospend.com', url: 'https://sitetospend.com' },
+    };
+
+    const breadcrumbSchema = {
+        '@context': 'https://schema.org',
+        '@type': 'BreadcrumbList',
+        itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://sitetospend.com' },
+            { '@type': 'ListItem', position: 2, name: 'Help Center', item: 'https://sitetospend.com/help' },
+            { '@type': 'ListItem', position: 3, name: article.title, item: canonicalUrl },
+        ],
     };
 
     return (
         <>
             <Head>
-                <title>{`${article.title} — sitetospend.com Help`}</title>
+                <title>{`${article.title} | sitetospend.com`}</title>
+                <link rel="canonical" href={canonicalUrl} />
                 <meta name="description" content={article.description} />
-                <meta property="og:title" content={`${article.title} — sitetospend.com`} />
+                <meta property="og:title" content={`${article.title} | sitetospend.com`} />
                 <meta property="og:description" content={article.description} />
                 <meta property="og:type" content="article" />
+                <meta property="og:url" content={canonicalUrl} />
                 <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
+                <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }} />
             </Head>
 
             <div className="min-h-screen bg-gray-50 flex flex-col">

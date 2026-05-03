@@ -51,8 +51,8 @@ class HelpArticles
     {
         return [
             'slug'        => 'how-conversion-tracking-works',
-            'title'       => 'How Conversion Tracking Works',
-            'description' => 'Learn how sitetospend.com tracks what happens after someone clicks your ad, and how we set it all up automatically — no developer needed.',
+            'title'       => 'Google Ads Conversion Tracking Explained',
+            'description' => 'Learn how sitetospend.com tracks conversions after someone clicks your Google Ad — and how we set it all up automatically with no developer needed.',
             'category'    => 'Platform',
             'read_time'   => '8 min read',
             'published'   => '2026-05-03',
@@ -301,7 +301,7 @@ HTML,
         return [
             'slug'        => 'getting-started',
             'title'       => 'Getting Started with sitetospend.com',
-            'description' => 'A step-by-step guide to launching your first AI-managed ad campaign — from signup to live campaign in under 30 minutes.',
+            'description' => 'A step-by-step guide to launching your first AI-managed Google Ads campaign — from signup to live ads in under 30 minutes, no prior experience needed.',
             'category'    => 'Getting Started',
             'read_time'   => '4 min read',
             'published'   => '2026-05-03',
@@ -368,7 +368,7 @@ HTML,
     {
         return [
             'slug'        => 'why-google-ads-is-so-hard-to-manage',
-            'title'       => 'Why Google Ads Is So Hard to Manage (and Why Most Campaigns Fail)',
+            'title'       => 'Why Google Ads Is So Hard to Manage',
             'description' => 'Google Ads looks simple to set up but is notoriously difficult to manage profitably. Here\'s why — and what a properly managed campaign actually requires.',
             'category'    => 'Google Ads',
             'read_time'   => '7 min read',
@@ -424,7 +424,7 @@ HTML,
     {
         return [
             'slug'        => 'why-your-google-ads-stop-working',
-            'title'       => 'Why Your Google Ads Stop Working (and What to Do About It)',
+            'title'       => 'Why Your Google Ads Stop Working',
             'description' => 'Google Ads that worked brilliantly at launch often decline over months. Here\'s the real reasons campaign performance drops — and how to reverse it.',
             'category'    => 'Google Ads',
             'read_time'   => '6 min read',
@@ -467,7 +467,7 @@ HTML,
     {
         return [
             'slug'        => 'true-cost-of-managing-google-ads-yourself',
-            'title'       => 'The True Cost of Managing Google Ads Yourself (It\'s More Than You Think)',
+            'title'       => 'The True Cost of Managing Google Ads Yourself',
             'description' => 'The monthly fee is the visible cost. The real cost of DIY Google Ads management is hidden in wasted spend, missed optimisations, and your own time. Here\'s the full picture.',
             'category'    => 'Platform',
             'read_time'   => '5 min read',
@@ -516,7 +516,7 @@ HTML,
     {
         return [
             'slug'        => 'why-small-businesses-lose-on-google-ads',
-            'title'       => 'Why Small Businesses Lose on Google Ads (and How to Level the Playing Field)',
+            'title'       => 'Why Small Businesses Lose on Google Ads',
             'description' => 'Large advertisers have dedicated teams, proprietary tools, and years of data. Here\'s how small businesses can compete — and where the real advantages lie.',
             'category'    => 'Google Ads',
             'read_time'   => '6 min read',
@@ -664,7 +664,7 @@ HTML,
     {
         return [
             'slug'        => 'facebook-ads-for-small-business',
-            'title'       => 'Facebook Ads for Small Business: Why It\'s Hard and How to Make It Work',
+            'title'       => 'Facebook Ads for Small Business: What Actually Works',
             'description' => 'Facebook Ads can be transformative for small businesses — but most campaigns fail due to the same avoidable mistakes. Here\'s what actually works.',
             'category'    => 'Platform',
             'read_time'   => '7 min read',
@@ -714,8 +714,8 @@ HTML,
     {
         return [
             'slug'        => 'negative-keywords-explained',
-            'title'       => 'Negative Keywords Explained: Stop Paying for Clicks That Will Never Convert',
-            'description' => 'Negative keywords are the fastest way to cut wasted ad spend on Google Ads. Here\'s how they work, why most accounts have too few, and how sitetospend.com manages them automatically.',
+            'title'       => 'Google Ads Negative Keywords Explained',
+            'description' => 'Negative keywords are the fastest way to cut wasted spend on Google Ads. Here\'s how they work, why most accounts have too few, and how sitetospend.com manages them automatically.',
             'category'    => 'Google Ads',
             'read_time'   => '6 min read',
             'published'   => '2026-05-03',
@@ -768,7 +768,7 @@ HTML,
     {
         return [
             'slug'        => 'what-is-ad-rank',
-            'title'       => 'What is Ad Rank? The Auction Mechanic That Decides Where Your Ad Shows',
+            'title'       => 'What is Ad Rank? How Google Decides Your Ad Position',
             'description' => 'Ad Rank determines your ad\'s position on Google\'s search results page — and it\'s not just about bid. Here\'s the full picture and how to improve it.',
             'category'    => 'Google Ads',
             'read_time'   => '5 min read',
@@ -824,8 +824,8 @@ HTML,
     {
         return [
             'slug'        => 'how-responsive-search-ads-work',
-            'title'       => 'How Responsive Search Ads Work — and How AI Makes Them Better',
-            'description' => 'Responsive Search Ads let you write up to 15 headlines and 4 descriptions. Google tests combinations automatically. Here\'s how to make RSAs perform, and how sitetospend.com optimises them continuously.',
+            'title'       => 'How Responsive Search Ads Work',
+            'description' => 'Responsive Search Ads let you write up to 15 headlines and 4 descriptions. Google tests combinations to find what performs. Here\'s how to make RSAs work and how sitetospend.com optimises them continuously.',
             'category'    => 'Google Ads',
             'read_time'   => '5 min read',
             'published'   => '2026-05-03',
@@ -872,7 +872,7 @@ HTML,
     {
         return [
             'slug'        => 'how-ai-writes-your-ad-copy',
-            'title'       => 'How AI Writes and Continuously Improves Your Ad Copy',
+            'title'       => 'How AI Writes and Improves Your Google Ad Copy',
             'description' => 'sitetospend.com uses AI to generate, test, and improve your Google Ad copy automatically — informed by your brand, your competitors, and real conversion data.',
             'category'    => 'Platform',
             'read_time'   => '5 min read',
@@ -921,8 +921,8 @@ HTML,
     {
         return [
             'slug'        => 'google-ads-audience-targeting',
-            'title'       => 'Google Ads Audience Targeting: Remarketing, RLSA, and Customer Match Explained',
-            'description' => 'Audience targeting lets you bid differently based on who is searching — not just what they\'re searching. Here\'s how Google\'s audience tools work and how sitetospend.com uses them.',
+            'title'       => 'Google Ads Audience Targeting Explained',
+            'description' => 'Audience targeting lets you bid based on who is searching, not just what they\'re searching. Here\'s how Google\'s remarketing, RLSA and Customer Match tools work — and how we use them.',
             'category'    => 'Google Ads',
             'read_time'   => '6 min read',
             'published'   => '2026-05-03',
@@ -974,8 +974,8 @@ HTML,
     {
         return [
             'slug'        => 'how-budget-pacing-works',
-            'title'       => 'How Budget Pacing Works: Making Every Pound of Ad Spend Count',
-            'description' => 'Spending your daily Google Ads budget at the right times — not just as fast as possible — is critical to campaign performance. Here\'s how intelligent budget pacing works.',
+            'title'       => 'How Google Ads Budget Pacing Works',
+            'description' => 'Spending your Google Ads budget at the right times of day — not just as fast as possible — is critical to performance. Here\'s how intelligent budget pacing and dayparting works.',
             'category'    => 'Platform',
             'read_time'   => '5 min read',
             'published'   => '2026-05-03',
@@ -1022,8 +1022,8 @@ HTML,
     {
         return [
             'slug'        => 'multi-platform-advertising',
-            'title'       => 'Google, Facebook, Microsoft, and LinkedIn Ads: Why Multi-Platform Advertising Wins',
-            'description' => 'Running ads on multiple platforms reaches your customers at every stage of the buying journey. Here\'s how each platform works differently — and how sitetospend.com manages them all from one place.',
+            'title'       => 'Why Multi-Platform Advertising Works',
+            'description' => 'Running ads on Google, Facebook, Microsoft, and LinkedIn reaches customers at every stage of the buying journey. Here\'s how each platform differs and how to manage them together.',
             'category'    => 'Platform',
             'read_time'   => '7 min read',
             'published'   => '2026-05-03',
@@ -1073,8 +1073,8 @@ HTML,
     {
         return [
             'slug'        => 'understanding-roas',
-            'title'       => 'Understanding ROAS: What It Means, How to Calculate It, and What\'s a Good Target',
-            'description' => 'Return on Ad Spend (ROAS) is the core metric for measuring whether your advertising is profitable. Here\'s what it means, how to set a target, and how to improve it.',
+            'title'       => 'What is ROAS and How Do You Improve It?',
+            'description' => 'Return on Ad Spend (ROAS) measures how much revenue you get for every pound spent on ads. Here\'s what it means, how to set a target for your margins, and how to improve it.',
             'category'    => 'Google Ads',
             'read_time'   => '5 min read',
             'published'   => '2026-05-03',
