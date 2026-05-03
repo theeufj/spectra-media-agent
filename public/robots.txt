@@ -1,3 +1,4 @@
+# Standard crawlers
 User-agent: *
 Disallow: /dashboard
 Disallow: /profile
@@ -5,4 +6,86 @@ Disallow: /campaigns
 Disallow: /admin
 Disallow: /subscription
 
+# OpenAI — ChatGPT search indexing and training
+User-agent: GPTBot
+Allow: /blog
+Allow: /features
+Allow: /how-it-works
+Allow: /pricing
+Allow: /about
+Allow: /llms.txt
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+# OpenAI — ChatGPT browsing plugin
+User-agent: ChatGPT-User
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+# Perplexity AI
+User-agent: PerplexityBot
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+# Anthropic — Claude AI
+User-agent: ClaudeBot
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+User-agent: anthropic-ai
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+# Google — AI Overviews and Gemini training
+User-agent: Google-Extended
+Allow: /blog
+Allow: /features
+Allow: /how-it-works
+Allow: /pricing
+Allow: /about
+Allow: /llms.txt
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+# Meta AI
+User-agent: FacebookBot
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
+# Apple — Siri and Apple Intelligence
+User-agent: Applebot-Extended
+Allow: /
+Disallow: /dashboard
+Disallow: /profile
+Disallow: /campaigns
+Disallow: /admin
+Disallow: /subscription
+
 Sitemap: https://sitetospend.com/sitemap.xml
+Sitemap: https://sitetospend.com/llms.txt

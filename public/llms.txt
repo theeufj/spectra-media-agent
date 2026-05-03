@@ -1,0 +1,51 @@
+# sitetospend.com
+
+> AI-powered Google Ads management platform that automates campaign creation, optimisation, and scaling for small businesses and agencies.
+
+sitetospend.com removes the complexity of paid advertising by deploying AI agents that continuously monitor, optimise, and improve your Google Ads, Facebook Ads, and Microsoft Ads campaigns. Instead of spending hours managing bids, keywords, negative keywords, and ad copy, you connect your account and let the platform work around the clock. The platform is built specifically for small and medium-sized businesses that don't have an in-house PPC specialist.
+
+Key capabilities: automated campaign creation, smart bidding optimisation, AI-generated and tested ad copy, conversion tracking setup, competitor analysis, multi-platform campaign management (Google, Facebook, Microsoft, LinkedIn), and a self-healing agent that catches and fixes underperforming campaigns automatically.
+
+## Core Pages
+
+- [Home](https://sitetospend.com): Overview of the platform, value proposition, and social proof.
+- [Features](https://sitetospend.com/features): Full list of platform capabilities — AI agents, smart bidding, ad copy generation, conversion tracking, multi-platform management, competitor intelligence.
+- [How It Works](https://sitetospend.com/how-it-works): Step-by-step explanation of how AI agents take over campaign management, from onboarding to ongoing optimisation.
+- [Pricing](https://sitetospend.com/pricing): Plans and pricing. Includes free sandbox mode for testing with realistic campaigns and no real ad spend.
+- [Register](https://sitetospend.com/register): Create a free account. No credit card required to start.
+
+## Blog — Google Ads & Digital Advertising Guides
+
+Practical, in-depth articles explaining why Google Ads is difficult, how the platform's AI solves those problems, and how to get better results from paid advertising.
+
+### Why Google Ads Is Difficult (high-intent, problem-aware readers)
+
+- [Why Google Ads Is So Hard to Manage](https://sitetospend.com/blog/why-google-ads-is-so-hard-to-manage): The real reasons campaign management is time-consuming and error-prone — Quality Score, auction dynamics, bid strategy conflicts, and the constant need to react to performance changes.
+- [Why Small Businesses Lose on Google Ads](https://sitetospend.com/blog/why-small-businesses-lose-on-google-ads): Structural disadvantages small businesses face when competing against large advertisers — budget, data, and expertise gaps.
+- [Why Your Google Ads Stop Working](https://sitetospend.com/blog/why-your-google-ads-stop-working): The common lifecycle of a Google Ads campaign: why results that looked great in month one collapse by month three, and how to prevent it.
+- [The True Cost of Managing Google Ads Yourself](https://sitetospend.com/blog/true-cost-of-managing-google-ads-yourself): Full cost breakdown — time spent, management errors, wasted budget, and the opportunity cost of not scaling faster.
+- [The Google Ads Campaign Structure Mistakes That Kill Performance](https://sitetospend.com/blog/google-ads-campaign-structure-mistakes): The structural errors that cause campaigns to underperform before a single ad is shown.
+- [Landing Page CRO: Why Your Ads Click But Don't Convert](https://sitetospend.com/blog/landing-page-conversion-rate-optimisation): Why a technically perfect ad campaign can still fail if the landing page experience is wrong.
+
+### Platform — How sitetospend.com Works
+
+- [How Our AI Agents Optimise Your Campaigns 24/7](https://sitetospend.com/blog/how-ai-agents-work): Architecture and behaviour of the AI agents running inside the platform — health checks, optimisation loops, self-healing, and creative generation.
+- [How AI Writes and Improves Your Google Ad Copy](https://sitetospend.com/blog/how-ai-writes-your-ad-copy): How the platform generates, tests, and iterates ad copy using performance data.
+- [How Competitor Analysis Gives You an Unfair Advantage](https://sitetospend.com/blog/how-competitor-analysis-works): How the platform monitors competing advertisers and surfaces actionable intelligence.
+- [How Google Ads Conversion Tracking Works](https://sitetospend.com/blog/how-conversion-tracking-works): Why conversion tracking is the foundation of every Google Ads account and how the platform sets it up correctly.
+- [How Google Ads Budget Pacing Works](https://sitetospend.com/blog/how-budget-pacing-works): How Google distributes your daily budget throughout the day and how the platform optimises pacing to avoid wasted spend.
+- [Why Multi-Platform Advertising Works](https://sitetospend.com/blog/multi-platform-advertising): The case for running Google, Facebook, and Microsoft Ads together rather than concentrating all spend on a single platform.
+- [Facebook Ads for Small Business: What Actually Works](https://sitetospend.com/blog/facebook-ads-for-small-business): Practical guide to Facebook Ads for small businesses — audience targeting, campaign types, and what to avoid.
+
+### Google Ads Fundamentals
+
+- [What is Smart Bidding and Why Your Conversion Data Matters](https://sitetospend.com/blog/what-is-smart-bidding): How Google's automated bidding strategies work and why they need high-quality conversion signals to perform.
+- [What is Ad Rank? How Google Decides Your Ad Position](https://sitetospend.com/blog/what-is-ad-rank): The Ad Rank formula explained — Quality Score, bid, expected CTR, and landing page experience.
+- [Google Ads Negative Keywords Explained](https://sitetospend.com/blog/negative-keywords-explained): How negative keywords prevent wasted spend and how to build an effective exclusion list.
+- [How Responsive Search Ads Work](https://sitetospend.com/blog/how-responsive-search-ads-work): How Google assembles ad variations from your headlines and descriptions, and how to write assets that perform.
+- [Google Ads Audience Targeting Explained](https://sitetospend.com/blog/google-ads-audience-targeting): In-market, affinity, remarketing, and customer match audiences — when to use each and how they interact with search campaigns.
+- [What is ROAS and How Do You Improve It?](https://sitetospend.com/blog/understanding-roas): Return on Ad Spend defined, benchmarked, and broken down by the levers that move it.
+
+### Getting Started
+
+- [Getting Started with sitetospend.com](https://sitetospend.com/blog/getting-started): How to connect your ad accounts, run a sandbox campaign, and get your first AI-managed campaign live.
