@@ -1,3 +1,34 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ── Help article prose styles ──────────────────────────── */
+.prose-article h2 {
+    @apply text-xl font-bold text-gray-900 mt-10 mb-3;
+}
+.prose-article h3 {
+    @apply text-base font-semibold text-gray-800 mt-6 mb-2;
+}
+.prose-article p {
+    @apply text-gray-600 leading-relaxed mb-4;
+}
+.prose-article ul, .prose-article ol {
+    @apply text-gray-600 mb-4 space-y-1.5;
+}
+.prose-article ul { @apply list-disc list-outside pl-5; }
+.prose-article ol { @apply list-decimal list-outside pl-5; }
+.prose-article li { @apply leading-relaxed; }
+.prose-article strong { @apply font-semibold text-gray-800; }
+.prose-article code {
+    @apply text-sm font-mono bg-gray-100 text-violet-700 rounded px-1.5 py-0.5;
+}
+.prose-article pre {
+    @apply bg-gray-900 text-gray-100 rounded-xl p-4 overflow-x-auto mb-4;
+}
+.prose-article pre code {
+    @apply bg-transparent text-gray-100 p-0;
+}
+.prose-article blockquote {
+    @apply border-l-4 border-violet-300 pl-4 italic text-gray-500 mb-4;
+}
+.prose-article h2:first-child { @apply mt-0; }

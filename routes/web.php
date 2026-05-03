@@ -26,6 +26,9 @@ Route::get('/about', [LandingController::class, 'about'])->name('about');
 Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
 
+Route::get('/help', [\App\Http\Controllers\HelpController::class, 'index'])->name('help.index');
+Route::get('/help/{article}', [\App\Http\Controllers\HelpController::class, 'show'])->name('help.show');
+
 /*
 |--------------------------------------------------------------------------
 | Health Check (Public — no auth, used by load balancers)
