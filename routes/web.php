@@ -26,8 +26,8 @@ Route::get('/about', [LandingController::class, 'about'])->name('about');
 Route::get('/terms-of-service', [LegalController::class, 'terms'])->name('terms');
 Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privacy');
 
-Route::get('/help', [\App\Http\Controllers\HelpController::class, 'index'])->name('help.index');
-Route::get('/help/{article}', [\App\Http\Controllers\HelpController::class, 'show'])->name('help.show');
+Route::get('/blog', [\App\Http\Controllers\HelpController::class, 'index'])->name('blog.index');
+Route::get('/blog/{article}', [\App\Http\Controllers\HelpController::class, 'show'])->name('blog.show');
 
 /*
 |--------------------------------------------------------------------------
@@ -189,7 +189,7 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
     // Route to display the new campaign creation wizard.
     // GET /campaigns/wizard
     Route::get('/campaigns/wizard', [App\Http\Controllers\CampaignController::class, 'wizard'])->name('campaigns.wizard');
-    
+
     // Route for AI-assisted campaign creation chat.
     // POST /api/campaigns/ai-assist
     Route::post('/api/campaigns/ai-assist', [App\Http\Controllers\CampaignController::class, 'aiAssist'])->name('campaigns.ai-assist');
@@ -260,7 +260,7 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
 Route::middleware(['auth', 'subscribed'])->group(function () {
     // Dashboard view for ad spend billing
     Route::get('/billing/ad-spend', [App\Http\Controllers\AdSpendBillingController::class, 'index'])->name('billing.ad-spend');
-    
+
     // API endpoints
     Route::get('/billing/ad-spend/balance', [App\Http\Controllers\AdSpendBillingController::class, 'getBalance'])->name('billing.ad-spend.balance');
     Route::get('/billing/ad-spend/transactions', [App\Http\Controllers\AdSpendBillingController::class, 'getTransactions'])->name('billing.ad-spend.transactions');
@@ -391,7 +391,7 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/campaigns/{campaign}/strategies/{strategy}/video/upload', [App\Http\Controllers\VideoCollateralController::class, 'upload'])
         ->middleware('throttle:10,1')
         ->name('campaigns.collateral.video.upload');
-    
+
     // Route to extend an existing Veo-generated video by up to 7 seconds
     // POST /video-collaterals/{video}/extend
     Route::post('/video-collaterals/{video}/extend', [App\Http\Controllers\VideoCollateralController::class, 'extend'])->name('video-collaterals.extend');
@@ -483,33 +483,33 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
     Route::delete('users/{user}', [App\Http\Controllers\AdminController::class, 'deleteUser'])->name('admin.users.delete');
     Route::post('users/{user}/assign-plan', [App\Http\Controllers\AdminController::class, 'assignPlan'])->name('admin.users.assign-plan');
-    
+
     // Execution Metrics Dashboard (Admin Only)
     Route::get('execution-metrics', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'index'])->name('admin.execution.metrics');
     Route::get('execution-metrics/{strategy}', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'show'])->name('admin.execution.detail');
     Route::post('users/{user}/unban', [App\Http\Controllers\AdminController::class, 'unbanUser'])->name('admin.users.unban');
     Route::post('notification', [App\Http\Controllers\AdminController::class, 'sendNotification'])->name('admin.notification.send');
-    
+
     // Impersonation
     Route::post('impersonate/{user}', [App\Http\Controllers\Admin\ImpersonationController::class, 'start'])->name('admin.impersonation.start');
     Route::post('impersonate/stop', [App\Http\Controllers\Admin\ImpersonationController::class, 'stop'])->name('admin.impersonation.stop');
-    
+
     // System Health Dashboard
     Route::get('system-health', [App\Http\Controllers\Admin\SystemHealthController::class, 'index'])->name('admin.health.index');
     Route::get('system-health/check', [App\Http\Controllers\Admin\SystemHealthController::class, 'check'])->name('admin.health.check');
     Route::post('system-health/retry-job/{id}', [App\Http\Controllers\Admin\SystemHealthController::class, 'retryJob'])->name('admin.health.retry-job');
     Route::delete('system-health/delete-job/{id}', [App\Http\Controllers\Admin\SystemHealthController::class, 'deleteJob'])->name('admin.health.delete-job');
     Route::post('system-health/flush-jobs', [App\Http\Controllers\Admin\SystemHealthController::class, 'flushFailedJobs'])->name('admin.health.flush-jobs');
-    
+
     // Revenue Dashboard
     Route::get('revenue', [App\Http\Controllers\Admin\RevenueController::class, 'index'])->name('admin.revenue.index');
     Route::post('revenue/refund/{chargeId}', [App\Http\Controllers\Admin\RevenueController::class, 'refund'])->name('admin.revenue.refund');
-    
+
     // Activity Logs
     Route::get('activity-logs', [App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('admin.activity.index');
     Route::get('activity-logs/stats', [App\Http\Controllers\Admin\ActivityLogController::class, 'stats'])->name('admin.activity.stats');
     Route::get('activity-logs/export', [App\Http\Controllers\Admin\ActivityLogController::class, 'export'])->name('admin.activity.export');
-    
+
     // Support Tickets (Admin)
     Route::get('support-tickets', [App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('admin.support-tickets.index');
     Route::get('support-tickets/{supportTicket}', [App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('admin.support-tickets.show');

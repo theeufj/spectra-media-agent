@@ -10,7 +10,7 @@ class HelpController extends Controller
 {
     public function index(): Response
     {
-        return Inertia::render('Help/Index', [
+        return Inertia::render('Blog/Index', [
             'articles' => HelpArticles::index(),
         ]);
     }
@@ -21,7 +21,7 @@ class HelpController extends Controller
 
         abort_if(!$article, 404);
 
-        return Inertia::render('Help/Article', [
+        return Inertia::render('Blog/Article', [
             'article'       => $article,
             'relatedArticles' => collect(HelpArticles::index())
                 ->where('slug', '!=', $slug)

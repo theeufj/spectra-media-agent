@@ -9,7 +9,7 @@ const CATEGORY_COLORS = {
 };
 
 export default function HelpArticle({ auth, article, relatedArticles = [] }) {
-    const canonicalUrl = `https://sitetospend.com/help/${article.slug}`;
+    const canonicalUrl = `https://sitetospend.com/blog/${article.slug}`;
 
     const schema = {
         '@context': 'https://schema.org',
@@ -30,7 +30,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
         '@type': 'BreadcrumbList',
         itemListElement: [
             { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://sitetospend.com' },
-            { '@type': 'ListItem', position: 2, name: 'Help Center', item: 'https://sitetospend.com/help' },
+            { '@type': 'ListItem', position: 2, name: 'Blog', item: 'https://sitetospend.com/blog' },
             { '@type': 'ListItem', position: 3, name: article.title, item: canonicalUrl },
         ],
     };
@@ -57,7 +57,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                     <div className="bg-white border-b border-gray-100">
                         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
                             <nav className="flex items-center gap-2 text-sm text-gray-400 mb-6">
-                                <Link href="/help" className="hover:text-gray-600 transition-colors">Help Center</Link>
+                                <Link href="/blog" className="hover:text-gray-600 transition-colors">Blog</Link>
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                 </svg>
@@ -115,7 +115,7 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
                                             {relatedArticles.map(related => (
                                                 <Link
                                                     key={related.slug}
-                                                    href={`/help/${related.slug}`}
+                                                    href={`/blog/${related.slug}`}
                                                     className="group block bg-white rounded-xl border border-gray-100 p-4 hover:border-violet-200 hover:shadow-sm transition-all"
                                                 >
                                                     <div className="text-xs text-gray-400 mb-1">{related.read_time}</div>
@@ -130,13 +130,13 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
 
                                 {/* Back link */}
                                 <Link
-                                    href="/help"
+                                    href="/blog"
                                     className="flex items-center gap-2 text-sm text-gray-400 hover:text-gray-600 transition-colors"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                                     </svg>
-                                    All help articles
+                                    All articles
                                 </Link>
                             </aside>
                         </div>

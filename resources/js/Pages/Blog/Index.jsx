@@ -28,10 +28,10 @@ export default function HelpIndex({ auth, articles = [] }) {
     return (
         <>
             <Head>
-                <title>Help Center — sitetospend.com</title>
-                <meta name="description" content="Guides and articles to help you understand how sitetospend.com manages your ad campaigns, tracks conversions, and uses AI to optimise your results." />
-                <meta property="og:title" content="Help Center — sitetospend.com" />
-                <meta property="og:description" content="Guides and articles on conversion tracking, AI agents, Smart Bidding, and getting started with sitetospend.com." />
+                <title>Blog — sitetospend.com</title>
+                <meta name="description" content="Plain-English guides on Google Ads, Facebook Ads, AI campaign management, and how sitetospend.com works." />
+                <meta property="og:title" content="Blog — sitetospend.com" />
+                <meta property="og:description" content="Plain-English guides on Google Ads, Facebook Ads, AI campaign management, and how sitetospend.com works." />
             </Head>
 
             <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -41,12 +41,12 @@ export default function HelpIndex({ auth, articles = [] }) {
                     {/* Hero */}
                     <div className="bg-white border-b border-gray-100">
                         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
-                            <p className="text-sm font-semibold text-flame-orange-600 uppercase tracking-wider mb-3">Help Center</p>
+                            <p className="text-sm font-semibold text-flame-orange-600 uppercase tracking-wider mb-3">Blog</p>
                             <h1 className="text-4xl font-extrabold text-gray-900 mb-4">
-                                Learn how sitetospend.com works
+                                Google Ads & Digital Advertising Guides
                             </h1>
                             <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-                                Plain-English guides to conversion tracking, AI agents, Smart Bidding, and everything in between.
+                                Plain-English guides to Google Ads, Smart Bidding, AI campaign management, and everything in between.
                             </p>
                         </div>
                     </div>
@@ -78,7 +78,7 @@ export default function HelpIndex({ auth, articles = [] }) {
                             {visible.map(article => (
                                 <Link
                                     key={article.slug}
-                                    href={`/help/${article.slug}`}
+                                    href={`/blog/${article.slug}`}
                                     className="group bg-white rounded-2xl border border-gray-100 p-6 hover:border-violet-200 hover:shadow-md transition-all duration-200"
                                 >
                                     <div className="flex items-center justify-between mb-4">

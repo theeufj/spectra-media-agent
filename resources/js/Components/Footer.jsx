@@ -24,14 +24,14 @@ export default function Footer() {
                         </ul>
                     </div>
 
-                    {/* Help */}
+                    {/* Blog */}
                     <div>
-                        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Help</h3>
+                        <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">Blog</h3>
                         <ul className="mt-4 space-y-3">
-                            <li><Link href="/help" className="text-sm text-gray-400 hover:text-white transition-colors">Help Center</Link></li>
-                            <li><Link href="/help/how-conversion-tracking-works" className="text-sm text-gray-400 hover:text-white transition-colors">Conversion Tracking</Link></li>
-                            <li><Link href="/help/how-ai-agents-work" className="text-sm text-gray-400 hover:text-white transition-colors">How AI Agents Work</Link></li>
-                            <li><Link href="/help/getting-started" className="text-sm text-gray-400 hover:text-white transition-colors">Getting Started</Link></li>
+                            <li><Link href="/blog" className="text-sm text-gray-400 hover:text-white transition-colors">All Articles</Link></li>
+                            <li><Link href="/blog/how-conversion-tracking-works" className="text-sm text-gray-400 hover:text-white transition-colors">Conversion Tracking</Link></li>
+                            <li><Link href="/blog/how-ai-agents-work" className="text-sm text-gray-400 hover:text-white transition-colors">How AI Agents Work</Link></li>
+                            <li><Link href="/blog/getting-started" className="text-sm text-gray-400 hover:text-white transition-colors">Getting Started</Link></li>
                         </ul>
                     </div>
 
