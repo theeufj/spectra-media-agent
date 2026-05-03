@@ -8,12 +8,12 @@
         <title inertia>Site to Spend - Agentic Digital Marketing</title>
 
         <!-- Favicons -->
-        <link rel="icon" type="image/x-icon" href="/favicon.ico">
-        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
-        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png">
+        <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+        <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2">
+        <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png?v=2">
         <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-        <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png">
-        <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png">
+        <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png?v=2">
+        <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png?v=2">
 
         <!-- Canonical URL -->
         <link rel="canonical" href="{{ str_replace('http://', 'https://', url()->current()) }}" />
@@ -26,7 +26,7 @@
         <!-- Open Graph Meta Tags (for social sharing) -->
         <meta property="og:title" content="sitetospend — AI-Powered Ad Campaign Management">
         <meta property="og:description" content="6 autonomous AI agents create, manage, and optimize your digital ad campaigns across Google, Facebook, Microsoft, and LinkedIn 24/7.">
-        <meta property="og:image" content="{{ url('/og-image.png') }}">
+        <meta property="og:image" content="{{ url('/og-image.png?v=2') }}">
         <meta property="og:url" content="{{ url()->current() }}">
         <meta property="og:type" content="website">
         <meta property="og:site_name" content="sitetospend">
