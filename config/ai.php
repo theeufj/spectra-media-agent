@@ -16,7 +16,7 @@ return [
          * Default model for all general-purpose AI tasks:
          * copy generation, analysis, recommendations, reporting, etc.
          */
-        'default' => env('AI_MODEL_DEFAULT', 'gemini-3.1-flash-preview'),
+        'default' => env('AI_MODEL_DEFAULT', 'gemini-3-flash-preview'),
 
         /*
          * Pro model for complex reasoning tasks (competitor strategy,

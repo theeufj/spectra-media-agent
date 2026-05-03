@@ -172,14 +172,19 @@ class AdExtensionAgent
     private function buildBusinessContext(Campaign $campaign): string
     {
         $customer = $campaign->customer;
-        $assets   = $customer->harvestedAssets()->limit(5)->pluck('content')->implode("\n\n");
+        $pageContent = $customer->pages()
+            ->limit(5)
+            ->get(['title', 'content'])
+            ->map(fn($p) => trim("{$p->title}\n{$p->content}"))
+            ->filter()
+            ->implode("\n\n");
 
         return implode("\n", array_filter([
             'Business: ' . $customer->name,
             $customer->description ? 'Description: ' . $customer->description : null,
             'Campaign: ' . $campaign->name,
             'Website: ' . $customer->website,
-            $assets ? "Website content snippets:\n" . $assets : null,
+            $pageContent ? "Website content:\n" . $pageContent : null,
         ]));
     }
 
