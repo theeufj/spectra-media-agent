@@ -414,18 +414,26 @@ PROMPT;
 
     private function generateAdStrengthCopy(Campaign $campaign, object $customer): array
     {
+        $pageContext = $customer->pages()
+            ->limit(3)
+            ->get(['title', 'content'])
+            ->map(fn($p) => trim("{$p->title}\n" . \Illuminate\Support\Str::limit($p->content ?? '', 300)))
+            ->filter()
+            ->implode("\n\n");
+
         $prompt = <<<PROMPT
 You are a Google Ads copywriter. Generate 3 additional RSA headlines and 2 additional descriptions for this campaign to improve its Ad Strength rating.
 
 Business: {$customer->name}
+Website: {$customer->website}
 Campaign: {$campaign->name}
-Goal: {$campaign->goals}
+{$pageContext}
 
 Requirements:
-- Headlines: max 30 characters each
-- Descriptions: max 90 characters each
-- Be specific, use numbers and CTAs
-- Vary messaging angles (price, quality, urgency, benefit)
+- Headlines: max 30 characters each — be specific to this business, use numbers and CTAs
+- Descriptions: max 90 characters each — highlight real benefits from the website content above
+- Vary messaging angles (price, speed, quality, urgency)
+- Do NOT write generic copy — reflect what this business actually does
 
 Return ONLY valid JSON:
 [{"headlines": ["...", "...", "..."], "descriptions": ["...", "..."]}]
