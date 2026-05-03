@@ -68,6 +68,7 @@ export default function Landing({ auth, plans = [] }) {
                 <meta name="description" content={`Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads & Facebook Ads 24/7—competitor discovery, self-healing campaigns, budget intelligence, and more. From $${lowestPrice}/mo.`} />
                 <meta property="og:title" content="sitetospend — AI-Powered Ad Campaign Management" />
                 <meta property="og:description" content={`6 autonomous AI agents optimize your ad campaigns 24/7. Agency-level results from $${lowestPrice}/mo. No credit card required.`} />
+                <meta property="og:image" content="https://sitetospend.com/og-image.png?v=2" />
                 <meta property="og:type" content="website" />
                 <meta name="twitter:title" content="sitetospend — AI-Powered Ad Campaign Management" />
                 <meta name="twitter:description" content={`6 autonomous AI agents optimize your ad campaigns 24/7. Agency-level results from $${lowestPrice}/mo.`} />
