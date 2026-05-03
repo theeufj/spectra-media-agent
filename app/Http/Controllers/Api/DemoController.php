@@ -147,7 +147,14 @@ class DemoController extends Controller
         }
 
         // 3. Extract Visuals via Browsershot + Gemini Vision
-        $visuals = $this->brandService->analyzeVisualStyle($url);
+        $rawVisuals = $this->brandService->analyzeVisualStyle($url);
+
+        // Normalize the JSON keys from Gemini Vision so the frontend receives what it expects
+        $visuals = [
+            'colors' => $rawVisuals['primary_colors'] ?? $rawVisuals['colors'] ?? [],
+            'fonts' => $rawVisuals['fonts'] ?? [],
+            'style_description' => $rawVisuals['image_style'] ?? $rawVisuals['style_description'] ?? 'Professional & Modern',
+        ];
 
         // Fallback to CSS colors if Vision failed to extract them
         if (empty($visuals['colors']) && !empty($cssColors)) {
