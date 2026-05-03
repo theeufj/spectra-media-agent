@@ -54,6 +54,16 @@
             'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
             })(window,document,'script','dataLayer','GTM-KHFLQZ8S');</script>
         <!-- End Google Tag Manager -->
+
+        <!-- Google Ads (Spectra account AW-18115663500) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18115663500"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'AW-18115663500');
+        </script>
+        <!-- End Google Ads -->
     </head>
     <body class="font-sans antialiased">
         <!-- Google Tag Manager (noscript) -->

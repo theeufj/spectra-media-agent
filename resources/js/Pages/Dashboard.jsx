@@ -13,6 +13,17 @@ export default function Dashboard() {
         }
     }, [flash]);
 
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('verified') === '1' && typeof gtag === 'function') {
+            gtag('event', 'conversion', {
+                send_to: 'AW-18115663500/JPlcCMyP26YcEIytnL5D',
+                value: 99,
+                currency: 'USD',
+            });
+        }
+    }, []);
+
     return (
         <AuthenticatedLayout
             header={
