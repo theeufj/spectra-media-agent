@@ -43,7 +43,7 @@ class CampaignController extends Controller
     public function wizard(Request $request)
     {
         $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
-        
+
         // Load available pages for the customer
         $pages = $customer->pages()
             ->orderBy('created_at', 'desc')
@@ -158,7 +158,7 @@ class CampaignController extends Controller
         // Extract keywords before creating campaign (not a campaign column)
         $keywords = $validated['keywords'] ?? [];
         unset($validated['keywords']);
-        
+
         // Calculate daily_budget if not provided
         if (empty($validated['daily_budget']) && !empty($validated['total_budget'])) {
             $startDate = \Carbon\Carbon::parse($validated['start_date']);
@@ -166,7 +166,7 @@ class CampaignController extends Controller
             $days = max(1, $startDate->diffInDays($endDate) + 1); // +1 to include both start and end days
             $validated['daily_budget'] = round($validated['total_budget'] / $days, 2);
         }
-        
+
         $campaign = $customer->campaigns()->create($validated);
 
         if ($request->has('selected_pages')) {
@@ -202,7 +202,7 @@ class CampaignController extends Controller
 
         // Mark that we're about to start generating strategies
         $campaign->update(['strategy_generation_started_at' => now()]);
-        
+
         GenerateStrategy::dispatch($campaign);
 
         return redirect()->route('campaigns.show', $campaign);
@@ -222,12 +222,12 @@ class CampaignController extends Controller
         $campaign->load(['strategies' => function ($query) {
             $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
         }]);
-        
+
         // Calculate total collateral counts
         $totalAdCopies = $campaign->strategies->sum('ad_copies_count');
         $totalImages = $campaign->strategies->sum('image_collaterals_count');
         $totalVideos = $campaign->strategies->sum('video_collaterals_count');
-        
+
         // Add generation status
         $campaignData = $campaign->toArray();
         $campaignData['is_generating_strategies'] = $campaign->isGeneratingStrategies();
@@ -254,10 +254,10 @@ class CampaignController extends Controller
         }
 
         $strategy->update(['signed_off_at' => now()]);
-        
+
         // Dispatch collateral generation for this strategy
         GenerateStrategyCollateral::dispatch($campaign, $strategy, $request->user()->id);
-        
+
         // Reload campaign with strategies to get fresh data
         $campaign->load('strategies');
         $campaignData = $campaign->toArray();
@@ -321,11 +321,11 @@ class CampaignController extends Controller
     {
         $messages = $request->input('messages', []);
         $currentData = $request->input('current_data', []);
-        
+
         // Get the customer's brand guidelines
         $customer = $request->user()->customers()->find(session('active_customer_id'));
         $brandGuidelines = $customer?->brandGuideline;
-        
+
         // Build the system instruction using the prompt class
         $systemInstruction = \App\Prompts\CampaignWizardPrompt::build($brandGuidelines);
 
@@ -340,11 +340,11 @@ class CampaignController extends Controller
 
         try {
             $apiKey = config('services.google.gemini_api_key');
-            
+
             if (!$apiKey) {
                 throw new \Exception('Gemini API key not configured');
             }
-            
+
             $response = \Illuminate\Support\Facades\Http::post(
                 "https://generativelanguage.googleapis.com/v1beta/models/" . config('ai.models.default') . ":generateContent?key={$apiKey}",
                 [
@@ -358,15 +358,15 @@ class CampaignController extends Controller
                     ],
                 ]
             );
-            
+
             if (!$response->successful()) {
                 \Log::error('Gemini API Error', ['status' => $response->status(), 'body' => $response->body()]);
                 throw new \Exception('Gemini API request failed');
             }
-            
+
             $responseData = $response->json();
             $aiMessage = $responseData['candidates'][0]['content']['parts'][0]['text'] ?? 'I apologize, but I encountered an issue. Please try again.';
-            
+
             // Extract campaign data if present
             $campaignData = null;
             if (preg_match('/```campaign_data\s*\n(.*?)\n```/s', $aiMessage, $matches)) {
@@ -374,7 +374,7 @@ class CampaignController extends Controller
                     $campaignData = json_decode($matches[1], true);
                     // Clean the message by removing the JSON block
                     $aiMessage = trim(preg_replace('/```campaign_data\s*\n.*?\n```/s', '', $aiMessage));
-                    
+
                     // If no voice was extracted but we have brand guidelines, use default
                     if (empty($campaignData['voice']) && $brandGuidelines) {
                         $campaignData['voice'] = \App\Prompts\CampaignWizardPrompt::getDefaultVoice($brandGuidelines);
@@ -383,15 +383,15 @@ class CampaignController extends Controller
                     // JSON parsing failed, continue without campaign data
                 }
             }
-            
+
             return response()->json([
                 'message' => $aiMessage,
                 'campaign_data' => $campaignData,
             ]);
-            
+
         } catch (\Exception $e) {
             \Log::error('AI Assist Error: ' . $e->getMessage());
-            
+
             return response()->json([
                 'message' => 'I apologize, but I encountered an error. Please try again or use the template option instead.',
                 'campaign_data' => null,
@@ -421,11 +421,11 @@ class CampaignController extends Controller
     public function performance(Request $request, Campaign $campaign)
     {
         $user = $request->user();
-        
+
         // Check if user is admin OR owns this campaign
         $isAdmin = $user->hasRole('admin');
         $isOwner = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
-        
+
         if (!$isAdmin && !$isOwner) {
             abort(403, 'You do not have access to this campaign.');
         }
@@ -580,13 +580,13 @@ class CampaignController extends Controller
         // Check if user has access to this campaign through any of their customers
         $user = $request->user();
         $hasAccess = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
-        
+
         if (!$hasAccess) {
             abort(403, 'You do not have access to this campaign.');
         }
 
         $campaign->load('strategies');
-        
+
         // Add generation status to response
         $campaignData = $campaign->toArray();
         $campaignData['is_generating_strategies'] = $campaign->isGeneratingStrategies();
@@ -602,7 +602,7 @@ class CampaignController extends Controller
         // Check if user has access to this campaign
         $user = $request->user();
         $hasAccess = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
-        
+
         if (!$hasAccess) {
             abort(403, 'You do not have access to this campaign.');
         }
@@ -649,27 +649,27 @@ class CampaignController extends Controller
     private function calculateDeploymentProgress($strategy): int
     {
         $progress = 0;
-        
+
         // Step 1: Collateral generated
         if ($strategy->ad_copies_count > 0 || $strategy->image_collaterals_count > 0) {
             $progress++;
         }
-        
+
         // Step 2: Deployment started
         if ($strategy->deployment_status === 'deploying' || $strategy->deployment_status === 'deployed') {
             $progress++;
         }
-        
+
         // Step 3: Platform configured
         if ($strategy->deployment_status === 'deployed' || $strategy->deployed_at) {
             $progress++;
         }
-        
+
         // Step 4: Verification complete
         if ($strategy->deployed_at && $strategy->deployment_status === 'deployed') {
             $progress++;
         }
-        
+
         return $progress;
     }
 }

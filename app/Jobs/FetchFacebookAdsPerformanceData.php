@@ -139,7 +139,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                         ]);
                     }
 
-                    Log::info("Generated {count($recommendations)} recommendations for campaign {$this->campaign->id}");
+                    Log::info("Generated " . count($recommendations) . " recommendations for campaign {$this->campaign->id}");
                 }
 
                 $lock->release();

@@ -62,7 +62,7 @@ class VideoGenerationService
                 Log::error("Video generation for operation {$operationName} failed.", ['error' => $status['error']]);
                 return null;
             }
-            
+
             Log::info("Video generation for operation {$operationName} completed successfully.");
             return $status;
 
