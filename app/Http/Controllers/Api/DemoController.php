@@ -32,6 +32,8 @@ class DemoController extends Controller
 
         // 1. Scrape text using basic HTTP
         $textContent = '';
+        $cssColors = [];
+        $html = '';
         try {
             $response = Http::timeout(10)->get($url);
             if ($response->successful()) {
@@ -49,6 +51,52 @@ class DemoController extends Controller
                 $h1s = implode(' ', $h1Matches[1] ?? []);
 
                 $textContent = "Title: {$title}\nDescription: {$description}\nHeadings: {$h1s}";
+
+                // Extract colors directly from HTML styles
+                preg_match_all('/#([a-fA-F0-9]{6})\b/', $html, $colorMatches);
+                if (!empty($colorMatches[0])) {
+                    $cssColors = array_merge($cssColors, $colorMatches[0]);
+                }
+
+                // Extract linked CSS files
+                preg_match_all('/<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\'][^>]*>/i', $html, $cssMatches);
+                $cssUrls = $cssMatches[1] ?? [];
+                
+                // Only try the first 2 CSS files to save time
+                $cssUrlsToFetch = array_slice($cssUrls, 0, 2);
+                foreach ($cssUrlsToFetch as $cssPath) {
+                    try {
+                        // Handle relative URLs
+                        if (!str_starts_with($cssPath, 'http')) {
+                            $parsedUrl = parse_url($url);
+                            $basePath = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? '');
+                            $cssUrlToFetch = str_starts_with($cssPath, '/') ? $basePath . $cssPath : $basePath . '/' . $cssPath;
+                        } else {
+                            $cssUrlToFetch = $cssPath;
+                        }
+                        
+                        $cssResponse = Http::timeout(5)->get($cssUrlToFetch);
+                        if ($cssResponse->successful()) {
+                            preg_match_all('/#([a-fA-F0-9]{6})\b/', $cssResponse->body(), $cssFileColorMatches);
+                            if (!empty($cssFileColorMatches[0])) {
+                                $cssColors = array_merge($cssColors, $cssFileColorMatches[0]);
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning("Could not fetch CSS from: " . $cssPath);
+                    }
+                }
+                
+                // Get unique, lowercased colors and take top 5 most frequent (or just unique)
+                if (!empty($cssColors)) {
+                    $cssColors = array_map('strtolower', $cssColors);
+                    $colorCounts = array_count_values($cssColors);
+                    // Filter out greyscales if possible, but for now just sort by frequency
+                    arsort($colorCounts);
+                    // Remove pure white/black as they're not usually brand colors
+                    unset($colorCounts['#ffffff'], $colorCounts['#000000']);
+                    $cssColors = array_slice(array_keys($colorCounts), 0, 5);
+                }
             }
         } catch (\Exception $e) {
             Log::warning("DemoController text scraping failed: " . $e->getMessage());
@@ -83,6 +131,11 @@ class DemoController extends Controller
 
         // 3. Extract Visuals via Browsershot + Gemini Vision
         $visuals = $this->brandService->analyzeVisualStyle($url);
+        
+        // Fallback to CSS colors if Vision failed to extract them
+        if (empty($visuals['colors']) && !empty($cssColors)) {
+            $visuals['colors'] = $cssColors;
+        }
 
         return response()->json([
             'success' => true,

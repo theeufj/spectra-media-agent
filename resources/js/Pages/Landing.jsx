@@ -53,9 +53,9 @@ export default function Landing({ auth, plans = [] }) {
 
     const getLoadingText = () => {
         switch (loadingStage) {
-            case 1: return "Spinning up Headless Chrome browser...";
-            case 2: return "Navigating to site & extracting HTML/CSS...";
-            case 3: return "Running Gemini Vision AI on site screenshots...";
+            case 1: return "Analyzing your home page now...";
+            case 2: return "Extracting brand identity and CSS...";
+            case 3: return "Running Gemini Vision AI on site visuals...";
             case 4: return "Writing multi-variant ad copy...";
             default: return "Processing...";
         }
