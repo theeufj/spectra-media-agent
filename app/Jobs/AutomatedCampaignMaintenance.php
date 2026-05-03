@@ -17,6 +17,7 @@ use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Services\Agents\AudienceIntelligenceAgent;
 use App\Jobs\FindUnderperformingKeywords;
+use App\Jobs\SetupConversionTracking;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -250,6 +251,11 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             $customer = \App\Models\Customer::find($customerId);
             if (!$customer) {
                 continue;
+            }
+
+            // Ensure conversion tracking is set up (dispatches once; job self-skips if already done)
+            if (!$customer->conversion_action_id) {
+                SetupConversionTracking::dispatch($customer);
             }
 
             // Check cross-platform budget reallocation opportunity (Google vs Facebook)

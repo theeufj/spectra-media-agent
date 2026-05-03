@@ -10,6 +10,7 @@ use App\Notifications\CriticalAgentAlert;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
+use App\Services\GoogleAds\CommonServices\UpdateResponsiveSearchAd;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -309,12 +310,15 @@ PROMPT;
         $errors     = [];
 
         try {
-            // Fetch ad strength via GAQL
+            // Fetch ad strength + existing copy via GAQL
             $service = new class($customer) extends BaseGoogleAdsService {
                 public function fetchAdStrength(string $customerId, string $campaignResource): array
                 {
                     $this->ensureClient();
-                    $query = "SELECT ad_group_ad.ad.id, ad_group_ad.ad_strength, ad_group.resource_name "
+                    $query = "SELECT ad_group_ad.resource_name, ad_group_ad.ad.id, ad_group_ad.ad_strength, "
+                           . "ad_group_ad.ad.responsive_search_ad.headlines, "
+                           . "ad_group_ad.ad.responsive_search_ad.descriptions, "
+                           . "ad_group.resource_name "
                            . "FROM ad_group_ad "
                            . "WHERE campaign.resource_name = '{$campaignResource}' "
                            . "AND ad_group_ad.status = 'ENABLED' "
@@ -322,10 +326,22 @@ PROMPT;
 
                     $results = [];
                     foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
+                        $rsa = $row->getAdGroupAd()->getAd()->getResponsiveSearchAd();
+                        $headlines    = [];
+                        $descriptions = [];
+                        foreach ($rsa->getHeadlines() as $asset) {
+                            $headlines[] = $asset->getText();
+                        }
+                        foreach ($rsa->getDescriptions() as $asset) {
+                            $descriptions[] = $asset->getText();
+                        }
                         $results[] = [
-                            'ad_id'        => $row->getAdGroupAd()->getAd()->getId(),
-                            'ad_strength'  => $row->getAdGroupAd()->getAdStrength(),
-                            'ad_group'     => $row->getAdGroup()->getResourceName(),
+                            'resource_name' => $row->getAdGroupAd()->getResourceName(),
+                            'ad_id'         => $row->getAdGroupAd()->getAd()->getId(),
+                            'ad_strength'   => $row->getAdGroupAd()->getAdStrength(),
+                            'ad_group'      => $row->getAdGroup()->getResourceName(),
+                            'headlines'     => $headlines,
+                            'descriptions'  => $descriptions,
                         ];
                     }
                     return $results;
@@ -342,6 +358,8 @@ PROMPT;
             // Ad strength enum: 0=UNSPECIFIED, 1=UNKNOWN, 2=PENDING, 3=NO_ADS, 4=POOR, 5=AVERAGE, 6=GOOD, 7=EXCELLENT
             $weakAds = array_filter($ads, fn($ad) => in_array($ad['ad_strength'], [4, 5], true));
 
+            $updater = new UpdateResponsiveSearchAd($customer);
+
             foreach ($weakAds as $ad) {
                 $strengthLabel = $ad['ad_strength'] === 4 ? 'POOR' : 'AVERAGE';
                 Log::info("QualityScoreImprovementAgent: RSA ad {$ad['ad_id']} has {$strengthLabel} strength", [
@@ -349,12 +367,30 @@ PROMPT;
                 ]);
 
                 $newCopy = $this->generateAdStrengthCopy($campaign, $customer);
-                if (!empty($newCopy)) {
+                if (empty($newCopy)) {
+                    continue;
+                }
+
+                $newHeadlines    = array_merge(...array_column($newCopy, 'headlines'));
+                $newDescriptions = array_merge(...array_column($newCopy, 'descriptions'));
+
+                $updated = ($updater)(
+                    $customerId,
+                    $ad['resource_name'],
+                    $ad['headlines'],
+                    $ad['descriptions'],
+                    $newHeadlines,
+                    $newDescriptions
+                );
+
+                if ($updated) {
                     $actions[] = [
-                        'ad_id'    => $ad['ad_id'],
-                        'strength' => $strengthLabel,
-                        'copy'     => $newCopy,
+                        'ad_id'           => $ad['ad_id'],
+                        'strength_before' => $strengthLabel,
+                        'headlines_added' => count($newHeadlines),
                     ];
+                } else {
+                    $errors[] = "Could not update RSA {$ad['ad_id']} (no new assets or API error)";
                 }
             }
         } catch (\Exception $e) {
@@ -366,10 +402,10 @@ PROMPT;
             AgentActivity::record(
                 'quality_score',
                 'ad_strength_improved',
-                "Generated " . count($actions) . " ad copy improvement(s) for weak RSA ads in \"{$campaign->name}\"",
+                "Pushed " . count($actions) . " RSA ad strength improvement(s) for \"{$campaign->name}\"",
                 $campaign->customer_id,
                 $campaign->id,
-                ['actions' => $actions]
+                ['actions' => $actions, 'errors' => $errors]
             );
         }
 

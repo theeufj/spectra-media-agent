@@ -5,6 +5,7 @@ namespace App\Console;
 use App\Models\Customer;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
+use App\Jobs\AutomatedCampaignMaintenance;
 use App\Jobs\DetectKeywordCannibalization;
 use App\Jobs\DetectNegativeKeywordConflicts;
 use App\Jobs\EvaluateABTests;
@@ -18,6 +19,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
+        $schedule->job(new AutomatedCampaignMaintenance)->dailyAt('02:00');
         $schedule->command('billing:report-ad-spend')->daily();
         $schedule->command('campaign:fetch-performance-data')->hourly();
         $schedule->job(new EvaluateABTests)->dailyAt('06:00');
