@@ -5,7 +5,9 @@ namespace App\Jobs;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
+use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetCampaignKeywords;
+use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
 use App\Services\GoogleAds\CommonServices\RemoveKeyword;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Bus\Queueable;
@@ -142,6 +144,24 @@ class ExpandBroadMatchKeywords implements ShouldQueue
                 $existingBroad[strtolower($text)] = true;
                 $added[] = $text;
                 Log::info("ExpandBroadMatchKeywords: Added broad match for \"{$text}\" in campaign {$this->campaign->id}");
+            }
+        }
+
+        // ── Phase 3: DISMISS the Google Ads recommendation ───────────────────
+        // Fetch KEYWORD_MATCH_TYPE recommendations for this campaign and dismiss
+        // them so the suggestion disappears from the Google Ads UI immediately.
+
+        if (!empty($added)) {
+            $getRecommendations = new GetGoogleAdsRecommendations($customer);
+            $allRecs            = ($getRecommendations)($customerId, $campaignResource);
+            $toBeDismissed      = array_column(
+                array_filter($allRecs, fn($r) => $r['type'] === 4), // 4 = KEYWORD_MATCH_TYPE
+                'resource_name'
+            );
+
+            if (!empty($toBeDismissed)) {
+                (new DismissRecommendation($customer))($customerId, $toBeDismissed);
+                Log::info("ExpandBroadMatchKeywords: Dismissed " . count($toBeDismissed) . " KEYWORD_MATCH_TYPE recommendation(s) for campaign {$this->campaign->id}");
             }
         }
 

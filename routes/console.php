@@ -12,6 +12,7 @@ use App\Jobs\RunHealthChecks;
 use App\Jobs\CheckCampaignPolicyViolations;
 use App\Jobs\HourlyBudgetOptimization;
 use App\Jobs\GetKeywordQualityScore;
+use App\Jobs\ReviewGoogleAdsRecommendations;
 use App\Jobs\GenerateExecutiveReport;
 use App\Jobs\GenerateMonthlyReport;
 use App\Jobs\SendDailyPerformanceReports;
@@ -99,6 +100,10 @@ Schedule::job(new \App\Jobs\ManageDSACampaigns)
 
 // Autonomous campaign maintenance - self-healing, keyword mining, budget intelligence
 Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('AutomatedCampaignMaintenance'));
+
+// Google Ads recommendation review — dismisses auto-handled recommendations and alerts
+// admins if Google has flagged anything that suggests our agents made a bad decision
+Schedule::job(new ReviewGoogleAdsRecommendations)->dailyAt('04:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ReviewGoogleAdsRecommendations'));
 
 // Daily ad spend billing - bills customers for yesterday's spend, handles failures
 Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ProcessDailyAdSpendBilling'));
