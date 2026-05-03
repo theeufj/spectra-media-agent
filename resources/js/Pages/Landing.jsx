@@ -55,7 +55,7 @@ export default function Landing({ auth, plans = [] }) {
         switch (loadingStage) {
             case 1: return "Analyzing your home page now...";
             case 2: return "Extracting brand identity and CSS...";
-            case 3: return "Running Gemini Vision AI on site visuals...";
+            case 3: return "Harnessing Vision AI to decode your winning brand style...";
             case 4: return "Writing multi-variant ad copy...";
             default: return "Processing...";
         }
