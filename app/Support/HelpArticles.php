@@ -20,6 +20,13 @@ class HelpArticles
             self::budgetPacing(),
             self::multiPlatformAdvertising(),
             self::understandingRoas(),
+            self::whyGoogleAdsIsHard(),
+            self::whyAdsStopWorking(),
+            self::hiddenCostOfManaging(),
+            self::whySmallBusinessLoses(),
+            self::campaignStructureMistakes(),
+            self::landingPageConversions(),
+            self::facebookAdsExplained(),
         ];
     }
 
@@ -351,6 +358,352 @@ HTML,
 
 <h2>Getting help</h2>
 <p>Every action the agents take is logged in your Activity Feed with a clear explanation of what happened and why. If you have questions about any action, or want to understand a particular optimisation, you can submit a support ticket directly from the activity log.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function whyGoogleAdsIsHard(): array
+    {
+        return [
+            'slug'        => 'why-google-ads-is-so-hard-to-manage',
+            'title'       => 'Why Google Ads Is So Hard to Manage (and Why Most Campaigns Fail)',
+            'description' => 'Google Ads looks simple to set up but is notoriously difficult to manage profitably. Here\'s why — and what a properly managed campaign actually requires.',
+            'category'    => 'Google Ads',
+            'read_time'   => '7 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>The illusion of simplicity</h2>
+<p>Google makes it remarkably easy to spend money on Google Ads. You can have an account set up and ads running in under an hour. The interface is clean, the setup wizard is friendly, and Google's onboarding actively encourages you to get started quickly. This is by design — and it's the first trap.</p>
+<p>Creating a campaign is easy. Creating a <em>profitable</em> campaign is genuinely hard. The gap between the two is where most businesses quietly lose thousands of pounds every year without understanding why.</p>
+
+<h2>The auction never stops changing</h2>
+<p>The Google Ads auction is not a fixed marketplace. It changes every day. New competitors enter your keywords. Existing competitors increase their bids. Seasonal demand shifts. Google updates its algorithm. A competitor launches a new offer that pulls clicks away from yours.</p>
+<p>A campaign that was profitable six months ago can be unprofitable today — not because you did anything wrong, but because the environment changed around you. Static campaigns, set and forgotten, degrade. They require active management to stay competitive.</p>
+
+<h2>The data problem</h2>
+<p>Good Google Ads decisions require data. But new campaigns have no data. This creates a bootstrapping problem: you can't optimise without data, but you can't get data without spending money. The learning phase — the period where Google's Smart Bidding is calibrating — can take 2–4 weeks and costs real money before it reliably works.</p>
+<p>Even once you have data, interpreting it correctly requires experience. Is a high CPC a problem, or is the conversion rate compensating for it? Is a low CTR a creative issue, a keyword match issue, or a landing page mismatch? Is the campaign limited by budget, by Quality Score, or by bidding strategy? These questions aren't answered by looking at a single metric.</p>
+
+<h2>The 47 things that need to be right simultaneously</h2>
+<p>A well-run Google Ads campaign requires:</p>
+<ul>
+  <li>Keyword research — finding the right terms, in the right match types, at the right volume</li>
+  <li>Negative keywords — continuously updated to prevent waste</li>
+  <li>Campaign and ad group structure — close enough groupings to maintain ad relevance</li>
+  <li>Ad copy — relevant, compelling, Google-policy-compliant, continuously A/B tested</li>
+  <li>Ad extensions — sitelinks, callouts, structured snippets, call extensions, all populated</li>
+  <li>Landing pages — fast, relevant, with a clear conversion path</li>
+  <li>Conversion tracking — correctly implemented, tracking the right events with the right values</li>
+  <li>Bidding strategy — right strategy for the right campaign stage with sufficient data</li>
+  <li>Audience targeting — remarketing lists, RLSA, customer match, in-market audiences</li>
+  <li>Budget management — correctly distributed, not running out at the wrong time of day</li>
+  <li>Dayparting — bid adjustments by hour and day based on actual conversion data</li>
+  <li>Device bid adjustments — based on actual device performance</li>
+  <li>Geographic targeting — correct radius, bid adjustments by location</li>
+  <li>Quality Score management — diagnosing and fixing low-scoring keywords</li>
+  <li>Disapproval monitoring — catching and fixing policy violations quickly</li>
+</ul>
+<p>Each of these is its own discipline. Each requires attention. Each degrades if ignored. Most businesses get 4 or 5 of them right. The best campaigns get all of them right, consistently, over months and years.</p>
+
+<h2>Why agencies often don't solve the problem</h2>
+<p>The traditional solution is to hire an agency. But agencies have a structural problem: they're paid a percentage of ad spend (typically 10–20%), which creates an incentive to <em>increase</em> your spend, not optimise it. A £3,000/month campaign generates more agency revenue than a £1,500/month campaign with the same return — even though the £1,500 version is objectively better for your business.</p>
+<p>Agencies are also expensive. Add a 15% management fee to a £3,000 monthly budget and you're paying £450/month for management before a single ad is clicked. For small and medium businesses, this fee represents a significant portion of the potential value Google Ads can deliver.</p>
+
+<h2>How sitetospend.com is different</h2>
+<p>sitetospend.com replaces the agency model with autonomous AI agents that run 24/7. Every optimisation task — negative keyword management, Quality Score monitoring, ad copy testing, budget pacing, competitor analysis, disapproval fixing — is automated and runs continuously. There's no account manager who checks in once a week and charges 15% of spend. The system works every day, on every campaign, applying the same rigour to a £500/month budget that would only be affordable for a £50,000/month budget with a traditional agency.</p>
+<p>The result is a properly managed campaign at a fraction of the cost — and without the six months of learning that managing it yourself would require.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function whyAdsStopWorking(): array
+    {
+        return [
+            'slug'        => 'why-your-google-ads-stop-working',
+            'title'       => 'Why Your Google Ads Stop Working (and What to Do About It)',
+            'description' => 'Google Ads that worked brilliantly at launch often decline over months. Here\'s the real reasons campaign performance drops — and how to reverse it.',
+            'category'    => 'Google Ads',
+            'read_time'   => '6 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>The honeymoon period</h2>
+<p>Many Google Ads campaigns have a honeymoon period. In the first few weeks, before competitors notice you, before Google has fully calibrated your Quality Scores, before ad fatigue sets in, clicks can be cheap and conversions can be plentiful. Then, gradually or suddenly, performance drops. Cost-per-lead climbs. ROAS falls. The campaign that was working stops working.</p>
+<p>This is so common it has a name among PPC professionals: campaign decay. Understanding why it happens is the first step to preventing it.</p>
+
+<h2>Reason 1: Competitors react</h2>
+<p>When a new advertiser appears in an auction and starts winning impressions, competitors notice. If your ads are showing in positions that used to belong to established players, they'll increase their bids to push you out. Your average CPC rises as a result. The keyword that cost £1.20 in month one costs £1.80 in month four — not because you changed anything, but because the auction got more competitive around you.</p>
+<p>The response isn't simply to outbid them — that's an expensive race to the bottom. The correct response is to improve Quality Score (so you achieve the same position at lower cost) and to use competitor intelligence to differentiate your ads so they're clicked more often.</p>
+
+<h2>Reason 2: Ad fatigue</h2>
+<p>The same ads shown to the same audience repeatedly lose their effectiveness. Click-through rates decline. Quality Scores fall as CTR drops. This happens invisibly — your campaign looks structurally the same, but the performance numbers worsen. Most businesses don't notice until the decline is significant.</p>
+<p>The solution is continuous creative refresh: new headline variations, new angle tests, new calls to action. This needs to happen proactively, not reactively after performance has already dropped.</p>
+
+<h2>Reason 3: Keyword match type drift</h2>
+<p>Broad match and phrase match keywords expand over time. A keyword that was generating relevant traffic in month one starts matching to increasingly tangential searches as Google learns and widens its interpretation. Search term reports fill with irrelevant queries consuming budget. Without a systematic weekly review of the Search Terms report and ongoing negative keyword additions, this drift is inevitable.</p>
+
+<h2>Reason 4: The landing page stopped converting</h2>
+<p>Sometimes the ads are performing fine — the clicks are coming — but the landing page conversion rate has declined. A website redesign that changed the CTA. A price increase that's no longer competitive. A slow page after a new plugin was added. Page speed degradation as the site grew. Any of these can cause a conversion rate drop that looks like an ads problem but isn't one.</p>
+<p>Diagnosing this requires separating ad metrics (CTR, impression share, Quality Score) from post-click metrics (conversion rate, bounce rate, time on page). If ad metrics are stable but conversion rate fell, the problem is the landing page.</p>
+
+<h2>Reason 5: Budget erosion</h2>
+<p>As CPCs rise from competition, a fixed daily budget runs out earlier in the day. A campaign that previously ran comfortably all day now exhausts its budget by midday. Afternoon and evening searches — which for many businesses are peak buying hours — receive no impressions at all. Revenue falls, but the daily spend looks the same on a report.</p>
+
+<h2>Reason 6: Smart Bidding has insufficient conversion data</h2>
+<p>If your campaign goes through a quiet period — seasonal lull, campaign pause, tracking issue — Google's Smart Bidding models can lose their calibration. A bidding strategy trained on 90 days of conversion history can perform very differently after 3 weeks of low conversion data. Google's learning phase effectively restarts, and performance fluctuates while it recalibrates.</p>
+
+<h2>How sitetospend.com prevents campaign decay</h2>
+<p>Every cause of campaign decay described above has a corresponding agent that prevents it. The Creative Intelligence Agent continuously refreshes ad copy before fatigue sets in. The Budget Intelligence Agent detects when CPCs are rising and adjusts dayparting to protect performance. The Self-Healing Agent monitors Search Term drift and maintains negative keyword lists weekly. The Quality Score Agent catches CTR declines before they become Quality Score problems. Together, these agents don't just fix problems — they prevent them from developing in the first place.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function hiddenCostOfManaging(): array
+    {
+        return [
+            'slug'        => 'true-cost-of-managing-google-ads-yourself',
+            'title'       => 'The True Cost of Managing Google Ads Yourself (It\'s More Than You Think)',
+            'description' => 'The monthly fee is the visible cost. The real cost of DIY Google Ads management is hidden in wasted spend, missed optimisations, and your own time. Here\'s the full picture.',
+            'category'    => 'Platform',
+            'read_time'   => '5 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>The maths most businesses don't do</h2>
+<p>When businesses consider whether to manage Google Ads themselves, they typically think about two numbers: the ad budget and the agency fee. "I'm spending £2,000/month on ads. An agency wants 15%, that's £300. I'll manage it myself and save £300." This calculation is almost always wrong.</p>
+<p>It ignores the three real costs: wasted ad spend, the opportunity cost of your time, and the revenue lost from suboptimal performance.</p>
+
+<h2>Cost 1: Wasted ad spend</h2>
+<p>An unmanaged or poorly managed Google Ads account wastes money in predictable ways:</p>
+<ul>
+  <li><strong>Irrelevant clicks</strong> — without systematic negative keyword management, 15–30% of clicks typically come from non-converting search queries</li>
+  <li><strong>Poor Quality Scores</strong> — keywords with low Quality Scores cost 2–4x more per click for the same position as high-QS keywords</li>
+  <li><strong>Inefficient time-of-day spend</strong> — without dayparting, budget is spread evenly including the hours with the worst conversion rates</li>
+  <li><strong>Disapproved ads</strong> — ads that violate policy and go unnoticed can result in campaigns running with few active ads for days</li>
+  <li><strong>Suboptimal bids</strong> — manual bidding or misconfigured Smart Bidding is typically 20–30% less efficient than well-configured automated bidding</li>
+</ul>
+<p>On a £2,000/month account, conservative estimates put wasted spend at £400–700/month. That's the agency fee paid twice over — and instead of getting management, you're getting nothing back.</p>
+
+<h2>Cost 2: Your time</h2>
+<p>Properly managing a Google Ads account takes time. Not the 20 minutes a week that Google's automated recommendations suggest, but real time:</p>
+<ul>
+  <li>Search Terms report review — 30–60 minutes weekly</li>
+  <li>Ad performance review and creative refresh — 60–90 minutes weekly</li>
+  <li>Keyword and Quality Score analysis — 30 minutes weekly</li>
+  <li>Campaign structure adjustments — periodic, but often 2–3 hours when needed</li>
+  <li>Staying current on Google Ads changes — platform updates, new features, policy changes happen constantly</li>
+</ul>
+<p>A conservative total: 3–5 hours per week. If your time is worth £50/hour, that's £600–1,000/month. If you're a business owner whose time is worth more, the number is higher. Most businesses undercount this because they do it in scattered 15-minute sessions and never add it up.</p>
+
+<h2>Cost 3: The revenue you didn't make</h2>
+<p>The hardest cost to see is the revenue that a better-managed campaign would have generated but didn't. A campaign running at £15 cost-per-lead instead of £8 isn't just wasting £7 — it's generating half the number of leads from the same budget. Over 12 months on a £2,000/month account, the difference between average and excellent management can easily represent 200–400 additional leads.</p>
+<p>At any reasonable lead-to-customer conversion rate and customer value, this revenue gap dwarfs the cost of professional management.</p>
+
+<h2>What you actually need vs what you pay for</h2>
+<p>The ideal scenario is a campaign that gets the attention of a senior PPC specialist every day — reviewing search terms, testing copy, monitoring Quality Scores, adjusting bids. But that level of human attention costs £2,000–4,000/month in agency fees, which is only economical for large-budget accounts.</p>
+<p>sitetospend.com makes daily expert-level attention economically viable for any budget. The AI agents do the work of a senior PPC team — continuous, every day, automatically — at a flat subscription fee rather than a percentage of spend. For a £2,000/month ad budget, that's the difference between paying £300+/month for weekly check-ins or a fraction of that for daily automated optimisation.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function whySmallBusinessLoses(): array
+    {
+        return [
+            'slug'        => 'why-small-businesses-lose-on-google-ads',
+            'title'       => 'Why Small Businesses Lose on Google Ads (and How to Level the Playing Field)',
+            'description' => 'Large advertisers have dedicated teams, proprietary tools, and years of data. Here\'s how small businesses can compete — and where the real advantages lie.',
+            'category'    => 'Google Ads',
+            'read_time'   => '6 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>The unfair fight</h2>
+<p>A national insurance company competing on Google Ads has a team of PPC specialists, a data science team, proprietary bidding software, years of conversion data, and a seven-figure monthly budget. A small insurance broker has a business owner who checks their Google Ads account every couple of weeks and a £1,500 monthly budget.</p>
+<p>On paper, this looks like an unwinnable fight. In practice, small businesses can and do compete effectively with large advertisers on Google — but only if they understand where the real advantages lie and how to exploit them.</p>
+
+<h2>Why big budgets don't automatically win</h2>
+<p>Google's auction is intentionally designed so money alone doesn't guarantee victory. Ad Rank — the formula that determines who shows where — rewards quality as well as bid. A small advertiser with a highly relevant, well-written ad targeting a specific long-tail keyword can outrank a national advertiser bidding on broad terms.</p>
+<p>Large advertisers often have sprawling accounts with thousands of keywords, many of which are poorly maintained. Their ads are generic, written to appeal to a national audience. Their landing pages are corporate and don't always match search intent precisely. These are exploitable weaknesses.</p>
+
+<h2>Where small businesses actually win</h2>
+<p><strong>Specificity.</strong> A national plumbing franchise targeting "plumber" loses on volume but wins on brand recognition. A local plumber targeting "emergency boiler repair Camden" with a highly relevant ad and a page specifically about emergency boiler repair in Camden can achieve higher Quality Scores, better CTR, and lower CPCs for that specific search. Local specificity is a genuine moat that large advertisers can't easily replicate.</p>
+<p><strong>Speed.</strong> A small business can change its offer, update its ads, and adjust its landing page in hours. A large advertiser needs approvals, compliance reviews, and brand guidelines sign-off. When a competitor makes a mistake, you can respond immediately. When a seasonal opportunity emerges, you can capitalise on it before larger competitors' internal processes allow them to react.</p>
+<p><strong>Relationship.</strong> Small businesses often convert at higher rates from phone calls and direct enquiries because they can personalise the response. An ad that says "Call Josh directly — we'll have a quote to you today" outperforms a corporate form submission for many service businesses.</p>
+
+<h2>Where small businesses systematically lose</h2>
+<p>The areas where small businesses genuinely struggle are the ones that require sustained, expert attention:</p>
+<ul>
+  <li><strong>Data volume</strong> — large advertisers accumulate conversion data faster, giving their Smart Bidding better signals sooner</li>
+  <li><strong>Continuous optimisation</strong> — big advertisers have people checking accounts daily; small businesses check monthly if they're lucky</li>
+  <li><strong>Competitive intelligence</strong> — large advertisers have tools to monitor competitor activity; small businesses typically fly blind</li>
+  <li><strong>Testing infrastructure</strong> — large advertisers run structured A/B tests; small businesses run the same ads for months</li>
+</ul>
+
+<h2>How sitetospend.com closes the gap</h2>
+<p>The capabilities that large advertisers pay teams to provide — daily optimisation, competitive monitoring, continuous creative testing, conversion tracking infrastructure — are exactly what sitetospend.com's AI agents deliver automatically. A small business using sitetospend.com gets the same quality of account management as a large advertiser's in-house team, at a fraction of the cost.</p>
+<p>Combined with the natural advantages small businesses hold — local specificity, speed, and the ability to convert enquiries personally — this creates a genuinely competitive position in any local or niche market.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function campaignStructureMistakes(): array
+    {
+        return [
+            'slug'        => 'google-ads-campaign-structure-mistakes',
+            'title'       => 'The Google Ads Campaign Structure Mistakes That Kill Performance',
+            'description' => 'Poor campaign structure is the root cause of most Google Ads underperformance. Here are the most common structural mistakes — and how to fix them.',
+            'category'    => 'Google Ads',
+            'read_time'   => '6 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>Why structure matters more than budget</h2>
+<p>Two Google Ads accounts with identical budgets and identical keywords can produce dramatically different results depending purely on how they're structured. Campaign structure determines ad relevance, Quality Score, conversion tracking accuracy, and budget distribution. Get it wrong and every other optimisation you do is working against a structural handicap.</p>
+
+<h2>Mistake 1: One campaign for everything</h2>
+<p>The most common mistake is a single campaign containing all your services, all your locations, and all your products — with one shared budget. This makes it impossible to:</p>
+<ul>
+  <li>Allocate budget differently to different services or products based on their profitability</li>
+  <li>Set different bid strategies for high-intent vs low-intent keywords</li>
+  <li>Understand which services or areas are actually performing</li>
+  <li>Optimise bidding separately for different goals</li>
+</ul>
+<p>The fix: one campaign per product/service line or geographic area, with its own budget and bidding strategy. Yes, this creates more campaigns to manage — which is exactly why automation helps.</p>
+
+<h2>Mistake 2: Ad groups that are too broad</h2>
+<p>Ad relevance — one of the three Quality Score components — measures how closely your ad matches a search query. If a single ad group contains 50 loosely related keywords, no single ad can be highly relevant to all of them. Your Quality Scores suffer across the board, raising CPCs.</p>
+<p>The correct approach is tight ad groups: 5–15 closely related keywords per ad group, each served by ad copy that directly addresses those specific terms. This is called Single Keyword Ad Groups (SKAGs) in its most extreme form, but even moderately tight groupings produce measurably better Quality Scores than large catch-all ad groups.</p>
+
+<h2>Mistake 3: Match type mismanagement</h2>
+<p>Keyword match types — broad, phrase, and exact — control how closely a search query must match your keyword to trigger your ad. Broad match is powerful but dangerous: it allows Google to match your keyword to semantically related queries, which often includes irrelevant ones. Most campaigns need a deliberate match type strategy:</p>
+<ul>
+  <li><strong>Exact match</strong> for your highest-value, best-converting terms — maximum control</li>
+  <li><strong>Phrase match</strong> for moderate-volume terms where some variation is acceptable</li>
+  <li><strong>Broad match</strong> only with Smart Bidding and strong conversion data — allows Google to find new converting queries</li>
+</ul>
+<p>Running broad match keywords without robust negative keyword lists and sufficient conversion data is one of the fastest ways to drain a budget.</p>
+
+<h2>Mistake 4: Mixing campaigns with different goals</h2>
+<p>A campaign that mixes brand terms (your company name), competitor terms, and generic service keywords is difficult to manage and report on. Someone searching your brand name has very different intent from someone searching a generic service term — they should be in different campaigns with different bid strategies, budgets, and goals.</p>
+<p>Brand campaigns typically warrant higher bids (protecting your brand terms is cheap and high-converting), while generic terms require more aggressive optimisation and carry higher costs.</p>
+
+<h2>Mistake 5: No separation between Search and Display</h2>
+<p>Google's default campaign setup often enables both Search and Display network targeting in the same campaign. These are fundamentally different advertising channels — Search reaches people actively searching, Display shows banner ads on websites. Combining them in one campaign mixes their performance data, making it impossible to optimise either properly. Always run them as separate campaigns.</p>
+
+<h2>How sitetospend.com builds campaign structure</h2>
+<p>When sitetospend.com creates your campaigns, it applies a structured framework: separate campaigns by service and intent type, tight ad groups with closely related keywords, appropriate match type distributions, and brand campaigns isolated from generic campaigns. This structure is established at launch and maintained over time — the agents won't collapse well-structured campaigns into inefficient arrangements, and any changes preserve the structural integrity that underpins campaign performance.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function landingPageConversions(): array
+    {
+        return [
+            'slug'        => 'landing-page-conversion-rate-optimisation',
+            'title'       => 'Landing Page CRO: Why Your Ads Click But Don\'t Convert',
+            'description' => 'Getting clicks is only half the battle. If your landing page doesn\'t convert, every click is wasted money. Here\'s how to diagnose and fix landing page conversion problems.',
+            'category'    => 'Platform',
+            'read_time'   => '6 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>The click is not the win</h2>
+<p>A common misconception in paid advertising is that the goal is to get as many clicks as possible. Clicks are a cost, not a result. The result is a conversion — an enquiry, a purchase, a booked call. A campaign that generates 200 clicks at 2% conversion rate produces 4 conversions. A campaign that generates 100 clicks at 8% conversion rate produces 8 conversions at half the spend.</p>
+<p>Landing page conversion rate is often the highest-leverage variable in a Google Ads account — higher than any bid adjustment, keyword change, or ad copy test. Yet it's the variable most businesses neglect.</p>
+
+<h2>The message match problem</h2>
+<p>The most common landing page failure is message mismatch. Someone searches "emergency boiler repair London," clicks an ad that promises "Fast Emergency Boiler Repair — Same Day Response," and lands on your homepage. The homepage talks about your company history, your range of services, and has a generic contact form buried below the fold. The searcher, who wanted immediate reassurance that you offer emergency same-day repairs, leaves within seconds.</p>
+<p>Every ad should lead to a page where the headline and primary content directly matches what the ad promised. If your ad targets emergency boiler repair, the landing page should lead with "Emergency Boiler Repair" — in the H1, in the first paragraph, in the CTA. This isn't just good UX — it directly improves your Quality Score's "landing page experience" component, lowering your CPCs.</p>
+
+<h2>The five elements of a high-converting landing page</h2>
+<ol>
+  <li><strong>Headline that matches the ad</strong> — the user should see immediate confirmation they're in the right place</li>
+  <li><strong>Clear, specific value proposition</strong> — what you offer, for whom, and why you're the right choice</li>
+  <li><strong>Social proof above the fold</strong> — reviews, number of customers, years in business, recognisable client logos</li>
+  <li><strong>Single, prominent CTA</strong> — one action to take, not four competing options. "Get a Free Quote" or "Call Now" — not both plus a newsletter signup and a download</li>
+  <li><strong>Fast load time</strong> — every additional second of load time reduces conversion rate by approximately 7%. Google considers page speed in Quality Score. A page that takes 6 seconds to load on mobile is silently killing your campaign</li>
+</ol>
+
+<h2>What good conversion rates actually look like</h2>
+<p>Conversion rates vary widely by industry and goal type, but as rough benchmarks:</p>
+<ul>
+  <li>Local service businesses (plumber, electrician, cleaner) — 8–15% from a well-targeted search ad</li>
+  <li>Professional services (accountant, solicitor, consultant) — 5–10%</li>
+  <li>E-commerce purchase — 2–5%</li>
+  <li>Lead generation form completion — 3–8%</li>
+  <li>Phone call from a mobile ad — 15–30% (phone calls convert better than form fills)</li>
+</ul>
+<p>If your conversion rate is below half these benchmarks, the landing page is almost certainly the problem — not the ads.</p>
+
+<h2>How to diagnose a landing page problem</h2>
+<p>If your Google Ads CTR is healthy (above 3–5% for Search) but conversions are low, isolate the problem to the landing page:</p>
+<ul>
+  <li>Check bounce rate — if over 70%, people are leaving immediately after seeing the page</li>
+  <li>Check page speed — use Google PageSpeed Insights. Under 3 seconds is the target</li>
+  <li>Check mobile experience — over 60% of searches are on mobile. Does your page work on a phone?</li>
+  <li>Check message match — does your landing page headline match your ad copy?</li>
+  <li>Check CTA visibility — can someone see what to do next without scrolling?</li>
+</ul>
+
+<h2>How sitetospend.com monitors landing page performance</h2>
+<p>sitetospend.com tracks conversion data at the landing page level, not just the campaign level. The Quality Score Agent monitors "landing page experience" scores per keyword and flags when pages drop below acceptable thresholds. When a page consistently underperforms relative to ad click quality — high CTR, low conversion — the system raises a recommendation with specific improvement priorities: headline alignment, speed, CTA placement, or mobile optimisation. You'll see these recommendations in your Activity Feed with the data that supports them.</p>
+HTML,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static function facebookAdsExplained(): array
+    {
+        return [
+            'slug'        => 'facebook-ads-for-small-business',
+            'title'       => 'Facebook Ads for Small Business: Why It\'s Hard and How to Make It Work',
+            'description' => 'Facebook Ads can be transformative for small businesses — but most campaigns fail due to the same avoidable mistakes. Here\'s what actually works.',
+            'category'    => 'Platform',
+            'read_time'   => '7 min read',
+            'published'   => '2026-05-03',
+            'content'     => <<<HTML
+<h2>Why Facebook Ads is different from Google Ads</h2>
+<p>Google Ads captures people who are already looking for something. Facebook Ads reaches people who aren't looking for anything — they're scrolling, watching videos, seeing what friends are up to. This fundamental difference shapes everything about how Facebook advertising must be approached.</p>
+<p>On Google, you match your ad to intent that already exists. On Facebook, you must create intent — interrupt someone's scroll, make them care about something they weren't thinking about, and move them toward a decision. This is harder creatively, requires different targeting logic, and demands a different relationship between your ads and your landing pages.</p>
+
+<h2>Why most Facebook Ads campaigns fail</h2>
+<p>The most common reason Facebook campaigns fail is treating it like a cheaper Google Ads. Businesses take the same messaging, the same offer, the same landing page — and push it to a Facebook audience. The results are predictably poor, because the audience has no active intent, the creative doesn't stop a scroll, and the funnel isn't built for cold traffic.</p>
+<p>The second most common failure is giving up too early. Facebook's algorithm requires a learning phase — typically 50 conversions per ad set — before it can properly optimise delivery. Most small business campaigns are shut down for "poor performance" while still in the learning phase.</p>
+
+<h2>The Facebook Ads funnel</h2>
+<p>Effective Facebook advertising requires thinking in three stages:</p>
+<ol>
+  <li><strong>Awareness (cold audience)</strong> — reaching people who've never heard of you. The creative must stop the scroll and introduce your value proposition. The goal here isn't a sale — it's a click, a video view, or a page visit. Cast wide.</li>
+  <li><strong>Consideration (warm audience)</strong> — reaching people who've engaged with your brand: visited your website, watched your video, interacted with a post. This audience knows you. The creative can be more specific, the offer more direct.</li>
+  <li><strong>Conversion (hot audience)</strong> — reaching people who've shown high intent: visited your pricing page, added to cart, started an enquiry but didn't finish. This is where your most direct conversion messaging belongs. These audiences are small but convert at very high rates.</li>
+</ol>
+<p>Running only conversion campaigns to cold audiences is like asking someone to marry you on a first date. Running only awareness campaigns with no follow-up is like making a good first impression and then never calling. The full funnel compounds all three stages.</p>
+
+<h2>Creative is the targeting on Facebook</h2>
+<p>A common misconception is that Facebook's detailed targeting options — interests, demographics, behaviours — are the primary lever for performance. In practice, creative quality is more important. Facebook's algorithm is sophisticated enough to find your audience if your creative is good. But no amount of targeting precision makes a bad creative perform.</p>
+<p>Effective Facebook creative typically:</p>
+<ul>
+  <li>Stops the scroll in the first 1–2 seconds (strong visual or opening line)</li>
+  <li>Addresses a specific pain point or desire the audience has</li>
+  <li>Makes the value proposition immediately clear</li>
+  <li>Has a single, unambiguous call to action</li>
+  <li>Looks native — too "salesy" and people scroll past; authentic-feeling content performs better</li>
+</ul>
+
+<h2>Facebook Pixel and conversion tracking</h2>
+<p>Facebook's Pixel is a tracking tag on your website that records what visitors do after clicking an ad. Without it, Facebook has no idea which ad combinations lead to conversions — its algorithm can't optimise, and your reporting is meaningless. The Pixel should be the very first thing set up before any Facebook campaign goes live.</p>
+<p>The Conversions API (CAPI) should also be implemented alongside the Pixel to capture conversions that browser-based tracking misses due to iOS privacy restrictions. Since Apple's iOS 14 changes, Pixel-only tracking can miss 20–40% of conversions.</p>
+
+<h2>How sitetospend.com manages Facebook Ads</h2>
+<p>sitetospend.com sets up and manages Facebook campaigns using Spectra's Business Manager — a professional management infrastructure that handles Pixel implementation, Conversions API setup, audience creation, and campaign management from a single platform. The same AI agents that optimise Google Ads — creative testing, audience refinement, budget pacing — apply to Facebook campaigns too. Remarketing audiences are built automatically from your website visitors, and the Creative Intelligence Agent continuously tests new ad variations to prevent audience fatigue and maintain campaign performance over time.</p>
 HTML,
         ];
     }
