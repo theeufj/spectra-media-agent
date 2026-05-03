@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Cache;
 
 class StrategyGenerationFailed extends Notification implements ShouldQueue
 {
@@ -19,6 +20,12 @@ class StrategyGenerationFailed extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
+        $cacheKey = "strategy_fail_mail:{$this->campaign->id}:{$notifiable->id}";
+        if (Cache::has($cacheKey)) {
+            return ['database'];
+        }
+        Cache::put($cacheKey, true, now()->addHours(24));
+
         return ['mail', 'database'];
     }
 

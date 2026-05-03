@@ -137,7 +137,7 @@ class GenerateStrategy implements ShouldQueue
             
             Log::info("Making API request to Gemini with thinking and search enabled for campaign {$this->campaign->id}");
             $result = $gemini->generateWithThinkingAndSearch(
-                config('ai.models.default'),
+                config('ai.models.pro'),
                 $systemInstruction,
                 $prompt,
                 [
@@ -324,6 +324,12 @@ class GenerateStrategy implements ShouldQueue
             'strategy_generation_completed_at' => now(),
             'strategy_generation_error' => $message,
         ]);
+
+        $cacheKey = "strategy_fail_notif:{$this->campaign->id}";
+        if (\Illuminate\Support\Facades\Cache::has($cacheKey)) {
+            return;
+        }
+        \Illuminate\Support\Facades\Cache::put($cacheKey, true, now()->addHours(24));
 
         $customer = $this->campaign->customer;
         if ($customer) {

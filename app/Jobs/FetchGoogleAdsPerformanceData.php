@@ -113,8 +113,6 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                         ]);
                     }
 
-                    // Dispatch the GenerateStrategy job to act as the Strategy Agent
-                    GenerateStrategy::dispatch($this->campaign);
                 }
 
             } catch (\Exception $e) {
