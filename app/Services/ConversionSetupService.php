@@ -86,7 +86,7 @@ class ConversionSetupService
         // Step 1: Create conversion action
         $createService = new CreateConversionAction($customer);
         $conversionActionName = 'Spectra — ' . $customer->name . ' Conversion';
-        $resourceName = ($createService)($customerId, $conversionActionName, ConversionActionCategory::LEAD);
+        $resourceName = ($createService)($customerId, $conversionActionName, ConversionActionCategory::SIGNUP);
 
         if (!$resourceName) {
             return ['success' => false, 'errors' => ['Failed to create Google Ads conversion action']];
