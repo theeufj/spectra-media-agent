@@ -66,6 +66,11 @@ class HandleInertiaRequests extends Middleware
             ],
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
             'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),
+            'conversionLabels' => fn () => [
+                'signup'           => \App\Models\Setting::get('conversion_label.signup',    config('conversions.events.signup.label')),
+                'pricing_visit'    => \App\Models\Setting::get('conversion_label.pricing_visit'),
+                'sandbox_launched' => \App\Models\Setting::get('conversion_label.sandbox_launched'),
+            ],
         ];
     }
 }

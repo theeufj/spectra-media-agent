@@ -6,6 +6,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import ErrorBoundary from './Components/ErrorBoundary';
 import { ToastProvider } from './Components/Toast';
+import { initConversions } from '@/utils/conversions';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
@@ -17,6 +18,7 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.jsx'),
         ),
     setup({ el, App, props }) {
+        initConversions(props.initialPage.props.conversionLabels);
         const root = createRoot(el);
 
         root.render(
