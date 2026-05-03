@@ -6,8 +6,12 @@ use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\GoogleAds\CommonServices\ApplyRecommendation;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
+use App\Services\NotificationService;
+use App\Services\Agents\CreativeIntelligenceAgent;
+use App\Services\GeminiService;
 use Google\Ads\GoogleAds\V22\Enums\RecommendationTypeEnum\RecommendationType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -17,26 +21,24 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
 
 /**
- * Runs at 4am alongside AutomatedCampaignMaintenance.
+ * Runs at 04:30 daily. For every customer with active Google Ads campaigns,
+ * fetches all open recommendations and takes the appropriate action:
  *
- * For every customer with active Google Ads campaigns:
+ *  AUTO-APPLY  — bidding/CPA adjustments Google is confident about.
+ *                Applied using Google's own suggested values.
  *
- *  AUTO-DISMISS — recommendations our system already handles. These would
- *  otherwise pile up in the Google Ads UI after every agent run:
- *    - KEYWORD_MATCH_TYPE / USE_BROAD_MATCH_KEYWORD (ExpandBroadMatchKeywords handles this)
- *    - MOVE_UNUSED_BUDGET (our budget agent handles cross-campaign allocation)
+ *  AUTO-FIX    — ad copy issues routed to CreativeIntelligenceAgent,
+ *                which knows brand guidelines and performance history.
  *
- *  WARN — recommendations that suggest an agent may have made a bad decision.
- *  Sends a CriticalAgentAlert email so a human can review:
- *    - CAMPAIGN_BUDGET          → budget agent may have cut spend too aggressively
- *    - RAISE_TARGET_CPA_BID_TOO_LOW → bidding agent set CPA target unrealistically low
- *    - KEYWORD                  → keyword agent added poor-quality keywords
- *    - RESPONSIVE_SEARCH_AD / RESPONSIVE_SEARCH_AD_IMPROVE_AD_STRENGTH
- *                               → creative agent produced weak ad copy
- *    - SHOPPING_FIX_DISAPPROVED_PRODUCTS / SHOPPING_FIX_SUSPENDED_MERCHANT_CENTER_ACCOUNT
- *                               → merchant center issues that need immediate attention
+ *  AUTO-DISMISS — things our agents already handle (broad match expansion,
+ *                 budget reallocation). Dismissed so they don't clutter the UI.
  *
- *  ADVISORY — useful for visibility but not urgent. Logged to AgentActivity only.
+ *  NOTIFY CLIENT — budget increases. It's the client's money; they decide.
+ *                  Sends an in-app notification to the customer's user.
+ *
+ *  NOTIFY ADMIN — account-level problems we genuinely cannot auto-fix:
+ *                 Merchant Center suspensions, disapproved products.
+ *                 These require a human to resolve policy or content issues.
  */
 class ReviewGoogleAdsRecommendations implements ShouldQueue
 {
@@ -45,23 +47,38 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
     public $tries   = 2;
     public $timeout = 300;
 
-    // Recommendations our agents handle automatically — dismiss these from Google's UI
+    private const AUTO_APPLY = [
+        RecommendationType::RAISE_TARGET_CPA_BID_TOO_LOW,
+        RecommendationType::RAISE_TARGET_CPA,
+        RecommendationType::OPTIMIZE_AD_ROTATION,
+    ];
+
+    private const AUTO_FIX_CREATIVE = [
+        RecommendationType::RESPONSIVE_SEARCH_AD,
+        RecommendationType::RESPONSIVE_SEARCH_AD_IMPROVE_AD_STRENGTH,
+        RecommendationType::RESPONSIVE_SEARCH_AD_ASSET,
+    ];
+
     private const AUTO_DISMISS = [
         RecommendationType::KEYWORD_MATCH_TYPE,
         RecommendationType::USE_BROAD_MATCH_KEYWORD,
         RecommendationType::MOVE_UNUSED_BUDGET,
     ];
 
-    // Recommendations that suggest an agent may have done something harmful
-    private const WARN = [
-        RecommendationType::CAMPAIGN_BUDGET                                => 'Budget agent may have cut campaign spend too aggressively',
-        RecommendationType::RAISE_TARGET_CPA_BID_TOO_LOW                  => 'Bidding agent may have set Target CPA unrealistically low',
-        RecommendationType::KEYWORD                                        => 'Keyword agent may have added poor-quality keywords',
-        RecommendationType::RESPONSIVE_SEARCH_AD                          => 'Creative agent may have produced weak ad copy',
-        RecommendationType::RESPONSIVE_SEARCH_AD_IMPROVE_AD_STRENGTH      => 'Creative agent ad strength is below Google\'s recommendation',
-        RecommendationType::SHOPPING_FIX_DISAPPROVED_PRODUCTS             => 'Disapproved products detected — merchant feed may need attention',
-        RecommendationType::SHOPPING_FIX_SUSPENDED_MERCHANT_CENTER_ACCOUNT => 'Merchant Center account suspension — requires immediate review',
+    private const NOTIFY_CLIENT_BUDGET = [
+        RecommendationType::CAMPAIGN_BUDGET,
+        RecommendationType::FORECASTING_CAMPAIGN_BUDGET,
+        RecommendationType::MARGINAL_ROI_CAMPAIGN_BUDGET,
     ];
+
+    private const NEEDS_HUMAN = [
+        RecommendationType::SHOPPING_FIX_SUSPENDED_MERCHANT_CENTER_ACCOUNT => 'Merchant Center account suspension — requires human review to resolve policy or payment issue',
+        RecommendationType::SHOPPING_FIX_DISAPPROVED_PRODUCTS               => 'Disapproved products — product feed content needs human review',
+    ];
+
+    public function __construct(
+        private readonly NotificationService $notifications = new NotificationService()
+    ) {}
 
     public function handle(): void
     {
@@ -79,98 +96,161 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
     private function reviewCustomer(Customer $customer): void
     {
-        $customerId  = $customer->cleanGoogleCustomerId();
-        $getRecsService = new GetGoogleAdsRecommendations($customer);
-        $dismissService = new DismissRecommendation($customer);
+        $customerId     = $customer->cleanGoogleCustomerId();
+        $getRecs        = new GetGoogleAdsRecommendations($customer);
+        $apply          = new ApplyRecommendation($customer);
+        $dismiss        = new DismissRecommendation($customer);
 
-        $allRecs     = ($getRecsService)($customerId);
+        $allRecs = ($getRecs)($customerId);
 
         if (empty($allRecs)) {
             return;
         }
 
-        $toDismiss   = [];
-        $warnings    = [];  // [type_int => [campaign_resource, ...]]
-        $advisory    = [];
+        $toApply        = [];
+        $toDismiss      = [];
+        $creativeCampaigns = [];  // campaign_resource => Campaign model
+        $humanNeeded    = [];
 
         foreach ($allRecs as $rec) {
             $type = $rec['type'];
+
+            if (in_array($type, self::AUTO_APPLY)) {
+                $toApply[] = $rec['resource_name'];
+                continue;
+            }
+
+            if (in_array($type, self::AUTO_FIX_CREATIVE)) {
+                $creativeCampaigns[$rec['campaign_resource']] = true;
+                $toDismiss[] = $rec['resource_name'];
+                continue;
+            }
 
             if (in_array($type, self::AUTO_DISMISS)) {
                 $toDismiss[] = $rec['resource_name'];
                 continue;
             }
 
-            if (isset(self::WARN[$type])) {
-                $warnings[$type][] = $rec;
+            if (in_array($type, self::NOTIFY_CLIENT_BUDGET)) {
+                $this->notifyClientBudget($customer, $rec);
                 continue;
             }
 
-            $advisory[] = $rec;
-        }
+            if (isset(self::NEEDS_HUMAN[$type])) {
+                $humanNeeded[$type] = self::NEEDS_HUMAN[$type];
+                continue;
+            }
 
-        // Dismiss auto-handled recommendations
-        if (!empty($toDismiss)) {
-            $dismissed = ($dismissService)($customerId, $toDismiss);
-            Log::info("ReviewGoogleAdsRecommendations: Dismissed " . count($toDismiss) . " auto-handled recommendation(s) for customer {$customer->id}");
-        }
-
-        // Alert on warnings
-        if (!empty($warnings)) {
-            $this->sendWarningAlert($customer, $warnings);
-        }
-
-        // Log advisory items
-        if (!empty($advisory)) {
-            $typeNames = array_unique(array_column($advisory, 'type'));
+            // Everything else: log for visibility and dismiss so the UI stays clean
+            $toDismiss[] = $rec['resource_name'];
             AgentActivity::record(
                 'google_ads_recommendations',
-                'advisory_recommendations',
-                count($advisory) . ' advisory recommendation(s) from Google Ads for "' . $customer->name . '" — types: ' . implode(', ', $typeNames),
-                $customer->id,
-                null,
-                ['recommendations' => $advisory]
+                'recommendation_dismissed',
+                "Dismissed unhandled recommendation type {$type} for customer \"{$customer->name}\"",
+                $customer->id
             );
         }
 
-        Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — dismissed: " . count($toDismiss) . ", warnings: " . count($warnings) . ", advisory: " . count($advisory));
-    }
-
-    private function sendWarningAlert(Customer $customer, array $warnings): void
-    {
-        $issues = [];
-        foreach ($warnings as $type => $recs) {
-            $reason   = self::WARN[$type] ?? 'Unknown recommendation type ' . $type;
-            $count    = count($recs);
-            $issues[] = "{$reason} ({$count} campaign(s) affected)";
+        // Auto-apply bidding/CPA recommendations
+        if (!empty($toApply)) {
+            $ok = ($apply)($customerId, $toApply);
+            if ($ok) {
+                AgentActivity::record(
+                    'google_ads_recommendations',
+                    'recommendations_applied',
+                    'Auto-applied ' . count($toApply) . ' Google Ads recommendation(s) for "' . $customer->name . '"',
+                    $customer->id,
+                    null,
+                    ['applied' => $toApply]
+                );
+            }
         }
 
-        $admins = User::whereHas('roles', fn($q) => $q->where('name', 'admin'))->get();
-        foreach ($admins as $admin) {
-            $admin->notify(new CriticalAgentAlert(
-                'google_ads_recommendation_warning',
-                'Google Ads flagged potential agent issues for ' . $customer->name,
-                'Google Ads has raised recommendations that may indicate our agents made suboptimal changes. Please review the following:',
-                [
-                    'issues'          => $issues,
-                    'customer_name'   => $customer->name,
-                    'action_required' => 'Review the Google Ads Recommendations tab for ' . $customer->name . ' and verify recent agent actions look correct.',
-                ]
-            ));
+        // Dismiss auto-handled and creative ones (creative agent will fix the actual issue)
+        if (!empty($toDismiss)) {
+            ($dismiss)($customerId, $toDismiss);
+        }
+
+        // Trigger creative agent for campaigns with weak ad copy
+        if (!empty($creativeCampaigns)) {
+            $this->triggerCreativeFix($customer, array_keys($creativeCampaigns));
+        }
+
+        // Notify admin only for things we truly can't fix
+        if (!empty($humanNeeded)) {
+            $this->notifyAdminHumanRequired($customer, $humanNeeded);
+        }
+
+        Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — applied: " . count($toApply) . ", dismissed: " . count($toDismiss) . ", creative-fix: " . count($creativeCampaigns) . ", human-needed: " . count($humanNeeded));
+    }
+
+    private function notifyClientBudget(Customer $customer, array $rec): void
+    {
+        $user = $customer->user;
+        if (!$user) {
+            return;
+        }
+
+        $this->notifications->notify(
+            $user,
+            'google_ads.budget_recommendation',
+            'Budget increase recommended for your campaign',
+            'Google Ads is recommending a budget increase for one of your campaigns to capture more conversions. Please review and approve or decline in your campaign settings.',
+            route('campaigns.index'),
+            'Review Budget',
+            $customer,
+            ['recommendation_resource' => $rec['resource_name'], 'campaign_resource' => $rec['campaign_resource']]
+        );
+
+        Log::info("ReviewGoogleAdsRecommendations: Notified customer {$customer->id} of budget recommendation");
+    }
+
+    private function triggerCreativeFix(Customer $customer, array $campaignResources): void
+    {
+        $campaigns = $customer->campaigns()
+            ->whereIn('google_ads_campaign_id', $campaignResources)
+            ->get();
+
+        if ($campaigns->isEmpty()) {
+            return;
+        }
+
+        $agent = new CreativeIntelligenceAgent(app(GeminiService::class));
+        $fixed = 0;
+
+        foreach ($campaigns as $campaign) {
+            try {
+                $agent->analyze($campaign);
+                $fixed++;
+            } catch (\Throwable $e) {
+                Log::error("ReviewGoogleAdsRecommendations: Creative fix failed for campaign {$campaign->id}: " . $e->getMessage());
+            }
         }
 
         AgentActivity::record(
             'google_ads_recommendations',
-            'agent_warning_flagged',
-            'Google Ads flagged ' . count($warnings) . ' potential agent issue(s) for "' . $customer->name . '": ' . implode('; ', $issues),
-            $customer->id,
-            null,
-            ['warnings' => array_map(fn($recs) => count($recs), $warnings)]
+            'creative_fix_triggered',
+            'Ran creative agent on ' . $fixed . ' campaign(s) with weak ad copy for "' . $customer->name . '"',
+            $customer->id
         );
+    }
 
-        Log::warning("ReviewGoogleAdsRecommendations: Sent warning alert for customer {$customer->id}", [
-            'issues' => $issues,
-        ]);
+    private function notifyAdminHumanRequired(Customer $customer, array $issues): void
+    {
+        $admins = User::whereHas('roles', fn($q) => $q->where('name', 'admin'))->get();
+
+        foreach ($admins as $admin) {
+            $admin->notify(new CriticalAgentAlert(
+                'google_ads_human_required',
+                $customer->name . ': Google Ads issue requires human review',
+                'The following issue(s) in "' . $customer->name . '" cannot be fixed automatically and need a human to resolve:',
+                [
+                    'issues'          => array_values($issues),
+                    'customer_name'   => $customer->name,
+                    'action_required' => 'Log into the Google Ads account for ' . $customer->name . ' and resolve the flagged issue(s).',
+                ]
+            ));
+        }
     }
 
     public function failed(\Throwable $exception): void
