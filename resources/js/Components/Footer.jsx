@@ -58,9 +58,9 @@ export default function Footer() {
                 <div className="mt-12 pt-8 border-t border-gray-800 flex flex-col sm:flex-row justify-between items-center">
                     <p className="text-sm text-gray-500">&copy; {new Date().getFullYear()} sitetospend. All rights reserved.</p>
                     <div className="mt-4 sm:mt-0 flex items-center space-x-6">
-                        <a href="https://proveably.com/portal/public/trust/b294b3b8-245a-469c-a8fc-e478db31c249" target="_blank" rel="noopener noreferrer">
+                        {/* <a href="https://proveably.com/portal/public/trust/b294b3b8-245a-469c-a8fc-e478db31c249" target="_blank" rel="noopener noreferrer">
                             <img src="https://proveably.com/portal/public/trust/b294b3b8-245a-469c-a8fc-e478db31c249/badge.svg" alt="Secured by Proveably" className="h-8" />
-                        </a>
+                        </a> */}
                         <Link href={route('terms')} className="text-sm text-gray-500 hover:text-gray-300">Terms</Link>
                         <Link href={route('privacy')} className="text-sm text-gray-500 hover:text-gray-300">Privacy</Link>
                     </div>
