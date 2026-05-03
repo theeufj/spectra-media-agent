@@ -9,14 +9,14 @@ export default function Landing({ auth, plans = [] }) {
     const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 99;
 
     const [url, setUrl] = useState('');
-    const [loadingStage, setLoadingStage] = useState(0); 
+    const [loadingStage, setLoadingStage] = useState(0);
     const [demoResult, setDemoResult] = useState(null);
     const [error, setError] = useState(null);
 
     const handleDemoSubmit = async (e) => {
         e.preventDefault();
         if (!url) return;
-        
+
         setError(null);
         setDemoResult(null);
         setLoadingStage(1);
@@ -24,7 +24,7 @@ export default function Landing({ auth, plans = [] }) {
         const t1 = setTimeout(() => setLoadingStage(2), 5000);
         const t2 = setTimeout(() => setLoadingStage(3), 10000);
         const t3 = setTimeout(() => setLoadingStage(4), 18000);
-        
+
         try {
             const response = await fetch('/api/demo/generate-full', {
                 method: 'POST',
@@ -35,7 +35,7 @@ export default function Landing({ auth, plans = [] }) {
                 body: JSON.stringify({ url })
             });
             const data = await response.json();
-            
+
             if (response.ok) {
                 setDemoResult(data);
             } else {
@@ -158,11 +158,11 @@ export default function Landing({ auth, plans = [] }) {
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
                                             Stop paying thousands in retainer fees. Our AI agents discover your competitors, heal broken campaigns automatically, optimize budgets in real-time, and A/B test creatives 24/7—all while you sleep.
                                         </p>
-                                        
+
                                         <div className="mt-8 bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                                             <form onSubmit={handleDemoSubmit} className="flex flex-col sm:flex-row gap-3">
-                                                <input 
-                                                    type="url" 
+                                                <input
+                                                    type="url"
                                                     required
                                                     value={url}
                                                     onChange={e => setUrl(e.target.value)}
@@ -170,7 +170,7 @@ export default function Landing({ auth, plans = [] }) {
                                                     className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
                                                     disabled={loadingStage > 0}
                                                 />
-                                                <button 
+                                                <button
                                                     type="submit"
                                                     disabled={loadingStage > 0}
                                                     className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-sm disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"

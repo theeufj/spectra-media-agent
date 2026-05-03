@@ -41,7 +41,7 @@ class DemoController extends Controller
                 // Extract title
                 preg_match('/<title>(.*?)<\/title>/is', $html, $titleMatch);
                 $title = $titleMatch[1] ?? '';
-                
+
                 // Extract description
                 preg_match('/<meta[^>]*name="description"[^>]*content="([^"]*)"[^>]*>/is', $html, $descMatch);
                 $description = $descMatch[1] ?? '';
@@ -61,7 +61,7 @@ class DemoController extends Controller
                 // Extract linked CSS files
                 preg_match_all('/<link[^>]*rel=["\']stylesheet["\'][^>]*href=["\']([^"\']+)["\'][^>]*>/i', $html, $cssMatches);
                 $cssUrls = $cssMatches[1] ?? [];
-                
+
                 // Only try the first 2 CSS files to save time
                 $cssUrlsToFetch = array_slice($cssUrls, 0, 2);
                 foreach ($cssUrlsToFetch as $cssPath) {
@@ -74,7 +74,7 @@ class DemoController extends Controller
                         } else {
                             $cssUrlToFetch = $cssPath;
                         }
-                        
+
                         $cssResponse = Http::timeout(5)->get($cssUrlToFetch);
                         if ($cssResponse->successful()) {
                             preg_match_all('/#([a-fA-F0-9]{6})\b/', $cssResponse->body(), $cssFileColorMatches);
@@ -86,15 +86,32 @@ class DemoController extends Controller
                         Log::warning("Could not fetch CSS from: " . $cssPath);
                     }
                 }
-                
+
                 // Get unique, lowercased colors and take top 5 most frequent (or just unique)
                 if (!empty($cssColors)) {
                     $cssColors = array_map('strtolower', $cssColors);
                     $colorCounts = array_count_values($cssColors);
-                    // Filter out greyscales if possible, but for now just sort by frequency
+                    
+                    // Filter out neutral/grayscale colors
+                    foreach ($colorCounts as $hex => $count) {
+                        if (strlen($hex) === 7) {
+                            $r = hexdec(substr($hex, 1, 2));
+                            $g = hexdec(substr($hex, 3, 2));
+                            $b = hexdec(substr($hex, 5, 2));
+                            
+                            $max = max($r, $g, $b);
+                            $min = min($r, $g, $b);
+                            // If difference between max and min is small, it's very gray/neutral
+                            // Also filter out very light and very dark colors
+                            if (($max - $min) < 30 || $max < 30 || $min > 225) {
+                                unset($colorCounts[$hex]);
+                            }
+                        } else {
+                            unset($colorCounts[$hex]);
+                        }
+                    }
+                    
                     arsort($colorCounts);
-                    // Remove pure white/black as they're not usually brand colors
-                    unset($colorCounts['#ffffff'], $colorCounts['#000000']);
                     $cssColors = array_slice(array_keys($colorCounts), 0, 5);
                 }
             }
@@ -107,7 +124,7 @@ class DemoController extends Controller
         $adCopy = ['headlines' => [], 'descriptions' => []];
         try {
             $prompt = "Based on this website data, write 3 Google Search Ad headlines (max 30 chars each) and 2 descriptions (max 90 chars each). Keep it punchy and highlight the value proposition. Return strict JSON with the keys 'headlines' (array of strings) and 'descriptions' (array of strings).\n\nWebsite Data:\n" . substr($textContent, 0, 1000);
-            
+
             $aiResponse = $this->geminiService->generateContent(
                 config('ai.models.default', 'gemini-1.5-flash-latest'), // Adjust to your text model
                 $prompt,
@@ -131,7 +148,7 @@ class DemoController extends Controller
 
         // 3. Extract Visuals via Browsershot + Gemini Vision
         $visuals = $this->brandService->analyzeVisualStyle($url);
-        
+
         // Fallback to CSS colors if Vision failed to extract them
         if (empty($visuals['colors']) && !empty($cssColors)) {
             $visuals['colors'] = $cssColors;

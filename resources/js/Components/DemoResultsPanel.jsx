@@ -27,7 +27,7 @@ export default function DemoResultsPanel({ result }) {
                                     {visuals?.colors?.length > 0 ? (
                                         visuals.colors.map((color, idx) => (
                                             <div key={idx} className="flex flex-col items-center">
-                                                <div 
+                                                <div
                                                     className="w-12 h-12 rounded-full border border-gray-300 shadow-sm"
                                                     style={{ backgroundColor: color }}
                                                 ></div>
@@ -39,7 +39,7 @@ export default function DemoResultsPanel({ result }) {
                                     )}
                                 </div>
                             </div>
-                            
+
                             <div className="mb-6">
                                 <h4 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Typography</h4>
                                 {visuals?.fonts?.length > 0 ? (
@@ -82,7 +82,7 @@ export default function DemoResultsPanel({ result }) {
                 <div className="mt-12 text-center bg-flame-orange-50 rounded-lg p-8 border border-flame-orange-100">
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">Ready to deploy these campaigns?</h3>
                     <p className="text-gray-600 mb-6">Our AI agents will build out your entire account structure, write dozens of variations, and manage the budget automatically.</p>
-                    <Link 
+                    <Link
                         href={`/register?demo_url=${encodeURIComponent(url)}`}
                         className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg transition-colors w-full sm:w-auto"
                     >
