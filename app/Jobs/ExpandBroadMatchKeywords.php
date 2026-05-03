@@ -10,6 +10,7 @@ use App\Services\GoogleAds\CommonServices\GetCampaignKeywords;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
 use App\Services\GoogleAds\CommonServices\RemoveKeyword;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V22\Enums\RecommendationTypeEnum\RecommendationType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -148,21 +149,23 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         }
 
         // ── Phase 3: DISMISS the Google Ads recommendation ───────────────────
-        // Fetch KEYWORD_MATCH_TYPE recommendations for this campaign and dismiss
-        // them so the suggestion disappears from the Google Ads UI immediately.
+        // Always dismiss any open KEYWORD_MATCH_TYPE / USE_BROAD_MATCH_KEYWORD
+        // recommendations for this campaign, regardless of whether we added new
+        // keywords this run. The recommendation may predate our first expansion.
 
-        if (!empty($added)) {
-            $getRecommendations = new GetGoogleAdsRecommendations($customer);
-            $allRecs            = ($getRecommendations)($customerId, $campaignResource);
-            $toBeDismissed      = array_column(
-                array_filter($allRecs, fn($r) => $r['type'] === 4), // 4 = KEYWORD_MATCH_TYPE
-                'resource_name'
-            );
+        $getRecommendations = new GetGoogleAdsRecommendations($customer);
+        $allRecs            = ($getRecommendations)($customerId, $campaignResource);
+        $toBeDismissed      = array_column(
+            array_filter($allRecs, fn($r) => in_array($r['type'], [
+                RecommendationType::KEYWORD_MATCH_TYPE,     // 14
+                RecommendationType::USE_BROAD_MATCH_KEYWORD, // 20
+            ])),
+            'resource_name'
+        );
 
-            if (!empty($toBeDismissed)) {
-                (new DismissRecommendation($customer))($customerId, $toBeDismissed);
-                Log::info("ExpandBroadMatchKeywords: Dismissed " . count($toBeDismissed) . " KEYWORD_MATCH_TYPE recommendation(s) for campaign {$this->campaign->id}");
-            }
+        if (!empty($toBeDismissed)) {
+            (new DismissRecommendation($customer))($customerId, $toBeDismissed);
+            Log::info("ExpandBroadMatchKeywords: Dismissed " . count($toBeDismissed) . " broad match recommendation(s) for campaign {$this->campaign->id}");
         }
 
         // ── Record & rate-limit ──────────────────────────────────────────────
