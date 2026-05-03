@@ -2,7 +2,7 @@
 
 # This script sets up and runs the Laravel application.
 
-cd /Users/joshtheeuf/Documents/Github/MediaAgent/spectra
+cd /Users/josh/Documents/Github/spectra-media-agent
 
 # 1. Copy .env.example to .env if it doesn't exist
 if [ ! -f .env ]; then

@@ -25,12 +25,12 @@ export default function HelpArticle({ auth, article, relatedArticles = [] }) {
     return (
         <>
             <Head>
-                <title>{article.title} — sitetospend.com Help</title>
+                <title>{`${article.title} — sitetospend.com Help`}</title>
                 <meta name="description" content={article.description} />
                 <meta property="og:title" content={`${article.title} — sitetospend.com`} />
                 <meta property="og:description" content={article.description} />
                 <meta property="og:type" content="article" />
-                <script type="application/ld+json">{JSON.stringify(schema)}</script>
+                <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }} />
             </Head>
 
             <div className="min-h-screen bg-gray-50 flex flex-col">
