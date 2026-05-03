@@ -10,14 +10,16 @@ class GetCampaignKeywords extends BaseGoogleAdsService
     /**
      * Return all enabled keywords for a campaign.
      *
-     * $segmented = true  → uses segments.date DURING $dateRange; keywords with zero
-     *                      activity in the window are excluded. Useful for performance reports.
-     * $segmented = false → no date segment; every keyword is returned (including zero-click
-     *                      ones) with all-time aggregated metrics. Useful for expansion/pruning.
+     * $segmented = true  → includes metrics.clicks/conversions via segments.date DURING
+     *                      $dateRange. Keywords with zero activity in the window are excluded.
+     *                      Useful for performance reports.
+     * $segmented = false → no metrics, no date filter. Every keyword is returned regardless
+     *                      of activity. clicks/conversions will be null. Useful when you need
+     *                      the full keyword list for expansion logic.
      *
      * Each row contains:
      *   keyword_text, match_type (BROAD|PHRASE|EXACT), criterion_resource,
-     *   ad_group_resource, clicks, conversions, creation_time (only when $segmented=false)
+     *   ad_group_resource, clicks (null when not segmented), conversions (null when not segmented)
      */
     public function __invoke(
         string $customerId,
@@ -42,13 +44,14 @@ class GetCampaignKeywords extends BaseGoogleAdsService
                         AND ad_group.status = 'ENABLED'
                         AND segments.date DURING $dateRange";
         } else {
+            // Metrics are not allowed on ad_group_criterion without date segmentation.
+            // Return structure only — callers that need click data should use $segmented=true
+            // with a wide date range, or use GetKeywordPerformance separately.
             $query = "SELECT
                         ad_group_criterion.keyword.text,
                         ad_group_criterion.keyword.match_type,
                         ad_group_criterion.resource_name,
-                        ad_group.resource_name,
-                        metrics.clicks,
-                        metrics.conversions
+                        ad_group.resource_name
                       FROM ad_group_criterion
                       WHERE campaign.resource_name = '$campaignResourceName'
                         AND ad_group_criterion.type = 'KEYWORD'
@@ -61,17 +64,16 @@ class GetCampaignKeywords extends BaseGoogleAdsService
             $keywords = [];
 
             foreach ($response->getIterator() as $row) {
-                $kw      = $row->getAdGroupCriterion()->getKeyword();
-                $entry   = [
+                $kw        = $row->getAdGroupCriterion()->getKeyword();
+                $metrics   = $segmented ? $row->getMetrics() : null;
+                $keywords[] = [
                     'keyword_text'       => $kw->getText(),
                     'match_type'         => $kw->getMatchType(),
                     'criterion_resource' => $row->getAdGroupCriterion()->getResourceName(),
                     'ad_group_resource'  => $row->getAdGroup()->getResourceName(),
-                    'clicks'             => $row->getMetrics()->getClicks(),
-                    'conversions'        => $row->getMetrics()->getConversions(),
+                    'clicks'             => $metrics?->getClicks(),
+                    'conversions'        => $metrics?->getConversions(),
                 ];
-
-                $keywords[] = $entry;
             }
 
             return $keywords;

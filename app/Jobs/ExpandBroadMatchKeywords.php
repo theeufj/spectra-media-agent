@@ -74,12 +74,22 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         $pruned        = [];
 
         if ($hasRunBefore) {
+            // Fetch performance data separately (segmented query) to find which broad
+            // keywords have had any clicks in the last 365 days
+            $perfKeywords     = ($getKeywords)($customerId, $campaignResource, 'LAST_365_DAYS', true);
+            $criteriaWithClicks = [];
+            foreach ($perfKeywords as $pk) {
+                if ($pk['match_type'] === KeywordMatchType::BROAD && ($pk['clicks'] ?? 0) > 0) {
+                    $criteriaWithClicks[$pk['criterion_resource']] = true;
+                }
+            }
+
             foreach ($keywords as $kw) {
                 if ($kw['match_type'] !== KeywordMatchType::BROAD) {
                     continue;
                 }
 
-                if (($kw['clicks'] ?? 0) > 0) {
+                if (isset($criteriaWithClicks[$kw['criterion_resource']])) {
                     continue;
                 }
 
