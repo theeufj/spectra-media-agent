@@ -63,21 +63,27 @@ INSTRUCTION;
         $adCopyStrategy = $strategy->ad_copy_strategy ?? 'Not provided';
         $imageryStrategy = $strategy->imagery_strategy ?? 'Not provided';
         $videoStrategy = $strategy->video_strategy ?? 'Not provided';
-        $biddingStrategy = is_array($strategy->bidding_strategy) 
-            ? json_encode($strategy->bidding_strategy, JSON_PRETTY_PRINT) 
+        $biddingStrategy = is_array($strategy->bidding_strategy)
+            ? json_encode($strategy->bidding_strategy, JSON_PRETTY_PRINT)
             : 'Not provided';
-        
+
         // Customer platform info
-        $hasPixel = $customer->facebook_pixel_id ? 'Yes' : 'No';
-        
+        $hasPixel       = $customer->facebook_pixel_id ? 'Yes' : 'No';
+        $landingPageUrl = $campaign->landing_page_url
+            ?? $strategy->bidding_strategy['landing_page_url']
+            ?? $customer->website
+            ?? 'Not provided';
+
         return <<<PROMPT
 Generate a comprehensive Facebook/Meta Ads execution plan for the following campaign.
+
+**BUYER PERSPECTIVE RULE:** Ad copy, targeting interests, and audiences must reflect the problems buyers are trying to solve and the outcomes they want — not product features or technology. Write to the person who wants to hand their ads to someone else, not to someone building their own tool.
 
 # CAMPAIGN INFORMATION
 
 **Campaign Name:** {$campaign->name}
 **Campaign Description:** {$campaign->description}
-**Landing Page:** {$campaign->landing_page_url}
+**Landing Page:** {$landingPageUrl}
 **Industry/Vertical:** {$campaign->industry}
 
 **Customer/Business:**

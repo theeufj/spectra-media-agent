@@ -99,18 +99,27 @@ class LinkedInAdsExecutionAgent extends PlatformExecutionAgent
         $strategy = $context->strategy;
         $campaign = $context->campaign;
 
+        $landingPageUrl = $campaign->landing_page_url
+            ?? $strategy->bidding_strategy['landing_page_url']
+            ?? $this->customer->website
+            ?? 'Not provided';
+
         $prompt = <<<PROMPT
 You are a LinkedIn Ads expert creating a campaign execution plan.
 
 Strategy: {$strategy->campaign_type}
 Platform: LinkedIn
 Budget: \${$strategy->daily_budget}/day
+Landing Page: {$landingPageUrl}
 Target audience: {$strategy->target_audience}
 Business type: {$this->customer->business_type}
 Industry: {$this->customer->industry}
+Business name: {$this->customer->name}
 
 Available ad copies: {$context->availableAssets['ad_copies']}
 Available images: {$context->availableAssets['images']}
+
+BUYER PERSPECTIVE RULE: Target and write copy for the decision-maker who wants to BUY or HIRE this service — focus on their problems and desired outcomes, not the product's features or technology. Job titles, industries, and ad copy should reflect who has budget authority and is actively looking for a solution.
 
 Create an execution plan as JSON with this structure:
 {

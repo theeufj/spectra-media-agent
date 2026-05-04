@@ -61,10 +61,15 @@ INSTRUCTION;
         $adCopyStrategy = $strategy->ad_copy_strategy ?? 'Not provided';
         $imageryStrategy = $strategy->imagery_strategy ?? 'Not provided';
         $videoStrategy = $strategy->video_strategy ?? 'Not provided';
-        $biddingStrategy = is_array($strategy->bidding_strategy) 
-            ? json_encode($strategy->bidding_strategy, JSON_PRETTY_PRINT) 
+        $biddingStrategy = is_array($strategy->bidding_strategy)
+            ? json_encode($strategy->bidding_strategy, JSON_PRETTY_PRINT)
             : 'Not provided';
-        
+
+        $landingPageUrl = $campaign->landing_page_url
+            ?? $strategy->bidding_strategy['landing_page_url']
+            ?? $customer->website
+            ?? 'Not provided';
+
         return <<<PROMPT
 Generate a comprehensive Google Ads execution plan for the following campaign.
 
@@ -72,7 +77,7 @@ Generate a comprehensive Google Ads execution plan for the following campaign.
 
 **Campaign Name:** {$campaign->name}
 **Campaign Description:** {$campaign->description}
-**Landing Page:** {$campaign->landing_page_url}
+**Landing Page:** {$landingPageUrl}
 **Industry/Vertical:** {$campaign->industry}
 
 **Customer/Business:**
@@ -115,6 +120,8 @@ The Strategy Agent has already analyzed this campaign and provided the following
 # YOUR TASK
 
 Create a detailed, step-by-step execution plan for deploying this campaign to Google Ads. Your plan should:
+
+**BUYER PERSPECTIVE RULE:** Throughout this plan — keywords, ad copy, targeting — think like the customer, not like the product. Ask: what does someone type into Google when they are ready to PAY for this? They search for the outcome they want ("google ads agency", "hire ppc manager") not the technology behind the product ("automation software", "AI tool"). Every keyword and headline must reflect buyer intent, not product features.
 
 1. **Select Optimal Campaign Type**
    - Choose between: Search, Display, Performance Max, Video

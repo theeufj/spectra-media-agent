@@ -28,17 +28,23 @@ INSTRUCTION;
     {
         $campaign = $context->campaign;
         $strategy = $context->strategy;
-        
-        $dailyBudget = $context->calculateDailyBudget();
-        // Microsoft Ads typically uses a lower budget slice, but we will plan to deploy based on the daily budget calculation
-        
+        $customer = $context->customer;
+
+        $dailyBudget    = $context->calculateDailyBudget();
+        $landingPageUrl = $campaign->landing_page_url
+            ?? $strategy->bidding_strategy['landing_page_url']
+            ?? $customer->website
+            ?? 'Not provided';
+
         return <<<PROMPT
 Generate a comprehensive Microsoft Ads execution plan for the following campaign. Return ONLY valid JSON structured for the ExecutionPlan format. Do not use Markdown formatting for the JSON.
+
+**BUYER PERSPECTIVE RULE:** Keywords and ad copy must reflect what a buyer searches when ready to pay for this service — outcomes and categories ("ppc agency", "managed google ads"), not product features or technology ("automation tool", "AI software").
 
 # CAMPAIGN INFORMATION
 **Campaign Name:** {$campaign->name}
 **Campaign Description:** {$campaign->description}
-**Landing Page:** {$campaign->landing_page_url}
+**Landing Page:** {$landingPageUrl}
 
 **Total Campaign Budget:** \${$campaign->total_budget}
 **Recommended Daily Budget:** \${$dailyBudget}

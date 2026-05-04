@@ -142,6 +142,8 @@ Each item in the "keywords" array must be an object with:
 - "text": The keyword string.
 - "match_type": One of "BROAD", "PHRASE", or "EXACT".
 
+CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential customer types when they are ready to PAY for this product or service. Think from the buyer's perspective, not the product's. Use the vocabulary of someone hiring or purchasing: "agency", "service", "managed", "company", "hire", "outsource". Never use feature or technology terms ("automation tool", "AI software", "platform") as keywords — those attract researchers and competitors, not buyers.
+
 **Example Response Format:**
 ```json
 {
