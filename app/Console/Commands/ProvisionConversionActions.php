@@ -17,7 +17,6 @@ use Google\Ads\GoogleAds\V22\Services\MutateConversionActionsRequest;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Google\Protobuf\FieldMask;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Crypt;
 
 /**
  * Creates Google Ads conversion actions for sitetospend.com's own ad account
@@ -270,7 +269,7 @@ class ProvisionConversionActions extends Command
         }
 
         try {
-            $refreshToken = Crypt::decryptString($mcc->refresh_token);
+            $refreshToken = $mcc->refresh_token;
 
             $oAuth2 = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)
