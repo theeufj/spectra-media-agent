@@ -15,6 +15,7 @@ use Google\Ads\GoogleAds\V22\Resources\ConversionAction\ValueSettings;
 use Google\Ads\GoogleAds\V22\Services\ConversionActionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateConversionActionsRequest;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
+use Google\Protobuf\FieldMask;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Crypt;
 
@@ -28,10 +29,13 @@ use Illuminate\Support\Facades\Crypt;
  * Usage:
  *   php artisan conversions:provision
  *   php artisan conversions:provision --force
+ *   php artisan conversions:provision --archive="Spectra — sitetospend Conversion"
  */
 class ProvisionConversionActions extends Command
 {
-    protected $signature   = 'conversions:provision {--force : Re-create already provisioned actions}';
+    protected $signature   = 'conversions:provision
+                              {--force : Re-create already provisioned actions}
+                              {--archive= : Archive (remove) a conversion action by exact name}';
     protected $description = 'Provision Google Ads conversion actions for sitetospend.com and store labels in settings.';
 
     private array $actions = [
@@ -70,12 +74,18 @@ class ProvisionConversionActions extends Command
     public function handle(): int
     {
         $customerId = config('conversions.google_ads_customer_id');
-        $this->info("Provisioning conversion actions for Google Ads account {$customerId}...");
 
         $client = $this->buildClient();
         if (!$client) {
             return self::FAILURE;
         }
+
+        // Archive mode: remove an orphaned conversion action by name
+        if ($archiveName = $this->option('archive')) {
+            return $this->archiveByName($client, $customerId, $archiveName);
+        }
+
+        $this->info("Provisioning conversion actions for Google Ads account {$customerId}...");
 
         foreach ($this->actions as $event => $def) {
             $settingKey = "conversion_resource_name.{$event}";
@@ -193,6 +203,56 @@ class ProvisionConversionActions extends Command
         }
 
         return null;
+    }
+
+    private function archiveByName($client, string $customerId, string $name): int
+    {
+        $this->info("Looking for conversion action: \"{$name}\" in account {$customerId}...");
+
+        try {
+            $response = $client->getGoogleAdsServiceClient()->search(
+                new SearchGoogleAdsRequest([
+                    'customer_id' => $customerId,
+                    'query'       => "SELECT conversion_action.resource_name, conversion_action.status "
+                        . "FROM conversion_action "
+                        . "WHERE conversion_action.name = '" . addslashes($name) . "' LIMIT 1",
+                ])
+            );
+
+            $resourceName = null;
+            foreach ($response->iterateAllElements() as $row) {
+                $resourceName = $row->getConversionAction()->getResourceName();
+            }
+
+            if (!$resourceName) {
+                $this->warn("No conversion action found with that name. Nothing changed.");
+                return self::SUCCESS;
+            }
+
+            $this->line("Found: {$resourceName}");
+
+            $action = new ConversionAction([
+                'resource_name' => $resourceName,
+                'status'        => ConversionActionStatus::REMOVED,
+            ]);
+
+            $op = new ConversionActionOperation();
+            $op->setUpdate($action);
+            $op->setUpdateMask(new FieldMask(['paths' => ['status']]));
+
+            $client->getConversionActionServiceClient()->mutateConversionActions(
+                new MutateConversionActionsRequest([
+                    'customer_id' => $customerId,
+                    'operations'  => [$op],
+                ])
+            );
+
+            $this->info("Archived \"{$name}\" — it will no longer appear in Google Ads conversion reporting.");
+            return self::SUCCESS;
+        } catch (\Exception $e) {
+            $this->error('Archive failed: ' . $e->getMessage());
+            return self::FAILURE;
+        }
     }
 
     private function buildClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient

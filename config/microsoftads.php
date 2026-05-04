@@ -16,6 +16,9 @@ return [
     // MCC (Manager) account ID for managing sub-accounts
     'manager_account_id' => env('MICROSOFT_ADS_MANAGER_ACCOUNT_ID'),
 
+    // UET tag ID — add to .env after running: php artisan microsoftads:list-uet-tags
+    'uet_tag_id' => env('MICROSOFT_ADS_UET_TAG_ID'),
+
     // API environment: production or sandbox
     'environment' => env('MICROSOFT_ADS_ENVIRONMENT', 'production'),
 

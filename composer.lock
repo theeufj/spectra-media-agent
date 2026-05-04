@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "b321efb94cb61bb59860756710278577",
+    "content-hash": "99848ed7e2317a34faf063599f445dba",
     "packages": [
         {
             "name": "aws/aws-crt-php",
@@ -3716,6 +3716,65 @@
                 }
             ],
             "time": "2026-03-08T20:05:35+00:00"
+        },
+        {
+            "name": "microsoft/msads",
+            "version": "v13.0.27",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/BingAds/BingAds-PHP-REST-SDK",
+                "reference": "e7b5d9010892f60d29f25100a22a9f944d9f4ac6"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/BingAds/BingAds-PHP-REST-SDK/zipball/e7b5d9010892f60d29f25100a22a9f944d9f4ac6",
+                "reference": "e7b5d9010892f60d29f25100a22a9f944d9f4ac6",
+                "shasum": ""
+            },
+            "require": {
+                "ext-curl": "*",
+                "ext-json": "*",
+                "ext-mbstring": "*",
+                "guzzlehttp/guzzle": "^7.3",
+                "guzzlehttp/psr7": "^1.7 || ^2.0",
+                "php": "^7.4 || ^8.0"
+            },
+            "require-dev": {
+                "friendsofphp/php-cs-fixer": "^3.5",
+                "monolog/monolog": "^2.5",
+                "phpunit/phpunit": "^8.0 || ^9.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "Microsoft\\MsAds\\Rest\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "Apache-2.0"
+            ],
+            "authors": [
+                {
+                    "name": "Microsoft Advertising",
+                    "homepage": "https://github.com/BingAds/BingAds-PHP-REST-SDK/graphs/contributors"
+                }
+            ],
+            "description": "This project provides the PHP client library for the REST-based Microsoft Ads API.",
+            "homepage": "https://github.com/BingAds/BingAds-PHP-REST-SDK",
+            "keywords": [
+                "ads",
+                "api",
+                "bing ads",
+                "bingads",
+                "microsoft ads",
+                "microsoft advertising",
+                "msads",
+                "php",
+                "rest",
+                "sdk"
+            ],
+            "time": "2026-03-13T09:14:11+00:00"
         },
         {
             "name": "moneyphp/money",

@@ -21,8 +21,10 @@ abstract class BaseMicrosoftAdsService
     protected ?string $accessToken = null;
     protected Customer $customer;
     protected array $config;
-    protected string $baseUrl = 'https://campaign.api.bingads.microsoft.com/Api/Advertiser/CampaignManagement/v13';
-    protected string $reportingUrl = 'https://reporting.api.bingads.microsoft.com/Api/Advertiser/Reporting/v13';
+    protected string $campaignWsdl = 'https://campaign.api.bingads.microsoft.com/Api/Advertiser/CampaignManagement/v13/CampaignManagementService.svc?singleWsdl';
+    protected string $reportingWsdl = 'https://reporting.api.bingads.microsoft.com/Api/Advertiser/Reporting/v13/ReportingService.svc?singleWsdl';
+    protected string $namespace = 'https://bingads.microsoft.com/CampaignManagement/v13';
+    protected string $reportingNamespace = 'https://bingads.microsoft.com/Reporting/v13';
 
     public function __construct(Customer $customer)
     {
@@ -80,24 +82,34 @@ abstract class BaseMicrosoftAdsService
     {
         if (!$this->ensureAuthenticated()) return null;
 
-        $headers = [
-            'Authorization' => "Bearer {$this->accessToken}",
-            'DeveloperToken' => $this->config['developer_token'] ?? '',
-            'CustomerId' => $this->customer->microsoft_ads_customer_id ?? '',
-            'CustomerAccountId' => $this->customer->microsoft_ads_account_id ?? '',
-            'Content-Type' => 'application/json',
-        ];
-
         try {
-            $response = Http::withHeaders($headers)
-                ->timeout(30)
-                ->post("{$this->baseUrl}/{$operation}", $body);
+            $client = new \SoapClient($this->campaignWsdl, [
+                'trace' => 1,
+                'exceptions' => 1,
+            ]);
 
-            if ($response->successful()) {
-                return $response->json();
-            }
+            $headers = [
+                new \SoapHeader($this->namespace, 'AuthenticationToken', $this->accessToken),
+                new \SoapHeader($this->namespace, 'DeveloperToken', $this->config['developer_token'] ?? ''),
+                new \SoapHeader($this->namespace, 'CustomerId', $this->customer->microsoft_ads_customer_id ?? ''),
+                new \SoapHeader($this->namespace, 'CustomerAccountId', $this->customer->microsoft_ads_account_id ?? ''),
+            ];
 
-            throw new \Exception("Microsoft Ads API error: {$operation} - " . $response->status() . " - " . $response->body());
+            $client->__setSoapHeaders($headers);
+
+            $response = $client->__soapCall($operation, [$body]);
+
+            // Convert Microsoft's deep stdClass response into an associative array for our app
+            return json_decode(json_encode($response), true);
+
+        } catch (\SoapFault $e) {
+            Log::error("Microsoft Ads API SoapFault: {$operation}", [
+                'faultcode' => $e->faultcode ?? '',
+                'faultstring' => $e->faultstring ?? '',
+                'detail' => $e->detail ?? '',
+                'message' => $e->getMessage()
+            ]);
+            throw new \Exception("Microsoft Ads API error: {$operation} - " . $e->getMessage());
         } catch (\Exception $e) {
             Log::error("Microsoft Ads API exception: {$operation}", ['error' => $e->getMessage()]);
             throw $e;
@@ -111,20 +123,24 @@ abstract class BaseMicrosoftAdsService
     {
         if (!$this->ensureAuthenticated()) return null;
 
-        $headers = [
-            'Authorization' => "Bearer {$this->accessToken}",
-            'DeveloperToken' => $this->config['developer_token'] ?? '',
-            'CustomerId' => $this->customer->microsoft_ads_customer_id ?? '',
-            'CustomerAccountId' => $this->customer->microsoft_ads_account_id ?? '',
-            'Content-Type' => 'application/json',
-        ];
-
         try {
-            $response = Http::withHeaders($headers)
-                ->timeout(60)
-                ->post("{$this->reportingUrl}/{$operation}", $body);
+            $client = new \SoapClient($this->reportingWsdl, [
+                'trace' => 1,
+                'exceptions' => 1,
+            ]);
 
-            return $response->successful() ? $response->json() : null;
+            $headers = [
+                new \SoapHeader($this->reportingNamespace, 'AuthenticationToken', $this->accessToken),
+                new \SoapHeader($this->reportingNamespace, 'DeveloperToken', $this->config['developer_token'] ?? ''),
+                new \SoapHeader($this->reportingNamespace, 'CustomerId', $this->customer->microsoft_ads_customer_id ?? ''),
+                new \SoapHeader($this->reportingNamespace, 'CustomerAccountId', $this->customer->microsoft_ads_account_id ?? ''),
+            ];
+
+            $client->__setSoapHeaders($headers);
+
+            $response = $client->__soapCall($operation, [$body]);
+
+            return json_decode(json_encode($response), true);
         } catch (\Exception $e) {
             Log::error("Microsoft Ads Reporting error: {$operation}", ['error' => $e->getMessage()]);
             return null;

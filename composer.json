@@ -23,6 +23,7 @@
         "laravel/socialite": "^5.23",
         "laravel/tinker": "^2.10.1",
         "league/flysystem-aws-s3-v3": "^3.30",
+        "microsoft/msads": "^13.0",
         "pgvector/pgvector": "^0.2.2",
         "react/http": "^0.4.0",
         "resend/resend-laravel": "^1.3",
