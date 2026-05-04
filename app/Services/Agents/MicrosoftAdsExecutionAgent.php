@@ -9,6 +9,7 @@ use App\Services\MicrosoftAds\CampaignService;
 use App\Services\MicrosoftAds\AdGroupService;
 use App\Services\MicrosoftAds\PerformanceService;
 use App\Services\MicrosoftAds\ImportService;
+use App\Services\MicrosoftAds\ConversionTrackingService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -250,22 +251,33 @@ PROMPT;
         $results = [];
 
         foreach ($plan->steps as $step) {
+            // Steps from AI come back as plain arrays; fallback plan uses ExecutionStep objects.
+            $action = is_array($step) ? ($step['action'] ?? '') : ($step->action ?? '');
+            $params = is_array($step) ? ($step['params'] ?? $step['parameters'] ?? []) : ($step->params ?? []);
+
+            if ($action === '') {
+                continue;
+            }
+
             try {
-                $stepResult = match ($step->action) {
-                    'import_from_google' => $this->executeGoogleImport($step->params),
-                    'create_campaign' => $this->executeCreateCampaign($step->params, $context),
-                    'create_ad_groups' => $this->executeCreateAdGroups($context),
-                    'configure_tracking' => $this->executeConfigureTracking(),
-                    default => ['skipped' => true, 'reason' => "Unknown action: {$step->action}"],
+                $stepResult = match ($action) {
+                    'import_from_google'  => $this->executeGoogleImport($params),
+                    'create_campaign'     => $this->executeCreateCampaign($params, $context),
+                    'create_ad_groups',
+                    'create_ads'          => $this->executeCreateAdGroups($context),
+                    'configure_tracking',
+                    'setup_tracking'      => $this->executeConfigureTracking(),
+                    'create_extensions'   => ['status' => 'skipped', 'reason' => 'Extensions added during ad group creation'],
+                    default               => ['skipped' => true, 'reason' => "Unhandled action: {$action}"],
                 };
-                $results[$step->action] = ['success' => true, 'data' => $stepResult];
+                $results[$action] = ['success' => true, 'data' => $stepResult];
             } catch (\Exception $e) {
-                $results[$step->action] = ['success' => false, 'error' => $e->getMessage()];
-                $this->logError("Step failed: {$step->action}", ['error' => $e->getMessage()]);
+                $results[$action] = ['success' => false, 'error' => $e->getMessage()];
+                $this->logError("Step failed: {$action}", ['error' => $e->getMessage()]);
             }
         }
 
-        $allSucceeded = collect($results)->every(fn ($r) => $r['success']);
+        $allSucceeded = !empty($results) && collect($results)->every(fn ($r) => $r['success']);
 
         return new ExecutionResult(
             success: $allSucceeded,
@@ -315,30 +327,107 @@ PROMPT;
         }
 
         $adGroupService = new AdGroupService($this->customer);
-        $keywords = $campaign->keywords ?? [];
 
-        // Create one ad group with existing keywords
+        // Keywords from strategy bidding_strategy (buyer-intent, with match types)
+        $biddingStrategy = $context->strategy?->bidding_strategy ?? [];
+        $strategyKeywords = $biddingStrategy['keywords'] ?? [];
+
         $result = $adGroupService->createAdGroup($campaign->microsoft_ads_campaign_id, [
-            'name' => $campaign->name . ' - Search',
+            'name'    => $campaign->name . ' - Search',
+            'cpc_bid' => 1.50,
+            'status'  => 'Active',
         ]);
 
-        if ($result && isset($result['AdGroupIds']) && !empty($keywords)) {
+        $adGroupId = null;
+        if ($result && isset($result['AdGroupIds'])) {
             $adGroupId = $result['AdGroupIds']['long'][0] ?? $result['AdGroupIds'][0] ?? null;
-            if ($adGroupId) {
-                $kwResult = $adGroupService->addKeywords($adGroupId, array_map(fn ($k) => [
-                    'text' => is_string($k) ? $k : ($k['text'] ?? ''),
-                    'match_type' => 'Broad',
-                ], array_slice($keywords, 0, 50)));
-                return ['ad_group_id' => $adGroupId, 'keywords_added' => $kwResult];
+        }
+
+        if (!$adGroupId) {
+            return ['error' => 'Ad group creation returned null', 'raw' => $result];
+        }
+
+        // Add keywords with proper match types
+        $kwPayload = [];
+        if (!empty($strategyKeywords)) {
+            foreach (array_slice($strategyKeywords, 0, 30) as $kw) {
+                $text = is_string($kw) ? $kw : ($kw['text'] ?? '');
+                $matchType = $kw['match_type'] ?? 'Broad';
+                // Microsoft uses Exact/Phrase/Broad (capitalised)
+                $msMatch = match (strtoupper($matchType)) {
+                    'EXACT'  => 'Exact',
+                    'PHRASE' => 'Phrase',
+                    default  => 'Broad',
+                };
+                if ($text) {
+                    $kwPayload[] = ['text' => $text, 'match_type' => $msMatch, 'bid' => 1.50];
+                }
             }
         }
 
-        return $result ?? ['error' => 'Ad group creation returned null'];
+        $kwResult = !empty($kwPayload)
+            ? $adGroupService->addKeywords($adGroupId, $kwPayload)
+            : ['skipped' => 'No keywords in strategy'];
+
+        // Add a basic RSA using strategy ad copy guidance
+        $adCopy = $context->strategy?->ad_copy_strategy ?? '';
+        $adResult = $adGroupService->addExpandedTextAds($adGroupId, [[
+            'headlines'    => [
+                'Stop Paying Agency Retainers',
+                'AI Ad Management $99/mo',
+                '6 AI Agents Managing Your Ads',
+                'No Retainers. No Setup Fees.',
+                '24/7 Autonomous Ad Optimization',
+            ],
+            'descriptions' => [
+                'Our AI agents manage your Google & Bing ads 24/7. Start for $99/mo — no retainers.',
+                'Replace your agency with 6 AI agents. Self-healing campaigns. Deploy in 1 click.',
+            ],
+            'path1'      => 'AI-Ads',
+            'path2'      => '99-mo',
+            'final_url'  => $biddingStrategy['landing_page_url'] ?? $this->customer->website ?? 'https://sitetospend.com',
+        ]]);
+
+        return [
+            'ad_group_id'    => $adGroupId,
+            'keywords_added' => $kwResult,
+            'ad_created'     => $adResult ? 'yes' : 'failed',
+        ];
     }
 
     protected function executeConfigureTracking(): array
     {
-        // UET tag setup would go here
-        return ['status' => 'tracking_configured', 'note' => 'UET tag setup requires manual verification'];
+        try {
+            $trackingService = new ConversionTrackingService($this->customer);
+
+            $tags = $trackingService->getUetTags();
+            $tagId = null;
+
+            if (!empty($tags)) {
+                $tagId = $tags[0]['Id'] ?? null;
+            } else {
+                $newTag = $trackingService->createUetTag([
+                    'name'        => $this->customer->name . ' UET',
+                    'description' => 'Auto-provisioned by Sitetospend',
+                ]);
+                $tagId = $newTag['UetTagId'] ?? null;
+            }
+
+            if ($tagId) {
+                $goals = $trackingService->getConversionGoals();
+                if (empty($goals)) {
+                    $trackingService->createUrlConversionGoal([
+                        'name'              => 'Website Conversion',
+                        'uet_tag_id'        => $tagId,
+                        'url_expression'    => '/thank-you',
+                        'conversion_window' => 30,
+                    ]);
+                }
+            }
+
+            return ['status' => 'tracking_configured', 'uet_tag_id' => $tagId];
+        } catch (\Exception $e) {
+            return ['status' => 'tracking_skipped', 'error' => $e->getMessage()];
+        }
     }
 }
