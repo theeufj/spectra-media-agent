@@ -213,7 +213,7 @@ class KeywordResearchService
     /**
      * Generate negative keywords using Gemini AI.
      */
-    protected function generateNegativeKeywords(string $businessName, ?string $industry): array
+    public function generateNegativeKeywords(string $businessName, ?string $industry): array
     {
         $prompt = "You are a Google Ads negative keyword expert. Generate exactly 15 negative keywords for a Search campaign.\n\n";
         $prompt .= "Business: {$businessName}\n";

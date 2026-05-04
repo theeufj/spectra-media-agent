@@ -8,7 +8,9 @@ use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetCampaignKeywords;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
+use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\RemoveKeyword;
+use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V22\Enums\RecommendationTypeEnum\RecommendationType;
 use Illuminate\Bus\Queueable;
@@ -148,7 +150,16 @@ class ExpandBroadMatchKeywords implements ShouldQueue
             }
         }
 
-        // ── Phase 3: DISMISS the Google Ads recommendation ───────────────────
+        // ── Phase 3: ADD NEGATIVES ────────────────────────────────────────────
+        // Broad match without negatives bleeds into unrelated searches immediately.
+        // Generate campaign-specific negatives via Gemini and add them alongside
+        // every broad match expansion so the two always travel together.
+
+        if (!empty($added)) {
+            $this->addNegatives($customer, $customerId, $campaignResource);
+        }
+
+        // ── Phase 4: DISMISS the Google Ads recommendation ───────────────────
         // Always dismiss any open KEYWORD_MATCH_TYPE / USE_BROAD_MATCH_KEYWORD
         // recommendations for this campaign, regardless of whether we added new
         // keywords this run. The recommendation may predate our first expansion.
@@ -195,6 +206,33 @@ class ExpandBroadMatchKeywords implements ShouldQueue
             'added'  => count($added),
             'pruned' => count($pruned),
         ]);
+    }
+
+    private function addNegatives($customer, string $customerId, string $campaignResource): void
+    {
+        $researchService = new KeywordResearchService($customer);
+        $negatives       = $researchService->generateNegativeKeywords(
+            $customer->name ?? 'this business',
+            $this->campaign->strategy?->industry ?? null
+        );
+
+        if (empty($negatives)) {
+            return;
+        }
+
+        $addNegative = new AddNegativeKeyword($customer);
+        $added       = [];
+
+        foreach ($negatives as $term) {
+            $result = ($addNegative)($customerId, $campaignResource, $term, KeywordMatchType::BROAD);
+            if ($result) {
+                $added[] = $term;
+            }
+        }
+
+        if (!empty($added)) {
+            Log::info("ExpandBroadMatchKeywords: Added " . count($added) . " negative keywords to campaign {$this->campaign->id}");
+        }
     }
 
     public function failed(\Throwable $exception): void
