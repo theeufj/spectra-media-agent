@@ -303,10 +303,13 @@ PROMPT;
     protected function executeCreateCampaign(array $params, ExecutionContext $context): array
     {
         $campaignService = new CampaignService($this->customer);
+        $name        = $params['name'] ?? $params['campaign_name'] ?? $context->campaign?->name ?? 'Sitetospend Campaign';
+        $dailyBudget = $params['daily_budget'] ?? $params['budget'] ?? $context->strategy?->daily_budget ?? 10.00;
+
         $result = $campaignService->createSearchCampaign([
-            'name' => $params['name'],
-            'daily_budget' => $params['daily_budget'],
-            'status' => 'Paused',
+            'name'         => $name,
+            'daily_budget' => (float) $dailyBudget,
+            'status'       => 'Paused',
         ]);
 
         if ($result && isset($result['CampaignIds'])) {
@@ -406,10 +409,10 @@ PROMPT;
             if (!empty($tags)) {
                 $tagId = $tags[0]['Id'] ?? null;
             } else {
-                $newTag = $trackingService->createUetTag([
-                    'name'        => $this->customer->name . ' UET',
-                    'description' => 'Auto-provisioned by Sitetospend',
-                ]);
+                $newTag = $trackingService->createUetTag(
+                    $this->customer->name . ' UET',
+                    'Auto-provisioned by Sitetospend'
+                );
                 $tagId = $newTag['UetTagId'] ?? null;
             }
 
