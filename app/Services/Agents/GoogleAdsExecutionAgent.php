@@ -1480,9 +1480,16 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 return [];
             }
 
-            $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
-            $industry = $strategy->businessProfile?->industry ?? null;
-            $landingPageUrl = $campaign->landing_page_url ?? null;
+            $businessName    = $campaign->business_name
+                ?? $strategy->businessProfile?->business_name
+                ?? $this->customer->name
+                ?? 'Business';
+            $industry        = $strategy->businessProfile?->industry ?? null;
+            // Fall back to strategy landing page when campaign doesn't have one set
+            $landingPageUrl  = $campaign->landing_page_url
+                ?? $strategy->bidding_strategy['landing_page_url']
+                ?? $this->customer->website
+                ?? null;
 
             $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
             $research = $researchService->research($customerId, $businessName, $industry, $landingPageUrl);

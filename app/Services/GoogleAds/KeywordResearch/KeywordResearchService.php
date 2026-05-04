@@ -78,7 +78,7 @@ class KeywordResearchService
      */
     protected function generateSeedKeywords(string $businessName, ?string $industry, ?string $landingPageUrl): array
     {
-        $prompt = "You are a Google Ads keyword research expert. Generate exactly 15 seed keywords for a Google Search campaign.\n\n";
+        $prompt  = "You are a Google Ads keyword research expert. Generate exactly 15 seed keywords for a Google Search campaign.\n\n";
         $prompt .= "Business: {$businessName}\n";
         if ($industry) {
             $prompt .= "Industry: {$industry}\n";
@@ -86,11 +86,16 @@ class KeywordResearchService
         if ($landingPageUrl) {
             $prompt .= "Landing Page: {$landingPageUrl}\n";
         }
-        $prompt .= "\nRequirements:\n";
-        $prompt .= "- Focus on high commercial intent keywords (people ready to buy/enquire)\n";
-        $prompt .= "- Include a mix of: brand-adjacent, service/product, problem-solution keywords\n";
+        $prompt .= "\nCRITICAL: Think from the buyer's perspective, NOT the product's perspective.\n";
+        $prompt .= "Ask yourself: what does a potential customer type into Google when they are ready to PAY for this?\n";
+        $prompt .= "They search for the OUTCOME they want (e.g. 'google ads agency', 'hire ppc manager'), ";
+        $prompt .= "NOT the technology behind the product (e.g. 'google ads automation tool', 'ai software').\n\n";
+        $prompt .= "Requirements:\n";
+        $prompt .= "- High commercial intent only — someone about to hire or buy, not research\n";
+        $prompt .= "- Phrase the keywords as a buyer would, using words like: agency, service, managed, company, hire, outsource\n";
+        $prompt .= "- Mix of: category keywords (what the service IS), problem keywords (what the buyer wants to solve)\n";
         $prompt .= "- Keep keywords 2-5 words each\n";
-        $prompt .= "- No branded competitor terms\n";
+        $prompt .= "- No branded competitor terms, no tool/software/DIY terms\n";
         $prompt .= "\nReturn ONLY a JSON array of keyword strings, no explanation. Example: [\"keyword one\", \"keyword two\"]";
 
         $result = $this->gemini->generateContent(
