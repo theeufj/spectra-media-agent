@@ -50,6 +50,39 @@ class UpdateResponsiveSearchAd extends BaseGoogleAdsService
             return false;
         }
 
+        return $this->sendUpdate($customerId, $adGroupAdResourceName, $mergedHeadlines, $mergedDescriptions);
+    }
+
+    /**
+     * Fully replace the headlines and/or descriptions on an RSA.
+     * Skips the equality check — use when you need to remove or swap specific assets.
+     *
+     * @param string $customerId
+     * @param string $adGroupAdResourceName  e.g. "customers/123/adGroupAds/456~789"
+     * @param array  $headlines              Complete new set of headlines (3–15)
+     * @param array  $descriptions           Complete new set of descriptions (2–4)
+     * @return bool  true if updated, false on error
+     */
+    public function replace(
+        string $customerId,
+        string $adGroupAdResourceName,
+        array $headlines,
+        array $descriptions
+    ): bool {
+        $this->ensureClient();
+
+        $headlines    = array_values(array_unique($headlines));
+        $descriptions = array_values(array_unique($descriptions));
+
+        return $this->sendUpdate($customerId, $adGroupAdResourceName, $headlines, $descriptions);
+    }
+
+    private function sendUpdate(
+        string $customerId,
+        string $adGroupAdResourceName,
+        array $headlines,
+        array $descriptions
+    ): bool {
         // Extract Ad ID from adGroupAd resource name: "customers/X/adGroupAds/AGID~ADID"
         preg_match('/~(\d+)$/', $adGroupAdResourceName, $m);
         $adId = $m[1] ?? null;
@@ -64,11 +97,11 @@ class UpdateResponsiveSearchAd extends BaseGoogleAdsService
             'responsive_search_ad' => new ResponsiveSearchAdInfo([
                 'headlines'    => array_map(
                     fn($t) => new AdTextAsset(['text' => substr($t, 0, 30)]),
-                    $mergedHeadlines
+                    $headlines
                 ),
                 'descriptions' => array_map(
                     fn($t) => new AdTextAsset(['text' => substr($t, 0, 90)]),
-                    $mergedDescriptions
+                    $descriptions
                 ),
             ]),
         ]);
@@ -87,7 +120,7 @@ class UpdateResponsiveSearchAd extends BaseGoogleAdsService
                 ])
             );
             $this->logInfo("UpdateResponsiveSearchAd: updated ad {$adId} — "
-                . count($mergedHeadlines) . " headlines, " . count($mergedDescriptions) . " descriptions");
+                . count($headlines) . " headlines, " . count($descriptions) . " descriptions");
             return true;
         } catch (GoogleAdsException|ApiException $e) {
             $this->logError("UpdateResponsiveSearchAd failed for ad {$adId}: " . $e->getMessage(), $e);
