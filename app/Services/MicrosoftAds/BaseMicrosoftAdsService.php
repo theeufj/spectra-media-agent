@@ -97,11 +97,7 @@ abstract class BaseMicrosoftAdsService
                 return $response->json();
             }
 
-            Log::warning("Microsoft Ads API error: {$operation}", [
-                'status' => $response->status(),
-                'body' => $response->body(),
-            ]);
-            return null;
+            throw new \Exception("Microsoft Ads API error: {$operation} - " . $response->status() . " - " . $response->body());
         } catch (\Exception $e) {
             Log::error("Microsoft Ads API exception: {$operation}", ['error' => $e->getMessage()]);
             return null;
