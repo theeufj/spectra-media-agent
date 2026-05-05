@@ -6,6 +6,7 @@ use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\MicrosoftAds\AdGroupService as MicrosoftAdGroupService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -29,15 +30,28 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
     {
         Log::info("DetectNegativeKeywordConflicts: Starting weekly conflict scan");
 
-        $customers = Customer::whereNotNull('google_ads_customer_id')
+        $googleCustomers = Customer::whereNotNull('google_ads_customer_id')
             ->whereHas('campaigns', fn($q) => $q->whereNotNull('google_ads_campaign_id')->where('status', 'active'))
             ->get();
 
-        foreach ($customers as $customer) {
+        foreach ($googleCustomers as $customer) {
             try {
                 $this->scanCustomer($customer);
             } catch (\Exception $e) {
                 Log::error("DetectNegativeKeywordConflicts: Failed for customer {$customer->id}: " . $e->getMessage());
+            }
+        }
+
+        $microsoftCustomers = Customer::whereNotNull('microsoft_ads_customer_id')
+            ->whereHas('campaigns', fn($q) => $q->whereNotNull('microsoft_ads_campaign_id')->where('status', 'active'))
+            ->whereNotIn('id', $googleCustomers->pluck('id'))
+            ->get();
+
+        foreach ($microsoftCustomers as $customer) {
+            try {
+                $this->scanMicrosoftCustomer($customer);
+            } catch (\Exception $e) {
+                Log::error("DetectNegativeKeywordConflicts: Failed (Microsoft) for customer {$customer->id}: " . $e->getMessage());
             }
         }
 
@@ -151,6 +165,96 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
                         array_slice($conflicts, 0, 5)
                     ),
                     'action_required' => 'Review your negative keyword lists in Google Ads to remove conflicting terms.',
+                ]
+            ));
+        }
+    }
+
+    private function scanMicrosoftCustomer(Customer $customer): void
+    {
+        $service   = new MicrosoftAdGroupService($customer);
+        $positives = [];
+        $negsByCampaign = [];
+
+        $activeCampaigns = $customer->campaigns()
+            ->whereNotNull('microsoft_ads_campaign_id')
+            ->where('status', 'active')
+            ->get();
+
+        foreach ($activeCampaigns as $campaign) {
+            $campaignId = (string) $campaign->microsoft_ads_campaign_id;
+            $adGroups   = $service->getAdGroupsByCampaignId($campaignId);
+
+            foreach ($adGroups as $adGroup) {
+                $adGroupId = (string) ($adGroup['Id'] ?? '');
+                if (!$adGroupId) continue;
+
+                foreach ($service->getKeywordsByAdGroupId($adGroupId) as $kw) {
+                    if (($kw['Status'] ?? '') !== 'Active') continue;
+                    $positives[] = [
+                        'campaign' => $campaignId,
+                        'text'     => strtolower(trim($kw['Text'] ?? '')),
+                    ];
+                }
+            }
+
+            // Fetch campaign-level negatives
+            $negResult = $service->getNegativeKeywordsByCampaignIds([(int) $campaignId]);
+            foreach ($negResult as $entityNeg) {
+                $negs = $entityNeg['NegativeKeywords']['NegativeKeyword'] ?? [];
+                if (isset($negs['Text'])) {
+                    $negs = [$negs];
+                }
+                foreach ($negs as $neg) {
+                    $negsByCampaign[$campaignId][] = strtolower(trim($neg['Text'] ?? ''));
+                }
+            }
+        }
+
+        if (empty($positives) || empty($negsByCampaign)) return;
+
+        $conflicts = [];
+        foreach ($positives as $pos) {
+            foreach ($negsByCampaign[$pos['campaign']] ?? [] as $negText) {
+                if ($pos['text'] === $negText || str_contains($pos['text'], $negText)) {
+                    $conflicts[] = [
+                        'campaign'         => $pos['campaign'],
+                        'positive_keyword' => $pos['text'],
+                        'negative_keyword' => $negText,
+                    ];
+                }
+            }
+        }
+
+        if (empty($conflicts)) return;
+
+        $conflictCount = count($conflicts);
+        Log::warning("DetectNegativeKeywordConflicts (Microsoft): Found {$conflictCount} conflicts for customer {$customer->id}");
+
+        AgentActivity::record(
+            'keyword',
+            'negative_keyword_conflict',
+            "Detected {$conflictCount} negative keyword conflict(s) blocking active keywords (Microsoft Ads)",
+            $customer->id,
+            null,
+            ['platform' => 'microsoft_ads', 'conflicts' => array_slice($conflicts, 0, 20)]
+        );
+
+        $cacheKey = "neg_conflict_alert_microsoft:{$customer->id}";
+        if (Cache::has($cacheKey)) return;
+        Cache::put($cacheKey, true, now()->addHours(4));
+
+        foreach ($customer->users as $user) {
+            $user->notify(new CriticalAgentAlert(
+                'negative_keyword_conflict',
+                'Negative Keyword Conflicts Detected (Microsoft Ads)',
+                "{$conflictCount} negative keyword(s) are blocking active positive keywords in your Microsoft Ads campaigns.",
+                [
+                    'issues'          => array_map(
+                        fn($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
+                        array_slice($conflicts, 0, 5)
+                    ),
+                    'action_required' => 'Review your negative keyword lists in Microsoft Ads to remove conflicting terms.',
                 ]
             ));
         }

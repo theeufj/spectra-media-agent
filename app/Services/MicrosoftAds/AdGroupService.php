@@ -99,6 +99,29 @@ class AdGroupService extends BaseMicrosoftAdsService
         }
     }
 
+    public function getAdGroupsByCampaignId(string $campaignId): array
+    {
+        $result = $this->apiCallWithRetry('GetAdGroupsByCampaignId', ['CampaignId' => $campaignId]);
+        $groups = $result['AdGroups']['AdGroup'] ?? [];
+        return isset($groups['Id']) ? [$groups] : $groups;
+    }
+
+    public function getKeywordsByAdGroupId(string $adGroupId): array
+    {
+        $result = $this->apiCallWithRetry('GetKeywordsByAdGroupId', ['AdGroupId' => $adGroupId]);
+        $kws = $result['Keywords']['Keyword'] ?? [];
+        return isset($kws['Id']) ? [$kws] : $kws;
+    }
+
+    public function getNegativeKeywordsByCampaignIds(array $campaignIds): array
+    {
+        $result = $this->apiCallWithRetry('GetNegativeKeywordsByEntityIds', [
+            'EntityIds'  => ['long' => $campaignIds],
+            'EntityType' => 'Campaign',
+        ]);
+        return $result['EntityNegativeKeywords']['EntityNegativeKeyword'] ?? [];
+    }
+
     /**
      * Add a negative keyword to a campaign or ad group.
      */

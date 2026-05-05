@@ -14,14 +14,15 @@ return [
     ],
 
     'bid_adjustment' => [
-        'device_min_conversions' => 50,
-        'device_min_clicks'      => 200,
-        'device_divergence'      => 0.20,
-        'hour_min_clicks'        => 30,
-        'hour_high_threshold'    => 0.70,
-        'hour_low_threshold'     => 1.50,
-        'modifier_min'           => 0.10,
-        'modifier_max'           => 10.0,
+        'device_min_conversions'       => 50,
+        'device_min_clicks'            => 200,
+        'device_divergence'            => 0.20,
+        'hour_min_clicks'              => 30,
+        'hour_high_threshold'          => 0.70,
+        'hour_low_threshold'           => 1.50,
+        'modifier_min'                 => 0.10,
+        'modifier_max'                 => 10.0,
+        'facebook_daypart_enabled'     => true,
     ],
 
     'search_terms' => [

@@ -230,4 +230,45 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
         // Reporting is async — return 0 for now, actual polling handled by PerformanceService
         return 0;
     }
+
+    /**
+     * Upload a single offline conversion to Microsoft Ads via ApplyOfflineConversions.
+     * Requires the msclid captured at landing time and the conversion goal name.
+     */
+    public function applyOfflineConversion(
+        string $msclid,
+        string $goalName,
+        \DateTimeInterface $conversionTime,
+        float $value = 0.0,
+        string $currencyCode = 'USD'
+    ): bool {
+        $result = $this->apiCallWithRetry('ApplyOfflineConversions', [
+            'OfflineConversions' => [
+                'OfflineConversion' => [[
+                    'ConversionCurrencyCode' => $currencyCode,
+                    'ConversionName'         => $goalName,
+                    'ConversionTime'         => $conversionTime->format('Y-m-d\TH:i:s'),
+                    'ConversionValue'        => $value,
+                    'MicrosoftClickId'       => $msclid,
+                ]],
+            ],
+        ]);
+
+        if ($result === null) {
+            return false;
+        }
+
+        // Check for partial errors
+        $errors = $result['PartialErrors']['BatchError'] ?? null;
+        if ($errors) {
+            Log::warning('Microsoft Ads: ApplyOfflineConversions partial error', [
+                'goal'   => $goalName,
+                'msclid' => $msclid,
+                'errors' => $errors,
+            ]);
+            return false;
+        }
+
+        return true;
+    }
 }

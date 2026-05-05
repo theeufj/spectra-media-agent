@@ -37,7 +37,9 @@ class HourlyBudgetOptimization implements ShouldQueue
 
         $campaigns = Campaign::with('customer')
             ->where('primary_status', 'ELIGIBLE')
-            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')->orWhereNotNull('facebook_ads_campaign_id'))
+            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
+                ->orWhereNotNull('facebook_ads_campaign_id')
+                ->orWhereNotNull('microsoft_ads_campaign_id'))
             ->get();
 
         $summary = [
@@ -150,6 +152,18 @@ class HourlyBudgetOptimization implements ShouldQueue
             } catch (\Exception $e) {
                 // Fall through to return null
             }
+        }
+
+        // Microsoft Ads — reporting is async/batch; live hourly metrics not available via SOAP
+        if ($campaign->microsoft_ads_campaign_id && $customer->microsoft_ads_customer_id) {
+            return [
+                'platform'         => 'microsoft_ads',
+                'impressions'      => 0,
+                'clicks'           => 0,
+                'conversions'      => 0,
+                'spend'            => 0,
+                'conversion_value' => 0,
+            ];
         }
 
         // Facebook Ads
