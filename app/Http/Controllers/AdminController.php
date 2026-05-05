@@ -464,6 +464,48 @@ class AdminController extends Controller
         return Inertia::render('Admin/Notifications');
     }
 
+    public function conversionTrackingIndex()
+    {
+        $awId = config('conversions.aw_id', 'AW-16797144138');
+        $events = config('conversions.events', []);
+
+        $actions = collect($events)->map(function ($def, $key) use ($awId) {
+            $label       = Setting::get("conversion_label.{$key}", $def['label'] ?? null);
+            $resourceName = Setting::get("conversion_resource_name.{$key}");
+            return [
+                'key'           => $key,
+                'name'          => 'Spectra — ' . ucfirst(str_replace('_', ' ', $key)),
+                'label'         => $label,
+                'send_to'       => $label ? "{$awId}/{$label}" : null,
+                'resource_name' => $resourceName,
+                'mode'          => $def['mode'] ?? 'client',
+                'value'         => $def['value'] ?? null,
+                'currency'      => $def['currency'] ?? 'USD',
+                'provisioned'   => $label !== null,
+            ];
+        })->values();
+
+        // Counts from the local AttributionConversion table (grouped by type)
+        $attributionCounts = \App\Models\AttributionConversion::query()
+            ->selectRaw('conversion_type, COUNT(*) as total, SUM(conversion_value) as value_sum')
+            ->groupBy('conversion_type')
+            ->get()
+            ->keyBy('conversion_type');
+
+        // 30-day and 7-day client-side event estimates from activity logs (best-effort)
+        $recentSignups7d  = \App\Models\User::where('created_at', '>=', now()->subDays(7))->count();
+        $recentSignups30d = \App\Models\User::where('created_at', '>=', now()->subDays(30))->count();
+
+        return Inertia::render('Admin/ConversionTracking', [
+            'aw_id'            => $awId,
+            'actions'          => $actions,
+            'attribution'      => $attributionCounts,
+            'signups_7d'       => $recentSignups7d,
+            'signups_30d'      => $recentSignups30d,
+            'customer_id'      => config('conversions.google_ads_customer_id'),
+        ]);
+    }
+
     public function settingsIndex()
     {
         $settings = Setting::all();

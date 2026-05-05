@@ -474,6 +474,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::put('campaigns/{campaign}', [App\Http\Controllers\AdminController::class, 'updateCampaign'])->name('admin.campaigns.update');
     Route::get('notifications', [App\Http\Controllers\AdminController::class, 'notificationsIndex'])->name('admin.notifications.index');
     Route::get('settings', [App\Http\Controllers\AdminController::class, 'settingsIndex'])->name('admin.settings.index');
+    Route::get('conversions', [App\Http\Controllers\AdminController::class, 'conversionTrackingIndex'])->name('admin.conversions.index');
     Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');
     Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
     Route::put('customers/{customer}', [App\Http\Controllers\AdminController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
