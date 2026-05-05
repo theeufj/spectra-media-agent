@@ -493,17 +493,31 @@ class AdminController extends Controller
             ->get()
             ->keyBy('conversion_type');
 
-        // 30-day and 7-day client-side event estimates from activity logs (best-effort)
         $recentSignups7d  = \App\Models\User::where('created_at', '>=', now()->subDays(7))->count();
         $recentSignups30d = \App\Models\User::where('created_at', '>=', now()->subDays(30))->count();
 
+        // Per-event totals and recent log from our own conversion event table
+        $eventTotals = \App\Models\SpectraConversionEvent::query()
+            ->selectRaw('event, COUNT(*) as total, SUM(value) as value_sum, MAX(created_at) as last_fired')
+            ->groupBy('event')
+            ->get()
+            ->keyBy('event');
+
+        $recentEvents = \App\Models\SpectraConversionEvent::query()
+            ->with('user:id,name,email')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get(['id', 'event', 'user_id', 'gclid', 'mode', 'value', 'uploaded_to_google', 'created_at']);
+
         return Inertia::render('Admin/ConversionTracking', [
-            'aw_id'            => $awId,
-            'actions'          => $actions,
-            'attribution'      => $attributionCounts,
-            'signups_7d'       => $recentSignups7d,
-            'signups_30d'      => $recentSignups30d,
-            'customer_id'      => config('conversions.google_ads_customer_id'),
+            'aw_id'         => $awId,
+            'actions'       => $actions,
+            'attribution'   => $attributionCounts,
+            'signups_7d'    => $recentSignups7d,
+            'signups_30d'   => $recentSignups30d,
+            'customer_id'   => config('conversions.google_ads_customer_id'),
+            'event_totals'  => $eventTotals,
+            'recent_events' => $recentEvents,
         ]);
     }
 

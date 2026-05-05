@@ -23,6 +23,7 @@ export function initConversions(labels) {
 /**
  * Fire a Google Ads conversion event by name.
  * Safe no-op if gtag is not loaded or the label has not been provisioned yet.
+ * Also logs the event server-side so we can monitor it in the admin dashboard.
  */
 export function trackConversion(event) {
     const label = _labels[event];
@@ -33,4 +34,10 @@ export function trackConversion(event) {
         value:    def.value,
         currency: def.currency,
     });
+    // Fire-and-forget server log so admin can monitor conversion counts.
+    fetch('/spectra/conversion', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '' },
+        body:    JSON.stringify({ event }),
+    }).catch(() => {});
 }

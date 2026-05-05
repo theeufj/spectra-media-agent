@@ -14,6 +14,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use App\Models\Setting;
+use App\Models\SpectraConversionEvent;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -86,6 +87,11 @@ class RecordSiteConversion implements ShouldQueue
             );
 
             Log::info("RecordSiteConversion: uploaded '{$this->event}' for gclid {$gclid}");
+
+            SpectraConversionEvent::record($this->event, $user->id ?? null, [
+                'gclid'    => $gclid,
+                'uploaded' => true,
+            ]);
         } catch (\Exception $e) {
             Log::error("RecordSiteConversion: upload failed for '{$this->event}': " . $e->getMessage(), [
                 'gclid'    => $gclid,

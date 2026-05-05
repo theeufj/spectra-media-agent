@@ -34,7 +34,7 @@ const CopyButton = ({ text }) => {
     );
 };
 
-export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id }) {
+export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events }) {
     const provisioned = actions.filter(a => a.provisioned).length;
 
     return (
@@ -78,7 +78,9 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Label / send_to</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Label / Resource</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fires (total)</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Last fired</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                 </tr>
                             </thead>
@@ -121,6 +123,14 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                                     <span className="text-xs text-gray-400 italic">Not provisioned</span>
                                                 )
                                             )}
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-900 font-medium">
+                                            {event_totals[action.key]?.total ?? 0}
+                                        </td>
+                                        <td className="px-6 py-4 text-xs text-gray-500">
+                                            {event_totals[action.key]?.last_fired
+                                                ? new Date(event_totals[action.key].last_fired).toLocaleDateString()
+                                                : '—'}
                                         </td>
                                         <td className="px-6 py-4">
                                             {action.provisioned
@@ -170,6 +180,59 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                             </table>
                         </div>
                     )}
+
+                    {/* Recent conversion event log */}
+                    <div className="bg-white rounded-lg shadow overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-200">
+                            <h3 className="text-lg font-medium text-gray-900">Recent Conversion Events</h3>
+                            <p className="text-sm text-gray-500 mt-0.5">Last 50 fires logged by Spectra — newest first.</p>
+                        </div>
+                        {recent_events.length === 0 ? (
+                            <div className="px-6 py-8 text-center text-sm text-gray-400">
+                                No conversion events recorded yet. They appear here as users trigger them.
+                            </div>
+                        ) : (
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Event</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Via Ad</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {recent_events.map(ev => (
+                                        <tr key={ev.id} className="hover:bg-gray-50">
+                                            <td className="px-6 py-3 text-sm font-medium text-gray-900 font-mono">{ev.event}</td>
+                                            <td className="px-6 py-3 text-sm text-gray-700">
+                                                {ev.user ? (
+                                                    <span>{ev.user.name} <span className="text-gray-400 text-xs">({ev.user.email})</span></span>
+                                                ) : '—'}
+                                            </td>
+                                            <td className="px-6 py-3">
+                                                <Badge color={ev.mode === 'client' ? 'blue' : 'gray'}>{ev.mode}</Badge>
+                                            </td>
+                                            <td className="px-6 py-3 text-sm text-gray-700">
+                                                {ev.value ? `$${parseFloat(ev.value).toFixed(2)}` : '—'}
+                                            </td>
+                                            <td className="px-6 py-3 text-sm">
+                                                {ev.gclid
+                                                    ? <Badge color="green">Yes</Badge>
+                                                    : <span className="text-gray-400 text-xs">No</span>
+                                                }
+                                            </td>
+                                            <td className="px-6 py-3 text-xs text-gray-500">
+                                                {new Date(ev.created_at).toLocaleString()}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
 
                     {/* How it works */}
                     <div className="bg-white rounded-lg shadow p-6">

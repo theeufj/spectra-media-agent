@@ -292,6 +292,19 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/platforms/{platform}/toggle', [App\Http\Controllers\Admin\EnabledPlatformController::class, 'toggle'])->name('platforms.toggle');
 });
 
+// Spectra own-site conversion event logger (authenticated, fire-and-forget)
+Route::middleware(['auth'])->post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
+    $event = $r->input('event');
+    $allowed = array_keys(config('conversions.events', []));
+    if (!in_array($event, $allowed, true)) {
+        return response()->json(['ok' => false], 422);
+    }
+    \App\Models\SpectraConversionEvent::record($event, $r->user()->id, [
+        'gclid' => $r->user()->gclid ?? null,
+    ]);
+    return response()->json(['ok' => true]);
+})->name('spectra.conversion.log');
+
 Route::middleware(['auth'])->group(function () {
     Route::post('/customers/switch/{customer}', [App\Http\Controllers\CustomerController::class, 'switch'])->name('customers.switch');
     Route::get('/customers/create', [App\Http\Controllers\CustomerController::class, 'create'])->name('customers.create');
