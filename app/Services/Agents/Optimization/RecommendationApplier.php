@@ -89,7 +89,7 @@ class RecommendationApplier
         if ($campaign->google_ads_campaign_id && $customer) {
             try {
                 $customerId = $customer->cleanGoogleCustomerId();
-                $resource   = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resource   = $campaign->googleAdsResourceName();
                 (new UpdateCampaignBudget($customer))($customerId, $resource, (int) ($newBudget * 1_000_000));
             } catch (\Exception $e) {
                 Log::warning("RecommendationApplier: Google budget API update failed: " . $e->getMessage());
@@ -215,7 +215,7 @@ class RecommendationApplier
         }
 
         $customerId = $customer->cleanGoogleCustomerId();
-        $resource   = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $resource   = $campaign->googleAdsResourceName();
         $subType    = $rec['sub_type'] ?? null;
 
         $result = match ($subType) {
@@ -259,7 +259,7 @@ class RecommendationApplier
         }
 
         $customerId   = $customer->cleanGoogleCustomerId();
-        $resource     = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $resource     = $campaign->googleAdsResourceName();
         $service      = new SetAdSchedule($customer);
         $scheduleType = $rec['sub_type'] ?? 'business_hours';
 
@@ -290,7 +290,7 @@ class RecommendationApplier
         }
 
         $customerId = $customer->cleanGoogleCustomerId();
-        $resource   = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $resource   = $campaign->googleAdsResourceName();
         $type       = $rec['sub_type'] ?? null;
 
         if (!$type) {

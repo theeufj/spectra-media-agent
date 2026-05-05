@@ -173,7 +173,7 @@ class CopilotContextService
             if ($campaign->google_ads_campaign_id) {
                 $service = app(GetCampaignPerformance::class, ['customer' => $customer, 'useMcc' => true]);
                 $customerId = $customer->google_ads_customer_id;
-                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resourceName = $campaign->googleAdsResourceName();
 
                 return [
                     'platform' => 'Google Ads',

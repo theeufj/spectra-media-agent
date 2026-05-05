@@ -79,6 +79,26 @@ class Campaign extends Model
     ];
 
     /**
+     * Return the fully-qualified Google Ads resource name for this campaign.
+     * google_ads_campaign_id may store either the full resource name
+     * (customers/{id}/campaigns/{id}) or just the numeric campaign ID.
+     * This method normalises both forms.
+     */
+    public function googleAdsResourceName(): ?string
+    {
+        if (!$this->google_ads_campaign_id) {
+            return null;
+        }
+        if (str_starts_with($this->google_ads_campaign_id, 'customers/')) {
+            return $this->google_ads_campaign_id;
+        }
+        $customerId = $this->customer?->cleanGoogleCustomerId();
+        return $customerId
+            ? "customers/{$customerId}/campaigns/{$this->google_ads_campaign_id}"
+            : null;
+    }
+
+    /**
      * Check if strategy generation is currently in progress.
      */
     public function isGeneratingStrategies(): bool

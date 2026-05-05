@@ -247,7 +247,7 @@ class AdminController extends Controller
                 $connection->refresh_token
             );
 
-            $resourceName = "customers/{$connection->platform_user_id}/campaigns/{$campaign->google_ads_campaign_id}";
+            $resourceName = $campaign->googleAdsResourceName();
             $result = $service->pause($resourceName);
 
             if ($result['success']) {
@@ -305,7 +305,7 @@ class AdminController extends Controller
                 $connection->refresh_token
             );
 
-            $resourceName = "customers/{$connection->platform_user_id}/campaigns/{$campaign->google_ads_campaign_id}";
+            $resourceName = $campaign->googleAdsResourceName();
             $result = $service->enable($resourceName);
 
             if ($result['success']) {
@@ -409,7 +409,7 @@ class AdminController extends Controller
                 $connection->refresh_token
             );
 
-            $resourceName = "customers/{$connection->platform_user_id}/campaigns/{$campaign->google_ads_campaign_id}";
+            $resourceName = $campaign->googleAdsResourceName();
             $metrics = $service($connection->platform_user_id, $resourceName, 'LAST_30_DAYS');
 
             if (!$metrics) {

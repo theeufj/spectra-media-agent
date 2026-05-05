@@ -253,7 +253,7 @@ class PerformanceAnomalyAlertAgent
         if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
             try {
                 $customerId   = $customer->cleanGoogleCustomerId();
-                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resourceName = $campaign->googleAdsResourceName();
                 $service      = app(UpdateCampaignBudget::class, ['customer' => $customer]);
                 $service($customerId, $resourceName, $newBudget * 1_000_000);
             } catch (\Exception $e) {

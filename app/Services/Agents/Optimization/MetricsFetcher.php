@@ -78,7 +78,8 @@ class MetricsFetcher
 
         try {
             $customerId   = $customer->cleanGoogleCustomerId();
-            $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+            $resourceName = $campaign->googleAdsResourceName();
+            if (!$resourceName) return null;
             return ($this->getGooglePerformance)($customerId, $resourceName);
         } catch (\Exception $e) {
             Log::error("MetricsFetcher: Failed to get Google metrics: " . $e->getMessage());

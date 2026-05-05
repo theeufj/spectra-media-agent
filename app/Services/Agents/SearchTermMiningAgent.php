@@ -62,7 +62,7 @@ class SearchTermMiningAgent
     {
         $customer = $campaign->customer;
         $customerId = $customer->google_ads_customer_id;
-        $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $campaignResourceName = $campaign->googleAdsResourceName();
 
         try {
             $getSearchTerms = new GetSearchTermsReport($customer, true);

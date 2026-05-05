@@ -584,7 +584,7 @@ class AdSpendBillingService
                 // Pause Google Ads campaign
                 if (!empty($campaign->google_ads_campaign_id) && !empty($customer->google_ads_customer_id)) {
                     $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
-                    $resourceName = "customers/{$customer->google_ads_customer_id}/campaigns/{$campaign->google_ads_campaign_id}";
+                    $resourceName = $campaign->googleAdsResourceName();
                     $updateStatusService->pause($resourceName);
                 }
                 
@@ -649,7 +649,7 @@ class AdSpendBillingService
                 // Resume Google Ads campaign
                 if (!empty($campaign->google_ads_campaign_id) && !empty($customer->google_ads_customer_id)) {
                     $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
-                    $resourceName = "customers/{$customer->google_ads_customer_id}/campaigns/{$campaign->google_ads_campaign_id}";
+                    $resourceName = $campaign->googleAdsResourceName();
                     $updateStatusService->enable($resourceName);
                 }
                 

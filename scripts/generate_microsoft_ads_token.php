@@ -23,11 +23,11 @@ if (!$clientId || !$clientSecret) {
     exit(1);
 }
 
-$redirectUri = 'http://localhost:8888/callback';
+$redirectUri = 'https://localhost/';
 $scope = 'https://ads.microsoft.com/msads.manage offline_access';
 
 // Use tenant-specific endpoint for work/school account
-$tenantId = $_ENV['MICROSOFT_ADS_TENANT_ID'] ?? 'common';
+$tenantId = 'common';
 
 // Step 1: Generate authorization URL
 $authUrl = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize?" . http_build_query([
@@ -43,44 +43,17 @@ echo "\n=== Microsoft Advertising OAuth2 Token Generator ===\n\n";
 echo "Step 1: Open this URL in your browser:\n\n";
 echo $authUrl . "\n\n";
 echo "Step 2: Sign in with your Microsoft Advertising account (josh@sitetospend.com)\n";
-echo "Step 3: After granting access, you'll be redirected to localhost:8888\n\n";
+echo "Step 3: After granting access, you'll be redirected to a URL starting with https://localhost/?code=\n\n";
+echo "Please paste the full URL you are redirected to here:\n";
 
-// Step 2: Start local server to catch the callback
-echo "Starting local callback server on port 8888...\n\n";
+$stdin = fopen('php://stdin', 'r');
+$redirectedUrl = trim(fgets($stdin));
 
-$socket = stream_socket_server('tcp://127.0.0.1:8888', $errno, $errstr);
-if (!$socket) {
-    echo "ERROR: Could not start server: $errstr ($errno)\n";
-    exit(1);
-}
-
-echo "Waiting for callback... (open the URL above in your browser)\n\n";
-
-$conn = stream_socket_accept($socket, 300); // 5 minute timeout
-if (!$conn) {
-    echo "ERROR: Timeout waiting for callback\n";
-    exit(1);
-}
-
-$request = fread($conn, 8192);
-
-// Send response to browser
-$response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n<html><body><h2>Success!</h2><p>You can close this tab and return to the terminal.</p></body></html>";
-fwrite($conn, $response);
-fclose($conn);
-fclose($socket);
-
-// Extract authorization code from request
-preg_match('/GET \/callback\?code=([^\s&]+)/', $request, $matches);
+preg_match('/code=([^\s&]+)/', $redirectedUrl, $matches);
 $code = $matches[1] ?? null;
 
 if (!$code) {
-    // Check for error
-    preg_match('/error=([^\s&]+)/', $request, $errorMatches);
-    preg_match('/error_description=([^\s&]+)/', $request, $descMatches);
-    echo "ERROR: No authorization code received.\n";
-    if (!empty($errorMatches[1])) echo "Error: " . urldecode($errorMatches[1]) . "\n";
-    if (!empty($descMatches[1])) echo "Description: " . urldecode($descMatches[1]) . "\n";
+    echo "ERROR: No authorization code found in the URL.\n";
     exit(1);
 }
 

@@ -186,7 +186,7 @@ class BudgetIntelligenceAgent
 
         $customer = $campaign->customer;
         $customerId = $customer->google_ads_customer_id;
-        $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+        $campaignResourceName = $campaign->googleAdsResourceName();
 
         try {
             $updateBudget = new UpdateCampaignBudget($customer, true);
@@ -439,7 +439,7 @@ class BudgetIntelligenceAgent
             if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
                 $platform = 'google_ads';
                 $customerId = $customer->google_ads_customer_id;
-                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resourceName = $campaign->googleAdsResourceName();
 
                 try {
                     $getPerformance = new GetCampaignPerformance($customer, true);
@@ -751,7 +751,7 @@ class BudgetIntelligenceAgent
     {
         if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
             $customerId = $customer->google_ads_customer_id;
-            $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+            $resourceName = $campaign->googleAdsResourceName();
             $updateBudget = new UpdateCampaignBudget($customer, true);
             return (bool) ($updateBudget)($customerId, $resourceName, $newDailyBudget * 1000000);
         }

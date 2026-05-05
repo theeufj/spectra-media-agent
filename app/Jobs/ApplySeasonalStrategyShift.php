@@ -208,7 +208,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             try {
                 $updateBudget = app(UpdateCampaignBudget::class, ['customer' => $customer]);
                 $customerId = $customer->google_ads_customer_id;
-                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resourceName = $campaign->googleAdsResourceName();
                 $budgetMicros = $newDailyBudget * 1_000_000;
 
                 $updateBudget($customerId, $resourceName, $budgetMicros);

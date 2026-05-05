@@ -135,7 +135,7 @@ class HourlyBudgetOptimization implements ShouldQueue
         if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
             try {
                 $customerId = $customer->google_ads_customer_id;
-                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resourceName = $campaign->googleAdsResourceName();
                 $getPerformance = new GetCampaignPerformance($customer, true);
                 $metrics = ($getPerformance)($customerId, $resourceName, 'TODAY');
 

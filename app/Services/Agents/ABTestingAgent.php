@@ -201,7 +201,7 @@ class ABTestingAgent
     {
         try {
             $customerId = $customer->google_ads_customer_id;
-            $campaignResourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+            $campaignResourceName = $campaign->googleAdsResourceName();
             $assetService = new GetAdPerformanceByAsset($customer, true);
 
             $fieldKey = match ($test->test_type) {

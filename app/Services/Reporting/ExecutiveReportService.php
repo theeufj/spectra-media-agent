@@ -112,7 +112,7 @@ class ExecutiveReportService
             try {
                 $service = new GetCampaignPerformance($customer, true);
                 $customerId = $customer->google_ads_customer_id;
-                $resourceName = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
+                $resourceName = $campaign->googleAdsResourceName();
 
                 $metrics = ($service)($customerId, $resourceName, $dateRange);
                 if ($metrics) {
