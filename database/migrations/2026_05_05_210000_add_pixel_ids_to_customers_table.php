@@ -9,15 +9,19 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('customers', function (Blueprint $table) {
-            $table->string('facebook_pixel_id')->nullable()->after('facebook_bm_owned');
-            $table->string('microsoft_uet_tag_id')->nullable()->after('microsoft_ads_account_id');
+            // facebook_pixel_id already exists in production — only add missing column
+            if (!Schema::hasColumn('customers', 'microsoft_uet_tag_id')) {
+                $table->string('microsoft_uet_tag_id')->nullable()->after('microsoft_ads_account_id');
+            }
         });
     }
 
     public function down(): void
     {
         Schema::table('customers', function (Blueprint $table) {
-            $table->dropColumn(['facebook_pixel_id', 'microsoft_uet_tag_id']);
+            if (Schema::hasColumn('customers', 'microsoft_uet_tag_id')) {
+                $table->dropColumn('microsoft_uet_tag_id');
+            }
         });
     }
 };
