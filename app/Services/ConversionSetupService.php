@@ -18,14 +18,15 @@ class ConversionSetupService
 
     /**
      * Run the full conversion tracking setup pipeline for a customer:
-     * 1. Auto-detect GTM container from live site (overrides stored ID if different)
+     * 1. Ensure a Spectra-managed GTM container exists (always — we cannot write
+     *    tags into containers owned by the customer's own Google account)
      * 2. Create Google Ads conversion action
      * 3. Retrieve conversion ID + label from tag snippets
-     * 4. Add conversion tag + trigger to the detected GTM container
-     * 5. Publish the GTM container
+     * 4. Add conversion tag + trigger to the Spectra GTM container
+     * 5. Publish the Spectra GTM container
      * 6. Persist conversion details on the customer record
      *
-     * Returns an array with 'success', 'snippet' (manual fallback HTML), and 'errors'.
+     * Returns an array with 'success', 'snippet' (install snippet HTML), and 'errors'.
      */
     public function setup(Customer $customer): array
     {
@@ -38,48 +39,47 @@ class ConversionSetupService
 
         $customerId = $customer->cleanGoogleCustomerId();
 
-        // Step 0: Ensure we have the correct GTM container to wire the conversion tag into.
+        // Step 0: Ensure a Spectra-managed GTM container exists for this customer.
         //
-        // a) Crawl the live site and extract the GTM ID from the page source.
-        //    If the detected ID differs from what's stored, correct the record.
+        // We always use a container provisioned under the Spectra platform GTM account
+        // so we have API write access to add and publish tags. We cannot modify containers
+        // that live in the customer's own Google account.
         //
-        // b) If no GTM container is found on the site at all, provision a fresh one
-        //    via the GTM API and return the installation snippet so the customer can
-        //    add it to their site. The conversion tag is added to the new container
-        //    before it's published.
+        // Any GTM container detected on the customer's live site is recorded as metadata
+        // only — we never attempt to write into it.
         if ($customer->website) {
             $detectedGtmId = $this->detectGtmContainer($customer->website);
-
             if ($detectedGtmId) {
-                if ($detectedGtmId !== $customer->gtm_container_id) {
-                    Log::info('ConversionSetupService: Detected different GTM container on live site — correcting stored ID', [
-                        'customer_id' => $customer->id,
-                        'stored'      => $customer->gtm_container_id,
-                        'detected'    => $detectedGtmId,
-                    ]);
-                    $customer->update(['gtm_container_id' => $detectedGtmId]);
-                    $customer->refresh();
-                }
-            } elseif (!$customer->gtm_container_id) {
-                // No GTM found on the live site and none stored — provision one now.
-                Log::info('ConversionSetupService: No GTM container found on site — provisioning new container', [
+                Log::info('ConversionSetupService: Customer already has GTM on site (read-only reference)', [
                     'customer_id' => $customer->id,
-                    'website'     => $customer->website,
+                    'detected'    => $detectedGtmId,
                 ]);
-                $provision = $this->gtm->provisionContainerForCustomer($customer);
-                if ($provision['success'] ?? false) {
-                    $customer->refresh();
-                    Log::info('ConversionSetupService: GTM container provisioned', [
-                        'customer_id'  => $customer->id,
-                        'container_id' => $customer->gtm_container_id,
-                    ]);
-                } else {
-                    $errors[] = 'GTM container could not be provisioned: ' . ($provision['error'] ?? 'unknown error') . '. Install Google Tag Manager manually and re-run setup.';
-                    Log::warning('ConversionSetupService: GTM provisioning failed', [
-                        'customer_id' => $customer->id,
-                        'error'       => $provision['error'] ?? 'unknown',
-                    ]);
-                }
+            }
+        }
+
+        $spectraAccountId    = config('services.gtm.platform_account_id');
+        $hasSpectraContainer = $spectraAccountId
+            && $customer->gtm_account_id === $spectraAccountId
+            && $customer->gtm_container_id
+            && $customer->gtm_workspace_id;
+
+        if (!$hasSpectraContainer) {
+            Log::info('ConversionSetupService: No Spectra-managed GTM container — provisioning one now', [
+                'customer_id' => $customer->id,
+            ]);
+            $provision = $this->gtm->provisionContainerForCustomer($customer);
+            if ($provision['success'] ?? false) {
+                $customer->refresh();
+                Log::info('ConversionSetupService: GTM container provisioned', [
+                    'customer_id'  => $customer->id,
+                    'container_id' => $customer->gtm_container_id,
+                ]);
+            } else {
+                $errors[] = 'GTM container could not be provisioned: ' . ($provision['error'] ?? 'unknown error');
+                Log::warning('ConversionSetupService: GTM provisioning failed', [
+                    'customer_id' => $customer->id,
+                    'error'       => $provision['error'] ?? 'unknown',
+                ]);
             }
         }
 
