@@ -8,6 +8,7 @@ const Badge = ({ children, color = 'gray' }) => {
         green:  'bg-green-100 text-green-800',
         yellow: 'bg-yellow-100 text-yellow-800',
         blue:   'bg-blue-100 text-blue-800',
+        indigo: 'bg-indigo-100 text-indigo-800',
         gray:   'bg-gray-100 text-gray-500',
     };
     return (
@@ -34,7 +35,7 @@ const CopyButton = ({ text }) => {
     );
 };
 
-export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events }) {
+export default function ConversionTracking({ aw_id, actions, attribution, signups_7d, signups_30d, customer_id, event_totals, recent_events, signups_by_platform }) {
     const provisioned = actions.filter(a => a.provisioned).length;
 
     return (
@@ -51,6 +52,30 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                         <StatCard label="Signups (7d)" value={signups_7d} />
                         <StatCard label="Signups (30d)" value={signups_30d} />
                     </div>
+
+                    {/* Platform signal breakdown (30d) */}
+                    {signups_by_platform && (
+                        <div className="bg-white rounded-lg shadow p-6">
+                            <h3 className="text-base font-medium text-gray-900 mb-4">Signups by Ad Platform (last 30d)</h3>
+                            <div className="grid grid-cols-3 gap-4">
+                                <div className="text-center">
+                                    <p className="text-2xl font-bold text-blue-600">{signups_by_platform.google}</p>
+                                    <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Google Ads</p>
+                                    <p className="text-xs text-gray-400">gclid captured</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-2xl font-bold text-indigo-600">{signups_by_platform.facebook}</p>
+                                    <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Facebook Ads</p>
+                                    <p className="text-xs text-gray-400">fbclid + CAPI fired</p>
+                                </div>
+                                <div className="text-center">
+                                    <p className="text-2xl font-bold text-teal-600">{signups_by_platform.microsoft}</p>
+                                    <p className="text-xs text-gray-500 mt-1 uppercase tracking-wide">Microsoft Ads</p>
+                                    <p className="text-xs text-gray-400">msclid captured</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Conversion actions table */}
                     <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -199,7 +224,7 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Mode</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Via Ad</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
                                     </tr>
                                 </thead>
@@ -220,8 +245,10 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                             </td>
                                             <td className="px-6 py-3 text-sm">
                                                 {ev.gclid
-                                                    ? <Badge color="green">Yes</Badge>
-                                                    : <span className="text-gray-400 text-xs">No</span>
+                                                    ? <Badge color="blue">Google</Badge>
+                                                    : ev.fbclid
+                                                        ? <Badge color="indigo">Facebook</Badge>
+                                                        : <span className="text-gray-400 text-xs">organic</span>
                                                 }
                                             </td>
                                             <td className="px-6 py-3 text-xs text-gray-500">

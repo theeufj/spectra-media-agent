@@ -7,6 +7,7 @@ use App\Models\Audience;
 use App\Models\Campaign;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
+use App\Services\MicrosoftAds\AdGroupService as MicrosoftAdGroupService;
 use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
 use App\Services\GoogleAds\CommonServices\CreateCallAsset;
 use App\Services\GoogleAds\CommonServices\CreatePriceAsset;
@@ -117,6 +118,11 @@ class RecommendationApplier
 
     private function applyKeyword(Campaign $campaign, array $rec): array
     {
+        // Microsoft: only keyword addition is supported via AdGroupService
+        if ($campaign->microsoft_ads_campaign_id && !$campaign->google_ads_campaign_id) {
+            return $this->applyMicrosoftKeyword($campaign, $rec);
+        }
+
         $action   = $rec['direction'] ?? $rec['action'] ?? null;
         $resource = $rec['criterion_resource_name'] ?? null;
         $customer = $campaign->customer;
@@ -205,7 +211,7 @@ class RecommendationApplier
         $customer = $campaign->customer;
 
         if (!$customer || !$campaign->google_ads_campaign_id) {
-            return ['applied' => false, 'message' => 'Missing customer or campaign Google ID', 'recommendation' => $rec];
+            return ['applied' => false, 'message' => 'Device/location bid adjustments are Google Ads only — not applicable for this platform', 'recommendation' => $rec];
         }
 
         $customerId = $customer->cleanGoogleCustomerId();
@@ -249,7 +255,7 @@ class RecommendationApplier
         $customer = $campaign->customer;
 
         if (!$customer || !$campaign->google_ads_campaign_id) {
-            return ['applied' => false, 'message' => 'Missing customer or campaign Google ID', 'recommendation' => $rec];
+            return ['applied' => false, 'message' => 'Ad schedule adjustments are Google Ads only — not applicable for this platform', 'recommendation' => $rec];
         }
 
         $customerId   = $customer->cleanGoogleCustomerId();
@@ -344,6 +350,38 @@ class RecommendationApplier
         if (!$target || empty($data)) return [null, null, 'Promotion'];
         $resource = (new CreatePromotionAsset($customer))($customerId, $target, $data);
         return [$resource, AssetFieldType::PROMOTION, 'Promotion'];
+    }
+
+    private function applyMicrosoftKeyword(Campaign $campaign, array $rec): array
+    {
+        $customer = $campaign->customer;
+        $action   = $rec['direction'] ?? $rec['action'] ?? null;
+
+        // Microsoft AdGroupService only supports adding new keywords, not bid changes or pausing
+        if (!in_array($action, ['add', 'expand'], true)) {
+            return ['applied' => false, 'message' => "Microsoft keyword '{$action}' not auto-applicable — requires manual action in Microsoft Ads", 'recommendation' => $rec];
+        }
+
+        $adGroupId = $rec['ad_group_id'] ?? null;
+        $keyword   = $rec['keyword_text'] ?? $rec['text'] ?? null;
+        $matchType = $rec['match_type'] ?? 'Broad';
+
+        if (!$adGroupId || !$keyword || !$customer) {
+            return ['applied' => false, 'message' => 'Missing ad_group_id, keyword_text, or customer', 'recommendation' => $rec];
+        }
+
+        try {
+            $resourceId = (new MicrosoftAdGroupService($customer))->addKeyword($adGroupId, $keyword, $matchType);
+            $applied    = $resourceId !== null;
+
+            return [
+                'applied'        => $applied,
+                'message'        => $applied ? "Keyword '{$keyword}' ({$matchType}) added to Microsoft ad group" : 'Failed to add keyword',
+                'recommendation' => $rec,
+            ];
+        } catch (\Exception $e) {
+            return ['applied' => false, 'message' => 'Error: ' . substr($e->getMessage(), 0, 200), 'recommendation' => $rec];
+        }
     }
 
     private function applyFacebookAudience(Campaign $campaign, $customer, array $rec): array

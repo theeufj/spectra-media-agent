@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\RecordSiteFacebookConversion;
 use App\Models\User;
 use App\Models\Customer;
 use App\Rules\CloudflareTurnstile;
@@ -76,6 +77,11 @@ class RegisteredUserController extends Controller
         $clickIds = \App\Http\Middleware\CaptureClickIds::all();
         if (!empty($clickIds)) {
             $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'fbclid', 'msclid'])));
+        }
+
+        // Server-side conversion signals — fire for each platform the user arrived from
+        if (!empty($user->fbclid)) {
+            RecordSiteFacebookConversion::dispatch($user->fresh(), 'signup');
         }
 
         event(new Registered($user));

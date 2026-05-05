@@ -73,6 +73,9 @@ return [
         // Platform Facebook Page used as the ad publisher for all customer campaigns.
         // Customers do NOT need their own Facebook Page.
         'page_id'             => env('FACEBOOK_PAGE_ID'),
+        // Spectra's own Meta Pixel ID for tracking own-site conversions (sitetospend.com).
+        // Set this to the pixel ID from Spectra's BM that fires on sitetospend.com.
+        'spectra_pixel_id'    => env('FACEBOOK_SPECTRA_PIXEL_ID'),
     ],
 
     'stripe' => [

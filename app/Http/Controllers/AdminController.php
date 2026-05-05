@@ -507,17 +507,32 @@ class AdminController extends Controller
             ->with('user:id,name,email')
             ->orderByDesc('created_at')
             ->limit(50)
-            ->get(['id', 'event', 'user_id', 'gclid', 'mode', 'value', 'uploaded_to_google', 'created_at']);
+            ->get(['id', 'event', 'user_id', 'gclid', 'fbclid', 'mode', 'value', 'uploaded_to_google', 'created_at']);
+
+        // Platform-level signal counts — how many of our own signups came via each ad platform
+        $signupsByPlatform = \App\Models\User::query()
+            ->selectRaw("
+                COUNT(*) FILTER (WHERE gclid IS NOT NULL) AS via_google,
+                COUNT(*) FILTER (WHERE fbclid IS NOT NULL) AS via_facebook,
+                COUNT(*) FILTER (WHERE msclid IS NOT NULL) AS via_microsoft
+            ")
+            ->where('created_at', '>=', now()->subDays(30))
+            ->first();
 
         return Inertia::render('Admin/ConversionTracking', [
-            'aw_id'         => $awId,
-            'actions'       => $actions,
-            'attribution'   => $attributionCounts,
-            'signups_7d'    => $recentSignups7d,
-            'signups_30d'   => $recentSignups30d,
-            'customer_id'   => config('conversions.google_ads_customer_id'),
-            'event_totals'  => $eventTotals,
-            'recent_events' => $recentEvents,
+            'aw_id'              => $awId,
+            'actions'            => $actions,
+            'attribution'        => $attributionCounts,
+            'signups_7d'         => $recentSignups7d,
+            'signups_30d'        => $recentSignups30d,
+            'customer_id'        => config('conversions.google_ads_customer_id'),
+            'event_totals'       => $eventTotals,
+            'recent_events'      => $recentEvents,
+            'signups_by_platform' => [
+                'google'    => (int) ($signupsByPlatform->via_google ?? 0),
+                'facebook'  => (int) ($signupsByPlatform->via_facebook ?? 0),
+                'microsoft' => (int) ($signupsByPlatform->via_microsoft ?? 0),
+            ],
         ]);
     }
 

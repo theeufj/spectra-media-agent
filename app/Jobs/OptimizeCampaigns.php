@@ -6,6 +6,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Recommendation;
 use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -20,7 +21,7 @@ class OptimizeCampaigns implements ShouldQueue
     /**
      * Execute the job.
      */
-    public function handle(CampaignOptimizationAgent $optimizationAgent): void
+    public function handle(CampaignOptimizationAgent $optimizationAgent, FacebookAdRelevanceDiagnosticsAgent $fbDiagnostics): void
     {
         // Find active campaigns that are 'ELIGIBLE' (primary status)
         // This covers both Google (ENABLED/ELIGIBLE) and Facebook (ACTIVE)
@@ -126,6 +127,15 @@ class OptimizeCampaigns implements ShouldQueue
                         $campaign->id,
                         ['auto_applied' => $appliedCount, 'pending_review' => $pendingCount]
                     );
+                }
+
+                // Run Facebook ad relevance diagnostics for Facebook campaigns
+                if ($campaign->facebook_ads_campaign_id) {
+                    try {
+                        $fbDiagnostics->analyze($campaign);
+                    } catch (\Exception $e) {
+                        Log::warning("FacebookAdRelevanceDiagnosticsAgent failed for campaign {$campaign->id}: " . $e->getMessage());
+                    }
                 }
 
             } catch (\Exception $e) {
