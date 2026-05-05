@@ -98,21 +98,34 @@ export default function ConversionTracking({ aw_id, actions, attribution, signup
                                             {action.value ? `$${action.value} ${action.currency}` : '—'}
                                         </td>
                                         <td className="px-6 py-4">
-                                            {action.send_to ? (
-                                                <div className="flex items-center">
-                                                    <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-700 break-all">
-                                                        {action.send_to}
-                                                    </code>
-                                                    <CopyButton text={action.send_to} />
-                                                </div>
+                                            {action.mode === 'server' ? (
+                                                action.resource_name ? (
+                                                    <div className="flex items-center">
+                                                        <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-700 break-all">
+                                                            {action.resource_name}
+                                                        </code>
+                                                        <CopyButton text={action.resource_name} />
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400 italic">Not provisioned</span>
+                                                )
                                             ) : (
-                                                <span className="text-xs text-gray-400 italic">Not provisioned</span>
+                                                action.send_to ? (
+                                                    <div className="flex items-center">
+                                                        <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-700 break-all">
+                                                            {action.send_to}
+                                                        </code>
+                                                        <CopyButton text={action.send_to} />
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400 italic">Not provisioned</span>
+                                                )
                                             )}
                                         </td>
                                         <td className="px-6 py-4">
                                             {action.provisioned
                                                 ? <Badge color="green">Provisioned</Badge>
-                                                : <Badge color="yellow">Missing label</Badge>
+                                                : <Badge color="yellow">Not provisioned</Badge>
                                             }
                                         </td>
                                     </tr>

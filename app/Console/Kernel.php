@@ -8,6 +8,7 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use App\Jobs\DetectKeywordCannibalization;
 use App\Jobs\DetectNegativeKeywordConflicts;
 use App\Jobs\GenerateExecutiveReport;
+use App\Jobs\RecordSiteConversion;
 use App\Jobs\RunPerformanceAnomalyCheck;
 
 class Kernel extends ConsoleKernel
@@ -18,6 +19,15 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         $schedule->command('billing:report-ad-spend')->daily();
+
+        // Fire seven_day_return conversion for customers whose users signed up exactly
+        // 7 days ago via a Google Ad (have a stored gclid). Runs daily at 10:00.
+        $schedule->call(function () {
+            Customer::whereHas('users', fn ($q) =>
+                $q->whereNotNull('gclid')
+                  ->whereBetween('created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
+            )->each(fn (Customer $c) => RecordSiteConversion::dispatch($c, 'seven_day_return'));
+        })->dailyAt('10:00');
         $schedule->command('campaign:fetch-performance-data')->hourly();
         $schedule->job(new RunPerformanceAnomalyCheck)->everyFourHours();
 

@@ -13,7 +13,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Crypt;
+use App\Models\Setting;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -39,10 +39,14 @@ class RecordSiteConversion implements ShouldQueue
     {
         $config = config("conversions.events.{$this->event}");
 
-        if (!$config || empty($config['resource_name'])) {
-            Log::debug("RecordSiteConversion: resource_name not configured for '{$this->event}' — skipping");
+        // Resource names are stored in Settings by conversions:provision, not in config.
+        $resourceName = Setting::get("conversion_resource_name.{$this->event}");
+        if (!$resourceName) {
+            Log::debug("RecordSiteConversion: resource_name not in settings for '{$this->event}' — skipping");
             return;
         }
+
+        $config = array_merge($config ?? [], ['resource_name' => $resourceName]);
 
         $users = $this->customer->users()->whereNotNull('gclid')->get();
         if ($users->isEmpty()) {
@@ -103,7 +107,7 @@ class RecordSiteConversion implements ShouldQueue
                 return null;
             }
 
-            $refreshToken = Crypt::decryptString($mcc->refresh_token);
+            $refreshToken = $mcc->refresh_token;
 
             $oAuth2 = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)

@@ -470,8 +470,9 @@ class AdminController extends Controller
         $events = config('conversions.events', []);
 
         $actions = collect($events)->map(function ($def, $key) use ($awId) {
-            $label       = Setting::get("conversion_label.{$key}", $def['label'] ?? null);
+            $label        = Setting::get("conversion_label.{$key}", $def['label'] ?? null);
             $resourceName = Setting::get("conversion_resource_name.{$key}");
+            $isServer     = ($def['mode'] ?? 'client') === 'server';
             return [
                 'key'           => $key,
                 'name'          => 'Spectra — ' . ucfirst(str_replace('_', ' ', $key)),
@@ -481,7 +482,7 @@ class AdminController extends Controller
                 'mode'          => $def['mode'] ?? 'client',
                 'value'         => $def['value'] ?? null,
                 'currency'      => $def['currency'] ?? 'USD',
-                'provisioned'   => $label !== null,
+                'provisioned'   => $isServer ? $resourceName !== null : $label !== null,
             ];
         })->values();
 
