@@ -34,7 +34,7 @@ return [
             'label'    => 'FHk5COLIz6ccEIytnL5D',
             'value'    => 99.00,
             'currency' => 'USD',
-            'mode'     => 'client',
+            'mode'     => 'server',
         ],
         'pricing_visit' => [
             'label'    => null,

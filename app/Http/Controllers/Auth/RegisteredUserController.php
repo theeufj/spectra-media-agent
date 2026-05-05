@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\RecordSiteFacebookConversion;
+use App\Jobs\RecordSiteGoogleConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Models\User;
 use App\Models\Customer;
@@ -81,11 +82,15 @@ class RegisteredUserController extends Controller
         }
 
         // Server-side conversion signals — fire for each platform the user arrived from
-        if (!empty($user->fbclid)) {
-            RecordSiteFacebookConversion::dispatch($user->fresh(), 'signup');
+        $freshUser = $user->fresh();
+        if (!empty($freshUser->gclid)) {
+            RecordSiteGoogleConversion::dispatch($freshUser, 'signup');
         }
-        if (!empty($user->msclid)) {
-            RecordSiteMicrosoftConversion::dispatch($user->fresh(), 'signup');
+        if (!empty($freshUser->fbclid)) {
+            RecordSiteFacebookConversion::dispatch($freshUser, 'signup');
+        }
+        if (!empty($freshUser->msclid)) {
+            RecordSiteMicrosoftConversion::dispatch($freshUser, 'signup');
         }
 
         event(new Registered($user));

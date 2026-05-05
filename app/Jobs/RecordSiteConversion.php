@@ -49,6 +49,14 @@ class RecordSiteConversion implements ShouldQueue
 
         $config = array_merge($config ?? [], ['resource_name' => $resourceName]);
 
+        // Extract customer ID directly from the resource_name (customers/{id}/conversionActions/{id})
+        // so this works even when SPECTRA_GOOGLE_ADS_CUSTOMER_ID is not set in env.
+        $customerId = explode('/', $resourceName)[1] ?? config('conversions.google_ads_customer_id');
+        if (!$customerId) {
+            Log::error("RecordSiteConversion: cannot determine customer_id for '{$this->event}'");
+            return;
+        }
+
         $users = $this->customer->users()->whereNotNull('gclid')->get();
         if ($users->isEmpty()) {
             return;
@@ -59,8 +67,6 @@ class RecordSiteConversion implements ShouldQueue
             Log::error("RecordSiteConversion: could not build Google Ads client for '{$this->event}'");
             return;
         }
-
-        $customerId = config('conversions.google_ads_customer_id');
 
         foreach ($users as $user) {
             $this->upload($client, $customerId, $user->gclid, $config);
