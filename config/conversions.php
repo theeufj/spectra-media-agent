@@ -7,7 +7,7 @@ return [
      */
     'google_ads_customer_id' => env('SPECTRA_GOOGLE_ADS_CUSTOMER_ID'),
 
-    'aw_id' => 'AW-18115663500',
+    'aw_id' => 'AW-16797144138',
 
     /*
      * Conversion event definitions.
@@ -19,7 +19,7 @@ return [
      * mode          — 'client' fires via gtag in the browser.
      *                 'server' uploads via the Google Ads Conversions API (requires gclid on user).
      * resource_name — Google Ads resource name for server-side upload
-     *                 (e.g. "customers/18115663500/conversionActions/XXXXX").
+     *                 (e.g. "customers/3598653839/conversionActions/XXXXX").
      *                 Only needed for 'server' mode events.
      *
      * To add a new conversion point:
@@ -31,7 +31,7 @@ return [
      */
     'events' => [
         'signup' => [
-            'label'    => 'JPlcCMyP26YcEIytnL5D',
+            'label'    => 'FHk5COLIz6ccEIytnL5D',
             'value'    => 99.00,
             'currency' => 'USD',
             'mode'     => 'client',

@@ -55,13 +55,13 @@
             })(window,document,'script','dataLayer','GTM-KHFLQZ8S');</script>
         <!-- End Google Tag Manager -->
 
-        <!-- Google Ads (Spectra account AW-18115663500) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18115663500"></script>
+        <!-- Google Ads (Spectra account AW-16797144138) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-16797144138"></script>
         <script>
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'AW-18115663500');
+            gtag('config', 'AW-16797144138');
         </script>
         <!-- End Google Ads -->
 

@@ -18,7 +18,7 @@ export default function Dashboard() {
         const params = new URLSearchParams(window.location.search);
         if (params.get('verified') === '1' && typeof gtag === 'function') {
             gtag('event', 'conversion', {
-                send_to: 'AW-18115663500/JPlcCMyP26YcEIytnL5D',
+                send_to: 'AW-16797144138/FHk5COLIz6ccEIytnL5D',
                 value: 99,
                 currency: 'USD',
             });
