@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Models\Customer;
 use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
+use App\Services\FacebookAds\PixelService;
 use App\Services\GTM\GTMContainerService;
+use App\Services\MicrosoftAds\ConversionTrackingService as MicrosoftConversionTrackingService;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -106,24 +108,73 @@ class ConversionSetupService
         $conversionLabel = $details['conversion_label'] ?? null;
         $conversionId    = $details['conversion_id'] ?? null;
 
-        // Step 3 & 4: Wire into GTM if the container has been provisioned
+        // Step 3 & 4: Wire tags into GTM if the container has been provisioned
         if ($customer->gtm_container_id && $conversionId && $conversionLabel) {
             try {
+                // Google Ads conversion tag
                 $tagResult = $this->gtm->addConversionTag($customer, $conversionActionName, $conversionId, [
                     'conversion_label' => $conversionLabel,
                 ]);
 
-                if ($tagResult['success'] ?? false) {
-                    $publishResult = $this->gtm->publishContainer($customer, 'Spectra: added conversion tracking tag');
-                    if (!($publishResult['success'] ?? false)) {
-                        $errors[] = 'GTM container publish failed: ' . ($publishResult['error'] ?? 'unknown');
-                    }
-                } else {
-                    $errors[] = 'GTM tag creation failed: ' . ($tagResult['error'] ?? 'unknown');
+                if (!($tagResult['success'] ?? false)) {
+                    $errors[] = 'GTM Google Ads tag creation failed: ' . ($tagResult['error'] ?? 'unknown');
                 }
             } catch (\Exception $e) {
-                $errors[] = 'GTM setup error: ' . $e->getMessage();
-                Log::error('ConversionSetupService: GTM error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
+                $errors[] = 'GTM Google Ads tag error: ' . $e->getMessage();
+                Log::error('ConversionSetupService: GTM Google Ads tag error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
+            }
+
+            // Meta Pixel tag
+            try {
+                $pixelId = (new PixelService($customer))->resolvePixelId();
+                if ($pixelId) {
+                    $fbResult = $this->gtm->addFacebookPixelTag($customer, $pixelId);
+                    if (!($fbResult['success'] ?? false)) {
+                        $errors[] = 'GTM Meta Pixel tag failed: ' . ($fbResult['error'] ?? 'unknown');
+                    }
+                }
+            } catch (\Exception $e) {
+                $errors[] = 'GTM Meta Pixel error: ' . $e->getMessage();
+                Log::warning('ConversionSetupService: Meta Pixel GTM error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
+            }
+
+            // Microsoft UET tag
+            try {
+                if ($customer->microsoft_ads_account_id) {
+                    $uetTagId = (new MicrosoftConversionTrackingService($customer))->resolveUetTagId();
+                    if ($uetTagId) {
+                        $msResult = $this->gtm->addMicrosoftUetTag($customer, $uetTagId);
+                        if (!($msResult['success'] ?? false)) {
+                            $errors[] = 'GTM Microsoft UET tag failed: ' . ($msResult['error'] ?? 'unknown');
+                        }
+                    }
+                }
+            } catch (\Exception $e) {
+                $errors[] = 'GTM Microsoft UET error: ' . $e->getMessage();
+                Log::warning('ConversionSetupService: Microsoft UET GTM error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
+            }
+
+            // Lead event tags (fire on form submission)
+            try {
+                $customer->refresh();
+                if ($customer->facebook_pixel_id) {
+                    $this->gtm->addFacebookLeadEventTag($customer, $customer->facebook_pixel_id);
+                }
+                if ($customer->microsoft_uet_tag_id) {
+                    $this->gtm->addMicrosoftLeadEventTag($customer, $customer->microsoft_uet_tag_id);
+                }
+            } catch (\Exception $e) {
+                Log::warning('ConversionSetupService: Lead event tag error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
+            }
+
+            // Publish once — covers all tags added above
+            try {
+                $publishResult = $this->gtm->publishContainer($customer, 'Spectra: added Google Ads + Meta Pixel + Microsoft UET tags');
+                if (!($publishResult['success'] ?? false)) {
+                    $errors[] = 'GTM container publish failed: ' . ($publishResult['error'] ?? 'unknown');
+                }
+            } catch (\Exception $e) {
+                $errors[] = 'GTM publish error: ' . $e->getMessage();
             }
 
             // Fetch snippet HTML for manual fallback display
@@ -156,11 +207,13 @@ class ConversionSetupService
         ]);
 
         return [
-            'success'        => true,
-            'resource_name'  => $resourceName,
-            'conversion_id'  => $conversionId,
-            'snippet'        => $snippet,
-            'errors'         => $errors,
+            'success'               => true,
+            'resource_name'         => $resourceName,
+            'conversion_id'         => $conversionId,
+            'snippet'               => $snippet,
+            'facebook_pixel_id'     => $customer->fresh()->facebook_pixel_id,
+            'microsoft_uet_tag_id'  => $customer->fresh()->microsoft_uet_tag_id,
+            'errors'                => $errors,
         ];
     }
 

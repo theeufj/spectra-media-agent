@@ -135,6 +135,45 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
     }
 
     /**
+     * Resolve the UET tag ID for this customer — uses existing tag or creates one.
+     * Stores the result on the customer record and returns the tag ID.
+     */
+    public function resolveUetTagId(): ?string
+    {
+        if ($this->customer->microsoft_uet_tag_id) {
+            return $this->customer->microsoft_uet_tag_id;
+        }
+
+        $tags = $this->getUetTags();
+
+        if (!empty($tags)) {
+            $tagId = (string) $tags[0]['Id'];
+            $this->customer->update(['microsoft_uet_tag_id' => $tagId]);
+
+            Log::info('Microsoft Ads: Resolved UET tag ID from account', [
+                'customer_id' => $this->customer->id,
+                'tag_id'      => $tagId,
+            ]);
+
+            return $tagId;
+        }
+
+        $result = $this->createUetTag('Spectra — ' . $this->customer->name);
+        if (!$result) {
+            return null;
+        }
+
+        $tag   = $result['UetTags']['UetTag'][0] ?? $result['UetTags']['UetTag'] ?? null;
+        $tagId = $tag ? (string) $tag['Id'] : null;
+
+        if ($tagId) {
+            $this->customer->update(['microsoft_uet_tag_id' => $tagId]);
+        }
+
+        return $tagId;
+    }
+
+    /**
      * Create a UET tag for the account.
      */
     public function createUetTag(string $name, string $description = ''): ?array

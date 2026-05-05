@@ -214,6 +214,111 @@ HTML;
     }
 
     /**
+     * Add a Meta Pixel base code tag to the customer's GTM container.
+     * Fires on all pages. Creates the pixel with fbq('init') + fbq('track', 'PageView').
+     */
+    public function addFacebookPixelTag(Customer $customer, string $pixelId): array
+    {
+        try {
+            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+                return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
+            }
+
+            $accessToken = $this->getPlatformAccessToken();
+            if (!$accessToken) {
+                return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
+            }
+
+            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+
+            $pixelScript = <<<JS
+<script>
+!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+document,'script','https://connect.facebook.net/en_US/fbevents.js');
+fbq('init','{$pixelId}');
+fbq('track','PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id={$pixelId}&ev=PageView&noscript=1"/></noscript>
+JS;
+
+            $tagData = [
+                'name' => 'Spectra — Meta Pixel Base Code',
+                'type' => 'html',
+                'parameter' => [
+                    ['key' => 'html',        'type' => 'template', 'value' => $pixelScript],
+                    ['key' => 'supportDocumentWrite', 'type' => 'boolean', 'value' => 'false'],
+                ],
+                'firingTriggerId' => ['2147479553'], // GTM built-in "All Pages" trigger ID
+            ];
+
+            $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+
+            if (!$response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Meta Pixel tag: ' . ($response['error'] ?? 'Unknown error')];
+            }
+
+            return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Add a Microsoft UET base code tag to the customer's GTM container.
+     * Fires on all pages.
+     */
+    public function addMicrosoftUetTag(Customer $customer, string $uetTagId): array
+    {
+        try {
+            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+                return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
+            }
+
+            $accessToken = $this->getPlatformAccessToken();
+            if (!$accessToken) {
+                return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
+            }
+
+            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+
+            $uetScript = <<<JS
+<script>
+(function(w,d,t,r,u){var f,n,i;w[u]=w[u]||[],f=function(){var o={ti:"{$uetTagId}",enableAutoSpaTracking:true};
+o.q=w[u],w[u]=new UET(o),w[u].push("pageLoad")},n=d.createElement(t),n.src=r,n.async=1,
+n.onload=n.onreadystatechange=function(){var s=this.readyState;
+s&&s!=="loaded"&&s!=="complete"||(f(),n.onload=n.onreadystatechange=null)},
+i=d.getElementsByTagName(t)[0],i.parentNode.insertBefore(n,i)
+})(window,document,"script","//bat.bing.com/bat.js","uetq");
+</script>
+JS;
+
+            $tagData = [
+                'name' => 'Spectra — Microsoft UET Base Code',
+                'type' => 'html',
+                'parameter' => [
+                    ['key' => 'html',        'type' => 'template', 'value' => $uetScript],
+                    ['key' => 'supportDocumentWrite', 'type' => 'boolean', 'value' => 'false'],
+                ],
+                'firingTriggerId' => ['2147479553'], // GTM built-in "All Pages" trigger ID
+            ];
+
+            $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+
+            if (!$response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Microsoft UET tag: ' . ($response['error'] ?? 'Unknown error')];
+            }
+
+            return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Add a trigger to the customer's GTM container.
      */
     public function addTrigger(Customer $customer, string $triggerName, string $triggerType, array $config = []): array
@@ -332,6 +437,112 @@ HTML;
                 'detected'  => $detected,
                 'expected'  => $customer->gtm_container_id,
             ];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Add a Facebook Lead event tag that fires on form submission.
+     * Requires the pixel base code tag to already be in the container.
+     */
+    public function addFacebookLeadEventTag(Customer $customer, string $pixelId): array
+    {
+        try {
+            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+                return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
+            }
+
+            $accessToken = $this->getPlatformAccessToken();
+            if (!$accessToken) {
+                return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
+            }
+
+            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+
+            // Create a form submission trigger first
+            $triggerResult = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, [
+                'name' => 'Spectra — Form Submit',
+                'type' => 'formSubmission',
+                'waitForTags' => ['type' => 'boolean', 'key' => 'waitForTags', 'value' => 'true'],
+            ]);
+
+            $triggerId = $triggerResult['data']['triggerId'] ?? null;
+
+            $script = "<script>fbq('track','Lead');</script>";
+
+            $tagData = [
+                'name' => 'Spectra — Meta Pixel Lead Event',
+                'type' => 'html',
+                'parameter' => [
+                    ['key' => 'html',                 'type' => 'template', 'value' => $script],
+                    ['key' => 'supportDocumentWrite', 'type' => 'boolean',  'value' => 'false'],
+                ],
+            ];
+
+            if ($triggerId) {
+                $tagData['firingTriggerId'] = [$triggerId];
+            }
+
+            $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+
+            if (!$response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Meta Lead event tag: ' . ($response['error'] ?? 'Unknown')];
+            }
+
+            return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
+        } catch (\Exception $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Add a Microsoft UET Goal event tag that fires on form submission.
+     */
+    public function addMicrosoftLeadEventTag(Customer $customer, string $uetTagId): array
+    {
+        try {
+            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+                return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
+            }
+
+            $accessToken = $this->getPlatformAccessToken();
+            if (!$accessToken) {
+                return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
+            }
+
+            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+
+            // Reuse or recreate the form submit trigger
+            $triggerResult = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, [
+                'name' => 'Spectra — Form Submit (MS)',
+                'type' => 'formSubmission',
+            ]);
+
+            $triggerId = $triggerResult['data']['triggerId'] ?? null;
+
+            $script = "<script>window.uetq=window.uetq||[];window.uetq.push('event','submit_lead_form',{});</script>";
+
+            $tagData = [
+                'name' => 'Spectra — Microsoft UET Lead Event',
+                'type' => 'html',
+                'parameter' => [
+                    ['key' => 'html',                 'type' => 'template', 'value' => $script],
+                    ['key' => 'supportDocumentWrite', 'type' => 'boolean',  'value' => 'false'],
+                ],
+            ];
+
+            if ($triggerId) {
+                $tagData['firingTriggerId'] = [$triggerId];
+            }
+
+            $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+
+            if (!$response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Microsoft Lead event tag: ' . ($response['error'] ?? 'Unknown')];
+            }
+
+            return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
