@@ -5,6 +5,9 @@ namespace App\Services\Agents\Optimization;
 use App\Models\AgentActivity;
 use App\Models\Audience;
 use App\Models\Campaign;
+use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
+use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
+use App\Services\MicrosoftAds\CampaignService as MicrosoftCampaignService;
 use App\Services\GoogleAds\CommonServices\CreateCallAsset;
 use App\Services\GoogleAds\CommonServices\CreatePriceAsset;
 use App\Services\GoogleAds\CommonServices\CreatePromotionAsset;
@@ -80,14 +83,32 @@ class RecommendationApplier
         $campaign->daily_budget = $newBudget;
         $campaign->save();
 
-        if ($campaign->google_ads_campaign_id && $campaign->customer) {
+        $customer = $campaign->customer;
+
+        if ($campaign->google_ads_campaign_id && $customer) {
             try {
-                $customer   = $campaign->customer;
                 $customerId = $customer->cleanGoogleCustomerId();
                 $resource   = "customers/{$customerId}/campaigns/{$campaign->google_ads_campaign_id}";
                 (new UpdateCampaignBudget($customer))($customerId, $resource, (int) ($newBudget * 1_000_000));
             } catch (\Exception $e) {
-                Log::warning("RecommendationApplier: Budget applied locally but API update failed: " . $e->getMessage());
+                Log::warning("RecommendationApplier: Google budget API update failed: " . $e->getMessage());
+            }
+        } elseif ($campaign->facebook_ads_campaign_id && $customer) {
+            try {
+                (new FacebookCampaignService($customer))->updateCampaign($campaign->facebook_ads_campaign_id, [
+                    'daily_budget' => (int) ($newBudget * 100), // Facebook uses cents
+                ]);
+            } catch (\Exception $e) {
+                Log::warning("RecommendationApplier: Facebook budget API update failed: " . $e->getMessage());
+            }
+        } elseif ($campaign->microsoft_ads_campaign_id && $customer) {
+            try {
+                (new MicrosoftCampaignService($customer))->updateBudget(
+                    (string) $campaign->microsoft_ads_campaign_id,
+                    (float) $newBudget
+                );
+            } catch (\Exception $e) {
+                Log::warning("RecommendationApplier: Microsoft budget API update failed: " . $e->getMessage());
             }
         }
 
@@ -325,12 +346,88 @@ class RecommendationApplier
         return [$resource, AssetFieldType::PROMOTION, 'Promotion'];
     }
 
+    private function applyFacebookAudience(Campaign $campaign, $customer, array $rec): array
+    {
+        $accountId = $customer->facebook_ads_account_id;
+        if (!$accountId) {
+            return ['applied' => false, 'message' => 'Customer has no Facebook Ads account', 'recommendation' => $rec];
+        }
+
+        $daysSinceCreation = $campaign->created_at?->diffInDays(now()) ?? 0;
+        if ($daysSinceCreation < 14) {
+            return ['applied' => false, 'message' => "Campaign only {$daysSinceCreation} days old — audience creation requires 14+ days", 'recommendation' => $rec];
+        }
+
+        $subType     = $rec['sub_type'] ?? 'lookalike';
+        $audienceName = $rec['audience_name'] ?? $rec['description'] ?? 'Spectra Auto-Audience';
+        $service     = new FacebookCustomAudienceService($customer);
+
+        try {
+            if ($subType === 'lookalike') {
+                $sourceId = $rec['source_audience_id'] ?? null;
+                if (!$sourceId) {
+                    return ['applied' => false, 'message' => 'Lookalike requires a source_audience_id', 'recommendation' => $rec];
+                }
+                $result = $service->createLookalikeAudience(
+                    $accountId,
+                    $sourceId,
+                    $audienceName,
+                    $rec['country_code'] ?? 'US',
+                    (float) ($rec['ratio'] ?? 0.01)
+                );
+            } else {
+                // Website custom audience fallback
+                $result = $service->createWebsiteAudience(
+                    $accountId,
+                    $audienceName,
+                    $rec['retention_days'] ?? 30,
+                    $rec['pixel_rule'] ?? []
+                );
+            }
+
+            if (!$result || empty($result['id'])) {
+                return ['applied' => false, 'message' => "Failed to create Facebook {$subType} audience", 'recommendation' => $rec];
+            }
+
+            Audience::create([
+                'customer_id' => $customer->id,
+                'campaign_id' => $campaign->id,
+                'name'        => $audienceName,
+                'platform'    => 'facebook',
+                'type'        => $subType,
+                'platform_resource_name' => $result['id'],
+                'status'      => 'active',
+                'source_data' => ['recommendation' => $rec, 'created_by' => 'optimization_agent'],
+            ]);
+
+            AgentActivity::record(
+                'optimization', 'audience_created',
+                "Created Facebook {$subType} audience '{$audienceName}'",
+                $customer->id, $campaign->id,
+                ['audience_id' => $result['id'], 'sub_type' => $subType]
+            );
+
+            return ['applied' => true, 'message' => "Facebook {$subType} audience '{$audienceName}' created", 'recommendation' => $rec];
+        } catch (\Exception $e) {
+            return ['applied' => false, 'message' => 'Error: ' . substr($e->getMessage(), 0, 200), 'recommendation' => $rec];
+        }
+    }
+
     private function applyAudience(Campaign $campaign, array $rec): array
     {
         $customer = $campaign->customer;
 
-        if (!$customer || !$campaign->google_ads_campaign_id) {
-            return ['applied' => false, 'message' => 'Missing customer or campaign Google ID', 'recommendation' => $rec];
+        if (!$customer) {
+            return ['applied' => false, 'message' => 'Missing customer', 'recommendation' => $rec];
+        }
+
+        // Route Facebook audience actions
+        if ($campaign->facebook_ads_campaign_id && !$campaign->google_ads_campaign_id) {
+            return $this->applyFacebookAudience($campaign, $customer, $rec);
+        }
+
+        if (!$campaign->google_ads_campaign_id) {
+            return ['applied' => false, 'message' => 'Audience actions not yet supported for this platform', 'recommendation' => $rec];
         }
 
         $daysSinceCreation = $campaign->created_at?->diffInDays(now()) ?? 0;

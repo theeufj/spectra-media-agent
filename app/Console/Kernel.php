@@ -8,7 +8,9 @@ use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 use App\Jobs\DetectKeywordCannibalization;
 use App\Jobs\DetectNegativeKeywordConflicts;
 use App\Jobs\GenerateExecutiveReport;
+use App\Jobs\OptimizeCampaigns;
 use App\Jobs\RecordSiteConversion;
+use App\Jobs\ReviewGoogleAdsRecommendations;
 use App\Jobs\RunPerformanceAnomalyCheck;
 
 class Kernel extends ConsoleKernel
@@ -30,6 +32,8 @@ class Kernel extends ConsoleKernel
         })->dailyAt('10:00');
         $schedule->command('campaign:fetch-performance-data')->hourly();
         $schedule->job(new RunPerformanceAnomalyCheck)->everyFourHours();
+        $schedule->job(new OptimizeCampaigns)->hourly();
+        $schedule->job(new ReviewGoogleAdsRecommendations)->dailyAt('04:30');
 
         // Weekly keyword audit jobs (Monday 07:00)
         $schedule->job(new DetectNegativeKeywordConflicts)->weeklyOn(1, '07:00');

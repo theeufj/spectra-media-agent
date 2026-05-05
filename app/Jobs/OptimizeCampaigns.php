@@ -27,7 +27,8 @@ class OptimizeCampaigns implements ShouldQueue
         $campaigns = Campaign::where('primary_status', 'ELIGIBLE')
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
-                      ->orWhereNotNull('facebook_ads_campaign_id');
+                      ->orWhereNotNull('facebook_ads_campaign_id')
+                      ->orWhereNotNull('microsoft_ads_campaign_id');
             })
             ->whereNull('last_optimized_at')
             ->orWhere('last_optimized_at', '<=', now()->subHours(24))
@@ -84,7 +85,7 @@ class OptimizeCampaigns implements ShouldQueue
                             'rationale'        => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
                             'status'           => $result['applied'] ? 'applied' : 'failed',
                             'requires_approval' => false,
-                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : 'facebook',
+                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : ($campaign->facebook_ads_campaign_id ? 'facebook' : 'microsoft'),
                         ]);
 
                         if ($result['applied']) {
@@ -102,7 +103,7 @@ class OptimizeCampaigns implements ShouldQueue
                             'rationale'        => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
                             'status'           => 'pending',
                             'requires_approval' => true,
-                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : 'facebook',
+                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : ($campaign->facebook_ads_campaign_id ? 'facebook' : 'microsoft'),
                         ]);
                         $pendingCount++;
                     }

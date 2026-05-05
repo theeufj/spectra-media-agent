@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\MccAccount;
 use App\Models\OfflineConversion;
 use App\Services\FacebookAds\ConversionsApiService;
+use App\Services\MicrosoftAds\ConversionTrackingService as MicrosoftConversionTrackingService;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\V22\Services\ClickConversion;
@@ -16,7 +17,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 
 class UploadOfflineConversions implements ShouldQueue
@@ -49,6 +49,12 @@ class UploadOfflineConversions implements ShouldQueue
         $facebookConversions = $pending->filter(fn ($c) => !empty($c->fbclid));
         if ($facebookConversions->isNotEmpty()) {
             $this->uploadToFacebook($customer, $facebookConversions);
+        }
+
+        // Upload to Microsoft (conversions with msclkid)
+        $microsoftConversions = $pending->filter(fn ($c) => !empty($c->msclid));
+        if ($microsoftConversions->isNotEmpty()) {
+            $this->uploadToMicrosoft($customer, $microsoftConversions);
         }
     }
 
@@ -191,6 +197,63 @@ class UploadOfflineConversions implements ShouldQueue
         }
     }
 
+    protected function uploadToMicrosoft(Customer $customer, $conversions): void
+    {
+        try {
+            if (!$customer->microsoft_ads_account_id) {
+                Log::warning('UploadOfflineConversions: Customer has no Microsoft Ads account', ['customer_id' => $customer->id]);
+                return;
+            }
+
+            $msService = new MicrosoftConversionTrackingService($customer);
+            $uetTagId  = $customer->microsoft_uet_tag_id ?? $msService->resolveUetTagId();
+
+            if (!$uetTagId) {
+                Log::warning('UploadOfflineConversions: Could not resolve UET tag ID', ['customer_id' => $customer->id]);
+                return;
+            }
+
+            // Microsoft uses offline conversion goals; each upload is one SOAP call per conversion
+            foreach ($conversions as $conversion) {
+                $results = $conversion->upload_results ?? [];
+
+                try {
+                    $result = $msService->createEventConversionGoal([
+                        'name'                      => $conversion->conversion_name ?? 'Offline Conversion',
+                        'uet_tag_id'                => $uetTagId,
+                        'action_expression'         => 'offline_conversion',
+                        'conversion_window_minutes' => 43200, // 30 days
+                        'revenue_type'              => 'FixedValue',
+                        'revenue_value'             => (float) $conversion->conversion_value,
+                        'currency_code'             => $conversion->currency_code ?? 'USD',
+                    ]);
+
+                    if ($result) {
+                        $results['microsoft'] = ['status' => 'uploaded', 'uploaded_at' => now()->toDateTimeString()];
+                        $allDone = empty($conversion->gclid) && empty($conversion->fbclid);
+                        $conversion->update([
+                            'upload_status'  => $allDone ? 'uploaded_all' : 'uploaded_microsoft',
+                            'upload_results' => $results,
+                        ]);
+                    } else {
+                        $results['microsoft'] = ['status' => 'failed', 'attempted_at' => now()->toDateTimeString()];
+                        $conversion->update(['upload_status' => 'failed', 'upload_results' => $results]);
+                    }
+                } catch (\Exception $e) {
+                    $results['microsoft'] = ['status' => 'failed', 'error' => $e->getMessage()];
+                    $conversion->update(['upload_status' => 'failed', 'upload_results' => $results]);
+                }
+            }
+
+            Log::info('UploadOfflineConversions: Microsoft upload complete', [
+                'customer_id' => $customer->id,
+                'count'       => $conversions->count(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('UploadOfflineConversions: Microsoft upload failed', ['error' => $e->getMessage()]);
+        }
+    }
+
     /**
      * Get or create the offline conversion action resource name.
      */
@@ -258,9 +321,7 @@ class UploadOfflineConversions implements ShouldQueue
                 return null;
             }
 
-            $mccRefreshToken = $mccAccount->exists
-                ? Crypt::decryptString($mccAccount->refresh_token)
-                : $mccAccount->refresh_token;
+            $mccRefreshToken = $mccAccount->refresh_token;
 
             $oAuth2Credential = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)
