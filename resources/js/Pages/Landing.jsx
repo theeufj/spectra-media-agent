@@ -13,9 +13,17 @@ export default function Landing({ auth, plans = [] }) {
     const [demoResult, setDemoResult] = useState(null);
     const [error, setError] = useState(null);
 
+    const normaliseUrl = (raw) => {
+        const trimmed = raw.trim();
+        if (!trimmed) return trimmed;
+        if (/^https?:\/\//i.test(trimmed)) return trimmed;
+        return 'https://' + trimmed;
+    };
+
     const handleDemoSubmit = async (e) => {
         e.preventDefault();
         if (!url) return;
+        const normalisedUrl = normaliseUrl(url);
 
         setError(null);
         setDemoResult(null);
@@ -32,7 +40,7 @@ export default function Landing({ auth, plans = [] }) {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ url })
+                body: JSON.stringify({ url: normalisedUrl })
             });
             const data = await response.json();
 
@@ -163,7 +171,7 @@ export default function Landing({ auth, plans = [] }) {
                                         <div className="mt-8 bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                                             <form onSubmit={handleDemoSubmit} className="flex flex-col sm:flex-row gap-3">
                                                 <input
-                                                    type="url"
+                                                    type="text"
                                                     required
                                                     value={url}
                                                     onChange={e => setUrl(e.target.value)}
