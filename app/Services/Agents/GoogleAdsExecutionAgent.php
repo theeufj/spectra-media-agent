@@ -26,6 +26,8 @@ use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroupWithAssets;
 use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
 use App\Services\GoogleAds\CommonServices\CreateCalloutAsset;
+use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
+use App\Services\GoogleAds\CommonServices\CreateCallAsset;
 use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
 use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\VideoServices\CreateVideoCampaign;
@@ -2030,7 +2032,7 @@ PROMPT;
     }
 
     /**
-     * Create and link ad extensions (Sitelinks, Callouts)
+     * Create and link ad extensions (Sitelinks, Callouts, Structured Snippets, Call)
      */
     protected function createAndLinkAdExtensions(
         string $customerId,
@@ -2123,6 +2125,55 @@ PROMPT;
                 }
             } catch (\Exception $e) {
                 Log::warning("GoogleAdsExecutionAgent: Failed to create/link callout: " . $e->getMessage());
+            }
+        }
+
+        // 3. Structured Snippets — zero-cost, improves ad quality score and CTR
+        $snippets = $strategy->bidding_strategy['structured_snippets'] ?? [];
+
+        if (empty($snippets)) {
+            // Build from strategy bidding_strategy service list or ad copy, else use business-appropriate defaults
+            $serviceList = $strategy->bidding_strategy['services'] ?? [];
+            $snippets = [
+                [
+                    'header' => 'Services',
+                    'values' => !empty($serviceList)
+                        ? array_slice($serviceList, 0, 10)
+                        : ['Google Ads', 'Facebook Ads', 'LinkedIn Ads', 'Microsoft Ads', 'AI Optimisation'],
+                ],
+            ];
+        }
+
+        $createSnippetService = new CreateStructuredSnippetAsset($this->customer);
+        foreach ($snippets as $snippet) {
+            try {
+                $values = array_slice($snippet['values'] ?? [], 0, 10);
+                if (empty($values) || empty($snippet['header'])) {
+                    continue;
+                }
+                $assetResourceName = ($createSnippetService)($customerId, $snippet['header'], $values);
+                if ($assetResourceName) {
+                    ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::STRUCTURED_SNIPPET);
+                    $result->addPlatformId('structured_snippet_asset', $assetResourceName);
+                }
+            } catch (\Exception $e) {
+                Log::warning("GoogleAdsExecutionAgent: Failed to create/link structured snippet: " . $e->getMessage());
+            }
+        }
+
+        // 4. Call Extension — only when customer has a phone number on file
+        $phone = $this->customer->phone ?? null;
+        if ($phone) {
+            try {
+                $createCallService = new CreateCallAsset($this->customer);
+                $countryCode = $strategy->bidding_strategy['call_country_code'] ?? 'US';
+                $callAssetResourceName = ($createCallService)($customerId, $phone, $countryCode);
+                if ($callAssetResourceName) {
+                    ($linkAssetService)($customerId, $campaignResourceName, $callAssetResourceName, AssetFieldType::CALL);
+                    $result->addPlatformId('call_asset', $callAssetResourceName);
+                }
+            } catch (\Exception $e) {
+                Log::warning("GoogleAdsExecutionAgent: Failed to create/link call asset: " . $e->getMessage());
             }
         }
     }
