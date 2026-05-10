@@ -129,8 +129,12 @@ The Strategy Agent has already analyzed this campaign and provided the following
 
 Create a detailed, step-by-step execution plan for deploying this campaign to Facebook/Meta Ads. Your plan should:
 
-1. **Select Optimal Campaign Objective**
-   - Choose from: LINK_CLICKS, CONVERSIONS, REACH, TRAFFIC, ENGAGEMENT, VIDEO_VIEWS, LEAD_GENERATION, etc.
+1. **Select Optimal Campaign Objective** (use OUTCOME_* format — legacy names are invalid in API v18+)
+   - `OUTCOME_LEADS` — for SaaS signups, free trials, lead generation forms (USE THIS for new products without pixel conversion data)
+   - `OUTCOME_SALES` / `OUTCOME_CONVERSIONS` — for e-commerce or when pixel has purchase data
+   - `OUTCOME_AWARENESS` — for brand awareness, reach, or video views
+   - `OUTCOME_TRAFFIC` — ONLY for content sites or blogs where click volume is the goal; NEVER for SaaS or products
+   - `OUTCOME_ENGAGEMENT` — for post engagement, event responses
    - Consider: business goals, available tracking (Pixel), budget, and available creatives
    - Justify your choice based on campaign objectives and available infrastructure
 
@@ -243,10 +247,22 @@ Provide your response as a valid JSON object with the following structure:
   "creative_strategy": {
     "ad_format": "single_image|carousel|video|collection|stories",
     "use_dynamic_creative": false,
-    "primary_text": "Engaging primary text (125 chars max)",
+    "primary_text": "REQUIRED: Compelling hook copy (125 chars max) — speak to buyer pain points, NOT product features. Min 20 chars.",
     "headline": "Compelling headline (40 chars max)",
     "description": "Brief description (30 chars max)",
     "call_to_action": "LEARN_MORE|SHOP_NOW|SIGN_UP|DOWNLOAD|etc",
+    "targeting": {
+      "geo_locations": {
+        "countries": ["US", "CA", "AU", "GB"],
+        "regions": [],
+        "cities": []
+      },
+      "age_min": 18,
+      "age_max": 65,
+      "genders": [1, 2],
+      "interests": [],
+      "behaviors": []
+    },
     "creative_details": {
       "image_count": 1,
       "video_count": 0,
@@ -312,13 +328,16 @@ Provide your response as a valid JSON object with the following structure:
 }
 ```
 
-**IMPORTANT:** 
+**IMPORTANT:**
 - Return ONLY valid JSON, no markdown code fences or additional text
 - Ensure all strings are properly escaped
 - All numeric values should be numbers, not strings
 - Budget values in cents for API calls (multiply dollars by 100)
 - Include detailed reasoning for all major decisions
 - Make sure your plan is executable with the available assets and budget
+- `creative_strategy.primary_text` is REQUIRED and must be at least 20 characters — write compelling hook copy
+- `creative_strategy.targeting.geo_locations.countries` is REQUIRED — use at minimum `["US","CA","AU","GB"]`
+- Use `OUTCOME_*` objectives ONLY — never legacy names like LINK_CLICKS, CONVERSIONS, or REACH
 - Ensure targeting produces audience of at least 50,000 people
 - Comply with Facebook's advertising policies
 PROMPT;

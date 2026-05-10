@@ -40,6 +40,7 @@ use App\Services\GoogleAds\ShoppingServices\CreateShoppingProductAd;
 use App\Services\GoogleAds\LocalServicesServices\CreateLocalServicesCampaign;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
+use App\Services\Agents\CampaignReviewAgent;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
@@ -354,13 +355,15 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             ]);
             
             $plan = ExecutionPlan::fromJson($response['text']);
-            
+
+            $plan = (new CampaignReviewAgent($this->customer))->review($plan, 'google');
+
             Log::info("GoogleAdsExecutionAgent: Generated execution plan", [
                 'campaign_id' => $context->campaign->id,
                 'steps_count' => count($plan->steps),
                 'campaign_type' => $plan->getCampaignStructure()['type'] ?? 'unknown'
             ]);
-            
+
             return $plan;
             
         } catch (\Exception $e) {
@@ -2011,35 +2014,62 @@ PROMPT;
      * Create and link ad extensions (Sitelinks, Callouts)
      */
     protected function createAndLinkAdExtensions(
-        string $customerId, 
-        string $campaignResourceName, 
-        Strategy $strategy, 
+        string $customerId,
+        string $campaignResourceName,
+        Strategy $strategy,
         ExecutionResult $result
     ): void {
         $createSitelinkService = new CreateSitelinkAsset($this->customer);
         $createCalloutService = new CreateCalloutAsset($this->customer);
         $linkAssetService = new LinkCampaignAsset($this->customer);
 
-        // 1. Sitelinks
-        // In a real app, these would come from the Strategy or AdCopy model.
-        // We'll generate some generic ones based on the business context if available, or placeholders.
-        $sitelinks = [
-            ['text' => 'Contact Us', 'desc1' => 'Get in touch today', 'desc2' => 'We are here to help'],
-            ['text' => 'About Us', 'desc1' => 'Learn our story', 'desc2' => 'Serving you since 2020'],
-            ['text' => 'Shop Now', 'desc1' => 'Browse our catalog', 'desc2' => 'Best prices guaranteed'],
-            ['text' => 'Special Offers', 'desc1' => 'Limited time deals', 'desc2' => 'Save big today']
-        ];
+        $landingUrl = $strategy->landing_page_url
+            ?? $strategy->bidding_strategy['landing_page_url']
+            ?? $this->customer->website
+            ?? null;
+
+        // 1. Sitelinks — prefer strategy-defined ones, fall back to business-relevant defaults
+        $sitelinks = $strategy->bidding_strategy['sitelinks'] ?? [];
+
+        if (empty($sitelinks)) {
+            $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
+            $descriptions = $adCopy?->descriptions ?? [];
+
+            // Build sitelinks from ad copy descriptions where available, otherwise use
+            // product-appropriate defaults (not generic retail placeholders).
+            $sitelinks = [
+                [
+                    'text'  => 'How It Works',
+                    'desc1' => $descriptions[0] ?? 'See the AI in action',
+                    'desc2' => 'Setup takes under 5 minutes',
+                ],
+                [
+                    'text'  => 'Pricing',
+                    'desc1' => 'Transparent, no retainer fees',
+                    'desc2' => 'Pay only for what you use',
+                ],
+                [
+                    'text'  => 'Start Free Trial',
+                    'desc1' => $descriptions[1] ?? 'No credit card required',
+                    'desc2' => 'Cancel anytime',
+                ],
+                [
+                    'text'  => 'Case Studies',
+                    'desc1' => 'Real results from real customers',
+                    'desc2' => 'See the ROI data',
+                ],
+            ];
+        }
 
         foreach ($sitelinks as $sitelink) {
             try {
-                // Use a placeholder URL if strategy doesn't have specific ones
-                $url = $strategy->landing_page_url ?? 'https://example.com';
-                
+                $url = $sitelink['url'] ?? $landingUrl ?? 'https://example.com';
+
                 $assetResourceName = ($createSitelinkService)(
-                    $customerId, 
-                    $sitelink['text'], 
-                    $sitelink['desc1'], 
-                    $sitelink['desc2'], 
+                    $customerId,
+                    $sitelink['text'],
+                    $sitelink['desc1'],
+                    $sitelink['desc2'],
                     $url
                 );
 
@@ -2052,13 +2082,18 @@ PROMPT;
             }
         }
 
-        // 2. Callouts
-        $callouts = ['Free Shipping', '24/7 Support', 'Best Quality', 'Secure Payment'];
-        
+        // 2. Callouts — prefer strategy-defined ones, fall back to product-appropriate defaults
+        $callouts = $strategy->bidding_strategy['callouts'] ?? [
+            'No Agency Retainers',
+            'AI-Powered Ad Management',
+            'Cancel Anytime',
+            'Setup in Minutes',
+        ];
+
         foreach ($callouts as $text) {
             try {
                 $assetResourceName = ($createCalloutService)($customerId, $text);
-                
+
                 if ($assetResourceName) {
                     ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::CALLOUT);
                     $result->addPlatformId('callout_asset', $assetResourceName);

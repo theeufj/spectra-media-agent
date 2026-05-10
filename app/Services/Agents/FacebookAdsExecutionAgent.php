@@ -11,6 +11,7 @@ use App\Services\FacebookAds\CampaignService;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CreativeService;
 use App\Services\FacebookAds\AdService;
+use App\Services\Agents\CampaignReviewAgent;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\CampaignStatusHelper;
 use App\Services\StorageHelper;
@@ -299,13 +300,15 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             }
             
             $plan = ExecutionPlan::fromJson($response['text']);
-            
+
+            $plan = (new CampaignReviewAgent($this->customer))->review($plan, 'facebook');
+
             Log::info("FacebookAdsExecutionAgent: Generated execution plan", [
                 'campaign_id' => $context->campaign->id,
                 'steps_count' => count($plan->steps),
                 'objective' => $plan->getCampaignStructure()['objective'] ?? 'unknown'
             ]);
-            
+
             return $plan;
             
         } catch (\Exception $e) {
@@ -427,7 +430,22 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         
         // Build targeting from plan
         $targeting = $this->buildTargeting($plan);
-        
+
+        // Wire pixel promoted_object when available — required for conversion objectives
+        $promotedObject = null;
+        if ($this->customer->facebook_pixel_id) {
+            $objective = $campaignStructure['objective'] ?? '';
+            $eventType = match (true) {
+                str_contains($objective, 'LEADS')  => 'LEAD',
+                str_contains($objective, 'SALES')  => 'PURCHASE',
+                default                            => 'LEAD',
+            };
+            $promotedObject = [
+                'pixel_id'          => $this->customer->facebook_pixel_id,
+                'custom_event_type' => $eventType,
+            ];
+        }
+
         // Campaign uses CBO — budget is set at campaign level, not ad-set level.
         // optimization_goal drives how Facebook allocates impressions within the ad set.
         // billing_event is always IMPRESSIONS (handled inside AdSetService).
@@ -437,7 +455,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $campaign->name . ' - Ad Set',
             $targeting,
             $campaignStructure['optimization_goal'] ?? 'LANDING_PAGE_VIEWS',
-            CampaignStatusHelper::getFacebookAdsStatus()
+            CampaignStatusHelper::getFacebookAdsStatus(),
+            $promotedObject
         );
         
         if (!$fbAdSet || !isset($fbAdSet['id'])) {
@@ -470,15 +489,19 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         }
         
         $imageUrl = StorageHelper::url($imageCollateral->s3_path);
-        
+
         $destinationUrl = $this->getDestinationUrl($campaign, $strategy);
+
+        $primaryText = $plan->getCreativeStrategy()['primary_text']
+            ?? ($adCopy->descriptions[0] ?? '')
+            ?: 'Discover our products and services';
 
         $fbCreative = $this->creativeService->createImageCreative(
             $accountId,
             $campaign->name . ' - Creative',
             $imageUrl,
             $adCopy->headlines[0] ?? 'Learn More',
-            $adCopy->descriptions[0] ?? 'Discover our products and services',
+            $primaryText,
             'LEARN_MORE',
             $destinationUrl
         );
@@ -537,11 +560,16 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             ];
         }
         
+        $primaryText = $plan->getCreativeStrategy()['primary_text']
+            ?? ($adCopy->descriptions[0] ?? '')
+            ?: 'Discover our products and services';
+
         $fbCreative = $this->creativeService->createCarouselCreative(
             $accountId,
             $campaign->name . ' - Carousel Creative',
             $carouselCards,
-            $this->getDestinationUrl($campaign, $strategy)
+            $this->getDestinationUrl($campaign, $strategy),
+            $primaryText
         );
         
         if (!$fbCreative || !isset($fbCreative['id'])) {
@@ -630,12 +658,16 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     protected function buildTargeting(ExecutionPlan $plan): array
     {
         $creativeStrategy = $plan->getCreativeStrategy();
-        $targeting = $creativeStrategy['targeting'] ?? [];
-        
+        // Targeting lives in creative_strategy.targeting in some models, and in
+        // targeting_strategy (top-level) in others — check both.
+        $targeting = $creativeStrategy['targeting']
+            ?? $plan->rawPlan['targeting_strategy']
+            ?? [];
+
         // Default targeting if not specified in plan
         $targetingConfig = [
             'geo_locations' => $targeting['geo_locations'] ?? [
-                'countries' => ['US'],
+                'countries' => ['US', 'CA', 'AU', 'GB'],
             ],
             'age_min' => $targeting['age_min'] ?? 18,
             'age_max' => $targeting['age_max'] ?? 65,

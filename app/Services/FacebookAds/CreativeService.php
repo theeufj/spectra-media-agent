@@ -429,7 +429,8 @@ class CreativeService extends BaseFacebookAdsService
         string $accountId,
         string $creativeName,
         array $cards,
-        string $linkUrl
+        string $linkUrl,
+        string $message = ''
     ): ?array {
         $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
         if (!$pageId) {
@@ -453,17 +454,23 @@ class CreativeService extends BaseFacebookAdsService
             $childAttachments[] = $attachment;
         }
 
+        $linkData = [
+            'link'                  => $linkUrl,
+            'child_attachments'     => $childAttachments,
+            'multi_share_optimized' => true,
+            'call_to_action'        => ['type' => 'LEARN_MORE'],
+        ];
+
+        if ($message !== '') {
+            $linkData['message'] = $message;
+        }
+
         try {
             $response = $this->post("/act_{$accountId}/adcreatives", [
                 'name' => $creativeName,
                 'object_story_spec' => json_encode([
                     'page_id'   => $pageId,
-                    'link_data' => [
-                        'link'                  => $linkUrl,
-                        'child_attachments'     => $childAttachments,
-                        'multi_share_optimized' => true,
-                        'call_to_action'        => ['type' => 'LEARN_MORE'],
-                    ],
+                    'link_data' => $linkData,
                 ]),
             ]);
 
