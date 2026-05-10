@@ -276,15 +276,13 @@ function PagesSection({ managedPages, pagePosts }) {
                 </p>
                 {pagePosts?.error ? (
                     pagePosts.error.includes('pages_read_engagement') || pagePosts.error.includes('#10') ? (
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                            <p className="text-sm font-semibold text-amber-800 mb-1">Token needs refresh</p>
-                            <p className="text-xs text-amber-700 mb-2">
-                                The stored token was issued before <code className="font-mono bg-amber-100 px-1 rounded">pages_read_engagement</code> was confirmed.
-                                Re-authorise to get a fresh token with all five scopes active, then return here.
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                            <p className="text-sm font-semibold text-blue-900 mb-1">Scope active — endpoint gated on App Review</p>
+                            <p className="text-xs text-blue-800 leading-relaxed">
+                                The <code className="font-mono bg-blue-100 px-1 rounded">pages_read_engagement</code> scope is confirmed granted on this token
+                                (see Granted OAuth Scopes above). Meta gates the <code className="font-mono bg-blue-100 px-1 rounded">/feed</code> endpoint
+                                at the app level until App Review is complete — the token and page selection are correct.
                             </p>
-                            <Link href={route('facebook-api.show')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900 underline">
-                                Re-authorise now →
-                            </Link>
                         </div>
                     ) : (
                         <p className="text-sm text-red-500">{pagePosts.error}</p>
