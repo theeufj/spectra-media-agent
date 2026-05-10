@@ -164,7 +164,17 @@ class GoogleApiOAuthController extends Controller
                 ->get('https://googleads.googleapis.com/v19/customers:listAccessibleCustomers');
 
             if (!$response->successful()) {
-                return ['error' => $response->json('error.message') ?? 'API call failed', 'accounts' => []];
+                $body = $response->json();
+                // Google Ads REST API nests errors under errors[0].errorCode or error.message
+                $message = $body['error']['message']
+                    ?? ($body['errors'][0]['message'] ?? null)
+                    ?? $response->body();
+                Log::warning('GoogleApiVerify: Ads API failed', [
+                    'status' => $response->status(),
+                    'body'   => $body,
+                    'dev_token_present' => !empty($developerToken),
+                ]);
+                return ['error' => $message, 'accounts' => [], 'status' => $response->status()];
             }
 
             $names = $response->json('resourceNames') ?? [];

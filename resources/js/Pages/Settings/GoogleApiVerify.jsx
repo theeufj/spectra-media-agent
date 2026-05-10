@@ -21,7 +21,10 @@ function ApiSection({ title, icon, description, data, renderRow }) {
             </div>
 
             {data.error ? (
-                <div className="px-5 py-4 text-sm text-red-600 bg-red-50">{data.error}</div>
+                <div className="px-5 py-4 text-sm text-red-600 bg-red-50">
+                    {data.status && <span className="font-mono text-xs mr-2 opacity-60">HTTP {data.status}</span>}
+                    {data.error}
+                </div>
             ) : data.accounts?.length === 0 ? (
                 <div className="px-5 py-4 text-sm text-gray-400 italic">No accessible accounts found for this Google login.</div>
             ) : (
