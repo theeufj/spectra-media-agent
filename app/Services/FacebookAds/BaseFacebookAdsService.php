@@ -2,9 +2,11 @@
 
 namespace App\Services\FacebookAds;
 
+use App\Features\PerUserFacebookToken;
 use App\Models\Customer;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Illuminate\Support\Facades\Log;
+use Laravel\Pennant\Feature;
 
 abstract class BaseFacebookAdsService
 {
@@ -35,19 +37,36 @@ abstract class BaseFacebookAdsService
     /**
      * Get the Facebook access token.
      *
-     * Uses the platform System User token for all BM-owned accounts.
-     *
-     * @return ?string
+     * When the PerUserFacebookToken feature flag is active for this customer's
+     * user, resolves a non-expired token from the connections table. Falls back
+     * to the platform System User token in all other cases.
      */
     protected function getAccessToken(): ?string
     {
-        // Platform System User token (BM-owned accounts)
-        $systemToken = config('services.facebook.system_user_token');
-        if ($systemToken) {
-            return $systemToken;
+        $user = $this->customer?->users()->first();
+
+        if ($user && Feature::for($user)->active(PerUserFacebookToken::class)) {
+            $connection = $user->connections()
+                ->where('platform', 'facebook_api')
+                ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+                ->first();
+
+            if ($connection?->access_token) {
+                Log::info('[FacebookAds] Using per-user OAuth token', [
+                    'customer_id'   => $this->customer->id,
+                    'user_id'       => $user->id,
+                    'connection_id' => $connection->id,
+                ]);
+                return $connection->access_token;
+            }
+
+            Log::warning('[FacebookAds] PerUserFacebookToken flag active but no valid connection found, falling back to system token', [
+                'customer_id' => $this->customer->id,
+                'user_id'     => $user->id,
+            ]);
         }
 
-        return null;
+        return config('services.facebook.system_user_token');
     }
 
     /**

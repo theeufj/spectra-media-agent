@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleAds;
 
+use App\Features\PerUserGoogleToken;
 use App\Models\Customer;
 use App\Models\MccAccount;
 use App\Services\Agents\Traits\RetryableApiOperation;
@@ -9,6 +10,7 @@ use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
+use Laravel\Pennant\Feature;
 
 abstract class BaseGoogleAdsService
 {
@@ -21,6 +23,7 @@ abstract class BaseGoogleAdsService
     {
         $this->customer = $customer;
         $this->client = $this->buildClient();
+        $this->maybeUseUserCredentials();
     }
 
     /**
@@ -36,6 +39,59 @@ abstract class BaseGoogleAdsService
                 "Please check: 1) OAuth credentials are valid, " .
                 "2) Customer has connected their Google Ads account via OAuth"
             );
+        }
+    }
+
+    /**
+     * If the PerUserGoogleToken feature flag is active for this customer's user,
+     * rebuild the Google Ads client using that user's stored OAuth refresh token
+     * instead of the platform MCC credentials. Falls back silently on any error.
+     */
+    private function maybeUseUserCredentials(): void
+    {
+        $user = $this->customer?->users()->first();
+
+        if (!$user || !Feature::for($user)->active(PerUserGoogleToken::class)) {
+            return;
+        }
+
+        $connection = $user->connections()
+            ->where('platform', 'google_ads')
+            ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->first();
+
+        if (!$connection?->refresh_token) {
+            Log::warning('[GoogleAds] PerUserGoogleToken flag active but no valid connection found, using MCC credentials', [
+                'customer_id' => $this->customer->id,
+                'user_id'     => $user->id,
+            ]);
+            return;
+        }
+
+        try {
+            $configPath = storage_path('app/google_ads_php.ini');
+
+            $oAuth2Credential = (new OAuth2TokenBuilder())
+                ->fromFile($configPath)
+                ->withRefreshToken($connection->refresh_token)
+                ->build();
+
+            $this->client = (new GoogleAdsClientBuilder())
+                ->fromFile($configPath)
+                ->withOAuth2Credential($oAuth2Credential)
+                ->build();
+
+            Log::info('[GoogleAds] Using per-user OAuth token', [
+                'customer_id'   => $this->customer->id,
+                'user_id'       => $user->id,
+                'connection_id' => $connection->id,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('[GoogleAds] Failed to build per-user client, retaining MCC credentials', [
+                'customer_id' => $this->customer->id,
+                'user_id'     => $user->id,
+                'error'       => $e->getMessage(),
+            ]);
         }
     }
 
