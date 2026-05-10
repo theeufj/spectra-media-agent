@@ -190,7 +190,13 @@ class AdExtensionAgent
 
     private function generateSitelinks(object $customer, Campaign $campaign, string $context, int $count): array
     {
-        $landingPage = $customer->website ?? 'https://example.com';
+        $landingPage = $customer->website ?? null;
+        if (!$landingPage) {
+            Log::warning('[AdExtensionAgent] No website set for customer, skipping sitelink generation', [
+                'customer_id' => $customer->id,
+            ]);
+            return [];
+        }
 
         $prompt = <<<PROMPT
 You are an expert Google Ads copywriter. Generate {$count} sitelink extension(s) for the following business.

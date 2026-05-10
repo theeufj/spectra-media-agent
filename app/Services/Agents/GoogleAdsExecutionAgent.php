@@ -1295,19 +1295,6 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     }
 
     /**
-     * Create and link assets for Performance Max
-     * @deprecated Replaced by inline logic in executePerformanceMaxCampaign using CreateAssetGroupWithAssets
-     */
-    protected function createAndLinkPMaxAssets(
-        string $customerId, 
-        string $assetGroupResourceName, 
-        Strategy $strategy, 
-        ExecutionResult $result
-    ): void {
-        // Deprecated
-    }
-    
-    /**
      * Get keywords from campaign, targeting config, or execution plan
      */
     protected function getKeywords(Campaign $campaign, Strategy $strategy, ExecutionPlan $plan): array

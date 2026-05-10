@@ -213,7 +213,7 @@ Provide your response as a valid JSON object with the following structure:
 ```json
 {
   "campaign_structure": {
-    "objective": "LINK_CLICKS|CONVERSIONS|REACH|TRAFFIC|ENGAGEMENT|VIDEO_VIEWS|LEAD_GENERATION",
+    "objective": "OUTCOME_LEADS|OUTCOME_SALES|OUTCOME_AWARENESS|OUTCOME_ENGAGEMENT|OUTCOME_APP_PROMOTION",
     "justification": "Why this objective was selected",
     "optimization_goal": "LINK_CLICKS|LANDING_PAGE_VIEWS|IMPRESSIONS|REACH|etc",
     "daily_budget": 16.67,
@@ -276,7 +276,7 @@ Provide your response as a valid JSON object with the following structure:
       "description": "Create Facebook Ads campaign with objective",
       "parameters": {
         "campaign_name": "Campaign Name",
-        "objective": "LINK_CLICKS",
+        "objective": "OUTCOME_LEADS",
         "status": "PAUSED"
       },
       "dependencies": [],

@@ -38,12 +38,20 @@ class RecommendationGenerationService
 
             // Heuristic: If average daily cost is close to daily budget and conversions are good
             if ($averageDailyCost >= ($dailyBudget * 0.9) && $averageDailyConversions > 0) {
-                $newBudgetAmount = $dailyBudget * 1.1; // Increase by 10%
+                // Scale increase by impression share loss: >30% loss → 20-25%, otherwise 10%
+                $avgImpressionShareLost = 0;
+                $isLossValues = array_filter(array_column($performanceData, 'search_impression_share_lost_budget'));
+                if (!empty($isLossValues)) {
+                    $avgImpressionShareLost = array_sum($isLossValues) / count($isLossValues);
+                }
+                $increaseMultiplier = $avgImpressionShareLost > 0.30 ? 1.225 : 1.10;
+                $newBudgetAmount = $dailyBudget * $increaseMultiplier;
+                $increasePercent = (int) round(($increaseMultiplier - 1) * 100);
                 $recommendations[] = [
                     'type' => 'BUDGET_INCREASE',
                     'target_campaign_id' => $campaignConfig['campaignId'],
                     'new_budget_amount' => round($newBudgetAmount, 2),
-                    'rationale' => "Campaign is consistently hitting daily budget cap and performing well with an average of " . round($averageDailyConversions, 2) . " conversions per day. Recommend increasing daily budget to " . round($newBudgetAmount, 2) . ".",
+                    'rationale' => "Campaign is consistently hitting daily budget cap with an average of " . round($averageDailyConversions, 2) . " conversions/day" . ($avgImpressionShareLost > 0 ? " and {$avgImpressionShareLost}% impression share lost to budget" : "") . ". Recommend a {$increasePercent}% budget increase to \$" . round($newBudgetAmount, 2) . ".",
                 ];
                 Log::info("Generated budget increase recommendation", ['recommendation' => end($recommendations)]);
             }
@@ -79,6 +87,17 @@ class RecommendationGenerationService
                 'campaign_config' => $campaignConfig,
             ]);
         }
+
+        // Filter out recommendations with empty required fields
+        $recommendations = array_values(array_filter($recommendations, function (array $rec): bool {
+            if (($rec['type'] ?? '') === 'BUDGET_INCREASE') {
+                return !empty($rec['target_campaign_id']) && !empty($rec['new_budget_amount']);
+            }
+            if (($rec['type'] ?? '') === 'KEYWORD') {
+                return !empty($rec['keyword_text']);
+            }
+            return !empty($rec['type']);
+        }));
 
         return $recommendations;
     }

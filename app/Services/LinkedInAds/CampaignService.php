@@ -270,6 +270,42 @@ class CampaignService extends BaseLinkedInAdsService
         return $this->apiCall('leadGenForms', 'POST', $form);
     }
 
+    /**
+     * Create a Sponsored Content creative for a campaign.
+     */
+    public function createCreative(string $campaignId, array $params): ?array
+    {
+        $accountId = $this->customer->linkedin_ads_account_id;
+        if (!$accountId) return null;
+
+        $creative = [
+            'account'  => "urn:li:sponsoredAccount:{$accountId}",
+            'campaign' => "urn:li:adCampaign:{$campaignId}",
+            'status'   => 'ACTIVE',
+            'content'  => [
+                'adContent' => [
+                    'type'        => 'SPONSORED',
+                    'headline'    => substr($params['headline'] ?? '', 0, 200),
+                    'description' => substr($params['description'] ?? '', 0, 600),
+                    'callToAction' => [
+                        'url' => $params['destination'] ?? '',
+                    ],
+                ],
+            ],
+        ];
+
+        $result = $this->apiCall('adCreativesV2', 'POST', $creative);
+
+        if ($result) {
+            Log::info('LinkedIn Ads: Created creative', [
+                'customer_id' => $this->customer->id,
+                'campaign_id' => $campaignId,
+            ]);
+        }
+
+        return $result;
+    }
+
     protected function buildFormQuestions(array $questions): array
     {
         return collect($questions)->map(fn ($q) => [

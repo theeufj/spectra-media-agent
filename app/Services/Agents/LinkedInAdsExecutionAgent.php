@@ -155,7 +155,7 @@ PROMPT;
                 $result = match ($step->action ?? $step['action'] ?? '') {
                     'create_campaign' => $this->executeCreateCampaign($campaignService, $step, $context),
                     'set_targeting' => $this->executeSetTargeting($campaignService, $step, $context),
-                    'create_creatives' => ['status' => 'skipped', 'reason' => 'Creative creation requires manual review'],
+                    'create_creatives' => $this->executeCreateCreatives($campaignService, $step, $context),
                     'setup_conversion_tracking' => $this->executeSetupTracking($campaignService),
                     default => ['status' => 'skipped', 'reason' => 'Unknown action'],
                 };
@@ -210,8 +210,59 @@ PROMPT;
 
     protected function executeSetTargeting(CampaignService $service, $step, ExecutionContext $context): array
     {
-        // Targeting is set during campaign creation in LinkedIn API
+        // Targeting is applied inside createSponsoredContentCampaign() via targetingCriteria.
+        Log::info('[LinkedInAdsExecutionAgent] Targeting applied during campaign creation — no separate API call required', [
+            'campaign_id' => $context->campaign->id,
+        ]);
         return ['status' => 'success', 'reason' => 'Targeting applied during campaign creation'];
+    }
+
+    protected function executeCreateCreatives(CampaignService $service, $step, ExecutionContext $context): array
+    {
+        $campaign = $context->campaign;
+        $strategy = $context->strategy;
+
+        $campaignId = $campaign->linkedin_campaign_id ?? null;
+        if (!$campaignId) {
+            return ['status' => 'skipped', 'reason' => 'No LinkedIn campaign ID — campaign creation must succeed first'];
+        }
+
+        $adCopy = $strategy->adCopies()
+            ->whereRaw('LOWER(platform) LIKE ?', ['%linkedin%'])
+            ->first()
+            ?? $strategy->adCopies()->first();
+
+        if (!$adCopy) {
+            Log::warning('[LinkedInAdsExecutionAgent] No ad copy for creative creation', ['strategy_id' => $strategy->id]);
+            return ['status' => 'skipped', 'reason' => 'No ad copy available'];
+        }
+
+        $landingUrl = $campaign->landing_page_url
+            ?? $strategy->bidding_strategy['landing_page_url']
+            ?? $this->customer->website
+            ?? null;
+
+        if (!$landingUrl) {
+            Log::warning('[LinkedInAdsExecutionAgent] No landing URL for creative', ['strategy_id' => $strategy->id]);
+            return ['status' => 'skipped', 'reason' => 'No landing page URL'];
+        }
+
+        $creative = $service->createCreative($campaignId, [
+            'headline'    => $adCopy->headlines[0] ?? 'Learn More',
+            'description' => $adCopy->descriptions[0] ?? '',
+            'destination' => $landingUrl,
+        ]);
+
+        if ($creative) {
+            Log::info('[LinkedInAdsExecutionAgent] Created LinkedIn creative', [
+                'campaign_id' => $campaign->id,
+                'creative'    => $creative,
+            ]);
+            $strategy->update(['linkedin_creative_id' => $creative['id'] ?? null]);
+            return ['status' => 'success', 'creative' => $creative];
+        }
+
+        return ['status' => 'failed', 'reason' => 'LinkedIn API did not return a creative ID'];
     }
 
     protected function executeSetupTracking(CampaignService $service): array

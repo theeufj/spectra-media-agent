@@ -372,23 +372,39 @@ PROMPT;
             ? $adGroupService->addKeywords($adGroupId, $kwPayload)
             : ['skipped' => 'No keywords in strategy'];
 
-        // Add a basic RSA using strategy ad copy guidance
-        $adCopy = $context->strategy?->ad_copy_strategy ?? '';
+        // Source ad copy from strategy — prefer Microsoft-specific copy, fall back to any copy
+        $adCopy = $context->strategy->adCopies()
+            ->whereRaw('LOWER(platform) LIKE ?', ['%microsoft%'])
+            ->first()
+            ?? $context->strategy->adCopies()->first();
+
+        $headlines    = $adCopy?->headlines    ?? [];
+        $descriptions = $adCopy?->descriptions ?? [];
+
+        if (empty($headlines)) {
+            Log::warning('[MicrosoftAdsExecutionAgent] No ad copy found in strategy, skipping ad creation', [
+                'strategy_id' => $context->strategy->id,
+            ]);
+            return ['ad_group_id' => $adGroupId, 'keywords_added' => $kwResult, 'ad_created' => 'skipped_no_copy'];
+        }
+
+        $finalUrl = $biddingStrategy['landing_page_url']
+            ?? $this->customer->website
+            ?? null;
+
+        if (!$finalUrl) {
+            Log::warning('[MicrosoftAdsExecutionAgent] No landing page URL for ad, skipping ad creation', [
+                'strategy_id' => $context->strategy->id,
+            ]);
+            return ['ad_group_id' => $adGroupId, 'keywords_added' => $kwResult, 'ad_created' => 'skipped_no_url'];
+        }
+
         $adResult = $adGroupService->addExpandedTextAds($adGroupId, [[
-            'headlines'    => [
-                'Stop Paying Agency Retainers',
-                'AI Ad Management $99/mo',
-                '6 AI Agents Managing Your Ads',
-                'No Retainers. No Setup Fees.',
-                '24/7 Autonomous Ad Optimization',
-            ],
-            'descriptions' => [
-                'Our AI agents manage your Google & Bing ads 24/7. Start for $99/mo — no retainers.',
-                'Replace your agency with 6 AI agents. Self-healing campaigns. Deploy in 1 click.',
-            ],
-            'path1'      => 'AI-Ads',
-            'path2'      => '99-mo',
-            'final_url'  => $biddingStrategy['landing_page_url'] ?? $this->customer->website ?? 'https://sitetospend.com',
+            'headlines'    => array_slice($headlines, 0, 15),
+            'descriptions' => array_slice($descriptions, 0, 4),
+            'path1'        => 'AI-Ads',
+            'path2'        => 'Managed',
+            'final_url'    => $finalUrl,
         ]]);
 
         return [
