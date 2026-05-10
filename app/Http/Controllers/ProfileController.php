@@ -26,15 +26,25 @@ class ProfileController extends Controller
             ->where('platform', 'google_api')
             ->first();
 
+        $facebookApiConnection = Connection::where('user_id', $user->id)
+            ->where('platform', 'facebook_api')
+            ->first();
+
         return Inertia::render('Profile/Edit', [
-            'mustVerifyEmail'      => $user instanceof MustVerifyEmail,
-            'status'               => session('status'),
-            'customers'            => $customers,
-            'facebookAppId'        => config('services.facebook.client_id'),
-            'googleApiConnection'  => $googleApiConnection ? [
+            'mustVerifyEmail'       => $user instanceof MustVerifyEmail,
+            'status'                => session('status'),
+            'customers'             => $customers,
+            'facebookAppId'         => config('services.facebook.client_id'),
+            'googleApiConnection'   => $googleApiConnection ? [
                 'connected'    => true,
                 'account_name' => $googleApiConnection->account_name,
                 'connected_at' => $googleApiConnection->updated_at->toISOString(),
+            ] : null,
+            'facebookApiConnection' => $facebookApiConnection ? [
+                'connected'    => true,
+                'account_name' => $facebookApiConnection->account_name,
+                'connected_at' => $facebookApiConnection->updated_at->toISOString(),
+                'expires_at'   => $facebookApiConnection->expires_at?->toISOString(),
             ] : null,
         ]);
     }

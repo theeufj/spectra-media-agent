@@ -671,6 +671,20 @@ Route::middleware('auth')->group(function () {
 
 /*
 |--------------------------------------------------------------------------
+| Facebook API OAuth (for API verification / screen recording)
+|--------------------------------------------------------------------------
+*/
+Route::middleware('auth')->group(function () {
+    Route::get('/settings/facebook-api',             [App\Http\Controllers\FacebookApiOAuthController::class, 'show'])->name('facebook-api.show');
+    Route::get('/settings/facebook-api/connect',     [App\Http\Controllers\FacebookApiOAuthController::class, 'redirect'])->name('facebook-api.redirect');
+    Route::get('/settings/facebook-api/callback',    [App\Http\Controllers\FacebookApiOAuthController::class, 'callback'])->name('facebook-api.callback');
+    Route::get('/settings/facebook-api/success',     [App\Http\Controllers\FacebookApiOAuthController::class, 'success'])->name('facebook-api.success');
+    Route::get('/settings/facebook-api/verify',      [App\Http\Controllers\FacebookApiOAuthController::class, 'verify'])->name('facebook-api.verify');
+    Route::post('/settings/facebook-api/disconnect', [App\Http\Controllers\FacebookApiOAuthController::class, 'disconnect'])->name('facebook-api.disconnect');
+});
+
+/*
+|--------------------------------------------------------------------------
 | Product / Shopping Routes
 |--------------------------------------------------------------------------
 */

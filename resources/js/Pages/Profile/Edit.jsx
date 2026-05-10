@@ -10,7 +10,7 @@ import DangerButton from '@/Components/DangerButton';
 import { startTour } from '@/Components/OnboardingTour';
 import { useState } from 'react';
 
-export default function Edit({ auth, mustVerifyEmail, status, googleApiConnection }) {
+export default function Edit({ auth, mustVerifyEmail, status, googleApiConnection, facebookApiConnection }) {
     const { customers } = usePage().props;
     const [formData, setFormData] = useState({
         name: '',
@@ -145,6 +145,50 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                         className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 transition-colors"
                                     >
                                         Connect Google APIs
+                                    </Link>
+                                )}
+                            </div>
+                        </section>
+                    </div>
+
+                    {/* Facebook API connection */}
+                    <div className="bg-white p-4 shadow sm:rounded-lg sm:p-8">
+                        <section className="max-w-xl">
+                            <header className="flex items-start justify-between">
+                                <div>
+                                    <h2 className="text-lg font-medium text-gray-900">Facebook API Access</h2>
+                                    <p className="mt-1 text-sm text-gray-600">
+                                        Authorise SiteToSpend to manage Facebook Ads campaigns and read Business Manager data on your behalf.
+                                    </p>
+                                </div>
+                                <div className="ml-4 flex-shrink-0">
+                                    <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#1877F2">
+                                        <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047v-2.66c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.265h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+                                    </svg>
+                                </div>
+                            </header>
+                            <div className="mt-4">
+                                {facebookApiConnection ? (
+                                    <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-lg">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-green-600 font-semibold text-sm">Connected</span>
+                                            <span className="text-gray-500 text-sm">·</span>
+                                            <span className="text-sm text-gray-600">{facebookApiConnection.account_name}</span>
+                                        </div>
+                                        <Link
+                                            href={route('facebook-api.show')}
+                                            className="text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2"
+                                        >
+                                            Manage
+                                        </Link>
+                                    </div>
+                                ) : (
+                                    <Link
+                                        href={route('facebook-api.show')}
+                                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors"
+                                        style={{ backgroundColor: '#1877F2' }}
+                                    >
+                                        Connect Facebook APIs
                                     </Link>
                                 )}
                             </div>
