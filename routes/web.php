@@ -665,6 +665,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/google-api/connect', [App\Http\Controllers\GoogleApiOAuthController::class, 'redirect'])->name('google-api.redirect');
     Route::get('/settings/google-api/callback', [App\Http\Controllers\GoogleApiOAuthController::class, 'callback'])->name('google-api.callback');
     Route::get('/settings/google-api/success', [App\Http\Controllers\GoogleApiOAuthController::class, 'success'])->name('google-api.success');
+    Route::get('/settings/google-api/verify', [App\Http\Controllers\GoogleApiOAuthController::class, 'verify'])->name('google-api.verify');
     Route::post('/settings/google-api/disconnect', [App\Http\Controllers\GoogleApiOAuthController::class, 'disconnect'])->name('google-api.disconnect');
 });
 

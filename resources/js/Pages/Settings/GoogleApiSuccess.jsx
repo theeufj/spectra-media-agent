@@ -163,16 +163,19 @@ export default function GoogleApiSuccess({ account_name, account_id, scopes, con
                 {/* Footer actions */}
                 <div className="flex gap-3">
                     <Link
-                        href={route('dashboard')}
-                        className="flex-1 flex items-center justify-center bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors"
+                        href={route('google-api.verify')}
+                        className="flex-1 flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-semibold px-6 py-3 rounded-xl transition-colors"
                     >
-                        Go to dashboard
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Verify live API access
                     </Link>
                     <Link
                         href={route('google-api.show')}
                         className="px-5 py-3 text-sm text-gray-600 hover:bg-gray-100 rounded-xl border border-gray-200 transition-colors"
                     >
-                        Manage connection
+                        Manage
                     </Link>
                 </div>
             </div>
