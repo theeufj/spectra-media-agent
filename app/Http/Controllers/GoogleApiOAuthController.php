@@ -156,8 +156,11 @@ class GoogleApiOAuthController extends Controller
     private function fetchGoogleAdsAccounts(string $token): array
     {
         try {
+            $ini = @parse_ini_file(storage_path('app/google_ads_php.ini')) ?: [];
+            $developerToken = $ini['developerToken'] ?? '';
+
             $response = Http::withToken($token)
-                ->withHeaders(['developer-token' => config('googleads.developer_token', '')])
+                ->withHeaders(['developer-token' => $developerToken])
                 ->get('https://googleads.googleapis.com/v19/customers:listAccessibleCustomers');
 
             if (!$response->successful()) {
