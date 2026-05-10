@@ -128,9 +128,11 @@ class FacebookApiOAuthController extends Controller
         $firstAccountId = $adAccounts['accounts'][0]['id'] ?? null;
         $adInsights = $firstAccountId ? $this->fetchAdInsights($token, $firstAccountId) : ['error' => 'No ad accounts found.'];
 
-        // Fetch posts for the first managed page (pages_read_engagement)
-        $firstPageId = $managedPages['pages'][0]['id'] ?? null;
-        $pagePosts = $firstPageId ? $this->fetchPagePosts($token, $firstPageId, $managedPages['pages'][0]['name'] ?? '') : ['error' => 'No managed pages found.', 'posts' => []];
+        // Fetch posts for the first managed page — use the page's own access token from /me/accounts
+        $firstPage = $managedPages['pages'][0] ?? null;
+        $firstPageId = $firstPage['id'] ?? null;
+        $firstPageToken = $firstPage['page_token'] ?? $token;
+        $pagePosts = $firstPageId ? $this->fetchPagePosts($firstPageToken, $firstPageId, $firstPage['name'] ?? '') : ['error' => 'No managed pages found.', 'posts' => []];
 
         // Fetch pages linked to first business (business_management asset demonstration)
         $firstBusinessId = $businesses['accounts'][0]['id'] ?? null;
@@ -165,13 +167,15 @@ class FacebookApiOAuthController extends Controller
         }
 
         try {
-            $response = Http::post(self::GRAPH . '/' . $adAccountId . '/campaigns', [
-                'name'                  => 'SiteToSpend Demo Campaign — ' . now()->format('d M Y H:i'),
-                'objective'             => 'OUTCOME_TRAFFIC',
-                'status'                => 'PAUSED',
-                'special_ad_categories' => [],
-                'access_token'          => $connection->access_token,
-            ]);
+            $response = Http::asJson()->post(
+                self::GRAPH . '/' . $adAccountId . '/campaigns?access_token=' . urlencode($connection->access_token),
+                [
+                    'name'                  => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
+                    'objective'             => 'OUTCOME_TRAFFIC',
+                    'status'                => 'PAUSED',
+                    'special_ad_categories' => [],
+                ]
+            );
 
             if (!$response->successful()) {
                 return response()->json([
@@ -184,7 +188,7 @@ class FacebookApiOAuthController extends Controller
             return response()->json([
                 'success'     => true,
                 'campaign_id' => $data['id'] ?? null,
-                'name'        => 'SiteToSpend Demo Campaign — ' . now()->format('d M Y H:i'),
+                'name'        => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
                 'status'      => 'PAUSED',
                 'objective'   => 'OUTCOME_TRAFFIC',
             ]);
@@ -268,7 +272,7 @@ class FacebookApiOAuthController extends Controller
     {
         try {
             $response = Http::get(self::GRAPH . '/me/accounts', [
-                'fields'       => 'id,name,category,fan_count,followers_count,link',
+                'fields'       => 'id,name,category,fan_count,followers_count,link,access_token',
                 'access_token' => $token,
             ]);
 
@@ -280,12 +284,13 @@ class FacebookApiOAuthController extends Controller
             return [
                 'error' => null,
                 'pages' => array_map(fn($p) => [
-                    'id'        => $p['id'] ?? '',
-                    'name'      => $p['name'] ?? '',
-                    'category'  => $p['category'] ?? '',
-                    'fans'      => $p['fan_count'] ?? 0,
-                    'followers' => $p['followers_count'] ?? 0,
-                    'link'      => $p['link'] ?? null,
+                    'id'         => $p['id'] ?? '',
+                    'name'       => $p['name'] ?? '',
+                    'category'   => $p['category'] ?? '',
+                    'fans'       => $p['fan_count'] ?? 0,
+                    'followers'  => $p['followers_count'] ?? 0,
+                    'link'       => $p['link'] ?? null,
+                    'page_token' => $p['access_token'] ?? null,
                 ], $pages),
                 'count' => count($pages),
             ];
@@ -329,7 +334,7 @@ class FacebookApiOAuthController extends Controller
     private function fetchBusinessPages(string $token, string $businessId, string $businessName): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/' . $businessId . '/pages', [
+            $response = Http::get(self::GRAPH . '/' . $businessId . '/owned_pages', [
                 'fields'       => 'id,name,category,fan_count',
                 'access_token' => $token,
             ]);
