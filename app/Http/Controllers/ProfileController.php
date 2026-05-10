@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\Connection;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,11 +22,20 @@ class ProfileController extends Controller
         $user = $request->user();
         $customers = $user->customers()->with('users')->get();
 
+        $googleApiConnection = Connection::where('user_id', $user->id)
+            ->where('platform', 'google_api')
+            ->first();
+
         return Inertia::render('Profile/Edit', [
-            'mustVerifyEmail' => $user instanceof MustVerifyEmail,
-            'status' => session('status'),
-            'customers' => $customers,
-            'facebookAppId' => config('services.facebook.client_id'),
+            'mustVerifyEmail'      => $user instanceof MustVerifyEmail,
+            'status'               => session('status'),
+            'customers'            => $customers,
+            'facebookAppId'        => config('services.facebook.client_id'),
+            'googleApiConnection'  => $googleApiConnection ? [
+                'connected'    => true,
+                'account_name' => $googleApiConnection->account_name,
+                'connected_at' => $googleApiConnection->updated_at->toISOString(),
+            ] : null,
         ]);
     }
 
