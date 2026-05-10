@@ -29,6 +29,7 @@ class Customer extends Model
         'google_ads_customer_id',
         'google_ads_manager_customer_id',
         'google_ads_customer_is_manager',
+        'google_my_business_account_id',
         'facebook_ads_account_id',
         'facebook_page_id',
         'facebook_page_name',
