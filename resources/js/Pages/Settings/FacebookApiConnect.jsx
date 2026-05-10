@@ -6,7 +6,7 @@ const SCOPE_LABELS = {
     'ads_read':             { name: 'Ads Read',              desc: 'Read ad campaign performance, insights, and reporting data' },
     'business_management':  { name: 'Business Management',   desc: 'Manage Business Manager assets, pages, and user permissions' },
     'pages_read_engagement':{ name: 'Pages Read Engagement', desc: 'Read Page content, follower counts, and post engagement' },
-    'instagram_basic':      { name: 'Instagram Basic',       desc: 'Read Instagram account information linked to Pages' },
+    'pages_show_list':      { name: 'Pages Show List',       desc: 'Read the list of Pages managed by this account' },
 };
 
 const FBLogo = (

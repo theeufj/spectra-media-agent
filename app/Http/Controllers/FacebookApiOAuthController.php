@@ -17,7 +17,7 @@ class FacebookApiOAuthController extends Controller
         'ads_read',
         'business_management',
         'pages_read_engagement',
-        'instagram_basic',
+        'pages_show_list',
     ];
 
     private const GRAPH = 'https://graph.facebook.com/v22.0';
@@ -42,7 +42,7 @@ class FacebookApiOAuthController extends Controller
     {
         return Socialite::driver('facebook')
             ->redirectUrl(route('facebook-api.callback'))
-            ->scopes(self::SCOPES)
+            ->setScopes(self::SCOPES)  // setScopes replaces defaults (avoids Socialite adding email)
             ->with(['config_id' => config('services.facebook.config_id')])
             ->stateless()
             ->redirect();

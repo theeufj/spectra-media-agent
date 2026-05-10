@@ -6,7 +6,7 @@ const SCOPE_LABELS = {
     'ads_read':              'Meta Ads — Read performance data',
     'business_management':   'Business Manager — Manage assets and permissions',
     'pages_read_engagement': 'Pages — Read content and engagement',
-    'instagram_basic':       'Instagram — Read linked account info',
+    'pages_show_list':       'Pages — List pages managed by this account',
 };
 
 const API_GROUPS = [
@@ -54,8 +54,8 @@ const API_GROUPS = [
                 <circle cx="27.5" cy="12.5" r="2" fill="#fff"/>
             </svg>
         ),
-        scopeKeys: ['pages_read_engagement', 'instagram_basic'],
-        description: 'Read Page engagement signals and Instagram account data',
+        scopeKeys: ['pages_read_engagement', 'pages_show_list'],
+        description: 'Read Page engagement signals and list managed Pages',
     },
 ];
 
