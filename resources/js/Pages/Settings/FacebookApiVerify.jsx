@@ -312,11 +312,72 @@ function PagesSection({ managedPages, pagePosts }) {
     );
 }
 
+const SCOPE_META = {
+    ads_management:        { label: 'Ads Management',        desc: 'Create and manage campaigns, ad sets, ads' },
+    ads_read:              { label: 'Ads Read',              desc: 'Read performance insights and reporting data' },
+    business_management:   { label: 'Business Management',   desc: 'Manage Business Manager assets and permissions' },
+    pages_read_engagement: { label: 'Pages Read Engagement', desc: 'Read Page content, posts, and engagement data' },
+    pages_show_list:       { label: 'Pages Show List',       desc: 'List all Pages managed by this account' },
+};
+
+function PermissionsSection({ grantedPermissions }) {
+    const perms = grantedPermissions?.permissions ?? [];
+    const grantedSet = new Set(perms.filter(p => p.status === 'granted').map(p => p.permission));
+    const allGranted = Object.keys(SCOPE_META).every(k => grantedSet.has(k));
+
+    return (
+        <SectionCard
+            title="Granted OAuth Scopes — Token Verification"
+            icon={<svg viewBox="0 0 28 28" fill="none" className="w-7 h-7"><rect width="28" height="28" rx="6" fill="#7C3AED"/><path d="M14 7l2.1 5.4H22l-4.7 3.4 1.8 5.5L14 18l-5.1 3.3 1.8-5.5L6 12.4h5.9L14 7z" fill="#fff" fillOpacity=".9"/></svg>}
+            error={grantedPermissions?.error}
+            badge={!grantedPermissions?.error && <GreenBadge label={`${grantedSet.size} scopes granted`} />}>
+            <div className="px-5 py-4">
+                <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                    Live result from <code className="font-mono bg-gray-100 px-1 rounded">GET /me/permissions</code> — confirms which scopes Meta granted to this token.
+                </p>
+                <div className="space-y-2">
+                    {Object.entries(SCOPE_META).map(([key, meta]) => {
+                        const granted = grantedSet.has(key);
+                        return (
+                            <div key={key} className={`flex items-center gap-3 px-4 py-2.5 rounded-lg ${granted ? 'bg-green-50 border border-green-100' : 'bg-gray-50 border border-gray-100'}`}>
+                                <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 ${granted ? 'bg-green-500' : 'bg-gray-300'}`}>
+                                    {granted ? (
+                                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                    ) : (
+                                        <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                    )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <p className={`text-xs font-semibold ${granted ? 'text-green-900' : 'text-gray-500'}`}>{meta.label}</p>
+                                    <p className="text-xs text-gray-400 truncate">{meta.desc}</p>
+                                </div>
+                                <span className={`text-xs font-bold flex-shrink-0 ${granted ? 'text-green-700' : 'text-gray-400'}`}>
+                                    {granted ? 'granted' : 'not granted'}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+                {allGranted && (
+                    <div className="mt-3 bg-green-50 border border-green-200 rounded-lg px-4 py-2.5">
+                        <p className="text-xs font-semibold text-green-800">All 5 required scopes confirmed active on this token.</p>
+                    </div>
+                )}
+            </div>
+        </SectionCard>
+    );
+}
+
 // ─── page ────────────────────────────────────────────────────────────────────
 
 export default function FacebookApiVerify({
     account_name, token_expired,
-    identity, adAccounts, adInsights,
+    identity, grantedPermissions,
+    adAccounts, adInsights,
     businesses, businessAssets,
     managedPages, pagePosts,
 }) {
@@ -357,6 +418,7 @@ export default function FacebookApiVerify({
                 </div>
 
                 <div className="space-y-4 mb-8">
+                    <PermissionsSection grantedPermissions={grantedPermissions} />
                     <IdentitySection identity={identity ?? { error: null }} />
                     <AdAccountsSection adAccounts={adAccounts ?? { accounts: [] }} adInsights={adInsights} />
                     <CampaignCreateSection adAccounts={adAccounts ?? { accounts: [] }} />

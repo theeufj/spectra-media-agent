@@ -139,15 +139,16 @@ class FacebookApiOAuthController extends Controller
         $businessAssets = $firstBusinessId ? $this->fetchBusinessPages($token, $firstBusinessId, $businesses['accounts'][0]['name'] ?? '') : ['error' => 'No businesses found.', 'pages' => []];
 
         return Inertia::render('Settings/FacebookApiVerify', [
-            'account_name'   => $connection->account_name,
-            'token_expired'  => false,
-            'identity'       => $this->fetchIdentity($token),
-            'adAccounts'     => $adAccounts,
-            'adInsights'     => $adInsights,
-            'businesses'     => $businesses,
-            'businessAssets' => $businessAssets,
-            'managedPages'   => $managedPages,
-            'pagePosts'      => $pagePosts,
+            'account_name'      => $connection->account_name,
+            'token_expired'     => false,
+            'identity'          => $this->fetchIdentity($token),
+            'grantedPermissions'=> $this->fetchGrantedPermissions($token),
+            'adAccounts'        => $adAccounts,
+            'adInsights'        => $adInsights,
+            'businesses'        => $businesses,
+            'businessAssets'    => $businessAssets,
+            'managedPages'      => $managedPages,
+            'pagePosts'         => $pagePosts,
         ]);
     }
 
@@ -171,11 +172,12 @@ class FacebookApiOAuthController extends Controller
             // are dropped by form encoding, so special_ad_categories must be the
             // string '[]' which Facebook deserialises as an empty JSON array.
             $response = Http::post(self::GRAPH . '/' . $adAccountId . '/campaigns', [
-                'name'                  => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
-                'objective'             => 'OUTCOME_AWARENESS',
-                'status'                => 'PAUSED',
-                'special_ad_categories' => '[]',
-                'access_token'          => $connection->access_token,
+                'name'                        => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
+                'objective'                   => 'OUTCOME_AWARENESS',
+                'status'                      => 'PAUSED',
+                'special_ad_categories'       => '[]',
+                'is_adset_budget_sharing_enabled' => 0,
+                'access_token'                => $connection->access_token,
             ]);
 
             if (!$response->successful()) {
@@ -450,6 +452,30 @@ class FacebookApiOAuthController extends Controller
             ];
         } catch (\Exception $e) {
             return ['error' => $e->getMessage(), 'accounts' => []];
+        }
+    }
+
+    private function fetchGrantedPermissions(string $token): array
+    {
+        try {
+            $response = Http::get(self::GRAPH . '/me/permissions', [
+                'access_token' => $token,
+            ]);
+
+            if (!$response->successful()) {
+                return ['error' => $response->json('error.message') ?? 'Permissions fetch failed', 'permissions' => []];
+            }
+
+            $data = $response->json('data') ?? [];
+            return [
+                'error'       => null,
+                'permissions' => array_map(fn($p) => [
+                    'permission' => $p['permission'] ?? '',
+                    'status'     => $p['status'] ?? '',
+                ], $data),
+            ];
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage(), 'permissions' => []];
         }
     }
 }
