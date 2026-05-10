@@ -117,7 +117,8 @@ abstract class BaseGoogleAdsService
             $mccRefreshToken = $mccAccount->exists
                 ? Crypt::decryptString($mccAccount->refresh_token)
                 : $mccAccount->refresh_token;
-            $mccCustomerId = $mccAccount->google_customer_id;
+            // Strip dashes — Google Ads API requires plain numeric IDs (e.g. 8701023448 not 870-102-3448)
+            $mccCustomerId = preg_replace('/[^0-9]/', '', $mccAccount->google_customer_id);
 
             $oAuth2Credential = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)

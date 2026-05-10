@@ -39,7 +39,7 @@ class CreateManagedAccount extends BaseGoogleAdsService
             ]);
 
             $request = new CreateCustomerClientRequest([
-                'customer_id' => $managerCustomerId,
+                'customer_id' => preg_replace('/[^0-9]/', '', $managerCustomerId),
                 'customer_client' => $newCustomer,
             ]);
 
