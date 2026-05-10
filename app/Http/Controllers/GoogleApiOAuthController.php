@@ -7,7 +7,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Laravel\Socialite\Facades\Socialite;
-use Laravel\Socialite\Two\InvalidStateException;
 
 class GoogleApiOAuthController extends Controller
 {
@@ -44,19 +43,16 @@ class GoogleApiOAuthController extends Controller
                 'access_type' => 'offline',
                 'prompt'      => 'consent',
             ])
+            ->stateless()
             ->redirect();
     }
 
     public function callback(Request $request)
     {
-        try {
-            $googleUser = Socialite::driver('google')
-                ->redirectUrl(route('google-api.callback'))
-                ->user();
-        } catch (InvalidStateException $e) {
-            return redirect()->route('google-api.show')
-                ->withErrors(['oauth' => 'OAuth session expired. Please try again.']);
-        }
+        $googleUser = Socialite::driver('google')
+            ->redirectUrl(route('google-api.callback'))
+            ->stateless()
+            ->user();
 
         Connection::updateOrCreate(
             [
