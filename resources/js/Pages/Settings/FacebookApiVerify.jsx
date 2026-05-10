@@ -272,9 +272,22 @@ function PagesSection({ managedPages, pagePosts }) {
                     Recent Posts from {pagePosts?.page_name ?? '—'} (pages_read_engagement)
                 </p>
                 {pagePosts?.error ? (
-                    <p className="text-sm text-red-500">{pagePosts.error}</p>
+                    pagePosts.error.includes('pages_read_engagement') || pagePosts.error.includes('#10') ? (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                            <p className="text-sm font-semibold text-amber-800 mb-1">Token needs refresh</p>
+                            <p className="text-xs text-amber-700 mb-2">
+                                The stored token was issued before <code className="font-mono bg-amber-100 px-1 rounded">pages_read_engagement</code> was confirmed.
+                                Re-authorise to get a fresh token with all five scopes active, then return here.
+                            </p>
+                            <Link href={route('facebook-api.show')} className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-900 underline">
+                                Re-authorise now →
+                            </Link>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-red-500">{pagePosts.error}</p>
+                    )
                 ) : pagePosts?.posts?.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">No recent posts found.</p>
+                    <p className="text-xs text-gray-400 italic">No recent posts found on this page.</p>
                 ) : (
                     <div className="space-y-3">
                         {pagePosts?.posts?.map((post, i) => (
