@@ -17,6 +17,7 @@ use Google\Ads\GoogleAds\V22\Common\UserInterestInfo;
 use Google\Ads\GoogleAds\V22\Common\ParentalStatusInfo;
 use Google\Ads\GoogleAds\V22\Common\IncomeRangeInfo;
 use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
+use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use App\Models\Customer;
@@ -42,7 +43,7 @@ class AddAdGroupCriterion extends BaseGoogleAdsService
         
         $adGroupCriterion = new AdGroupCriterion([
             'ad_group' => $adGroupResourceName,
-            // Common settings, e.g., 'status'
+            'status'   => AdGroupCriterionStatus::ENABLED,
         ]);
 
         // Set specific criterion based on type

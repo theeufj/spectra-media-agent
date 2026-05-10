@@ -497,7 +497,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
             'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'endDate' => now()->addYear()->format('Y-m-d'),
         ];
         
         $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
@@ -582,25 +582,51 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             }
         }
         
-        // 5. Create Responsive Search Ad
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
-        if ($adCopy) {
+        // 5. Create Responsive Search Ads (2-3 variants per Google best practices)
+        $adCopies = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->limit(3)->get();
+        if ($adCopies->isEmpty()) {
+            $adCopies = $strategy->adCopies()->limit(3)->get();
+        }
+
+        if ($adCopies->isNotEmpty()) {
             $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
-            
+
             if (!$finalUrl) {
                 $result->addWarning('No landing page URL found for ad creation. Skipping ad creation.');
             } else {
                 $createAdService = new CreateResponsiveSearchAd($this->customer);
-                $adData = [
-                    'finalUrls' => [$finalUrl],
-                    'headlines' => $adCopy->headlines ?? [],
-                    'descriptions' => $adCopy->descriptions ?? [],
-                    'imageAssets' => $imageAssetResourceNames, // Add images to RSA
-                ];
-                
-                $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
-                if ($adResourceName) {
-                    $result->addPlatformId('ad', $adResourceName);
+
+                foreach ($adCopies as $adCopy) {
+                    $adData = [
+                        'finalUrls'   => [$finalUrl],
+                        'headlines'   => $adCopy->headlines ?? [],
+                        'descriptions' => $adCopy->descriptions ?? [],
+                        'imageAssets' => $imageAssetResourceNames,
+                    ];
+                    $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
+                    if ($adResourceName) {
+                        $result->addPlatformId('ad', $adResourceName);
+                    }
+                }
+
+                // If only 1 ad copy with enough headlines, create a second RSA variant
+                // with rotated headlines so Google has two containers to A/B test.
+                if ($adCopies->count() === 1) {
+                    $firstCopy = $adCopies->first();
+                    $allHeadlines = $firstCopy->headlines ?? [];
+                    if (count($allHeadlines) >= 6) {
+                        $rotated = array_merge(array_slice($allHeadlines, 4), array_slice($allHeadlines, 0, 4));
+                        $adData2 = [
+                            'finalUrls'    => [$finalUrl],
+                            'headlines'    => $rotated,
+                            'descriptions' => array_reverse($firstCopy->descriptions ?? []),
+                            'imageAssets'  => $imageAssetResourceNames,
+                        ];
+                        $adResourceName2 = ($createAdService)($customerId, $adGroupResourceName, $adData2);
+                        if ($adResourceName2) {
+                            $result->addPlatformId('ad', $adResourceName2);
+                        }
+                    }
                 }
             }
         }
@@ -727,7 +753,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
             'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'endDate' => now()->addYear()->format('Y-m-d'),
         ];
         
         $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
@@ -853,7 +879,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'businessName'   => $campaignName,
             'budget'         => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
             'startDate'      => now()->format('Y-m-d'),
-            'endDate'        => now()->addMonth()->format('Y-m-d'),
+            'endDate'        => now()->addYear()->format('Y-m-d'),
             'targetCpaMicros' => $targetCpaMicros,
         ];
 
@@ -1004,7 +1030,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
             'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'endDate' => now()->addYear()->format('Y-m-d'),
         ];
         
         $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
@@ -1085,7 +1111,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
             'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'endDate' => now()->addYear()->format('Y-m-d'),
             'targetCpaMicros' => $strategy->cpa_target ?? null,
         ];
 
@@ -1208,7 +1234,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
             'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'endDate' => now()->addYear()->format('Y-m-d'),
             'merchantId' => $merchantId,
             'feedLabel' => $campaignStructure['feed_label'] ?? null,
             'campaignPriority' => $campaignStructure['campaign_priority'] ?? 0,
@@ -1277,7 +1303,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
             'startDate' => now()->format('Y-m-d'),
-            'endDate' => now()->addMonth()->format('Y-m-d'),
+            'endDate' => now()->addYear()->format('Y-m-d'),
             'categoryBids' => $campaignStructure['category_bids'] ?? [],
         ];
 
@@ -1519,7 +1545,11 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             $negatives = $research['negative_keywords'] ?? [];
 
             if (empty($negatives)) {
-                return;
+                // Fallback: brand-protection negatives for any broad-match campaign
+                $negatives = ['free', 'cheap', 'diy', 'tutorial', 'how to', 'torrent', 'crack', 'pirate', 'course'];
+                Log::info('GoogleAdsExecutionAgent: No LLM negatives — using default broad-match protection negatives', [
+                    'campaign_id' => $campaign->id,
+                ]);
             }
 
             $addNegativeService = new AddNegativeKeyword($this->customer);
@@ -1821,7 +1851,9 @@ PROMPT;
         $locationIds = array_filter($locationIds);
 
         if (empty($locationIds)) {
-            return;
+            // Default to English-speaking markets with meaningful SaaS ad spend
+            $locationIds = [2840, 2124, 2036, 2826]; // US, CA, AU, GB
+            Log::info('GoogleAdsExecutionAgent: No geo configured — defaulting to US/CA/AU/GB');
         }
 
         $addCriterionService = new AddCampaignCriterion($this->customer);
@@ -2050,7 +2082,11 @@ PROMPT;
 
         foreach ($sitelinks as $sitelink) {
             try {
-                $url = $sitelink['url'] ?? $landingUrl ?? 'https://example.com';
+                $url = $sitelink['url'] ?? $landingUrl;
+                if (!$url) {
+                    Log::warning('GoogleAdsExecutionAgent: Skipping sitelink — no URL available and customer has no website');
+                    continue;
+                }
 
                 $assetResourceName = ($createSitelinkService)(
                     $customerId,
