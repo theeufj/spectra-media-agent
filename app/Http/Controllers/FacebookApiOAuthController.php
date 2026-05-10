@@ -108,13 +108,89 @@ class FacebookApiOAuthController extends Controller
         $tokenExpired = $connection->expires_at && $connection->expires_at->isPast();
         $token = $connection->access_token;
 
+        if ($tokenExpired) {
+            return Inertia::render('Settings/FacebookApiVerify', [
+                'account_name'  => $connection->account_name,
+                'token_expired' => true,
+                'identity'      => ['error' => 'Token expired.'],
+                'adAccounts'    => ['error' => 'Token expired.', 'accounts' => []],
+                'adInsights'    => ['error' => 'Token expired.'],
+                'businesses'    => ['error' => 'Token expired.', 'accounts' => []],
+                'managedPages'  => ['error' => 'Token expired.', 'pages' => []],
+            ]);
+        }
+
+        $adAccounts = $this->fetchAdAccounts($token);
+        $businesses = $this->fetchBusinesses($token);
+        $managedPages = $this->fetchManagedPages($token);
+
+        // Fetch account-level ad insights for the first accessible ad account
+        $firstAccountId = $adAccounts['accounts'][0]['id'] ?? null;
+        $adInsights = $firstAccountId ? $this->fetchAdInsights($token, $firstAccountId) : ['error' => 'No ad accounts found.'];
+
+        // Fetch posts for the first managed page (pages_read_engagement)
+        $firstPageId = $managedPages['pages'][0]['id'] ?? null;
+        $pagePosts = $firstPageId ? $this->fetchPagePosts($token, $firstPageId, $managedPages['pages'][0]['name'] ?? '') : ['error' => 'No managed pages found.', 'posts' => []];
+
+        // Fetch pages linked to first business (business_management asset demonstration)
+        $firstBusinessId = $businesses['accounts'][0]['id'] ?? null;
+        $businessAssets = $firstBusinessId ? $this->fetchBusinessPages($token, $firstBusinessId, $businesses['accounts'][0]['name'] ?? '') : ['error' => 'No businesses found.', 'pages' => []];
+
         return Inertia::render('Settings/FacebookApiVerify', [
-            'account_name'  => $connection->account_name,
-            'token_expired' => $tokenExpired,
-            'identity'      => $tokenExpired ? ['error' => 'Token expired — re-authorise to refresh.'] : $this->fetchIdentity($token),
-            'adAccounts'    => $tokenExpired ? ['error' => 'Token expired.', 'accounts' => []] : $this->fetchAdAccounts($token),
-            'businesses'    => $tokenExpired ? ['error' => 'Token expired.', 'accounts' => []] : $this->fetchBusinesses($token),
+            'account_name'   => $connection->account_name,
+            'token_expired'  => false,
+            'identity'       => $this->fetchIdentity($token),
+            'adAccounts'     => $adAccounts,
+            'adInsights'     => $adInsights,
+            'businesses'     => $businesses,
+            'businessAssets' => $businessAssets,
+            'managedPages'   => $managedPages,
+            'pagePosts'      => $pagePosts,
         ]);
+    }
+
+    public function createTestCampaign(Request $request)
+    {
+        $connection = Connection::where('user_id', Auth::id())
+            ->where('platform', 'facebook_api')
+            ->first();
+
+        if (!$connection) {
+            return response()->json(['error' => 'Not connected'], 401);
+        }
+
+        $adAccountId = $request->input('ad_account_id');
+        if (!$adAccountId) {
+            return response()->json(['error' => 'No ad account specified'], 422);
+        }
+
+        try {
+            $response = Http::post(self::GRAPH . '/' . $adAccountId . '/campaigns', [
+                'name'                  => 'SiteToSpend Demo Campaign — ' . now()->format('d M Y H:i'),
+                'objective'             => 'OUTCOME_TRAFFIC',
+                'status'                => 'PAUSED',
+                'special_ad_categories' => [],
+                'access_token'          => $connection->access_token,
+            ]);
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'error'  => $response->json('error.message') ?? 'Campaign creation failed',
+                    'status' => $response->status(),
+                ]);
+            }
+
+            $data = $response->json();
+            return response()->json([
+                'success'     => true,
+                'campaign_id' => $data['id'] ?? null,
+                'name'        => 'SiteToSpend Demo Campaign — ' . now()->format('d M Y H:i'),
+                'status'      => 'PAUSED',
+                'objective'   => 'OUTCOME_TRAFFIC',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()]);
+        }
     }
 
     public function disconnect()
@@ -152,6 +228,131 @@ class FacebookApiOAuthController extends Controller
         } catch (\Exception $e) {
             Log::error('FacebookApiOAuth: token exchange exception', ['message' => $e->getMessage()]);
             return null;
+        }
+    }
+
+    private function fetchAdInsights(string $token, string $adAccountId): array
+    {
+        try {
+            $response = Http::get(self::GRAPH . '/' . $adAccountId . '/insights', [
+                'fields'      => 'impressions,clicks,spend,reach,cpc,cpm,actions',
+                'date_preset' => 'last_30d',
+                'level'       => 'account',
+                'access_token' => $token,
+            ]);
+
+            if (!$response->successful()) {
+                return ['error' => $response->json('error.message') ?? 'Insights fetch failed', 'status' => $response->status()];
+            }
+
+            $data = $response->json('data') ?? [];
+            $row = $data[0] ?? [];
+            return [
+                'error'       => null,
+                'account_id'  => $adAccountId,
+                'period'      => 'Last 30 days',
+                'impressions' => $row['impressions'] ?? '0',
+                'clicks'      => $row['clicks'] ?? '0',
+                'spend'       => $row['spend'] ?? '0.00',
+                'reach'       => $row['reach'] ?? '0',
+                'cpc'         => $row['cpc'] ?? null,
+                'cpm'         => $row['cpm'] ?? null,
+                'actions'     => $row['actions'] ?? [],
+            ];
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage()];
+        }
+    }
+
+    private function fetchManagedPages(string $token): array
+    {
+        try {
+            $response = Http::get(self::GRAPH . '/me/accounts', [
+                'fields'       => 'id,name,category,fan_count,followers_count,link',
+                'access_token' => $token,
+            ]);
+
+            if (!$response->successful()) {
+                return ['error' => $response->json('error.message') ?? 'Pages fetch failed', 'pages' => [], 'status' => $response->status()];
+            }
+
+            $pages = $response->json('data') ?? [];
+            return [
+                'error' => null,
+                'pages' => array_map(fn($p) => [
+                    'id'        => $p['id'] ?? '',
+                    'name'      => $p['name'] ?? '',
+                    'category'  => $p['category'] ?? '',
+                    'fans'      => $p['fan_count'] ?? 0,
+                    'followers' => $p['followers_count'] ?? 0,
+                    'link'      => $p['link'] ?? null,
+                ], $pages),
+                'count' => count($pages),
+            ];
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage(), 'pages' => []];
+        }
+    }
+
+    private function fetchPagePosts(string $token, string $pageId, string $pageName): array
+    {
+        try {
+            $response = Http::get(self::GRAPH . '/' . $pageId . '/feed', [
+                'fields'       => 'id,message,story,created_time,likes.summary(true),comments.summary(true)',
+                'limit'        => 5,
+                'access_token' => $token,
+            ]);
+
+            if (!$response->successful()) {
+                return ['error' => $response->json('error.message') ?? 'Posts fetch failed', 'posts' => [], 'status' => $response->status()];
+            }
+
+            $posts = $response->json('data') ?? [];
+            return [
+                'error'     => null,
+                'page_id'   => $pageId,
+                'page_name' => $pageName,
+                'posts'     => array_map(fn($p) => [
+                    'id'           => $p['id'] ?? '',
+                    'message'      => $p['message'] ?? ($p['story'] ?? ''),
+                    'created_time' => $p['created_time'] ?? '',
+                    'likes'        => $p['likes']['summary']['total_count'] ?? 0,
+                    'comments'     => $p['comments']['summary']['total_count'] ?? 0,
+                ], $posts),
+                'count' => count($posts),
+            ];
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage(), 'posts' => []];
+        }
+    }
+
+    private function fetchBusinessPages(string $token, string $businessId, string $businessName): array
+    {
+        try {
+            $response = Http::get(self::GRAPH . '/' . $businessId . '/pages', [
+                'fields'       => 'id,name,category,fan_count',
+                'access_token' => $token,
+            ]);
+
+            if (!$response->successful()) {
+                return ['error' => $response->json('error.message') ?? 'Business pages fetch failed', 'pages' => [], 'status' => $response->status()];
+            }
+
+            $pages = $response->json('data') ?? [];
+            return [
+                'error'         => null,
+                'business_id'   => $businessId,
+                'business_name' => $businessName,
+                'pages'         => array_map(fn($p) => [
+                    'id'       => $p['id'] ?? '',
+                    'name'     => $p['name'] ?? '',
+                    'category' => $p['category'] ?? '',
+                    'fans'     => $p['fan_count'] ?? 0,
+                ], $pages),
+                'count' => count($pages),
+            ];
+        } catch (\Exception $e) {
+            return ['error' => $e->getMessage(), 'pages' => []];
         }
     }
 

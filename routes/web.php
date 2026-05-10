@@ -680,7 +680,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/settings/facebook-api/callback',    [App\Http\Controllers\FacebookApiOAuthController::class, 'callback'])->name('facebook-api.callback');
     Route::get('/settings/facebook-api/success',     [App\Http\Controllers\FacebookApiOAuthController::class, 'success'])->name('facebook-api.success');
     Route::get('/settings/facebook-api/verify',      [App\Http\Controllers\FacebookApiOAuthController::class, 'verify'])->name('facebook-api.verify');
-    Route::post('/settings/facebook-api/disconnect', [App\Http\Controllers\FacebookApiOAuthController::class, 'disconnect'])->name('facebook-api.disconnect');
+    Route::post('/settings/facebook-api/disconnect',     [App\Http\Controllers\FacebookApiOAuthController::class, 'disconnect'])->name('facebook-api.disconnect');
+    Route::post('/settings/facebook-api/test-campaign',  [App\Http\Controllers\FacebookApiOAuthController::class, 'createTestCampaign'])->name('facebook-api.test-campaign');
 });
 
 /*
