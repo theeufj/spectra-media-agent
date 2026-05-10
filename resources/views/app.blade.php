@@ -55,17 +55,7 @@
             })(window,document,'script','dataLayer','GTM-KHFLQZ8S');</script>
         <!-- End Google Tag Manager -->
 
-        <!-- Google Ads (Spectra account AW-16797144138) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-16797144138"></script>
-        <script>
-            window.dataLayer = window.dataLayer || [];
-            function gtag(){dataLayer.push(arguments);}
-            gtag('js', new Date());
-            gtag('config', 'AW-16797144138');
-        </script>
-        <!-- End Google Ads -->
-
-        @if(config('microsoftads.uet_tag_id'))
+@if(config('microsoftads.uet_tag_id'))
         <!-- Microsoft Ads UET Tag -->
         <script>(function(w,d,t,r,u){var f,n,i;w[u]=w[u]||[],f=function(){var o={ti:"{{ config('microsoftads.uet_tag_id') }}"};o.q=w[u],w[u]=new UET(o),w[u].push("pageLoad")},n=d.createElement(t),n.src=r,n.async=1,n.onload=n.onreadystatechange=function(){var s=this.readyState;s&&s!=="loaded"&&s!=="complete"||(f(),n.onload=n.onreadystatechange=null)},i=d.getElementsByTagName(t)[0],i.parentNode.insertBefore(n,i)})(window,document,"script","//bat.bing.com/bat.js","uetq");</script>
         <noscript><img src="//bat.bing.com/action/0?ti={{ config('microsoftads.uet_tag_id') }}&Ver=2" height="0" width="0" style="display:none; visibility:hidden;" /></noscript>

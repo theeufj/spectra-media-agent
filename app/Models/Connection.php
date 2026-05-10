@@ -17,10 +17,12 @@ class Connection extends Model
         'expires_at',
         'account_id',
         'account_name',
+        'scopes',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
+        'scopes'     => 'array',
     ];
 
     public function user()
