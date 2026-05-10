@@ -138,9 +138,9 @@ export default function GoogleApiVerify({ account_name, googleAds, tagManager, a
                     <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">How SiteToSpend uses these APIs</p>
                     <div className="space-y-3">
                         {[
-                            { api: 'Google Ads API', usage: 'Spectra's Optimisation and Budget agents create campaigns, adjust bids, pause underperforming ad groups, and pull daily performance metrics 24/7.' },
-                            { api: 'Tag Manager API', usage: 'Spectra's Vision AI agent publishes conversion tags and tracking pixels to GTM containers when new campaign types are launched.' },
-                            { api: 'GA4 API', usage: 'Spectra's Search Term Mining and A/B Testing agents read landing page and session data to identify high-intent signals and improve targeting.' },
+                            { api: 'Google Ads API', usage: "Spectra's Optimisation and Budget agents create campaigns, adjust bids, pause underperforming ad groups, and pull daily performance metrics 24/7." },
+                            { api: 'Tag Manager API', usage: "Spectra's Vision AI agent publishes conversion tags and tracking pixels to GTM containers when new campaign types are launched." },
+                            { api: 'GA4 API', usage: "Spectra's Search Term Mining and A/B Testing agents read landing page and session data to identify high-intent signals and improve targeting." },
                         ].map(({ api, usage }) => (
                             <div key={api} className="flex gap-3">
                                 <div className="w-1 rounded-full bg-gray-300 flex-shrink-0" />
