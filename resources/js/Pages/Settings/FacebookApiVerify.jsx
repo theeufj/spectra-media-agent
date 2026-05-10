@@ -184,7 +184,10 @@ function CampaignCreateSection({ adAccounts }) {
                                 </div>
                             </>
                         ) : (
-                            <p className="text-sm text-red-700">{result.error}</p>
+                            <>
+                                <p className="text-sm font-semibold text-red-700">{result.error}</p>
+                                {result.detail && <p className="text-xs text-red-600 mt-1">{result.detail}</p>}
+                            </>
                         )}
                     </div>
                 )}

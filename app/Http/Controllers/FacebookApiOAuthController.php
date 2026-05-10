@@ -167,19 +167,26 @@ class FacebookApiOAuthController extends Controller
         }
 
         try {
-            $response = Http::asJson()->post(
-                self::GRAPH . '/' . $adAccountId . '/campaigns?access_token=' . urlencode($connection->access_token),
-                [
-                    'name'                  => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
-                    'objective'             => 'OUTCOME_TRAFFIC',
-                    'status'                => 'PAUSED',
-                    'special_ad_categories' => [],
-                ]
-            );
+            // Graph API requires form-encoded body (not JSON). Empty PHP arrays
+            // are dropped by form encoding, so special_ad_categories must be the
+            // string '[]' which Facebook deserialises as an empty JSON array.
+            $response = Http::post(self::GRAPH . '/' . $adAccountId . '/campaigns', [
+                'name'                  => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
+                'objective'             => 'OUTCOME_AWARENESS',
+                'status'                => 'PAUSED',
+                'special_ad_categories' => '[]',
+                'access_token'          => $connection->access_token,
+            ]);
 
             if (!$response->successful()) {
+                Log::warning('FacebookApiOAuth: campaign creation failed', [
+                    'ad_account_id' => $adAccountId,
+                    'status'        => $response->status(),
+                    'body'          => $response->json(),
+                ]);
                 return response()->json([
                     'error'  => $response->json('error.message') ?? 'Campaign creation failed',
+                    'detail' => $response->json('error.error_user_msg') ?? null,
                     'status' => $response->status(),
                 ]);
             }
@@ -190,7 +197,7 @@ class FacebookApiOAuthController extends Controller
                 'campaign_id' => $data['id'] ?? null,
                 'name'        => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
                 'status'      => 'PAUSED',
-                'objective'   => 'OUTCOME_TRAFFIC',
+                'objective'   => 'OUTCOME_AWARENESS',
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()]);
@@ -281,6 +288,12 @@ class FacebookApiOAuthController extends Controller
             }
 
             $pages = $response->json('data') ?? [];
+            Log::info('FacebookApiOAuth: managed pages', [
+                'count'              => count($pages),
+                'first_page_id'      => $pages[0]['id'] ?? null,
+                'has_page_token'     => isset($pages[0]['access_token']),
+                'page_token_length'  => strlen($pages[0]['access_token'] ?? ''),
+            ]);
             return [
                 'error' => null,
                 'pages' => array_map(fn($p) => [
@@ -309,6 +322,14 @@ class FacebookApiOAuthController extends Controller
             ]);
 
             if (!$response->successful()) {
+                Log::warning('FacebookApiOAuth: page feed failed', [
+                    'page_id'          => $pageId,
+                    'status'           => $response->status(),
+                    'error_code'       => $response->json('error.code'),
+                    'error_subcode'    => $response->json('error.error_subcode'),
+                    'error_message'    => $response->json('error.message'),
+                    'token_is_user'    => strlen($token) < 200,
+                ]);
                 return ['error' => $response->json('error.message') ?? 'Posts fetch failed', 'posts' => [], 'status' => $response->status()];
             }
 
