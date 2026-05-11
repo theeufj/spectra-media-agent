@@ -94,12 +94,22 @@ class DeploymentController extends Controller
             ]);
         }
 
-        // 1. Subscription Check
-        $hasAccess = $user->subscribed('default')
+        // 1. Subscription Check — passes if the current user OR any teammate on the same
+        //    customer account has an active subscription / payment method.
+        //    Team members (admin/member roles) share the company's plan.
+        $userHasAccess = $user->subscribed('default')
             || $user->hasDefaultPaymentMethod()
             || $user->subscription_status === 'active';
 
-        if (!$hasAccess) {
+        $customerHasAccess = $userHasAccess || $customer->users()
+            ->where(function ($q) {
+                $q->where('subscription_status', 'active')
+                  ->orWhereNotNull('pm_type')
+                  ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
+            })
+            ->exists();
+
+        if (!$customerHasAccess) {
             ActivityLog::log('campaign_deploy_blocked', "Deploy blocked — no active subscription for campaign '{$campaign->name}'", $campaign, [
                 'campaign_id' => $campaign->id,
                 'reason' => 'no_subscription',
