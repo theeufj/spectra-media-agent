@@ -71,10 +71,10 @@ export default function HowItWorks({ auth }) {
                                     </div>
                                     <h2 className="text-3xl font-bold text-gray-900 mb-4">1. We read your website</h2>
                                     <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Enter your website address and we take it from there. We look at your site and pick up your colours, fonts, and the way you talk about your business. No forms, no brand guides, no setup calls.
+                                        Enter your website address and we take it from there. We read your site and pick up your colours, fonts, and the way you talk about your business — so your ads sound like you from day one.
                                     </p>
                                     <ul className="space-y-3">
-                                        {['Your colours, picked up automatically', 'Your fonts and visual style', 'Your tone of voice', 'Your logo and brand feel'].map((item) => (
+                                        {['Your colours and visual style, read automatically', 'Your fonts and brand feel', 'Your tone of voice and messaging', 'Your products and services'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
                                                 <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
@@ -130,7 +130,7 @@ export default function HowItWorks({ auth }) {
                                         Launch with one click. From then on, rejected ads get fixed, budget moves to where it's performing, and we're always testing new ideas to improve your results. Every day, automatically.
                                     </p>
                                     <ul className="space-y-3">
-                                        {['Rejected ads fixed and resubmitted automatically', 'Budget shifts to peak hours every day', 'Always testing different headlines and images', 'Finds new audiences who look like your best customers'].map((item) => (
+                                        {['Rejected ads fixed and resubmitted automatically', 'Budget shifts to your best-performing hours every day', 'Continuously testing headline variations to find winners', 'Refreshes lookalike audiences from your customers every week'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
                                                 <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
