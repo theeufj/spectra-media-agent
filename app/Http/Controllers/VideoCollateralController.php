@@ -237,20 +237,13 @@ class VideoCollateralController extends Controller
     }
 
     /**
-     * Delete an uploaded video collateral.
+     * Delete a video collateral (any source — AI-generated or uploaded).
      */
     public function destroy(VideoCollateral $video)
     {
         $user = Auth::user();
         if (!$user->customers()->where('customers.id', $video->campaign->customer_id)->exists()) {
             abort(403, 'Unauthorized action.');
-        }
-
-        if ($video->source !== 'uploaded') {
-            return redirect()->back()->with('flash', [
-                'type' => 'error',
-                'message' => 'Only uploaded videos can be deleted.',
-            ]);
         }
 
         StorageHelper::delete($video->s3_path);

@@ -783,34 +783,35 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         {/* Display generated + uploaded images */}
                                         {collateral.imageCollaterals && collateral.imageCollaterals.length > 0 && (
-                                            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                            <>
+                                                <p className="mt-4 text-xs text-gray-500">Click an image to select or deselect it for deployment. Only selected images (green border) will go live.</p>
+                                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.imageCollaterals.map((image) => (
-                                                    <div 
-                                                        key={image.id} 
-                                                        className={`border-2 ${image.should_deploy ? 'border-green-500' : 'border-transparent'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer`}
+                                                    <div
+                                                        key={image.id}
+                                                        className={`border-2 ${image.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md group relative cursor-pointer`}
                                                         onClick={() => handleToggleCollateral('image', image.id)}
                                                     >
                                                         <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
-                                                        {/* Source badge */}
-                                                        <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium shadow ${
-                                                            image.source === 'uploaded' ? 'bg-blue-100 text-blue-700' :
-                                                            image.source === 'harvested' ? 'bg-green-100 text-green-700' :
-                                                            'bg-purple-100 text-purple-700'
-                                                        }`}>
-                                                            {image.source === 'uploaded' ? '📁 Uploaded' : image.source === 'harvested' ? '🌐 Harvested' : '✨ AI'}
+                                                        {/* Selection indicator */}
+                                                        <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold shadow ${image.should_deploy ? 'bg-green-500 text-white' : 'bg-white/80 text-gray-600'}`}>
+                                                            {image.should_deploy ? (
+                                                                <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Selected</>
+                                                            ) : 'Excluded'}
                                                         </div>
-                                                        {/* Format badge */}
-                                                        {image.format && image.format !== 'square' && (
-                                                            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white">
-                                                                {image.format === 'landscape' ? '1200×628' : image.format === 'mrec' ? '300×250' : image.format}
-                                                            </div>
-                                                        )}
-                                                        {/* Refinement depth badge */}
-                                                        {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (
-                                                            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium shadow bg-amber-100 text-amber-700">
-                                                                {image.refinement_depth}/{creativeUsage.max_refinements_per_item} edits
-                                                            </div>
-                                                        )}
+                                                        {/* Format + source badges */}
+                                                        <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                                                            {image.format && image.format !== 'square' && (
+                                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white">
+                                                                    {image.format === 'landscape' ? '1200×628' : image.format === 'mrec' ? '300×250' : image.format}
+                                                                </span>
+                                                            )}
+                                                            {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (
+                                                                <span className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-amber-100 text-amber-700">
+                                                                    {image.refinement_depth}/{creativeUsage.max_refinements_per_item} edits
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         {!isSubscribed && (
                                                             <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
                                                                 <p className="text-white text-xs font-medium">Preview - Upgrade to download</p>
@@ -818,35 +819,33 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         )}
                                                         <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                                             {isSubscribed ? (
-                                                                <div className="flex gap-2">
+                                                                <div className="flex gap-2 flex-wrap justify-center px-2">
                                                                     {image.source !== 'uploaded' && (
                                                                         <button
                                                                             onClick={(e) => { e.stopPropagation(); setEditingImage(image); }}
                                                                             disabled={creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item}
-                                                                            className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            className="px-3 py-1.5 text-xs font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                                                         >
-                                                                            {creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item ? 'Max Edits Reached' : 'Edit Image'}
+                                                                            {creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item ? 'Max Edits' : 'Edit'}
                                                                         </button>
                                                                     )}
-                                                                    <a 
-                                                                        href={image.cloudfront_url} 
-                                                                        download 
+                                                                    <a
+                                                                        href={image.cloudfront_url}
+                                                                        download
                                                                         onClick={(e) => e.stopPropagation()}
-                                                                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
+                                                                        className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 rounded-md hover:bg-green-700"
                                                                     >
                                                                         Download
                                                                     </a>
-                                                                    {image.source === 'uploaded' && (
-                                                                        <button 
-                                                                            onClick={(e) => { e.stopPropagation(); handleDeleteCollateral('image', image.id); }}
-                                                                            className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
-                                                                        >
-                                                                            Delete
-                                                                        </button>
-                                                                    )}
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleDeleteCollateral('image', image.id); }}
+                                                                        className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 rounded-md hover:bg-red-700"
+                                                                    >
+                                                                        Delete
+                                                                    </button>
                                                                 </div>
                                                             ) : (
-                                                                <a 
+                                                                <a
                                                                     href={route('subscription.pricing')}
                                                                     onClick={(e) => e.stopPropagation()}
                                                                     className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700"
@@ -857,6 +856,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         </div>
                                                     </div>
                                                 ))}
+                                                </div>
+                                            </>
                                             </div>
                                         )}
 
@@ -922,14 +923,16 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                         {/* Display generated + uploaded videos */}
                                         {collateral.videoCollaterals && collateral.videoCollaterals.length > 0 && (
-                                            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                                            <>
+                                                <p className="mt-4 text-xs text-gray-500">Click a video to select or deselect it for deployment. Only selected videos (green border) will go live.</p>
+                                                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.videoCollaterals.map((video) => (
-                                                    <div 
-                                                        key={video.id} 
+                                                    <div
+                                                        key={video.id}
                                                         className="relative group"
                                                     >
-                                                        <div 
-                                                            className={`border-2 ${video.should_deploy ? 'border-green-500' : 'border-transparent'} rounded-lg overflow-hidden shadow-md cursor-pointer`}
+                                                        <div
+                                                            className={`border-2 ${video.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md cursor-pointer`}
                                                             onClick={() => handleToggleCollateral('video', video.id)}
                                                         >
                                                             {video.status === 'completed' ? (
@@ -966,15 +969,13 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             </button>
                                                         )}
 
-                                                        {/* Delete button for uploaded videos */}
-                                                        {video.source === 'uploaded' && (
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleDeleteCollateral('video', video.id); }}
-                                                                className="absolute bottom-2 right-2 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            >
-                                                                <span>Delete</span>
-                                                            </button>
-                                                        )}
+                                                        {/* Delete button — available for all videos */}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); handleDeleteCollateral('video', video.id); }}
+                                                            className="absolute bottom-2 left-2 bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded-lg shadow-lg flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <span>Delete</span>
+                                                        </button>
 
                                                         {/* Extension Count Badge */}
                                                         {(video.extension_count || 0) > 0 && (
@@ -984,7 +985,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         )}
                                                     </div>
                                                 ))}
-                                            </div>
+                                                </div>
+                                            </>
                                         )}
                                     </div>
                                 )

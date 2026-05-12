@@ -152,7 +152,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         // Validate creative assets
         $strategy = $context->strategy;
-        $hasImages = $strategy->imageCollaterals()->where('is_active', true)->exists();
+        $hasImages = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->exists();
         $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
         
         if (!$hasAdCopy) {
@@ -245,7 +245,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaign = $context->campaign;
         
         // Check Performance Max eligibility
-        $hasMultipleAssets = $strategy->imageCollaterals()->where('is_active', true)->count() >= 3
+        $hasMultipleAssets = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->count() >= 3
             && $strategy->videoCollaterals()->where('is_active', true)->count() >= 1;
         $hasConversionTracking = $this->hasConversionTracking($context);
         $meetsPerformanceMaxBudget = $context->calculateDailyBudget() >= 8.33; // ~$250/month minimum
@@ -404,7 +404,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             // PMax runs across all Google surfaces (Search, Display, YouTube, Gmail, Maps)
             // from day one — more efficient than a Search-only campaign for new accounts.
             if (in_array($campaignType, ['search', 'display'], true)) {
-                $hasImages  = $strategy->imageCollaterals()->where('is_active', true)->count() >= 3;
+                $hasImages  = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->count() >= 3;
                 $hasAdCopy  = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
                 $minBudget  = ($strategy->daily_budget ?: ($campaign->daily_budget ?: 0)) >= 10;
                 if ($hasImages && $hasAdCopy && $minBudget) {
@@ -554,7 +554,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         // 4. Upload Image Assets for Responsive Search Ad (if available)
         $imageAssetResourceNames = [];
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->limit(15)->get();
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
         if ($imageCollaterals->isNotEmpty()) {
             $uploadImageAssetService = new UploadImageAsset($this->customer);
             $linkAdGroupAssetService = new LinkAdGroupAsset($this->customer);
@@ -789,7 +789,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $strategy->save();
         
         // 3. Upload Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
         $imageAssetResourceNames = [];
         
         if ($imageCollaterals->isNotEmpty()) {
@@ -946,7 +946,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         }
 
         // 2.2 Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->limit(15)->get();
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
         $hasLogo = false;
         
         foreach ($imageCollaterals as $image) {
@@ -1148,7 +1148,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $strategy->save();
 
         // 3. Upload Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
+        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
         $imageAssetResourceNames = [];
         $logoAssetResourceNames = [];
 

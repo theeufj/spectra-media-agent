@@ -213,20 +213,13 @@ class ImageCollateralController extends Controller
     }
 
     /**
-     * Delete an uploaded image collateral.
+     * Delete an image collateral (any source — AI, harvested, or uploaded).
      */
     public function destroy(ImageCollateral $imageCollateral)
     {
         $user = Auth::user();
         if (!$user->customers()->where('customers.id', $imageCollateral->campaign->customer_id)->exists()) {
             abort(403, 'Unauthorized action.');
-        }
-
-        if ($imageCollateral->source !== 'uploaded') {
-            return redirect()->back()->with('flash', [
-                'type' => 'error',
-                'message' => 'Only uploaded images can be deleted.',
-            ]);
         }
 
         StorageHelper::delete($imageCollateral->s3_path);

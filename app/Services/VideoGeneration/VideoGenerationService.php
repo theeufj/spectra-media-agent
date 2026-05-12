@@ -22,11 +22,11 @@ class VideoGenerationService
      * @param array $parameters Additional parameters for video generation.
      * @return string|null The operation name if generation started successfully, otherwise null.
      */
-    public function startGeneration(string $topic, array $parameters = []): ?string
+    public function startGeneration(string $topic, array $parameters = [], ?string $model = null): ?string
     {
         try {
             $prompt = VideoGenerationPrompt::create($topic);
-            $operationName = $this->geminiService->startVideoGeneration($prompt, config('ai.models.video'), $parameters);
+            $operationName = $this->geminiService->startVideoGeneration($prompt, $model ?? config('ai.models.video'), $parameters);
 
             if (is_null($operationName)) {
                 Log::error("Video generation failed to start: GeminiService returned null operation name.", [

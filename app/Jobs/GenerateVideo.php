@@ -173,7 +173,11 @@ class GenerateVideo implements ShouldQueue
             Log::info("Combined video prompt: {$videoPrompt}");
 
             // Step 4: Start the video generation and get the operation name
-            $operationName = $videoGenerationService->startGeneration($videoPrompt);
+            // Meta/Facebook ads are consumed on mobile in portrait (Stories/Reels), so use 9:16.
+            // All other platforms default to 16:9 landscape.
+            $isMobilePlatform = in_array(strtolower($this->platform), ['facebook', 'meta', 'instagram', 'facebook ads']);
+            $videoParams = $isMobilePlatform ? ['aspectRatio' => '9:16'] : [];
+            $operationName = $videoGenerationService->startGeneration($videoPrompt, $videoParams);
 
             if (!$operationName) {
                 // Don't hard-fail immediately — retry the job after a backoff delay
