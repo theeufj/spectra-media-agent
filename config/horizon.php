@@ -210,6 +210,20 @@ return [
             'timeout' => 3600,
             'nice' => 0,
         ],
+        // Single-worker supervisor for email notifications — keeps send rate
+        // well below Resend's 5 req/s limit when multiple alerts fire at once.
+        'supervisor-2' => [
+            'connection' => 'redis',
+            'queue' => ['notifications'],
+            'balance' => 'simple',
+            'maxProcesses' => 1,
+            'maxTime' => 0,
+            'maxJobs' => 0,
+            'memory' => 128,
+            'tries' => 3,
+            'timeout' => 60,
+            'nice' => 0,
+        ],
     ],
 
     'environments' => [
@@ -220,11 +234,18 @@ return [
                 'balanceMaxShift' => 3,
                 'balanceCooldown' => 3,
             ],
+            'supervisor-2' => [
+                'minProcesses' => 1,
+                'maxProcesses' => 1,
+            ],
         ],
 
         'local' => [
             'supervisor-1' => [
                 'maxProcesses' => 3,
+            ],
+            'supervisor-2' => [
+                'maxProcesses' => 1,
             ],
         ],
     ],

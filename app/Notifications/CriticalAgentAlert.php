@@ -32,6 +32,10 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         $this->title = $title;
         $this->message = $message;
         $this->details = $details;
+
+        // Spread concurrent alerts across 30 s to stay within Resend's 5 req/s limit
+        $this->delay(now()->addSeconds(rand(0, 30)));
+        $this->onQueue('notifications');
     }
 
     public function via(object $notifiable): array
