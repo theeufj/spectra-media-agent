@@ -31,6 +31,7 @@ class Strategy extends Model
         'execution_result',
         'execution_time',
         'execution_errors',
+        'collateral_errors',
         'google_ads_ad_group_id',
         'status',
         'deployed_at',
@@ -48,6 +49,7 @@ class Strategy extends Model
         'execution_plan' => 'array',
         'execution_result' => 'array',
         'execution_errors' => 'array',
+        'collateral_errors' => 'array',
         'execution_time' => 'float',
     ];
 

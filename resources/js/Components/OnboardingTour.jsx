@@ -21,9 +21,21 @@ const TOUR_STEPS = [
     },
     {
         target: '[data-tour="content"]',
-        title: 'Content',
-        body: 'Add your website content to the Knowledge Base and set Brand Guidelines so AI writes ads in your voice.',
+        title: 'Knowledge Base',
+        body: 'Add your website pages to the Knowledge Base. The AI reads them to understand your business before writing a single word of ad copy.',
         placement: 'bottom',
+    },
+    {
+        target: '[data-tour="content"]',
+        title: 'Brand Guidelines',
+        body: 'Once your pages are crawled, go to Brand Guidelines to extract your colours, tone of voice, and messaging. Ads written with your brand guidelines are noticeably more on-brand.',
+        placement: 'bottom',
+    },
+    {
+        target: '[data-tour="profile"]',
+        title: 'Connect conversion tracking',
+        body: 'Head to your profile to connect Google and Facebook APIs. This enables accurate conversion tracking and offline conversion imports — important once your campaigns are live.',
+        placement: 'bottom-end',
     },
     {
         target: '[data-tour="insights"]',

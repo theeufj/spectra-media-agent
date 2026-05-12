@@ -195,6 +195,10 @@ class GenerateVideo implements ShouldQueue
 
             Log::info("Video generation initiated for Strategy ID: {$this->strategy->id}. Operation Name: {$operationName}");
 
+            $existing = $this->strategy->collateral_errors ?? [];
+            unset($existing['video']);
+            $this->strategy->update(['collateral_errors' => empty($existing) ? null : $existing]);
+
             // Step 6: Dispatch the job to check the video status.
             CheckVideoStatus::dispatch($videoCollateral)->delay(now()->addMinutes(1));
 
@@ -215,5 +219,9 @@ class GenerateVideo implements ShouldQueue
         Log::error('GenerateVideo failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+
+        $existing = $this->strategy->collateral_errors ?? [];
+        $existing['video'] = $exception->getMessage();
+        $this->strategy->update(['collateral_errors' => $existing]);
     }
 }

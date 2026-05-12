@@ -189,6 +189,11 @@ class GenerateAdCopy implements ShouldQueue
 
             Log::info("Successfully generated and stored approved ad copy for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}");
 
+            // Clear any prior ad_copy error so the UI doesn't show stale failures.
+            $existing = $this->strategy->collateral_errors ?? [];
+            unset($existing['ad_copy']);
+            $this->strategy->update(['collateral_errors' => empty($existing) ? null : $existing]);
+
         } catch (\Exception $e) {
             Log::error("Error in GenerateAdCopy job for Campaign {$this->campaign->id}: " . $e->getMessage());
             $this->fail($e);
@@ -203,5 +208,9 @@ class GenerateAdCopy implements ShouldQueue
         Log::error('GenerateAdCopy failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+
+        $existing = $this->strategy->collateral_errors ?? [];
+        $existing['ad_copy'] = $exception->getMessage();
+        $this->strategy->update(['collateral_errors' => $existing]);
     }
 }

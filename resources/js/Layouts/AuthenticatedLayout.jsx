@@ -242,6 +242,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                 <Dropdown.Trigger>
                                     <button
                                         type="button"
+                                        data-tour="profile"
                                         className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors hover:bg-gray-50 focus:outline-none"
                                     >
                                         <UserInitials name={user.name} className="h-8 w-8" />

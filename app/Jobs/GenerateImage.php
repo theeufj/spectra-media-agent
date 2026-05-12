@@ -255,6 +255,10 @@ class GenerateImage implements ShouldQueue
 
             Log::info("Successfully generated and stored {$successfulUploads} image(s) for Strategy ID: {$this->strategy->id}");
 
+            $existing = $this->strategy->collateral_errors ?? [];
+            unset($existing['image']);
+            $this->strategy->update(['collateral_errors' => empty($existing) ? null : $existing]);
+
         } catch (\Exception $e) {
             Log::error("Error in GenerateImage job for Strategy ID {$this->strategy->id}: " . $e->getMessage());
             $this->fail($e);
@@ -302,5 +306,9 @@ class GenerateImage implements ShouldQueue
         Log::error('GenerateImage failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+
+        $existing = $this->strategy->collateral_errors ?? [];
+        $existing['image'] = $exception->getMessage();
+        $this->strategy->update(['collateral_errors' => $existing]);
     }
 }
