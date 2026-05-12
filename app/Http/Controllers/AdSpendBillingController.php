@@ -326,32 +326,52 @@ class AdSpendBillingController extends Controller
                 'customer_id' => $customer->id,
             ]);
 
-            // Calculate 7 days of ad spend
             $dailyBudget = $request->daily_budget;
-            $initialCredit = $dailyBudget * 7;
+            $daysToCharge = $request->days_to_charge ?? 7;
+            $topUpAmount = round($dailyBudget * $daysToCharge, 2);
 
-            // Initialize the credit account (this will charge the customer)
-            $credit = $this->billingService->initializeCreditAccount(
-                $customer,
-                $dailyBudget
-            );
+            $existingCredit = $customer->adSpendCredit;
 
-            Log::info('AdSpendBilling: Credit account initialized during deployment', [
+            if ($existingCredit) {
+                // Account already exists — top up for this campaign's budget
+                $result = $this->billingService->addCredit(
+                    $customer,
+                    $topUpAmount,
+                    "Campaign ad spend top-up ({$daysToCharge} days @ \${$dailyBudget}/day)"
+                );
+
+                if (!$result['success']) {
+                    throw new \Exception($result['error'] ?? 'Payment failed');
+                }
+
+                $credit = $customer->fresh()->adSpendCredit;
+                $chargedAmount = $topUpAmount;
+                $logMessage = "Ad spend top-up for customer '{$customer->name}' — \${$chargedAmount} charged for new campaign";
+            } else {
+                // First campaign — initialize the account
+                $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget);
+                $chargedAmount = $credit->initial_credit_amount;
+                $logMessage = "Ad spend billing set up for customer '{$customer->name}' — \${$chargedAmount} charged";
+            }
+
+            Log::info('AdSpendBilling: Campaign funding collected', [
                 'customer_id' => $customer->id,
                 'daily_budget' => $dailyBudget,
-                'initial_credit' => $credit->initial_credit_amount,
+                'charged_amount' => $chargedAmount,
+                'new_balance' => $credit->current_balance,
+                'is_top_up' => (bool) $existingCredit,
             ]);
 
-            ActivityLog::log('ad_spend_billing_setup', "Ad spend billing set up for customer '{$customer->name}' — \${$credit->initial_credit_amount} charged", $customer, [
+            ActivityLog::log('ad_spend_billing_setup', $logMessage, $customer, [
                 'customer_id' => $customer->id,
                 'daily_budget' => $dailyBudget,
-                'credit_amount' => $credit->initial_credit_amount,
+                'credit_amount' => $chargedAmount,
             ]);
 
             return response()->json([
                 'success' => true,
-                'message' => 'Ad spend billing set up successfully',
-                'credit_amount' => $credit->initial_credit_amount,
+                'message' => $existingCredit ? 'Campaign funded successfully' : 'Ad spend billing set up successfully',
+                'credit_amount' => $chargedAmount,
                 'new_balance' => $credit->current_balance,
             ]);
         } catch (\Exception $e) {

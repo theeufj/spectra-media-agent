@@ -309,10 +309,28 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             return;
         }
 
-        // Check if ad spend billing is set up (only when managed billing is enabled)
-        if (managedBillingEnabled && (!adSpendCredit || adSpendCredit.status === 'pending')) {
-            setShowAdSpendSetupModal(true);
-            return;
+        // Check if ad spend billing is set up and has enough balance for this campaign
+        if (managedBillingEnabled) {
+            const totalBudget = Number(campaign?.total_budget || 0);
+            const startDate = campaign?.start_date ? new Date(campaign.start_date) : null;
+            const endDate = campaign?.end_date ? new Date(campaign.end_date) : null;
+            const durationDays = (startDate && endDate)
+                ? Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1)
+                : 30;
+            const dailyBudget = campaign?.daily_budget
+                ? Number(campaign.daily_budget)
+                : (totalBudget > 0 ? totalBudget / durationDays : 50);
+            const daysToCharge = Math.min(7, durationDays);
+            const requiredFunds = dailyBudget * daysToCharge;
+            const currentBalance = adSpendCredit?.current_balance ?? 0;
+            const needsFunding = !adSpendCredit
+                || adSpendCredit.status === 'pending'
+                || currentBalance < requiredFunds;
+
+            if (needsFunding) {
+                setShowAdSpendSetupModal(true);
+                return;
+            }
         }
 
         // Check if account is paused due to payment failure (only when managed billing is enabled)
@@ -398,6 +416,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 onSuccess={handleAdSpendSetupSuccess}
                 campaign={campaign}
                 campaignName={campaign.name}
+                existingCredit={adSpendCredit}
             />
 
             <ConfirmationModal

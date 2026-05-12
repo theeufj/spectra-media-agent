@@ -108,6 +108,7 @@ const PaymentForm = ({ campaign, onSuccess, onCancel }) => {
                 body: JSON.stringify({
                     payment_method_id: paymentMethod.id,
                     daily_budget: estimatedDailySpend,
+                    days_to_charge: daysToCharge,
                 }),
             });
 
@@ -225,19 +226,25 @@ const PaymentForm = ({ campaign, onSuccess, onCancel }) => {
 };
 
 // Main Modal Component
-export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName }) {
+export default function AdSpendSetupModal({ show, onClose, onSuccess, campaign, campaignName, existingCredit }) {
+    const isTopUp = existingCredit && existingCredit.status === 'active';
     return (
         <Modal show={show} onClose={onClose} maxWidth="lg">
             <div className="p-6">
                 <div className="mb-6">
-                    <h2 className="text-xl font-bold text-gray-900">Set Up Ad Spend Billing</h2>
+                    <h2 className="text-xl font-bold text-gray-900">
+                        {isTopUp ? 'Fund This Campaign' : 'Set Up Ad Spend Billing'}
+                    </h2>
                     <p className="mt-1 text-sm text-gray-500">
-                        Before deploying <strong>{campaignName}</strong>, we need to set up your ad spend billing.
+                        {isTopUp
+                            ? <>Add funds for <strong>{campaignName}</strong>. Your existing balance of <strong>${Number(existingCredit.current_balance).toFixed(2)}</strong> will be topped up.</>
+                            : <>Before deploying <strong>{campaignName}</strong>, we need to set up your ad spend billing.</>
+                        }
                     </p>
                 </div>
 
                 <Elements stripe={stripePromise}>
-                    <PaymentForm 
+                    <PaymentForm
                         campaign={campaign}
                         onSuccess={onSuccess}
                         onCancel={onClose}
