@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\VideoCollateral;
 use App\Services\GeminiService;
+use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -37,8 +38,8 @@ class ExtendVideo implements ShouldQueue
                 throw new \Exception("Source video must be completed before extension. Current status: {$this->sourceVideo->status}");
             }
 
-            if (!$this->sourceVideo->gemini_video_uri) {
-                throw new \Exception("Source video missing Gemini video URI. Cannot extend non-Gemini videos.");
+            if (!$this->sourceVideo->gemini_video_uri && !$this->sourceVideo->s3_path) {
+                throw new \Exception("Source video missing Gemini URI and S3 path. Cannot extend.");
             }
 
             // Check extension count limit (max 20 extensions)
@@ -47,10 +48,34 @@ class ExtendVideo implements ShouldQueue
                 throw new \Exception("Maximum extension limit (20) reached for this video.");
             }
 
+            // Re-upload the video to Gemini Files API to get a fresh URI.
+            // Generation URIs expire in ~48 h; re-uploading ensures the extension
+            // API always receives a valid reference so Veo can read the source frames.
+            $videoBytes = StorageHelper::get($this->sourceVideo->s3_path);
+            if (!$videoBytes) {
+                throw new \Exception("Could not retrieve source video from storage for re-upload.");
+            }
+
+            Log::info("ExtendVideo: Re-uploading source video to Gemini Files API for fresh URI");
+            $freshUri = $geminiService->uploadVideoToFilesApi($videoBytes, 'video/mp4', 'extend_source.mp4');
+
+            if (!$freshUri) {
+                // Fall back to stored URI — may still work if video was generated recently
+                Log::warning("ExtendVideo: Files API re-upload failed, falling back to stored gemini_video_uri");
+                $freshUri = $this->sourceVideo->gemini_video_uri;
+                if (!$freshUri) {
+                    throw new \Exception("No valid video URI available for extension.");
+                }
+            }
+
+            // Build a context-rich prompt so Veo understands the brand, product and
+            // original scene — without this, it generates a disconnected continuation.
+            $enrichedPrompt = $this->buildEnrichedPrompt();
+
             // Start video extension
             $operationName = $geminiService->extendVideo(
-                $this->sourceVideo->gemini_video_uri,
-                $this->extensionPrompt
+                $freshUri,
+                $enrichedPrompt
             );
 
             if (!$operationName) {
@@ -64,7 +89,7 @@ class ExtendVideo implements ShouldQueue
                 'campaign_id' => $this->sourceVideo->campaign_id,
                 'strategy_id' => $this->sourceVideo->strategy_id,
                 'platform' => $this->sourceVideo->platform,
-                'script' => $this->sourceVideo->script . "\n\n[EXTENSION]: " . $this->extensionPrompt,
+                'script' => $this->sourceVideo->script . "\n\n[EXTENSION " . ($extensionCount + 1) . "]: " . $this->extensionPrompt,
                 'status' => 'generating',
                 'operation_name' => $operationName,
                 'is_active' => true,
@@ -82,6 +107,55 @@ class ExtendVideo implements ShouldQueue
             Log::error("Error in ExtendVideo job for VideoCollateral ID {$this->sourceVideo->id}: " . $e->getMessage());
             $this->fail($e);
         }
+    }
+
+    /**
+     * Build a context-rich extension prompt so Veo maintains visual and brand
+     * consistency across 8-second clips.
+     *
+     * Without original context, Veo generates a disconnected continuation that
+     * doesn't match the brand, product, or scene in the source video.
+     */
+    private function buildEnrichedPrompt(): string
+    {
+        $parts = [];
+
+        // Original script — tells Veo what was depicted in the source clip
+        $originalScript = trim($this->sourceVideo->script ?? '');
+        if ($originalScript) {
+            // Strip any previous [EXTENSION x]: prefixes to get the root script
+            $rootScript = preg_split('/\[EXTENSION \d+\]:/i', $originalScript)[0];
+            $rootScript = trim($rootScript);
+            if ($rootScript) {
+                $parts[] = "ORIGINAL VIDEO SCENE: {$rootScript}";
+            }
+        }
+
+        // Brand / customer context
+        $customer = $this->sourceVideo->campaign?->customer;
+        if ($customer) {
+            $parts[] = "BRAND: {$customer->name}";
+            if ($customer->website) {
+                $parts[] = "PRODUCT/SERVICE: {$customer->website}";
+            }
+        }
+
+        // Strategy video context
+        $strategy = $this->sourceVideo->strategy;
+        if ($strategy?->video_strategy) {
+            $videoStrategy = trim($strategy->video_strategy);
+            if ($videoStrategy && !preg_match('/^n\/a/i', $videoStrategy)) {
+                $parts[] = "CAMPAIGN VIDEO DIRECTION: " . mb_substr($videoStrategy, 0, 300);
+            }
+        }
+
+        // User's requested continuation
+        $parts[] = "CONTINUATION DIRECTION: {$this->extensionPrompt}";
+
+        // Consistency instruction
+        $parts[] = "IMPORTANT: Maintain exact visual continuity — same subjects, lighting, color grading, camera style, and environment as the preceding clip. This is a seamless 8-second continuation, not a new scene.";
+
+        return implode("\n\n", $parts);
     }
 
     /**

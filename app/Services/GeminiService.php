@@ -551,6 +551,69 @@ class GeminiService
     }
 
     /**
+     * Upload a video file to the Gemini Files API and return a fresh persistent URI.
+     *
+     * Gemini video URIs from generation responses expire in ~48 hours. Re-uploading
+     * via the Files API gives a URI that's valid for 48 h from upload time, which is
+     * enough for an extension call that fires immediately after.
+     *
+     * @param string $videoData  Raw video bytes
+     * @param string $mimeType   e.g. 'video/mp4'
+     * @param string $displayName Human-readable label for the file
+     * @return string|null The files API URI (e.g. https://generativelanguage.googleapis.com/v1beta/files/xxx)
+     */
+    public function uploadVideoToFilesApi(string $videoData, string $mimeType = 'video/mp4', string $displayName = 'source_video.mp4'): ?string
+    {
+        try {
+            $numBytes = strlen($videoData);
+
+            // Step 1: Initiate resumable upload and get upload URL
+            $initResponse = Http::withHeaders([
+                'X-Goog-Upload-Protocol' => 'resumable',
+                'X-Goog-Upload-Command'  => 'start',
+                'X-Goog-Upload-Header-Content-Length' => $numBytes,
+                'X-Goog-Upload-Header-Content-Type'   => $mimeType,
+                'Content-Type' => 'application/json',
+            ])->withQueryParameters([
+                'key' => $this->apiKey,
+            ])->post('https://generativelanguage.googleapis.com/upload/v1beta/files', [
+                'file' => ['display_name' => $displayName],
+            ]);
+
+            if ($initResponse->failed()) {
+                Log::error('GeminiService: Failed to initiate Files API upload: ' . $initResponse->body());
+                return null;
+            }
+
+            $uploadUrl = $initResponse->header('X-Goog-Upload-URL');
+            if (!$uploadUrl) {
+                Log::error('GeminiService: No upload URL returned from Files API initiation');
+                return null;
+            }
+
+            // Step 2: Upload the actual bytes
+            $uploadResponse = Http::withHeaders([
+                'Content-Length'         => $numBytes,
+                'X-Goog-Upload-Offset'   => 0,
+                'X-Goog-Upload-Command'  => 'upload, finalize',
+            ])->withBody($videoData, $mimeType)->put($uploadUrl);
+
+            if ($uploadResponse->failed()) {
+                Log::error('GeminiService: Failed to upload video bytes to Files API: ' . $uploadResponse->body());
+                return null;
+            }
+
+            $fileUri = $uploadResponse->json()['file']['uri'] ?? null;
+            Log::info('GeminiService: Video uploaded to Files API', ['uri' => $fileUri]);
+
+            return $fileUri;
+        } catch (\Exception $e) {
+            Log::error('GeminiService: Exception during Files API upload: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Extend a Veo-generated video by up to 7 seconds using Veo 3.1.
      * 
      * Requirements:
