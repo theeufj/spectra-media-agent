@@ -120,8 +120,9 @@ class AdCopyPrompt
         $lines = [];
         foreach ($this->competitors as $c) {
             $name = $c->name ?? $c->domain ?? 'Competitor';
-            $counterStrategy = $c->counter_strategy ?? null;
-            $keyMessages = $c->key_messages ?? [];
+            $messaging = $c->messaging_analysis ?? [];
+            $counterStrategy = $messaging['counter_strategy'] ?? null;
+            $keyMessages = $messaging['key_messages'] ?? $messaging['messaging_themes'] ?? [];
 
             $entry = "**{$name}**";
             if (!empty($keyMessages)) {

@@ -73,7 +73,7 @@ class GenerateAdCopy implements ShouldQueue
 
             // Load analyzed competitors so ad copy differentiates from what they're saying
             $competitors = $this->campaign->customer->competitors()
-                ->whereNotNull('counter_strategy')
+                ->whereNotNull('messaging_analysis')
                 ->get();
 
             // Fetch selected product pages
