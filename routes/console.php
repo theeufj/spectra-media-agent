@@ -6,6 +6,8 @@ use Illuminate\Support\Facades\Schedule;
 use App\Jobs\MonitorCampaignStatus;
 use App\Jobs\OptimizeCampaigns;
 use App\Jobs\AutomatedCampaignMaintenance;
+use App\Jobs\RunSelfHealingChecks;
+use App\Jobs\AutoStartABTests;
 use App\Jobs\RunCompetitorIntelligence;
 use App\Jobs\ProcessDailyAdSpendBilling;
 use App\Jobs\RunHealthChecks;
@@ -82,6 +84,12 @@ Schedule::call(function () {
 
 // AI-powered optimization analysis - reviews performance and suggests improvements
 Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(notifyAdminOnFailure('OptimizeCampaigns'));
+
+// Self-healing checks — scan for disapproved ads and rewrite/resubmit every 4 hours
+Schedule::job(new RunSelfHealingChecks)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunSelfHealingChecks'));
+
+// Auto-start A/B tests — create headline split tests for live strategies with no active test
+Schedule::job(new AutoStartABTests)->dailyAt('05:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('AutoStartABTests'));
 
 // Autonomous A/B Test evaluation - tracks significance and drops losers
 Schedule::job(new \App\Jobs\EvaluateABTests)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('EvaluateABTests'));
