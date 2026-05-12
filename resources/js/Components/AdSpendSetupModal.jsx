@@ -69,10 +69,15 @@ const PaymentForm = ({ campaign, onSuccess, onCancel }) => {
 
     const campaignDurationDays = getCampaignDurationDays();
     const estimatedDailySpend = calculateDailyBudget();
-    
+
     // Charge the lesser of 7 days OR the full campaign duration
     const daysToCharge = Math.min(7, campaignDurationDays);
-    const upfrontCharge = estimatedDailySpend * daysToCharge;
+    // Use total_budget directly when charging the full campaign duration to avoid
+    // rounding loss from stored daily_budget (e.g. $250/7 = $35.71 → $35.71×7 = $249.97)
+    const totalBudget = Number(campaign?.total_budget || 0);
+    const upfrontCharge = (daysToCharge === campaignDurationDays && totalBudget > 0)
+        ? totalBudget
+        : Math.round(estimatedDailySpend * daysToCharge * 100) / 100;
 
     const handleSubmit = async (event) => {
         event.preventDefault();
