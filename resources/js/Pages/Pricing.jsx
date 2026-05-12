@@ -79,11 +79,11 @@ export default function Pricing({ auth, plans = [] }) {
                                         {[
                                             ['Cost', '$2,500 - $5,000 / month', 'From $99 / month'],
                                             ['Setup Time', '2-4 Weeks', '< 5 Minutes'],
-                                            ['Brand Guidelines', 'Manual PDF creation (billed extra)', 'Instant Vision AI Extraction'],
-                                            ['Creatives', 'Limited revisions', 'Unlimited AI Generation'],
-                                            ['Optimization', 'Weekly manual checks', '24/7 Real-time Agent adjustments'],
-                                            ['Competitor Analysis', 'Manual research (extra hours)', 'Automatic AI Discovery & Counter-Strategy'],
-                                            ['Campaign Fixes', 'Wait for account manager response', 'Self-Optimising AI (instant fixes)'],
+                                            ['Brand Matching', 'Manual PDF creation (billed extra)', 'Reads your website automatically'],
+                                            ['Ad Creative', 'Limited revisions, extra cost', 'AI writes and generates images for you'],
+                                            ['Optimisation', 'Weekly manual checks', 'Every hour, automatically'],
+                                            ['Competitor Research', 'Manual (charged by the hour)', 'Automatic weekly discovery (Growth plan)'],
+                                            ['Rejected Ads', 'Wait for account manager', 'Fixed and resubmitted automatically'],
                                         ].map(([label, agency, ai]) => (
                                             <tr key={label}>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{label}</td>
@@ -140,7 +140,12 @@ export default function Pricing({ auth, plans = [] }) {
                                                 </li>
                                             ))}
                                         </ul>
-                                        <div className="mt-10">
+                                        {plan.slug === 'starter' && (
+                                            <p className="mt-4 text-xs text-gray-400 text-center">
+                                                You pick your platform (Google or Facebook) when you sign up.
+                                            </p>
+                                        )}
+                                        <div className="mt-4">
                                             <a
                                                 href={plan.cta_text === 'Contact Sales' ? 'mailto:hello@sitetospend.com?subject=Agency Plan Inquiry' : '/register'}
                                                 className={`block w-full text-center rounded-lg px-6 py-3 text-base font-medium ${

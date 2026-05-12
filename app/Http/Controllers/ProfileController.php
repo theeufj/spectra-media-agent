@@ -30,11 +30,15 @@ class ProfileController extends Controller
             ->where('platform', 'facebook_api')
             ->first();
 
+        $plan = $user->resolveCurrentPlan();
+
         return Inertia::render('Profile/Edit', [
             'mustVerifyEmail'       => $user instanceof MustVerifyEmail,
             'status'                => session('status'),
             'customers'             => $customers,
             'facebookAppId'         => config('services.facebook.client_id'),
+            'planSlug'              => $plan?->slug ?? 'free',
+            'starterPlatform'       => $user->starter_platform ?? 'google',
             'googleApiConnection'   => $googleApiConnection ? [
                 'connected'    => true,
                 'account_name' => $googleApiConnection->account_name,

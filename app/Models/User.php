@@ -164,9 +164,9 @@ class User extends Authenticatable implements MustVerifyEmail
         $slug = $plan?->slug ?? 'free';
 
         return match ($slug) {
-            'free' => ['google'],
-            'starter' => ['google', 'facebook'],
-            default => ['google', 'facebook', 'microsoft', 'linkedin'],
+            'free'    => ['google'],
+            'starter' => [$this->starter_platform ?? 'google'],
+            default   => ['google', 'facebook', 'microsoft', 'linkedin'],
         };
     }
 
