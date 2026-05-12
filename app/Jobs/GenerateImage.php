@@ -160,32 +160,76 @@ class GenerateImage implements ShouldQueue
                     continue;
                 }
 
-                // Check if user is subscribed - if not, add watermark
-                $user = $this->campaign->customer->users()->first();
-                $isSubscribed = $user && ($user->subscribed('default') || $user->subscription_status === 'active');
-                
-                if (!$isSubscribed) {
-                    try {
-                        // Apply watermark to free tier images
-                        $image = Image::read($decodedImage);
-                        
-                        // Add semi-transparent watermark in bottom right
-                        $image->text('Preview', $image->width() - 20, $image->height() - 20, function($font) {
-                            $font->filename(public_path('fonts/Arial.ttf')); // Use system font as fallback
+                // Apply brand name + tagline overlay (all tiers), or preview watermark (free tier)
+                $customer = $this->campaign->customer;
+                $user = $customer->users()->first();
+                $isSubscribed = $user && ($user->subscribed('default') || $user->subscription_status === 'active')
+                    || $customer->subscription_status === 'active';
+
+                try {
+                    $image = Image::read($decodedImage);
+                    $w = $image->width();
+                    $h = $image->height();
+
+                    if ($isSubscribed) {
+                        // Brand name + tagline banner at bottom
+                        $brandName = $customer->name ?? '';
+                        $tagline = null;
+                        if ($brandGuidelines) {
+                            $usps = $brandGuidelines->unique_selling_propositions ?? [];
+                            $themes = $brandGuidelines->messaging_themes ?? [];
+                            $raw = $usps[0] ?? $themes[0] ?? null;
+                            if ($raw) {
+                                // Strip "First USP: " style prefixes and truncate
+                                $raw = preg_replace('/^[^:]+:\s*/', '', $raw);
+                                $tagline = mb_strlen($raw) > 45 ? mb_substr($raw, 0, 42) . '…' : $raw;
+                            }
+                        }
+
+                        // Semi-transparent dark banner covering bottom 18% of image
+                        $bannerH = (int) ($h * 0.18);
+                        $image->drawRectangle(0, $h - $bannerH, function ($draw) use ($w, $h, $bannerH) {
+                            $draw->size($w, $bannerH);
+                            $draw->background('rgba(0, 0, 0, 0.65)');
+                        });
+
+                        // Resolve a font path (server system font fallback chain)
+                        $fontPath = $this->resolveFont();
+
+                        if ($brandName) {
+                            $image->text($brandName, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.38), function ($font) use ($fontPath, $bannerH) {
+                                if ($fontPath) $font->filename($fontPath);
+                                $font->size((int) ($bannerH * 0.38));
+                                $font->color('ffffff');
+                                $font->align('center');
+                                $font->valign('middle');
+                            });
+                        }
+
+                        if ($tagline) {
+                            $image->text($tagline, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.72), function ($font) use ($fontPath, $bannerH) {
+                                if ($fontPath) $font->filename($fontPath);
+                                $font->size((int) ($bannerH * 0.22));
+                                $font->color('rgba(220, 220, 220, 1)');
+                                $font->align('center');
+                                $font->valign('middle');
+                            });
+                        }
+                    } else {
+                        // Free tier: "Preview" watermark bottom-right
+                        $fontPath = $this->resolveFont();
+                        $image->text('Preview', $w - 20, $h - 20, function ($font) use ($fontPath) {
+                            if ($fontPath) $font->filename($fontPath);
                             $font->size(24);
                             $font->color('ffffff');
                             $font->align('right');
                             $font->valign('bottom');
                         });
-                        
-                        // Encode back to binary
-                        $decodedImage = (string) $image->encode();
-                        
-                        Log::info("Watermark applied to free tier image for Campaign ID: {$this->campaign->id}");
-                    } catch (\Exception $e) {
-                        Log::warning("Failed to apply watermark: " . $e->getMessage());
-                        // Continue without watermark if it fails
                     }
+
+                    $decodedImage = (string) $image->encode();
+                } catch (\Exception $e) {
+                    Log::warning("Failed to apply image overlay: " . $e->getMessage());
                 }
 
                 // Store the image in S3
@@ -215,6 +259,30 @@ class GenerateImage implements ShouldQueue
             Log::error("Error in GenerateImage job for Strategy ID {$this->strategy->id}: " . $e->getMessage());
             $this->fail($e);
         }
+    }
+
+    /**
+     * Resolve a usable font path for Intervention Image text rendering.
+     * Falls back through a chain of common system font locations.
+     */
+    private function resolveFont(): ?string
+    {
+        $candidates = [
+            public_path('fonts/Arial.ttf'),
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+            '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+            '/usr/share/fonts/truetype/freefont/FreeSansBold.ttf',
+            '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf',
+        ];
+
+        foreach ($candidates as $path) {
+            if (file_exists($path)) {
+                return $path;
+            }
+        }
+
+        return null;
     }
 
     /**

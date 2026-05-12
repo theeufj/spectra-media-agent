@@ -575,7 +575,7 @@ class GeminiService
                     [
                         'prompt' => $prompt,
                         'video' => [
-                            'uri' => $videoFileName
+                            'uri' => $videoUri
                         ]
                     ]
                 ],

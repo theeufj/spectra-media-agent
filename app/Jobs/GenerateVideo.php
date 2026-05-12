@@ -176,8 +176,15 @@ class GenerateVideo implements ShouldQueue
             $operationName = $videoGenerationService->startGeneration($videoPrompt);
 
             if (!$operationName) {
+                // Don't hard-fail immediately — retry the job after a backoff delay
+                // to handle Veo quota limits when multiple strategies fire simultaneously
+                if ($this->attempts() < 3) {
+                    Log::warning("Video generation failed to start for Strategy ID {$this->strategy->id}, attempt {$this->attempts()}/3 — retrying in 5 minutes");
+                    $this->release(300);
+                    return;
+                }
                 $videoCollateral->update(['status' => 'failed']);
-                throw new \Exception('Failed to start video generation.');
+                throw new \Exception('Failed to start video generation after 3 attempts.');
             }
 
             // Step 5: Update the record with the operation name and set status to 'generating'

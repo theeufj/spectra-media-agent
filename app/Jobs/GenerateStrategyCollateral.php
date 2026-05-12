@@ -84,11 +84,15 @@ class GenerateStrategyCollateral implements ShouldQueue
         // Generate 2 videos per strategy (only if video strategy contains actionable content)
         $videoStrategy = $this->strategy->video_strategy ?? '';
         if ($this->hasActionableVideoContent($videoStrategy)) {
+            // Spread video jobs across strategies using strategy ID as an offset.
+            // Veo has per-minute quota; staggering prevents concurrent requests from multiple strategies.
+            $strategySpread = ($this->strategy->id % 8) * 45; // 0–315 s spread across up to 8 strategies
             for ($i = 0; $i < 2; $i++) {
+                $delay = 120 + $strategySpread + ($i * 240); // 2 min base + strategy spread + 4 min between videos
                 GenerateVideo::dispatch($this->campaign, $this->strategy, $this->strategy->platform)
-                    ->delay(now()->addSeconds(40 + ($i * 60))); // Stagger videos by 60 seconds
+                    ->delay(now()->addSeconds($delay));
                 $videoNum = $i + 1;
-                Log::info("Dispatched video generation {$videoNum}/2 for Strategy ID: {$this->strategy->id}");
+                Log::info("Dispatched video generation {$videoNum}/2 for Strategy ID: {$this->strategy->id}, delay: {$delay}s");
             }
         } else {
             Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content");

@@ -317,12 +317,14 @@ class AdSpendBillingService
     protected function chargeCustomer(Customer $customer, float $amount, string $description): array
     {
         try {
-            $user = $customer->users()->first();
-            
+            // Prefer the owner user; fall back to any user with a payment method
+            $user = $customer->users()->wherePivot('role', 'owner')->first()
+                ?? $customer->users()->get()->first(fn ($u) => $u->hasDefaultPaymentMethod());
+
             if (!$user || !$user->hasDefaultPaymentMethod()) {
                 return [
                     'success' => false,
-                    'error' => 'No payment method on file',
+                    'error' => 'No payment method on file for this account',
                 ];
             }
 

@@ -21,7 +21,7 @@ class CheckVideoStatus implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 10; // Poll for a while
+    public $tries = 60; // Poll for up to 60 minutes (60 × 60s releases)
     public $timeout = 900;
 
     public function __construct(protected VideoCollateral $videoCollateral)

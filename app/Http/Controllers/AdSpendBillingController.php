@@ -310,16 +310,19 @@ class AdSpendBillingController extends Controller
         }
 
         try {
-            // Ensure user exists as a Stripe customer (required for admin-promoted users without Stripe subscriptions)
-            if (!$user->stripe_id) {
-                $user->createAsStripeCustomer();
+            // Save payment method to the customer's owner so recurring charges work for all team members
+            $billingUser = $customer->users()->wherePivot('role', 'owner')->first() ?? $user;
+
+            if (!$billingUser->stripe_id) {
+                $billingUser->createAsStripeCustomer();
             }
 
             // First, update the payment method
-            $user->updateDefaultPaymentMethod($request->payment_method_id);
+            $billingUser->updateDefaultPaymentMethod($request->payment_method_id);
 
             Log::info('AdSpendBilling: Payment method set during deployment setup', [
                 'user_id' => $user->id,
+                'billing_user_id' => $billingUser->id,
                 'customer_id' => $customer->id,
             ]);
 
@@ -339,7 +342,7 @@ class AdSpendBillingController extends Controller
                 'initial_credit' => $credit->initial_credit_amount,
             ]);
 
-            ActivityLog::log('ad_spend_billing_setup', "Ad spend billing set up for customer '{$customer->business_name}' — \${$credit->initial_credit_amount} charged", $customer, [
+            ActivityLog::log('ad_spend_billing_setup', "Ad spend billing set up for customer '{$customer->name}' — \${$credit->initial_credit_amount} charged", $customer, [
                 'customer_id' => $customer->id,
                 'daily_budget' => $dailyBudget,
                 'credit_amount' => $credit->initial_credit_amount,
