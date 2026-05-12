@@ -75,6 +75,11 @@ class DashboardController extends Controller
             'projections' => $projections,
             'crossPlatformComparison' => $crossPlatformComparison,
             'funnel' => $funnel,
+            'trackingStatus' => [
+                'provisioned' => (bool) $activeCustomer->gtm_container_id,
+                'installed'   => (bool) $activeCustomer->gtm_installed,
+                'setup_url'   => route('customers.gtm.setup', $activeCustomer->id),
+            ],
         ]);
     }
 

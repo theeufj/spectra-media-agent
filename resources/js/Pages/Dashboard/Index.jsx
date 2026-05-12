@@ -137,7 +137,7 @@ export default function Dashboard({ auth }) {
         campaigns, defaultCampaign, days: initialDays,
         usageStats, creativeUsage, pendingTasks, healthAlerts, agentActivities, flash,
         platformData: allPlatformData, campaignBreakdown, dailyTrend: allDailyTrend,
-        projections, crossPlatformComparison, funnel,
+        projections, crossPlatformComparison, funnel, trackingStatus,
     } = usePage().props;
 
     const activeCustomer = auth.user?.active_customer;
@@ -234,6 +234,24 @@ export default function Dashboard({ auth }) {
             <div className="py-6 sm:py-10">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <SetupProgressNav />
+
+                    {trackingStatus?.provisioned && !trackingStatus?.installed && (
+                        <div className="mb-4 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                            <svg className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-500" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+                            </svg>
+                            <div className="flex-1 text-sm">
+                                <span className="font-semibold text-amber-900">Install your conversion tracking snippet</span>
+                                <span className="ml-1 text-amber-800">— Your tracking is set up and ready. Paste the snippet on your website to start recording conversions.</span>
+                            </div>
+                            <a
+                                href={trackingStatus.setup_url}
+                                className="flex-shrink-0 rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-amber-700"
+                            >
+                                Install snippet
+                            </a>
+                        </div>
+                    )}
 
                     {activeCustomer?.google_ads_customer_id && (
                         <div className="mb-4 flex items-center gap-2 text-sm text-gray-500">

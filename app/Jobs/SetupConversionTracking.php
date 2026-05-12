@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Customer;
 use App\Services\ConversionSetupService;
 use App\Notifications\CriticalAgentAlert;
+use App\Notifications\ConversionTrackingReady;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -57,6 +58,9 @@ class SetupConversionTracking implements ShouldQueue
             'customer_id'   => $this->customer->id,
             'resource_name' => $result['resource_name'],
         ]);
+
+        // Notify all users for this customer so they know to install the snippet
+        $this->customer->users()->each(fn ($user) => $user->notify(new ConversionTrackingReady($this->customer)));
     }
 
     public function failed(\Throwable $exception): void

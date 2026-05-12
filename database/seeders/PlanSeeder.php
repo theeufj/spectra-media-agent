@@ -78,7 +78,7 @@ class PlanSeeder extends Seeder
             ['slug' => 'growth'],
             [
                 'name' => 'Growth',
-                'description' => 'For e-commerce brands ready to scale.',
+                'description' => 'For established businesses spending $1,000+/mo on Google Ads.',
                 'price_cents' => 24900,
                 'billing_interval' => 'month',
                 'stripe_price_id' => 'price_1TFYpAClfeR0n0yLugIalDeU',
