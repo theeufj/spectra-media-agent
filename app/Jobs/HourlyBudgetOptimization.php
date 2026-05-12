@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
+use App\Models\MicrosoftAdsPerformanceData;
+use App\Models\LinkedInAdsPerformanceData;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\CampaignAlertService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
@@ -39,7 +41,8 @@ class HourlyBudgetOptimization implements ShouldQueue
             ->where('primary_status', 'ELIGIBLE')
             ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id')
-                ->orWhereNotNull('microsoft_ads_campaign_id'))
+                ->orWhereNotNull('microsoft_ads_campaign_id')
+                ->orWhereNotNull('linkedin_campaign_id'))
             ->get();
 
         $summary = [
@@ -154,16 +157,52 @@ class HourlyBudgetOptimization implements ShouldQueue
             }
         }
 
-        // Microsoft Ads — reporting is async/batch; live hourly metrics not available via SOAP
+        // Microsoft Ads — SOAP API has no live intra-day endpoint; use today's stored
+        // performance data as the best available proxy. Falls back to yesterday if today
+        // has no records yet (e.g., early morning before the first fetch).
         if ($campaign->microsoft_ads_campaign_id && $customer->microsoft_ads_customer_id) {
-            return [
-                'platform'         => 'microsoft_ads',
-                'impressions'      => 0,
-                'clicks'           => 0,
-                'conversions'      => 0,
-                'spend'            => 0,
-                'conversion_value' => 0,
-            ];
+            $msRow = MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', $today)
+                ->orderByDesc('updated_at')
+                ->first()
+                ?? MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->where('date', now()->subDay()->toDateString())
+                    ->orderByDesc('updated_at')
+                    ->first();
+
+            if ($msRow) {
+                return [
+                    'platform'         => 'microsoft_ads',
+                    'impressions'      => (int) $msRow->impressions,
+                    'clicks'           => (int) $msRow->clicks,
+                    'conversions'      => (float) $msRow->conversions,
+                    'spend'            => (float) $msRow->cost,
+                    'conversion_value' => (float) $msRow->conversion_value,
+                ];
+            }
+        }
+
+        // LinkedIn Ads — use stored performance data (Marketing API is batch/async like Microsoft)
+        if ($campaign->linkedin_campaign_id && $customer->linkedin_ads_account_id) {
+            $liRow = LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', $today)
+                ->orderByDesc('updated_at')
+                ->first()
+                ?? LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
+                    ->where('date', now()->subDay()->toDateString())
+                    ->orderByDesc('updated_at')
+                    ->first();
+
+            if ($liRow) {
+                return [
+                    'platform'         => 'linkedin_ads',
+                    'impressions'      => (int) $liRow->impressions,
+                    'clicks'           => (int) $liRow->clicks,
+                    'conversions'      => (float) $liRow->conversions,
+                    'spend'            => (float) $liRow->cost,
+                    'conversion_value' => (float) $liRow->conversion_value,
+                ];
+            }
         }
 
         // Facebook Ads

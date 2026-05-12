@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Customer;
 use App\Models\Notification;
+use App\Models\User;
 use App\Services\Agents\HealthCheckAgent;
 use App\Notifications\CriticalAgentAlert;
 use Illuminate\Bus\Queueable;
@@ -212,9 +213,29 @@ class RunHealthChecks implements ShouldQueue
      */
     protected function sendAdminSummary(array $summary): void
     {
-        // This would send a summary email to admin users
-        // Implementation depends on how admin users are identified
-        Log::info("RunHealthChecks: Admin summary would be sent", $summary);
+        $admins = User::where('is_admin', true)->get();
+
+        if ($admins->isEmpty()) {
+            Log::warning('RunHealthChecks: No admin users found for health summary notification');
+            return;
+        }
+
+        $message = "Health check found {$summary['critical']} critical and {$summary['unhealthy']} unhealthy accounts across {$summary['total_customers']} customers.";
+
+        foreach ($admins as $admin) {
+            $admin->notify(new CriticalAgentAlert(
+                'health_check_summary',
+                'Platform Health Alert',
+                $message,
+                $summary
+            ));
+        }
+
+        Log::info('RunHealthChecks: Admin summary sent', [
+            'recipients' => $admins->pluck('email')->all(),
+            'critical' => $summary['critical'],
+            'unhealthy' => $summary['unhealthy'],
+        ]);
     }
 
     /**

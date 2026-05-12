@@ -96,6 +96,9 @@ class AdminController extends Controller
 
         $updates = [
             'facebook_ads_account_id' => $validated['facebook_ads_account_id'] ?: null,
+            // Mark as BM-managed whenever an admin assigns an account ID — this is the
+            // gate that allows FacebookAdsExecutionAgent to deploy campaigns.
+            'facebook_bm_owned' => !empty($validated['facebook_ads_account_id']),
         ];
 
         if (!empty($validated['facebook_page_url'])) {

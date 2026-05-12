@@ -10,6 +10,7 @@ use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use App\Models\AdCopy;
 
 /**
  * ABTestingAgent
@@ -152,6 +153,9 @@ class ABTestingAgent
         // Generate replacement creatives based on the winner
         $replacements = $this->generateReplacements($test, $winner, $losers);
 
+        // Persist winner + replacements back to the strategy's AdCopy model
+        $this->persistWinnerToAdCopy($test, $winner, $replacements);
+
         $test->markApplied();
 
         Log::info('ABTestingAgent: Results applied', [
@@ -166,6 +170,57 @@ class ABTestingAgent
             'winner' => $winner,
             'replacements' => $replacements,
         ];
+    }
+
+    /**
+     * Save the winning variant's headlines (plus AI-generated replacements) back to the
+     * strategy's AdCopy record so the next test cycle and any future re-deployments use
+     * the confirmed winner copy.
+     */
+    protected function persistWinnerToAdCopy(ABTest $test, array $winner, array $replacements): void
+    {
+        if ($test->test_type !== ABTest::TYPE_HEADLINE && $test->test_type !== ABTest::TYPE_DESCRIPTION) {
+            return;
+        }
+
+        $strategy = $test->strategy;
+        if (!$strategy) {
+            return;
+        }
+
+        $adCopy = AdCopy::where('strategy_id', $strategy->id)->first();
+        if (!$adCopy) {
+            return;
+        }
+
+        $winnerHeadlines    = $winner['meta']['headlines']    ?? explode(' | ', $winner['content'] ?? '');
+        $winnerDescriptions = $winner['meta']['descriptions'] ?? $adCopy->descriptions ?? [];
+
+        if ($test->test_type === ABTest::TYPE_HEADLINE) {
+            // Replace full headline set: winner headlines first, then AI-generated replacements
+            $updatedHeadlines = array_values(array_unique(array_merge(
+                $winnerHeadlines,
+                array_filter($replacements),
+            )));
+            // Cap at Google's RSA limit of 15 headlines
+            $updatedHeadlines = array_slice($updatedHeadlines, 0, 15);
+            $adCopy->update(['headlines' => $updatedHeadlines]);
+        } elseif ($test->test_type === ABTest::TYPE_DESCRIPTION) {
+            $winnerDescriptions = $winner['meta']['descriptions'] ?? explode(' | ', $winner['content'] ?? '');
+            $updatedDescriptions = array_values(array_unique(array_merge(
+                $winnerDescriptions,
+                array_filter($replacements),
+            )));
+            $updatedDescriptions = array_slice($updatedDescriptions, 0, 4);
+            $adCopy->update(['descriptions' => $updatedDescriptions]);
+        }
+
+        Log::info('ABTestingAgent: AdCopy updated with winner', [
+            'test_id'    => $test->id,
+            'strategy_id' => $strategy->id,
+            'ad_copy_id' => $adCopy->id,
+            'test_type'  => $test->test_type,
+        ]);
     }
 
     /**

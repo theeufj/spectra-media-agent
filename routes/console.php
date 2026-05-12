@@ -15,6 +15,10 @@ use App\Jobs\CheckCampaignPolicyViolations;
 use App\Jobs\HourlyBudgetOptimization;
 use App\Jobs\GetKeywordQualityScore;
 use App\Jobs\ReviewGoogleAdsRecommendations;
+use App\Jobs\RunPerformanceAnomalyCheck;
+use App\Jobs\DetectNegativeKeywordConflicts;
+use App\Jobs\DetectKeywordCannibalization;
+use App\Jobs\ExpandBroadMatchKeywords;
 use App\Jobs\GenerateExecutiveReport;
 use App\Jobs\GenerateMonthlyReport;
 use App\Jobs\SendDailyPerformanceReports;
@@ -88,6 +92,9 @@ Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(n
 // Self-healing checks — scan for disapproved ads and rewrite/resubmit every 4 hours
 Schedule::job(new RunSelfHealingChecks)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunSelfHealingChecks'));
 
+// Performance anomaly detection — intra-day CTR/CPC/CVR/delivery alerts
+Schedule::job(new RunPerformanceAnomalyCheck)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunPerformanceAnomalyCheck'));
+
 // Auto-start A/B tests — create headline split tests for live strategies with no active test
 Schedule::job(new AutoStartABTests)->dailyAt('05:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('AutoStartABTests'));
 
@@ -135,6 +142,7 @@ Schedule::call(function () {
         });
 })->name('get-keyword-quality-scores')->daily()->withoutOverlapping();
 
+
 // ============================================================
 // WEEKLY OPERATIONS
 // ============================================================
@@ -150,6 +158,12 @@ Schedule::call(function () {
 
 // Audience intelligence - segment and sync customer match lists
 Schedule::job(new \App\Jobs\RunAudienceIntelligence)->weekly()->sundays()->at('03:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunAudienceIntelligence'));
+
+// Negative keyword conflict detection — finds negatives blocking active keywords
+Schedule::job(new DetectNegativeKeywordConflicts)->weekly()->mondays()->at('03:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('DetectNegativeKeywordConflicts'));
+
+// Keyword cannibalization detection — finds duplicate keywords competing across ad groups
+Schedule::job(new DetectKeywordCannibalization)->weekly()->mondays()->at('03:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('DetectKeywordCannibalization'));
 
 // Weekly executive reports - AI-generated performance summaries per customer
 Schedule::call(function () {
@@ -175,6 +189,15 @@ Schedule::call(function () {
 
 // Cross-channel budget rebalance - check all auto-rebalance allocations
 Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->dailyAt('06:00')->withoutOverlapping();
+
+// Broad match keyword expansion — prunes poor performers, generates new keyword suggestions
+Schedule::call(function () {
+    Campaign::withDeployedPlatforms()
+        ->whereNotNull('google_ads_campaign_id')
+        ->each(function ($campaign) {
+            ExpandBroadMatchKeywords::dispatch($campaign);
+        });
+})->name('expand-broad-match-keywords')->monthlyOn(5, '04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ExpandBroadMatchKeywords'));
 
 // Seasonal strategy shift — adjusts budgets and bidding for current season at the start of each month
 Schedule::call(function () {
