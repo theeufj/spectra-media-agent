@@ -122,7 +122,7 @@ export default function SandboxIndex({ scenarios, existingSandbox }) {
                                 { name: 'Budget Intelligence', desc: 'Time-of-day and day-of-week budget multiplier optimization' },
                                 { name: 'Search Term Mining', desc: 'Finds high-value keywords and negative keyword opportunities' },
                                 { name: 'Creative Intelligence', desc: 'Identifies winning/losing ad creative patterns' },
-                                { name: 'Self-Healing Agent', desc: 'Automatically detects and fixes common campaign problems' },
+                                { name: 'Self-Optimising Agent', desc: 'Automatically detects and fixes common campaign problems' },
                             ].map((agent) => (
                                 <div key={agent.name} className="border border-gray-200 rounded-lg p-4">
                                     <h4 className="font-medium text-gray-900 text-sm">{agent.name}</h4>

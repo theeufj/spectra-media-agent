@@ -8,11 +8,11 @@ export default function Features({ auth }) {
         <>
             <Head>
                 <title>Features - AI Marketing Agents & Automation | sitetospend</title>
-                <meta name="description" content="Discover sitetospend's 6 autonomous AI agents: competitor discovery, self-healing campaigns, budget intelligence, creative A/B testing, audience management, and Vision AI brand extraction." />
+                <meta name="description" content="Discover sitetospend's 6 autonomous AI agents: competitor discovery, self-optimising campaigns, budget intelligence, creative A/B testing, audience management, and Vision AI brand extraction." />
                 <meta property="og:title" content="Features — 6 Autonomous AI Marketing Agents | sitetospend" />
-                <meta property="og:description" content="Competitor discovery, self-healing campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction—all on autopilot." />
+                <meta property="og:description" content="Competitor discovery, self-optimising campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction—all on autopilot." />
                 <meta name="twitter:title" content="Features — 6 Autonomous AI Marketing Agents | sitetospend" />
-                <meta name="twitter:description" content="Competitor discovery, self-healing campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction." />
+                <meta name="twitter:description" content="Competitor discovery, self-optimising campaigns, budget intelligence, creative testing, audience management, and Vision AI brand extraction." />
                 <script type="application/ld+json">{JSON.stringify({
                     "@context": "https://schema.org",
                     "@type": "ItemList",
@@ -22,7 +22,7 @@ export default function Features({ auth }) {
                     "itemListElement": [
                         { "@type": "ListItem", "position": 1, "name": "Competitor Discovery Agent", "description": "Uses Google Search AI to find real competitors based on your website content." },
                         { "@type": "ListItem", "position": 2, "name": "Competitor Analysis Agent", "description": "Scrapes competitor websites, extracts messaging and pricing, generates counter-strategies." },
-                        { "@type": "ListItem", "position": 3, "name": "Self-Healing Agent", "description": "Automatically detects and fixes disapproved ads while maintaining brand voice." },
+                        { "@type": "ListItem", "position": 3, "name": "Self-Optimising Agent", "description": "Automatically detects and fixes disapproved ads while maintaining brand voice." },
                         { "@type": "ListItem", "position": 4, "name": "Budget Intelligence Agent", "description": "Dynamically adjusts budgets based on time-of-day and day-of-week performance." },
                         { "@type": "ListItem", "position": 5, "name": "Creative Intelligence Agent", "description": "Tracks A/B test performance, identifies winners, and generates new ad variations." },
                         { "@type": "ListItem", "position": 6, "name": "Audience Intelligence Agent", "description": "Manages Customer Match lists, segments audiences, and recommends lookalike expansion." }
@@ -95,7 +95,7 @@ export default function Features({ auth }) {
                                 {[
                                     { icon: '🔍', color: 'flame-orange', name: 'Competitor Discovery Agent', desc: 'Uses Google Search AI to find your real competitors based on your website content. Identifies direct and indirect competitors you might not know about.', freq: 'Weekly' },
                                     { icon: '📊', color: 'flame-orange', name: 'Competitor Analysis Agent', desc: 'Scrapes competitor websites, extracts their messaging, value propositions, pricing, and ad copy. Generates counter-strategies for your campaigns.', freq: 'Weekly' },
-                                    { icon: '🩹', color: 'green', name: 'Self-Healing Agent', desc: 'Monitors for disapproved ads and automatically rewrites them to be policy-compliant. Pauses underperforming ads before they waste budget.', freq: 'Every 4 Hours' },
+                                    { icon: '🩹', color: 'green', name: 'Self-Optimising Agent', desc: 'Monitors for disapproved ads and automatically rewrites them to be policy-compliant. Pauses underperforming ads before they waste budget.', freq: 'Every 4 Hours' },
                                     { icon: '💰', color: 'yellow', name: 'Budget Intelligence Agent', desc: 'Dynamically adjusts budgets based on time-of-day and day-of-week performance. Reduces spend at 3am, increases during peak buying hours.', freq: 'Hourly' },
                                     { icon: '🎨', color: 'pink', name: 'Creative Intelligence Agent', desc: 'Tracks A/B test performance at headline, description, and image level. Identifies winners, kills losers, and generates new variations.', freq: 'Daily' },
                                     { icon: '👥', color: 'purple', name: 'Audience Intelligence Agent', desc: 'Manages Customer Match lists, segments your audience, and recommends lookalike audiences for expansion. Maximizes your first-party data.', freq: 'On-Demand' },
@@ -139,7 +139,7 @@ export default function Features({ auth }) {
                                 <dl className="grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-8 sm:gap-y-10 lg:max-w-none lg:grid-cols-3 lg:gap-y-16">
                                     {[
                                         { title: 'Competitive Intelligence', desc: 'AI agents discover your competitors using Google Search, scrape their websites, analyze their messaging, and generate counter-strategies to help you win.', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
-                                        { title: 'Self-Healing Campaigns', desc: "Disapproved ad? Our AI automatically rewrites it to be policy-compliant and resubmits. Underperforming ads are paused before they waste your budget.", icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+                                        { title: 'Self-Optimising Campaigns', desc: "Disapproved ad? Our AI automatically rewrites it to be policy-compliant and resubmits. Underperforming ads are paused before they waste your budget.", icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
                                         { title: 'Budget Intelligence', desc: 'Smart budget shifting based on time-of-day and day-of-week performance. Reduce spend at 3am, increase during peak buying hours—automatically.', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
                                         { title: 'Creative A/B Testing', desc: "Track performance at the headline, description, and image level. AI identifies winners, kills losers, and generates new variations based on what's working.", icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
                                         { title: 'Audience Intelligence', desc: 'Upload your customer emails for Customer Match targeting. AI segments your audience and recommends lookalike audiences for expansion.', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },

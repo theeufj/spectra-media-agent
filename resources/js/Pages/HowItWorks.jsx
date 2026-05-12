@@ -37,7 +37,7 @@ export default function HowItWorks({ auth }) {
                             "@type": "HowToStep",
                             "position": 3,
                             "name": "Autonomous Optimization",
-                            "text": "Deploy with one click. Self-Healing Agents fix disapproved ads automatically. Budget Intelligence shifts spend to peak hours. Creative Testing identifies winners and generates new variations—all autonomously, 24/7.",
+                            "text": "Deploy with one click. Self-Optimising Agents fix disapproved ads automatically. Budget Intelligence shifts spend to peak hours. Creative Testing identifies winners and generates new variations—all autonomously, 24/7.",
                             "url": "https://sitetospend.com/how-it-works"
                         }
                     ]
@@ -127,10 +127,10 @@ export default function HowItWorks({ auth }) {
                                     </div>
                                     <h2 className="text-3xl font-bold text-gray-900 mb-4">3. Autonomous Optimization</h2>
                                     <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Deploy with one click. Self-Healing Agents fix disapproved ads automatically. Budget Intelligence shifts spend to peak hours. Creative Testing identifies winners and generates new variations—all autonomously, 24/7.
+                                        Deploy with one click. Self-Optimising Agents fix disapproved ads automatically. Budget Intelligence shifts spend to peak hours. Creative Testing identifies winners and generates new variations—all autonomously, 24/7.
                                     </p>
                                     <ul className="space-y-3">
-                                        {['Self-healing for disapproved ads', 'Hourly budget optimization by time-of-day', 'Automated A/B testing & creative generation', 'Audience segmentation & expansion'].map((item) => (
+                                        {['Self-optimising disapproved ads', 'Hourly budget optimization by time-of-day', 'Automated A/B testing & creative generation', 'Audience segmentation & expansion'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
                                                 <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
@@ -159,7 +159,7 @@ export default function HowItWorks({ auth }) {
                             <div className="grid max-w-2xl grid-cols-1 gap-8 sm:grid-cols-2 xl:max-w-none xl:grid-cols-3">
                                 {[
                                     { quote: "sitetospend completely transformed how we run ads for our security platform. The AI agents handle our Google Ads around the clock—competitor targeting, budget shifts, creative testing—all automated. We've cut our ad management time by 80%.", name: 'Josh T.', role: 'Founder', company: 'Proveably', url: 'https://proveably.com' },
-                                    { quote: "As an event platform, we need to reach the right audience fast. sitetospend's autonomous agents discovered competitors we didn't even know about and built campaigns that outperformed our old agency from day one. The self-healing ads alone saved us thousands.", name: 'Jamie L.', role: 'Founder', company: 'PapSnap', url: 'https://papsnap.com' },
+                                    { quote: "As an event platform, we need to reach the right audience fast. sitetospend's autonomous agents discovered competitors we didn't even know about and built campaigns that outperformed our old agency from day one. The self-optimising ads alone saved us thousands.", name: 'Jamie L.', role: 'Founder', company: 'PapSnap', url: 'https://papsnap.com' },
                                     { quote: "Running an e-commerce store builder means I don't have time to babysit ad campaigns. sitetospend's AI agents do it all—budget optimization, creative testing, audience targeting. The results have been incredible for a fraction of what we were paying our agency.", name: 'Mike R.', role: 'Co-Founder', company: 'YourFirstStore', url: 'https://yourfirststore.com' },
                                     { quote: "Managing marketing for a golf marketplace with venues, coaches, and members is complex. sitetospend's AI agents handle the nuance beautifully—different campaigns for different audiences, all optimized automatically. It's like having a full marketing team on autopilot.", name: 'Alicia M.', role: 'Founder', company: 'Zonely', url: 'https://zonely.co' },
                                     { quote: "We've been in digital marketing for 20+ years and sitetospend is genuinely impressive. We use it for clients who need always-on campaign optimization. The autonomous budget intelligence and creative testing agents deliver results that rival manual management at scale.", name: 'Daniel K.', role: 'Director', company: 'First Digital', url: 'https://firstdigital.co.nz' },

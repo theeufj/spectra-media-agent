@@ -113,7 +113,7 @@ export default function About({ auth }) {
                             <div className="space-y-6">
                                 {[
                                     { label: 'Vision AI', desc: 'We don\'t ask you to fill out a 20-page brand questionnaire. Our Vision AI reads your website and instantly understands your brand—colors, fonts, tone, everything.' },
-                                    { label: 'Self-Healing', desc: 'Disapproved ad? Fixed automatically. Underperforming creative? Paused and replaced. Our agents don\'t wait for a Monday morning standup.' },
+                                    { label: 'Self-Optimising', desc: 'Disapproved ad? Fixed automatically. Underperforming creative? Paused and replaced. Our agents don\'t wait for a Monday morning standup.' },
                                     { label: 'Competitive Intel', desc: 'We use Google Search to find your real competitors, scrape their websites, and generate counter-strategies. Updated weekly, automatically.' },
                                     { label: 'Fair Billing', desc: 'Your subscription covers the platform. Ad spend goes directly to the ad networks. We never mark up your media costs—ever.' },
                                 ].map((item) => (

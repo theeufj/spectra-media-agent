@@ -73,7 +73,7 @@ export default function Landing({ auth, plans = [] }) {
         <>
             <Head>
                 <title>AI-Powered Ad Campaign Management | sitetospend</title>
-                <meta name="description" content={`Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads & Facebook Ads 24/7—competitor discovery, self-healing campaigns, budget intelligence, and more. From $${lowestPrice}/mo.`} />
+                <meta name="description" content={`Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads & Facebook Ads 24/7—competitor discovery, self-optimising campaigns, budget intelligence, and more. From $${lowestPrice}/mo.`} />
                 <meta property="og:title" content="sitetospend — AI-Powered Ad Campaign Management" />
                 <meta property="og:description" content={`6 autonomous AI agents optimize your ad campaigns 24/7. Agency-level results from $${lowestPrice}/mo. No credit card required.`} />
                 <meta property="og:image" content="https://sitetospend.com/og-image.png?v=2" />
@@ -107,7 +107,7 @@ export default function Landing({ auth, plans = [] }) {
                             },
                             "featureList": [
                                 "AI Competitor Discovery",
-                                "Self-Healing Campaigns",
+                                "Self-Optimising Campaigns",
                                 "Budget Intelligence",
                                 "Creative A/B Testing",
                                 "Audience Intelligence",
@@ -233,7 +233,7 @@ export default function Landing({ auth, plans = [] }) {
                                 {[
                                     { icon: '👁️', title: '1. Vision AI Extraction', desc: 'Enter your URL. Gemini Vision AI instantly extracts your hex codes, fonts, and brand voice.' },
                                     { icon: '🧠', title: '2. Competitive Intelligence', desc: 'AI discovers your real competitors, scrapes their sites, and generates counter-strategies.' },
-                                    { icon: '🚀', title: '3. Autonomous Optimization', desc: 'Self-Healing Agents fix ads, Budget Intelligence shifts spend, Creative Testing finds winners.' },
+                                    { icon: '🚀', title: '3. Autonomous Optimization', desc: 'Self-Optimising Agents fix ads, Budget Intelligence shifts spend, Creative Testing finds winners.' },
                                 ].map((step) => (
                                     <div key={step.title} className="relative flex flex-col items-center text-center">
                                         <div className="flex items-center justify-center h-24 w-24 rounded-full bg-flame-orange-50 border-4 border-white shadow-lg mb-6">
@@ -264,7 +264,7 @@ export default function Landing({ auth, plans = [] }) {
                                 {[
                                     { icon: '🔍', name: 'Competitor Discovery' },
                                     { icon: '📊', name: 'Competitor Analysis' },
-                                    { icon: '🩹', name: 'Self-Healing' },
+                                    { icon: '🩹', name: 'Self-Optimising' },
                                     { icon: '💰', name: 'Budget Intelligence' },
                                     { icon: '🎨', name: 'Creative Intelligence' },
                                     { icon: '👥', name: 'Audience Intelligence' },

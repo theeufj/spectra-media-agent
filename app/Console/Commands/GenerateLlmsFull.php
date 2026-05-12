@@ -41,7 +41,7 @@ class GenerateLlmsFull extends Command
         $content .= "- **Smart Bidding Optimisation**: 24/7 adjustment of bids to hit ROAS and CPA targets.\n";
         $content .= "- **AI Ad Copy Strategy**: Our creative agents continuously test headlines, descriptions, and imagery against each other.\n";
         $content .= "- **Cross-Platform**: Deploy to Google Ads, Meta (Facebook Ads), and Microsoft Ads from one central campaign goal.\n";
-        $content .= "- **Self-Healing Agent**: Automatically catches sudden CPC spikes, underperforming ad groups, and broken links, and pauses or fixes them.\n";
+        $content .= "- **Self-Optimising Agent**: Automatically catches sudden CPC spikes, underperforming ad groups, and broken links, and pauses or fixes them.\n";
         $content .= "- **Competitor Intelligence**: Spies on competitor offers and dynamically adjusts your copy to counteract them.\n\n";
 
         // Section: Blog Articles

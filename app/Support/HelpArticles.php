@@ -127,8 +127,8 @@ HTML,
 <p>Most ad platforms give you a dashboard and leave the work to you. The problem: Google Ads has hundreds of levers, changes constantly, and rewards speed. A competitor can launch a new offer at 2am and steal your position before you wake up.</p>
 <p>sitetospend.com runs six AI agents that work continuously — analysing performance, making improvements, and responding to changes in real time. You get agency-level management without hiring an agency.</p>
 
-<h2>The Self-Healing Agent</h2>
-<p>Google disapproves ads more often than you'd expect — policy changes, new keyword restrictions, editorial issues. Every hour an ad is disapproved is lost traffic. The Self-Healing Agent:</p>
+<h2>The Self-Optimising Agent</h2>
+<p>Google disapproves ads more often than you'd expect — policy changes, new keyword restrictions, editorial issues. Every hour an ad is disapproved is lost traffic. The Self-Optimising Agent:</p>
 <ul>
   <li>Monitors all active ads for disapproval status</li>
   <li>Identifies the specific policy violation using Google's error codes</li>
@@ -343,7 +343,7 @@ HTML,
 <h2>Step 4 — The agents take over</h2>
 <p>Once your campaign is live, all six AI agents activate immediately:</p>
 <ul>
-  <li>The <strong>Self-Healing Agent</strong> monitors for disapprovals</li>
+  <li>The <strong>Self-Optimising Agent</strong> monitors for disapprovals</li>
   <li>The <strong>Budget Intelligence Agent</strong> starts analysing performance by time of day</li>
   <li>The <strong>Quality Score Agent</strong> monitors keyword quality scores</li>
   <li>The <strong>Ad Extension Agent</strong> ensures full extension coverage</li>
@@ -456,7 +456,7 @@ HTML,
 <p>If your campaign goes through a quiet period — seasonal lull, campaign pause, tracking issue — Google's Smart Bidding models can lose their calibration. A bidding strategy trained on 90 days of conversion history can perform very differently after 3 weeks of low conversion data. Google's learning phase effectively restarts, and performance fluctuates while it recalibrates.</p>
 
 <h2>How sitetospend.com prevents campaign decay</h2>
-<p>Every cause of campaign decay described above has a corresponding agent that prevents it. The Creative Intelligence Agent continuously refreshes ad copy before fatigue sets in. The Budget Intelligence Agent detects when CPCs are rising and adjusts dayparting to protect performance. The Self-Healing Agent monitors Search Term drift and maintains negative keyword lists weekly. The Quality Score Agent catches CTR declines before they become Quality Score problems. Together, these agents don't just fix problems — they prevent them from developing in the first place.</p>
+<p>Every cause of campaign decay described above has a corresponding agent that prevents it. The Creative Intelligence Agent continuously refreshes ad copy before fatigue sets in. The Budget Intelligence Agent detects when CPCs are rising and adjusts dayparting to protect performance. The Self-Optimising Agent monitors Search Term drift and maintains negative keyword lists weekly. The Quality Score Agent catches CTR declines before they become Quality Score problems. Together, these agents don't just fix problems — they prevent them from developing in the first place.</p>
 HTML,
         ];
     }
