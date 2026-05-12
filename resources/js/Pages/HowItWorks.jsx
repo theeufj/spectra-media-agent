@@ -52,10 +52,10 @@ export default function HowItWorks({ auth }) {
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
                             <p className="text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">How It Works</p>
                             <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
-                                From URL to ROI in 3 Simple Steps
+                                Up and running in 3 steps
                             </h1>
                             <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-500">
-                                Our autonomous agents handle the complex workflow so you don't have to. Just enter your URL and we do the rest.
+                                Just enter your website address. We handle everything else.
                             </p>
                         </div>
                     </div>
@@ -69,12 +69,12 @@ export default function HowItWorks({ auth }) {
                                     <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-flame-orange-100 mb-6">
                                         <span className="text-3xl">👁️</span>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-gray-900 mb-4">1. Vision AI Brand Extraction</h2>
+                                    <h2 className="text-3xl font-bold text-gray-900 mb-4">1. We read your website</h2>
                                     <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Enter your website URL. Our Crawler takes a high-resolution screenshot, and Gemini Vision AI instantly extracts your hex codes, fonts, and brand voice. No manual setup, no brand guidelines PDF—just instant understanding.
+                                        Enter your website address and we take it from there. We look at your site and pick up your colours, fonts, and the way you talk about your business. No forms, no brand guides, no setup calls.
                                     </p>
                                     <ul className="space-y-3">
-                                        {['Automatic color palette extraction', 'Font & typography detection', 'Brand voice & tone analysis', 'Logo and visual style recognition'].map((item) => (
+                                        {['Your colours, picked up automatically', 'Your fonts and visual style', 'Your tone of voice', 'Your logo and brand feel'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
                                                 <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
@@ -85,8 +85,8 @@ export default function HowItWorks({ auth }) {
                                 <div className="bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
                                         <span className="text-7xl">👁️</span>
-                                        <p className="mt-4 text-flame-orange-600 font-semibold">Vision AI Extraction</p>
-                                        <p className="text-sm text-gray-500 mt-2">URL → Brand Identity in seconds</p>
+                                        <p className="mt-4 text-flame-orange-600 font-semibold">Your brand, understood instantly</p>
+                                        <p className="text-sm text-gray-500 mt-2">Just your website address. That's all we need.</p>
                                     </div>
                                 </div>
                             </div>
@@ -96,20 +96,20 @@ export default function HowItWorks({ auth }) {
                                 <div className="order-2 lg:order-1 bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
                                         <span className="text-7xl">🧠</span>
-                                        <p className="mt-4 text-flame-orange-600 font-semibold">Competitive Intelligence</p>
-                                        <p className="text-sm text-gray-500 mt-2">Discover → Analyze → Counter-Strategy</p>
+                                        <p className="mt-4 text-flame-orange-600 font-semibold">Know your competition</p>
+                                        <p className="text-sm text-gray-500 mt-2">Find them → read them → beat them</p>
                                     </div>
                                 </div>
                                 <div className="order-1 lg:order-2">
                                     <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-flame-orange-100 mb-6">
                                         <span className="text-3xl">🧠</span>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-gray-900 mb-4">2. Competitive Intelligence</h2>
+                                    <h2 className="text-3xl font-bold text-gray-900 mb-4">2. We find your competitors</h2>
                                     <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Our Competitor Discovery Agent uses Google Search to find your real competitors. The Analysis Agent scrapes their sites, extracts their messaging, and generates counter-strategies to help you win.
+                                        We look at who else is advertising in your space, read through their websites, and work out the best angles for your ads to stand out. Updated every week without you having to ask.
                                     </p>
                                     <ul className="space-y-3">
-                                        {['Automatic competitor identification via Google Search', 'Website scraping & messaging extraction', 'Value proposition & pricing analysis', 'AI-generated counter-strategy recommendations'].map((item) => (
+                                        {['Finds competitors you might not know about', 'Reads their websites and messaging', 'Checks their pricing and offers', 'Tells you exactly how to stand out from them'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
                                                 <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
@@ -125,12 +125,12 @@ export default function HowItWorks({ auth }) {
                                     <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-flame-orange-100 mb-6">
                                         <span className="text-3xl">🚀</span>
                                     </div>
-                                    <h2 className="text-3xl font-bold text-gray-900 mb-4">3. Autonomous Optimization</h2>
+                                    <h2 className="text-3xl font-bold text-gray-900 mb-4">3. Your ads run themselves</h2>
                                     <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Deploy with one click. Self-Optimising Agents fix disapproved ads automatically. Budget Intelligence shifts spend to peak hours. Creative Testing identifies winners and generates new variations—all autonomously, 24/7.
+                                        Launch with one click. From then on, rejected ads get fixed, budget moves to where it's performing, and we're always testing new ideas to improve your results. Every day, automatically.
                                     </p>
                                     <ul className="space-y-3">
-                                        {['Self-optimising disapproved ads', 'Hourly budget optimization by time-of-day', 'Automated A/B testing & creative generation', 'Audience segmentation & expansion'].map((item) => (
+                                        {['Rejected ads fixed and resubmitted automatically', 'Budget shifts to peak hours every day', 'Always testing different headlines and images', 'Finds new audiences who look like your best customers'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
                                                 <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
@@ -141,8 +141,8 @@ export default function HowItWorks({ auth }) {
                                 <div className="bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
                                         <span className="text-7xl">🚀</span>
-                                        <p className="mt-4 text-flame-orange-600 font-semibold">Autonomous Optimization</p>
-                                        <p className="text-sm text-gray-500 mt-2">Deploy → Optimize → Scale</p>
+                                        <p className="mt-4 text-flame-orange-600 font-semibold">Improving every day</p>
+                                        <p className="text-sm text-gray-500 mt-2">Launch → Learn → Keep getting better</p>
                                     </div>
                                 </div>
                             </div>
@@ -159,10 +159,10 @@ export default function HowItWorks({ auth }) {
                             <div className="grid max-w-2xl grid-cols-1 gap-8 sm:grid-cols-2 xl:max-w-none xl:grid-cols-3">
                                 {[
                                     { quote: "sitetospend completely transformed how we run ads for our security platform. The AI agents handle our Google Ads around the clock—competitor targeting, budget shifts, creative testing—all automated. We've cut our ad management time by 80%.", name: 'Josh T.', role: 'Founder', company: 'Proveably', url: 'https://proveably.com' },
-                                    { quote: "As an event platform, we need to reach the right audience fast. sitetospend's autonomous agents discovered competitors we didn't even know about and built campaigns that outperformed our old agency from day one. The self-optimising ads alone saved us thousands.", name: 'Jamie L.', role: 'Founder', company: 'PapSnap', url: 'https://papsnap.com' },
+                                    { quote: "As an event platform, we need to reach the right audience fast. sitetospend found competitors we didn't even know about and built campaigns that outperformed our old agency from day one. The self-optimising ads alone saved us thousands.", name: 'Jamie L.', role: 'Founder', company: 'PapSnap', url: 'https://papsnap.com' },
                                     { quote: "Running an e-commerce store builder means I don't have time to babysit ad campaigns. sitetospend's AI agents do it all—budget optimization, creative testing, audience targeting. The results have been incredible for a fraction of what we were paying our agency.", name: 'Mike R.', role: 'Co-Founder', company: 'YourFirstStore', url: 'https://yourfirststore.com' },
                                     { quote: "Managing marketing for a golf marketplace with venues, coaches, and members is complex. sitetospend's AI agents handle the nuance beautifully—different campaigns for different audiences, all optimized automatically. It's like having a full marketing team on autopilot.", name: 'Alicia M.', role: 'Founder', company: 'Zonely', url: 'https://zonely.co' },
-                                    { quote: "We've been in digital marketing for 20+ years and sitetospend is genuinely impressive. We use it for clients who need always-on campaign optimization. The autonomous budget intelligence and creative testing agents deliver results that rival manual management at scale.", name: 'Daniel K.', role: 'Director', company: 'First Digital', url: 'https://firstdigital.co.nz' },
+                                    { quote: "We've been in digital marketing for 20+ years and sitetospend is genuinely impressive. We use it for clients who need always-on campaign optimization. The budget shifting and creative testing features deliver results that rival hands-on management—at a fraction of the effort.", name: 'Daniel K.', role: 'Director', company: 'First Digital', url: 'https://firstdigital.co.nz' },
                                 ].map((testimonial) => (
                                     <div key={testimonial.name} className="relative rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-900/5 hover:shadow-md transition-shadow">
                                         <div className="flex gap-1 mb-4">
@@ -184,7 +184,7 @@ export default function HowItWorks({ auth }) {
                                 Ready to get started?
                             </h2>
                             <p className="mt-6 text-xl text-flame-orange-100">
-                                Sign up free and let our AI agents transform your marketing in minutes.
+                                Sign up free and see your first ads ready to launch in minutes.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
                                 <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
@@ -194,7 +194,7 @@ export default function HowItWorks({ auth }) {
                                     View Pricing
                                 </a>
                             </div>
-                            <p className="mt-8 text-flame-orange-100">✓ No credit card required · ✓ Generous free tier · ✓ Deploy in minutes</p>
+                            <p className="mt-8 text-flame-orange-100">✓ No credit card required · ✓ Free to explore · ✓ Live in minutes</p>
                         </div>
                     </div>
                 </main>

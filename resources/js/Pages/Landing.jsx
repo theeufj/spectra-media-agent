@@ -61,11 +61,11 @@ export default function Landing({ auth, plans = [] }) {
 
     const getLoadingText = () => {
         switch (loadingStage) {
-            case 1: return "Analyzing your home page now...";
-            case 2: return "Extracting brand identity and CSS...";
-            case 3: return "Harnessing Vision AI to decode your winning brand style...";
-            case 4: return "Writing multi-variant ad copy...";
-            default: return "Processing...";
+            case 1: return "Reading your website...";
+            case 2: return "Picking up your colours, fonts, and brand feel...";
+            case 3: return "Understanding what makes your brand stand out...";
+            case 4: return "Writing your ads...";
+            default: return "Working on it...";
         }
     };
 
@@ -73,9 +73,9 @@ export default function Landing({ auth, plans = [] }) {
         <>
             <Head>
                 <title>AI-Powered Ad Campaign Management | sitetospend</title>
-                <meta name="description" content={`Agency-level digital advertising powered by AI. 6 autonomous agents optimize your Google Ads & Facebook Ads 24/7—competitor discovery, self-optimising campaigns, budget intelligence, and more. From $${lowestPrice}/mo.`} />
-                <meta property="og:title" content="sitetospend — AI-Powered Ad Campaign Management" />
-                <meta property="og:description" content={`6 autonomous AI agents optimize your ad campaigns 24/7. Agency-level results from $${lowestPrice}/mo. No credit card required.`} />
+                <meta name="description" content={`Your own AI marketing team. Runs your Google Ads & Facebook Ads 24/7—spots your competitors, fixes broken ads, shifts budget to what's working, and keeps testing. From $${lowestPrice}/mo.`} />
+                <meta property="og:title" content="sitetospend — Your AI Marketing Team" />
+                <meta property="og:description" content={`Ads that run themselves. Agency-level results from $${lowestPrice}/mo. No credit card required.`} />
                 <meta property="og:image" content="https://sitetospend.com/og-image.png?v=2" />
                 <meta property="og:type" content="website" />
                 <meta name="twitter:title" content="sitetospend — AI-Powered Ad Campaign Management" />
@@ -165,7 +165,7 @@ export default function Landing({ auth, plans = [] }) {
                                             <span className="block text-flame-orange-600 whitespace-normal">The cost of a utility bill.</span>
                                         </h1>
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
-                                            Stop paying thousands in retainer fees. Our AI agents discover your competitors, heal broken campaigns automatically, optimize budgets in real-time, and A/B test creatives 24/7—all while you sleep.
+                                            Stop paying agency retainer fees. Our AI spots your competitors, fixes broken ads, moves budget to what's working, and keeps testing new ideas—every single day, without you lifting a finger.
                                         </p>
 
                                         <div className="mt-8 bg-white p-4 rounded-xl shadow-lg border border-gray-100">
@@ -197,7 +197,7 @@ export default function Landing({ auth, plans = [] }) {
                                                 </div>
                                             )}
                                         </div>
-                                        <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Generous free tier · ✓ Cancel anytime</p>
+                                        <p className="mt-4 sm:mt-6 text-xs sm:text-sm text-gray-500">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
                                     </div>
                                 </div>
                             </div>
@@ -223,17 +223,17 @@ export default function Landing({ auth, plans = [] }) {
                     <div className="bg-white py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center mb-14">
-                                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">From URL to ROI in 3 Steps</h2>
+                                <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">Up and running in 3 steps</h2>
                                 <p className="mt-4 text-lg leading-8 text-gray-600">
-                                    Our autonomous agents handle the complex workflow so you don't have to.
+                                    We handle the hard parts. You focus on your business.
                                 </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
                                 <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-flame-orange-100 -z-10"></div>
                                 {[
-                                    { icon: '👁️', title: '1. Vision AI Extraction', desc: 'Enter your URL. Gemini Vision AI instantly extracts your hex codes, fonts, and brand voice.' },
-                                    { icon: '🧠', title: '2. Competitive Intelligence', desc: 'AI discovers your real competitors, scrapes their sites, and generates counter-strategies.' },
-                                    { icon: '🚀', title: '3. Autonomous Optimization', desc: 'Self-Optimising Agents fix ads, Budget Intelligence shifts spend, Creative Testing finds winners.' },
+                                    { icon: '👁️', title: '1. We read your website', desc: 'Just enter your URL. We pick up your colours, fonts, and brand voice automatically—no forms to fill in.' },
+                                    { icon: '🧠', title: '2. We find your competitors', desc: 'We look at who else is advertising in your space, check out their messaging, and figure out how to beat them.' },
+                                    { icon: '🚀', title: '3. Your ads run themselves', desc: 'We fix disapproved ads, shift budget to what\'s working, and keep testing new ideas—every day, on autopilot.' },
                                 ].map((step) => (
                                     <div key={step.title} className="relative flex flex-col items-center text-center">
                                         <div className="flex items-center justify-center h-24 w-24 rounded-full bg-flame-orange-50 border-4 border-white shadow-lg mb-6">
@@ -255,10 +255,10 @@ export default function Landing({ auth, plans = [] }) {
                     {/* Agents Highlight */}
                     <div className="bg-gradient-to-br from-flame-orange-900 via-flame-orange-800 to-purple-900 py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Autonomous AI Agents</p>
+                            <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
                             <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 Marketing Team</h2>
                             <p className="mt-4 max-w-2xl mx-auto text-lg text-flame-orange-200">
-                                Six specialized AI agents work around the clock to optimize every aspect of your campaigns.
+                                Six AI specialists, each focused on a different part of your advertising. Running around the clock, whether you're in a meeting or fast asleep.
                             </p>
                             <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
                                 {[
@@ -290,8 +290,8 @@ export default function Landing({ auth, plans = [] }) {
                     <div className="bg-gradient-to-b from-gray-50 to-white py-16 sm:py-24">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="text-center mb-16">
-                                <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">Simple, Transparent Pricing</h2>
-                                <p className="mt-4 text-xl text-gray-500">Agency-level results starting at just ${lowestPrice}/month.</p>
+                                <h2 className="text-3xl font-extrabold text-gray-900 sm:text-4xl">Simple, honest pricing</h2>
+                                <p className="mt-4 text-xl text-gray-500">Agency-quality results. Starting at just ${lowestPrice}/month.</p>
                             </div>
                             <div className={`grid grid-cols-1 ${plans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-8 max-w-4xl mx-auto`}>
                                 {plans.map((plan) => (
@@ -317,10 +317,10 @@ export default function Landing({ auth, plans = [] }) {
                     <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-800 py-16 sm:py-24">
                         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
-                                Ready to transform your marketing?
+                                Ready to stop doing this the hard way?
                             </h2>
                             <p className="mt-6 text-xl text-flame-orange-100">
-                                Join hundreds of marketing teams creating smarter, faster campaigns with AI-powered optimization.
+                                Join hundreds of businesses who handed the heavy lifting to their AI team—and haven't looked back.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
                                 <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
@@ -330,7 +330,7 @@ export default function Landing({ auth, plans = [] }) {
                                     Sign In
                                 </a>
                             </div>
-                            <p className="mt-8 text-flame-orange-100">✓ Generous free tier · ✓ No credit card required · ✓ Deploy in minutes</p>
+                            <p className="mt-8 text-flame-orange-100">✓ Free to explore · ✓ No credit card required · ✓ Live in minutes</p>
                         </div>
                     </div>
                 </main>

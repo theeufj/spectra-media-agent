@@ -54,13 +54,13 @@ export default function About({ auth }) {
                                 <div>
                                     <h2 className="text-3xl font-bold text-gray-900 mb-6">Our Mission</h2>
                                     <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Traditional agencies charge thousands per month, lock you into long contracts, and deliver weekly reports at best. We built sitetospend to change that.
+                                        Traditional agencies charge thousands a month, lock you into long contracts, and send you a report once a week if you're lucky. We built sitetospend because that's just not good enough for most businesses.
                                     </p>
                                     <p className="text-lg text-gray-600 leading-relaxed mb-6">
-                                        Our autonomous AI agents work 24/7—discovering your competitors, optimizing your budgets hourly, fixing disapproved ads instantly, and A/B testing creatives around the clock. You get real-time optimization that no human team can match, at a cost that starts at just $99/month.
+                                        Our AI works every hour of every day—finding your competitors, shifting your budget to the right times, fixing rejected ads the moment they happen, and always testing new ideas. It never takes a day off, never misses something, and costs a fraction of what an agency charges.
                                     </p>
                                     <p className="text-lg text-gray-600 leading-relaxed">
-                                        We're not replacing marketers—we're giving every business access to the tools and intelligence that used to be reserved for companies with six-figure ad budgets.
+                                        We're not here to replace your marketing instincts—we're here to give every business the tools that used to be reserved for companies with enormous ad budgets.
                                     </p>
                                 </div>
                                 <div className="bg-flame-orange-50 rounded-2xl p-10">
@@ -91,7 +91,7 @@ export default function About({ auth }) {
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                                 {[
                                     { icon: '🔍', title: 'Transparency', desc: 'No hidden fees, no markup on ad spend. You pay the platforms directly and always see exactly where your money goes.' },
-                                    { icon: '🤖', title: 'Automation First', desc: "We believe the best marketing is autonomous. Our agents don't rest—they optimize budgets, fix issues, and test creatives while you focus on your business." },
+                                    { icon: '🤖', title: 'Always On', desc: "The best marketing never sleeps. Our AI doesn't rest—it's fixing issues, testing new ideas, and shifting your budget while you're focused on everything else." },
                                     { icon: '🛡️', title: 'Your Data, Your Control', desc: 'Your customer data and brand assets stay yours. We create and manage your ad accounts under our management umbrella—you always retain full ownership and visibility.' },
                                 ].map((value) => (
                                     <div key={value.title} className="bg-white rounded-xl p-8 shadow-sm ring-1 ring-gray-900/5">
@@ -112,10 +112,10 @@ export default function About({ auth }) {
                             </div>
                             <div className="space-y-6">
                                 {[
-                                    { label: 'Vision AI', desc: 'We don\'t ask you to fill out a 20-page brand questionnaire. Our Vision AI reads your website and instantly understands your brand—colors, fonts, tone, everything.' },
-                                    { label: 'Self-Optimising', desc: 'Disapproved ad? Fixed automatically. Underperforming creative? Paused and replaced. Our agents don\'t wait for a Monday morning standup.' },
-                                    { label: 'Competitive Intel', desc: 'We use Google Search to find your real competitors, scrape their websites, and generate counter-strategies. Updated weekly, automatically.' },
-                                    { label: 'Fair Billing', desc: 'Your subscription covers the platform. Ad spend goes directly to the ad networks. We never mark up your media costs—ever.' },
+                                    { label: 'Your brand, instantly', desc: 'No 20-page brand questionnaires. We read your website and understand your colours, fonts, and tone straight away. Every ad looks like it came from your own team.' },
+                                    { label: 'Problems get fixed before you notice', desc: 'Rejected ad? Fixed. Underperforming creative? Paused and replaced. We don\'t wait for a Monday morning call to deal with it.' },
+                                    { label: 'We watch your competitors for you', desc: 'Every week we look at who\'s advertising in your space, read their websites, and figure out how you can beat them. You just see the results.' },
+                                    { label: 'What you see is what you pay', desc: 'Your subscription covers the platform. Your ad spend goes straight to Google, Facebook, and the others. We never add a margin to your media costs.' },
                                 ].map((item) => (
                                     <div key={item.label} className="flex gap-4 items-start">
                                         <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-flame-orange-500"></div>
@@ -146,7 +146,7 @@ export default function About({ auth }) {
                                     Explore Features
                                 </Link>
                             </div>
-                            <p className="mt-8 text-flame-orange-100">✓ No credit card required · ✓ Generous free tier · ✓ Cancel anytime</p>
+                            <p className="mt-8 text-flame-orange-100">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
                         </div>
                     </div>
                 </main>

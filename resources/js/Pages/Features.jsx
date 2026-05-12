@@ -41,7 +41,7 @@ export default function Features({ auth }) {
                                 Everything You Need to Win at Paid Ads
                             </h1>
                             <p className="mt-6 max-w-2xl mx-auto text-lg text-gray-500">
-                                Six autonomous AI agents, full Google Ads support, Vision AI brand extraction, and conversion tracking—all working 24/7 so you don't have to.
+                                Six AI specialists, full Google Ads support, automatic brand matching, and conversion tracking—all running 24/7 so you don't have to think about it.
                             </p>
                         </div>
                     </div>
@@ -84,21 +84,21 @@ export default function Features({ auth }) {
                     <div className="bg-gradient-to-br from-flame-orange-900 via-flame-orange-800 to-purple-900 py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center mb-12">
-                                <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Autonomous AI Agents</p>
+                                <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
                                 <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 Marketing Team</h2>
                                 <p className="mt-4 text-lg text-flame-orange-200">
-                                    Six specialized AI agents work around the clock to optimize every aspect of your campaigns.
+                                    Six AI specialists, each focused on a different part of your advertising, running around the clock.
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {[
-                                    { icon: '🔍', color: 'flame-orange', name: 'Competitor Discovery Agent', desc: 'Uses Google Search AI to find your real competitors based on your website content. Identifies direct and indirect competitors you might not know about.', freq: 'Weekly' },
-                                    { icon: '📊', color: 'flame-orange', name: 'Competitor Analysis Agent', desc: 'Scrapes competitor websites, extracts their messaging, value propositions, pricing, and ad copy. Generates counter-strategies for your campaigns.', freq: 'Weekly' },
-                                    { icon: '🩹', color: 'green', name: 'Self-Optimising Agent', desc: 'Monitors for disapproved ads and automatically rewrites them to be policy-compliant. Pauses underperforming ads before they waste budget.', freq: 'Every 4 Hours' },
-                                    { icon: '💰', color: 'yellow', name: 'Budget Intelligence Agent', desc: 'Dynamically adjusts budgets based on time-of-day and day-of-week performance. Reduces spend at 3am, increases during peak buying hours.', freq: 'Hourly' },
-                                    { icon: '🎨', color: 'pink', name: 'Creative Intelligence Agent', desc: 'Tracks A/B test performance at headline, description, and image level. Identifies winners, kills losers, and generates new variations.', freq: 'Daily' },
-                                    { icon: '👥', color: 'purple', name: 'Audience Intelligence Agent', desc: 'Manages Customer Match lists, segments your audience, and recommends lookalike audiences for expansion. Maximizes your first-party data.', freq: 'On-Demand' },
+                                    { icon: '🔍', color: 'flame-orange', name: 'Competitor Discovery', desc: 'Looks at what you do and finds the businesses competing for the same customers—including ones you might not know about.', freq: 'Weekly' },
+                                    { icon: '📊', color: 'flame-orange', name: 'Competitor Analysis', desc: 'Reads your competitors\' websites and figures out what angles you can use to beat them. Updated every week.', freq: 'Weekly' },
+                                    { icon: '🩹', color: 'green', name: 'Ad Health & Fixing', desc: 'Keeps an eye out for rejected ads and rewrites them so they get approved by Google. Also pauses ads that aren\'t pulling their weight.', freq: 'Every 4 Hours' },
+                                    { icon: '💰', color: 'yellow', name: 'Smart Budget Shifting', desc: 'Moves your budget to the times your customers are actually online. Pulls back at quiet hours, pushes harder when it counts.', freq: 'Hourly' },
+                                    { icon: '🎨', color: 'pink', name: 'Ad Creative Testing', desc: 'Runs constant tests across your headlines, descriptions, and images. Keeps what\'s working, replaces what isn\'t.', freq: 'Daily' },
+                                    { icon: '👥', color: 'purple', name: 'Audience Growth', desc: 'Uploads your customer list and finds new people who look a lot like your best customers—so you\'re always reaching the right crowd.', freq: 'On-Demand' },
                                 ].map((agent) => (
                                     <div key={agent.name} className="bg-white/10 backdrop-blur-lg rounded-xl p-6 border border-white/20 hover:bg-white/15 transition-colors">
                                         <div className="flex items-center gap-3 mb-4">
@@ -127,26 +127,26 @@ export default function Features({ auth }) {
                     <div className="bg-gray-50 py-12 sm:py-16 md:py-20 lg:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center">
-                                <h2 className="text-base font-semibold leading-7 text-flame-orange-600">Deploy with Confidence</h2>
+                                <h2 className="text-base font-semibold leading-7 text-flame-orange-600">Built for real businesses</h2>
                                 <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
-                                    Everything you need to launch and optimize your ad campaigns
+                                    Everything you need to launch great ads and keep them running
                                 </p>
                                 <p className="mt-4 sm:mt-6 text-base sm:text-lg leading-8 text-gray-600">
-                                    Our AI agents handle the heavy lifting, from creative generation to performance analysis, so you can focus on your business.
+                                    We handle everything from writing your ads to tracking what's working—so you can focus on actually running your business.
                                 </p>
                             </div>
                             <div className="mx-auto mt-12 sm:mt-16 md:mt-20 lg:mt-24 max-w-2xl sm:max-w-none lg:max-w-5xl">
                                 <dl className="grid max-w-xl grid-cols-1 sm:grid-cols-2 gap-x-6 sm:gap-x-8 gap-y-8 sm:gap-y-10 lg:max-w-none lg:grid-cols-3 lg:gap-y-16">
                                     {[
-                                        { title: 'Competitive Intelligence', desc: 'AI agents discover your competitors using Google Search, scrape their websites, analyze their messaging, and generate counter-strategies to help you win.', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
-                                        { title: 'Self-Optimising Campaigns', desc: "Disapproved ad? Our AI automatically rewrites it to be policy-compliant and resubmits. Underperforming ads are paused before they waste your budget.", icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
-                                        { title: 'Budget Intelligence', desc: 'Smart budget shifting based on time-of-day and day-of-week performance. Reduce spend at 3am, increase during peak buying hours—automatically.', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
-                                        { title: 'Creative A/B Testing', desc: "Track performance at the headline, description, and image level. AI identifies winners, kills losers, and generates new variations based on what's working.", icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
-                                        { title: 'Audience Intelligence', desc: 'Upload your customer emails for Customer Match targeting. AI segments your audience and recommends lookalike audiences for expansion.', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
-                                        { title: 'Vision AI Brand Extraction', desc: 'AI screenshots your website and extracts colors, fonts, and brand voice. Every ad stays perfectly on-brand without manual input.', icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
-                                        { title: 'Search, Display, Video, PMax', desc: 'Full Google Ads support including Search campaigns, Display ads, Video campaigns, and Performance Max with AI-generated assets.', icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' },
-                                        { title: 'Conversion Tracking & GTM', desc: 'Automatic conversion tracking setup with Google Tag Manager integration. We create and deploy tags so you can measure ROI from day one.', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-                                        { title: 'Try Before You Buy', desc: "Sign up free and test our platform with 3 brand sources, 4 images per campaign (watermarked), and unlimited ad copy. Upgrade when you're ready to deploy live campaigns.", icon: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6' },
+                                        { title: 'Know Your Competition', desc: 'We find out who you\'re up against, check out their websites, and work out how you can stand out. Updated every week without you asking.', icon: 'M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' },
+                                        { title: 'Ads That Fix Themselves', desc: "Ad rejected by Google? We rewrite it and resubmit automatically. Ads that stop performing get paused before they burn through your budget.", icon: 'M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z' },
+                                        { title: 'Smart Budget Shifting', desc: 'Your budget moves automatically to the times people are most likely to buy. Less wasted spend overnight, more firepower during peak hours.', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+                                        { title: 'Always Testing Your Ads', desc: "We constantly test different headlines, descriptions, and images to find out what clicks with your audience—and keep improving from there.", icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z' },
+                                        { title: 'Reach More of the Right People', desc: 'Upload your existing customer emails and we\'ll find more people just like them. Great for growing your audience without guessing.', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
+                                        { title: 'Your Brand, Automatically', desc: 'We read your website and pick up your colours, fonts, and tone of voice. Every ad looks like it came from your own design team.', icon: 'M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01' },
+                                        { title: 'Every Google Ad Format', desc: 'We run Search, Display, Video, and Performance Max campaigns—all managed from the same place, with AI writing the assets.', icon: 'M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4' },
+                                        { title: 'Conversion Tracking, Set Up for You', desc: 'We set up your conversion tracking so you always know what your ads are actually delivering—sales, leads, calls, whatever matters to you.', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+                                        { title: 'Try It Free First', desc: "Sign up and explore everything with no commitment. Real ad copy, real images, real competitor insights. Upgrade when you're ready to go live.", icon: 'M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3v-6' },
                                     ].map((feature) => (
                                         <div key={feature.title} className="relative pl-16">
                                             <dt className="text-base font-semibold leading-7 text-gray-900">
