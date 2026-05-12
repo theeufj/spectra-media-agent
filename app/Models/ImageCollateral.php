@@ -24,6 +24,7 @@ class ImageCollateral extends Model
         'refinement_depth',
         'is_active',
         'source',
+        'format',
     ];
 
     /**

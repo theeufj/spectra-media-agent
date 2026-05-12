@@ -182,7 +182,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
       "platform": "Google Ads (SEM)",
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
       "imagery_strategy": "For Responsive Display Ads, use high-contrast infographics...",
-      "video_strategy": "N/A for text-based search ads.",
+      "video_strategy": "For Search campaigns: N/A — text ads only. For Performance Max or Display campaigns: create a 15–30 second video concept showing the product/service in use, with a clear benefit and call to action.",
       "bidding_strategy": {
         "name": "TargetCpa",
         "parameters": {

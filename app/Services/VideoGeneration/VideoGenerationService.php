@@ -29,7 +29,10 @@ class VideoGenerationService
             $operationName = $this->geminiService->startVideoGeneration($prompt, config('ai.models.video'), $parameters);
 
             if (is_null($operationName)) {
-                Log::error("Video generation failed to start: GeminiService returned null operation name.");
+                Log::error("Video generation failed to start: GeminiService returned null operation name.", [
+                    'model' => config('ai.models.video'),
+                    'prompt_length' => strlen($prompt),
+                ]);
                 return null;
             }
 

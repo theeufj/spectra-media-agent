@@ -476,11 +476,17 @@ class GeminiService
             ])->timeout(300)->post("{$this->baseUrl}{$model}:predictLongRunning", $requestBody);
 
             if ($response->failed()) {
-                Log::error("GeminiService: Failed to start video generation from model {$model}: " . $response->body());
+                Log::error("GeminiService: Failed to start video generation from model {$model}", [
+                    'status'   => $response->status(),
+                    'body'     => $response->body(),
+                    'model'    => $model,
+                ]);
                 return null;
             }
 
-            return $response->json()['name'] ?? null;
+            $json = $response->json();
+            Log::info("GeminiService: Veo response keys: " . implode(', ', array_keys($json ?? [])));
+            return $json['name'] ?? null;
         } catch (\Exception $e) {
             Log::error("GeminiService: Exception during video generation start from model {$model}: " . $e->getMessage(), [
                 'exception' => $e,

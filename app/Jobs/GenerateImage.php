@@ -160,95 +160,103 @@ class GenerateImage implements ShouldQueue
                     continue;
                 }
 
-                // Apply brand name + tagline overlay (all tiers), or preview watermark (free tier)
+                // Generate all ad sizes from the same raw image data
                 $customer = $this->campaign->customer;
                 $user = $customer->users()->first();
                 $isSubscribed = $user && ($user->subscribed('default') || $user->subscription_status === 'active')
                     || $customer->subscription_status === 'active';
 
-                try {
-                    $image = Image::read($decodedImage);
-                    $w = $image->width();
-                    $h = $image->height();
-
-                    if ($isSubscribed) {
-                        // Brand name + tagline banner at bottom
-                        $brandName = $customer->name ?? '';
-                        $tagline = null;
-                        if ($brandGuidelines) {
-                            $usps = $brandGuidelines->unique_selling_propositions ?? [];
-                            $themes = $brandGuidelines->messaging_themes ?? [];
-                            $raw = $usps[0] ?? $themes[0] ?? null;
-                            if ($raw) {
-                                // Strip "First USP: " style prefixes and truncate
-                                $raw = preg_replace('/^[^:]+:\s*/', '', $raw);
-                                $tagline = mb_strlen($raw) > 45 ? mb_substr($raw, 0, 42) . '…' : $raw;
-                            }
-                        }
-
-                        // Semi-transparent dark banner covering bottom 18% of image
-                        $bannerH = (int) ($h * 0.18);
-                        $image->drawRectangle(0, $h - $bannerH, function ($draw) use ($w, $h, $bannerH) {
-                            $draw->size($w, $bannerH);
-                            $draw->background('rgba(0, 0, 0, 0.65)');
-                        });
-
-                        // Resolve a font path (server system font fallback chain)
-                        $fontPath = $this->resolveFont();
-
-                        if ($brandName) {
-                            $image->text($brandName, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.38), function ($font) use ($fontPath, $bannerH) {
-                                if ($fontPath) $font->filename($fontPath);
-                                $font->size((int) ($bannerH * 0.38));
-                                $font->color('ffffff');
-                                $font->align('center');
-                                $font->valign('middle');
-                            });
-                        }
-
-                        if ($tagline) {
-                            $image->text($tagline, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.72), function ($font) use ($fontPath, $bannerH) {
-                                if ($fontPath) $font->filename($fontPath);
-                                $font->size((int) ($bannerH * 0.22));
-                                $font->color('rgba(220, 220, 220, 1)');
-                                $font->align('center');
-                                $font->valign('middle');
-                            });
-                        }
-                    } else {
-                        // Free tier: "Preview" watermark bottom-right
-                        $fontPath = $this->resolveFont();
-                        $image->text('Preview', $w - 20, $h - 20, function ($font) use ($fontPath) {
-                            if ($fontPath) $font->filename($fontPath);
-                            $font->size(24);
-                            $font->color('ffffff');
-                            $font->align('right');
-                            $font->valign('bottom');
-                        });
+                // Precompute tagline once (same for all sizes)
+                $brandName = $customer->name ?? '';
+                $tagline = null;
+                if ($isSubscribed && $brandGuidelines) {
+                    $usps = $brandGuidelines->unique_selling_propositions ?? [];
+                    $themes = $brandGuidelines->messaging_themes ?? [];
+                    $raw = $usps[0] ?? $themes[0] ?? null;
+                    if ($raw) {
+                        $raw = preg_replace('/^[^:]+:\s*/', '', $raw);
+                        // 32 chars max — at 22% of banner height, fits safely within any ad width
+                        $tagline = mb_strlen($raw) > 32 ? mb_substr($raw, 0, 29) . '…' : $raw;
                     }
-
-                    $decodedImage = (string) $image->encode();
-                } catch (\Exception $e) {
-                    Log::warning("Failed to apply image overlay: " . $e->getMessage());
                 }
 
-                // Store the image in S3
+                // Three sizes: square (social), landscape (display/link), MREC (display network)
+                $adSizes = [
+                    'square'    => [1024, 1024],
+                    'landscape' => [1200, 628],
+                    'mrec'      => [300, 250],
+                ];
+
                 $extension = $this->getExtensionFromMimeType($imageData['mimeType']);
-                $filename = uniqid('img_', true) . '.' . $extension;
-                $storagePath = "collateral/images/{$this->campaign->id}/{$filename}";
 
-                [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $decodedImage, $imageData['mimeType']);
+                foreach ($adSizes as $format => [$targetW, $targetH]) {
+                    try {
+                        $img = Image::read($decodedImage);
+                        $img->cover($targetW, $targetH);
 
-                Log::info("Image uploaded at path: {$s3Path}");
+                        $w = $img->width();
+                        $h = $img->height();
 
-                // Create the ImageCollateral record
-                ImageCollateral::create([
-                    'campaign_id' => $this->campaign->id,
-                    'strategy_id' => $this->strategy->id,
-                    'platform' => $this->strategy->platform,
-                    's3_path' => $s3Path,
-                    'cloudfront_url' => $cloudFrontUrl,
-                ]);
+                        if ($isSubscribed) {
+                            $bannerH = (int) ($h * 0.18);
+                            $img->drawRectangle(0, $h - $bannerH, function ($draw) use ($w, $bannerH) {
+                                $draw->size($w, $bannerH);
+                                $draw->background('rgba(0, 0, 0, 0.65)');
+                            });
+
+                            $fontPath = $this->resolveFont();
+
+                            if ($brandName) {
+                                $img->text($brandName, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.38), function ($font) use ($fontPath, $bannerH) {
+                                    if ($fontPath) $font->filename($fontPath);
+                                    $font->size((int) ($bannerH * 0.38));
+                                    $font->color('ffffff');
+                                    $font->align('center');
+                                    $font->valign('middle');
+                                });
+                            }
+
+                            if ($tagline) {
+                                $img->text($tagline, (int) ($w / 2), $h - $bannerH + (int) ($bannerH * 0.72), function ($font) use ($fontPath, $bannerH) {
+                                    if ($fontPath) $font->filename($fontPath);
+                                    $font->size((int) ($bannerH * 0.22));
+                                    $font->color('rgba(220, 220, 220, 1)');
+                                    $font->align('center');
+                                    $font->valign('middle');
+                                });
+                            }
+                        } else {
+                            $fontPath = $this->resolveFont();
+                            $img->text('Preview', $w - 20, $h - 20, function ($font) use ($fontPath) {
+                                if ($fontPath) $font->filename($fontPath);
+                                $font->size(24);
+                                $font->color('ffffff');
+                                $font->align('right');
+                                $font->valign('bottom');
+                            });
+                        }
+
+                        $encoded = (string) $img->encode();
+                    } catch (\Exception $e) {
+                        Log::warning("Failed to apply overlay for format {$format}: " . $e->getMessage());
+                        $encoded = $decodedImage;
+                    }
+
+                    $filename = uniqid('img_', true) . "_{$format}.{$extension}";
+                    $storagePath = "collateral/images/{$this->campaign->id}/{$filename}";
+                    [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $encoded, $imageData['mimeType']);
+
+                    ImageCollateral::create([
+                        'campaign_id' => $this->campaign->id,
+                        'strategy_id' => $this->strategy->id,
+                        'platform'    => $this->strategy->platform,
+                        's3_path'     => $s3Path,
+                        'cloudfront_url' => $cloudFrontUrl,
+                        'format'      => $format,
+                    ]);
+
+                    Log::info("Image uploaded [{$format}]: {$s3Path}");
+                }
 
                 $successfulUploads++;
             }

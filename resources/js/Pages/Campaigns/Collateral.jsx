@@ -799,6 +799,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         }`}>
                                                             {image.source === 'uploaded' ? '📁 Uploaded' : image.source === 'harvested' ? '🌐 Harvested' : '✨ AI'}
                                                         </div>
+                                                        {/* Format badge */}
+                                                        {image.format && image.format !== 'square' && (
+                                                            <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white">
+                                                                {image.format === 'landscape' ? '1200×628' : image.format === 'mrec' ? '300×250' : image.format}
+                                                            </div>
+                                                        )}
                                                         {/* Refinement depth badge */}
                                                         {image.source !== 'uploaded' && (image.refinement_depth ?? 0) > 0 && creativeUsage && (
                                                             <div className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium shadow bg-amber-100 text-amber-700">
