@@ -123,8 +123,9 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                 $lock->release();
             }
         } else {
-            Log::warning("Could not obtain lock or circuit breaker is tripped for campaign ID: {$this->campaign->id}.");
-            $this->release(60);
+            Log::warning("Could not obtain lock or circuit breaker is tripped for campaign ID: {$this->campaign->id}. Will retry next scheduled run.");
+            // Do not release — burning tries against a locked/open-circuit state is wasteful.
+            // The scheduler will re-dispatch on the next run.
         }
     }
 

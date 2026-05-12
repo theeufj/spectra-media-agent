@@ -569,7 +569,11 @@ PROMPT;
             Log::debug("ExecutiveReportService: WoW insight generation failed: " . $e->getMessage());
         }
 
-        return $movers;
+        // Return flat string array so templates can safely call e($insight)
+        return array_values(array_filter(array_map(
+            fn($m) => is_string($m['insight'] ?? null) ? $m['insight'] : null,
+            $movers
+        )));
     }
 
     /**
