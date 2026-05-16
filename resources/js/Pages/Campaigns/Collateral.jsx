@@ -858,7 +858,6 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                 ))}
                                                 </div>
                                             </>
-                                            </div>
                                         )}
 
                                         <hr className="my-8" />
