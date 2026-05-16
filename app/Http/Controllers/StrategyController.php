@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\GenerateAdCopy;
+use App\Jobs\GenerateImage;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
@@ -97,6 +99,29 @@ class StrategyController extends Controller
         ]);
 
         $strategy->update($validated);
+
+        // If this strategy was already signed off, its collateral is now stale.
+        // Delete existing ad copies and images and re-queue generation.
+        // Videos are left untouched (expensive, slow — user can regenerate manually).
+        if ($strategy->signed_off_at) {
+            $campaign = $strategy->campaign;
+
+            $strategy->adCopies()->delete();
+            $strategy->imageCollaterals()->each(function ($img) {
+                \App\Services\StorageHelper::delete($img->s3_path);
+                $img->delete();
+            });
+
+            GenerateAdCopy::dispatch($campaign, $strategy, $strategy->platform)
+                ->delay(now()->addSeconds(3));
+
+            for ($i = 0; $i < 3; $i++) {
+                GenerateImage::dispatch($campaign, $strategy)
+                    ->delay(now()->addSeconds(10 + ($i * 10)));
+            }
+
+            return back()->with('success', 'Strategy updated — regenerating ad copy and images.');
+        }
 
         return back()->with('success', 'Strategy updated!');
     }

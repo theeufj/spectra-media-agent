@@ -22,7 +22,13 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        
+
+        if (!data.prompt.trim()) {
+            // setError isn't exposed by useForm; manually trigger focus so the user sees the field
+            document.getElementById('extend-prompt')?.focus();
+            return;
+        }
+
         post(route('video-collaterals.extend', video.id), {
             preserveScroll: true,
             onSuccess: () => {
@@ -102,13 +108,13 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                                 <span className="text-red-500 ml-1">*</span>
                             </label>
                             <textarea
+                                id="extend-prompt"
                                 value={data.prompt}
                                 onChange={(e) => setData('prompt', e.target.value)}
                                 placeholder="Describe how you want to continue or extend the video scene..."
                                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none"
                                 rows="4"
                                 disabled={processing}
-                                required
                             />
                             <InputError message={errors.prompt} className="mt-2" />
                             <p className="mt-2 text-sm text-gray-500">

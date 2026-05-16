@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Mail\CollateralGenerated;
+use App\Jobs\GenerateAdCopy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -92,6 +93,9 @@ class GenerateCampaignCollateral implements ShouldQueue
         Log::info("Building collateral jobs for Strategy ID: {$strategy->id}, Platform: {$strategy->platform}");
 
         $jobs = [];
+
+        // Ad copy (one job per strategy)
+        $jobs[] = new GenerateAdCopy($this->campaign, $strategy, $strategy->platform);
 
         // 3 images per strategy
         for ($i = 0; $i < 3; $i++) {

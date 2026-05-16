@@ -41,12 +41,16 @@ class GenerateStrategyCollateral implements ShouldQueue
                 return;
             }
 
-            // Check if collateral already exists for this strategy
+            // Guard against double-dispatch: skip only if collateral was generated very recently
+            // (within 5 minutes). Stale collateral from a previous run should not block fresh generation.
             $existingImages = $this->strategy->imageCollaterals()->count();
             $existingAdCopies = $this->strategy->adCopies()->count();
-            
-            if ($existingImages > 0 || $existingAdCopies > 0) {
-                Log::info("Strategy ID {$this->strategy->id} already has collateral (images: {$existingImages}, ad copies: {$existingAdCopies}), skipping");
+            $recentCutoff = now()->subMinutes(5);
+            $recentlyGenerated = ($existingImages > 0 || $existingAdCopies > 0)
+                && $this->strategy->updated_at >= $recentCutoff;
+
+            if ($recentlyGenerated) {
+                Log::info("Strategy ID {$this->strategy->id} collateral was just generated, skipping duplicate dispatch");
                 return;
             }
 
