@@ -58,6 +58,14 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        // Sends to both Nightwatch and a local daily file.
+        // Set LOG_CHANNEL=nightwatch_stack in .env to use this.
+        'nightwatch_stack' => [
+            'driver' => 'stack',
+            'channels' => ['nightwatch', 'daily'],
+            'ignore_exceptions' => true,
+        ],
+
         'single' => [
             'driver' => 'single',
             'path' => storage_path('logs/laravel.log'),
