@@ -178,12 +178,32 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
 
     const handleToggleCollateral = (type, id) => {
-        router.post(route('deployment.toggle-collateral'), {
-            type,
-            id,
-        }, {
+        // Optimistic update — local state responds immediately; server persists in background
+        setCollateral(prev => {
+            if (type === 'ad_copy') {
+                return { ...prev, adCopy: { ...prev.adCopy, should_deploy: !prev.adCopy.should_deploy } };
+            }
+            if (type === 'image') {
+                return {
+                    ...prev,
+                    imageCollaterals: prev.imageCollaterals.map(img =>
+                        img.id === id ? { ...img, should_deploy: !img.should_deploy } : img
+                    ),
+                };
+            }
+            if (type === 'video') {
+                return {
+                    ...prev,
+                    videoCollaterals: prev.videoCollaterals.map(vid =>
+                        vid.id === id ? { ...vid, should_deploy: !vid.should_deploy } : vid
+                    ),
+                };
+            }
+            return prev;
+        });
+
+        router.post(route('deployment.toggle-collateral'), { type, id }, {
             preserveScroll: true,
-            only: ['adCopy', 'imageCollaterals', 'videoCollaterals'],
             onError: (errors) => {
                 console.error('Failed to toggle collateral status:', errors);
             },

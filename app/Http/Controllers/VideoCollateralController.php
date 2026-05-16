@@ -242,11 +242,14 @@ class VideoCollateralController extends Controller
     public function destroy(VideoCollateral $video)
     {
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $video->campaign->customer_id)->exists()) {
+        $customerId = $video->campaign?->customer_id ?? $video->strategy?->campaign?->customer_id;
+        if (!$customerId || !$user->customers()->where('customers.id', $customerId)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 
-        StorageHelper::delete($video->s3_path);
+        if ($video->s3_path) {
+            StorageHelper::delete($video->s3_path);
+        }
         $video->delete();
 
         return redirect()->back()->with('flash', [
