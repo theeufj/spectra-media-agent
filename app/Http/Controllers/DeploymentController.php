@@ -35,30 +35,26 @@ class DeploymentController extends Controller
         };
 
         if (!$modelClass) {
-            return response()->json(['message' => 'Invalid collateral type provided.'], 400);
+            abort(400, 'Invalid collateral type provided.');
         }
 
         $collateral = $modelClass::findOrFail($validated['id']);
 
         // Authorization check: Ensure the user owns the campaign this collateral belongs to.
-        // Campaign belongs to Customer, which belongs to User
         $campaign = $collateral->campaign ?? $collateral->strategy?->campaign;
-        
+
         if (!$campaign) {
-            return response()->json(['message' => 'Campaign not found for this collateral.'], 404);
+            abort(404, 'Campaign not found for this collateral.');
         }
 
         $customer = $campaign->customer;
         if (!$customer || !$request->user()->customers()->where('customers.id', $customer->id)->exists()) {
-            return response()->json(['message' => 'Unauthorized'], 403);
+            abort(403);
         }
 
         $collateral->update(['should_deploy' => !$collateral->should_deploy]);
 
-        return response()->json([
-            'message' => 'Deployment status updated successfully.',
-            'should_deploy' => $collateral->should_deploy,
-        ]);
+        return back();
     }
 
     /**
