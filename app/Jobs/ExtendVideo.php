@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\VideoCollateral;
 use App\Services\GeminiService;
-use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -38,8 +37,8 @@ class ExtendVideo implements ShouldQueue
                 throw new \Exception("Source video must be completed before extension. Current status: {$this->sourceVideo->status}");
             }
 
-            if (!$this->sourceVideo->gemini_video_uri && !$this->sourceVideo->s3_path) {
-                throw new \Exception("Source video missing Gemini URI and S3 path. Cannot extend.");
+            if (!$this->sourceVideo->gemini_video_uri) {
+                throw new \Exception("Source video missing Gemini URI. Cannot extend.");
             }
 
             // Check extension count limit (max 20 extensions)
@@ -48,25 +47,13 @@ class ExtendVideo implements ShouldQueue
                 throw new \Exception("Maximum extension limit (20) reached for this video.");
             }
 
-            // Re-upload the video to Gemini Files API to get a fresh URI.
-            // Generation URIs expire in ~48 h; re-uploading ensures the extension
-            // API always receives a valid reference so Veo can read the source frames.
-            $videoBytes = StorageHelper::get($this->sourceVideo->s3_path);
-            if (!$videoBytes) {
-                throw new \Exception("Could not retrieve source video from storage for re-upload.");
-            }
-
-            Log::info("ExtendVideo: Re-uploading source video to Gemini Files API for fresh URI");
-            $freshUri = $geminiService->uploadVideoToFilesApi($videoBytes, 'video/mp4', 'extend_source.mp4');
-
-            if (!$freshUri) {
-                // Fall back to stored URI — may still work if video was generated recently
-                Log::warning("ExtendVideo: Files API re-upload failed, falling back to stored gemini_video_uri");
-                $freshUri = $this->sourceVideo->gemini_video_uri;
-                if (!$freshUri) {
-                    throw new \Exception("No valid video URI available for extension.");
-                }
-            }
+            // Use the stored generation URI directly. Veo extension expects the URI
+            // from the original generation response (the "uri" key in the request body),
+            // not a Files API URI. Files API URIs use a different field ("fileUri") and
+            // re-uploading converts the format — causing Veo to reject or ignore the source.
+            // Generation URIs are valid for 48 h, which is sufficient for freshly-extended videos.
+            $videoUri = $this->sourceVideo->gemini_video_uri;
+            Log::info("ExtendVideo: Using stored gemini_video_uri for extension", ['uri' => $videoUri]);
 
             // Build a context-rich prompt so Veo understands the brand, product and
             // original scene — without this, it generates a disconnected continuation.
@@ -74,7 +61,7 @@ class ExtendVideo implements ShouldQueue
 
             // Start video extension
             $operationName = $geminiService->extendVideo(
-                $freshUri,
+                $videoUri,
                 $enrichedPrompt
             );
 

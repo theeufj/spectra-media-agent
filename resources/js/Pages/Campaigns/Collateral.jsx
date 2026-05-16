@@ -1056,10 +1056,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     onClose={() => setExtendingVideo(null)}
                     onExtensionStart={() => {
                         setIsPolling(true);
-                        // Show success message
                         setTimeout(() => {
                             setIsPolling(false);
-                        }, 180000); // Stop polling after 3 minutes
+                        }, 600000); // Poll for 10 minutes — extension takes 5–15 min
                     }}
                 />
             )}
