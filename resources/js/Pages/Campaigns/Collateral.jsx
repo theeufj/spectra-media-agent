@@ -487,6 +487,37 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                             </nav>
                         </div>
 
+                        {/* Deployment selection summary */}
+                        {(() => {
+                            const selImages = collateral.imageCollaterals?.filter(i => i.should_deploy).length ?? 0;
+                            const totalImages = collateral.imageCollaterals?.length ?? 0;
+                            const selVideos = collateral.videoCollaterals?.filter(v => v.should_deploy).length ?? 0;
+                            const totalVideos = collateral.videoCollaterals?.length ?? 0;
+                            const selAdCopy = collateral.adCopy?.should_deploy ? 1 : 0;
+                            const totalSelected = selImages + selVideos + selAdCopy;
+                            const hasAny = totalImages > 0 || totalVideos > 0 || collateral.adCopy;
+                            if (!hasAny) return null;
+                            return (
+                                <div className={`mt-4 rounded-lg border-2 px-4 py-3 flex flex-wrap items-center justify-between gap-3 ${totalSelected > 0 ? 'bg-green-50 border-green-300' : 'bg-amber-50 border-amber-300'}`}>
+                                    <div className="flex items-center gap-2">
+                                        <span className={`text-lg font-bold ${totalSelected > 0 ? 'text-green-700' : 'text-amber-700'}`}>
+                                            {totalSelected > 0 ? `${totalSelected} item${totalSelected !== 1 ? 's' : ''} selected for deployment` : 'No items selected for deployment'}
+                                        </span>
+                                        <span className="text-sm text-gray-500">
+                                            {[
+                                                selAdCopy ? `${selAdCopy} ad copy` : null,
+                                                totalImages ? `${selImages}/${totalImages} images` : null,
+                                                totalVideos ? `${selVideos}/${totalVideos} videos` : null,
+                                            ].filter(Boolean).join(' · ')}
+                                        </span>
+                                    </div>
+                                    <span className="text-sm text-gray-600 font-medium">
+                                        👆 Click any asset below to select or deselect it
+                                    </span>
+                                </div>
+                            );
+                        })()}
+
                         {/* Tab Content */}
                         <div className="mt-6">
                             {allStrategies.map((strategyItem) => (
@@ -512,11 +543,21 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {/* Display generated ad copy here */}
                                         {collateral.adCopy && collateral.adCopy.strategy_id === strategyItem.id && collateral.adCopy.platform === strategyItem.platform && (
                                             <>
-                                                <div 
-                                                    className={`mt-6 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500' : 'border-gray-200'} cursor-pointer relative`}
+                                                <p className="mt-4 flex items-center gap-2 text-sm font-medium bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
+                                                    <span>👆</span>
+                                                    <span>Click the ad copy card to select or deselect it for deployment. <strong>Green border = will be deployed.</strong></span>
+                                                </p>
+                                                <div
+                                                    className={`mt-3 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500 bg-green-50' : 'border-gray-200'} cursor-pointer relative`}
                                                     onClick={() => handleToggleCollateral('ad_copy', collateral.adCopy.id)}
                                                 >
-                                                    <div className="flex justify-between items-start mb-3">
+                                                    {/* Selection badge */}
+                                                    <div className={`absolute top-3 left-3 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm ${collateral.adCopy.should_deploy ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                                        {collateral.adCopy.should_deploy ? (
+                                                            <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Selected</>
+                                                        ) : '○ Excluded'}
+                                                    </div>
+                                                    <div className="flex justify-between items-start mb-3 mt-5">
                                                         <h4 className="text-md font-semibold text-gray-800">Generated Ad Copy:</h4>
                                                         <div className="flex gap-2">
                                                             <button
@@ -784,7 +825,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {/* Display generated + uploaded images */}
                                         {collateral.imageCollaterals && collateral.imageCollaterals.length > 0 && (
                                             <>
-                                                <p className="mt-4 text-xs text-gray-500">Click an image to select or deselect it for deployment. Only selected images (green border) will go live.</p>
+                                                <p className="mt-4 flex items-center gap-2 text-sm font-medium bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
+                                                    <span>👆</span>
+                                                    <span>Click an image to select or deselect it. <strong>Green border = will be deployed. Gray border = excluded.</strong></span>
+                                                </p>
                                                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.imageCollaterals.map((image) => (
                                                     <div
@@ -923,7 +967,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {/* Display generated + uploaded videos */}
                                         {collateral.videoCollaterals && collateral.videoCollaterals.length > 0 && (
                                             <>
-                                                <p className="mt-4 text-xs text-gray-500">Click a video to select or deselect it for deployment. Only selected videos (green border) will go live.</p>
+                                                <p className="mt-4 flex items-center gap-2 text-sm font-medium bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
+                                                    <span>👆</span>
+                                                    <span>Click a video to select or deselect it. <strong>Green border = will be deployed. Gray border = excluded.</strong></span>
+                                                </p>
                                                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.videoCollaterals.map((video) => (
                                                     <div
