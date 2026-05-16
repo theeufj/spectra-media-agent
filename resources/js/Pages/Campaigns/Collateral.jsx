@@ -544,18 +544,18 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {collateral.adCopy && collateral.adCopy.strategy_id === strategyItem.id && collateral.adCopy.platform === strategyItem.platform && (
                                             <>
                                                 <p className="mt-4 flex items-center gap-2 text-sm font-medium bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
-                                                    <span>👆</span>
-                                                    <span>Click the ad copy card to select or deselect it for deployment. <strong>Green border = will be deployed.</strong></span>
+                                                    <span>☑️</span>
+                                                    <span>Check the box to include this ad copy in deployment. Unchecked ad copy will not go live.</span>
                                                 </p>
                                                 <div
-                                                    className={`mt-3 p-4 bg-gray-50 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500 bg-green-50' : 'border-gray-200'} cursor-pointer relative`}
+                                                    className={`mt-3 p-4 rounded-lg border-2 ${collateral.adCopy.should_deploy ? 'border-green-500 bg-green-50' : 'border-gray-200 bg-gray-50'} cursor-pointer relative`}
                                                     onClick={() => handleToggleCollateral('ad_copy', collateral.adCopy.id)}
                                                 >
-                                                    {/* Selection badge */}
-                                                    <div className={`absolute top-3 left-3 flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold shadow-sm ${collateral.adCopy.should_deploy ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'}`}>
-                                                        {collateral.adCopy.should_deploy ? (
-                                                            <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Selected</>
-                                                        ) : '○ Excluded'}
+                                                    {/* Checkbox */}
+                                                    <div className={`absolute top-3 left-3 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${collateral.adCopy.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+                                                        {collateral.adCopy.should_deploy && (
+                                                            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                        )}
                                                     </div>
                                                     <div className="flex justify-between items-start mb-3 mt-5">
                                                         <h4 className="text-md font-semibold text-gray-800">Generated Ad Copy:</h4>
@@ -826,8 +826,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {collateral.imageCollaterals && collateral.imageCollaterals.length > 0 && (
                                             <>
                                                 <p className="mt-4 flex items-center gap-2 text-sm font-medium bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
-                                                    <span>👆</span>
-                                                    <span>Click an image to select or deselect it. <strong>Green border = will be deployed. Gray border = excluded.</strong></span>
+                                                    <span>☑️</span>
+                                                    <span>Check the box on each image to include it in deployment. Unchecked images will not go live.</span>
                                                 </p>
                                                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.imageCollaterals.map((image) => (
@@ -837,11 +837,11 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         onClick={() => handleToggleCollateral('image', image.id)}
                                                     >
                                                         <img src={image.cloudfront_url} alt={`Collateral for ${strategyItem.platform}`} className="w-full h-auto object-cover" />
-                                                        {/* Selection indicator */}
-                                                        <div className={`absolute top-2 left-2 flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold shadow ${image.should_deploy ? 'bg-green-500 text-white' : 'bg-white/80 text-gray-600'}`}>
-                                                            {image.should_deploy ? (
-                                                                <><svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg> Selected</>
-                                                            ) : 'Excluded'}
+                                                        {/* Checkbox */}
+                                                        <div className={`absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${image.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+                                                            {image.should_deploy && (
+                                                                <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                            )}
                                                         </div>
                                                         {/* Format + source badges */}
                                                         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
@@ -968,8 +968,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                         {collateral.videoCollaterals && collateral.videoCollaterals.length > 0 && (
                                             <>
                                                 <p className="mt-4 flex items-center gap-2 text-sm font-medium bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-blue-800">
-                                                    <span>👆</span>
-                                                    <span>Click a video to select or deselect it. <strong>Green border = will be deployed. Gray border = excluded.</strong></span>
+                                                    <span>☑️</span>
+                                                    <span>Check the box on each video to include it in deployment. Unchecked videos will not go live.</span>
                                                 </p>
                                                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                                                 {collateral.videoCollaterals.map((video) => (
@@ -981,6 +981,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                             className={`border-2 ${video.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md cursor-pointer`}
                                                             onClick={() => handleToggleCollateral('video', video.id)}
                                                         >
+                                                            {/* Checkbox */}
+                                                            <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${video.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+                                                                {video.should_deploy && (
+                                                                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                                )}
+                                                            </div>
                                                             {video.status === 'completed' ? (
                                                                 <video controls src={video.cloudfront_url} className="w-full h-auto"></video>
                                                             ) : (
