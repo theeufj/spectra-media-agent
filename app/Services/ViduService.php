@@ -31,9 +31,13 @@ class ViduService
             default => '16:9',
         };
 
+        // Prepend language directive — Vidu is Chinese-built and may default to
+        // Chinese narration without an explicit instruction.
+        $localizedPrompt = "English language only. All speech, narration, and audio must be in English. " . $prompt;
+
         $body = [
             'model'              => $this->model,
-            'prompt'             => $prompt,
+            'prompt'             => $localizedPrompt,
             'duration'           => 15,
             'aspect_ratio'       => $aspectRatio,
             'resolution'         => '720p',
