@@ -87,15 +87,15 @@ const StrategyCard = ({ strategy, campaignId }) => {
                 <div className="space-y-4">
                     <div>
                         <h4 className="font-bold text-jet">Ad Copy Strategy</h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">{strategy.ad_copy_strategy}</p>
+                        <p className="text-gray-700 whitespace-pre-wrap">{data.ad_copy_strategy}</p>
                     </div>
                     <div>
                         <h4 className="font-bold text-jet">Imagery Strategy</h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">{strategy.imagery_strategy}</p>
+                        <p className="text-gray-700 whitespace-pre-wrap">{data.imagery_strategy}</p>
                     </div>
                     <div>
                         <h4 className="font-bold text-jet">Video Strategy</h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">{strategy.video_strategy}</p>
+                        <p className="text-gray-700 whitespace-pre-wrap">{data.video_strategy}</p>
                     </div>
                 </div>
             )}
