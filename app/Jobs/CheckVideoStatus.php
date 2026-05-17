@@ -2,19 +2,17 @@
 
 namespace App\Jobs;
 
-use App\Models\VideoCollateral;
-use App\Models\Campaign;
-use App\Models\User;
 use App\Mail\VideosGenerated;
+use App\Models\VideoCollateral;
 use App\Services\GeminiService;
 use App\Services\StorageHelper;
+use App\Services\ViduService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Mail;
 
 class CheckVideoStatus implements ShouldQueue
@@ -28,86 +26,121 @@ class CheckVideoStatus implements ShouldQueue
     {
     }
 
-    public function handle(GeminiService $geminiService): void
+    public function handle(GeminiService $geminiService, ViduService $viduService): void
     {
         Log::info("--- CheckVideoStatus Job Started ---");
-        Log::info("Attempt #{$this->attempts()} for VideoCollateral ID: {$this->videoCollateral->id}");
+        Log::info("Attempt #{$this->attempts()} for VideoCollateral ID: {$this->videoCollateral->id}", [
+            'provider' => $this->videoCollateral->provider ?? 'veo',
+        ]);
 
         try {
-            Log::info("Calling GeminiService to check status for operation: {$this->videoCollateral->operation_name}");
-            $operation = $geminiService->checkVideoGenerationStatus($this->videoCollateral->operation_name);
+            $provider = $this->videoCollateral->provider ?? 'veo';
 
-            if (!$operation) {
-                Log::info("Polling... Video is not ready yet. Re-dispatching job with a 60-second delay.");
-                $this->release(60);
-                return;
+            if ($provider === 'vidu') {
+                $this->handleVidu($viduService);
+            } else {
+                $this->handleVeo($geminiService);
             }
-
-            Log::info("Received a response from Gemini. Processing operation result.");
-            Log::info("Full Gemini Response: " . json_encode($operation, JSON_PRETTY_PRINT));
-
-            if (isset($operation['error'])) {
-                $errorMessage = json_encode($operation['error']);
-                Log::error("Video generation failed according to Gemini. Error: {$errorMessage}");
-                $this->videoCollateral->update(['status' => 'failed']);
-                throw new \Exception("Video generation failed: {$errorMessage}");
-            }
-
-            if (!isset($operation['response']['generateVideoResponse']['generatedSamples'][0]['video']['uri'])) {
-                Log::error("Invalid response from Gemini: Video URI is missing.");
-                $this->videoCollateral->update(['status' => 'failed']);
-                throw new \Exception('Invalid response from Gemini: Video URI is missing.');
-            }
-
-            $videoUri = $operation['response']['generateVideoResponse']['generatedSamples'][0]['video']['uri'];
-            Log::info("Video is ready. Downloading from Gemini URI: {$videoUri}");
-
-            $videoData = $geminiService->downloadVideo($videoUri);
-
-            if ($videoData === false) {
-                Log::error("Failed to download video data from the provided Gemini URI.");
-                $this->videoCollateral->update(['status' => 'failed']);
-                throw new \Exception('Failed to download video from Gemini URI.');
-            }
-
-            Log::info("Video data downloaded successfully. Preparing to upload.");
-
-            $filename = uniqid('vid_', true) . '.mp4';
-            $storagePath = "collateral/videos/{$this->videoCollateral->campaign_id}/{$filename}";
-
-            [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $videoData, 'video/mp4');
-
-            Log::info("Video uploaded at path: {$s3Path}, URL: {$cloudFrontUrl}");
-
-            Log::info("Updating VideoCollateral record in the database with final status and URLs.");
-            $this->videoCollateral->update([
-                'status' => 'completed',
-                's3_path' => $s3Path,
-                'cloudfront_url' => $cloudFrontUrl,
-                'gemini_video_uri' => $videoUri,
-            ]);
-
-            // Notify users that video has generated!
-            $campaign = $this->videoCollateral->campaign;
-            if ($campaign && $campaign->customer) {
-                foreach ($campaign->customer->users as $user) {
-                    Mail::to($user->email)->send(new VideosGenerated($user, $campaign));
-                }
-            }
-
-            Log::info("--- CheckVideoStatus Job Completed Successfully for VideoCollateral ID: {$this->videoCollateral->id} ---");
-
         } catch (\Throwable $e) {
-            Log::error("An error occurred in CheckVideoStatus for VideoCollateral ID {$this->videoCollateral->id}. Error: " . $e->getMessage());
+            Log::error("CheckVideoStatus error for VideoCollateral ID {$this->videoCollateral->id}: " . $e->getMessage());
             $this->videoCollateral->update(['status' => 'failed']);
             $this->fail($e);
-            Log::info("--- CheckVideoStatus Job Failed for VideoCollateral ID: {$this->videoCollateral->id} ---");
         }
     }
 
-    /**
-     * Handle a job failure.
-     */
+    // ─── Veo (Gemini) ────────────────────────────────────────────────────────
+
+    private function handleVeo(GeminiService $geminiService): void
+    {
+        Log::info("CheckVideoStatus: Polling Veo operation: {$this->videoCollateral->operation_name}");
+
+        $operation = $geminiService->checkVideoGenerationStatus($this->videoCollateral->operation_name);
+
+        if (!$operation) {
+            Log::info("CheckVideoStatus: Veo not ready yet — releasing with 60s delay.");
+            $this->release(60);
+            return;
+        }
+
+        Log::info("CheckVideoStatus: Veo response received.", ['operation' => $operation]);
+
+        if (isset($operation['error'])) {
+            $this->videoCollateral->update(['status' => 'failed']);
+            throw new \Exception("Veo generation failed: " . json_encode($operation['error']));
+        }
+
+        $videoUri = $operation['response']['generateVideoResponse']['generatedSamples'][0]['video']['uri'] ?? null;
+        if (!$videoUri) {
+            $this->videoCollateral->update(['status' => 'failed']);
+            throw new \Exception('Veo response is missing video URI.');
+        }
+
+        Log::info("CheckVideoStatus: Veo video ready. Downloading from: {$videoUri}");
+        $videoData = $geminiService->downloadVideo($videoUri);
+
+        if ($videoData === false) {
+            $this->videoCollateral->update(['status' => 'failed']);
+            throw new \Exception('Failed to download video from Veo URI.');
+        }
+
+        $this->storeAndComplete($videoData, ['gemini_video_uri' => $videoUri]);
+    }
+
+    // ─── Vidu ────────────────────────────────────────────────────────────────
+
+    private function handleVidu(ViduService $viduService): void
+    {
+        Log::info("CheckVideoStatus: Polling Vidu task: {$this->videoCollateral->operation_name}");
+
+        $result = $viduService->getTaskStatus($this->videoCollateral->operation_name);
+
+        if ($result === null) {
+            Log::info("CheckVideoStatus: Vidu not ready yet — releasing with 60s delay.");
+            $this->release(60);
+            return;
+        }
+
+        $videoUrl = $result['videoUrl'];
+        Log::info("CheckVideoStatus: Vidu video ready. Downloading from: {$videoUrl}");
+
+        $videoData = $viduService->downloadVideo($videoUrl);
+
+        if ($videoData === false) {
+            $this->videoCollateral->update(['status' => 'failed']);
+            throw new \Exception('Failed to download video from Vidu URL.');
+        }
+
+        // gemini_video_uri intentionally not set — Vidu videos cannot be extended via Veo
+        $this->storeAndComplete($videoData, []);
+    }
+
+    // ─── Shared: upload + notify ─────────────────────────────────────────────
+
+    private function storeAndComplete(string $videoData, array $extraFields): void
+    {
+        $filename    = uniqid('vid_', true) . '.mp4';
+        $storagePath = "collateral/videos/{$this->videoCollateral->campaign_id}/{$filename}";
+
+        [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $videoData, 'video/mp4');
+
+        Log::info("CheckVideoStatus: Video uploaded.", ['s3_path' => $s3Path, 'url' => $cloudFrontUrl]);
+
+        $this->videoCollateral->update(array_merge([
+            'status'         => 'completed',
+            's3_path'        => $s3Path,
+            'cloudfront_url' => $cloudFrontUrl,
+        ], $extraFields));
+
+        $campaign = $this->videoCollateral->campaign;
+        if ($campaign && $campaign->customer) {
+            foreach ($campaign->customer->users as $user) {
+                Mail::to($user->email)->send(new VideosGenerated($user, $campaign));
+            }
+        }
+
+        Log::info("--- CheckVideoStatus Completed for VideoCollateral ID: {$this->videoCollateral->id} ---");
+    }
+
     public function failed(\Throwable $exception): void
     {
         Log::error('CheckVideoStatus failed: ' . $exception->getMessage(), [

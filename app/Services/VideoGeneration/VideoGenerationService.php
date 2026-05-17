@@ -4,52 +4,62 @@ namespace App\Services\VideoGeneration;
 
 use App\Prompts\VideoGenerationPrompt;
 use App\Services\GeminiService;
+use App\Services\ViduService;
 use Illuminate\Support\Facades\Log;
 
 class VideoGenerationService
 {
-    private GeminiService $geminiService;
-
-    public function __construct(GeminiService $geminiService)
-    {
-        $this->geminiService = $geminiService;
-    }
+    public function __construct(
+        private GeminiService $geminiService,
+        private ViduService $viduService,
+    ) {}
 
     /**
-     * Starts the video generation process.
+     * Start video generation, falling back to Vidu if Veo is unavailable.
      *
-     * @param string $topic The topic for the video.
-     * @param array $parameters Additional parameters for video generation.
-     * @return string|null The operation name if generation started successfully, otherwise null.
+     * Returns ['provider' => 'veo'|'vidu', 'operation_name' => string]
+     * or null if both providers fail.
+     *
+     * @param array $parameters Passed through to the provider (e.g. ['aspectRatio' => '9:16'])
      */
-    public function startGeneration(string $topic, array $parameters = [], ?string $model = null): ?string
+    public function startGeneration(string $topic, array $parameters = [], ?string $model = null): ?array
     {
-        try {
-            $prompt = VideoGenerationPrompt::create($topic);
-            $operationName = $this->geminiService->startVideoGeneration($prompt, $model ?? config('ai.models.video'), $parameters);
+        $prompt = VideoGenerationPrompt::create($topic);
 
-            if (is_null($operationName)) {
-                Log::error("Video generation failed to start: GeminiService returned null operation name.", [
-                    'model' => config('ai.models.video'),
-                    'prompt_length' => strlen($prompt),
-                ]);
-                return null;
-            }
+        // ── Primary: Veo ────────────────────────────────────────────────────
+        $operationName = $this->geminiService->startVideoGeneration(
+            $prompt,
+            $model ?? config('ai.models.video'),
+            $parameters
+        );
 
-            Log::info("Video generation started successfully. Operation name: {$operationName}");
-            return $operationName;
+        if ($operationName) {
+            Log::info("VideoGenerationService: Started via Veo. Operation: {$operationName}");
+            return ['provider' => 'veo', 'operation_name' => $operationName];
+        }
 
-        } catch (\Exception $e) {
-            Log::error("Error during video generation start: " . $e->getMessage());
+        // ── Fallback: Vidu ──────────────────────────────────────────────────
+        if (!config('services.vidu.api_key')) {
+            Log::warning("VideoGenerationService: Veo failed and VIDU_API_KEY is not set — no fallback available.");
             return null;
         }
+
+        Log::warning("VideoGenerationService: Veo failed, falling back to Vidu.");
+
+        $taskId = $this->viduService->generateVideo($prompt, $parameters);
+
+        if ($taskId) {
+            Log::info("VideoGenerationService: Started via Vidu. Task ID: {$taskId}");
+            return ['provider' => 'vidu', 'operation_name' => $taskId];
+        }
+
+        Log::error("VideoGenerationService: Both Veo and Vidu failed to start video generation.");
+        return null;
     }
 
     /**
-     * Checks the status of a video generation operation.
-     *
-     * @param string $operationName The name of the operation to check.
-     * @return array|null The operation result if complete, null if pending or failed.
+     * Check the status of a Veo long-running operation.
+     * Only used for Veo — Vidu polling is handled directly in CheckVideoStatus.
      */
     public function checkGenerationStatus(string $operationName): ?array
     {
@@ -57,20 +67,20 @@ class VideoGenerationService
             $status = $this->geminiService->checkVideoGenerationStatus($operationName);
 
             if (is_null($status)) {
-                Log::info("Video generation for operation {$operationName} is still in progress.");
-                return null; // Still pending
-            }
-
-            if (isset($status['error'])) {
-                Log::error("Video generation for operation {$operationName} failed.", ['error' => $status['error']]);
+                Log::info("VideoGenerationService: Operation {$operationName} still in progress.");
                 return null;
             }
 
-            Log::info("Video generation for operation {$operationName} completed successfully.");
+            if (isset($status['error'])) {
+                Log::error("VideoGenerationService: Operation {$operationName} failed.", ['error' => $status['error']]);
+                return null;
+            }
+
+            Log::info("VideoGenerationService: Operation {$operationName} completed successfully.");
             return $status;
 
         } catch (\Exception $e) {
-            Log::error("Error checking video generation status for {$operationName}: " . $e->getMessage());
+            Log::error("VideoGenerationService: Error checking status for {$operationName}: " . $e->getMessage());
             return null;
         }
     }
