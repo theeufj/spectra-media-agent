@@ -156,11 +156,11 @@ class VideoCollateralController extends Controller
 
             // Validate request
             $validated = $request->validate([
-                'prompt' => 'required|string|max:1000',
+                'prompt' => 'nullable|string|max:1000',
             ]);
 
             Log::info("Dispatching ExtendVideo job for VideoCollateral ID: {$video->id}");
-            ExtendVideo::dispatch($video, $validated['prompt']);
+            ExtendVideo::dispatch($video, $validated['prompt'] ?? '');
 
             $quotaService->recordUsage($user, 'video');
 

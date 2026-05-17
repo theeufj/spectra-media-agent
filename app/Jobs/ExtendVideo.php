@@ -107,40 +107,43 @@ class ExtendVideo implements ShouldQueue
     {
         $parts = [];
 
-        // Original script — tells Veo what was depicted in the source clip
+        // Extract the root voiceover script (strip any [EXTENSION x]: prefixes)
         $originalScript = trim($this->sourceVideo->script ?? '');
+        $rootScript = '';
         if ($originalScript) {
-            // Strip any previous [EXTENSION x]: prefixes to get the root script
-            $rootScript = preg_split('/\[EXTENSION \d+\]:/i', $originalScript)[0];
-            $rootScript = trim($rootScript);
-            if ($rootScript) {
-                $parts[] = "ORIGINAL VIDEO SCENE: {$rootScript}";
-            }
+            $rootScript = trim(preg_split('/\[EXTENSION \d+\]:/i', $originalScript)[0]);
         }
 
         // Brand / customer context
         $customer = $this->sourceVideo->campaign?->customer;
-        if ($customer) {
-            $parts[] = "BRAND: {$customer->name}";
-            if ($customer->website) {
-                $parts[] = "PRODUCT/SERVICE: {$customer->website}";
-            }
+        $brandName = $customer?->name ?? '';
+        $brandWebsite = $customer?->website ?? '';
+
+        if ($brandName) {
+            $parts[] = "BRAND: {$brandName}" . ($brandWebsite ? "\nWEBSITE: {$brandWebsite}" : '');
         }
 
-        // Strategy video context
-        $strategy = $this->sourceVideo->strategy;
-        if ($strategy?->video_strategy) {
-            $videoStrategy = trim($strategy->video_strategy);
-            if ($videoStrategy && !preg_match('/^n\/a/i', $videoStrategy)) {
-                $parts[] = "CAMPAIGN VIDEO DIRECTION: " . mb_substr($videoStrategy, 0, 300);
-            }
+        // Core instruction: this is a script-completion extension, not a generic continuation.
+        // The original 8-second clip narrated only the first portion of the voiceover before
+        // running out of time. This extension must pick up the narration exactly where it
+        // left off and deliver the remainder of the script.
+        if ($rootScript) {
+            $parts[] = <<<TEXT
+PURPOSE: The original 8-second video clip ran out of time before finishing its voiceover narration. This extension must seamlessly continue that narration, picking up mid-sentence or mid-thought exactly where the previous clip ended.
+
+COMPLETE VOICEOVER SCRIPT (the narrator must finish delivering this):
+"{$rootScript}"
+
+The previous clip covered the opening portion. This 8-second extension must deliver the remainder of the script with the same narrator voice, pace, and energy — as if it is one continuous take.
+TEXT;
         }
 
-        // User's requested continuation
-        $parts[] = "CONTINUATION DIRECTION: {$this->extensionPrompt}";
+        // Additional creative direction from the user
+        if ($this->extensionPrompt) {
+            $parts[] = "ADDITIONAL DIRECTION: {$this->extensionPrompt}";
+        }
 
-        // Consistency instruction
-        $parts[] = "IMPORTANT: Maintain exact visual continuity — same subjects, lighting, color grading, camera style, and environment as the preceding clip. This is a seamless 8-second continuation, not a new scene.";
+        $parts[] = "VISUAL CONTINUITY: Maintain exact visual continuity — same subjects, lighting, colour grading, camera style, and environment as the preceding clip. This is a seamless continuation, not a new scene.";
 
         return implode("\n\n", $parts);
     }

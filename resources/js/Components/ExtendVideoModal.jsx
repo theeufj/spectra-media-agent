@@ -18,10 +18,6 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
-        if (!data.prompt.trim()) {
-            document.getElementById('extend-prompt')?.focus();
-            return;
-        }
         post(route('video-collaterals.extend', video.id), {
             preserveScroll: true,
             onSuccess: () => {
@@ -33,9 +29,9 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
     };
 
     const examplePrompts = [
-        "Continue the scene with a smooth pan to the right",
-        "Zoom in slowly on the main subject",
-        "Add a gentle fade as the scene continues naturally",
+        "Continue narrating the script naturally, same voice and energy",
+        "Finish delivering the voiceover with a confident close",
+        "Complete the script, then hold on the final scene for a moment",
     ];
 
     return (
@@ -46,7 +42,7 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                     <div>
                         <h2 className="text-base font-semibold text-gray-900">Extend Video</h2>
                         <p className="text-xs text-gray-500 mt-0.5">
-                            +7s · {extensionsRemaining}/{maxExtensions} extensions remaining
+                            +8s to finish the script · {extensionsRemaining}/{maxExtensions} extensions remaining
                         </p>
                     </div>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1">
@@ -80,13 +76,13 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                         {/* Prompt */}
                         <div className="mb-2.5">
                             <label htmlFor="extend-prompt" className="block text-xs font-medium text-gray-700 mb-1">
-                                How should the video continue? <span className="text-red-500">*</span>
+                                Any additional direction? <span className="text-gray-400 font-normal">(optional)</span>
                             </label>
                             <textarea
                                 id="extend-prompt"
                                 value={data.prompt}
                                 onChange={(e) => setData('prompt', e.target.value)}
-                                placeholder="Describe the continuation..."
+                                placeholder="e.g. finish the script with energy, hold on the final shot..."
                                 className="w-full px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm"
                                 rows="2"
                                 disabled={processing}
@@ -116,8 +112,8 @@ export default function ExtendVideoModal({ video, onClose, onExtensionStart }) {
                             <SecondaryButton type="button" onClick={onClose} disabled={processing}>
                                 Cancel
                             </SecondaryButton>
-                            <PrimaryButton type="submit" disabled={processing || !data.prompt.trim()}>
-                                {processing ? 'Starting...' : 'Extend (+7s)'}
+                            <PrimaryButton type="submit" disabled={processing}>
+                                {processing ? 'Starting...' : 'Extend to finish script (+8s)'}
                             </PrimaryButton>
                         </div>
                     </form>
