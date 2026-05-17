@@ -44,6 +44,10 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const generatingAdCopyRef = useRef(generatingAdCopy);
     const generatingImageRef = useRef(generatingImage);
     const generatingVideoRef = useRef(generatingVideo);
+    // Track how many errors existed when this poll session started so we only
+    // surface errors that are genuinely new (pre-existing errors must not stop
+    // subsequent polls, e.g. during video extension after an earlier failure).
+    const errorCountAtPollStartRef = useRef(0);
 
     useEffect(() => { collateralRef.current = collateral; }, [collateral]);
     useEffect(() => { generatingAdCopyRef.current = generatingAdCopy; }, [generatingAdCopy]);
@@ -54,6 +58,9 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     useEffect(() => {
         if (!isPolling) return;
 
+        // Reset to sentinel — will be set to the actual baseline on the first poll response
+        errorCountAtPollStartRef.current = -1;
+
         const pollInterval = setInterval(async () => {
             try {
                 const response = await fetch(route('api.collateral.show', { strategy: currentStrategy.id }));
@@ -61,8 +68,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                     const data = await response.json();
                     const current = collateralRef.current;
 
-                    // Stop polling and surface error if generation failed
-                    if (data.collateralErrors && data.collateralErrors.length > 0) {
+                    // Capture the baseline error count on the first response of this session
+                    const currentErrorCount = data.collateralErrors?.length ?? 0;
+                    if (errorCountAtPollStartRef.current === -1) {
+                        errorCountAtPollStartRef.current = currentErrorCount;
+                    }
+
+                    // Stop polling and surface error only if NEW errors appeared since this poll session started
+                    if (currentErrorCount > errorCountAtPollStartRef.current) {
                         const latest = data.collateralErrors[data.collateralErrors.length - 1];
                         setCollateralError(latest.message || 'Collateral generation failed. Please try regenerating.');
                         setIsPolling(false);
