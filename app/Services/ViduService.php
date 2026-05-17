@@ -9,7 +9,7 @@ class ViduService
 {
     private string $apiKey;
     private string $baseUrl = 'https://api.vidu.com/ent/v2';
-    private string $model   = 'viduq2';
+    private string $model   = 'viduq3-turbo';
 
     public function __construct()
     {
@@ -38,6 +38,7 @@ class ViduService
             'aspect_ratio'       => $aspectRatio,
             'resolution'         => '720p',
             'movement_amplitude' => 'auto',
+            'audio'              => true,  // q3 models only — generates narration/sound from prompt
         ];
 
         try {
