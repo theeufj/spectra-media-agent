@@ -146,6 +146,11 @@ class DeployCampaign implements ShouldQueue
                         $totalPct += $pct;
                     }
 
+                    if (abs($totalPct - 100) > 1) {
+                        Log::warning("Budget allocation percentages sum to {$totalPct}% (expected ~100%) for campaign {$this->campaign->id} — falling back to even split");
+                        $totalPct = 0; // Force even-split fallback below
+                    }
+
                     foreach ($strategies as $strategy) {
                         if (!$strategy->daily_budget) {
                             if ($totalPct > 0) {
@@ -153,6 +158,9 @@ class DeployCampaign implements ShouldQueue
                                 $budget = round($this->campaign->daily_budget * $share, 2);
                             } else {
                                 $budget = round($this->campaign->daily_budget / $strategies->count(), 2);
+                            }
+                            if ($budget < 5.00) {
+                                Log::warning("Strategy {$strategy->id} ({$strategy->platform}) allocated only \${$budget}/day for campaign {$this->campaign->id}");
                             }
                             $strategy->update(['daily_budget' => max($budget, 1.00)]);
                         }
@@ -162,6 +170,9 @@ class DeployCampaign implements ShouldQueue
                     $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
                     foreach ($strategies as $strategy) {
                         if (!$strategy->daily_budget) {
+                            if ($budgetPerStrategy < 5.00) {
+                                Log::warning("Strategy {$strategy->id} ({$strategy->platform}) allocated only \${$budgetPerStrategy}/day for campaign {$this->campaign->id}");
+                            }
                             $strategy->update(['daily_budget' => $budgetPerStrategy]);
                         }
                     }

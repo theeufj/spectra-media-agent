@@ -21,6 +21,8 @@ class GenerateStrategy implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    public $timeout = 300;
+
     /**
      * @var \App\Models\Campaign
      */
@@ -63,7 +65,16 @@ class GenerateStrategy implements ShouldQueue
                 ->pluck('content')
                 ->implode("\n\n---\n\n");
             
-            Log::info("Knowledge base content length: " . strlen($knowledgeBaseContent) . " characters");
+            $kbLength = strlen($knowledgeBaseContent);
+            Log::info("Knowledge base content length: {$kbLength} characters");
+
+            // Warn and truncate if the KB is approaching Gemini's input limits
+            if ($kbLength > 800000) {
+                Log::warning("Knowledge base content is very large ({$kbLength} chars) for campaign {$this->campaign->id} — truncating to 800k chars to stay within API limits");
+                $knowledgeBaseContent = substr($knowledgeBaseContent, 0, 800000);
+            } elseif ($kbLength > 500000) {
+                Log::warning("Knowledge base content is large ({$kbLength} chars) for campaign {$this->campaign->id}");
+            }
 
             if (empty($knowledgeBaseContent)) {
                 Log::warning("No knowledge base content found for customer {$this->campaign->customer_id} to generate strategy for campaign {$this->campaign->id}.");
@@ -168,11 +179,20 @@ class GenerateStrategy implements ShouldQueue
 
             $strategyData = $this->extractStrategyJson($jsonText);
 
-            if (!$strategyData || !isset($strategyData['strategies'])) {
+            if (!$strategyData) {
                 Log::error("Failed to parse JSON response for campaign {$this->campaign->id}", [
                     'raw_preview' => substr($jsonText, 0, 500),
                 ]);
-                $this->failWithError('Failed to parse AI response. Please try again.');
+                $this->failWithError('The AI returned a response that could not be parsed. Please try regenerating.');
+                return;
+            }
+
+            if (!isset($strategyData['strategies'])) {
+                Log::error("AI response parsed but missing 'strategies' key for campaign {$this->campaign->id}", [
+                    'keys_present' => array_keys($strategyData),
+                    'raw_preview' => substr($jsonText, 0, 500),
+                ]);
+                $this->failWithError('The AI response was missing expected strategy data. Please try regenerating.');
                 return;
             }
             
@@ -197,6 +217,7 @@ class GenerateStrategy implements ShouldQueue
                         'bidding_strategy' => $strategy['bidding_strategy'],
                         'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
                         'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
+                        'generate_video' => $strategy['generate_video'] ?? true,
                     ]);
 
                     // Create TargetingConfig if targeting data is present

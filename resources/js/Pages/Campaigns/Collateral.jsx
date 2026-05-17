@@ -23,6 +23,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [extendingVideo, setExtendingVideo] = useState(null);
     const [collateral, setCollateral] = useState({ adCopy, imageCollaterals, videoCollaterals });
     const [isPolling, setIsPolling] = useState(false);
+    const [collateralError, setCollateralError] = useState(null);
     const [showDeployModal, setShowDeployModal] = useState(false);
     const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
     const [showDeploymentDisabledModal, setShowDeploymentDisabledModal] = useState(false);
@@ -59,24 +60,36 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 if (response.ok) {
                     const data = await response.json();
                     const current = collateralRef.current;
+
+                    // Stop polling and surface error if generation failed
+                    if (data.collateralErrors && data.collateralErrors.length > 0) {
+                        const latest = data.collateralErrors[data.collateralErrors.length - 1];
+                        setCollateralError(latest.message || 'Collateral generation failed. Please try regenerating.');
+                        setIsPolling(false);
+                        setGeneratingAdCopy(false);
+                        setGeneratingImage(false);
+                        setGeneratingVideo(false);
+                        return;
+                    }
+
                     // Update all collateral data
                     const hasNewAdCopy = data.adCopy && (!current.adCopy || data.adCopy.updated_at !== current.adCopy?.updated_at);
                     const hasNewImages = JSON.stringify(data.imageCollaterals) !== JSON.stringify(current.imageCollaterals);
                     const hasNewVideos = JSON.stringify(data.videoCollaterals) !== JSON.stringify(current.videoCollaterals);
-                    
+
                     if (hasNewAdCopy || hasNewImages || hasNewVideos) {
                         setCollateral(data);
-                        
+
                         // Stop polling for ad copy if it was generated
                         if (hasNewAdCopy && generatingAdCopyRef.current) {
                             setGeneratingAdCopy(false);
                         }
-                        
+
                         // Stop image generation flag if new images arrived
                         if (hasNewImages && generatingImageRef.current) {
                             setGeneratingImage(false);
                         }
-                        
+
                         // Stop video generation flag if new videos arrived
                         if (hasNewVideos && generatingVideoRef.current) {
                             setGeneratingVideo(false);
@@ -453,6 +466,22 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
             <div className="py-12">
                 <div className="max-w-7xl mx-auto sm:px-6 lg:px-8">
+
+                    {/* Runtime collateral generation failure banner */}
+                    {collateralError && (
+                        <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                                <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                                </svg>
+                                <div>
+                                    <p className="text-sm font-semibold text-red-800 mb-1">Collateral generation failed</p>
+                                    <p className="text-sm text-red-700">{collateralError}</p>
+                                    <p className="text-xs text-red-600 mt-1">Use the Generate buttons below to retry individual assets.</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Collateral generation error banner */}
                     {Object.keys(collateralErrors).length > 0 && (

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreCampaignRequest extends FormRequest
 {
@@ -30,7 +31,10 @@ class StoreCampaignRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => 'required|string|max:255',
+            'name' => [
+                'required', 'string', 'max:255',
+                Rule::unique('campaigns', 'name')->where('customer_id', session('active_customer_id')),
+            ],
             'reason' => 'required|string',
             'goals' => 'required|string',
             'target_market' => 'required|string',

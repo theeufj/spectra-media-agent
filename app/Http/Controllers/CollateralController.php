@@ -106,6 +106,7 @@ class CollateralController extends Controller
             'adCopy' => $strategy->adCopies->where('platform', $strategy->platform)->first(),
             'imageCollaterals' => $strategy->imageCollaterals()->where('is_active', true)->get(),
             'videoCollaterals' => $strategy->videoCollaterals()->where('is_active', true)->get(),
+            'collateralErrors' => $strategy->collateral_errors ?? [],
         ]);
     }
 }

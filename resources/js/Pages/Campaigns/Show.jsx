@@ -418,14 +418,16 @@ export default function Show({ auth, campaign }) {
     const allStrategiesSignedOff = campaigns.strategies.every(strategy => !!strategy.signed_off_at);
     const anyStrategiesSignedOff = campaigns.strategies.some(strategy => !!strategy.signed_off_at);
 
-    const handleRegenerate = () => {
+    const handleRegenerate = (force = false) => {
         setConfirmModal({
             show: true,
-            title: 'Regenerate Strategies',
-            message: 'This will delete all current strategies and generate new ones using AI. Are you sure?',
+            title: force ? 'Force Regenerate Strategies' : 'Regenerate Strategies',
+            message: force
+                ? 'This will revert all sign-offs, delete all generated collateral, and regenerate strategies from scratch. This cannot be undone.'
+                : 'This will delete all current strategies and generate new ones using AI. Are you sure?',
             onConfirm: () => {
                 setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
-                router.post(route('campaigns.regenerate-strategies', { campaign: campaigns.id }), {}, {
+                router.post(route('campaigns.regenerate-strategies', { campaign: campaigns.id }), { force: force ? 1 : 0 }, {
                     preserveScroll: true,
                     onSuccess: () => {
                         setIsPolling(true);
@@ -435,7 +437,7 @@ export default function Show({ auth, campaign }) {
                 });
             },
             isDestructive: true,
-            confirmText: 'Regenerate'
+            confirmText: force ? 'Yes, Force Regenerate' : 'Regenerate'
         });
     };
 
@@ -500,7 +502,7 @@ export default function Show({ auth, campaign }) {
                         <div className="mb-8 flex justify-end gap-3">
                             {!anyStrategiesSignedOff && (
                                 <button
-                                    onClick={handleRegenerate}
+                                    onClick={() => handleRegenerate(false)}
                                     disabled={processing || isPolling}
                                     className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 disabled:opacity-50 transition"
                                 >
@@ -508,6 +510,18 @@ export default function Show({ auth, campaign }) {
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                     Regenerate Strategies
+                                </button>
+                            )}
+                            {anyStrategiesSignedOff && (
+                                <button
+                                    onClick={() => handleRegenerate(true)}
+                                    disabled={processing || isPolling}
+                                    className="inline-flex items-center px-4 py-2 bg-white border border-red-300 rounded-md font-semibold text-xs text-red-700 uppercase tracking-widest shadow-sm hover:bg-red-50 disabled:opacity-50 transition"
+                                >
+                                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                    </svg>
+                                    Force Regenerate
                                 </button>
                             )}
                             <PrimaryButton onClick={handleSignOffAll} disabled={processing || allStrategiesSignedOff} className="bg-green-600 hover:bg-green-700">

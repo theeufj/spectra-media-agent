@@ -180,10 +180,10 @@ class CampaignController extends Controller
                     [
                         'customer_id' => $customer->id,
                         'keyword_text' => $kw['text'],
+                        'match_type' => $kw['match_type'],
                         'campaign_id' => $campaign->id,
                     ],
                     [
-                        'match_type' => $kw['match_type'],
                         'status' => 'active',
                         'source' => 'wizard',
                         'avg_monthly_searches' => $kw['avg_monthly_searches'] ?? null,
@@ -294,9 +294,18 @@ class CampaignController extends Controller
             abort(403);
         }
 
-        // Only allow regeneration if no strategies are signed off
+        $force = $request->boolean('force', false);
+
         if ($campaign->strategies()->whereNotNull('signed_off_at')->exists()) {
-            return back()->with('error', 'Cannot regenerate strategies that have already been signed off.');
+            if (!$force) {
+                return back()->with('error', 'Some strategies are already signed off. Use force regeneration to revert sign-offs and start over.');
+            }
+            // Force regeneration: delete all collateral and revert sign-offs
+            $campaign->strategies->each(function ($strategy) {
+                $strategy->adCopies()->delete();
+                $strategy->imageCollaterals()->delete();
+                $strategy->videoCollaterals()->delete();
+            });
         }
 
         // Delete existing strategies

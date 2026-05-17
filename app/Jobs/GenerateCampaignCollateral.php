@@ -77,6 +77,16 @@ class GenerateCampaignCollateral implements ShouldQueue
                 })
                 ->catch(function ($batch, $e) use ($campaignId) {
                     Log::error("Some collateral jobs failed for Campaign ID {$campaignId}: " . $e->getMessage());
+
+                    // Stamp the error onto any strategy for this campaign that has no collateral yet,
+                    // so the polling endpoint can surface it to the UI.
+                    \App\Models\Strategy::where('campaign_id', $campaignId)
+                        ->whereNotNull('signed_off_at')
+                        ->each(function ($strategy) use ($e) {
+                            $errors = $strategy->collateral_errors ?? [];
+                            $errors[] = ['message' => $e->getMessage(), 'failed_at' => now()->toIso8601String()];
+                            $strategy->update(['collateral_errors' => $errors]);
+                        });
                 })
                 ->dispatch();
 
@@ -102,14 +112,15 @@ class GenerateCampaignCollateral implements ShouldQueue
             $jobs[] = new GenerateImage($this->campaign, $strategy);
         }
 
-        // 2 videos per strategy (only if actionable content)
-        $videoStrategy = $strategy->video_strategy;
-        if ($this->hasActionableVideoContent($videoStrategy)) {
+        // 2 videos per strategy — respect the AI's explicit decision when available,
+        // fall back to the heuristic for strategies generated before this field existed.
+        $shouldGenerateVideo = $strategy->generate_video ?? $this->hasActionableVideoContent($strategy->video_strategy);
+        if ($shouldGenerateVideo) {
             for ($i = 0; $i < 2; $i++) {
                 $jobs[] = new GenerateVideo($this->campaign, $strategy, $strategy->platform, $i);
             }
         } else {
-            Log::info("Skipping video generation for Strategy ID: {$strategy->id} - no actionable video content");
+            Log::info("Skipping video generation for Strategy ID: {$strategy->id} - generate_video=false");
         }
 
         return $jobs;

@@ -93,7 +93,7 @@ You are an expert digital marketing strategist. Your task is to generate a compr
 {$brandContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
-Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
+Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
 
 **Targeting Configuration:**
 You MUST include a "targeting" object for each strategy that defines the audience targeting.
@@ -114,7 +114,15 @@ You MUST include an "ad_extensions" object to improve ad visibility and CTR.
 You MUST include a "conversion_goals" object to guide optimization.
 - "primary_goal": String (e.g., "Purchase", "Lead", "Sign-up"). This helps the system configure the correct conversion action.
 
-**Video Strategy (For Video/YouTube Platforms):**
+**Video Strategy & Generate Video Flag:**
+You MUST include a boolean "generate_video" field for every platform strategy.
+- Set "generate_video": true if video ads are applicable and worth producing for this platform (e.g., Facebook, Instagram, YouTube, Performance Max, LinkedIn).
+- Set "generate_video": false if video is not applicable for the campaign type (e.g., pure text search campaigns on Google Ads SEM where video adds no value, or platforms where video is not supported).
+- If in doubt, prefer true — it is better to generate video assets than to skip them.
+
+If "generate_video" is true, describe the video concept in "video_strategy".
+If "generate_video" is false, still populate "video_strategy" with a brief explanation of why video is not applicable.
+
 If the platform is "Video" or "YouTube", the "video_strategy" object MUST include:
 - "youtube_video_id": A placeholder string (e.g., "INSERT_VIDEO_ID") or a real ID if known.
 - "video_ad_format": String (e.g., "Skippable In-Stream", "In-Feed").
@@ -153,6 +161,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
       "ad_copy_strategy": "Focus on vibrant, lifestyle-oriented copy...",
       "imagery_strategy": "Use bright, eye-catching images of people enjoying the product...",
       "video_strategy": "Create short, engaging video clips...",
+      "generate_video": true,
       "bidding_strategy": {
         "name": "MaximizeConversions",
         "parameters": {}
@@ -182,7 +191,8 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
       "platform": "Google Ads (SEM)",
       "ad_copy_strategy": "Write concise, keyword-rich headlines and descriptions...",
       "imagery_strategy": "For Responsive Display Ads, use high-contrast infographics...",
-      "video_strategy": "For Search campaigns: N/A — text ads only. For Performance Max or Display campaigns: create a 15–30 second video concept showing the product/service in use, with a clear benefit and call to action.",
+      "video_strategy": "For Search campaigns: N/A — text ads only.",
+      "generate_video": false,
       "bidding_strategy": {
         "name": "TargetCpa",
         "parameters": {
