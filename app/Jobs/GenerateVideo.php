@@ -28,7 +28,8 @@ class GenerateVideo implements ShouldQueue
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
-        protected string $platform
+        protected string $platform,
+        protected int $variationIndex = 0
     ) {
     }
 
@@ -145,8 +146,8 @@ class GenerateVideo implements ShouldQueue
             }
 
             // Step 1: Generate Video Script using Gemini
-            Log::info("Generating video script for Strategy ID: {$this->strategy->id}");
-            $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines, $productContext))->getPrompt();
+            Log::info("Generating video script for Strategy ID: {$this->strategy->id}, variation: {$this->variationIndex}");
+            $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines, $productContext, $this->variationIndex))->getPrompt();
             $scriptResponse = $geminiService->generateContent(config('ai.models.default'), $scriptPrompt);
             
             $script = $scriptResponse['text'] ?? null;

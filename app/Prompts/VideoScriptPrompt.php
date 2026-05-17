@@ -10,12 +10,14 @@ class VideoScriptPrompt
     private string $strategy;
     private ?BrandGuideline $brandGuidelines;
     private ?array $productContext;
+    private int $variationIndex;
 
-    public function __construct(string $strategy, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null)
+    public function __construct(string $strategy, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null, int $variationIndex = 0)
     {
         $this->strategy = $strategy;
         $this->brandGuidelines = $brandGuidelines;
         $this->productContext = $productContext;
+        $this->variationIndex = $variationIndex;
     }
 
     private function formatBrandContext(): string
@@ -74,12 +76,16 @@ class VideoScriptPrompt
                 json_encode($this->productContext, JSON_PRETTY_PRINT);
         }
 
+        $variationInstruction = $this->getVariationInstruction();
+
         return <<<PROMPT
 You are a creative and concise scriptwriter for short marketing videos.
 
 {$brandContext}
 {$productContextString}
 Based on the following creative strategy, write a short, engaging voiceover script for a video that is approximately 8-15 seconds long.
+
+{$variationInstruction}
 
 **SCRIPT REQUIREMENTS:**
 - **Length:** 8-15 seconds of spoken content (approximately 20-40 words)
@@ -102,6 +108,15 @@ Based on the following creative strategy, write a short, engaging voiceover scri
 
 --- VOICEOVER SCRIPT ---
 PROMPT;
+    }
+
+    private function getVariationInstruction(): string
+    {
+        if ($this->variationIndex === 0) {
+            return "**CREATIVE ANGLE — VARIATION A:**\nLead with the core problem the customer faces. Open with a pain point or frustration hook, then present the product as the direct solution. End with a benefit-driven call to action.";
+        }
+
+        return "**CREATIVE ANGLE — VARIATION B:**\nThis must be DISTINCTLY DIFFERENT from any other script written for this strategy. Lead with aspiration or a bold outcome — skip the problem framing entirely. Open with what life looks/feels like AFTER using the product. Use a different hook style, different sentence rhythm, and a different call to action from Variation A.";
     }
 
     private function getBrandTone(): string

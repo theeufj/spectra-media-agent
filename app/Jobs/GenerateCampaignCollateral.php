@@ -106,7 +106,7 @@ class GenerateCampaignCollateral implements ShouldQueue
         $videoStrategy = $strategy->video_strategy;
         if ($this->hasActionableVideoContent($videoStrategy)) {
             for ($i = 0; $i < 2; $i++) {
-                $jobs[] = new GenerateVideo($this->campaign, $strategy, $strategy->platform);
+                $jobs[] = new GenerateVideo($this->campaign, $strategy, $strategy->platform, $i);
             }
         } else {
             Log::info("Skipping video generation for Strategy ID: {$strategy->id} - no actionable video content");
