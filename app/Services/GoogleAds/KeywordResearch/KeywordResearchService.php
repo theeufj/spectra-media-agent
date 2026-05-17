@@ -36,19 +36,26 @@ class KeywordResearchService
         ?string $landingPageUrl = null,
         ?string $language = 'languageConstants/1000',
         array $geoTargets = [],
-        int $maxKeywords = 20
+        int $maxKeywords = 20,
+        array $userSeedKeywords = []
     ): array {
-        // Step 1: Generate seed keywords using Gemini AI
-        $seedKeywords = $this->generateSeedKeywords($businessName, $industry, $landingPageUrl);
-
-        if (empty($seedKeywords)) {
-            Log::warning("KeywordResearchService: Gemini returned no seed keywords for '{$businessName}'");
-            return ['keywords' => [], 'negative_keywords' => []];
+        // Step 1: Use user-provided seeds if given, otherwise generate via Gemini AI
+        if (!empty($userSeedKeywords)) {
+            $seedKeywords = $userSeedKeywords;
+            Log::info("KeywordResearchService: Using " . count($seedKeywords) . " user-provided seed keywords", [
+                'seeds' => $seedKeywords,
+            ]);
+        } else {
+            $seedKeywords = $this->generateSeedKeywords($businessName, $industry, $landingPageUrl);
+            Log::info("KeywordResearchService: Generated " . count($seedKeywords) . " seed keywords via Gemini", [
+                'seeds' => $seedKeywords,
+            ]);
         }
 
-        Log::info("KeywordResearchService: Generated " . count($seedKeywords) . " seed keywords via Gemini", [
-            'seeds' => $seedKeywords,
-        ]);
+        if (empty($seedKeywords)) {
+            Log::warning("KeywordResearchService: No seed keywords for '{$businessName}'");
+            return ['keywords' => [], 'negative_keywords' => []];
+        }
 
         // Step 2: Expand via Google Keyword Planner
         $keywordIdeas = $this->expandWithKeywordPlanner(

@@ -330,6 +330,14 @@ class KeywordController extends Controller
             return response()->json(['error' => 'Google Ads account required for keyword research.'], 422);
         }
 
+        // Parse comma/newline-separated seed keywords entered by the user
+        $userSeeds = [];
+        if (!empty($validated['seed_keywords'])) {
+            $userSeeds = array_values(array_filter(
+                array_map('trim', preg_split('/[\r\n,]+/', $validated['seed_keywords']))
+            ));
+        }
+
         try {
             $service = new KeywordResearchService($customer);
             $results = $service->research(
@@ -339,7 +347,8 @@ class KeywordController extends Controller
                 $validated['landing_page'] ?? $customer->website_url,
                 'languageConstants/1000',
                 [],
-                $validated['max_keywords'] ?? 20
+                $validated['max_keywords'] ?? 20,
+                $userSeeds
             );
 
             if (!empty($results['keywords'])) {
