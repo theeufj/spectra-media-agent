@@ -665,12 +665,14 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             ?? [];
 
         // Default targeting if not specified in plan
+        // age_max must be >= 65 when using Advantage+ audience (Facebook error 1870189).
+        $ageMax = (int) ($targeting['age_max'] ?? 65);
         $targetingConfig = [
             'geo_locations' => $targeting['geo_locations'] ?? [
                 'countries' => ['US', 'CA', 'AU', 'GB'],
             ],
             'age_min' => $targeting['age_min'] ?? 18,
-            'age_max' => $targeting['age_max'] ?? 65,
+            'age_max' => max($ageMax, 65),
             'genders' => $targeting['genders'] ?? [1, 2], // All genders
             'interests' => $targeting['interests'] ?? [],
             'behaviors' => $targeting['behaviors'] ?? [],

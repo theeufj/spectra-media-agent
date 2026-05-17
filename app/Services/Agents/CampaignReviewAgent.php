@@ -3,6 +3,7 @@
 namespace App\Services\Agents;
 
 use App\Models\Customer;
+use App\Services\Agents\PlatformConstraints;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
 
@@ -70,6 +71,27 @@ class CampaignReviewAgent
                 ]);
             }
 
+            // Deterministic safety net: auto-fix any constraint violations the AI missed.
+            $result = PlatformConstraints::autoFix($platform, $corrected->rawPlan);
+            if (!empty($result['fixes_applied'])) {
+                Log::warning('[CampaignReviewAgent] Deterministic constraint fixes applied after AI review', [
+                    'platform'      => $platform,
+                    'customer_id'   => $this->customer->id,
+                    'fixes_applied' => $result['fixes_applied'],
+                ]);
+                $corrected = ExecutionPlan::fromArray($result['plan']);
+            }
+
+            // Log any remaining non-fixable violations as warnings (they will surface as API errors).
+            $violations = PlatformConstraints::validate($platform, $corrected->rawPlan);
+            if (!empty($violations)) {
+                Log::warning('[CampaignReviewAgent] Non-fixable constraint violations remain after review', [
+                    'platform'   => $platform,
+                    'customer_id' => $this->customer->id,
+                    'violations' => $violations,
+                ]);
+            }
+
             return $corrected;
 
         } catch (\Exception $e) {
@@ -89,6 +111,8 @@ class CampaignReviewAgent
 
     private function buildPrompt(string $rawJson, string $platform): string
     {
+        $apiConstraints = PlatformConstraints::asPromptRules($platform);
+
         $platformRules = match ($platform) {
             'facebook' => $this->facebookRules(),
             'google'   => $this->googleRules(),
@@ -99,6 +123,8 @@ class CampaignReviewAgent
 You are reviewing a campaign execution plan JSON before it is sent to the {$platform} Ads API.
 
 Apply the following rules and return a corrected version of the JSON. If a field already satisfies the rule, leave it unchanged.
+
+{$apiConstraints}
 
 {$platformRules}
 
@@ -175,8 +201,12 @@ RULES;
             'campaign_structure.objective',
             'campaign_structure.type',
             'campaign_structure.locations',
+            'campaign_structure.optimization_goal',
             'creative_strategy.primary_text',
+            'creative_strategy.headline',
             'targeting_strategy.geo_locations.countries',
+            'targeting_strategy.age_max',
+            'targeting_strategy.age_min',
         ];
 
         foreach ($checks as $path) {

@@ -109,6 +109,21 @@ class ExecutionPlan
     }
 
     /**
+     * Build an ExecutionPlan directly from an already-decoded array.
+     * Used when the raw plan array has been modified (e.g., after constraint fixes)
+     * and needs to be re-wrapped in an ExecutionPlan without re-parsing JSON.
+     */
+    public static function fromArray(array $data): self
+    {
+        $steps           = Arr::get($data, 'execution_sequence', Arr::get($data, 'steps', []));
+        $budgetAllocation = Arr::get($data, 'budget_allocation', []);
+        $fallbackPlans   = Arr::get($data, 'fallback_plans', []);
+        $reasoning       = self::generateReasoning($data);
+
+        return new self($steps, $budgetAllocation, $fallbackPlans, $reasoning, $data);
+    }
+
+    /**
      * Generate a comprehensive reasoning summary from the plan data.
      * 
      * @param array $data Full plan data

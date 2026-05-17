@@ -194,6 +194,7 @@ Create a detailed, step-by-step execution plan for deploying this campaign to Fa
   - Audience size should be at least 50,000 for delivery
   - Broader audiences often perform better with Meta's algorithm
   - Use detailed targeting expansion for better reach
+  - **CRITICAL API RULE:** All ad sets use Advantage+ audience (`advantage_audience: 1`). Facebook's API rejects `age_max` below 65 with this setting (error 1870189). Always set `age_max: 65` regardless of the target demographic. Use `age_min` to restrict the lower bound instead.
   
 - **Technical Constraints:**
   - All URLs must be valid and accessible

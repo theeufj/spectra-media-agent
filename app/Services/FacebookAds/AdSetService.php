@@ -120,6 +120,11 @@ class AdSetService extends BaseFacebookAdsService
                 if (!isset($targeting['targeting_automation'])) {
                     $targeting['targeting_automation'] = ['advantage_audience' => 1];
                 }
+                // Facebook rejects age_max < 65 when Advantage+ audience is active (error 1870189).
+                // Clamp to the minimum allowed value; age_min is unaffected.
+                if (isset($targeting['age_max']) && $targeting['age_max'] < 65) {
+                    $targeting['age_max'] = 65;
+                }
                 $data['targeting'] = json_encode($targeting);
             } else {
                 // Even with no targeting, the flag is required
