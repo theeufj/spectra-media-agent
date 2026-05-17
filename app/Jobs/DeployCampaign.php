@@ -9,6 +9,7 @@ use App\Notifications\DeploymentFailed;
 use App\Services\DeploymentService;
 use App\Services\AdSpendBillingService;
 use App\Services\Agents\PreLaunchComplianceAgent;
+use App\Services\FacebookAds\PixelService;
 use App\Jobs\VerifyDeployment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -46,6 +47,25 @@ class DeployCampaign implements ShouldQueue
         if (!$customer) {
             Log::error("No customer found for campaign {$this->campaign->id}. Skipping deployment.");
             return;
+        }
+
+        // Auto-provision Facebook pixel before compliance check.
+        // PixelService will find an existing pixel on the ad account or create a
+        // new BM-owned one and share it — no manual steps required.
+        if ($customer->facebook_ads_account_id && !$customer->facebook_pixel_id) {
+            Log::info("DeployCampaign: No pixel on record — attempting auto-provision for customer {$customer->id}");
+            $pixelId = (new PixelService($customer))->resolvePixelId();
+            if ($pixelId) {
+                Log::info("DeployCampaign: Facebook pixel provisioned", [
+                    'customer_id' => $customer->id,
+                    'pixel_id'    => $pixelId,
+                ]);
+                $customer->refresh(); // ensure compliance check sees the updated pixel_id
+            } else {
+                Log::warning("DeployCampaign: Could not auto-provision Facebook pixel — compliance check may fail", [
+                    'customer_id' => $customer->id,
+                ]);
+            }
         }
 
         // Pre-launch compliance check — abort if any check fails
