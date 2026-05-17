@@ -34,7 +34,7 @@ class ViduService
         $body = [
             'model'              => $this->model,
             'prompt'             => $prompt,
-            'duration'           => 8,
+            'duration'           => 15,
             'aspect_ratio'       => $aspectRatio,
             'resolution'         => '720p',
             'movement_amplitude' => 'auto',
