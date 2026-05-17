@@ -10,14 +10,20 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class ExtendVideo implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 3;
+    public $tries = 5;
     public $timeout = 900;
+
+    public function backoff(): array
+    {
+        // Veo quota exhaustion (429) can take minutes to reset.
+        // Delays: 5 min, 15 min, 30 min, 60 min between retries.
+        return [300, 900, 1800, 3600];
+    }
 
     public function __construct(
         protected VideoCollateral $sourceVideo,
@@ -31,22 +37,24 @@ class ExtendVideo implements ShouldQueue
         Log::info("Source VideoCollateral ID: {$this->sourceVideo->id}");
         Log::info("Extension Prompt: {$this->extensionPrompt}");
 
+        // Permanent precondition failures — fail immediately without retry.
+        if ($this->sourceVideo->status !== 'completed') {
+            $this->fail(new \Exception("Source video must be completed before extension. Current status: {$this->sourceVideo->status}"));
+            return;
+        }
+
+        if (!$this->sourceVideo->gemini_video_uri) {
+            $this->fail(new \Exception("Source video missing Gemini URI. Cannot extend."));
+            return;
+        }
+
+        $extensionCount = $this->sourceVideo->extension_count ?? 0;
+        if ($extensionCount >= 20) {
+            $this->fail(new \Exception("Maximum extension limit (20) reached for this video."));
+            return;
+        }
+
         try {
-            // Validate source video
-            if ($this->sourceVideo->status !== 'completed') {
-                throw new \Exception("Source video must be completed before extension. Current status: {$this->sourceVideo->status}");
-            }
-
-            if (!$this->sourceVideo->gemini_video_uri) {
-                throw new \Exception("Source video missing Gemini URI. Cannot extend.");
-            }
-
-            // Check extension count limit (max 20 extensions)
-            $extensionCount = $this->sourceVideo->extension_count ?? 0;
-            if ($extensionCount >= 20) {
-                throw new \Exception("Maximum extension limit (20) reached for this video.");
-            }
-
             // Use the original Veo generation URI stored in the DB exactly as returned
             // by Veo at generation time. The extension API requires the full download URL:
             //   https://generativelanguage.googleapis.com/v1beta/files/{FILE_ID}:download?alt=media
@@ -66,6 +74,7 @@ class ExtendVideo implements ShouldQueue
             );
 
             if (!$operationName) {
+                // Transient failure (quota, network) — throw so Laravel retries with backoff().
                 throw new \Exception('Failed to start video extension.');
             }
 
@@ -92,7 +101,7 @@ class ExtendVideo implements ShouldQueue
 
         } catch (\Exception $e) {
             Log::error("Error in ExtendVideo job for VideoCollateral ID {$this->sourceVideo->id}: " . $e->getMessage());
-            $this->fail($e);
+            throw $e;
         }
     }
 

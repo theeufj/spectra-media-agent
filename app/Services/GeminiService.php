@@ -636,50 +636,76 @@ class GeminiService
      */
     public function extendVideo(string $videoUri, string $prompt, array $parameters = []): ?string
     {
-        try {
-            // Pass the video URI exactly as received from the generation response.
-            // The Veo API expects the video object with "uri" key (not "fileUri").
-            $requestBody = [
-                'instances' => [
-                    [
-                        'prompt' => $prompt,
-                        'video' => [
-                            'uri' => $videoUri
-                        ]
+        $requestBody = [
+            'instances' => [
+                [
+                    'prompt' => $prompt,
+                    'video' => [
+                        'uri' => $videoUri
                     ]
-                ],
-                'parameters' => array_merge([
-                    'aspectRatio' => '16:9',
-                    'sampleCount' => 1,
-                    'durationSeconds' => 8, // Must be 8 when using extension
-                    'personGeneration' => 'ALLOW_ALL',
-                    'resolution' => '720p', // Extension only supports 720p
-                ], $parameters),
-            ];
+                ]
+            ],
+            'parameters' => array_merge([
+                'aspectRatio' => '16:9',
+                'sampleCount' => 1,
+                'durationSeconds' => 8, // Must be 8 when using extension
+                'personGeneration' => 'ALLOW_ALL',
+                'resolution' => '720p', // Extension only supports 720p
+            ], $parameters),
+        ];
 
-            Log::info("GeminiService: Extending video with URI: {$videoUri}");
-            Log::info("GeminiService: Extension prompt: {$prompt}");
+        Log::info("GeminiService: Extending video with URI: {$videoUri}");
+        Log::info("GeminiService: Extension prompt: {$prompt}");
 
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'x-goog-api-key' => $this->apiKey,
-            ])->timeout(300)->post("{$this->baseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
+        $attempt = 0;
+        $maxRetries = 3;
 
-            if ($response->failed()) {
+        while ($attempt < $maxRetries) {
+            try {
+                $response = Http::withHeaders([
+                    'Content-Type' => 'application/json',
+                    'x-goog-api-key' => $this->apiKey,
+                ])->timeout(300)->post("{$this->baseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
+
+                if ($response->successful()) {
+                    $operationName = $response->json()['name'] ?? null;
+                    Log::info("GeminiService: Video extension started successfully. Operation: {$operationName}");
+                    return $operationName;
+                }
+
+                $statusCode = $response->status();
+
+                if ($this->isRetryableError($statusCode)) {
+                    $attempt++;
+                    if ($attempt < $maxRetries) {
+                        $delayMs = $this->calculateBackoffDelay($attempt);
+                        Log::warning("GeminiService: Retryable error ({$statusCode}) on extension attempt {$attempt}/{$maxRetries}. Retrying in {$delayMs}ms...", [
+                            'response' => $response->body(),
+                        ]);
+                        usleep($delayMs * 1000);
+                        continue;
+                    }
+                }
+
                 Log::error("GeminiService: Failed to extend video: " . $response->body());
                 return null;
+
+            } catch (\Exception $e) {
+                $attempt++;
+                if ($attempt < $maxRetries) {
+                    $delayMs = $this->calculateBackoffDelay($attempt);
+                    Log::warning("GeminiService: Exception on extension attempt {$attempt}/{$maxRetries}: " . $e->getMessage() . ". Retrying in {$delayMs}ms...");
+                    usleep($delayMs * 1000);
+                    continue;
+                }
+                Log::error("GeminiService: Exception during video extension: " . $e->getMessage(), [
+                    'exception' => $e,
+                ]);
+                return null;
             }
-
-            $operationName = $response->json()['name'] ?? null;
-            Log::info("GeminiService: Video extension started successfully. Operation: {$operationName}");
-
-            return $operationName;
-        } catch (\Exception $e) {
-            Log::error("GeminiService: Exception during video extension: " . $e->getMessage(), [
-                'exception' => $e,
-            ]);
-            return null;
         }
+
+        return null;
     }
 
 }

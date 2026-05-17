@@ -117,7 +117,13 @@ class DeployCampaign implements ShouldQueue
         if ($user) {
             $allowed = $user->allowedPlatforms();
             $strategies = $strategies->filter(function ($strategy) use ($allowed) {
-                return in_array(strtolower($strategy->platform), $allowed, true);
+                $platformStr = strtolower($strategy->platform);
+                foreach ($allowed as $allow) {
+                    if (str_contains($platformStr, $allow)) {
+                        return true;
+                    }
+                }
+                return false;
             });
             Log::info("Plan-filtered strategies for deployment: " . $strategies->pluck('platform')->implode(', '));
         }
