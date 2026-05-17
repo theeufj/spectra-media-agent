@@ -9,7 +9,7 @@ class ViduService
 {
     private string $apiKey;
     private string $baseUrl = 'https://api.vidu.com/ent/v2';
-    private string $model   = 'viduq3-turbo';
+    private string $model   = 'viduq3-pro';
 
     public function __construct()
     {
