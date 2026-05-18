@@ -48,6 +48,19 @@ class ExtendVideo implements ShouldQueue
             return;
         }
 
+        // Veo's extension API only supports 16:9 landscape. Meta/Facebook/Instagram videos
+        // are generated as 9:16 portrait for Stories/Reels — attempting to extend them
+        // always fails with "Aspect ratio must be 16:9". Bail permanently rather than
+        // retrying and burning quota.
+        $mobilePlatforms = ['facebook', 'meta', 'instagram', 'facebook ads'];
+        if (in_array(strtolower($this->sourceVideo->platform ?? ''), $mobilePlatforms)) {
+            Log::info("ExtendVideo: Skipping {$this->sourceVideo->platform} video (9:16 portrait) — Veo extension requires 16:9.", [
+                'video_collateral_id' => $this->sourceVideo->id,
+            ]);
+            $this->fail(new \Exception("ExtendVideo: {$this->sourceVideo->platform} videos are 9:16 portrait — Veo extension requires 16:9. Not retrying."));
+            return;
+        }
+
         $extensionCount = $this->sourceVideo->extension_count ?? 0;
         if ($extensionCount >= 20) {
             $this->fail(new \Exception("Maximum extension limit (20) reached for this video."));
