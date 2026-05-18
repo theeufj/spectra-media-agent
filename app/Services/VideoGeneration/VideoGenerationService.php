@@ -20,9 +20,11 @@ class VideoGenerationService
      * Returns ['provider' => 'veo'|'vidu', 'operation_name' => string]
      * or null if both providers fail.
      *
-     * @param array $parameters Passed through to the provider (e.g. ['aspectRatio' => '9:16'])
+     * @param array  $parameters Passed through to the provider (e.g. ['aspectRatio' => '9:16'])
+     * @param string|null $voiceoverScript When provided, Vidu will structure its prompt around
+     *                                     narrating this script rather than using the generic wrapper.
      */
-    public function startGeneration(string $topic, array $parameters = [], ?string $model = null): ?array
+    public function startGeneration(string $topic, array $parameters = [], ?string $model = null, ?string $voiceoverScript = null): ?array
     {
         $prompt = VideoGenerationPrompt::create($topic);
 
@@ -46,7 +48,15 @@ class VideoGenerationService
 
         Log::warning("VideoGenerationService: Veo failed, falling back to Vidu.");
 
-        $taskId = $this->viduService->generateVideo($prompt, $parameters);
+        // Vidu's audio AI works best with a concise, narration-focused prompt rather than the
+        // generic Veo wrapper. When a voiceover script is available, build a Vidu-specific prompt
+        // that explicitly instructs the model to narrate it — avoiding the conflicting "NO TEXT"
+        // instruction from VideoFromScriptPrompt that can suppress speech generation.
+        $viduPrompt = $voiceoverScript
+            ? $this->buildViduNarrationPrompt($voiceoverScript, $topic)
+            : $prompt;
+
+        $taskId = $this->viduService->generateVideo($viduPrompt, $parameters);
 
         if ($taskId) {
             Log::info("VideoGenerationService: Started via Vidu. Task ID: {$taskId}");
@@ -55,6 +65,30 @@ class VideoGenerationService
 
         Log::error("VideoGenerationService: Both Veo and Vidu failed to start video generation.");
         return null;
+    }
+
+    /**
+     * Build a Vidu-optimised prompt where audio narration of the script is the primary directive.
+     * Vidu's viduq3-pro audio layer responds to explicit voiceover instructions better than
+     * the generic Veo-style visual prompt.
+     */
+    private function buildViduNarrationPrompt(string $script, string $visualContext): string
+    {
+        // Extract a brief visual summary from the visual context (first 200 chars of strategy)
+        $briefVisual = mb_substr(strip_tags(trim($visualContext)), 0, 200);
+        if (strlen($visualContext) > 200) {
+            $briefVisual = rtrim($briefVisual, ' .,') . '.';
+        }
+
+        return <<<PROMPT
+Professional advertising video. The narrator speaks this voiceover script in English:
+
+"{$script}"
+
+Visual setting: {$briefVisual}
+
+Requirements: No on-screen text or captions. The narration above must be spoken clearly as English voiceover audio accompanying the visuals.
+PROMPT;
     }
 
     /**

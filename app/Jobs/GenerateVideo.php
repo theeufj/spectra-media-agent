@@ -178,7 +178,7 @@ class GenerateVideo implements ShouldQueue
             // All other platforms default to 16:9 landscape.
             $isMobilePlatform = in_array(strtolower($this->platform), ['facebook', 'meta', 'instagram', 'facebook ads']);
             $videoParams = $isMobilePlatform ? ['aspectRatio' => '9:16'] : [];
-            $result = $videoGenerationService->startGeneration($videoPrompt, $videoParams);
+            $result = $videoGenerationService->startGeneration($videoPrompt, $videoParams, null, $script);
 
             if (!$result) {
                 // Don't hard-fail immediately — retry the job after a backoff delay
