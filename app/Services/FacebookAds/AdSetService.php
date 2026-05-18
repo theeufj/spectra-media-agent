@@ -100,6 +100,19 @@ class AdSetService extends BaseFacebookAdsService
         $billingEvent = 'IMPRESSIONS';
 
         try {
+            // LEAD_GENERATION optimization goal is exclusively for native Facebook Lead Forms
+            // (on-platform forms with no external URL). When using a pixel-based promoted_object
+            // for conversion tracking, the correct goal is OFFSITE_CONVERSIONS — Facebook
+            // returns error 2490408 ("Performance goal isn't available") otherwise.
+            if ($optimizationGoal === 'LEAD_GENERATION'
+                && $promotedObject !== null
+                && isset($promotedObject['pixel_id'])
+                && !isset($promotedObject['leadgen_id'])
+            ) {
+                Log::info("AdSetService: Auto-correcting optimization_goal from LEAD_GENERATION to OFFSITE_CONVERSIONS (pixel-based tracking detected)");
+                $optimizationGoal = 'OFFSITE_CONVERSIONS';
+            }
+
             $data = [
                 'campaign_id'      => $campaignId,
                 'name'             => $adSetName,

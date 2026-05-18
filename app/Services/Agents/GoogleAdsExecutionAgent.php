@@ -504,7 +504,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignData = [
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->format('Y-m-d'),
+            'startDate' => now()->addDay()->format('Y-m-d'),
             'endDate' => now()->addYear()->format('Y-m-d'),
         ];
         
@@ -760,7 +760,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignData = [
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->format('Y-m-d'),
+            'startDate' => now()->addDay()->format('Y-m-d'),
             'endDate' => now()->addYear()->format('Y-m-d'),
         ];
         
@@ -1037,7 +1037,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignData = [
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->format('Y-m-d'),
+            'startDate' => now()->addDay()->format('Y-m-d'),
             'endDate' => now()->addYear()->format('Y-m-d'),
         ];
         
@@ -1118,7 +1118,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignData = [
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->format('Y-m-d'),
+            'startDate' => now()->addDay()->format('Y-m-d'),
             'endDate' => now()->addYear()->format('Y-m-d'),
             'targetCpaMicros' => $strategy->cpa_target ?? null,
         ];
@@ -1241,7 +1241,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignData = [
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->format('Y-m-d'),
+            'startDate' => now()->addDay()->format('Y-m-d'),
             'endDate' => now()->addYear()->format('Y-m-d'),
             'merchantId' => $merchantId,
             'feedLabel' => $campaignStructure['feed_label'] ?? null,
@@ -1310,7 +1310,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignData = [
             'businessName' => $campaignName,
             'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->format('Y-m-d'),
+            'startDate' => now()->addDay()->format('Y-m-d'),
             'endDate' => now()->addYear()->format('Y-m-d'),
             'categoryBids' => $campaignStructure['category_bids'] ?? [],
         ];

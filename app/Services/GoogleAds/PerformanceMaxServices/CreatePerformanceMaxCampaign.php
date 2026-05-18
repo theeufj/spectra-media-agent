@@ -41,14 +41,21 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
         }
 
         // 2. Create Campaign
+        // start_date: Google evaluates dates in the ad account's local timezone, but the server
+        // runs UTC. If the account is in a UTC+ timezone (e.g. Australia), the UTC "today" can
+        // already be "yesterday" from Google's perspective — causing CANNOT_SET_DATE_TO_PAST.
+        // Fix: always push start_date at least one day into the future. Since campaigns deploy
+        // PAUSED, a tomorrow start date has zero practical impact.
+        $startDateRaw = $campaignData['startDate'] ?? now()->format('Y-m-d');
+        $startDate = \Carbon\Carbon::parse($startDateRaw)->max(now()->addDay())->format('Ymd');
+
         $campaign = new Campaign([
             'name' => $campaignData['businessName'],
             'status' => CampaignStatusHelper::getGoogleAdsStatus(), // Status based on testing mode config
             'advertising_channel_type' => AdvertisingChannelType::PERFORMANCE_MAX,
             // 'advertising_channel_sub_type' => AdvertisingChannelSubType::UNKNOWN, // Removed as it causes INVALID_ENUM_VALUE
             'campaign_budget' => $budgetResourceName,
-            'start_date' => str_replace('-', '', $campaignData['startDate']),
-            'end_date' => str_replace('-', '', $campaignData['endDate']),
+            'start_date' => $startDate,
             'contains_eu_political_advertising' => EuPoliticalAdvertisingStatus::DOES_NOT_CONTAIN_EU_POLITICAL_ADVERTISING,
             'brand_guidelines_enabled' => false, // Disable Brand Guidelines to avoid CampaignAsset requirements
             // 'url_expansion_opt_out' => false, // Removed as it's not a direct property of Campaign in V22 or handled differently
