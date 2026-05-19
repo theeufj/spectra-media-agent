@@ -151,7 +151,12 @@ class DeploymentController extends Controller
             'has_payment_method' => $user->hasDefaultPaymentMethod(),
         ]);
 
-        // Dispatch the deployment job with execution agents enabled
+        // Reset deployment_status on all signed-off strategies so an explicit
+        // "Deploy All" always re-deploys, even if previously marked deployed/verified.
+        $campaign->strategies()
+            ->whereNotNull('signed_off_at')
+            ->update(['deployment_status' => null]);
+
         DeployCampaign::dispatch($campaign, useAgents: true);
 
         ActivityLog::log('campaign_deployed', "Campaign '{$campaign->name}' deployment initiated ({$signedOffCount} strategies)", $campaign, [
