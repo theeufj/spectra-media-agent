@@ -61,8 +61,8 @@ class CampaignHourlyPerformance extends Model
             ->where('date', '>=', now()->subDays(60))
             ->selectRaw('hour, AVG(roas) as avg_roas, SUM(impressions) as total_impressions, COUNT(DISTINCT date) as days_count')
             ->groupBy('hour')
-            ->having('days_count', '>=', $minDays)
-            ->having('total_impressions', '>', 0)
+            ->havingRaw('COUNT(DISTINCT date) >= ?', [$minDays])
+            ->havingRaw('SUM(impressions) > 0')
             ->get();
 
         if ($dataPoints->isEmpty() || $dataPoints->count() < 12) {
@@ -95,8 +95,8 @@ class CampaignHourlyPerformance extends Model
             ->where('date', '>=', now()->subDays(60))
             ->selectRaw('day_of_week, AVG(roas) as avg_roas, SUM(impressions) as total_impressions, COUNT(DISTINCT date) as days_count')
             ->groupBy('day_of_week')
-            ->having('days_count', '>=', $minWeeks)
-            ->having('total_impressions', '>', 0)
+            ->havingRaw('COUNT(DISTINCT date) >= ?', [$minWeeks])
+            ->havingRaw('SUM(impressions) > 0')
             ->get();
 
         if ($dataPoints->isEmpty() || $dataPoints->count() < 5) {
