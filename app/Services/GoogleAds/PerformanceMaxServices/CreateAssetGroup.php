@@ -19,7 +19,7 @@ class CreateAssetGroup extends BaseGoogleAdsService
             'name' => $name,
             'campaign' => $campaignResourceName,
             'final_urls' => $finalUrls,
-            'status' => AssetGroupStatus::PAUSED,
+            'status' => AssetGroupStatus::ENABLED,
         ]);
 
         $operation = new AssetGroupOperation();
