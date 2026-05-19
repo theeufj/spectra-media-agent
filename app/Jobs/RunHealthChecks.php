@@ -213,7 +213,7 @@ class RunHealthChecks implements ShouldQueue
      */
     protected function sendAdminSummary(array $summary): void
     {
-        $admins = User::where('is_admin', true)->get();
+        $admins = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
 
         if ($admins->isEmpty()) {
             Log::warning('RunHealthChecks: No admin users found for health summary notification');

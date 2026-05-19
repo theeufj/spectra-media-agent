@@ -51,7 +51,7 @@ class BillingHealthChecker
 
             $recentFailures = $customer->adSpendTransactions()
                 ->where('status', 'failed')
-                ->where('created_at', '>', now()->subDays(7))
+                ->where('ad_spend_transactions.created_at', '>', now()->subDays(7))
                 ->count();
 
             if ($recentFailures > 0) {
