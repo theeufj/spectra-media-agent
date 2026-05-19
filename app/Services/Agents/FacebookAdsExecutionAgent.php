@@ -333,48 +333,131 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         Log::info("FacebookAdsExecutionAgent: Starting plan execution for Campaign {$campaign->id}");
         
         try {
-            $campaignStructure = $plan->getCampaignStructure();
-            $objective = $campaignStructure['objective'] ?? 'LINK_CLICKS';
-            $creativeFormat = $plan->getCreativeStrategy()['ad_format'] ?? 'single_image';
-            
             // 1. Create Facebook Campaign
             $fbCampaign = $this->createCampaign($accountId, $campaign, $strategy, $plan, $result);
-            
+
             // 2. Create Ad Set with targeting
             $fbAdSet = $this->createAdSet($accountId, $fbCampaign['id'], $campaign, $strategy, $plan, $result);
-            
-            // 3. Upload creatives and create ads based on format
-            switch ($creativeFormat) {
-                case 'carousel':
-                    $this->createCarouselAd($accountId, $fbAdSet['id'], $campaign, $strategy, $plan, $result);
-                    break;
-                    
-                case 'video':
-                    $this->createVideoAd($accountId, $fbAdSet['id'], $campaign, $strategy, $plan, $result);
-                    break;
-                    
-                case 'single_image':
-                default:
-                    $this->createSingleImageAd($accountId, $fbAdSet['id'], $campaign, $strategy, $plan, $result);
-                    break;
+
+            // 3. Deploy every available creative — one ad per image, one per video.
+            //    Facebook optimises delivery across all ads in the ad set, so more
+            //    creatives = better signal and faster convergence on the best performer.
+            $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
+            $destinationUrl = $this->getDestinationUrl($campaign, $strategy);
+            $primaryText = $plan->getCreativeStrategy()['primary_text']
+                ?? ($adCopy->descriptions[0] ?? '')
+                ?: 'Discover our products and services';
+            $headline = $adCopy->headlines[0] ?? 'Learn More';
+
+            $adsCreated = 0;
+
+            // 3a. Image ads — one ad per image marked for deployment
+            $images = $strategy->imageCollaterals()
+                ->where('is_active', true)
+                ->where('should_deploy', true)
+                ->get();
+
+            foreach ($images as $index => $image) {
+                try {
+                    $imageUrl = StorageHelper::url($image->s3_path);
+                    $creative = $this->creativeService->createImageCreative(
+                        $accountId,
+                        $campaign->name . ' - Image Creative ' . ($index + 1),
+                        $imageUrl,
+                        $headline,
+                        $primaryText,
+                        'LEARN_MORE',
+                        $destinationUrl
+                    );
+                    if (!$creative || !isset($creative['id'])) {
+                        Log::warning("FacebookAdsExecutionAgent: Failed to create image creative for image {$image->id}");
+                        continue;
+                    }
+                    $ad = $this->adService->createAd(
+                        $accountId,
+                        $fbAdSet['id'],
+                        $campaign->name . ' - Image Ad ' . ($index + 1),
+                        $creative['id']
+                    );
+                    if ($ad && isset($ad['id'])) {
+                        $result->addPlatformId('image_ad_' . $image->id, $ad['id']);
+                        if ($adsCreated === 0) {
+                            // Store the first ad ID on the strategy for reference
+                            $strategy->facebook_creative_id = $creative['id'];
+                            $strategy->facebook_ad_id = $ad['id'];
+                            $strategy->save();
+                        }
+                        $adsCreated++;
+                        Log::info("FacebookAdsExecutionAgent: Created image ad {$ad['id']} for image {$image->id}");
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("FacebookAdsExecutionAgent: Image ad creation failed for image {$image->id}: " . $e->getMessage());
+                }
             }
-            
-            $result->executionTime = microtime(true) - $startTime;
-            
-            Log::info("FacebookAdsExecutionAgent: Successfully executed plan", [
+
+            // 3b. Video ads — one ad per video marked for deployment
+            $videos = $strategy->videoCollaterals()
+                ->where('is_active', true)
+                ->where('should_deploy', true)
+                ->get();
+
+            foreach ($videos as $index => $video) {
+                try {
+                    $videoUrl = StorageHelper::url($video->s3_path);
+                    $creative = $this->creativeService->createVideoCreative(
+                        $accountId,
+                        $campaign->name . ' - Video Creative ' . ($index + 1),
+                        $videoUrl,
+                        $headline,
+                        $adCopy->descriptions[0] ?? 'Discover our story',
+                        'LEARN_MORE',
+                        $destinationUrl
+                    );
+                    if (!$creative || !isset($creative['id'])) {
+                        Log::warning("FacebookAdsExecutionAgent: Failed to create video creative for video {$video->id}");
+                        continue;
+                    }
+                    $ad = $this->adService->createAd(
+                        $accountId,
+                        $fbAdSet['id'],
+                        $campaign->name . ' - Video Ad ' . ($index + 1),
+                        $creative['id']
+                    );
+                    if ($ad && isset($ad['id'])) {
+                        $result->addPlatformId('video_ad_' . $video->id, $ad['id']);
+                        if ($adsCreated === 0) {
+                            $strategy->facebook_creative_id = $creative['id'];
+                            $strategy->facebook_ad_id = $ad['id'];
+                            $strategy->save();
+                        }
+                        $adsCreated++;
+                        Log::info("FacebookAdsExecutionAgent: Created video ad {$ad['id']} for video {$video->id}");
+                    }
+                } catch (\Exception $e) {
+                    Log::warning("FacebookAdsExecutionAgent: Video ad creation failed for video {$video->id}: " . $e->getMessage());
+                }
+            }
+
+            if ($adsCreated === 0) {
+                throw new \Exception('No ads could be created — no deployable images or videos found for this strategy');
+            }
+
+            Log::info("FacebookAdsExecutionAgent: Created {$adsCreated} ads total", [
                 'campaign_id' => $campaign->id,
-                'execution_time' => $result->executionTime,
-                'platform_ids_count' => count($result->platformIds)
+                'images_available' => $images->count(),
+                'videos_available' => $videos->count(),
             ]);
-            
+
+            $result->executionTime = microtime(true) - $startTime;
+
             return $result;
-            
+
         } catch (\Exception $e) {
             Log::error("FacebookAdsExecutionAgent: Plan execution failed: " . $e->getMessage());
-            
+
             $result = ExecutionResult::failure($plan, [$e->getMessage()]);
             $result->executionTime = microtime(true) - $startTime;
-            
+
             return $result;
         }
     }
