@@ -239,6 +239,8 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
         ->name('deployment.toggle-collateral');
     Route::post('/deployment/deploy', [\App\Http\Controllers\DeploymentController::class, 'deploy'])
         ->name('deployment.deploy');
+    Route::post('/deployment/deploy-platform', [\App\Http\Controllers\DeploymentController::class, 'deployPlatform'])
+        ->name('deployment.deploy-platform');
 
     // AI-Generated Proposals
     Route::get('/proposals', [\App\Http\Controllers\ProposalController::class, 'index'])->name('proposals.index');

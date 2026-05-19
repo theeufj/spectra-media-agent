@@ -167,4 +167,86 @@ class DeploymentController extends Controller
             'message' => 'Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.',
         ]);
     }
+
+    /**
+     * Deploy a single platform strategy.
+     */
+    public function deployPlatform(Request $request)
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'campaign_id' => 'required|integer|exists:campaigns,id',
+            'strategy_id' => 'required|integer|exists:strategies,id',
+        ]);
+
+        $campaign = Campaign::findOrFail($validated['campaign_id']);
+        $customer = $user->customers()->findOrFail(session('active_customer_id'));
+
+        if ($campaign->customer_id !== $customer->id) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Unauthorized access to this campaign.',
+            ]);
+        }
+
+        $strategy = $campaign->strategies()->findOrFail($validated['strategy_id']);
+
+        // Re-use the same subscription + deployment-enabled checks as the full deploy.
+        $userHasAccess = $user->subscribed('default')
+            || $user->hasDefaultPaymentMethod()
+            || $user->subscription_status === 'active';
+
+        $customerHasAccess = $userHasAccess || $customer->users()
+            ->where(function ($q) {
+                $q->where('subscription_status', 'active')
+                  ->orWhereNotNull('pm_type')
+                  ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
+            })
+            ->exists();
+
+        if (!$customerHasAccess) {
+            return redirect()->route('subscription.pricing')->with('flash', [
+                'type' => 'error',
+                'message' => 'You must have an active subscription to deploy campaigns.',
+            ]);
+        }
+
+        if (!Setting::get('deployment_enabled', true)) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Deployment is currently disabled.',
+            ]);
+        }
+
+        if (!$strategy->signed_off_at) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => "The {$strategy->platform} strategy must be signed off before deploying.",
+            ]);
+        }
+
+        // Reset deployment_status so the idempotency guard allows re-deployment of this strategy.
+        $strategy->update(['deployment_status' => null]);
+
+        DeployCampaign::dispatch($campaign, useAgents: true, strategyId: $strategy->id);
+
+        Log::info("Single-platform deploy dispatched", [
+            'campaign_id' => $campaign->id,
+            'strategy_id' => $strategy->id,
+            'platform'    => $strategy->platform,
+            'user_id'     => $user->id,
+        ]);
+
+        ActivityLog::log('campaign_deployed', "Single-platform deployment initiated for '{$strategy->platform}' on campaign '{$campaign->name}'", $campaign, [
+            'campaign_id' => $campaign->id,
+            'strategy_id' => $strategy->id,
+            'platform'    => $strategy->platform,
+        ]);
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => "{$strategy->platform} deployment has been initiated!",
+        ]);
+    }
 }

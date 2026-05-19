@@ -30,7 +30,8 @@ class DeployCampaign implements ShouldQueue
 
     public function __construct(
         protected Campaign $campaign,
-        protected bool $useAgents = true
+        protected bool $useAgents = true,
+        protected ?int $strategyId = null
     ) {
     }
 
@@ -130,7 +131,9 @@ class DeployCampaign implements ShouldQueue
         }
 
         // Split the campaign's daily budget evenly across strategies
-        $strategies = $this->campaign->strategies;
+        $strategies = $this->strategyId
+            ? $this->campaign->strategies->where('id', $this->strategyId)
+            : $this->campaign->strategies;
 
         // Filter strategies to only platforms the user's plan allows
         $user = $this->campaign->customer->users()->first();

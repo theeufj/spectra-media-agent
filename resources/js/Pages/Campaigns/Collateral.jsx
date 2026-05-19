@@ -37,6 +37,8 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     const [uploadingImages, setUploadingImages] = useState(false);
     const [uploadingVideo, setUploadingVideo] = useState(false);
     const [imageUploadErrors, setImageUploadErrors] = useState([]);
+    const [deployDropdownOpen, setDeployDropdownOpen] = useState(false);
+    const deployDropdownRef = useRef(null);
 
     // Refs for values accessed inside the polling interval to avoid stale closures
     // and prevent the effect from restarting (which resets the safety timeout).
@@ -415,19 +417,53 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             campaign_id: campaign.id,
         }, {
             preserveScroll: true,
-            onSuccess: (page) => {
+            onSuccess: () => {
                 toast.success('Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.');
             },
             onError: (errors) => {
                 console.error('Deployment errors:', errors);
-                if (errors.message) {
-                    toast.error(errors.message);
-                } else {
-                    toast.error('Deployment failed. Please check the console for details.');
-                }
+                toast.error(errors.message || 'Deployment failed. Please check the console for details.');
             },
         });
     };
+
+    const handleDeployPlatform = (strategy) => {
+        setDeployDropdownOpen(false);
+
+        if (!hasActiveSubscription) { setShowSubscriptionModal(true); return; }
+        if (!deploymentEnabled) { setShowDeploymentDisabledModal(true); return; }
+
+        setConfirmModal({
+            show: true,
+            title: `Deploy ${strategy.platform}`,
+            message: `Deploy only the ${strategy.platform} strategy? This will create or update ads on that platform only.`,
+            onConfirm: () => {
+                router.post(route('deployment.deploy-platform'), {
+                    campaign_id: campaign.id,
+                    strategy_id: strategy.id,
+                }, {
+                    preserveScroll: true,
+                    onSuccess: () => toast.success(`${strategy.platform} deployment initiated!`),
+                    onError: (errors) => toast.error(errors.message || `${strategy.platform} deployment failed.`),
+                });
+            },
+            confirmText: `Deploy ${strategy.platform}`,
+            confirmButtonClass: 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800',
+            isDestructive: false,
+        });
+    };
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+        if (!deployDropdownOpen) return;
+        const handler = (e) => {
+            if (deployDropdownRef.current && !deployDropdownRef.current.contains(e.target)) {
+                setDeployDropdownOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [deployDropdownOpen]);
 
     return (
         <AuthenticatedLayout
@@ -435,12 +471,42 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             header={
                 <div className="flex justify-between items-center">
                     <h2 className="font-semibold text-xl text-gray-800 leading-tight">Collateral for {campaign.name} - {currentStrategy.name}</h2>
-                    <button
-                        onClick={handleDeploy}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition"
-                    >
-                        Deploy
-                    </button>
+                    <div className="relative" ref={deployDropdownRef}>
+                        <div className="flex">
+                            <button
+                                onClick={handleDeploy}
+                                className="px-4 py-2 bg-green-600 text-white rounded-l-lg hover:bg-green-700 transition font-medium"
+                            >
+                                Deploy All
+                            </button>
+                            <button
+                                onClick={() => setDeployDropdownOpen(o => !o)}
+                                className="px-2 py-2 bg-green-700 text-white rounded-r-lg hover:bg-green-800 transition border-l border-green-500"
+                                aria-label="Deploy individual platform"
+                            >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
+                        </div>
+                        {deployDropdownOpen && (
+                            <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
+                                <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100">
+                                    Deploy single platform
+                                </div>
+                                {allStrategies.map(strategy => (
+                                    <button
+                                        key={strategy.id}
+                                        onClick={() => handleDeployPlatform(strategy)}
+                                        className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                                    >
+                                        <span className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                                        {strategy.platform}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             }
         >
