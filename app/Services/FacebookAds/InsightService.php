@@ -40,10 +40,11 @@ class InsightService extends BaseFacebookAdsService
                     'frequency',
                     'cpc',
                     'cpm',
-                    'cpa',
                     'date_start',
                     'date_stop',
                 ];
+                // NOTE: 'cpa' is not a valid Facebook Insights API field — calculate
+                // client-side as spend / conversions after fetching.
             }
 
             $response = $this->get("/{$campaignId}/insights", [

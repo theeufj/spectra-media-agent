@@ -84,19 +84,20 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     // Parse conversions from actions
                     $conversions = $insightService->parseAction($insight['actions'] ?? null, 'purchase');
 
+                    $cost = (float) ($insight['spend'] ?? 0);
                     $data = [
                         'campaign_id' => $this->campaign->id,
                         'facebook_campaign_id' => $this->campaign->facebook_ads_campaign_id,
                         'date' => $date,
                         'impressions' => (int) ($insight['impressions'] ?? 0),
                         'clicks' => (int) ($insight['inline_link_clicks'] ?? $insight['clicks'] ?? 0),
-                        'cost' => (float) ($insight['spend'] ?? 0),
+                        'cost' => $cost,
                         'conversions' => $conversions,
                         'reach' => (int) ($insight['reach'] ?? null),
                         'frequency' => (float) ($insight['frequency'] ?? null),
                         'cpc' => (float) ($insight['cpc'] ?? null),
                         'cpm' => (float) ($insight['cpm'] ?? null),
-                        'cpa' => (float) ($insight['cpa'] ?? null),
+                        'cpa' => $conversions > 0 ? round($cost / $conversions, 2) : 0.0,
                     ];
 
                     FacebookAdsPerformanceData::updateOrCreate(

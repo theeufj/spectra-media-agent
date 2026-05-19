@@ -34,10 +34,9 @@ class BillingHealthChecker
                 }
             }
 
-            $adSpendCredits = $customer->adSpendCredits()
-                ->where('expires_at', '>', now())
-                ->where('remaining_amount', '>', 0)
-                ->sum('remaining_amount');
+            // adSpendCredit is a hasOne relation — read the balance directly from it.
+            $credit = $customer->adSpendCredit;
+            $adSpendCredits = $credit ? (float) $credit->remaining_amount : 0.0;
 
             $health['metrics']['ad_spend_credits'] = $adSpendCredits;
 

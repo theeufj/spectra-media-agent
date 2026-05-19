@@ -41,15 +41,22 @@ class FacebookLearningPhaseAgent
         ];
 
         try {
+            // learning_stage_info is only available on ad sets, not on campaign insights.
+            // Fetch it from the first ad set of this campaign instead.
             $insightService = new InsightService($customer);
-            $insights = $insightService->getCampaignInsights(
-                $campaign->facebook_ads_campaign_id,
-                now()->subDays(1)->toDateString(),
-                now()->toDateString(),
-                ['learning_stage_info', 'insights_updated_time']
-            );
+            $strategy = $campaign->strategies()->where('platform', 'like', '%facebook%')->latest()->first();
+            $adSetId  = $strategy?->facebook_adset_id ?? null;
 
-            $learningInfo = $insights[0]['learning_stage_info'] ?? null;
+            $learningInfo = null;
+            if ($adSetId) {
+                $adSetInsights = $insightService->getAdSetInsights(
+                    $adSetId,
+                    now()->subDays(1)->toDateString(),
+                    now()->toDateString(),
+                    ['learning_stage_info']
+                );
+                $learningInfo = $adSetInsights[0]['learning_stage_info'] ?? null;
+            }
 
             if (!$learningInfo) {
                 return $result;
