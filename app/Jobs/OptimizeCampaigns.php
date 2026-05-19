@@ -33,8 +33,10 @@ class OptimizeCampaigns implements ShouldQueue
                       ->orWhereNotNull('facebook_ads_campaign_id')
                       ->orWhereNotNull('microsoft_ads_campaign_id');
             })
-            ->whereNull('last_optimized_at')
-            ->orWhere('last_optimized_at', '<=', now()->subHours(24))
+            ->where(function ($query) {
+                $query->whereNull('last_optimized_at')
+                      ->orWhere('last_optimized_at', '<=', now()->subHours(24));
+            })
             ->get();
 
         // Filter by plan-aware optimization frequency:
@@ -60,35 +62,38 @@ class OptimizeCampaigns implements ShouldQueue
 
                 $recommendations = $optimizationAgent->analyze($campaign);
 
+                $appliedCount = 0;
+                $pendingCount = 0;
+
                 if ($recommendations) {
                     // Clear old pending recommendations for this campaign
                     Recommendation::where('campaign_id', $campaign->id)
                         ->where('status', 'pending')
                         ->delete();
 
-                    $categorized    = $recommendations['categorized'] ?? [];
-                    $autoApply      = $categorized['auto_apply'] ?? [];
-                    $needsReview    = array_merge(
+                    $categorized = $recommendations['categorized'] ?? [];
+                    $autoApply   = $categorized['auto_apply'] ?? [];
+                    $needsReview = array_merge(
                         $categorized['recommended'] ?? [],
                         $categorized['review_required'] ?? []
                     );
 
-                    $appliedCount = 0;
-                    $pendingCount = 0;
+                    $platform = $campaign->google_ads_campaign_id ? 'google'
+                        : ($campaign->facebook_ads_campaign_id ? 'facebook' : 'microsoft');
 
                     // Auto-apply high-confidence recommendations immediately
                     foreach ($autoApply as $rec) {
                         $result = $optimizationAgent->applyRecommendation($campaign, $rec);
 
                         Recommendation::create([
-                            'campaign_id'      => $campaign->id,
-                            'type'             => $rec['type'] ?? 'general',
-                            'target_entity'    => $rec['target_entity'] ?? $rec['target'] ?? null,
-                            'parameters'       => $rec['parameters'] ?? $rec['params'] ?? null,
-                            'rationale'        => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
-                            'status'           => $result['applied'] ? 'applied' : 'failed',
+                            'campaign_id'       => $campaign->id,
+                            'type'              => $rec['type'] ?? 'general',
+                            'target_entity'     => $rec['target_entity'] ?? $rec['target'] ?? null,
+                            'parameters'        => $rec['parameters'] ?? $rec['params'] ?? null,
+                            'rationale'         => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
+                            'status'            => $result['applied'] ? 'applied' : 'failed',
                             'requires_approval' => false,
-                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : ($campaign->facebook_ads_campaign_id ? 'facebook' : 'microsoft'),
+                            'platform'          => $platform,
                         ]);
 
                         if ($result['applied']) {
@@ -99,27 +104,19 @@ class OptimizeCampaigns implements ShouldQueue
                     // Store lower-confidence recommendations for human review
                     foreach ($needsReview as $rec) {
                         Recommendation::create([
-                            'campaign_id'      => $campaign->id,
-                            'type'             => $rec['type'] ?? 'general',
-                            'target_entity'    => $rec['target_entity'] ?? $rec['target'] ?? null,
-                            'parameters'       => $rec['parameters'] ?? $rec['params'] ?? null,
-                            'rationale'        => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
-                            'status'           => 'pending',
+                            'campaign_id'       => $campaign->id,
+                            'type'              => $rec['type'] ?? 'general',
+                            'target_entity'     => $rec['target_entity'] ?? $rec['target'] ?? null,
+                            'parameters'        => $rec['parameters'] ?? $rec['params'] ?? null,
+                            'rationale'         => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
+                            'status'            => 'pending',
                             'requires_approval' => true,
-                            'platform'         => $campaign->google_ads_campaign_id ? 'google' : ($campaign->facebook_ads_campaign_id ? 'facebook' : 'microsoft'),
+                            'platform'          => $platform,
                         ]);
                         $pendingCount++;
                     }
 
-                    $campaign->update([
-                        'latest_optimization_analysis' => $recommendations,
-                        'last_optimized_at'            => now(),
-                    ]);
-
-                    Log::info("Optimization complete for campaign {$campaign->id}", [
-                        'auto_applied'  => $appliedCount,
-                        'pending_review' => $pendingCount,
-                    ]);
+                    $campaign->update(['latest_optimization_analysis' => $recommendations]);
 
                     AgentActivity::record(
                         'optimization',
@@ -130,6 +127,16 @@ class OptimizeCampaigns implements ShouldQueue
                         ['auto_applied' => $appliedCount, 'pending_review' => $pendingCount]
                     );
                 }
+
+                // Always stamp last_optimized_at so this campaign isn't re-queued every run
+                // when there's insufficient data for recommendations (e.g. brand-new campaigns).
+                $campaign->update(['last_optimized_at' => now()]);
+
+                Log::info("Optimization complete for campaign {$campaign->id}", [
+                    'auto_applied'   => $appliedCount,
+                    'pending_review' => $pendingCount,
+                    'had_data'       => $recommendations !== null,
+                ]);
 
                 // Run Facebook ad relevance diagnostics for Facebook campaigns
                 if ($campaign->facebook_ads_campaign_id) {
