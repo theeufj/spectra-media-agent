@@ -72,10 +72,16 @@ class GetExtensionPerformance extends BaseGoogleAdsService
     {
         $this->ensureClient();
 
+        // GAQL requires the enum name string, not the integer value.
+        $fieldTypeName = \Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType::name($fieldType);
+        if (!$fieldTypeName) {
+            return 0;
+        }
+
         $query = "SELECT campaign_asset.asset
                   FROM campaign_asset
                   WHERE campaign_asset.campaign = '{$campaignResourceName}'
-                    AND campaign_asset.field_type = {$fieldType}";
+                    AND campaign_asset.field_type = {$fieldTypeName}";
 
         $count = 0;
 

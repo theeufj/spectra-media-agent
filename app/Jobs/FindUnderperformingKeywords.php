@@ -34,6 +34,16 @@ class FindUnderperformingKeywords implements ShouldQueue
     {
         try {
             $campaign = Campaign::findOrFail($this->campaignId);
+
+            // PMax campaigns don't have keywords — skip entirely.
+            $isPMax = $campaign->strategies()
+                ->where('platform', 'LIKE', '%Performance Max%')
+                ->exists();
+            if ($isPMax) {
+                Log::info("FindUnderperformingKeywords: skipping PMax campaign {$this->campaignId}");
+                return;
+            }
+
             $service = new AccountStructureService($campaign->customer);
             $googleAdsServiceClient = $service->getClient()->getGoogleAdsServiceClient();
 
