@@ -949,7 +949,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         // 2.2 Image Assets
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
         $hasLogo = false;
-        
+        $firstSquareAsset = null; // track for logo fallback
+
         foreach ($imageCollaterals as $image) {
             try {
                 $imageData = StorageHelper::get($image->s3_path);
@@ -959,9 +960,9 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                     ]);
                     continue;
                 }
-                
+
                 $assetResourceName = ($uploadImageService)($customerId, $imageData, $image->s3_path);
-                
+
                 if ($assetResourceName) {
                     if (str_contains(strtolower($image->s3_path), 'logo')) {
                         $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::LOGO];
@@ -979,6 +980,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                             $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::MARKETING_IMAGE];
                         } elseif ($ratio >= 0.8 && $ratio < 1.5 && $width >= 300 && $height >= 300) {
                             $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
+                            $firstSquareAsset ??= $assetResourceName;
                         } else {
                             Log::info("GoogleAdsExecutionAgent: Skipping image asset — dimensions {$width}×{$height} (ratio {$ratio}) don't meet PMax minimums", [
                                 's3_path' => $image->s3_path,
@@ -991,13 +993,12 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             }
         }
 
-        // Ensure we have at least one logo (required for PMax)
-        if (!$hasLogo && !empty($assets)) {
-            // If no explicit logo found, use the first available image as a logo too (fallback)
-            // This might fail if dimensions are wrong, but better than guaranteed failure.
-            $firstAsset = $assets[0]['asset'];
-            $assets[] = ['asset' => $firstAsset, 'field_type' => AssetFieldType::LOGO];
-            Log::warning("GoogleAdsExecutionAgent: No explicit logo found, using first image as logo fallback.");
+        // Logo is required for PMax. Use the first square image as fallback (logos must be image assets).
+        if (!$hasLogo && $firstSquareAsset) {
+            $assets[] = ['asset' => $firstSquareAsset, 'field_type' => AssetFieldType::LOGO];
+            Log::warning("GoogleAdsExecutionAgent: No explicit logo found, using first square image as logo fallback.");
+        } elseif (!$hasLogo) {
+            Log::warning("GoogleAdsExecutionAgent: No logo or square image available — asset group may be rejected by Google.");
         }
 
         // 3. Create Asset Group with Assets
