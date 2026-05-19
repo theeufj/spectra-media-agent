@@ -972,15 +972,17 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                         $height = $size[1] ?? 1;
                         $ratio  = $height > 0 ? $width / $height : 1;
 
-                        if ($ratio >= 1.5) {
-                            // Landscape (≥1.5:1 — Google requires min 600×314, recommended 1.91:1)
+                        // Google PMax minimum sizes:
+                        //   MARKETING_IMAGE:        min 600×314 (landscape, ratio ≥ 1.91:1)
+                        //   SQUARE_MARKETING_IMAGE: min 300×300 (square,    ratio ≈ 1:1)
+                        if ($ratio >= 1.5 && $width >= 600 && $height >= 314) {
                             $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::MARKETING_IMAGE];
-                        } elseif ($ratio >= 0.8 && $ratio < 1.5) {
-                            // Square or near-square (0.8–1.5:1)
+                        } elseif ($ratio >= 0.8 && $ratio < 1.5 && $width >= 300 && $height >= 300) {
                             $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
                         } else {
-                            // Portrait — try square slot as best-effort
-                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
+                            Log::info("GoogleAdsExecutionAgent: Skipping image asset — dimensions {$width}×{$height} (ratio {$ratio}) don't meet PMax minimums", [
+                                's3_path' => $image->s3_path,
+                            ]);
                         }
                     }
                 }
