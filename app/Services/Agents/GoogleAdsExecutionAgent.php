@@ -886,7 +886,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignData = [
             'businessName'   => $campaignName,
             'budget'         => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate'      => now()->format('Y-m-d'),
+            'startDate'      => now()->addDay()->format('Y-m-d'),
             'endDate'        => now()->addYear()->format('Y-m-d'),
             'targetCpaMicros' => $targetCpaMicros,
         ];
@@ -937,8 +937,9 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 }
             }
 
-            // Business Name (Min 1, Max 1)
-            $businessName = $campaignData['businessName'] ?? 'ShopFree';
+            // Business Name (Min 1, Max 1) — max 25 chars
+            $rawBusinessName = $this->customer->name ?? 'ShopFree';
+            $businessName = mb_substr($rawBusinessName, 0, 25);
             $assetResourceName = ($createTextAssetService)($customerId, $businessName);
             if ($assetResourceName) {
                 $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::BUSINESS_NAME];
@@ -962,16 +963,25 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 $assetResourceName = ($uploadImageService)($customerId, $imageData, $image->s3_path);
                 
                 if ($assetResourceName) {
-                    // Simple heuristic: if filename contains 'logo', treat as logo
                     if (str_contains(strtolower($image->s3_path), 'logo')) {
                         $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::LOGO];
                         $hasLogo = true;
                     } else {
-                        // Link as MARKETING_IMAGE (Landscape)
-                        $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::MARKETING_IMAGE];
-                        
-                        // Link as SQUARE_MARKETING_IMAGE (Square)
-                        $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
+                        $size = @getimagesizefromstring($imageData);
+                        $width  = $size[0] ?? 0;
+                        $height = $size[1] ?? 1;
+                        $ratio  = $height > 0 ? $width / $height : 1;
+
+                        if ($ratio >= 1.5) {
+                            // Landscape (≥1.5:1 — Google requires min 600×314, recommended 1.91:1)
+                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::MARKETING_IMAGE];
+                        } elseif ($ratio >= 0.8 && $ratio < 1.5) {
+                            // Square or near-square (0.8–1.5:1)
+                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
+                        } else {
+                            // Portrait — try square slot as best-effort
+                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
+                        }
                     }
                 }
             } catch (\Exception $e) {
