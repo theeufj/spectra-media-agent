@@ -220,7 +220,7 @@ class QualityScoreImprovementAgent
         $count       = count($paused);
         $message     = "{$count} keyword(s) were paused in \"{$campaign->name}\" after remaining below QS {$qsThreshold} for {$pauseDays}+ days: {$keywordList}.";
 
-        $admins = \App\Models\User::where('is_admin', true)->get();
+        $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
         foreach ($admins as $admin) {
             $admin->notify(new CriticalAgentAlert(
                 'quality_score',

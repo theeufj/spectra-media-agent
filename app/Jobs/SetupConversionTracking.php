@@ -41,7 +41,7 @@ class SetupConversionTracking implements ShouldQueue
 
             // Notify admins on final failure
             if ($this->attempts() >= $this->tries) {
-                $admins = \App\Models\User::where('is_admin', true)->get();
+                $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
                 foreach ($admins as $admin) {
                     $admin->notify(new CriticalAgentAlert(
                         'conversion_tracking',

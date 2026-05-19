@@ -154,7 +154,7 @@ class FacebookLearningPhaseAgent
             'learning_too_long' => "Campaign \"{$campaign->name}\" has been in Facebook learning phase for {$days} days. Check conversion event setup, audience breadth, and minimum budget.",
         ];
 
-        $admins = \App\Models\User::where('is_admin', true)->get();
+        $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
         foreach ($admins as $admin) {
             $admin->notify(new CriticalAgentAlert(
                 'facebook_learning',

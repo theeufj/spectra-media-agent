@@ -35,7 +35,7 @@ class RefreshFacebookTokens implements ShouldQueue
             Log::critical('Facebook System User token is invalid or missing', $health);
 
             // Notify admin users
-            $admins = \App\Models\User::where('is_admin', true)->get();
+            $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
             foreach ($admins as $admin) {
                 $admin->notify(new CriticalAgentAlert(
                     'facebook',
