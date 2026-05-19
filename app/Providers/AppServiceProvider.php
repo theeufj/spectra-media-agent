@@ -80,7 +80,7 @@ class AppServiceProvider extends ServiceProvider
                     ],
                 ]);
             } catch (\Throwable $logException) {
-                // Silently fail
+                \Illuminate\Support\Facades\Log::warning('Failed to write queue failure to runtime_exceptions: ' . $logException->getMessage());
             }
         });
     }

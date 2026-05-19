@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\RunCroAudit;
-use App\Models\Customer;
 use App\Models\LandingPageAudit;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -12,13 +11,13 @@ class CroController extends Controller
 {
     public function index(Request $request)
     {
-        $customer = Customer::find(session('active_customer_id'));
+        $user = $request->user();
+        $customer = $user->customers()->find(session('active_customer_id'));
 
         if (!$customer) {
             return redirect()->route('dashboard');
         }
 
-        $user = $request->user();
         $plan = $user->resolveCurrentPlan();
         $slug = $plan?->slug ?? 'free';
 
@@ -42,9 +41,9 @@ class CroController extends Controller
         ]);
     }
 
-    public function show(LandingPageAudit $audit)
+    public function show(Request $request, LandingPageAudit $audit)
     {
-        $customer = Customer::find(session('active_customer_id'));
+        $customer = $request->user()->customers()->find(session('active_customer_id'));
 
         if (!$customer || $audit->customer_id !== $customer->id) {
             abort(403);
@@ -61,13 +60,13 @@ class CroController extends Controller
             'url' => 'required|url|max:2048',
         ]);
 
-        $customer = Customer::find(session('active_customer_id'));
+        $user = $request->user();
+        $customer = $user->customers()->find(session('active_customer_id'));
 
         if (!$customer) {
             return redirect()->route('dashboard');
         }
 
-        $user = $request->user();
         $plan = $user->resolveCurrentPlan();
         $slug = $plan?->slug ?? 'free';
 

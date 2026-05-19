@@ -119,8 +119,8 @@ class AssetValidator
 
         } finally {
             // Clean up temp file if created
-            if ($tempFile && file_exists($tempFile)) {
-                @unlink($tempFile);
+            if ($tempFile && file_exists($tempFile) && !unlink($tempFile)) {
+                \Illuminate\Support\Facades\Log::warning("AssetValidator: failed to delete temp file", ['path' => $tempFile]);
             }
         }
 
@@ -182,7 +182,7 @@ class AssetValidator
             }
 
             // Attempt full validation with FFmpeg if available
-            $ffprobeAvailable = !empty(trim(shell_exec('which ffprobe 2>/dev/null') ?? ''));
+            $ffprobeAvailable = $this->findFFmpeg() !== null;
             if ($ffprobeAvailable) {
                 $ffmpegErrors = $this->validateVideoWithFFmpeg($filePath);
                 $errors = array_merge($errors, $ffmpegErrors['errors'] ?? []);
@@ -192,8 +192,8 @@ class AssetValidator
 
         } finally {
             // Clean up temp file if created
-            if ($tempFile && file_exists($tempFile)) {
-                @unlink($tempFile);
+            if ($tempFile && file_exists($tempFile) && !unlink($tempFile)) {
+                \Illuminate\Support\Facades\Log::warning("AssetValidator: failed to delete temp file", ['path' => $tempFile]);
             }
         }
 
@@ -217,9 +217,10 @@ class AssetValidator
         }
 
         // Use FFprobe to get video metadata
-        $command = "{$ffmpegPath}probe -v quiet -print_format json -show_format -show_streams " . escapeshellarg($filePath);
-        $output = shell_exec($command);
-        
+        $ffprobePath = $ffmpegPath . 'probe';
+        exec(escapeshellarg($ffprobePath) . ' -v quiet -print_format json -show_format -show_streams ' . escapeshellarg($filePath), $lines, $exitCode);
+        $output = $exitCode === 0 ? implode('', $lines) : null;
+
         if (!$output) {
             return ['errors' => ['Failed to read video metadata with FFmpeg']];
         }
@@ -358,9 +359,10 @@ class AssetValidator
         }
 
         // Try which command
-        $which = shell_exec('which ffmpeg 2>/dev/null');
-        if ($which && file_exists(trim($which))) {
-            return trim($which);
+        exec('which ffmpeg', $whichOut, $whichCode);
+        $which = $whichCode === 0 ? trim(implode('', $whichOut)) : null;
+        if ($which && file_exists($which)) {
+            return $which;
         }
 
         return null;

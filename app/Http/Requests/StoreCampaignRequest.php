@@ -39,8 +39,8 @@ class StoreCampaignRequest extends FormRequest
             'goals' => 'required|string',
             'target_market' => 'required|string',
             'voice' => 'required|string',
-            'total_budget' => 'required|numeric|min:0',
-            'daily_budget' => 'nullable|numeric|min:0',
+            'total_budget' => 'required|numeric|min:0|max:9999999',
+            'daily_budget' => 'nullable|numeric|min:0|max:999999',
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
             'primary_kpi' => 'required|string',
@@ -59,6 +59,22 @@ class StoreCampaignRequest extends FormRequest
             'keywords.*.funnel_stage' => 'nullable|string|max:50',
             'platforms' => 'required|array|min:1',
             'platforms.*' => 'string|in:google,facebook,microsoft,linkedin',
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'name.unique'                     => 'A campaign with this name already exists for your account.',
+            'name.required'                   => 'Please provide a campaign name.',
+            'total_budget.max'                => 'Total budget cannot exceed $9,999,999.',
+            'daily_budget.max'                => 'Daily budget cannot exceed $999,999.',
+            'platforms.required'              => 'Select at least one advertising platform.',
+            'platforms.min'                   => 'Select at least one advertising platform.',
+            'start_date.required'             => 'A campaign start date is required.',
+            'end_date.after_or_equal'         => 'End date must be on or after the start date.',
+            'keywords.*.text.required_with'   => 'Each keyword must have text.',
+            'keywords.*.match_type.in'        => 'Keyword match type must be BROAD, PHRASE, or EXACT.',
         ];
     }
 

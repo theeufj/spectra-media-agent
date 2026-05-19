@@ -267,7 +267,11 @@ class Customer extends Model
             }
         }
 
-        // Fallback — treat non-empty string as a slug/ID
-        return ['page_id' => $input, 'page_name' => null];
+        // Fallback — only accept alphanumeric slugs or numeric IDs; reject anything else
+        if (preg_match('/^[\w.\-]{1,100}$/', $input)) {
+            return ['page_id' => $input, 'page_name' => null];
+        }
+
+        return null;
     }
 }

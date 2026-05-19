@@ -39,7 +39,8 @@ class DashboardController extends Controller
 
         // Build ROI / analytics data for all campaigns
         $days = (int) $request->get('days', 30);
-        $since = now()->subDays($days);
+        $tz = $activeCustomer->timezone ?? config('app.timezone', 'UTC');
+        $since = now($tz)->subDays($days)->startOfDay();
         $campaignIds = $campaigns->pluck('id');
 
         $platformData = $this->aggregatePlatformData($campaignIds, $since);
@@ -95,7 +96,8 @@ class DashboardController extends Controller
         }
 
         $days = (int) $request->get('days', 30);
-        $since = now()->subDays($days);
+        $tz = $campaign->customer->timezone ?? config('app.timezone', 'UTC');
+        $since = now($tz)->subDays($days)->startOfDay();
         $cIds = collect([$campaign->id]);
 
         $platformData = $this->aggregatePlatformData($cIds, $since);

@@ -2,6 +2,14 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router, usePage } from '@inertiajs/react';
 import { useState } from 'react';
 
+const decodePaginationLabel = (html) =>
+    html
+        .replace(/&laquo;/g, '«')
+        .replace(/&raquo;/g, '»')
+        .replace(/&hellip;/g, '…')
+        .replace(/&amp;/g, '&')
+        .replace(/<[^>]+>/g, '');
+
 const PLATFORM_LABELS = {
     google: 'Google',
     facebook: 'Facebook',
@@ -220,8 +228,9 @@ export default function CreativeBriefsIndex({ briefs, counts, activeStatus }) {
                                         ? 'bg-indigo-600 text-white border-indigo-600'
                                         : 'text-gray-600 border-gray-300 hover:bg-gray-50 disabled:opacity-40'
                                 }`}
-                                dangerouslySetInnerHTML={{ __html: link.label }}
-                            />
+                            >
+                                {decodePaginationLabel(link.label)}
+                            </button>
                         ))}
                     </div>
                 )}

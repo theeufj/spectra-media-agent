@@ -80,18 +80,18 @@ class VertexAIService
                 return $this->getAccessTokenFromServiceAccount($credentialsPath);
             }
             
-            // 3. Fall back to gcloud CLI (local development)
-            $accessToken = trim(shell_exec('gcloud auth application-default print-access-token 2>&1'));
-            
-            if (empty($accessToken) || str_contains($accessToken, 'ERROR')) {
-                Log::error("VertexAIService: Failed to get access token", ['output' => $accessToken]);
-                return null;
+            // 3. Fall back to gcloud CLI — local development only
+            if (!app()->isProduction()) {
+                exec('gcloud auth application-default print-access-token', $lines, $exitCode);
+                if ($exitCode === 0 && !empty($lines)) {
+                    $accessToken = trim(implode('', $lines));
+                    Cache::put('vertex_ai_access_token', $accessToken, now()->addMinutes(55));
+                    return $accessToken;
+                }
             }
 
-            // Cache for 55 minutes (tokens typically valid for 1 hour)
-            Cache::put('vertex_ai_access_token', $accessToken, now()->addMinutes(55));
-            
-            return $accessToken;
+            Log::error("VertexAIService: No valid authentication method available (GCE metadata, service account, or gcloud CLI)");
+            return null;
         } catch (\Exception $e) {
             Log::error("VertexAIService: Exception getting access token: " . $e->getMessage());
             return null;
@@ -203,16 +203,27 @@ class VertexAIService
      * @param int|null $maxRetries Maximum number of retry attempts.
      * @return array|null The generated content as an array, or null on failure.
      */
+    private const DEPRECATED_MODELS = [
+        'gemini-2.0-flash'      => 'gemini-2.5-flash',
+        'gemini-2.0-flash-lite' => 'gemini-2.5-flash-lite',
+        'gemini-3-pro-preview'  => 'gemini-3.1-pro-preview',
+    ];
+
     public function generateContent(
-        string $model, 
-        string $prompt, 
-        array $config = [], 
+        string $model,
+        string $prompt,
+        array $config = [],
         ?string $systemInstruction = null,
         bool $enableThinking = false,
         bool $enableGoogleSearch = false,
         array $safetySettings = [],
         ?int $maxRetries = null
     ): ?array {
+        if (isset(self::DEPRECATED_MODELS[$model])) {
+            $replacement = self::DEPRECATED_MODELS[$model];
+            Log::warning("VertexAIService: model '{$model}' is deprecated — use '{$replacement}' instead", ['model' => $model]);
+        }
+
         $maxRetries = $maxRetries ?? $this->maxRetries;
         $attempt = 0;
 

@@ -114,6 +114,23 @@ class GenerateVideo implements ShouldQueue
     {
         Log::info("Starting video generation job for Campaign ID: {$this->campaign->id}, Strategy ID: {$this->strategy->id}");
 
+        // Idempotency: if a non-failed collateral already exists for this strategy+platform
+        // (e.g. from a previous attempt that survived a retry), skip creation.
+        $alreadyStarted = VideoCollateral::where('campaign_id', $this->campaign->id)
+            ->where('strategy_id', $this->strategy->id)
+            ->where('platform', $this->platform)
+            ->whereIn('status', ['pending', 'generating', 'completed'])
+            ->exists();
+
+        if ($alreadyStarted) {
+            Log::info("GenerateVideo: idempotency guard — collateral already exists, skipping", [
+                'campaign_id' => $this->campaign->id,
+                'strategy_id' => $this->strategy->id,
+                'platform'    => $this->platform,
+            ]);
+            return;
+        }
+
         $videoCollateral = null;
         try {
             // Fetch brand guidelines if available
