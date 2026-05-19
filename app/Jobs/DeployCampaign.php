@@ -211,6 +211,19 @@ class DeployCampaign implements ShouldQueue
         $failureCount = 0;
 
         foreach ($strategies as $strategy) {
+            // Skip strategies that are already deployed/verified — prevents duplicate campaigns
+            // when the user clicks Deploy more than once or the job retries.
+            if (in_array($strategy->deployment_status, ['deployed', 'verified'])) {
+                Log::info("Skipping already-deployed strategy", [
+                    'campaign_id'       => $this->campaign->id,
+                    'strategy_id'       => $strategy->id,
+                    'platform'          => $strategy->platform,
+                    'deployment_status' => $strategy->deployment_status,
+                ]);
+                $successCount++;
+                continue;
+            }
+
             Log::info("Deploying strategy for platform: {$strategy->platform}", [
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => $strategy->id,
