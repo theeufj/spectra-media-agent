@@ -6,7 +6,7 @@ use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Services\FacebookAds\AdService;
 use App\Services\FacebookAds\CreativeService;
-use App\Helpers\StorageHelper;
+use App\Services\StorageHelper;
 use Illuminate\Console\Command;
 
 class AddFacebookImageAds extends Command
