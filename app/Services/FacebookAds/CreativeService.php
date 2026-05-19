@@ -114,23 +114,33 @@ class CreativeService extends BaseFacebookAdsService
             return null;
         }
 
+        // Facebook requires image_url or image_hash as a thumbnail in video_data.
+        // After upload, Facebook auto-generates thumbnails — fetch the preferred one.
+        $thumbnailUrl = $this->fetchVideoThumbnail($videoId);
+
         $destination = $linkUrl ?? $this->customer->website ?? 'https://facebook.com';
 
         try {
+            $videoData = [
+                'video_id'         => $videoId,
+                'title'            => $headline,
+                'message'          => $description,
+                'link_description' => $description,
+                'call_to_action'   => [
+                    'type'  => $callToAction,
+                    'value' => ['link' => $destination],
+                ],
+            ];
+
+            if ($thumbnailUrl) {
+                $videoData['image_url'] = $thumbnailUrl;
+            }
+
             $response = $this->post("/act_{$accountId}/adcreatives", [
                 'name' => $creativeName,
                 'object_story_spec' => json_encode([
-                    'page_id' => $pageId,
-                    'video_data' => [
-                        'video_id'       => $videoId,
-                        'title'          => $headline,
-                        'message'        => $description,
-                        'link_description' => $description,
-                        'call_to_action' => [
-                            'type'  => $callToAction,
-                            'value' => ['link' => $destination],
-                        ],
-                    ],
+                    'page_id'    => $pageId,
+                    'video_data' => $videoData,
                 ]),
             ]);
 
@@ -156,6 +166,38 @@ class CreativeService extends BaseFacebookAdsService
             ]);
             return null;
         }
+    }
+
+    /**
+     * Fetch the preferred auto-generated thumbnail URL from a freshly uploaded Facebook video.
+     * Facebook generates thumbnails asynchronously — retry briefly to allow encoding time.
+     */
+    protected function fetchVideoThumbnail(string $videoId): ?string
+    {
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            if ($attempt > 0) {
+                sleep(3);
+            }
+
+            $response = $this->get("/{$videoId}/thumbnails", ['fields' => 'uri,is_preferred']);
+
+            $thumbnails = $response['data'] ?? [];
+            if (empty($thumbnails)) {
+                continue;
+            }
+
+            // Prefer the thumbnail Facebook marked as preferred; fall back to first available.
+            foreach ($thumbnails as $thumb) {
+                if (!empty($thumb['is_preferred'])) {
+                    return $thumb['uri'];
+                }
+            }
+
+            return $thumbnails[0]['uri'] ?? null;
+        }
+
+        Log::warning("FacebookCreativeService: Could not fetch video thumbnail for video {$videoId} after 3 attempts");
+        return null;
     }
 
     /**
