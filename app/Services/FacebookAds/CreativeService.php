@@ -170,23 +170,41 @@ class CreativeService extends BaseFacebookAdsService
 
     /**
      * Fetch the preferred auto-generated thumbnail URL from a freshly uploaded Facebook video.
-     * Facebook generates thumbnails asynchronously — retry briefly to allow encoding time.
+     * Facebook processes videos asynchronously — poll the video status until "ready" (up to 90s),
+     * then fetch thumbnails.
      */
     protected function fetchVideoThumbnail(string $videoId): ?string
     {
-        for ($attempt = 0; $attempt < 3; $attempt++) {
+        // Step 1: Wait for the video to finish processing (max ~90s)
+        $maxStatusAttempts = 9;
+        for ($i = 0; $i < $maxStatusAttempts; $i++) {
+            if ($i > 0) {
+                sleep(10);
+            }
+
+            $statusResponse = $this->get("/{$videoId}", ['fields' => 'status']);
+            $videoStatus = $statusResponse['status']['video_status'] ?? null;
+
+            if ($videoStatus === 'ready') {
+                break;
+            }
+
+            Log::info("FacebookCreativeService: Video {$videoId} not ready yet (status: {$videoStatus}), waiting...");
+        }
+
+        // Step 2: Fetch thumbnails (retry a few times in case they're still generating)
+        for ($attempt = 0; $attempt < 4; $attempt++) {
             if ($attempt > 0) {
-                sleep(3);
+                sleep(5);
             }
 
             $response = $this->get("/{$videoId}/thumbnails", ['fields' => 'uri,is_preferred']);
-
             $thumbnails = $response['data'] ?? [];
+
             if (empty($thumbnails)) {
                 continue;
             }
 
-            // Prefer the thumbnail Facebook marked as preferred; fall back to first available.
             foreach ($thumbnails as $thumb) {
                 if (!empty($thumb['is_preferred'])) {
                     return $thumb['uri'];
@@ -196,7 +214,7 @@ class CreativeService extends BaseFacebookAdsService
             return $thumbnails[0]['uri'] ?? null;
         }
 
-        Log::warning("FacebookCreativeService: Could not fetch video thumbnail for video {$videoId} after 3 attempts");
+        Log::warning("FacebookCreativeService: Could not fetch video thumbnail for video {$videoId}");
         return null;
     }
 
