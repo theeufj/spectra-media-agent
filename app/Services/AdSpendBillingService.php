@@ -376,7 +376,6 @@ class AdSpendBillingService
             // Get spend from active campaigns
             $activeCampaigns = $customer->campaigns()
                 ->where('status', 'active')
-                ->whereNotNull('external_campaign_id')
                 ->get();
 
             foreach ($activeCampaigns as $campaign) {
@@ -421,7 +420,7 @@ class AdSpendBillingService
             
             $performance = $performanceService->getPerformance(
                 $customer->google_ads_customer_id,
-                $campaign->external_campaign_id,
+                $campaign->google_ads_campaign_id,
                 now()->subDay()->format('Y-m-d'),
                 now()->subDay()->format('Y-m-d')
             );
@@ -557,7 +556,6 @@ class AdSpendBillingService
     {
         $campaigns = $customer->campaigns()
             ->where('status', 'active')
-            ->whereNotNull('external_campaign_id')
             ->get();
 
         foreach ($campaigns as $campaign) {

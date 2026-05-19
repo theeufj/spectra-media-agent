@@ -200,6 +200,14 @@ class Customer extends Model
         return $this->hasOne(AdSpendCredit::class);
     }
 
+    public function adSpendTransactions()
+    {
+        return $this->hasManyThrough(
+            \App\Models\AdSpendTransaction::class,
+            AdSpendCredit::class
+        );
+    }
+
     /**
      * Extract a Facebook Page ID from a URL or raw ID string.
      *
