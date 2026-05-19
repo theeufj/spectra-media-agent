@@ -259,6 +259,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         product_focus: brandDefaults.product_focus || '',
         exclusions: brandDefaults.exclusions || '',
         selected_pages: [],
+        landing_page_url: '',
         keywords: [],
         platforms: selectablePlatforms,
     });
@@ -873,10 +874,13 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                 <InputLabel value="Select Landing Pages" />
                                 <HelpText text="Choose product pages from your website to promote" />
                                 <div className="mt-2">
-                                    <ProductSelection 
+                                    <ProductSelection
                                         customerId={customerId}
                                         selectedPages={data.selected_pages || []}
-                                        onSelectionChange={(pages) => setData('selected_pages', pages)}
+                                        onSelectionChange={(page) => {
+                                            setData('selected_pages', page ? [page.id] : []);
+                                            setData('landing_page_url', page?.url || '');
+                                        }}
                                     />
                                 </div>
                             </div>
@@ -910,7 +914,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         <KeywordSelector
                             value={data.keywords}
                             onChange={(keywords) => setData('keywords', keywords)}
-                            landingPage={data.selected_pages?.[0]?.url || ''}
+                            landingPage={data.landing_page_url || ''}
                         />
                     </div>
                 );

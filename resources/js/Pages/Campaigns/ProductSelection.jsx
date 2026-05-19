@@ -35,7 +35,7 @@ export default function ProductSelection({ customerId, selectedPages, onSelectio
 
     const handleSelection = (page) => {
         setSelectedPageObject(page);
-        onSelectionChange(page ? [page.id] : []);
+        onSelectionChange(page ?? null);
     };
 
     return (
