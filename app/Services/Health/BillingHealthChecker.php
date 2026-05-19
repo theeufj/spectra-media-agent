@@ -49,17 +49,19 @@ class BillingHealthChecker
                 ];
             }
 
-            $recentFailures = $customer->adSpendTransactions()
-                ->where('ad_spend_transactions.status', 'failed')
+            // ad_spend_transactions tracks debits/credits and has no status column;
+            // negative-amount rows represent reversals/refunds.
+            $recentDebits = $customer->adSpendTransactions()
                 ->where('ad_spend_transactions.created_at', '>', now()->subDays(7))
+                ->where('ad_spend_transactions.amount', '<', 0)
                 ->count();
 
-            if ($recentFailures > 0) {
+            if ($recentDebits > 0) {
                 $health['warnings'][] = [
                     'type'     => 'payment_failures',
                     'severity' => 'high',
-                    'message'  => 'Recent payment failures detected',
-                    'details'  => "{$recentFailures} failed transaction(s) in the last 7 days",
+                    'message'  => 'Recent credit reversals detected',
+                    'details'  => "{$recentDebits} reversal(s) in the last 7 days",
                 ];
             }
 

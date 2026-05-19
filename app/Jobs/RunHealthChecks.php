@@ -220,7 +220,7 @@ class RunHealthChecks implements ShouldQueue
             return;
         }
 
-        $message = "Health check found {$summary['critical']} critical and {$summary['unhealthy']} unhealthy accounts across {$summary['total_customers']} customers.";
+        $message = "Health check found {$summary['critical']} critical and {$summary['unhealthy']} unhealthy accounts across {$summary['customers_checked']} customers.";
 
         foreach ($admins as $admin) {
             $admin->notify(new CriticalAgentAlert(
