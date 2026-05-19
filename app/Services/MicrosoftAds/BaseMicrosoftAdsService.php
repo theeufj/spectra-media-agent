@@ -4,6 +4,7 @@ namespace App\Services\MicrosoftAds;
 
 use App\Models\Customer;
 use App\Services\Agents\Traits\RetryableApiOperation;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -47,22 +48,36 @@ abstract class BaseMicrosoftAdsService
                 return;
             }
 
+            // Cache access tokens to avoid a round-trip on every service instantiation.
+            // Key on a hash of the refresh token so different credentials get separate entries.
+            $cacheKey = 'microsoft_ads_access_token_' . substr(md5($refreshToken), 0, 16);
+            $cached   = Cache::get($cacheKey);
+
+            if ($cached) {
+                $this->accessToken = $cached;
+                return;
+            }
+
             $tenantId = $this->config['tenant_id'] ?? 'common';
 
             $response = Http::asForm()->post("https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token", [
-                'client_id' => $this->config['client_id'],
+                'client_id'     => $this->config['client_id'],
                 'client_secret' => $this->config['client_secret'],
                 'refresh_token' => $refreshToken,
-                'grant_type' => 'refresh_token',
-                'scope' => 'https://ads.microsoft.com/msads.manage offline_access',
+                'grant_type'    => 'refresh_token',
+                'scope'         => 'https://ads.microsoft.com/msads.manage offline_access',
             ]);
 
             if ($response->successful()) {
                 $this->accessToken = $response->json('access_token');
+                $expiresIn = (int) $response->json('expires_in', 3600);
+                // Cache with a 5-minute safety buffer
+                Cache::put($cacheKey, $this->accessToken, now()->addSeconds(max(0, $expiresIn - 300)));
             } else {
                 Log::error('Microsoft Ads authentication failed', [
-                    'status' => $response->status(),
-                    'body' => $response->body(),
+                    'status'    => $response->status(),
+                    'error'     => $response->json('error'),
+                    'error_description' => $response->json('error_description'),
                 ]);
             }
         } catch (\Exception $e) {

@@ -7,6 +7,8 @@ use App\Models\Campaign;
 use App\Models\Recommendation;
 use App\Services\Agents\CampaignOptimizationAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
+use App\Services\Agents\LinkedInCampaignOptimizationAgent;
+use App\Services\Agents\MicrosoftAdsCampaignOptimizationAgent;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -135,6 +137,24 @@ class OptimizeCampaigns implements ShouldQueue
                         $fbDiagnostics->analyze($campaign);
                     } catch (\Exception $e) {
                         Log::warning("FacebookAdRelevanceDiagnosticsAgent failed for campaign {$campaign->id}: " . $e->getMessage());
+                    }
+                }
+
+                // LinkedIn-specific optimization
+                if ($campaign->linkedin_campaign_id) {
+                    try {
+                        (new LinkedInCampaignOptimizationAgent())->analyze($campaign);
+                    } catch (\Exception $e) {
+                        Log::warning("LinkedInCampaignOptimizationAgent failed for campaign {$campaign->id}: " . $e->getMessage());
+                    }
+                }
+
+                // Microsoft Ads-specific optimization
+                if ($campaign->microsoft_ads_campaign_id) {
+                    try {
+                        (new MicrosoftAdsCampaignOptimizationAgent())->analyze($campaign);
+                    } catch (\Exception $e) {
+                        Log::warning("MicrosoftAdsCampaignOptimizationAgent failed for campaign {$campaign->id}: " . $e->getMessage());
                     }
                 }
 

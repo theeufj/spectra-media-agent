@@ -302,6 +302,15 @@ PROMPT;
 
     protected function executeCreateCampaign(array $params, ExecutionContext $context): array
     {
+        // Idempotency: skip if this campaign was already deployed to Microsoft Ads
+        if ($context->campaign && $context->campaign->microsoft_ads_campaign_id) {
+            Log::info('[MicrosoftAdsExecutionAgent] Campaign already deployed to Microsoft Ads, skipping creation', [
+                'campaign_id'              => $context->campaign->id,
+                'microsoft_ads_campaign_id' => $context->campaign->microsoft_ads_campaign_id,
+            ]);
+            return ['status' => 'already_deployed', 'microsoft_ads_campaign_id' => $context->campaign->microsoft_ads_campaign_id];
+        }
+
         $campaignService = new CampaignService($this->customer);
         $name        = $params['name'] ?? $params['campaign_name'] ?? $context->campaign?->name ?? 'Sitetospend Campaign';
         $dailyBudget = $params['daily_budget'] ?? $params['budget'] ?? $context->strategy?->daily_budget ?? 10.00;

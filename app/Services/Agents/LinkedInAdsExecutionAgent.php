@@ -184,6 +184,15 @@ PROMPT;
         $params = (array) ($step->parameters ?? $step['parameters'] ?? []);
         $campaign = $context->campaign;
 
+        // Idempotency: skip if this campaign was already deployed to LinkedIn
+        if ($campaign && $campaign->linkedin_campaign_id) {
+            Log::info('[LinkedInAdsExecutionAgent] Campaign already deployed to LinkedIn, skipping creation', [
+                'campaign_id'         => $campaign->id,
+                'linkedin_campaign_id' => $campaign->linkedin_campaign_id,
+            ]);
+            return ['status' => 'already_deployed', 'linkedin_campaign_id' => $campaign->linkedin_campaign_id];
+        }
+
         $campaignType = $params['campaign_type'] ?? 'SPONSORED_UPDATES';
 
         $createParams = [
