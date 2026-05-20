@@ -36,7 +36,7 @@ class UploadVideoAsset extends BaseGoogleAdsService
         // Create Asset
         $asset = new Asset([
             'name'                => $videoName,
-            'type'                => AssetType::VIDEO,
+            'type'                => AssetType::YOUTUBE_VIDEO,
             'youtube_video_asset' => $videoAsset,
         ]);
 
