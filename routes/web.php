@@ -757,4 +757,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::post('/sandbox/launch', [App\Http\Controllers\SandboxController::class, 'launch'])->name('sandbox.launch');
     Route::get('/sandbox/{customer}/results', [App\Http\Controllers\SandboxController::class, 'results'])->name('sandbox.results');
     Route::delete('/sandbox/{customer}', [App\Http\Controllers\SandboxController::class, 'destroy'])->name('sandbox.destroy');
+
+    // One-time YouTube OAuth flow to generate a platform refresh token with youtube.upload scope
+    Route::get('/youtube/auth', [App\Http\Controllers\YouTubeAuthController::class, 'redirect'])->name('youtube.auth');
+    Route::get('/youtube/auth/callback', [App\Http\Controllers\YouTubeAuthController::class, 'callback'])->name('youtube.auth.callback');
 });
