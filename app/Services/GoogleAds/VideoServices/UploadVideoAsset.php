@@ -4,7 +4,7 @@ namespace App\Services\GoogleAds\VideoServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Resources\Asset;
-use Google\Ads\GoogleAds\V22\Common\VideoAsset;
+use Google\Ads\GoogleAds\V22\Common\YoutubeVideoAsset;
 use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
 use Google\Ads\GoogleAds\V22\Services\AssetService;
 use Google\Ads\GoogleAds\V22\Services\AssetOperation;
@@ -31,13 +31,13 @@ class UploadVideoAsset extends BaseGoogleAdsService
     public function __invoke(string $customerId, string $youtubeVideoId, string $videoName): ?string
     {
         // Create VideoAsset
-        $videoAsset = new VideoAsset(['youtube_video_id' => $youtubeVideoId]);
+        $videoAsset = new YoutubeVideoAsset(['youtube_video_id' => $youtubeVideoId]);
 
         // Create Asset
         $asset = new Asset([
-            'name' => $videoName,
-            'type' => AssetType::VIDEO,
-            'video_asset' => $videoAsset,
+            'name'                => $videoName,
+            'type'                => AssetType::VIDEO,
+            'youtube_video_asset' => $videoAsset,
         ]);
 
         // Create AssetOperation
