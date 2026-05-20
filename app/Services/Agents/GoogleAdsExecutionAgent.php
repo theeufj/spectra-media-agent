@@ -575,13 +575,24 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                         $imageAssetResourceNames[] = $assetResourceName;
                         $result->addPlatformId('image_asset', $assetResourceName);
 
-                        // Link the asset to the Ad Group (Image Extension)
-                        $linkResourceName = ($linkAdGroupAssetService)($customerId, $adGroupResourceName, $assetResourceName, AssetFieldType::AD_IMAGE);
+                        // Determine field type from image dimensions.
+                        // AD_IMAGE is Display/Video only — Search image extensions require
+                        // MARKETING_IMAGE (landscape) or SQUARE_MARKETING_IMAGE (square).
+                        $size       = @getimagesizefromstring($imageData);
+                        $width      = $size[0] ?? 0;
+                        $height     = $size[1] ?? 1;
+                        $ratio      = $height > 0 ? $width / $height : 1;
+                        $fieldType  = ($ratio >= 0.8 && $ratio < 1.5 && $width >= 300 && $height >= 300)
+                            ? AssetFieldType::SQUARE_MARKETING_IMAGE
+                            : AssetFieldType::MARKETING_IMAGE;
+
+                        $linkResourceName = ($linkAdGroupAssetService)($customerId, $adGroupResourceName, $assetResourceName, $fieldType);
                         if ($linkResourceName) {
                             $result->addPlatformId('ad_group_asset', $linkResourceName);
                             Log::info("GoogleAdsExecutionAgent: Linked image asset to ad group", [
                                 'asset' => $assetResourceName,
-                                'ad_group' => $adGroupResourceName
+                                'ad_group' => $adGroupResourceName,
+                                'field_type' => $fieldType,
                             ]);
                         }
                     }

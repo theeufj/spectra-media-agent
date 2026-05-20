@@ -248,7 +248,9 @@ PROMPT;
 
     protected function executePlan(ExecutionPlan $plan, ExecutionContext $context): ExecutionResult
     {
-        $results = [];
+        $results    = [];
+        $startTime  = microtime(true);
+        $platformIds = [];
 
         foreach ($plan->steps as $step) {
             // Steps from AI come back as plain arrays; fallback plan uses ExecutionStep objects.
@@ -268,8 +270,17 @@ PROMPT;
                     'configure_tracking',
                     'setup_tracking'      => $this->executeConfigureTracking(),
                     'create_extensions'   => ['status' => 'skipped', 'reason' => 'Extensions added during ad group creation'],
-                    default               => ['skipped' => true, 'reason' => "Unhandled action: {$action}"],
+                    default               => throw new \RuntimeException("Unhandled plan action: {$action}"),
                 };
+
+                // Collect any platform IDs returned by the step
+                if (isset($stepResult['microsoft_ads_campaign_id'])) {
+                    $platformIds['campaign'] = $stepResult['microsoft_ads_campaign_id'];
+                }
+                if (isset($stepResult['ad_group_id'])) {
+                    $platformIds['ad_group'] = $stepResult['ad_group_id'];
+                }
+
                 $results[$action] = ['success' => true, 'data' => $stepResult];
             } catch (\Exception $e) {
                 $results[$action] = ['success' => false, 'error' => $e->getMessage()];
@@ -277,11 +288,15 @@ PROMPT;
             }
         }
 
-        $allSucceeded = !empty($results) && collect($results)->every(fn ($r) => $r['success']);
+        $executionTime = microtime(true) - $startTime;
+        $anyRealWork   = !empty($results);
+        $allSucceeded  = $anyRealWork && collect($results)->every(fn ($r) => $r['success']);
 
         return new ExecutionResult(
             success: $allSucceeded,
-            message: $allSucceeded ? 'Microsoft Ads campaign deployed' : 'Partial deployment',
+            message: $allSucceeded ? 'Microsoft Ads campaign deployed' : ($anyRealWork ? 'Partial deployment' : 'No steps were executed — check plan generation'),
+            platformIds: $platformIds,
+            executionTime: $executionTime,
             data: $results,
         );
     }
