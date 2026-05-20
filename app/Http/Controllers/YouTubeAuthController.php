@@ -36,15 +36,22 @@ class YouTubeAuthController extends Controller
     public function callback(Request $request)
     {
         if ($request->has('error')) {
-            return response()->view('errors.minimal', [
-                'message' => 'Google OAuth error: ' . $request->get('error'),
-            ], 400);
+            $error = $request->get('error');
+            $hint  = $error === 'redirect_uri_mismatch'
+                ? ' — add https://sitetospend.com/youtube/auth/callback as an Authorized Redirect URI in Google Cloud Console → Credentials.'
+                : '';
+            abort(400, "Google OAuth error: {$error}{$hint}");
         }
 
-        $code        = $request->get('code');
-        $clientId    = config('services.youtube.client_id');
+        $code = $request->get('code');
+
+        if (!$code) {
+            abort(400, 'No authorization code received. Visit /youtube/auth to start the flow.');
+        }
+
+        $clientId     = config('services.youtube.client_id');
         $clientSecret = config('services.youtube.client_secret');
-        $redirectUri = route('youtube.auth.callback');
+        $redirectUri  = route('youtube.auth.callback');
 
         $response = Http::asForm()->post(self::TOKEN_URL, [
             'code'          => $code,
