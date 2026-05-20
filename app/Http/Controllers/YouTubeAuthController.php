@@ -35,19 +35,29 @@ class YouTubeAuthController extends Controller
 
     public function callback(Request $request)
     {
+        Log::info('YouTubeAuthController: Callback received', $request->all());
+
         if ($request->has('error')) {
-            $error = $request->get('error');
-            $hint  = $error === 'redirect_uri_mismatch'
+            $error       = $request->get('error');
+            $description = $request->get('error_description', '');
+            Log::error('YouTubeAuthController: Google returned error', [
+                'error'       => $error,
+                'description' => $description,
+            ]);
+            $hint = $error === 'redirect_uri_mismatch'
                 ? ' — add https://sitetospend.com/youtube/auth/callback as an Authorized Redirect URI in Google Cloud Console → Credentials.'
-                : '';
+                : " ({$description})";
             abort(400, "Google OAuth error: {$error}{$hint}");
         }
 
         $code = $request->get('code');
 
         if (!$code) {
+            Log::error('YouTubeAuthController: No code in callback', $request->all());
             abort(400, 'No authorization code received. Visit /youtube/auth to start the flow.');
         }
+
+        Log::info('YouTubeAuthController: Got authorization code, exchanging for tokens');
 
         $clientId     = config('services.youtube.client_id');
         $clientSecret = config('services.youtube.client_secret');
