@@ -1,0 +1,1154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectra Media — Agent Architecture</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #6c63ff;
+    --accent2: #a78bfa;
+    --accent3: #34d399;
+    --accent4: #f59e0b;
+    --accent5: #f43f5e;
+    --text: #e2e2f0;
+    --muted: #7070a0;
+    --code: #1e1e2e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  /* ── Header ── */
+  .hero {
+    background: linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 50%, #0a1a1a 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(108,99,255,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-badge {
+    display: inline-block;
+    background: rgba(108,99,255,0.15);
+    border: 1px solid rgba(108,99,255,0.4);
+    color: var(--accent2);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 20px;
+    margin-bottom: 20px;
+  }
+  .hero h1 {
+    font-size: clamp(28px, 5vw, 48px);
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 0%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 12px;
+  }
+  .hero p {
+    color: var(--muted);
+    font-size: 16px;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* ── Layout ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  section { padding: 60px 0; border-bottom: 1px solid var(--border); }
+  section:last-child { border-bottom: none; }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  h2 .num {
+    background: var(--accent);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .section-sub {
+    color: var(--muted);
+    margin-bottom: 32px;
+    font-size: 14px;
+  }
+
+  h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--accent2);
+    margin: 28px 0 10px;
+  }
+
+  /* ── Analogy box ── */
+  .analogy {
+    background: linear-gradient(135deg, rgba(108,99,255,0.06), rgba(167,139,250,0.04));
+    border: 1px solid rgba(108,99,255,0.25);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 24px;
+    font-size: 14px;
+  }
+  .analogy strong { color: var(--accent2); }
+
+  /* ── Agent cards ── */
+  .agent-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  .agent-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+    transition: border-color 0.2s;
+  }
+  .agent-card:hover { border-color: var(--accent); }
+  .agent-card .card-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .agent-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .agent-card .card-title { font-weight: 600; font-size: 14px; color: #fff; }
+  .agent-card .card-class { font-size: 11px; color: var(--muted); font-family: monospace; }
+  .agent-card .card-desc { font-size: 13px; color: var(--muted); line-height: 1.6; }
+  .tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+    letter-spacing: 0.5px;
+  }
+  .tag-deploy  { background: rgba(108,99,255,0.15); color: var(--accent2); }
+  .tag-review  { background: rgba(52,211,153,0.12); color: var(--accent3); }
+  .tag-optim   { background: rgba(245,158,11,0.12); color: var(--accent4); }
+  .tag-intel   { background: rgba(244,63,94,0.12);  color: var(--accent5); }
+  .tag-heal    { background: rgba(56,189,248,0.12); color: #38bdf8; }
+
+  /* ── Pipeline flow ── */
+  .pipeline {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 16px;
+  }
+  .pipe-step {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .pipe-left {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 40px;
+    flex-shrink: 0;
+  }
+  .pipe-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    border: 2px solid var(--bg);
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+  .pipe-line {
+    width: 2px;
+    flex: 1;
+    background: var(--border);
+    min-height: 16px;
+    margin-top: 2px;
+  }
+  .pipe-step:last-child .pipe-line { display: none; }
+  .pipe-body {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 4px;
+    flex: 1;
+  }
+  .pipe-title {
+    font-weight: 600;
+    font-size: 14px;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .pipe-meta {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: monospace;
+    margin-bottom: 6px;
+  }
+  .pipe-desc { font-size: 13px; color: var(--muted); }
+  .pipe-sub {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--muted);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .pipe-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    color: var(--text);
+    font-family: monospace;
+  }
+
+  /* ── Architecture diagram ── */
+  .arch-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin-top: 16px;
+    overflow-x: auto;
+  }
+  .arch-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+  }
+  .arch-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: center;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .arch-box.primary { border-color: var(--accent); color: var(--accent2); }
+  .arch-box.green   { border-color: rgba(52,211,153,0.4); color: var(--accent3); }
+  .arch-box.amber   { border-color: rgba(245,158,11,0.4); color: var(--accent4); }
+  .arch-box.red     { border-color: rgba(244,63,94,0.4); color: var(--accent5); }
+  .arch-box.blue    { border-color: rgba(56,189,248,0.4); color: #38bdf8; }
+  .arch-arrow {
+    color: var(--muted);
+    font-size: 18px;
+    font-weight: 300;
+  }
+  .arch-label {
+    text-align: center;
+    font-size: 11px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .arch-divider {
+    border: none;
+    border-top: 1px dashed var(--border);
+    margin: 16px 0;
+  }
+
+  /* ── Bidding ladder ── */
+  .ladder {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 16px 0;
+    max-width: 500px;
+  }
+  .ladder-step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 2px;
+    position: relative;
+  }
+  .ladder-step::after {
+    content: '↑';
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--accent3);
+    font-size: 18px;
+    display: none;
+  }
+  .ladder-step:not(:last-child)::after { display: block; }
+  .ladder-num {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .l1 { background: rgba(108,99,255,0.2); color: var(--accent2); }
+  .l2 { background: rgba(245,158,11,0.2); color: var(--accent4); }
+  .l3 { background: rgba(52,211,153,0.2); color: var(--accent3); }
+  .ladder-info { flex: 1; }
+  .ladder-name { font-weight: 600; font-size: 14px; color: #fff; }
+  .ladder-req  { font-size: 12px; color: var(--muted); }
+
+  /* ── Code block ── */
+  .code-block {
+    background: var(--code);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 12px;
+    color: #cdd6f4;
+    overflow-x: auto;
+    margin: 12px 0;
+    line-height: 1.8;
+  }
+  .code-comment { color: #6c7086; }
+  .code-key     { color: #89b4fa; }
+  .code-val     { color: #a6e3a1; }
+  .code-str     { color: #f9e2af; }
+
+  /* ── Table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 12px;
+  }
+  th {
+    background: var(--surface2);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  td code {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: monospace;
+    font-size: 11px;
+    color: var(--accent2);
+  }
+
+  /* ── Callout ── */
+  .callout {
+    background: rgba(52,211,153,0.06);
+    border: 1px solid rgba(52,211,153,0.2);
+    border-radius: 8px;
+    padding: 14px 18px;
+    font-size: 13px;
+    margin: 16px 0;
+    color: #a7f3d0;
+  }
+  .callout strong { color: var(--accent3); }
+
+  /* ── Footer ── */
+  footer {
+    text-align: center;
+    padding: 40px 24px;
+    color: var(--muted);
+    font-size: 13px;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 600px) {
+    .hero { padding: 40px 20px; }
+    section { padding: 40px 0; }
+    .agent-grid { grid-template-columns: 1fr; }
+    .arch-diagram { padding: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─────────────────────── HERO ─────────────────────── -->
+<div class="hero">
+  <div class="hero-badge">Internal Technical Reference</div>
+  <h1>Spectra Media Agent Architecture</h1>
+  <p>How our AI agents think, plan, and act together to build and optimise campaigns across every major ad platform.</p>
+</div>
+
+<div class="container">
+
+<!-- ─────────────────────── 1. THE BIG PICTURE ─────────────────────── -->
+<section>
+  <h2><span class="num">1</span> The Big Picture</h2>
+  <p class="section-sub">What this system actually is, in plain English</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> Think of Spectra as a fully automated advertising agency that lives in a server. When a client brief comes in, a senior strategist reads it and writes a plan (the <em>Strategy Agent</em>). A creative team produces the ads (image and video jobs). A compliance officer checks everything before it goes live (<em>PreLaunchComplianceAgent</em>). Account managers execute the buys on Google, Meta, Microsoft, and LinkedIn (<em>Execution Agents</em>). Then an analytics team monitors performance every day and applies improvements automatically (<em>Optimisation Agents</em>). Nobody sleeps. Nobody forgets.
+  </div>
+
+  <div class="arch-diagram">
+    <div class="arch-label">System overview</div>
+
+    <div class="arch-row">
+      <div class="arch-box primary">👤 User</div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-box primary">Campaign Brief</div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-box primary">🧠 Gemini 3 Pro<br><small style="font-weight:400;color:var(--muted)">Strategy generation</small></div>
+    </div>
+
+    <div class="arch-row" style="justify-content:center; margin: 4px 0;">
+      <div class="arch-arrow" style="transform:rotate(90deg)">→</div>
+    </div>
+
+    <div class="arch-row">
+      <div class="arch-box green">📋 Strategies<br><small style="font-weight:400;color:var(--muted)">1 per platform</small></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-box green">🎨 Collateral<br><small style="font-weight:400;color:var(--muted)">Images · Videos · Copy</small></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-box green">✅ Compliance<br><small style="font-weight:400;color:var(--muted)">Pre-launch check</small></div>
+    </div>
+
+    <div class="arch-row" style="justify-content:center; margin: 4px 0;">
+      <div class="arch-arrow" style="transform:rotate(90deg)">→</div>
+    </div>
+
+    <div class="arch-row">
+      <div class="arch-box amber">🚀 Google Ads</div>
+      <div class="arch-box amber">📘 Meta Ads</div>
+      <div class="arch-box amber">🪟 Microsoft</div>
+      <div class="arch-box amber">💼 LinkedIn</div>
+    </div>
+
+    <div class="arch-row" style="justify-content:center; margin: 4px 0;">
+      <div class="arch-arrow" style="transform:rotate(90deg)">→</div>
+    </div>
+
+    <div class="arch-row">
+      <div class="arch-box blue">📊 Optimisation</div>
+      <div class="arch-box blue">💰 Bidding Progression</div>
+      <div class="arch-box blue">🔧 Self-Healing</div>
+      <div class="arch-box blue">🕵️ Competitor Intel</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────── 2. THE ORCHESTRATOR ─────────────────────── -->
+<section>
+  <h2><span class="num">2</span> The Orchestrator</h2>
+  <p class="section-sub">The single brain that coordinates everything</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> The orchestrator is the <em>agency operations director</em>. It doesn't write the ads or click the buttons itself — it decides who does what, in what order, and checks that billing is sorted before any work begins. If something goes wrong, it decides whether to retry, escalate, or gracefully fail.
+  </div>
+
+  <h3>DeploymentService</h3>
+  <p style="color:var(--muted); font-size:13px; margin-bottom:10px;">
+    <code>app/Services/DeploymentService.php</code>
+  </p>
+
+  <div class="pipeline">
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">1. Platform resolution</div>
+        <div class="pipe-desc">Reads the strategy's platform field and instantiates the correct ExecutionAgent (Google, Facebook, Microsoft, LinkedIn). One line of code picks the right "account manager" for the job.</div>
+      </div>
+    </div>
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">2. ExecutionContext assembly</div>
+        <div class="pipe-desc">Bundles the strategy, campaign, customer, available assets, and budget calculations into an immutable context object — the briefing document handed to every agent.</div>
+      </div>
+    </div>
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">3. Agent execution</div>
+        <div class="pipe-desc">Calls <code>$agent->execute($context)</code> and waits for an ExecutionResult containing platform IDs, warnings, and errors.</div>
+      </div>
+    </div>
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">4. Result persistence</div>
+        <div class="pipe-desc">Saves the full execution plan, all platform IDs (campaign, ad group, asset group), deployment status, and any warnings to the strategy record in the database.</div>
+      </div>
+    </div>
+
+  </div>
+
+  <h3>DeployCampaign Job</h3>
+  <p style="color:var(--muted); font-size:13px; margin-bottom:12px;">
+    <code>app/Jobs/DeployCampaign.php</code> — the async wrapper that drives the whole deployment
+  </p>
+
+  <div class="code-block">
+<span class="code-comment">// Sequence inside DeployCampaign::handle()</span>
+<span class="code-key">1.</span> Auto-provision Facebook Pixel (if not yet created)
+<span class="code-key">2.</span> PreLaunchComplianceAgent → check policy, landing page, tracking, budget
+<span class="code-key">3.</span> AdSpendBillingService → initialise credit account (if managed billing on)
+<span class="code-key">4.</span> PlatformBudgetAllocation → split total budget across platforms
+<span class="code-key">5.</span> For each Strategy:
+       DeploymentService::deploy(campaign, strategy, customer)
+         └─ ExecutionAgent.execute() → returns ExecutionResult
+<span class="code-key">6.</span> VerifyDeployment job → confirm campaign is live &amp; ads approved
+  </div>
+</section>
+
+<!-- ─────────────────────── 3. EXECUTION AGENTS ─────────────────────── -->
+<section>
+  <h2><span class="num">3</span> Execution Agents</h2>
+  <p class="section-sub">The platform account managers — one per ad network</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> Each execution agent is a specialist account manager who knows one platform inside out. The Google agent knows every campaign type and bidding strategy. The Facebook agent knows Advantage+ audiences and pixel events. They all follow the same workflow template but apply completely different platform knowledge.
+  </div>
+
+  <h3>Shared workflow — <code>PlatformExecutionAgent</code> (abstract base)</h3>
+
+  <div class="pipeline">
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent3)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">① Validate prerequisites</div>
+        <div class="pipe-desc">Checks platform credentials, conversion tracking, minimum budget, and asset availability. If this fails, nothing executes — saves API quota and prevents partial deployments.</div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent3)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">② Analyse optimisation opportunities</div>
+        <div class="pipe-desc">Checks conversion count, budget level, available assets, and platform features to determine what capabilities are unlocked (Smart Bidding, Advantage+ audiences, Performance Max, etc.).</div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent3)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">③ Generate execution plan (AI)</div>
+        <div class="pipe-desc">Calls Gemini with a detailed platform-specific prompt. The AI returns a structured JSON execution plan with every step, budget allocation, targeting config, bidding strategy, and reasoning. This is the "thinking" phase.</div>
+        <div class="pipe-sub">
+          <span class="pipe-chip">GoogleAdsExecutionPrompt</span>
+          <span class="pipe-chip">FacebookAdsExecutionPrompt</span>
+          <span class="pipe-chip">MicrosoftAdsExecutionPrompt</span>
+          <span class="pipe-chip">LinkedInAdsExecutionPrompt</span>
+        </div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent3)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">④ Review &amp; auto-correct (CampaignReviewAgent)</div>
+        <div class="pipe-desc">A second AI pass reviews the plan for common errors. Then <code>PlatformConstraints</code> applies deterministic fixes — e.g. Facebook age_max must always be 65, RSA headlines max 30 chars. No human needed.</div>
+      </div>
+    </div>
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent3)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">⑤ Execute plan</div>
+        <div class="pipe-desc">Translates each plan step into real API calls: create campaign → create ad groups → upload assets → link targeting → set bidding. Errors are caught per-step; a recovery plan is AI-generated on failure.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>Platform agents</h3>
+
+  <div class="agent-grid">
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(66,133,244,0.15)">🔵</div>
+        <div>
+          <div class="card-title">Google Ads Execution Agent</div>
+          <div class="card-class">GoogleAdsExecutionAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Handles Search, Display, Performance Max, Video, Shopping, Demand Gen, and Local Services campaigns. Manages image and video asset uploads, RSA creation, smart bidding with conversion-count guards, and sitelink/callout/snippet extensions.</div>
+      <span class="tag tag-deploy">DEPLOYMENT</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(24,119,242,0.15)">📘</div>
+        <div>
+          <div class="card-title">Facebook Ads Execution Agent</div>
+          <div class="card-class">FacebookAdsExecutionAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Deploys to Meta with Advantage+ campaigns, dynamic creative, pixel event configuration, and OUTCOME_* objective mapping. Handles the full campaign → ad set → creative → ad hierarchy.</div>
+      <span class="tag tag-deploy">DEPLOYMENT</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(0,120,215,0.15)">🪟</div>
+        <div>
+          <div class="card-title">Microsoft Ads Execution Agent</div>
+          <div class="card-class">MicrosoftAdsExecutionAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Mirrors Google campaigns to Bing / Microsoft Advertising. Supports direct creation or import-from-Google. Includes LinkedIn profile targeting (unique to Microsoft), conversion tracking, and UET tag setup.</div>
+      <span class="tag tag-deploy">DEPLOYMENT</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(10,102,194,0.15)">💼</div>
+        <div>
+          <div class="card-title">LinkedIn Ads Execution Agent</div>
+          <div class="card-class">LinkedInAdsExecutionAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Manages LinkedIn Sponsored Content, Message Ads, and Lead Gen Forms. Handles company/job-title/industry targeting and LinkedIn Insight Tag setup.</div>
+      <span class="tag tag-deploy">DEPLOYMENT</span>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────── 4. REVIEW & COMPLIANCE ─────────────────────── -->
+<section>
+  <h2><span class="num">4</span> Review &amp; Compliance Agents</h2>
+  <p class="section-sub">The quality-control layer that runs before anything goes live</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> Every ad agency has a compliance team that reads every creative before it's submitted to the publisher. Our compliance agents do this automatically — one checks the plan itself for errors (like a proof-reader), and one checks the whole campaign setup (like a legal sign-off). If they flag something, deployment stops.
+  </div>
+
+  <div class="agent-grid">
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(52,211,153,0.15)">🔍</div>
+        <div>
+          <div class="card-title">Campaign Review Agent</div>
+          <div class="card-class">CampaignReviewAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Sits between plan generation and execution. Does an AI review of the execution plan for structural errors, then applies deterministic <code>PlatformConstraints</code> fixes (age_max, headline length, objective alignment). Returns a corrected plan.</div>
+      <span class="tag tag-review">REVIEW</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(52,211,153,0.15)">✅</div>
+        <div>
+          <div class="card-title">Pre-Launch Compliance Agent</div>
+          <div class="card-class">PreLaunchComplianceAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Runs four checks before any deployment begins: (1) ad copy policy — no restricted terms; (2) landing page — HTTP 200 reachable; (3) conversion tracking — tag installed; (4) minimum budget — meets platform floors. One fail = deployment aborted.</div>
+      <span class="tag tag-review">COMPLIANCE</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(52,211,153,0.15)">🛡️</div>
+        <div>
+          <div class="card-title">Platform Constraints</div>
+          <div class="card-class">PlatformConstraints</div>
+        </div>
+      </div>
+      <div class="card-desc">A registry of hard platform rules that are <em>deterministically</em> enforced — no AI involved. Examples: Facebook age_max must be ≥65, Google RSA headlines ≤30 chars, OUTCOME_LEADS must use LEAD_GENERATION optimisation goal. Auto-fixes where possible.</div>
+      <span class="tag tag-review">DETERMINISTIC</span>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────── 5. GENERATION PIPELINE ─────────────────────── -->
+<section>
+  <h2><span class="num">5</span> Strategy &amp; Creative Generation</h2>
+  <p class="section-sub">From a client brief to publishable ad creative — fully automated</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> This is the creative department. A senior strategist takes the brief and writes a media plan (strategy generation). The creative team produces copy, images, and videos from that brief. One landscape video and one portrait video are produced per campaign — not per platform — and shared everywhere, the same way a production company shoots one master version of a commercial that then gets cut for different channels.
+  </div>
+
+  <div class="pipeline">
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent4)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">Strategy Generation</div>
+        <div class="pipe-meta">Job: GenerateStrategy → Gemini 3 Pro Preview + Google Search grounding</div>
+        <div class="pipe-desc">Ingests campaign brief, customer knowledge base, brand guidelines, and competitor data. Uses extended thinking (temperature 1, topP 0.95) to produce platform-specific strategies: targeting config, bidding direction, creative guidance, video strategy — all in one structured JSON response.</div>
+        <div class="pipe-sub">
+          <span class="pipe-chip">StrategyPrompt</span>
+          <span class="pipe-chip">Extended thinking</span>
+          <span class="pipe-chip">Google Search grounding</span>
+          <span class="pipe-chip">1 Strategy per platform</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent4)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">Ad Copy Generation</div>
+        <div class="pipe-meta">Job: GenerateAdCopy → Gemini · per strategy</div>
+        <div class="pipe-desc">Generates headlines and descriptions for each platform, respecting format limits (RSA: 30-char headlines, 90-char descriptions; Facebook: 125-char primary text, 40-char headline). Produces 2–3 variants per strategy for A/B testing.</div>
+        <div class="pipe-sub">
+          <span class="pipe-chip">AdCopyPrompt</span>
+          <span class="pipe-chip">Platform-aware limits</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent4)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">Image Generation</div>
+        <div class="pipe-meta">Job: GenerateImage · 3 images per strategy · $0.07 each</div>
+        <div class="pipe-desc">Generates 3 images per strategy using Gemini 3.1 Flash Image (1024px). Images are routed to the correct asset field type at deployment by dimension — landscape images become MARKETING_IMAGE, squares become SQUARE_MARKETING_IMAGE.</div>
+        <div class="pipe-sub">
+          <span class="pipe-chip">ImagePrompt</span>
+          <span class="pipe-chip">Gemini 3.1 Flash Image</span>
+          <span class="pipe-chip">Quota-aware dispatch</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="pipe-step">
+      <div class="pipe-left"><div class="pipe-dot" style="background:var(--accent4)"></div><div class="pipe-line"></div></div>
+      <div class="pipe-body">
+        <div class="pipe-title">Video Generation</div>
+        <div class="pipe-meta">Job: GenerateVideo · 2 videos per campaign · $2.80 each · Veo 3.1</div>
+        <div class="pipe-desc">
+          Generates exactly <strong>2 videos per campaign</strong> — not per strategy. Both are shared across all platforms automatically.<br><br>
+          <strong>Landscape 16:9</strong> — used by Google Ads, YouTube, Performance Max<br>
+          <strong>Portrait 9:16</strong> — used by Meta, Facebook, Instagram<br><br>
+          Two-step process: (1) Gemini writes a video script from the strategy brief; (2) Veo 3.1 renders the 8-second video from that script. Only the first signed-off strategy triggers generation — subsequent strategies reuse the same videos.
+        </div>
+        <div class="pipe-sub">
+          <span class="pipe-chip">VideoScriptPrompt</span>
+          <span class="pipe-chip">VideoGenerationPrompt</span>
+          <span class="pipe-chip">Veo 3.1 · 8 seconds</span>
+          <span class="pipe-chip">Campaign-scoped</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─────────────────────── 6. OPTIMISATION AGENTS ─────────────────────── -->
+<section>
+  <h2><span class="num">6</span> Optimisation Agents</h2>
+  <p class="section-sub">The team that keeps campaigns performing after they go live</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> After a campaign launches, a good agency doesn't just walk away. They have analysts reviewing performance weekly, a trading desk adjusting bids in real time, and a specialist who upgrades the buying strategy as the campaign matures. That's exactly what these agents do — automatically, around the clock.
+  </div>
+
+  <div class="agent-grid">
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(245,158,11,0.15)">📊</div>
+        <div>
+          <div class="card-title">Campaign Optimisation Agent</div>
+          <div class="card-class">CampaignOptimizationAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">The main optimisation orchestrator. Fetches cross-platform metrics via MetricsFetcher, sends them to Gemini with an OptimizationPrompt, scores recommendations by confidence via RecommendationScorer, then applies high-confidence changes immediately. Medium/low-confidence recommendations surface to the UI for manual review.</div>
+      <span class="tag tag-optim">DAILY / WEEKLY</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(245,158,11,0.15)">💰</div>
+        <div>
+          <div class="card-title">Bidding Strategy Progression Agent</div>
+          <div class="card-class">BiddingStrategyProgressionAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Watches conversion counts and automatically graduates campaigns up the bidding ladder. Runs weekly. When thresholds are met, it upgrades the campaign without any human action — the only fully autonomous bidding promotion in the system.</div>
+      <span class="tag tag-optim">WEEKLY</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(245,158,11,0.15)">⚖️</div>
+        <div>
+          <div class="card-title">Bid Adjustment Agent</div>
+          <div class="card-class">BidAdjustmentAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Applies device, location, and audience bid adjustments based on performance data. If mobile converts at 40% lower than desktop, it applies a –40% mobile bid modifier automatically.</div>
+      <span class="tag tag-optim">ON-DEMAND</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(245,158,11,0.15)">🧮</div>
+        <div>
+          <div class="card-title">Budget Intelligence Agent</div>
+          <div class="card-class">BudgetIntelligenceAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Runs hourly. Uses learned hourly performance patterns to apply budget multipliers in real time — spending more during high-conversion windows, pulling back during dead hours. Weekly rebalance redistributes budget across platforms based on ROAS.</div>
+      <span class="tag tag-optim">HOURLY</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(245,158,11,0.15)">🎨</div>
+        <div>
+          <div class="card-title">Creative Intelligence Agent</div>
+          <div class="card-class">CreativeIntelligenceAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Analyses headline and description performance at the asset level. Identifies top and bottom performers, detects A/B test winners, and generates new creative variations based on what's working — feeding the learning loop.</div>
+      <span class="tag tag-optim">ON-DEMAND</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(245,158,11,0.15)">🔗</div>
+        <div>
+          <div class="card-title">Ad Extension Agent</div>
+          <div class="card-class">AdExtensionAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Manages sitelinks, callouts, structured snippets, call extensions, price extensions, and promotion extensions across Google and other platforms. Keeps extensions fresh and relevant.</div>
+      <span class="tag tag-optim">ON-DEMAND</span>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─────────────────────── 7. INTELLIGENCE AGENTS ─────────────────────── -->
+<section>
+  <h2><span class="num">7</span> Intelligence &amp; Self-Healing Agents</h2>
+  <p class="section-sub">Agents that watch, warn, compete, and fix</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> These are the research department and the crisis response team. The competitor intelligence agents are like a mystery shopper program — they anonymously check what competitors are doing and brief the account team. The self-healing agent is like an overnight maintenance crew — it finds broken things and fixes them before the client wakes up.
+  </div>
+
+  <div class="agent-grid">
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(244,63,94,0.12)">🕵️</div>
+        <div>
+          <div class="card-title">Competitor Intelligence Agent</div>
+          <div class="card-class">CompetitorIntelligenceAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Orchestrates competitive research. Calls CompetitorDiscoveryAgent (finds rivals via Google Search grounding), CompetitorAnalysisAgent (crawls and analyses their sites), then pulls Google Ads Auction Insights to show where you're winning and losing head-to-head.</div>
+      <span class="tag tag-intel">INTELLIGENCE</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(244,63,94,0.12)">👥</div>
+        <div>
+          <div class="card-title">Audience Intelligence Agent</div>
+          <div class="card-class">AudienceIntelligenceAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Creates and manages audiences across platforms — Google Customer Match, Facebook Custom Audiences, lookalike generation. Can ingest email/phone lists and distribute them to all connected ad accounts automatically.</div>
+      <span class="tag tag-intel">INTELLIGENCE</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(56,189,248,0.12)">🔧</div>
+        <div>
+          <div class="card-title">Self-Healing Agent</div>
+          <div class="card-class">SelfHealingAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Proactively detects disapproved ads, policy violations, budget exhaustion, and delivery issues. Uses AI to regenerate ad copy for failed creatives and reallocates budget away from blocked placements — without a human in the loop.</div>
+      <span class="tag tag-heal">SELF-HEALING</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(56,189,248,0.12)">🏥</div>
+        <div>
+          <div class="card-title">Health Check Agent</div>
+          <div class="card-class">HealthCheckAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Runs regular health checks across all active campaigns. Monitors delivery status, policy flags, budget pacing, and performance benchmarks. Raises alerts before small issues become expensive ones.</div>
+      <span class="tag tag-heal">MONITORING</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(56,189,248,0.12)">🚨</div>
+        <div>
+          <div class="card-title">Performance Anomaly Alert Agent</div>
+          <div class="card-class">PerformanceAnomalyAlertAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Detects sudden changes in performance — CTR drops, cost spikes, conversion anomalies. Uses statistical thresholds to distinguish real problems from normal variance, then alerts only when something genuinely unusual is happening.</div>
+      <span class="tag tag-heal">MONITORING</span>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(244,63,94,0.12)">🔎</div>
+        <div>
+          <div class="card-title">Quality Score Improvement Agent</div>
+          <div class="card-class">QualityScoreImprovementAgent</div>
+        </div>
+      </div>
+      <div class="card-desc">Analyses the three quality score factors for Google Search campaigns — expected CTR, ad relevance, and landing page experience — and generates specific recommendations to improve each one.</div>
+      <span class="tag tag-intel">INTELLIGENCE</span>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─────────────────────── 8. BIDDING LADDER ─────────────────────── -->
+<section>
+  <h2><span class="num">8</span> The Bidding Progression Ladder</h2>
+  <p class="section-sub">How campaigns automatically upgrade their buying strategy over time</p>
+
+  <div class="analogy">
+    <strong>Real-world analogy:</strong> When a new salesperson joins, you don't immediately give them a quota and bonus structure — they need to learn the ropes first. We start campaigns on "get as many conversions as possible" mode. Once they've proven they can convert, we switch to "get conversions at our target cost." Once that's stable, we switch to "maximise revenue return on every dollar spent." The BiddingStrategyProgressionAgent watches the data and promotes the campaign when it's ready.
+  </div>
+
+  <div class="ladder">
+    <div class="ladder-step">
+      <div class="ladder-num l3">3</div>
+      <div class="ladder-info">
+        <div class="ladder-name">Target ROAS</div>
+        <div class="ladder-req">Requires 50+ conversions / month · Maximises revenue per dollar spent</div>
+      </div>
+    </div>
+    <div class="ladder-step">
+      <div class="ladder-num l2">2</div>
+      <div class="ladder-info">
+        <div class="ladder-name">Target CPA</div>
+        <div class="ladder-req">Requires 30+ conversions / month · Hits a target cost per acquisition</div>
+      </div>
+    </div>
+    <div class="ladder-step">
+      <div class="ladder-num l1">1</div>
+      <div class="ladder-info">
+        <div class="ladder-name">Maximize Conversions</div>
+        <div class="ladder-req">Starting position · No conversion history required</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Automatic progression:</strong> The BiddingStrategyProgressionAgent runs weekly. When conversion thresholds are met, it upgrades the campaign via the platform API — no human action needed. If a campaign regresses (conversion count drops), the guard at deployment time will protect against incorrect strategy selection on the next redeploy.
+  </div>
+</section>
+
+<!-- ─────────────────────── 9. DATA FLOW ─────────────────────── -->
+<section>
+  <h2><span class="num">9</span> Full Data Flow — Brief to Live Campaign</h2>
+  <p class="section-sub">Every step from the user clicking "Create Campaign" to ads running on every platform</p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Phase</th>
+        <th>What happens</th>
+        <th>Who does it</th>
+        <th>Output</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Brief</strong></td>
+        <td>User fills in campaign name, budget, goals, landing page, platforms</td>
+        <td>UI → Controller</td>
+        <td>Campaign record</td>
+      </tr>
+      <tr>
+        <td><strong>2. Strategy</strong></td>
+        <td>Gemini reads brief + knowledge base + brand guidelines + competitor data. Extended thinking mode. Google Search grounding for real market data.</td>
+        <td><code>GenerateStrategy</code> job</td>
+        <td>1 Strategy record per platform</td>
+      </tr>
+      <tr>
+        <td><strong>3. Sign-off</strong></td>
+        <td>User reviews AI strategies in UI, approves or edits</td>
+        <td>Manual</td>
+        <td>Signed-off strategies</td>
+      </tr>
+      <tr>
+        <td><strong>4. Creative</strong></td>
+        <td>Ad copy (headlines/descriptions), 3 images per strategy, 2 videos per campaign (1 landscape + 1 portrait) generated in parallel async jobs</td>
+        <td><code>GenerateStrategyCollateral</code></td>
+        <td>AdCopy, ImageCollateral, VideoCollateral records</td>
+      </tr>
+      <tr>
+        <td><strong>5. Compliance</strong></td>
+        <td>Policy check, landing page check, conversion tracking check, budget floor check — all four must pass</td>
+        <td><code>PreLaunchComplianceAgent</code></td>
+        <td>Pass / fail</td>
+      </tr>
+      <tr>
+        <td><strong>6. Deployment</strong></td>
+        <td>For each platform: AI generates execution plan → review agent corrects it → platform API calls create the campaign</td>
+        <td><code>DeployCampaign</code> → Execution Agents</td>
+        <td>Live campaigns on Google, Meta, Microsoft, LinkedIn</td>
+      </tr>
+      <tr>
+        <td><strong>7. Verify</strong></td>
+        <td>Confirms campaigns are live, ads are approved, delivery has started</td>
+        <td><code>VerifyDeployment</code> job</td>
+        <td>Delivery confirmation</td>
+      </tr>
+      <tr>
+        <td><strong>8. Optimise</strong></td>
+        <td>Daily: performance metrics → AI recommendations → auto-apply high-confidence changes. Hourly: budget multipliers. Weekly: bidding progression check.</td>
+        <td>Optimisation agents</td>
+        <td>Improved ROAS, lower CPA over time</td>
+      </tr>
+      <tr>
+        <td><strong>9. Self-heal</strong></td>
+        <td>Disapproved ads regenerated, policy violations fixed, anomalies alerted — all without human input</td>
+        <td><code>SelfHealingAgent</code>, <code>HealthCheckAgent</code></td>
+        <td>Campaign stays healthy</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ─────────────────────── 10. KEY DESIGN PRINCIPLES ─────────────────────── -->
+<section>
+  <h2><span class="num">10</span> Key Design Principles</h2>
+  <p class="section-sub">Why the system is built the way it is</p>
+
+  <div class="agent-grid">
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(108,99,255,0.15)">🧱</div>
+        <div><div class="card-title">Determinism before AI</div></div>
+      </div>
+      <div class="card-desc">Platform constraints (headline length, age targets, objective alignment) are enforced by code — not trusted to AI. The AI plans, the code enforces. This means no creative hallucination can cause an API rejection.</div>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(108,99,255,0.15)">🔁</div>
+        <div><div class="card-title">Async everything</div></div>
+      </div>
+      <div class="card-desc">Every expensive operation — strategy generation, image generation, video rendering, deployment, optimisation — runs as a queued job. The user is never waiting for an API call. The UI shows progress; the work happens in the background.</div>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(108,99,255,0.15)">🛡️</div>
+        <div><div class="card-title">Fail loudly, recover gracefully</div></div>
+      </div>
+      <div class="card-desc">Errors are caught per-step, not per-campaign. A failed image upload doesn't abort the whole deployment. Where recovery is possible, an AI-generated RecoveryPlan is attempted. Where it isn't, the error is surfaced with full detail.</div>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(108,99,255,0.15)">📐</div>
+        <div><div class="card-title">Campaign-level resources</div></div>
+      </div>
+      <div class="card-desc">Videos are generated once per campaign and shared across all platforms. This prevents the same asset being regenerated 4× for 4 platforms — a 75% cost reduction. The deployment agents look up assets at campaign scope, not strategy scope.</div>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(108,99,255,0.15)">📈</div>
+        <div><div class="card-title">Earned automation</div></div>
+      </div>
+      <div class="card-desc">Smart bidding strategies are only applied when the account has enough data to support them. The system starts conservative and earns the right to be aggressive. This mirrors how a skilled media buyer would manage a new account.</div>
+    </div>
+
+    <div class="agent-card">
+      <div class="card-header">
+        <div class="agent-icon" style="background:rgba(108,99,255,0.15)">🤖</div>
+        <div><div class="card-title">Two-pass AI review</div></div>
+      </div>
+      <div class="card-desc">The execution plan is generated by a high-temperature Gemini call (creative), then reviewed by a lower-temperature pass (critical). A second AI checks the first AI's work before any real money is spent. Deterministic constraint fixes are applied last.</div>
+    </div>
+
+  </div>
+</section>
+
+</div><!-- /container -->
+
+<footer>
+  Spectra Media Agent Architecture — Internal Reference &nbsp;·&nbsp; Generated May 2026
+</footer>
+
+</body>
+</html>
