@@ -261,15 +261,16 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         }
         
         // Check Smart Bidding eligibility
+        // Google's minimums: Target ROAS needs 50+/month, Target CPA needs 30+/month.
         $conversionCount = $this->getConversionCount($context);
-        if ($conversionCount >= 30) {
+        if ($conversionCount >= 50) {
             $analysis->addOpportunity(
                 'smart_bidding_target_roas',
                 'Sufficient conversion data for Target ROAS bidding strategy',
                 'high',
                 ['conversion_count' => $conversionCount]
             );
-        } elseif ($conversionCount >= 15) {
+        } elseif ($conversionCount >= 30) {
             $analysis->addOpportunity(
                 'smart_bidding_target_cpa',
                 'Sufficient conversion data for Target CPA bidding strategy',
@@ -655,8 +656,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
 
         // 7. Apply bidding strategy from strategy record, with a safety guard:
-        // TargetCPA and TargetRoas require conversion history — fall back to
-        // MaximizeConversions on accounts with fewer than 30 recorded conversions.
+        // Target CPA requires 30+/month, Target ROAS requires 50+/month — fall back to
+        // MaximizeConversions on accounts below those thresholds.
         $this->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
     }
 
@@ -678,19 +679,23 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             return;
         }
 
-        // Smart Bidding strategies that need conversion data to work effectively
-        $smartBiddingStrategies = ['TARGET_CPA', 'TARGETCPA', 'TARGET_ROAS', 'TARGETROAS'];
-        $needsConversionData = in_array($strategyName, $smartBiddingStrategies, true);
+        // Smart Bidding strategies that need conversion data to work effectively.
+        // Google minimums: Target CPA needs 30+/month, Target ROAS needs 50+/month.
+        $targetRoasStrategies = ['TARGET_ROAS', 'TARGETROAS'];
+        $targetCpaStrategies  = ['TARGET_CPA', 'TARGETCPA'];
+        $needsConversionData  = in_array($strategyName, array_merge($targetRoasStrategies, $targetCpaStrategies), true);
 
         if ($needsConversionData) {
             $conversionCount = $this->getConversionCountForCustomer($customerId);
-            if ($conversionCount < 30) {
-                Log::info("GoogleAdsExecutionAgent: Downgrading {$strategyName} to MaximizeConversions — only {$conversionCount} conversions recorded", [
+            $minRequired     = in_array($strategyName, $targetRoasStrategies, true) ? 50 : 30;
+
+            if ($conversionCount < $minRequired) {
+                Log::info("GoogleAdsExecutionAgent: Downgrading {$strategyName} to MaximizeConversions — only {$conversionCount} conversions recorded (need {$minRequired})", [
                     'campaign' => $campaignResourceName,
                 ]);
                 $result->addWarning(
                     'bidding_strategy_downgraded',
-                    "Bidding strategy changed from {$strategyName} to Maximize Conversions — account needs 30+ conversions before Smart Bidding is effective. Strategy will auto-upgrade via BiddingStrategyProgressionAgent."
+                    "Bidding strategy changed from {$strategyName} to Maximize Conversions — account needs {$minRequired}+ conversions/month before this strategy is effective. Will auto-upgrade via BiddingStrategyProgressionAgent."
                 );
                 $strategyName = 'MAXIMIZE_CONVERSIONS';
             }
@@ -885,14 +890,14 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaignName = $campaign->name . ' - PMax - ' . $timestamp;
 
         // Only set a Target CPA if the account has enough conversion history.
-        // Below 30 conversions, PMax uses MaximizeConversions automatically (no target CPA).
+        // Below 50 conversions, PMax uses Maximize Conversions (no target).
         // BiddingStrategyProgressionAgent will add the target once data matures.
         $conversionCount = $this->getConversionCountForCustomer($customerId);
         $targetCpaMicros = null;
-        if ($strategy->cpa_target && $conversionCount >= 30) {
+        if ($strategy->cpa_target && $conversionCount >= 50) {
             $targetCpaMicros = $strategy->cpa_target;
-        } elseif ($strategy->cpa_target && $conversionCount < 30) {
-            $result->addWarning('pmax_bidding_downgraded', "Performance Max will use Maximize Conversions until 30 conversions are recorded ({$conversionCount} so far). Target CPA will be applied automatically by the Bidding Progression Agent.");
+        } elseif ($strategy->cpa_target && $conversionCount < 50) {
+            $result->addWarning('pmax_bidding_downgraded', "Performance Max will use Maximize Conversions until 50 conversions are recorded ({$conversionCount} so far). Target CPA will be applied automatically by the Bidding Progression Agent.");
         }
 
         $campaignData = [
