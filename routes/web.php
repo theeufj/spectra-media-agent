@@ -758,7 +758,9 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/sandbox/{customer}/results', [App\Http\Controllers\SandboxController::class, 'results'])->name('sandbox.results');
     Route::delete('/sandbox/{customer}', [App\Http\Controllers\SandboxController::class, 'destroy'])->name('sandbox.destroy');
 
-    // One-time YouTube OAuth flow to generate a platform refresh token with youtube.upload scope
+    // One-time YouTube OAuth flow — redirect is admin-only
     Route::get('/youtube/auth', [App\Http\Controllers\YouTubeAuthController::class, 'redirect'])->name('youtube.auth');
-    Route::get('/youtube/auth/callback', [App\Http\Controllers\YouTubeAuthController::class, 'callback'])->name('youtube.auth.callback');
 });
+
+// Callback must be outside auth middleware — Google redirects here and the session won't carry over
+Route::get('/youtube/auth/callback', [App\Http\Controllers\YouTubeAuthController::class, 'callback'])->name('youtube.auth.callback');
