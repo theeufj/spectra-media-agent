@@ -37,6 +37,7 @@ use Google\Ads\GoogleAds\V22\Enums\PriceExtensionPriceQualifierEnum\PriceExtensi
 use Google\Ads\GoogleAds\V22\Enums\PriceExtensionPriceUnitEnum\PriceExtensionPriceUnit;
 use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\VideoServices\CreateVideoCampaign;
+use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\GoogleAds\VideoServices\CreateVideoAdGroup;
 use App\Services\GoogleAds\VideoServices\CreateResponsiveVideoAd;
 use App\Services\GoogleAds\DemandGenServices\CreateDemandGenCampaign;
@@ -1001,6 +1002,30 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             Log::warning("GoogleAdsExecutionAgent: No logo or square image available — asset group may be rejected by Google.");
         }
 
+        // 2.3 Video Assets (YouTube required — links videos that already have a YouTube ID)
+        $uploadVideoAssetService = new UploadVideoAsset($this->customer);
+        $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->whereNotNull('youtube_video_id')->get();
+        $videosWithoutYouTubeId = $strategy->videoCollaterals()->where('is_active', true)->whereNull('youtube_video_id')->count();
+
+        foreach ($videoCollaterals as $video) {
+            try {
+                $assetResourceName = ($uploadVideoAssetService)($customerId, $video->youtube_video_id, "Video Asset #{$video->id}");
+                if ($assetResourceName) {
+                    $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::YOUTUBE_VIDEO];
+                    Log::info("GoogleAdsExecutionAgent: Added video asset to PMax", [
+                        'video_id'         => $video->id,
+                        'youtube_video_id' => $video->youtube_video_id,
+                    ]);
+                }
+            } catch (\Exception $e) {
+                $result->addWarning("Failed to register video asset {$video->id}: " . $e->getMessage());
+            }
+        }
+
+        if ($videosWithoutYouTubeId > 0) {
+            $result->addWarning('videos_pending_youtube', "{$videosWithoutYouTubeId} video(s) have no YouTube ID yet — they will be linked automatically once uploaded. Run: php artisan pmax:repair-assets --strategy={$strategy->id}");
+        }
+
         // 3. Create Asset Group with Assets
         $createAssetGroupService = new CreateAssetGroupWithAssets($this->customer);
         $assetGroupName = 'Asset Group - ' . $timestamp;
@@ -1016,6 +1041,12 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         }
 
         $result->addPlatformId('asset_group', $assetGroupResourceName);
+
+        // Dispatch async job to upload any videos that don't have YouTube IDs yet
+        if ($videosWithoutYouTubeId > 0) {
+            \App\Jobs\UploadPMaxVideoAssets::dispatch($strategy->id, $customerId, $assetGroupResourceName)
+                ->delay(now()->addSeconds(30));
+        }
 
         // 4. Add Ad Extensions (Sitelinks, Callouts) - PMax can use campaign-level assets
         $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);

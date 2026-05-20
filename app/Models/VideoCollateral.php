@@ -14,6 +14,7 @@ class VideoCollateral extends Model
         'status',
         'operation_name',
         's3_path',
+        'youtube_video_id',
         'cloudfront_url',
         'gemini_video_uri',
         'parent_video_id',

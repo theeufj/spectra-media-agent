@@ -63,6 +63,15 @@ return [
         'ads_api_version' => env('GOOGLE_ADS_API_VERSION', 'V22'),
     ],
 
+    // YouTube Data API v3 — used to upload generated videos before linking to PMax asset groups.
+    // Requires a refresh token with scope: https://www.googleapis.com/auth/youtube.upload
+    // Generate once via the Google OAuth playground and set in .env.
+    'youtube' => [
+        'client_id'     => env('GOOGLE_YOUTUBE_CLIENT_ID'),
+        'client_secret' => env('GOOGLE_YOUTUBE_CLIENT_SECRET'),
+        'refresh_token' => env('GOOGLE_YOUTUBE_REFRESH_TOKEN'),
+    ],
+
     // Platform-managed Google Tag Manager (service account — no per-user OAuth needed)
     'gtm' => [
         // Refresh token for the PLATFORM's Google account with GTM edit+publish scopes.
