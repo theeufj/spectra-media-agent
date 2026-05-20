@@ -168,8 +168,9 @@ class PlatformConstraints
                     $ads = self::dig($plan, ['creative_strategy', 'ads']) ?? [];
                     foreach ((array) $ads as $ad) {
                         foreach ((array) ($ad['headlines'] ?? []) as $headline) {
-                            if (mb_strlen($headline) > 30) {
-                                return "RSA headline exceeds 30 chars: \"{$headline}\" (" . mb_strlen($headline) . " chars)";
+                            $text = is_array($headline) ? ($headline['text'] ?? implode(' ', $headline)) : (string) $headline;
+                            if (mb_strlen($text) > 30) {
+                                return "RSA headline exceeds 30 chars: \"{$text}\" (" . mb_strlen($text) . " chars)";
                             }
                         }
                     }
@@ -186,8 +187,9 @@ class PlatformConstraints
                     $ads = self::dig($plan, ['creative_strategy', 'ads']) ?? [];
                     foreach ((array) $ads as $ad) {
                         foreach ((array) ($ad['descriptions'] ?? []) as $desc) {
-                            if (mb_strlen($desc) > 90) {
-                                return "RSA description exceeds 90 chars: \"{$desc}\" (" . mb_strlen($desc) . " chars)";
+                            $text = is_array($desc) ? ($desc['text'] ?? implode(' ', $desc)) : (string) $desc;
+                            if (mb_strlen($text) > 90) {
+                                return "RSA description exceeds 90 chars: \"{$text}\" (" . mb_strlen($text) . " chars)";
                             }
                         }
                     }
