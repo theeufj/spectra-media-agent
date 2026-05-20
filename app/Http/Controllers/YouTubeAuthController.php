@@ -15,11 +15,13 @@ class YouTubeAuthController extends Controller
     public function redirect()
     {
         $clientId    = config('services.youtube.client_id');
-        $redirectUri = route('youtube.auth.callback');
+        $redirectUri = 'https://sitetospend.com/youtube/auth/callback';
 
         if (!$clientId) {
             abort(500, 'GOOGLE_YOUTUBE_CLIENT_ID is not set in .env');
         }
+
+        Log::info('YouTubeAuthController: Redirecting to Google', ['redirect_uri' => $redirectUri]);
 
         $params = http_build_query([
             'client_id'     => $clientId,
@@ -35,7 +37,11 @@ class YouTubeAuthController extends Controller
 
     public function callback(Request $request)
     {
-        Log::info('YouTubeAuthController: Callback received', $request->all());
+        Log::info('YouTubeAuthController: Callback received', [
+            'full_url'    => $request->fullUrl(),
+            'query'       => $request->all(),
+            'query_string' => $request->server('QUERY_STRING'),
+        ]);
 
         if ($request->has('error')) {
             $error       = $request->get('error');
@@ -61,7 +67,7 @@ class YouTubeAuthController extends Controller
 
         $clientId     = config('services.youtube.client_id');
         $clientSecret = config('services.youtube.client_secret');
-        $redirectUri  = route('youtube.auth.callback');
+        $redirectUri  = 'https://sitetospend.com/youtube/auth/callback';
 
         $response = Http::asForm()->post(self::TOKEN_URL, [
             'code'          => $code,
