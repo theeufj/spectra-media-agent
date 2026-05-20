@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Jobs\UploadPMaxVideoAssets;
 use App\Models\Strategy;
+use App\Models\VideoCollateral;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoToYouTube;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
@@ -65,10 +66,13 @@ class RepairPMaxAssets extends Command
         $this->info("Strategy: {$strategyId} | Customer: {$customerId}");
         $this->info("Asset group: {$assetGroupResourceName}");
 
-        $videos = $strategy->videoCollaterals()->where('is_active', true)->get();
+        // Look up at campaign level — videos are shared across all strategies.
+        $videos = VideoCollateral::where('campaign_id', $strategy->campaign_id)
+            ->where('is_active', true)
+            ->get();
 
         if ($videos->isEmpty()) {
-            $this->warn("No active video collaterals found for strategy {$strategyId}");
+            $this->warn("No active video collaterals found for campaign {$strategy->campaign_id}");
             return self::SUCCESS;
         }
 

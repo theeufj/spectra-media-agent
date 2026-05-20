@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Models\VideoCollateral;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoToYouTube;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
@@ -49,10 +50,13 @@ class UploadPMaxVideoAssets implements ShouldQueue
             return;
         }
 
-        $videos = $strategy->videoCollaterals()->where('is_active', true)->get();
+        // Look up at campaign level — videos are shared across all strategies.
+        $videos = VideoCollateral::where('campaign_id', $strategy->campaign_id)
+            ->where('is_active', true)
+            ->get();
 
         if ($videos->isEmpty()) {
-            Log::info("UploadPMaxVideoAssets: No active videos for strategy {$this->strategyId}");
+            Log::info("UploadPMaxVideoAssets: No active videos for campaign {$strategy->campaign_id}");
             return;
         }
 

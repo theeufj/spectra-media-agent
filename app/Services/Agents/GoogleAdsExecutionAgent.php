@@ -53,6 +53,7 @@ use App\Services\Agents\CampaignReviewAgent;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
+use App\Models\VideoCollateral;
 use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -247,7 +248,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         // Check Performance Max eligibility
         $hasMultipleAssets = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->count() >= 3
-            && $strategy->videoCollaterals()->where('is_active', true)->count() >= 1;
+            && VideoCollateral::where('campaign_id', $campaign->id)->where('is_active', true)->count() >= 1;
         $hasConversionTracking = $this->hasConversionTracking($context);
         $meetsPerformanceMaxBudget = $context->calculateDailyBudget() >= 8.33; // ~$250/month minimum
         
@@ -1018,10 +1019,17 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             Log::warning("GoogleAdsExecutionAgent: No logo or square image available — asset group may be rejected by Google.");
         }
 
-        // 2.3 Video Assets (YouTube required — links videos that already have a YouTube ID)
+        // 2.3 Video Assets — look up at campaign level so portrait + landscape videos
+        // generated once are shared across all strategies in the campaign.
         $uploadVideoAssetService = new UploadVideoAsset($this->customer);
-        $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->whereNotNull('youtube_video_id')->get();
-        $videosWithoutYouTubeId = $strategy->videoCollaterals()->where('is_active', true)->whereNull('youtube_video_id')->count();
+        $videoCollaterals = VideoCollateral::where('campaign_id', $campaign->id)
+            ->where('is_active', true)
+            ->whereNotNull('youtube_video_id')
+            ->get();
+        $videosWithoutYouTubeId = VideoCollateral::where('campaign_id', $campaign->id)
+            ->where('is_active', true)
+            ->whereNull('youtube_video_id')
+            ->count();
 
         foreach ($videoCollaterals as $video) {
             try {
