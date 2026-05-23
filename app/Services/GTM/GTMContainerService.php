@@ -182,7 +182,7 @@ HTML;
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+            $workspacePath = $this->getWorkspacePath($customer);
 
             $tagData = [
                 'name' => $tagName,
@@ -229,7 +229,7 @@ HTML;
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+            $workspacePath = $this->getWorkspacePath($customer);
 
             $pixelScript = <<<JS
 <script>
@@ -283,7 +283,7 @@ JS;
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+            $workspacePath = $this->getWorkspacePath($customer);
 
             $uetScript = <<<JS
 <script>
@@ -333,7 +333,7 @@ JS;
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+            $workspacePath = $this->getWorkspacePath($customer);
             $triggerData   = $this->buildTriggerConfiguration($triggerName, $triggerType, $config);
             $response      = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, $triggerData);
 
@@ -366,7 +366,7 @@ JS;
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+            $workspacePath = $this->getWorkspacePath($customer);
 
             $createVersionResponse = $this->makeApiCall('POST', "/{$workspacePath}/version", $accessToken, [
                 'name'  => $notes ?: 'Published by Site to Spend — ' . now()->toDateTimeString(),
@@ -458,7 +458,7 @@ JS;
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+            $workspacePath = $this->getWorkspacePath($customer);
 
             // Create a form submission trigger first
             $triggerResult = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, [
@@ -511,7 +511,7 @@ JS;
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $workspacePath = "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}/workspaces/{$customer->gtm_workspace_id}";
+            $workspacePath = $this->getWorkspacePath($customer);
 
             // Reuse or recreate the form submit trigger
             $triggerResult = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, [
@@ -546,6 +546,21 @@ JS;
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Build the workspace path for API calls.
+     *
+     * Uses the numeric container path from gtm_config if available, because the GTM API
+     * requires a numeric container ID in the URL — the public GTM-XXXXXXX format only
+     * works in the install snippet, not in REST calls.
+     */
+    private function getWorkspacePath(Customer $customer): string
+    {
+        $containerPath = $customer->gtm_config['container_path']
+            ?? "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}";
+
+        return "{$containerPath}/workspaces/{$customer->gtm_workspace_id}";
     }
 
     private function isValidContainerId(string $containerId): bool
