@@ -15,6 +15,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -32,6 +33,22 @@ class HourlyBudgetOptimization implements ShouldQueue
     public $timeout = 300; // 5 minutes max
 
     public function handle(BudgetIntelligenceAgent $budgetAgent): void
+    {
+        // Prevent duplicate runs if the scheduler dispatches a second instance before the first finishes
+        $lock = Cache::lock('hourly-budget-optimization', 3300); // 55 min — releases before next hour
+        if (!$lock->get()) {
+            Log::info('HourlyBudgetOptimization: Skipping — another instance is already running');
+            return;
+        }
+
+        try {
+            $this->run($budgetAgent);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function run(BudgetIntelligenceAgent $budgetAgent): void
     {
         Log::info('HourlyBudgetOptimization: Starting hourly run');
 
