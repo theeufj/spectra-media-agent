@@ -184,11 +184,14 @@ HTML;
 
             $workspacePath = $this->getWorkspacePath($customer);
 
+            // awct tag type requires a bare numeric ID — strip the "AW-" prefix if present
+            $numericConversionId = preg_replace('/^AW-/i', '', $conversionId);
+
             $tagData = [
                 'name' => $tagName,
                 'type' => 'awct',
                 'parameter' => [
-                    ['key' => 'conversionId',    'type' => 'template', 'value' => $conversionId],
+                    ['key' => 'conversionId',    'type' => 'template', 'value' => $numericConversionId],
                     ['key' => 'conversionLabel', 'type' => 'template', 'value' => $config['conversion_label'] ?? ''],
                 ],
             ];
@@ -368,7 +371,8 @@ JS;
 
             $workspacePath = $this->getWorkspacePath($customer);
 
-            $createVersionResponse = $this->makeApiCall('POST', "/{$workspacePath}/version", $accessToken, [
+            // GTM v2 API uses RPC-style action suffixes (e.g. :create_version, :publish)
+            $createVersionResponse = $this->makeApiCall('POST', "/{$workspacePath}:create_version", $accessToken, [
                 'name'  => $notes ?: 'Published by Site to Spend — ' . now()->toDateTimeString(),
                 'notes' => $notes,
             ]);
@@ -377,11 +381,15 @@ JS;
                 return ['success' => false, 'error' => 'Failed to create version: ' . ($createVersionResponse['error'] ?? 'Unknown error')];
             }
 
-            $versionPath = $createVersionResponse['data']['path'] ?? null;
-            $versionId   = $createVersionResponse['data']['containerVersionId'] ?? null;
+            $versionPath = $createVersionResponse['data']['containerVersion']['path']
+                ?? $createVersionResponse['data']['path']
+                ?? null;
+            $versionId   = $createVersionResponse['data']['containerVersion']['containerVersionId']
+                ?? $createVersionResponse['data']['containerVersionId']
+                ?? null;
 
             if ($versionPath) {
-                $this->makeApiCall('POST', "/{$versionPath}/publish", $accessToken);
+                $this->makeApiCall('POST', "/{$versionPath}:publish", $accessToken);
             }
 
             return ['success' => true, 'version_id' => $versionId, 'published_at' => now()];
