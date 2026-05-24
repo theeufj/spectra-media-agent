@@ -24,6 +24,7 @@ use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use App\Features\AutoOptimization;
 use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
 
@@ -37,7 +38,7 @@ class RecommendationApplier
     {
         $customer = $campaign->customer;
 
-        if ($customer && !Feature::for($customer)->active('auto_optimization')) {
+        if ($customer && !Feature::for($customer)->active(AutoOptimization::class)) {
             return [
                 'applied'        => false,
                 'message'        => 'Auto-optimization is disabled for this customer',

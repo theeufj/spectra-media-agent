@@ -11,8 +11,11 @@ use App\Jobs\DetectNegativeKeywordConflicts;
 use App\Jobs\EvaluateBiddingStrategyProgression;
 use App\Jobs\GenerateExecutiveReport;
 use App\Jobs\HourlyBudgetOptimization;
+use App\Jobs\MonitorCampaignStatus;
 use App\Jobs\OptimizeCampaigns;
+use App\Jobs\ProcessDailyAdSpendBilling;
 use App\Jobs\RecordSiteConversion;
+use App\Jobs\RefreshFacebookTokens;
 use App\Jobs\ReviewGoogleAdsRecommendations;
 use App\Jobs\RunHealthChecks;
 use App\Jobs\RunPerformanceAnomalyCheck;
@@ -43,8 +46,12 @@ class Kernel extends ConsoleKernel
         $schedule->job(new RunSelfHealingChecks)->everyFourHours()->at('00:15');
         $schedule->job(new OptimizeCampaigns)->hourly();
 
+        $schedule->job(new MonitorCampaignStatus)->everyFourHours();
+
         // Daily jobs — staggered to avoid hammering the APIs at the same time
         $schedule->job(new AutomatedCampaignMaintenance)->dailyAt('03:00');
+        $schedule->job(new RefreshFacebookTokens)->dailyAt('03:15');
+        $schedule->job(new ProcessDailyAdSpendBilling)->dailyAt('06:30');
         $schedule->job(new EvaluateBiddingStrategyProgression)->dailyAt('04:00');
         $schedule->job(new ReviewGoogleAdsRecommendations)->dailyAt('04:30');
         $schedule->job(new RunHealthChecks)->dailyAt('06:00');

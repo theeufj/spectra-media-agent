@@ -17,6 +17,7 @@ use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Prompts\AdCompliancePrompt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use App\Features\AutoHealing;
 use Laravel\Pennant\Feature;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 
@@ -76,7 +77,7 @@ class SelfHealingAgent
         $customer = $campaign->customer;
 
         // Check feature flag - if disabled, only run diagnostics (no mutations)
-        $autoHealingEnabled = Feature::for($customer)->active('auto_healing');
+        $autoHealingEnabled = Feature::for($customer)->active(AutoHealing::class);
         if (!$autoHealingEnabled) {
             $results['feature_flag'] = 'auto_healing disabled - diagnostics only';
             Log::info("SelfHealingAgent: auto_healing feature disabled for customer {$customer->id}, running diagnostics only");
