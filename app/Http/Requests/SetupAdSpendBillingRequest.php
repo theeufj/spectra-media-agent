@@ -14,7 +14,7 @@ class SetupAdSpendBillingRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'payment_method_id' => 'required|string',
+            'payment_method_id' => 'sometimes|nullable|string',
             'daily_budget' => 'required|numeric|min:1',
             'days_to_charge' => 'sometimes|integer|min:1|max:30',
         ];

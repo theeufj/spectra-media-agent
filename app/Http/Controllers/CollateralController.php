@@ -73,6 +73,7 @@ class CollateralController extends Controller
             'videoCollaterals' => $videoCollaterals,
             'collateralErrors' => $strategy->collateral_errors ?? [],
             'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod() || $user->subscription_status === 'active',
+            'hasPaymentMethod' => $user->hasDefaultPaymentMethod(),
             'deploymentEnabled' => Setting::get('deployment_enabled', true),
             'managedBillingEnabled' => Setting::get('managed_billing_enabled', true),
             'creativeUsage' => app(CreativeQuotaService::class)->getUsageSummary($user),

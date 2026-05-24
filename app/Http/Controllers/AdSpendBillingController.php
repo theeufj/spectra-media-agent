@@ -317,8 +317,15 @@ class AdSpendBillingController extends Controller
                 $billingUser->createAsStripeCustomer();
             }
 
-            // First, update the payment method
-            $billingUser->updateDefaultPaymentMethod($request->payment_method_id);
+            // Update payment method if a new one was provided; otherwise use the existing one
+            if ($request->payment_method_id) {
+                $billingUser->updateDefaultPaymentMethod($request->payment_method_id);
+            } elseif (!$billingUser->hasDefaultPaymentMethod()) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'No payment method on file. Please add a payment method.',
+                ], 400);
+            }
 
             Log::info('AdSpendBilling: Payment method set during deployment setup', [
                 'user_id' => $user->id,

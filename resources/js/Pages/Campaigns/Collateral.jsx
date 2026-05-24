@@ -11,7 +11,7 @@ import Modal from '@/Components/Modal';
 import AdPreviewPanel from '@/Components/AdPreview';
 import { useToast } from '@/Components/Toast';
 
-export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0 }) {
+export default function Collateral({ campaign, currentStrategy, allStrategies, adCopy, imageCollaterals, videoCollaterals, collateralErrors = {}, hasActiveSubscription, hasPaymentMethod, deploymentEnabled, managedBillingEnabled, adSpendCredit, creativeUsage, harvestedAssetCount = 0 }) {
     const { auth } = usePage().props;
     const isSubscribed = hasActiveSubscription || auth.user?.subscription_status === 'active';
     const toast = useToast();
@@ -529,6 +529,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 campaign={campaign}
                 campaignName={campaign.name}
                 existingCredit={adSpendCredit}
+                hasPaymentMethod={hasPaymentMethod}
             />
 
             <ConfirmationModal
