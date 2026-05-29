@@ -1,18 +1,19 @@
-import ApplicationLogo from '@/Components/ApplicationLogo';
-import { Link } from '@inertiajs/react';
+import Header from '@/Components/Header';
+import Footer from '@/Components/Footer';
+import { usePage } from '@inertiajs/react';
 
 export default function GuestLayout({ children }) {
-    return (
-        <div className="flex min-h-screen flex-col items-center bg-gray-100 pt-6 sm:justify-center sm:pt-0">
-            <div>
-                <Link href="/">
-                    <ApplicationLogo />
-                </Link>
-            </div>
+    const { auth } = usePage().props;
 
-            <div className="mt-6 w-full overflow-hidden bg-white px-6 py-4 shadow-md sm:max-w-md sm:rounded-lg">
-                {children}
-            </div>
+    return (
+        <div className="flex flex-col min-h-screen bg-gray-50">
+            <Header auth={auth} />
+            <main className="flex-1 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+                <div className="w-full max-w-md">
+                    {children}
+                </div>
+            </main>
+            <Footer />
         </div>
     );
 }

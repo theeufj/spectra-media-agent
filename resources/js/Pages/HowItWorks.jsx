@@ -81,6 +81,12 @@ export default function HowItWorks({ auth }) {
                                             </li>
                                         ))}
                                     </ul>
+                                    <div className="mt-8">
+                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg hover:shadow-xl transition-all">
+                                            Start Free →
+                                        </a>
+                                        <p className="mt-3 text-sm text-gray-400">No credit card required</p>
+                                    </div>
                                 </div>
                                 <div className="bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
@@ -116,6 +122,12 @@ export default function HowItWorks({ auth }) {
                                             </li>
                                         ))}
                                     </ul>
+                                    <div className="mt-8">
+                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg hover:shadow-xl transition-all">
+                                            Start Free →
+                                        </a>
+                                        <p className="mt-3 text-sm text-gray-400">No credit card required</p>
+                                    </div>
                                 </div>
                             </div>
 
@@ -137,6 +149,12 @@ export default function HowItWorks({ auth }) {
                                             </li>
                                         ))}
                                     </ul>
+                                    <div className="mt-8">
+                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg hover:shadow-xl transition-all">
+                                            Start Free →
+                                        </a>
+                                        <p className="mt-3 text-sm text-gray-400">No credit card required</p>
+                                    </div>
                                 </div>
                                 <div className="bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
