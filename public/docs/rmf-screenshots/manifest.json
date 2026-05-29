@@ -1,0 +1,127 @@
+[
+  {
+    "name": "01-dashboard",
+    "label": "Dashboard — R.10 account-level (clicks, cost, impressions, conversions, all_conversions)",
+    "file": "rmf-screenshots/01-dashboard.png"
+  },
+  {
+    "name": "01-dashboardb",
+    "label": "Dashboard — R.10 account-level (clicks, cost, impressions, conversions, all_conversions) (scrolled)",
+    "file": "rmf-screenshots/01-dashboardb.png"
+  },
+  {
+    "name": "02-campaigns-list",
+    "label": "Campaigns List — M.110 pause/enable/remove campaign (campaign.status)",
+    "file": "rmf-screenshots/02-campaigns-list.png"
+  },
+  {
+    "name": "03-campaign-detail",
+    "label": "Campaign Detail — R.20 campaign metrics (clicks, cost, impressions, conversions, status)",
+    "file": "rmf-screenshots/03-campaign-detail.png"
+  },
+  {
+    "name": "03-campaign-detailb",
+    "label": "Campaign Detail — R.20 campaign metrics (clicks, cost, impressions, conversions, status) (scrolled)",
+    "file": "rmf-screenshots/03-campaign-detailb.png"
+  },
+  {
+    "name": "04-campaign-performance",
+    "label": "Campaign Performance — R.20 + R.130 bidding strategy (type, clicks, cost, CPA, impressions, avg_cpc, conversions)",
+    "file": "rmf-screenshots/04-campaign-performance.png"
+  },
+  {
+    "name": "04-campaign-performanceb",
+    "label": "Campaign Performance — R.20 + R.130 bidding strategy (type, clicks, cost, CPA, impressions, avg_cpc, conversions) (scrolled)",
+    "file": "rmf-screenshots/04-campaign-performanceb.png"
+  },
+  {
+    "name": "05-keywords",
+    "label": "Keyword Manager — C.260 add keyword, C.300 match type, R.50 keyword view (clicks, cost, impressions, conversions, first_page_cpc, status), M.140 pause/enable/remove keyword",
+    "file": "rmf-screenshots/05-keywords.png"
+  },
+  {
+    "name": "05-keywordsb",
+    "label": "Keyword Manager — C.260 add keyword, C.300 match type, R.50 keyword view (clicks, cost, impressions, conversions, first_page_cpc, status), M.140 pause/enable/remove keyword (scrolled)",
+    "file": "rmf-screenshots/05-keywordsb.png"
+  },
+  {
+    "name": "05b-keyword-research",
+    "label": "Keyword Research — C.260 discover & add keywords, C.300 match type selection",
+    "file": "rmf-screenshots/05b-keyword-research.png"
+  },
+  {
+    "name": "06-competitor-gap",
+    "label": "Competitor Gap / Search Term View — R.70 (search_term, match_type, clicks, cost, impressions)",
+    "file": "rmf-screenshots/06-competitor-gap.png"
+  },
+  {
+    "name": "06-competitor-gapb",
+    "label": "Competitor Gap / Search Term View — R.70 (search_term, match_type, clicks, cost, impressions) (scrolled)",
+    "file": "rmf-screenshots/06-competitor-gapb.png"
+  },
+  {
+    "name": "07-negative-lists",
+    "label": "Negative Keyword Lists — C.270 add campaign negative keywords, M.140 manage keywords",
+    "file": "rmf-screenshots/07-negative-lists.png"
+  },
+  {
+    "name": "08-wizard",
+    "label": "Campaign Creation Wizard — C.10 create campaign, C.120 set budget, C.190 create ad group, C.96/97/98 bidding",
+    "file": "rmf-screenshots/08-wizard.png"
+  },
+  {
+    "name": "08-wizardb",
+    "label": "Campaign Creation Wizard — C.10 create campaign, C.120 set budget, C.190 create ad group, C.96/97/98 bidding (scrolled)",
+    "file": "rmf-screenshots/08-wizardb.png"
+  },
+  {
+    "name": "09-attribution",
+    "label": "Campaign Attribution — R.10 conversions, all_conversions reporting",
+    "file": "rmf-screenshots/09-attribution.png"
+  },
+  {
+    "name": "09-attributionb",
+    "label": "Campaign Attribution — R.10 conversions, all_conversions reporting (scrolled)",
+    "file": "rmf-screenshots/09-attributionb.png"
+  },
+  {
+    "name": "10-admin-customer",
+    "label": "Admin Customer Detail — R.10 account-level performance, bidding strategy, R.130",
+    "file": "rmf-screenshots/10-admin-customer.png"
+  },
+  {
+    "name": "10-admin-customerb",
+    "label": "Admin Customer Detail — R.10 account-level performance, bidding strategy, R.130 (scrolled)",
+    "file": "rmf-screenshots/10-admin-customerb.png"
+  },
+  {
+    "name": "10b-admin-dashboard",
+    "label": "Admin Customer Dashboard — R.10 comprehensive account metrics",
+    "file": "rmf-screenshots/10b-admin-dashboard.png"
+  },
+  {
+    "name": "10b-admin-dashboardb",
+    "label": "Admin Customer Dashboard — R.10 comprehensive account metrics (scrolled)",
+    "file": "rmf-screenshots/10b-admin-dashboardb.png"
+  },
+  {
+    "name": "11-conversions",
+    "label": "Conversion Tracking — C.65 create website/call conversion, generate tracking code snippet",
+    "file": "rmf-screenshots/11-conversions.png"
+  },
+  {
+    "name": "12-collateral",
+    "label": "Ad Collateral / Creative Editor — M.130 pause/enable/remove ads, C.75 callout extensions",
+    "file": "rmf-screenshots/12-collateral.png"
+  },
+  {
+    "name": "12-collateralb",
+    "label": "Ad Collateral / Creative Editor — M.130 pause/enable/remove ads, C.75 callout extensions (scrolled)",
+    "file": "rmf-screenshots/12-collateralb.png"
+  },
+  {
+    "name": "13-analytics",
+    "label": "Analytics Attribution — R.10 R.20 cross-campaign reporting view",
+    "file": "rmf-screenshots/13-analytics.png"
+  }
+]

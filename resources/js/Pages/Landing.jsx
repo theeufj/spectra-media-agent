@@ -89,7 +89,9 @@ export default function Landing({ auth, plans = [] }) {
                             "url": "https://sitetospend.com",
                             "logo": "https://sitetospend.com/og-image.png",
                             "description": "AI-powered digital advertising platform with autonomous agents that manage and optimize ad campaigns across Google, Facebook, Microsoft, and LinkedIn.",
-                            "sameAs": []
+                            "sameAs": [
+                                "https://www.linkedin.com/company/sitetospend"
+                            ]
                         },
                         {
                             "@type": "SoftwareApplication",

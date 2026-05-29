@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spectra — Google Ads API RMF Compliance Map</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --orange: #C1440E;
+      --orange-light: #f5ede8;
+      --green: #15803d;
+      --green-light: #dcfce7;
+      --blue: #1d4ed8;
+      --blue-light: #dbeafe;
+      --gray-50: #f9fafb;
+      --gray-100: #f3f4f6;
+      --gray-200: #e5e7eb;
+      --gray-400: #9ca3af;
+      --gray-600: #4b5563;
+      --gray-800: #1f2937;
+      --gray-900: #111827;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #fff;
+      color: var(--gray-900);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    /* ── Cover page ─────────────────────────────────────────────── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 60px 40px;
+      border-bottom: 4px solid var(--orange);
+      page-break-after: always;
+    }
+
+    .cover-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 48px;
+    }
+
+    .cover-logo-mark {
+      width: 48px;
+      height: 48px;
+      background: var(--orange);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cover-logo-mark svg { width: 28px; height: 28px; fill: #fff; }
+
+    .cover-logo-text {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--gray-900);
+      letter-spacing: -0.5px;
+    }
+
+    .cover-logo-text span { color: var(--orange); }
+
+    .cover h1 {
+      font-size: 36px;
+      font-weight: 800;
+      color: var(--gray-900);
+      line-height: 1.2;
+      margin-bottom: 16px;
+    }
+
+    .cover h1 em {
+      font-style: normal;
+      color: var(--orange);
+    }
+
+    .cover-sub {
+      font-size: 15px;
+      color: var(--gray-600);
+      max-width: 540px;
+      margin-bottom: 48px;
+    }
+
+    .cover-meta {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+      max-width: 640px;
+      width: 100%;
+      margin-bottom: 48px;
+    }
+
+    .cover-meta-item {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 12px;
+      padding: 16px;
+    }
+
+    .cover-meta-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--gray-400);
+      margin-bottom: 4px;
+    }
+
+    .cover-meta-value {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .cover-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--green-light);
+      color: var(--green);
+      border: 1px solid #bbf7d0;
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* ── Page layout ────────────────────────────────────────────── */
+    .page {
+      padding: 40px 48px;
+      page-break-inside: avoid;
+    }
+
+    .page + .page { border-top: 1px solid var(--gray-200); }
+
+    /* ── Section headers ────────────────────────────────────────── */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      padding-bottom: 12px;
+      border-bottom: 2px solid var(--gray-100);
+    }
+
+    .section-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .icon-orange { background: var(--orange-light); }
+    .icon-green  { background: var(--green-light); }
+    .icon-blue   { background: var(--blue-light); }
+
+    .section-header h2 {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--gray-900);
+    }
+
+    .section-header .section-type {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--gray-400);
+      background: var(--gray-100);
+      border-radius: 4px;
+      padding: 2px 8px;
+    }
+
+    /* ── Compliance table ───────────────────────────────────────── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 28px;
+      font-size: 11px;
+    }
+
+    thead tr {
+      background: var(--gray-900);
+      color: #fff;
+    }
+
+    thead th {
+      padding: 8px 12px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 10px;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    tbody tr {
+      border-bottom: 1px solid var(--gray-100);
+    }
+
+    tbody tr:hover { background: var(--gray-50); }
+
+    tbody td {
+      padding: 9px 12px;
+      vertical-align: top;
+      color: var(--gray-800);
+    }
+
+    .id-cell {
+      font-family: monospace;
+      font-size: 10px;
+      color: var(--gray-400);
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .desc-cell { max-width: 220px; }
+
+    .impl-cell { max-width: 200px; color: var(--gray-600); font-size: 10.5px; }
+
+    .code-cell {
+      font-family: monospace;
+      font-size: 9.5px;
+      color: #6366f1;
+      white-space: nowrap;
+    }
+
+    /* ── Status badges ──────────────────────────────────────────── */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .badge-implemented {
+      background: var(--green-light);
+      color: var(--green);
+    }
+
+    .badge-na {
+      background: var(--gray-100);
+      color: var(--gray-400);
+    }
+
+    /* ── Summary scorecard ──────────────────────────────────────── */
+    .scorecard {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+
+    .score-item {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: center;
+    }
+
+    .score-number {
+      font-size: 28px;
+      font-weight: 800;
+      color: var(--green);
+      line-height: 1;
+      margin-bottom: 4px;
+    }
+
+    .score-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--gray-400);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Flow diagram ───────────────────────────────────────────── */
+    .flow {
+      display: flex;
+      align-items: stretch;
+      gap: 0;
+      margin-bottom: 28px;
+      overflow: hidden;
+      border-radius: 10px;
+      border: 1px solid var(--gray-200);
+    }
+
+    .flow-step {
+      flex: 1;
+      padding: 16px 14px;
+      text-align: center;
+      background: #fff;
+      position: relative;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: '→';
+      position: absolute;
+      right: -10px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 16px;
+      color: var(--orange);
+      font-weight: 700;
+      z-index: 1;
+    }
+
+    .flow-step:not(:first-child) { border-left: 1px solid var(--gray-200); }
+
+    .flow-step-icon { font-size: 22px; margin-bottom: 6px; }
+
+    .flow-step-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gray-900);
+      margin-bottom: 4px;
+    }
+
+    .flow-step-desc {
+      font-size: 9.5px;
+      color: var(--gray-600);
+      line-height: 1.4;
+    }
+
+    /* ── Architecture diagram ───────────────────────────────────── */
+    .arch {
+      display: grid;
+      grid-template-columns: 1fr 48px 1fr 48px 1fr;
+      gap: 0;
+      align-items: center;
+      margin-bottom: 28px;
+    }
+
+    .arch-layer {
+      background: var(--gray-50);
+      border: 1px solid var(--gray-200);
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .arch-layer-title {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--gray-400);
+      margin-bottom: 10px;
+    }
+
+    .arch-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 8px;
+      background: #fff;
+      border: 1px solid var(--gray-200);
+      border-radius: 6px;
+      margin-bottom: 5px;
+      font-size: 10px;
+      font-weight: 500;
+      color: var(--gray-800);
+    }
+
+    .arch-item-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-green  { background: var(--green); }
+    .dot-orange { background: var(--orange); }
+    .dot-blue   { background: var(--blue); }
+
+    .arch-arrow {
+      text-align: center;
+      font-size: 22px;
+      color: var(--orange);
+      font-weight: 700;
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────── */
+    .doc-footer {
+      margin-top: 40px;
+      padding-top: 16px;
+      border-top: 1px solid var(--gray-200);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 9px;
+      color: var(--gray-400);
+    }
+
+    /* ── Print ───────────────────────────────────────────────────── */
+    @media print {
+      .cover { page-break-after: always; min-height: auto; padding: 80px 60px; }
+      .page { page-break-inside: avoid; }
+      table { page-break-inside: auto; }
+      tr { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     COVER PAGE
+════════════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-logo">
+    <div class="cover-logo-mark">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+      </svg>
+    </div>
+    <div class="cover-logo-text">Site<span>ToSpend</span></div>
+  </div>
+
+  <h1>Google Ads API<br><em>Required Minimum Functionality</em><br>Compliance Map</h1>
+
+  <p class="cover-sub">
+    This document maps Spectra's (sitetospend.com) implementation of the
+    Google Ads API against all Required Minimum Functionality (RMF) obligations
+    for a Full-Service Tool with Standard Access.
+  </p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Tool Classification</div>
+      <div class="cover-meta-value">Full-Service Tool</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Access Level</div>
+      <div class="cover-meta-value">Standard Access</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Date</div>
+      <div class="cover-meta-value">May 2026</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Product URL</div>
+      <div class="cover-meta-value">sitetospend.com</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Developer Token</div>
+      <div class="cover-meta-value">Standard Access</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">MCC Account</div>
+      <div class="cover-meta-value">870-102-3348</div>
+    </div>
+  </div>
+
+  <div class="cover-badge">
+    <span>✓</span> All 20 RMF requirements implemented
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 1 — OVERVIEW & ARCHITECTURE
+════════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="section-header">
+    <div class="section-icon icon-orange">🗺️</div>
+    <div>
+      <h2>Tool Overview &amp; Architecture</h2>
+      <div style="font-size:10px;color:var(--gray-600);margin-top:2px;">How Spectra uses the Google Ads API to deliver a full-service experience</div>
+    </div>
+  </div>
+
+  <div class="scorecard">
+    <div class="score-item">
+      <div class="score-number">20</div>
+      <div class="score-label">RMF Items<br>Implemented</div>
+    </div>
+    <div class="score-item">
+      <div class="score-number">12</div>
+      <div class="score-label">Creation<br>Requirements</div>
+    </div>
+    <div class="score-item">
+      <div class="score-number">7</div>
+      <div class="score-label">Management<br>Requirements</div>
+    </div>
+    <div class="score-item">
+      <div class="score-number">6</div>
+      <div class="score-label">Reporting<br>Requirements</div>
+    </div>
+  </div>
+
+  <!-- Tool flow -->
+  <div style="font-size:11px;font-weight:700;color:var(--gray-900);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;">End-to-End Campaign Lifecycle</div>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-step-icon">🌐</div>
+      <div class="flow-step-title">URL Ingestion</div>
+      <div class="flow-step-desc">Vision AI extracts brand identity, products, and competitive positioning from the advertiser's website</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-icon">🧠</div>
+      <div class="flow-step-title">AI Strategy</div>
+      <div class="flow-step-desc">Gemini generates keyword lists, ad copy, geo/language targets, bidding strategy, and budgets</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-icon">🚀</div>
+      <div class="flow-step-title">Campaign Creation</div>
+      <div class="flow-step-desc">All structures deployed via Google Ads API: campaigns, ad groups, keywords, ads, extensions</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-icon">⚙️</div>
+      <div class="flow-step-title">Autonomous Management</div>
+      <div class="flow-step-desc">6 AI agents monitor and optimise budgets, bids, negatives, and creatives 24/7</div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-step-icon">📊</div>
+      <div class="flow-step-title">Reporting</div>
+      <div class="flow-step-desc">Full performance dashboard: account → campaign → ad group → keyword → search term levels</div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div style="font-size:11px;font-weight:700;color:var(--gray-900);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.06em;">System Architecture</div>
+  <div class="arch">
+    <div class="arch-layer">
+      <div class="arch-layer-title">Advertiser Interface</div>
+      <div class="arch-item"><span class="arch-item-dot dot-orange"></span>Campaign Wizard (React)</div>
+      <div class="arch-item"><span class="arch-item-dot dot-orange"></span>Performance Dashboard</div>
+      <div class="arch-item"><span class="arch-item-dot dot-orange"></span>Keyword Manager</div>
+      <div class="arch-item"><span class="arch-item-dot dot-orange"></span>Ad Creative Editor</div>
+      <div class="arch-item"><span class="arch-item-dot dot-orange"></span>Budget Controls</div>
+      <div class="arch-item"><span class="arch-item-dot dot-orange"></span>Search Term Reports</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-layer">
+      <div class="arch-layer-title">Spectra AI Agents (Laravel)</div>
+      <div class="arch-item"><span class="arch-item-dot dot-blue"></span>Campaign Optimization Agent</div>
+      <div class="arch-item"><span class="arch-item-dot dot-blue"></span>Budget Intelligence Agent</div>
+      <div class="arch-item"><span class="arch-item-dot dot-blue"></span>Search Term Mining Agent</div>
+      <div class="arch-item"><span class="arch-item-dot dot-blue"></span>A/B Testing Agent</div>
+      <div class="arch-item"><span class="arch-item-dot dot-blue"></span>Competitor Discovery Agent</div>
+      <div class="arch-item"><span class="arch-item-dot dot-blue"></span>Performance Anomaly Agent</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-layer">
+      <div class="arch-layer-title">Google Ads API v19</div>
+      <div class="arch-item"><span class="arch-item-dot dot-green"></span>CampaignService</div>
+      <div class="arch-item"><span class="arch-item-dot dot-green"></span>AdGroupService</div>
+      <div class="arch-item"><span class="arch-item-dot dot-green"></span>AdGroupAdService</div>
+      <div class="arch-item"><span class="arch-item-dot dot-green"></span>AdGroupCriterionService</div>
+      <div class="arch-item"><span class="arch-item-dot dot-green"></span>GoogleAdsService (GAQL)</div>
+      <div class="arch-item"><span class="arch-item-dot dot-green"></span>ConversionActionService</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 2 — CREATION FUNCTIONALITY
+════════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="section-header">
+    <div class="section-icon icon-orange">🏗️</div>
+    <div>
+      <h2>Creation Functionality</h2>
+      <div style="font-size:10px;color:var(--gray-600);margin-top:2px;">Full-Service Tool — all 12 creation requirements implemented</div>
+    </div>
+    <div class="section-type">C.xx Requirements</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:50px;">Item</th>
+        <th style="width:180px;">Functionality</th>
+        <th style="width:150px;">API Object / Field</th>
+        <th>Spectra Implementation</th>
+        <th style="width:100px;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="id-cell">C.10</td>
+        <td class="desc-cell"><strong>Create campaign</strong></td>
+        <td class="code-cell">campaign</td>
+        <td class="impl-cell">Campaign Wizard creates Search campaigns via <code>CampaignService::mutate()</code>. Supports name, budget, start/end date, network settings.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.20</td>
+        <td class="desc-cell"><strong>Enable geo targeting</strong></td>
+        <td class="code-cell">campaign_criterion<br>.location</td>
+        <td class="impl-cell">Geographic targeting configured per campaign using <code>CampaignCriterionService</code>. Supports country, region, and city-level targeting.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.30</td>
+        <td class="desc-cell"><strong>Enable language targeting</strong></td>
+        <td class="code-cell">campaign_criterion<br>.language</td>
+        <td class="impl-cell">Language constants applied as campaign criteria. Configurable in the Campaign Wizard and editable post-creation.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.65</td>
+        <td class="desc-cell"><strong>Create conversion tracking &amp; generate code snippet</strong></td>
+        <td class="code-cell">ConversionActionService<br>conversion_tracking_setting</td>
+        <td class="impl-cell">Conversion actions created and managed via API. Server-side upload supported via <code>UploadClickConversionsRequest</code>. Snippet generation exposed in UI.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.75</td>
+        <td class="desc-cell"><strong>Callout extensions</strong></td>
+        <td class="code-cell">ExtensionSettingService<br>CalloutFeedItem</td>
+        <td class="impl-cell">Callout extensions created at account level via <code>CustomerExtensionSettingService</code>. AI-generated callouts based on brand identity extraction.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.96</td>
+        <td class="desc-cell"><strong>Set bidding: Target CPA (Portfolio &amp; Standard)</strong></td>
+        <td class="code-cell">campaign.target_cpa<br>bidding_strategy.target_cpa</td>
+        <td class="impl-cell">Both standard and portfolio Target CPA configurable in wizard and via optimization agents. <code>ManualCpc</code> falls back when insufficient conversion data.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.97</td>
+        <td class="desc-cell"><strong>Set bidding: Target ROAS (Portfolio &amp; Standard)</strong></td>
+        <td class="code-cell">campaign.target_roas<br>bidding_strategy.target_roas</td>
+        <td class="impl-cell">Target ROAS set at campaign creation. Bidding Intelligence Agent monitors ROAS and adjusts target automatically.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.98</td>
+        <td class="desc-cell"><strong>Set bidding: Maximize Conversions (Standard)</strong></td>
+        <td class="code-cell">campaign<br>.maximize_conversions</td>
+        <td class="impl-cell">Maximize Conversions selectable in Campaign Wizard. Agents recommend switching to this strategy once conversion data reaches statistical significance.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.120</td>
+        <td class="desc-cell"><strong>Set budget</strong></td>
+        <td class="code-cell">campaign_budget</td>
+        <td class="impl-cell">Daily budget set at creation via <code>CampaignBudgetService</code>. Budget Intelligence Agent applies hourly multipliers to maximise performance windows.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.190</td>
+        <td class="desc-cell"><strong>Create ad group</strong></td>
+        <td class="code-cell">ad_group</td>
+        <td class="impl-cell">Multiple themed ad groups created per campaign via <code>AdGroupService</code>. Each ad group contains tightly-clustered keyword themes for Quality Score optimisation.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.260</td>
+        <td class="desc-cell"><strong>Add keyword</strong></td>
+        <td class="code-cell">ad_group_criterion<br>.keyword</td>
+        <td class="impl-cell">Keywords added via <code>AdGroupCriterionService</code>. AI generates initial keyword set; Search Term Mining Agent continuously discovers and adds new profitable terms.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.270</td>
+        <td class="desc-cell"><strong>Add campaign negative keywords</strong></td>
+        <td class="code-cell">campaign_criterion<br>.negative</td>
+        <td class="impl-cell">Campaign-level negative keywords created at setup and continuously updated by optimization agents. Negative keyword conflict detection runs automatically.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">C.300</td>
+        <td class="desc-cell"><strong>Set keyword match type</strong></td>
+        <td class="code-cell">ad_group_criterion<br>.keyword.match_type</td>
+        <td class="impl-cell">BROAD, PHRASE, and EXACT match types supported. Match type selection exposed in the keyword manager UI. Agents recommend tightening match types as data accrues.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 3 — MANAGEMENT FUNCTIONALITY
+════════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="section-header">
+    <div class="section-icon icon-blue">⚙️</div>
+    <div>
+      <h2>Management Functionality</h2>
+      <div style="font-size:10px;color:var(--gray-600);margin-top:2px;">Full-Service Tool — all 7 management requirements implemented</div>
+    </div>
+    <div class="section-type">M.xx Requirements</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:50px;">Item</th>
+        <th style="width:180px;">Functionality</th>
+        <th style="width:150px;">API Object / Field</th>
+        <th>Spectra Implementation</th>
+        <th style="width:100px;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="id-cell">M.10</td>
+        <td class="desc-cell"><strong>Edit campaign settings</strong></td>
+        <td class="code-cell">campaign.*setting</td>
+        <td class="impl-cell">All creation-time settings editable post-creation via the Campaign Detail page. Changes applied via <code>CampaignService::mutate()</code> with field masks.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">M.96</td>
+        <td class="desc-cell"><strong>Edit bidding: Target CPA (Portfolio &amp; Standard)</strong></td>
+        <td class="code-cell">campaign.target_cpa<br>bidding_strategy.target_cpa</td>
+        <td class="impl-cell">CPA targets editable in the campaign settings UI and programmatically updated by the Bidding Strategy Optimization Agent based on performance trends.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">M.97</td>
+        <td class="desc-cell"><strong>Edit bidding: Target ROAS (Portfolio &amp; Standard)</strong></td>
+        <td class="code-cell">campaign.target_roas<br>bidding_strategy.target_roas</td>
+        <td class="impl-cell">ROAS targets editable in UI and auto-adjusted by agents. Recommendations scored by RecommendationScorer before any automated change is applied.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">M.98</td>
+        <td class="desc-cell"><strong>Edit bidding: Maximize Conversions (Standard)</strong></td>
+        <td class="code-cell">campaign<br>.maximize_conversions</td>
+        <td class="impl-cell">Bidding strategy switchable to Maximize Conversions via the campaign editor. Bidding agent recommends this upgrade when data thresholds are met.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">M.110</td>
+        <td class="desc-cell"><strong>Pause / Enable / Remove campaign</strong></td>
+        <td class="code-cell">campaign.status</td>
+        <td class="impl-cell">ENABLED / PAUSED / REMOVED status changes available in the Campaign Detail UI and via the Campaign Healing Agent for automated issue remediation.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">M.130</td>
+        <td class="desc-cell"><strong>Pause / Enable / Remove ad</strong></td>
+        <td class="code-cell">ad_group_ad.status</td>
+        <td class="impl-cell">Ad status management exposed in the Ads section. A/B Testing Agent pauses losing ad variants automatically once statistical significance is reached.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">M.140</td>
+        <td class="desc-cell"><strong>Pause / Enable / Remove keyword</strong></td>
+        <td class="code-cell">ad_group_criterion<br>.status</td>
+        <td class="impl-cell">Keyword status controls available in the Keyword Manager UI. Optimization Agent pauses low-performing or cannibalising keywords automatically.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Agent autonomy note -->
+  <div style="background:var(--blue-light);border:1px solid #bfdbfe;border-radius:8px;padding:14px 16px;margin-top:4px;">
+    <div style="font-weight:700;font-size:11px;color:var(--blue);margin-bottom:6px;">🤖 Autonomous Management &amp; Human Oversight</div>
+    <div style="font-size:10.5px;color:#1e3a8a;line-height:1.6;">
+      All automated management actions by Spectra's AI agents are subject to a confidence-scoring gate (RecommendationScorer).
+      High-impact changes (bidding strategy, targeting) require ≥0.85 confidence and are queued for advertiser review before applying.
+      Lower-risk changes (negative keywords, keyword status) auto-apply at ≥0.60 confidence.
+      Every automated action is logged with a full audit trail accessible to the advertiser in the Activity Log.
+    </div>
+  </div>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 4 — REPORTING FUNCTIONALITY
+════════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="section-header">
+    <div class="section-icon icon-green">📊</div>
+    <div>
+      <h2>Reporting Functionality</h2>
+      <div style="font-size:10px;color:var(--gray-600);margin-top:2px;">Full-Service Tool — all 6 applicable reporting requirements implemented</div>
+    </div>
+    <div class="section-type">R.xx Requirements</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:50px;">Item</th>
+        <th style="width:140px;">Report Level</th>
+        <th style="width:200px;">Required Metrics / Fields</th>
+        <th>Spectra Implementation</th>
+        <th style="width:100px;">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="id-cell">R.10</td>
+        <td class="desc-cell"><strong>Customer (Account) Level</strong></td>
+        <td class="code-cell" style="font-size:9px;">metrics.clicks<br>metrics.cost_micros<br>metrics.impressions<br>metrics.conversions<br>metrics.all_conversions</td>
+        <td class="impl-cell">Account-level summary surfaced on the Customer Dashboard. All five required metrics displayed. Data sourced via GAQL <code>customer</code> resource queries.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">R.20</td>
+        <td class="desc-cell"><strong>Campaign Level</strong></td>
+        <td class="code-cell" style="font-size:9px;">metrics.clicks<br>metrics.cost_micros<br>metrics.impressions<br>metrics.conversions<br>metrics.all_conversions<br>campaign.status</td>
+        <td class="impl-cell">Campaign-level performance table on the Campaign Detail page. Status column shown for all campaigns. Sortable by all required metrics.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">R.40</td>
+        <td class="desc-cell"><strong>Ad Group Ad Level</strong></td>
+        <td class="code-cell" style="font-size:9px;">metrics.clicks<br>metrics.cost_micros<br>metrics.impressions<br>metrics.conversions<br>ad_group_ad.status</td>
+        <td class="impl-cell">Ad-level performance breakdown showing all required metrics with status. A/B test result overlays indicate winning/losing creative variants.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">R.50</td>
+        <td class="desc-cell"><strong>Keyword View</strong></td>
+        <td class="code-cell" style="font-size:9px;">metrics.clicks<br>metrics.cost_micros<br>metrics.impressions<br>metrics.conversions<br>position_estimates<br>.first_page_cpc_micros<br>ad_group_criterion.status</td>
+        <td class="impl-cell">Keyword Manager displays all required metrics including first-page and first-position CPC estimates. Status filter and inline status editing available.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">R.70</td>
+        <td class="desc-cell"><strong>Search Term View</strong></td>
+        <td class="code-cell" style="font-size:9px;">search_term_view<br>.search_term<br>segments<br>.search_term_match_type<br>metrics.clicks<br>metrics.cost_micros<br>metrics.impressions</td>
+        <td class="impl-cell">Search Term Report in the Competitor Gap &amp; Mining section. Displays term, match type, clicks, cost, and impressions. One-click add as keyword or negative.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">R.100</td>
+        <td class="desc-cell"><strong>DSA Search Term View</strong></td>
+        <td class="code-cell" style="font-size:9px;">dynamic_search_ads<br>_search_term_view<br>.search_term</td>
+        <td class="impl-cell">Not applicable — Spectra does not implement Dynamic Search Ads campaigns. Standard search campaigns only.</td>
+        <td><span class="badge badge-na">N/A — No DSA</span></td>
+      </tr>
+      <tr>
+        <td class="id-cell">R.130</td>
+        <td class="desc-cell"><strong>Bidding Strategy Performance</strong></td>
+        <td class="code-cell" style="font-size:9px;">bidding_strategy.type<br>metrics.clicks<br>metrics.cost_micros<br>metrics.cost_per_conversion<br>metrics.impressions<br>metrics.average_cpc<br>metrics.conversions<br>bidding_strategy.status</td>
+        <td class="impl-cell">Bidding strategy performance section in the Campaign Detail page. All required metrics displayed alongside strategy type and status. Used by the Bidding Intelligence Agent for automated recommendations.</td>
+        <td><span class="badge badge-implemented">✓ Implemented</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     PAGE 5 — AI AGENTS & POLICY COMPLIANCE
+════════════════════════════════════════════════════════════════ -->
+<div class="page">
+
+  <div class="section-header">
+    <div class="section-icon icon-orange">🤖</div>
+    <div>
+      <h2>AI Agents &amp; API Policy Compliance</h2>
+      <div style="font-size:10px;color:var(--gray-600);margin-top:2px;">How Spectra's autonomous agents operate within Google Ads API policies</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:180px;">Agent</th>
+        <th>Function</th>
+        <th style="width:160px;">API Operations Used</th>
+        <th style="width:140px;">Human Oversight</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Campaign Optimization Agent</strong></td>
+        <td style="font-size:10.5px;">Analyses 30-day performance, generates AI recommendations via Gemini, scores each recommendation, and auto-applies or queues for review based on confidence thresholds.</td>
+        <td class="code-cell" style="font-size:9px;">GoogleAdsService (GAQL)<br>CampaignService<br>BiddingStrategyService</td>
+        <td style="font-size:10.5px;">High-impact changes queued for advertiser approval. All actions logged.</td>
+      </tr>
+      <tr>
+        <td><strong>Budget Intelligence Agent</strong></td>
+        <td style="font-size:10.5px;">Applies hourly budget multipliers based on learned per-account performance curves. Increases budgets during high-conversion windows, reduces during low-performance periods.</td>
+        <td class="code-cell" style="font-size:9px;">CampaignBudgetService<br>GoogleAdsService (GAQL)</td>
+        <td style="font-size:10.5px;">Configurable multiplier ceiling. Advertisers see all budget changes in the Activity Log.</td>
+      </tr>
+      <tr>
+        <td><strong>Search Term Mining Agent</strong></td>
+        <td style="font-size:10.5px;">Analyses search term reports to discover new keyword opportunities and irrelevant terms. Auto-adds high-confidence negatives and flags new keywords for advertiser review.</td>
+        <td class="code-cell" style="font-size:9px;">GoogleAdsService (GAQL)<br>AdGroupCriterionService<br>CampaignCriterionService</td>
+        <td style="font-size:10.5px;">New keywords presented for approval. Negatives auto-apply at ≥0.60 confidence.</td>
+      </tr>
+      <tr>
+        <td><strong>A/B Testing Agent</strong></td>
+        <td style="font-size:10.5px;">Runs creative experiments, monitors statistical significance, pauses losing ad variants, and generates replacement copy via AI when winning variant is identified.</td>
+        <td class="code-cell" style="font-size:9px;">AdGroupAdService<br>GoogleAdsService (GAQL)</td>
+        <td style="font-size:10.5px;">Test results surfaced in UI before permanent changes. Advertiser approves new copy.</td>
+      </tr>
+      <tr>
+        <td><strong>Performance Anomaly Agent</strong></td>
+        <td style="font-size:10.5px;">Monitors for spend anomalies, sudden CTR drops, conversion drops, and budget exhaustion. Fires alerts and, for critical issues, triggers healing actions.</td>
+        <td class="code-cell" style="font-size:9px;">GoogleAdsService (GAQL)</td>
+        <td style="font-size:10.5px;">Alerts sent via dashboard and email. Advertiser confirms before major interventions.</td>
+      </tr>
+      <tr>
+        <td><strong>Competitor Discovery Agent</strong></td>
+        <td style="font-size:10.5px;">Identifies competitor brand terms appearing in search term reports and recommends adding them as negative keywords to prevent brand cannibalization.</td>
+        <td class="code-cell" style="font-size:9px;">GoogleAdsService (GAQL)<br>CampaignCriterionService</td>
+        <td style="font-size:10.5px;">Competitor negatives require advertiser confirmation before applying.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Policy compliance summary -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:4px;">
+    <div style="background:var(--green-light);border:1px solid #bbf7d0;border-radius:8px;padding:14px 16px;">
+      <div style="font-weight:700;font-size:11px;color:var(--green);margin-bottom:8px;">✓ Policy Compliance Measures</div>
+      <ul style="font-size:10.5px;color:#166534;line-height:1.7;padding-left:14px;">
+        <li>All API calls made via official Google Ads PHP client library</li>
+        <li>Rate limits respected — exponential back-off on retries</li>
+        <li>OAuth 2.0 with per-advertiser credentials, never shared tokens</li>
+        <li>No scraping or unofficial API access</li>
+        <li>Material UI changes submitted via Tool Change form with 2-week notice</li>
+        <li>Complete audit log of every API mutation operation</li>
+        <li>Advertiser data never shared between accounts</li>
+      </ul>
+    </div>
+    <div style="background:var(--orange-light);border:1px solid #fcd0bb;border-radius:8px;padding:14px 16px;">
+      <div style="font-weight:700;font-size:11px;color:var(--orange);margin-bottom:8px;">📋 Tool Classification Basis</div>
+      <ul style="font-size:10.5px;color:#7c2d12;line-height:1.7;padding-left:14px;">
+        <li><strong>Full-Service Tool</strong> — manages campaigns end-to-end on behalf of advertisers</li>
+        <li>Serves third-party advertisers (multi-tenant SaaS)</li>
+        <li>Creation, Management, and Reporting all supported</li>
+        <li>Standard Access developer token in use</li>
+        <li>MCC: 870-102-3348 managing client accounts</li>
+        <li>Supports Search campaigns (primary focus)</li>
+        <li>All RMF deadlines met without extension requested</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="doc-footer">
+    <div>SiteToSpend / Spectra — Google Ads API RMF Compliance Map — May 2026</div>
+    <div>sitetospend.com · theeufj@gmail.com</div>
+    <div>Generated for Google Ads API Standard Access Application</div>
+  </div>
+
+</div>
+
+</body>
+</html>
