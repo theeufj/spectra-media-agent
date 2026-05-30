@@ -24,9 +24,13 @@ class LandingController extends Controller
         return \Inertia\Inertia::render('Features');
     }
 
-    public function howItWorks()
+    public function howItWorks(Request $request)
     {
-        return \Inertia\Inertia::render('HowItWorks');
+        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
+
+        $page = ($tenant['key'] ?? '') === 'realpropertyads' ? 'RealEstateHowItWorks' : 'HowItWorks';
+
+        return \Inertia\Inertia::render($page);
     }
 
     public function pricing(Request $request)
