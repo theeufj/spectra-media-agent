@@ -25,7 +25,7 @@
         }
         .header {
             padding: 24px 30px;
-            background: linear-gradient(135deg, #cc3d00 0%, #ff4d00 50%, #cc3d00 100%);
+            background: linear-gradient(135deg, {{ $tenantDark ?? '#cc3d00' }} 0%, {{ $tenantPrimary ?? '#ff4d00' }} 50%, {{ $tenantDark ?? '#cc3d00' }} 100%);
             color: #ffffff;
             text-align: center;
         }
@@ -37,7 +37,7 @@
         }
         .accent-bar {
             height: 4px;
-            background: linear-gradient(90deg, #ff4d00, #ffc300, #ff4d00);
+            background: linear-gradient(90deg, {{ $tenantPrimary ?? '#ff4d00' }}, {{ $tenantAccent ?? '#ffc300' }}, {{ $tenantPrimary ?? '#ff4d00' }});
         }
         .content {
             padding: 30px;
@@ -51,7 +51,7 @@
         }
         .btn-primary {
             display: inline-block;
-            background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%);
+            background: linear-gradient(135deg, {{ $tenantPrimary ?? '#ff4d00' }} 0%, {{ $tenantDark ?? '#cc3d00' }} 100%);
             color: #ffffff;
             padding: 14px 28px;
             text-decoration: none;
@@ -72,14 +72,14 @@
 <body>
     <div class="wrapper">
         <div class="header">
-            <h1>Site to Spend</h1>
+            <h1>{{ $tenantName ?? 'Site to Spend' }}</h1>
         </div>
         <div class="accent-bar"></div>
         <div class="content">
             @yield('content')
         </div>
         <div class="footer">
-            <p>&copy; {{ date('Y') }} Site to Spend. All rights reserved.</p>
+            <p>&copy; {{ date('Y') }} {{ $tenantName ?? 'Site to Spend' }}. All rights reserved.</p>
         </div>
     </div>
 </body>

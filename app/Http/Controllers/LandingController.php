@@ -7,11 +7,14 @@ use Illuminate\Http\Request;
 
 class LandingController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         $plans = Plan::active()->ordered()->where('is_free', false)->get();
+        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
 
-        return \Inertia\Inertia::render('Landing', [
+        $page = ($tenant['key'] ?? '') === 'realpropertyads' ? 'RealEstateLanding' : 'Landing';
+
+        return \Inertia\Inertia::render($page, [
             'plans' => $plans,
         ]);
     }

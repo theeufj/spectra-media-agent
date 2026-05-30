@@ -66,6 +66,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
             'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),
+            'tenant' => $request->attributes->get('tenant', config('tenants.' . config('tenants.default'))),
             'conversionLabels' => fn () => [
                 'signup'           => \App\Models\Setting::get('conversion_label.signup',    config('conversions.events.signup.label')),
                 'pricing_visit'    => \App\Models\Setting::get('conversion_label.pricing_visit'),

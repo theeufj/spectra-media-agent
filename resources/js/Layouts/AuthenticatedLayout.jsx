@@ -5,6 +5,7 @@ import ApplicationLogo from '@/Components/ApplicationLogo';
 import NotificationBell from '@/Components/NotificationBell';
 import ImpersonationBanner from '@/Components/ImpersonationBanner';
 import OnboardingTour, { startTour } from '@/Components/OnboardingTour';
+import TenantTheme from '@/Components/TenantTheme';
 import { useToast } from '@/Components/Toast';
 import { Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect, useRef } from 'react';
@@ -61,7 +62,7 @@ function MobileNavLink({ href, active = false, icon, children, ...props }) {
             href={href}
             className={`flex items-center gap-3 mx-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-colors ${
                 active
-                    ? 'bg-flame-orange-50 text-flame-orange-700'
+                    ? 'bg-brand-primary/10 text-brand-primary'
                     : 'text-gray-700 hover:bg-gray-50'
             }`}
             {...props}
@@ -115,6 +116,7 @@ export default function AuthenticatedLayout({ header, children }) {
 
     return (
         <div className="min-h-screen bg-gray-50">
+            <TenantTheme />
             <ImpersonationBanner />
 
             {/* ── Desktop + Tablet Navigation ── */}
@@ -226,7 +228,7 @@ export default function AuthenticatedLayout({ header, children }) {
                             <Link
                                 href={route('campaigns.wizard')}
                                 data-tour="new-campaign"
-                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-primary rounded-lg hover:bg-brand-dark transition-colors"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -271,7 +273,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                     type="button"
                                                     onClick={() => handleSwitchCustomer(customer)}
                                                     className={`flex w-full items-center gap-2 px-4 py-2 text-sm transition-colors hover:bg-gray-50 ${
-                                                        activeCustomer?.id === customer.id ? 'text-flame-orange-700 bg-flame-orange-50' : 'text-gray-700'
+                                                        activeCustomer?.id === customer.id ? 'text-brand-primary bg-brand-primary/10' : 'text-gray-700'
                                                     }`}
                                                 >
                                                     <span className="flex h-5 w-5 items-center justify-center rounded bg-gray-100 text-[10px] font-bold text-gray-500">
@@ -279,7 +281,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                                     </span>
                                                     <span className="truncate">{customer.name}</span>
                                                     {activeCustomer?.id === customer.id && (
-                                                        <svg className="ml-auto h-4 w-4 text-flame-orange-600" fill="currentColor" viewBox="0 0 20 20">
+                                                        <svg className="ml-auto h-4 w-4 text-brand-primary" fill="currentColor" viewBox="0 0 20 20">
                                                             <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                                         </svg>
                                                     )}
@@ -398,7 +400,7 @@ export default function AuthenticatedLayout({ header, children }) {
                     {/* Active customer badge */}
                     {activeCustomer && (
                         <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2">
-                            <span className="flex h-6 w-6 items-center justify-center rounded bg-flame-orange-100 text-[10px] font-bold text-flame-orange-700">
+                            <span className="flex h-6 w-6 items-center justify-center rounded bg-brand-primary/20 text-[10px] font-bold text-brand-primary">
                                 {(activeCustomer.name || '?')[0].toUpperCase()}
                             </span>
                             <span className="text-sm font-medium text-gray-700 truncate">{activeCustomer.name}</span>
@@ -411,7 +413,7 @@ export default function AuthenticatedLayout({ header, children }) {
                         <div className="px-4 py-2">
                             <Link
                                 href={route('campaigns.wizard')}
-                                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
+                                className="flex items-center justify-center gap-2 w-full px-4 py-2.5 text-sm font-medium text-white bg-brand-primary rounded-lg hover:bg-brand-dark transition-colors"
                             >
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -636,7 +638,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                         onClick={() => handleSwitchCustomer(customer)}
                                         className={`flex items-center gap-3 mx-3 px-3 py-2.5 w-[calc(100%-1.5rem)] text-sm font-medium rounded-lg transition-colors ${
                                             activeCustomer?.id === customer.id
-                                                ? 'bg-flame-orange-50 text-flame-orange-700'
+                                                ? 'bg-brand-primary/10 text-brand-primary'
                                                 : 'text-gray-700 hover:bg-gray-50'
                                         }`}
                                     >
@@ -645,7 +647,7 @@ export default function AuthenticatedLayout({ header, children }) {
                                         </span>
                                         <span className="truncate">{customer.name}</span>
                                         {activeCustomer?.id === customer.id && (
-                                            <svg className="ml-auto h-4 w-4 text-flame-orange-600 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                            <svg className="ml-auto h-4 w-4 text-brand-primary flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                             </svg>
                                         )}

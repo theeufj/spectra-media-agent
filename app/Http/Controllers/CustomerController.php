@@ -61,6 +61,11 @@ class CustomerController extends Controller
             ])->withInput();
         }
 
+        $tenant = $request->attributes->get('tenant');
+        if ($tenant && ($tenant['locked_vertical'] ?? false) && !empty($tenant['vertical'])) {
+            $validated['industry'] = $tenant['vertical'];
+        }
+
         $customer = Customer::create($validated);
 
         $user->customers()->attach($customer->id, ['role' => 'owner']);

@@ -30,6 +30,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'fbclid',
         'msclid',
         'demo_url',
+        'tenant_key',
     ];
 
     /**

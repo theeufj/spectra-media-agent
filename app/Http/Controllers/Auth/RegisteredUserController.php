@@ -57,11 +57,14 @@ class RegisteredUserController extends Controller
 
         $demoUrl = $request->input('demo_url');
 
+        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
+
         $user = User::create([
-            'name'      => $request->name,
-            'email'     => $request->email,
-            'password'  => Hash::make($request->password),
-            'demo_url'  => $demoUrl ? filter_var($demoUrl, FILTER_VALIDATE_URL) ?: null : null,
+            'name'       => $request->name,
+            'email'      => $request->email,
+            'password'   => Hash::make($request->password),
+            'demo_url'   => $demoUrl ? filter_var($demoUrl, FILTER_VALIDATE_URL) ?: null : null,
+            'tenant_key' => $tenant['key'] ?? null,
         ]);
 
         if ($request->invitation_token) {
@@ -95,7 +98,9 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
-        \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\WelcomeEmail($user->name));
+        \Illuminate\Support\Facades\Mail::to($user->email)->send(
+            (new \App\Mail\WelcomeEmail($user->name))->withTenant($tenant['key'] ?? null)
+        );
 
         Auth::login($user);
 

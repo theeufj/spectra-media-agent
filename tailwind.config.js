@@ -16,6 +16,12 @@ export default {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
             },
             colors: {
+                'brand': {
+                    'primary': 'var(--color-brand-primary)',
+                    'dark':    'var(--color-brand-dark)',
+                    'darker':  'var(--color-brand-darker)',
+                    'accent':  'var(--color-brand-accent)',
+                },
                 'mint-cream': '#f7fff7',
                 'jet': '#343434',
                 'delft-blue': '#2f3061',
