@@ -13,6 +13,65 @@ use App\Services\Agents\ExecutionContext;
 class GoogleAdsExecutionPrompt
 {
     /**
+     * Return vertical-specific execution guidance to prepend to the main task.
+     * Returns an empty string for industries with no custom rules.
+     */
+    private static function getVerticalGuidance(?string $industry): string
+    {
+        if (!$industry) {
+            return '';
+        }
+
+        $vertical = config("verticals.{$industry}");
+        if (!$vertical || empty($vertical['ad_copy_guidance'])) {
+            return '';
+        }
+
+        $label = $vertical['label'] ?? ucfirst($industry);
+        $adCopyRules = implode("\n- ", $vertical['ad_copy_guidance']);
+
+        $sitelinkLines = '';
+        foreach ($vertical['sitelink_suggestions'] ?? [] as $sl) {
+            $sitelinkLines .= "\n  - \"{$sl['text']}\" | {$sl['description1']} | {$sl['description2']}";
+        }
+
+        $callouts = !empty($vertical['callout_suggestions'])
+            ? '"' . implode('", "', $vertical['callout_suggestions']) . '"'
+            : '';
+
+        $negatives = !empty($vertical['negative_keywords'])
+            ? implode(', ', $vertical['negative_keywords'])
+            : '';
+
+        $conversionGoal = $vertical['conversion_goal'] ?? 'Lead';
+
+        return <<<GUIDANCE
+# VERTICAL-SPECIFIC RULES — {$label}
+
+This campaign runs in the **{$label}** vertical. Apply these rules throughout the execution plan:
+
+**Ad Copy Requirements:**
+- {$adCopyRules}
+
+**Preferred Sitelinks (use these verbatim or adapt):**{$sitelinkLines}
+
+**Preferred Callouts:**
+{$callouts}
+
+**Negative Keywords (add these to every ad group):**
+{$negatives}
+
+**Conversion Goal:** {$conversionGoal}
+- Configure call extensions with the agent's phone number and office hours
+- Use location assets tied to the agency's office address
+- Enable call reporting so phone enquiries count as conversions
+
+---
+
+GUIDANCE;
+    }
+
+    /**
      * Get system instruction for Google Ads execution planning
      */
     public static function getSystemInstruction(): string
@@ -70,6 +129,8 @@ INSTRUCTION;
             ?? $customer->website
             ?? 'Not provided';
 
+        $verticalGuidance = self::getVerticalGuidance($campaign->customer->industry ?? null);
+
         return <<<PROMPT
 Generate a comprehensive Google Ads execution plan for the following campaign.
 
@@ -121,7 +182,7 @@ The Strategy Agent has already analyzed this campaign and provided the following
 
 Create a detailed, step-by-step execution plan for deploying this campaign to Google Ads. Your plan should:
 
-**BUYER PERSPECTIVE RULE:** Throughout this plan — keywords, ad copy, targeting — think like the customer, not like the product. Ask: what does someone type into Google when they are ready to PAY for this? They search for the outcome they want ("google ads agency", "hire ppc manager") not the technology behind the product ("automation software", "AI tool"). Every keyword and headline must reflect buyer intent, not product features.
+{$verticalGuidance}**BUYER PERSPECTIVE RULE:** Throughout this plan — keywords, ad copy, targeting — think like the customer, not like the product. Ask: what does someone type into Google when they are ready to PAY for this? They search for the outcome they want ("google ads agency", "hire ppc manager") not the technology behind the product ("automation software", "AI tool"). Every keyword and headline must reflect buyer intent, not product features.
 
 1. **Select Optimal Campaign Type**
    - Choose between: Search, Display, Performance Max, Video

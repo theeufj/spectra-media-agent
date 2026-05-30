@@ -44,6 +44,7 @@ class StrategyPrompt
     {
         $brandContext = self::formatBrandContext($brandGuidelines);
         $competitorContext = self::formatCompetitorContext($competitors);
+        $verticalContext = self::formatVerticalContext($campaign);
         
         if ($brandGuidelines) {
             Log::info("StrategyPrompt: Using brand guidelines for customer ID: {$brandGuidelines->customer_id}");
@@ -254,11 +255,100 @@ This is the specific goal for the marketing campaign.
 - **Product/Service Focus:** {$campaign->product_focus}
 - **Exclusions (What to avoid):** {$campaign->exclusions}
 ---
-{$recommendationsPrompt}
+{$verticalContext}{$recommendationsPrompt}
 
 Based on all the information above, generate the JSON object containing the platform-specific strategies for the following enabled platforms ONLY: {$platformsList}.
 Do NOT generate strategies for any platforms not listed above.
 PROMPT;
+    }
+
+    /**
+     * Inject vertical-specific strategy guidance when the customer's industry
+     * maps to a configured vertical with extra prompt guidance.
+     */
+    private static function formatVerticalContext(Campaign $campaign): string
+    {
+        $industry = $campaign->customer->industry ?? null;
+        if (!$industry) {
+            return '';
+        }
+
+        $vertical = config("verticals.{$industry}");
+        if (!$vertical) {
+            return '';
+        }
+
+        // Only inject when the vertical has ad copy guidance defined
+        $guidance = $vertical['ad_copy_guidance'] ?? [];
+        $sitelinks = $vertical['sitelink_suggestions'] ?? [];
+        $callouts = $vertical['callout_suggestions'] ?? [];
+        $conversionGoal = $vertical['conversion_goal'] ?? null;
+        $revenueCpa = $vertical['revenue_cpa_multiple'] ?? null;
+        $negativeKeywords = $vertical['negative_keywords'] ?? [];
+        $keywordThemes = $vertical['keyword_themes'] ?? [];
+
+        if (empty($guidance) && empty($sitelinks)) {
+            return '';
+        }
+
+        $guidanceLines = !empty($guidance)
+            ? implode("\n- ", $guidance)
+            : 'Follow general best practices.';
+
+        $sitelinkLines = '';
+        foreach ($sitelinks as $sl) {
+            $sitelinkLines .= "\n  - \"{$sl['text']}\" | {$sl['description1']} | {$sl['description2']}";
+        }
+
+        $calloutLines = !empty($callouts)
+            ? '"' . implode('", "', $callouts) . '"'
+            : '';
+
+        $negativeLines = !empty($negativeKeywords)
+            ? implode(', ', $negativeKeywords)
+            : '';
+
+        $keywordThemeLines = !empty($keywordThemes)
+            ? implode("\n- ", $keywordThemes)
+            : '';
+
+        $conversionLine = $conversionGoal
+            ? "- **Conversion Goal:** {$conversionGoal} (configure conversion tracking for form enquiries and phone calls)"
+            : '';
+
+        $revenueMultipleLine = $revenueCpa
+            ? "- **Revenue CPA Multiple:** {$revenueCpa} (each converted lead has high downstream value — set revenue_cpa_multiple to {$revenueCpa} in your response)"
+            : '';
+
+        $label = $vertical['label'] ?? ucfirst($industry);
+
+        return <<<VERTICAL
+
+---
+
+**VERTICAL-SPECIFIC GUIDANCE — {$label}:**
+This campaign is for the **{$label}** industry. Apply the following vertical-specific rules to override generic defaults:
+
+**Ad Copy Rules:**
+- {$guidanceLines}
+
+**Recommended Sitelinks (use these as a starting point):**{$sitelinkLines}
+
+**Recommended Callouts:**
+{$calloutLines}
+
+**Keyword Themes (replace {suburb}/{city}/{bedrooms} with specifics from the campaign brief):**
+- {$keywordThemeLines}
+
+**Negative Keywords (exclude these to avoid irrelevant traffic):**
+{$negativeLines}
+
+{$conversionLine}
+{$revenueMultipleLine}
+
+---
+
+VERTICAL;
     }
 
     /**

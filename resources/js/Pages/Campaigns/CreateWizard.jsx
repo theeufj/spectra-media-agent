@@ -9,9 +9,38 @@ import InputError from '@/Components/InputError';
 import ProgressStepper from '@/Components/ProgressStepper';
 import ProductSelection from './ProductSelection';
 import KeywordSelector from '@/Components/KeywordSelector';
+import { useTenant } from '@/hooks/useTenant';
 
 // Campaign Templates for quick start
 const CAMPAIGN_TEMPLATES = [
+    {
+        id: 'property-listing',
+        name: 'Property Listing',
+        icon: '🏠',
+        description: 'Drive buyer enquiries for a property',
+        verticals: ['real_estate'],
+        prefill: {
+            reason: 'Promoting a residential property listing to generate qualified buyer enquiries and inspection bookings.',
+            goals: 'Drive enquiry form submissions, phone calls, and inspection bookings from serious buyers in the local area.',
+            primary_kpi: 'Cost per Enquiry under $80, minimum 5 enquiries per week',
+            target_market: 'Home buyers actively searching for properties in the local suburb and surrounding areas, aged 25-60, with household income suitable for the property price range.',
+            exclusions: 'Renters, property investors seeking commercial property, real estate students, competitors.',
+        }
+    },
+    {
+        id: 'seller-leads',
+        name: 'Seller Lead Generation',
+        icon: '🏡',
+        description: 'Win new property listings from sellers',
+        verticals: ['real_estate'],
+        prefill: {
+            reason: 'Generating appraisal requests and listing opportunities from homeowners considering selling.',
+            goals: 'Drive free appraisal requests, grow listing pipeline, build brand recognition among homeowners in target suburbs.',
+            primary_kpi: 'Cost per Appraisal Request under $120',
+            target_market: 'Homeowners in target suburbs aged 35-65 who may be considering selling in the next 6-12 months.',
+            exclusions: 'Renters, first home buyers, commercial property owners.',
+        }
+    },
     {
         id: 'product-launch',
         name: 'Product Launch',
@@ -215,6 +244,15 @@ const PreflightBanner = ({ brandGuideline, pages, selectablePlatforms, configure
 };
 
 export default function CreateWizard({ auth, pages = [], brandGuideline, selectablePlatforms = [], allowedPlatforms = [], configuredPlatforms = [] }) {
+    const tenant = useTenant();
+    const tenantVertical = tenant?.vertical ?? null;
+
+    // Show vertical-specific templates first, then generic ones
+    const visibleTemplates = [
+        ...CAMPAIGN_TEMPLATES.filter(t => t.verticals?.includes(tenantVertical)),
+        ...CAMPAIGN_TEMPLATES.filter(t => !t.verticals),
+    ];
+
     const [currentStep, setCurrentStep] = useState(0);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
     const [creationMode, setCreationMode] = useState(null); // 'template' or 'ai'
@@ -580,16 +618,21 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         </div>
                         
                         {/* Template Options */}
+                        {tenantVertical && visibleTemplates.some(t => t.verticals?.includes(tenantVertical)) && (
+                            <p className="text-xs font-semibold text-brand-primary uppercase tracking-wider -mb-2">
+                                Recommended for your vertical
+                            </p>
+                        )}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {CAMPAIGN_TEMPLATES.map((template) => (
+                            {visibleTemplates.map((template) => (
                                 <button
                                     key={template.id}
                                     onClick={() => applyTemplate(template)}
                                     className={`
                                         p-6 rounded-lg border-2 text-left transition-all duration-200
-                                        hover:border-flame-orange-500 hover:shadow-lg
-                                        ${selectedTemplate === template.id 
-                                            ? 'border-flame-orange-500 bg-flame-orange-50' 
+                                        hover:border-brand-primary hover:shadow-lg
+                                        ${selectedTemplate === template.id
+                                            ? 'border-brand-primary bg-brand-primary/5'
                                             : 'border-gray-200 bg-white'
                                         }
                                     `}
@@ -597,6 +640,11 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                     <span className="text-3xl mb-3 block">{template.icon}</span>
                                     <h3 className="font-semibold text-gray-900">{template.name}</h3>
                                     <p className="text-sm text-gray-500 mt-1">{template.description}</p>
+                                    {template.verticals?.includes(tenantVertical) && (
+                                        <span className="mt-3 inline-block text-xs font-medium text-brand-primary bg-brand-primary/10 px-2 py-0.5 rounded-full">
+                                            Recommended
+                                        </span>
+                                    )}
                                 </button>
                             ))}
                         </div>
