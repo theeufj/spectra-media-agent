@@ -23,6 +23,7 @@ class ImageCollateral extends Model
         'parent_id',
         'refinement_depth',
         'is_active',
+        'is_seed',
         'source',
         'format',
     ];
@@ -32,6 +33,7 @@ class ImageCollateral extends Model
      */
     protected $casts = [
         'is_active' => 'boolean',
+        'is_seed'   => 'boolean',
     ];
 
     /**

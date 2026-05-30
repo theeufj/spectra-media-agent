@@ -289,6 +289,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             : '',
     } : {};
 
+    // stagedImages: array of { file: File, isSeed: boolean }
     const [stagedImages, setStagedImages] = useState([]);
     const [stagedVideos, setStagedVideos] = useState([]);
 
@@ -459,7 +460,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         localStorage.removeItem('campaign_draft');
         form.transform((d) => ({
             ...d,
-            images: stagedImages,
+            images: stagedImages.filter(s => !s.isSeed).map(s => s.file),
+            seed_images: stagedImages.filter(s => s.isSeed).map(s => s.file),
             videos: stagedVideos,
         }));
         post(route('campaigns.store'), {
@@ -995,23 +997,47 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
 
                         {/* Image Upload */}
                         <div>
-                            <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center justify-between mb-1">
                                 <div>
                                     <h4 className="text-sm font-semibold text-gray-800">Images</h4>
                                     <p className="text-xs text-gray-500">JPEG, PNG, or WebP · Max 10MB each · Up to 10 images</p>
                                 </div>
                                 <span className="text-xs text-gray-400">{stagedImages.length}/10</span>
                             </div>
+                            <p className="text-xs text-gray-400 mb-3">
+                                Toggle <span className="font-medium text-brand-primary">AI Seed</span> on any image to use it as a visual reference when generating new ad creatives.
+                            </p>
 
                             {stagedImages.length > 0 && (
                                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-3">
-                                    {stagedImages.map((file, i) => (
-                                        <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                                    {stagedImages.map((item, i) => (
+                                        <div
+                                            key={i}
+                                            className={`relative group aspect-square rounded-lg overflow-hidden border-2 bg-gray-50 transition-colors ${
+                                                item.isSeed ? 'border-brand-primary' : 'border-gray-200'
+                                            }`}
+                                        >
                                             <img
-                                                src={URL.createObjectURL(file)}
-                                                alt={file.name}
+                                                src={URL.createObjectURL(item.file)}
+                                                alt={item.file.name}
                                                 className="w-full h-full object-cover"
                                             />
+                                            {/* Seed badge */}
+                                            <button
+                                                type="button"
+                                                title={item.isSeed ? 'Remove as AI seed' : 'Use as AI seed'}
+                                                onClick={() => setStagedImages(prev =>
+                                                    prev.map((s, idx) => idx === i ? { ...s, isSeed: !s.isSeed } : s)
+                                                )}
+                                                className={`absolute bottom-1 left-1 text-xs font-semibold px-1.5 py-0.5 rounded transition-colors ${
+                                                    item.isSeed
+                                                        ? 'bg-brand-primary text-white'
+                                                        : 'bg-black/50 text-white opacity-0 group-hover:opacity-100'
+                                                }`}
+                                            >
+                                                {item.isSeed ? '✦ Seed' : 'Seed?'}
+                                            </button>
+                                            {/* Remove button */}
                                             <button
                                                 type="button"
                                                 onClick={() => setStagedImages(prev => prev.filter((_, idx) => idx !== i))}
@@ -1019,9 +1045,6 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                             >
                                                 ×
                                             </button>
-                                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {file.name}
-                                            </div>
                                         </div>
                                     ))}
                                 </div>
@@ -1043,8 +1066,8 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                         onChange={(e) => {
                                             const files = Array.from(e.target.files || []);
                                             setStagedImages(prev => {
-                                                const combined = [...prev, ...files];
-                                                return combined.slice(0, 10);
+                                                const incoming = files.map(f => ({ file: f, isSeed: false }));
+                                                return [...prev, ...incoming].slice(0, 10);
                                             });
                                             e.target.value = '';
                                         }}
@@ -1167,7 +1190,18 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                             </ReviewSection>
 
                             <ReviewSection title="Images & Videos" step={7} onEdit={() => goToStep(7)}>
-                                <ReviewItem label="Images" value={stagedImages.length > 0 ? `${stagedImages.length} image${stagedImages.length !== 1 ? 's' : ''} uploaded` : 'None (AI will generate)'} />
+                                {(() => {
+                                    const seedCount = stagedImages.filter(s => s.isSeed).length;
+                                    const regularCount = stagedImages.filter(s => !s.isSeed).length;
+                                    let imageLabel = 'None (AI will generate)';
+                                    if (stagedImages.length > 0) {
+                                        const parts = [];
+                                        if (regularCount > 0) parts.push(`${regularCount} uploaded`);
+                                        if (seedCount > 0) parts.push(`${seedCount} as AI seed`);
+                                        imageLabel = parts.join(', ');
+                                    }
+                                    return <ReviewItem label="Images" value={imageLabel} />;
+                                })()}
                                 <ReviewItem label="Videos" value={stagedVideos.length > 0 ? `${stagedVideos.length} video${stagedVideos.length !== 1 ? 's' : ''} uploaded` : 'None (AI will generate)'} />
                             </ReviewSection>
                         </div>

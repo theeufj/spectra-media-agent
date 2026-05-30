@@ -162,8 +162,9 @@ class CampaignController extends Controller
         // Extract keywords and files before creating campaign (not campaign columns)
         $keywords = $validated['keywords'] ?? [];
         $uploadedImages = $validated['images'] ?? [];
+        $seedImages = $validated['seed_images'] ?? [];
         $uploadedVideos = $validated['videos'] ?? [];
-        unset($validated['keywords'], $validated['images'], $validated['videos']);
+        unset($validated['keywords'], $validated['images'], $validated['seed_images'], $validated['videos']);
 
         // Calculate daily_budget if not provided
         if (empty($validated['daily_budget']) && !empty($validated['total_budget'])) {
@@ -207,6 +208,7 @@ class CampaignController extends Controller
         }
 
         // Upload any user-provided images from the wizard
+        $defaultPlatform = $campaign->platforms[0] ?? 'google';
         foreach ($uploadedImages as $file) {
             $ext = $file->getClientOriginalExtension() ?: 'jpg';
             $path = 'collateral/images/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
@@ -214,10 +216,27 @@ class CampaignController extends Controller
             ImageCollateral::create([
                 'campaign_id'    => $campaign->id,
                 'strategy_id'    => null,
-                'platform'       => $campaign->platforms[0] ?? 'google',
+                'platform'       => $defaultPlatform,
                 's3_path'        => $s3Path,
                 'cloudfront_url' => $url,
                 'is_active'      => true,
+                'source'         => 'uploaded',
+            ]);
+        }
+
+        // Upload seed images — these are used as visual reference for AI-generated ads
+        foreach ($seedImages as $file) {
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $path = 'collateral/images/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            [$s3Path, $url] = StorageHelper::put($path, file_get_contents($file->getPathname()), $file->getMimeType() ?: 'image/jpeg');
+            ImageCollateral::create([
+                'campaign_id'    => $campaign->id,
+                'strategy_id'    => null,
+                'platform'       => $defaultPlatform,
+                's3_path'        => $s3Path,
+                'cloudfront_url' => $url,
+                'is_active'      => true,
+                'is_seed'        => true,
                 'source'         => 'uploaded',
             ]);
         }

@@ -128,24 +128,47 @@ class GenerateImage implements ShouldQueue
                 $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext))->getPrompt();
                 Log::info("Gemini Image Generation Prompt:", ['prompt' => $imagePrompt]);
 
+                // Load seed images for this campaign (uploaded as AI visual reference)
+                $seedContextImages = [];
+                $seeds = $this->campaign->imageCollaterals()
+                    ->where('is_seed', true)
+                    ->where('is_active', true)
+                    ->get();
+
+                foreach ($seeds as $seed) {
+                    $seedData = StorageHelper::get($seed->s3_path);
+                    if ($seedData) {
+                        $seedContextImages[] = [
+                            'mime_type' => StorageHelper::mimeType($seed->s3_path) ?? 'image/jpeg',
+                            'data'      => base64_encode($seedData),
+                        ];
+                    }
+                }
+
                 // Retry logic with exponential backoff
                 $maxRetries = 3;
                 $imageData = null;
-                
+
                 for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
                     if ($attempt > 1) {
-                        $waitTime = pow(2, $attempt - 1); // Exponential backoff: 2, 4, 8 seconds
+                        $waitTime = pow(2, $attempt - 1);
                         Log::info("Retrying image generation after {$waitTime} seconds (attempt {$attempt}/{$maxRetries})");
                         sleep($waitTime);
                     }
-                    
-                    $imageData = $geminiService->generateImage($imagePrompt);
-                    
+
+                    // Use seed images as context if provided, otherwise generate from prompt only
+                    if (!empty($seedContextImages)) {
+                        Log::info("Generating image with " . count($seedContextImages) . " seed image(s) as reference");
+                        $imageData = $geminiService->refineImage($imagePrompt, $seedContextImages);
+                    } else {
+                        $imageData = $geminiService->generateImage($imagePrompt);
+                    }
+
                     if ($imageData && isset($imageData['data']) && isset($imageData['mimeType'])) {
                         Log::info("Successfully generated image on attempt {$attempt}");
                         break;
                     }
-                    
+
                     Log::warning("Failed to generate image data from Gemini on attempt {$attempt}/{$maxRetries}");
                 }
 
