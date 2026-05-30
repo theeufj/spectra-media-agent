@@ -7,9 +7,13 @@ use App\Jobs\GenerateStrategy;
 use App\Jobs\GenerateCampaignCollateral;
 use App\Jobs\GenerateStrategyCollateral;
 use App\Models\Campaign;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Models\VideoCollateral;
+use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class CampaignController extends Controller
@@ -155,9 +159,11 @@ class CampaignController extends Controller
 
         $validated = $request->validated();
 
-        // Extract keywords before creating campaign (not a campaign column)
+        // Extract keywords and files before creating campaign (not campaign columns)
         $keywords = $validated['keywords'] ?? [];
-        unset($validated['keywords']);
+        $uploadedImages = $validated['images'] ?? [];
+        $uploadedVideos = $validated['videos'] ?? [];
+        unset($validated['keywords'], $validated['images'], $validated['videos']);
 
         // Calculate daily_budget if not provided
         if (empty($validated['daily_budget']) && !empty($validated['total_budget'])) {
@@ -198,6 +204,39 @@ class CampaignController extends Controller
 
             // Also store on campaign JSON for quick access by strategy generation
             $campaign->update(['keywords' => $keywords]);
+        }
+
+        // Upload any user-provided images from the wizard
+        foreach ($uploadedImages as $file) {
+            $ext = $file->getClientOriginalExtension() ?: 'jpg';
+            $path = 'collateral/images/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            [$s3Path, $url] = StorageHelper::put($path, file_get_contents($file->getPathname()), $file->getMimeType() ?: 'image/jpeg');
+            ImageCollateral::create([
+                'campaign_id'    => $campaign->id,
+                'strategy_id'    => null,
+                'platform'       => $campaign->platforms[0] ?? 'google',
+                's3_path'        => $s3Path,
+                'cloudfront_url' => $url,
+                'is_active'      => true,
+                'source'         => 'uploaded',
+            ]);
+        }
+
+        // Upload any user-provided videos from the wizard
+        foreach ($uploadedVideos as $file) {
+            $ext = $file->getClientOriginalExtension() ?: 'mp4';
+            $path = 'collateral/videos/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            [$s3Path, $url] = StorageHelper::put($path, file_get_contents($file->getPathname()), $file->getMimeType() ?: 'video/mp4');
+            VideoCollateral::create([
+                'campaign_id'    => $campaign->id,
+                'strategy_id'    => null,
+                'platform'       => $campaign->platforms[0] ?? 'google',
+                's3_path'        => $s3Path,
+                'cloudfront_url' => $url,
+                'status'         => 'completed',
+                'is_active'      => true,
+                'source'         => 'uploaded',
+            ]);
         }
 
         // Mark that we're about to start generating strategies

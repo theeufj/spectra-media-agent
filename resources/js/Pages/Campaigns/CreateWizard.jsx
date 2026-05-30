@@ -96,43 +96,48 @@ const CAMPAIGN_TEMPLATES = [
 
 // Wizard Steps Configuration
 const WIZARD_STEPS = [
-    { 
-        id: 'method', 
+    {
+        id: 'method',
         title: 'Choose Method',
         description: 'How to create'
     },
-    { 
-        id: 'basics', 
+    {
+        id: 'basics',
         title: 'Campaign Basics',
         description: 'Name & objectives'
     },
-    { 
-        id: 'platforms', 
+    {
+        id: 'platforms',
         title: 'Platforms',
         description: 'Where to advertise'
     },
-    { 
-        id: 'audience', 
+    {
+        id: 'audience',
         title: 'Target Audience',
         description: 'Who to reach'
     },
-    { 
-        id: 'budget', 
+    {
+        id: 'budget',
         title: 'Budget & Schedule',
         description: 'Investment & timing'
     },
-    { 
-        id: 'products', 
+    {
+        id: 'products',
         title: 'Product Focus',
         description: 'What to promote'
     },
-    { 
-        id: 'keywords', 
+    {
+        id: 'keywords',
         title: 'Keywords',
         description: 'Search terms'
     },
-    { 
-        id: 'review', 
+    {
+        id: 'assets',
+        title: 'Images & Videos',
+        description: 'Creative assets'
+    },
+    {
+        id: 'review',
         title: 'Review & Create',
         description: 'Final check'
     }
@@ -284,7 +289,10 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             : '',
     } : {};
 
-    const { data, setData, post, processing, errors, reset } = useForm({
+    const [stagedImages, setStagedImages] = useState([]);
+    const [stagedVideos, setStagedVideos] = useState([]);
+
+    const form = useForm({
         name: '',
         reason: '',
         goals: '',
@@ -301,7 +309,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         keywords: [],
         platforms: selectablePlatforms,
     });
-    
+
+    const { data, setData, post, processing, errors, reset } = form;
+
     // Auto-scroll chat to bottom
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -412,7 +422,9 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                 return true; // Optional step
             case 6: // Keywords
                 return true; // Optional step
-            case 7: // Review
+            case 7: // Assets
+                return true; // Optional step
+            case 8: // Review
                 return true;
             default:
                 return true;
@@ -445,9 +457,13 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     const submit = (e) => {
         e.preventDefault();
         localStorage.removeItem('campaign_draft');
+        form.transform((d) => ({
+            ...d,
+            images: stagedImages,
+            videos: stagedVideos,
+        }));
         post(route('campaigns.store'), {
             onError: () => {
-                // Scroll to top so user can see error messages
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             },
         });
@@ -967,7 +983,142 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                     </div>
                 );
 
-            case 7: // Review
+            case 7: // Assets
+                return (
+                    <div className="space-y-8 max-w-3xl mx-auto">
+                        <div className="mb-4">
+                            <h3 className="text-lg font-semibold text-gray-900">Images & Videos (Optional)</h3>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Upload your own creative assets and they'll be included when we deploy your ads. You can also add more after the campaign is created.
+                            </p>
+                        </div>
+
+                        {/* Image Upload */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h4 className="text-sm font-semibold text-gray-800">Images</h4>
+                                    <p className="text-xs text-gray-500">JPEG, PNG, or WebP · Max 10MB each · Up to 10 images</p>
+                                </div>
+                                <span className="text-xs text-gray-400">{stagedImages.length}/10</span>
+                            </div>
+
+                            {stagedImages.length > 0 && (
+                                <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mb-3">
+                                    {stagedImages.map((file, i) => (
+                                        <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                                            <img
+                                                src={URL.createObjectURL(file)}
+                                                alt={file.name}
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => setStagedImages(prev => prev.filter((_, idx) => idx !== i))}
+                                                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                ×
+                                            </button>
+                                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs px-1 py-0.5 truncate opacity-0 group-hover:opacity-100 transition-opacity">
+                                                {file.name}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {stagedImages.length < 10 && (
+                                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
+                                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
+                                        <svg className="w-8 h-8 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                        </svg>
+                                        <p className="text-sm text-gray-500">Click to upload images</p>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        accept="image/jpeg,image/png,image/webp"
+                                        multiple
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const files = Array.from(e.target.files || []);
+                                            setStagedImages(prev => {
+                                                const combined = [...prev, ...files];
+                                                return combined.slice(0, 10);
+                                            });
+                                            e.target.value = '';
+                                        }}
+                                    />
+                                </label>
+                            )}
+                        </div>
+
+                        {/* Video Upload */}
+                        <div>
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h4 className="text-sm font-semibold text-gray-800">Videos</h4>
+                                    <p className="text-xs text-gray-500">MP4, MOV, or WebM · Max 100MB each · Up to 3 videos</p>
+                                </div>
+                                <span className="text-xs text-gray-400">{stagedVideos.length}/3</span>
+                            </div>
+
+                            {stagedVideos.length > 0 && (
+                                <div className="space-y-2 mb-3">
+                                    {stagedVideos.map((file, i) => (
+                                        <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                            <svg className="w-8 h-8 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                                                <p className="text-xs text-gray-500">{(file.size / 1024 / 1024).toFixed(1)} MB</p>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => setStagedVideos(prev => prev.filter((_, idx) => idx !== i))}
+                                                className="text-red-400 hover:text-red-600 flex-shrink-0"
+                                            >
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                            {stagedVideos.length < 3 && (
+                                <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 hover:border-brand-primary transition-colors">
+                                    <div className="flex items-center gap-2">
+                                        <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                        <p className="text-sm text-gray-500">Click to upload a video</p>
+                                    </div>
+                                    <input
+                                        type="file"
+                                        accept="video/mp4,video/quicktime,video/webm"
+                                        className="hidden"
+                                        onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                setStagedVideos(prev => [...prev, file].slice(0, 3));
+                                            }
+                                            e.target.value = '';
+                                        }}
+                                    />
+                                </label>
+                            )}
+                        </div>
+
+                        <p className="text-xs text-gray-400 text-center">
+                            Skipping this step is fine — our AI will generate creative assets for you automatically.
+                        </p>
+                    </div>
+                );
+
+            case 8: // Review
                 return (
                     <div className="space-y-6 max-w-3xl mx-auto">
                         <div className="text-center mb-8">
@@ -1013,6 +1164,11 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                                         {data.keywords.length > 10 && <span className="text-xs text-gray-400">+{data.keywords.length - 10} more</span>}
                                     </div>
                                 )}
+                            </ReviewSection>
+
+                            <ReviewSection title="Images & Videos" step={7} onEdit={() => goToStep(7)}>
+                                <ReviewItem label="Images" value={stagedImages.length > 0 ? `${stagedImages.length} image${stagedImages.length !== 1 ? 's' : ''} uploaded` : 'None (AI will generate)'} />
+                                <ReviewItem label="Videos" value={stagedVideos.length > 0 ? `${stagedVideos.length} video${stagedVideos.length !== 1 ? 's' : ''} uploaded` : 'None (AI will generate)'} />
                             </ReviewSection>
                         </div>
                         

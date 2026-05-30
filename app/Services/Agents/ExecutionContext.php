@@ -52,10 +52,12 @@ class ExecutionContext
         Customer $customer,
         array $platformStatus = []
     ): self {
-        // Analyze available assets
+        // Analyze available assets — include strategy-specific and pre-wizard (strategy_id = null) uploads
+        $preWizardImages = $campaign->imageCollaterals()->whereNull('strategy_id')->where('is_active', true)->count();
+        $preWizardVideos = $campaign->videoCollaterals()->whereNull('strategy_id')->where('is_active', true)->count();
         $availableAssets = [
-            'images' => $strategy->imageCollaterals()->where('is_active', true)->count(),
-            'videos' => $strategy->videoCollaterals()->where('is_active', true)->count(),
+            'images' => $strategy->imageCollaterals()->where('is_active', true)->count() + $preWizardImages,
+            'videos' => $strategy->videoCollaterals()->where('is_active', true)->count() + $preWizardVideos,
             'ad_copies' => $strategy->adCopies()->count(),
             'has_ad_copy' => $strategy->adCopies()->exists(),
         ];

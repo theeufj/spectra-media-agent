@@ -59,6 +59,10 @@ class StoreCampaignRequest extends FormRequest
             'keywords.*.funnel_stage' => 'nullable|string|max:50',
             'platforms' => 'required|array|min:1',
             'platforms.*' => 'string|in:google,facebook,microsoft,linkedin',
+            'images' => 'nullable|array|max:10',
+            'images.*' => 'file|mimes:jpeg,jpg,png,webp|max:10240',
+            'videos' => 'nullable|array|max:3',
+            'videos.*' => 'file|mimes:mp4,mov,webm|max:102400',
         ];
     }
 

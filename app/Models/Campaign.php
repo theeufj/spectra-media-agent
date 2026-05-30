@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Models\ImageCollateral;
+use App\Models\VideoCollateral;
 
 class Campaign extends Model
 {
@@ -151,5 +153,15 @@ class Campaign extends Model
     public function pages()
     {
         return $this->belongsToMany(CustomerPage::class, 'campaign_pages');
+    }
+
+    public function imageCollaterals(): HasMany
+    {
+        return $this->hasMany(ImageCollateral::class);
+    }
+
+    public function videoCollaterals(): HasMany
+    {
+        return $this->hasMany(VideoCollateral::class);
     }
 }
