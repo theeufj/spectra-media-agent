@@ -29,8 +29,14 @@ class LandingController extends Controller
         return \Inertia\Inertia::render('HowItWorks');
     }
 
-    public function pricing()
+    public function pricing(Request $request)
     {
+        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
+
+        if (($tenant['key'] ?? '') === 'realpropertyads') {
+            return \Inertia\Inertia::render('RealEstatePricing');
+        }
+
         $plans = Plan::active()->ordered()->where('is_free', false)->get();
 
         return \Inertia\Inertia::render('Pricing', [
