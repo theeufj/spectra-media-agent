@@ -128,10 +128,18 @@ class RunHealthChecks implements ShouldQueue
      */
     protected function sendHealthAlert(Customer $customer, array $results): void
     {
+        // Suppress repeated alerts for the same health state — max once per 24h per customer.
+        $dedupeKey = "health_alert_sent:{$customer->id}:{$results['overall_health']}";
+        if (Cache::has($dedupeKey)) {
+            Log::info("RunHealthChecks: Suppressing duplicate health alert for customer {$customer->id} (already sent within 24h)");
+            return;
+        }
+        Cache::put($dedupeKey, true, now()->addHours(24));
+
         try {
             $isCritical = $results['overall_health'] === 'critical';
-            $title = 'Automated Campaign Fixes Applied';
-            $message = 'We detected an issue with your campaigns and have fixed them automatically.';
+            $title = 'Platform Health Alert';
+            $message = 'We detected an issue with your campaigns that requires attention.';
             $notificationType = $isCritical
                 ? Notification::TYPE_HEALTH_CRITICAL
                 : Notification::TYPE_HEALTH_WARNING;

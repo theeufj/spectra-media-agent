@@ -119,14 +119,25 @@ class CampaignHealthChecker
                         6 => 'PENDING', 7 => 'MISCONFIGURED', 8 => 'LIMITED', default => 'UNKNOWN',
                     };
 
-                    if ($campaignStatus !== 'ENABLED' || in_array($primaryStatus, ['PAUSED', 'REMOVED', 'ENDED', 'MISCONFIGURED'], true)) {
+                    // Don't alert on campaigns that are intentionally paused in our DB.
+                    $isIntentionallyPaused = in_array($campaign->status, ['paused', 'draft'], true);
+
+                    if (!$isIntentionallyPaused && ($campaignStatus !== 'ENABLED' || in_array($primaryStatus, ['REMOVED', 'ENDED', 'MISCONFIGURED'], true))) {
                         $health['issues'][] = [
                             'type'     => 'google_campaign_not_serving',
                             'severity' => 'critical',
                             'message'  => "Google campaign is not serving normally ({$campaignStatus} / {$primaryStatus})",
                             'details'  => 'Check campaign status, policy issues, and billing in Google Ads.',
                         ];
-                    } elseif (in_array($primaryStatus, ['PENDING', 'LIMITED', 'UNKNOWN'], true)) {
+                    } elseif (!$isIntentionallyPaused && $campaignStatus === 'ENABLED' && $primaryStatus === 'PAUSED') {
+                        // Enabled in Google Ads but paused by platform (budget exhausted, policy, etc.)
+                        $health['issues'][] = [
+                            'type'     => 'google_campaign_not_serving',
+                            'severity' => 'critical',
+                            'message'  => "Google campaign is not serving normally ({$campaignStatus} / {$primaryStatus})",
+                            'details'  => 'Check campaign status, policy issues, and billing in Google Ads.',
+                        ];
+                    } elseif (!$isIntentionallyPaused && in_array($primaryStatus, ['PENDING', 'LIMITED', 'UNKNOWN'], true)) {
                         $health['warnings'][] = [
                             'type'     => 'google_campaign_limited',
                             'severity' => 'high',
