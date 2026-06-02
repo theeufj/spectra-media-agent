@@ -13,28 +13,34 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
     }
 
     /**
-     * Create a new Facebook Ads account for the customer.
-     * 
-     * Note: This requires the user to have a Facebook business account and the necessary permissions.
-     * The actual account creation happens through the Facebook Business Manager UI, but we can
-     * retrieve and link existing accounts, or create one if the API allows.
+     * Create a new Facebook Ads account under the platform Business Manager.
      *
      * @param string $accountName Name for the new ad account
-     * @param string $currency Currency code (e.g., 'USD')
-     * @param string $timezone Timezone (e.g., 'America/New_York')
+     * @param string $currency Currency code (e.g., 'USD', 'AUD')
+     * @param int $timezoneId Facebook timezone ID (e.g., 37 = Australia/Sydney, 1 = America/New_York)
      * @return ?array Array with account ID or null on failure
      */
     public function __invoke(
         string $accountName,
         string $currency = 'USD',
-        string $timezone = 'America/New_York'
+        int $timezoneId = 1
     ): ?array {
         try {
-            // Attempt to create a new ad account
-            $response = $this->post('/me/adaccounts', [
-                'name' => $accountName,
-                'currency' => $currency,
-                'timezone' => $timezone,
+            $businessId = config('services.facebook.business_manager_id');
+
+            if (!$businessId) {
+                Log::error("FACEBOOK_BUSINESS_MANAGER_ID not configured");
+                return null;
+            }
+
+            // POST /{business_id}/adaccount — requires business admin access
+            $response = $this->post("/{$businessId}/adaccount", [
+                'name'           => $accountName,
+                'currency'       => $currency,
+                'timezone_id'    => $timezoneId,
+                'end_advertiser' => $businessId,
+                'media_agency'   => 'NONE',
+                'partner'        => 'NONE',
             ]);
 
             if ($response && isset($response['id'])) {
@@ -51,7 +57,7 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
                     'account_id' => $accountId,
                     'account_name' => $accountName,
                     'currency' => $currency,
-                    'timezone' => $timezone,
+                    'timezone_id' => $timezoneId,
                 ];
             }
 
