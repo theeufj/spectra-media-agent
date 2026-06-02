@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Mail\DailyPerformanceReport;
 use App\Models\Customer;
+use App\Services\Agents\CampaignOptimizationAgent;
 use App\Services\Reporting\YesterdayPerformanceSummary;
 use App\Services\GeminiService;
 use App\Models\GoogleAdsPerformanceData;
@@ -23,7 +24,7 @@ class SendDailyPerformanceReports implements ShouldQueue
     public int $tries = 2;
     public int $timeout = 300;
 
-    public function handle(YesterdayPerformanceSummary $summaryService, GeminiService $gemini): void
+    public function handle(YesterdayPerformanceSummary $summaryService, GeminiService $gemini, CampaignOptimizationAgent $optimizer): void
     {
         $isMonday = now()->dayOfWeek === 1;
 
@@ -42,6 +43,9 @@ class SendDailyPerformanceReports implements ShouldQueue
                     $summary['weekly_rollup'] = $this->buildWeeklyRollup($customer, $gemini);
                 }
 
+                // Pull highest-confidence cached recommendation across all active campaigns
+                $summary['top_action'] = $this->getTopAction($customer, $optimizer);
+
                 // Skip if no data at all
                 if ($summary['combined']['impressions'] === 0 && $summary['combined']['spend'] === 0) {
                     Log::info("Skipping daily report for customer {$customer->id} — no data for {$summary['date']}");
@@ -53,6 +57,12 @@ class SendDailyPerformanceReports implements ShouldQueue
 
                 foreach ($users as $user) {
                     if (!$user->email) {
+                        continue;
+                    }
+
+                    // Respect unsubscribe preference set via email.unsubscribe route
+                    $prefs = $user->notification_preferences ?? [];
+                    if (isset($prefs['performance_reports']) && $prefs['performance_reports'] === false) {
                         continue;
                     }
 
@@ -73,6 +83,37 @@ class SendDailyPerformanceReports implements ShouldQueue
         }
 
         Log::info("Daily performance reports complete: {$sent} emails queued across {$customers->count()} customers");
+    }
+
+    /**
+     * Find the highest-confidence cached recommendation across all active campaigns for this customer.
+     * Returns a ['action' => '...', 'reasoning' => '...'] array or null if nothing cached.
+     */
+    private function getTopAction(Customer $customer, CampaignOptimizationAgent $optimizer): ?array
+    {
+        $campaigns = $customer->campaigns()->where('status', 'active')->get();
+        $best = null;
+        $bestScore = -1;
+
+        foreach ($campaigns as $campaign) {
+            $recs = $optimizer->getCachedRecommendations($campaign->id);
+            if (empty($recs['recommendations'])) {
+                continue;
+            }
+            foreach ($recs['recommendations'] as $rec) {
+                $score = $rec['confidence_score'] ?? 0;
+                if ($score > $bestScore) {
+                    $bestScore = $score;
+                    $best = [
+                        'action'    => $rec['action'] ?? $rec['type'] ?? 'Review campaign performance',
+                        'reasoning' => $rec['reasoning'] ?? $rec['reason'] ?? '',
+                        'campaign'  => $campaign->name,
+                    ];
+                }
+            }
+        }
+
+        return $best;
     }
 
     /**

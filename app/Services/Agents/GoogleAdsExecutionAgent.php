@@ -49,6 +49,7 @@ use App\Services\GoogleAds\ShoppingServices\CreateShoppingProductAd;
 use App\Services\GoogleAds\LocalServicesServices\CreateLocalServicesCampaign;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
+use App\Notifications\ConversionTrackingReady;
 use App\Services\Agents\CampaignReviewAgent;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
@@ -398,7 +399,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         
         try {
             // Setup Conversion Tracking (Best Effort)
-            $this->setupConversionTracking($customerId, $result);
+            $this->setupConversionTracking($customerId, $result, $campaign);
 
             $campaignStructure = $plan->getCampaignStructure();
             $campaignType = $campaignStructure['type'] ?? 'search';
@@ -497,43 +498,59 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'customer_id' => $customerId
         ]);
 
-        // 1. Create Campaign
-        $createCampaignService = new CreateSearchCampaign($this->customer);
-        $campaignStructure = $plan->getCampaignStructure();
-        
+        // 1. Create Campaign — idempotency guard prevents duplicates on retry
         $timestamp = now()->format('Ymd_His');
-        $campaignName = $campaign->name . ' - ' . $timestamp;
+        if (!empty($campaign->google_ads_campaign_id)) {
+            $campaignResourceName = $campaign->google_ads_campaign_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing Search campaign from prior attempt", [
+                'campaign_id'              => $campaign->id,
+                'google_ads_campaign_id'   => $campaignResourceName,
+            ]);
+            $result->addPlatformId('campaign', $campaignResourceName);
+        } else {
+            $createCampaignService = new CreateSearchCampaign($this->customer);
+            $campaignName = $campaign->name . ' - ' . $timestamp;
 
-        $campaignData = [
-            'businessName' => $campaignName,
-            'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->addDay()->format('Y-m-d'),
-            'endDate' => now()->addYear()->format('Y-m-d'),
-        ];
-        
-        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
-            throw new \Exception('Failed to create search campaign');
+            $campaignData = [
+                'businessName' => $campaignName,
+                'budget'    => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'startDate' => now()->addDay()->format('Y-m-d'),
+                'endDate'   => now()->addYear()->format('Y-m-d'),
+            ];
+
+            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+            if (!$campaignResourceName) {
+                throw new \Exception('Failed to create search campaign');
+            }
+
+            $result->addPlatformId('campaign', $campaignResourceName);
+            $campaign->google_ads_campaign_id = $campaignResourceName;
+            $campaign->save();
         }
-        
-        $result->addPlatformId('campaign', $campaignResourceName);
-        $campaign->google_ads_campaign_id = $campaignResourceName;
-        $campaign->save();
 
         // 1.5 Add Location Targeting
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
         
-        // 2. Create Ad Group
-        $createAdGroupService = new CreateSearchAdGroup($this->customer);
-        $adGroupName = 'Default Ad Group - ' . $timestamp;
-        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-        if (!$adGroupResourceName) {
-            throw new \Exception('Failed to create search ad group');
+        // 2. Create Ad Group — reuse if already created in a prior attempt
+        if (!empty($strategy->google_ads_ad_group_id)) {
+            $adGroupResourceName = $strategy->google_ads_ad_group_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing Search ad group from prior attempt", [
+                'strategy_id'           => $strategy->id,
+                'google_ads_ad_group_id' => $adGroupResourceName,
+            ]);
+            $result->addPlatformId('ad_group', $adGroupResourceName);
+        } else {
+            $createAdGroupService = new CreateSearchAdGroup($this->customer);
+            $adGroupName = 'Default Ad Group - ' . $timestamp;
+            $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
+            if (!$adGroupResourceName) {
+                throw new \Exception('Failed to create search ad group');
+            }
+
+            $result->addPlatformId('ad_group', $adGroupResourceName);
+            $strategy->google_ads_ad_group_id = $adGroupResourceName;
+            $strategy->save();
         }
-        
-        $result->addPlatformId('ad_group', $adGroupResourceName);
-        $strategy->google_ads_ad_group_id = $adGroupResourceName;
-        $strategy->save();
         
         // 3. Add Keywords — always validate through Keyword Planner for volume data
         $keywords = $this->getKeywords($campaign, $strategy, $plan);
@@ -768,43 +785,59 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'customer_id' => $customerId
         ]);
 
-        // 1. Create Campaign
-        $createCampaignService = new CreateDisplayCampaign($this->customer);
-        $campaignStructure = $plan->getCampaignStructure();
-        
+        // 1. Create Campaign — idempotency guard prevents duplicates on retry
         $timestamp = now()->format('Ymd_His');
-        $campaignName = $campaign->name . ' - ' . $timestamp;
+        if (!empty($campaign->google_ads_campaign_id)) {
+            $campaignResourceName = $campaign->google_ads_campaign_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing Display campaign from prior attempt", [
+                'campaign_id'            => $campaign->id,
+                'google_ads_campaign_id' => $campaignResourceName,
+            ]);
+            $result->addPlatformId('campaign', $campaignResourceName);
+        } else {
+            $createCampaignService = new CreateDisplayCampaign($this->customer);
+            $campaignName = $campaign->name . ' - ' . $timestamp;
 
-        $campaignData = [
-            'businessName' => $campaignName,
-            'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->addDay()->format('Y-m-d'),
-            'endDate' => now()->addYear()->format('Y-m-d'),
-        ];
-        
-        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
-            throw new \Exception('Failed to create display campaign');
+            $campaignData = [
+                'businessName' => $campaignName,
+                'budget'    => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'startDate' => now()->addDay()->format('Y-m-d'),
+                'endDate'   => now()->addYear()->format('Y-m-d'),
+            ];
+
+            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+            if (!$campaignResourceName) {
+                throw new \Exception('Failed to create display campaign');
+            }
+
+            $result->addPlatformId('campaign', $campaignResourceName);
+            $campaign->google_ads_campaign_id = $campaignResourceName;
+            $campaign->save();
         }
-        
-        $result->addPlatformId('campaign', $campaignResourceName);
-        $campaign->google_ads_campaign_id = $campaignResourceName;
-        $campaign->save();
 
         // 1.5 Add Location Targeting
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
         
-        // 2. Create Ad Group
-        $createAdGroupService = new CreateDisplayAdGroup($this->customer);
-        $adGroupName = 'Default Ad Group - ' . $timestamp;
-        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-        if (!$adGroupResourceName) {
-            throw new \Exception('Failed to create display ad group');
+        // 2. Create Ad Group — reuse if already created in a prior attempt
+        if (!empty($strategy->google_ads_ad_group_id)) {
+            $adGroupResourceName = $strategy->google_ads_ad_group_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing Display ad group from prior attempt", [
+                'strategy_id'            => $strategy->id,
+                'google_ads_ad_group_id' => $adGroupResourceName,
+            ]);
+            $result->addPlatformId('ad_group', $adGroupResourceName);
+        } else {
+            $createAdGroupService = new CreateDisplayAdGroup($this->customer);
+            $adGroupName = 'Default Ad Group - ' . $timestamp;
+            $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
+            if (!$adGroupResourceName) {
+                throw new \Exception('Failed to create display ad group');
+            }
+
+            $result->addPlatformId('ad_group', $adGroupResourceName);
+            $strategy->google_ads_ad_group_id = $adGroupResourceName;
+            $strategy->save();
         }
-        
-        $result->addPlatformId('ad_group', $adGroupResourceName);
-        $strategy->google_ads_ad_group_id = $adGroupResourceName;
-        $strategy->save();
         
         // 3. Upload Image Assets
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
@@ -885,38 +918,49 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'customer_id' => $customerId
         ]);
 
-        // 1. Create Campaign
-        $createCampaignService = new CreatePerformanceMaxCampaign($this->customer);
+        // 1. Create Campaign — idempotency guard prevents duplicates on retry.
+        // This was the source of 6 duplicate PMax campaigns created on 2026-05-19
+        // when the deployment job was retried without checking for an existing campaign.
         $timestamp = now()->format('Ymd_His');
-        $campaignName = $campaign->name . ' - PMax - ' . $timestamp;
+        if (!empty($campaign->google_ads_campaign_id)) {
+            $campaignResourceName = $campaign->google_ads_campaign_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing PMax campaign from prior attempt — skipping creation to prevent duplicate", [
+                'campaign_id'            => $campaign->id,
+                'google_ads_campaign_id' => $campaignResourceName,
+            ]);
+            $result->addPlatformId('campaign', $campaignResourceName);
+        } else {
+            $createCampaignService = new CreatePerformanceMaxCampaign($this->customer);
+            $campaignName = $campaign->name . ' - PMax - ' . $timestamp;
 
-        // Only set a Target CPA if the account has enough conversion history.
-        // Below 50 conversions, PMax uses Maximize Conversions (no target).
-        // BiddingStrategyProgressionAgent will add the target once data matures.
-        $conversionCount = $this->getConversionCountForCustomer($customerId);
-        $targetCpaMicros = null;
-        if ($strategy->cpa_target && $conversionCount >= 50) {
-            $targetCpaMicros = $strategy->cpa_target;
-        } elseif ($strategy->cpa_target && $conversionCount < 50) {
-            $result->addWarning('pmax_bidding_downgraded', "Performance Max will use Maximize Conversions until 50 conversions are recorded ({$conversionCount} so far). Target CPA will be applied automatically by the Bidding Progression Agent.");
+            // Only set a Target CPA if the account has enough conversion history.
+            // Below 50 conversions, PMax uses Maximize Conversions (no target).
+            // BiddingStrategyProgressionAgent will add the target once data matures.
+            $conversionCount = $this->getConversionCountForCustomer($customerId);
+            $targetCpaMicros = null;
+            if ($strategy->cpa_target && $conversionCount >= 50) {
+                $targetCpaMicros = $strategy->cpa_target;
+            } elseif ($strategy->cpa_target && $conversionCount < 50) {
+                $result->addWarning('pmax_bidding_downgraded', "Performance Max will use Maximize Conversions until 50 conversions are recorded ({$conversionCount} so far). Target CPA will be applied automatically by the Bidding Progression Agent.");
+            }
+
+            $campaignData = [
+                'businessName'    => $campaignName,
+                'budget'          => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'startDate'       => now()->addDay()->format('Y-m-d'),
+                'endDate'         => now()->addYear()->format('Y-m-d'),
+                'targetCpaMicros' => $targetCpaMicros,
+            ];
+
+            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+            if (!$campaignResourceName) {
+                throw new \Exception('Failed to create Performance Max campaign');
+            }
+
+            $result->addPlatformId('campaign', $campaignResourceName);
+            $campaign->google_ads_campaign_id = $campaignResourceName;
+            $campaign->save();
         }
-
-        $campaignData = [
-            'businessName'   => $campaignName,
-            'budget'         => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate'      => now()->addDay()->format('Y-m-d'),
-            'endDate'        => now()->addYear()->format('Y-m-d'),
-            'targetCpaMicros' => $targetCpaMicros,
-        ];
-
-        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
-            throw new \Exception('Failed to create Performance Max campaign');
-        }
-
-        $result->addPlatformId('campaign', $campaignResourceName);
-        $campaign->google_ads_campaign_id = $campaignResourceName;
-        $campaign->save();
 
         // 1.5 Add Location Targeting
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
@@ -1095,28 +1139,35 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'customer_id' => $customerId
         ]);
 
-        // 1. Create Campaign
-        $createCampaignService = new CreateVideoCampaign($this->customer);
-        $campaignStructure = $plan->getCampaignStructure();
-        
+        // 1. Create Campaign — idempotency guard prevents duplicates on retry
         $timestamp = now()->format('Ymd_His');
-        $campaignName = $campaign->name . ' - Video - ' . $timestamp;
+        if (!empty($campaign->google_ads_campaign_id)) {
+            $campaignResourceName = $campaign->google_ads_campaign_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing Video campaign from prior attempt", [
+                'campaign_id'            => $campaign->id,
+                'google_ads_campaign_id' => $campaignResourceName,
+            ]);
+            $result->addPlatformId('campaign', $campaignResourceName);
+        } else {
+            $createCampaignService = new CreateVideoCampaign($this->customer);
+            $campaignName = $campaign->name . ' - Video - ' . $timestamp;
 
-        $campaignData = [
-            'businessName' => $campaignName,
-            'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->addDay()->format('Y-m-d'),
-            'endDate' => now()->addYear()->format('Y-m-d'),
-        ];
-        
-        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
-            throw new \Exception('Failed to create video campaign');
+            $campaignData = [
+                'businessName' => $campaignName,
+                'budget'    => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'startDate' => now()->addDay()->format('Y-m-d'),
+                'endDate'   => now()->addYear()->format('Y-m-d'),
+            ];
+
+            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+            if (!$campaignResourceName) {
+                throw new \Exception('Failed to create video campaign');
+            }
+
+            $result->addPlatformId('campaign', $campaignResourceName);
+            $campaign->google_ads_campaign_id = $campaignResourceName;
+            $campaign->save();
         }
-        
-        $result->addPlatformId('campaign', $campaignResourceName);
-        $campaign->google_ads_campaign_id = $campaignResourceName;
-        $campaign->save();
 
         // 1.5 Add Location Targeting
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
@@ -1177,28 +1228,36 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
         Log::info("GoogleAdsExecutionAgent: Creating Demand Gen Campaign", ['customer_id' => $customerId]);
 
-        // 1. Create Campaign
-        $createCampaignService = new CreateDemandGenCampaign($this->customer);
-        $campaignStructure = $plan->getCampaignStructure();
+        // 1. Create Campaign — idempotency guard prevents duplicates on retry
         $timestamp = now()->format('Ymd_His');
-        $campaignName = $campaign->name . ' - DemandGen - ' . $timestamp;
+        if (!empty($campaign->google_ads_campaign_id)) {
+            $campaignResourceName = $campaign->google_ads_campaign_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing DemandGen campaign from prior attempt", [
+                'campaign_id'            => $campaign->id,
+                'google_ads_campaign_id' => $campaignResourceName,
+            ]);
+            $result->addPlatformId('campaign', $campaignResourceName);
+        } else {
+            $createCampaignService = new CreateDemandGenCampaign($this->customer);
+            $campaignName = $campaign->name . ' - DemandGen - ' . $timestamp;
 
-        $campaignData = [
-            'businessName' => $campaignName,
-            'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->addDay()->format('Y-m-d'),
-            'endDate' => now()->addYear()->format('Y-m-d'),
-            'targetCpaMicros' => $strategy->cpa_target ?? null,
-        ];
+            $campaignData = [
+                'businessName'    => $campaignName,
+                'budget'          => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'startDate'       => now()->addDay()->format('Y-m-d'),
+                'endDate'         => now()->addYear()->format('Y-m-d'),
+                'targetCpaMicros' => $strategy->cpa_target ?? null,
+            ];
 
-        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
-            throw new \Exception('Failed to create Demand Gen campaign');
+            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+            if (!$campaignResourceName) {
+                throw new \Exception('Failed to create Demand Gen campaign');
+            }
+
+            $result->addPlatformId('campaign', $campaignResourceName);
+            $campaign->google_ads_campaign_id = $campaignResourceName;
+            $campaign->save();
         }
-
-        $result->addPlatformId('campaign', $campaignResourceName);
-        $campaign->google_ads_campaign_id = $campaignResourceName;
-        $campaign->save();
 
         // 1.5 Add Location Targeting
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
@@ -1300,47 +1359,61 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             throw new \Exception('Shopping campaigns require a linked Google Merchant Center account. No merchant_id found.');
         }
 
-        // 1. Create Campaign
-        $createCampaignService = new CreateShoppingCampaign($this->customer);
-        $campaignStructure = $plan->getCampaignStructure();
+        // 1. Create Campaign — idempotency guard prevents duplicates on retry
         $timestamp = now()->format('Ymd_His');
-        $campaignName = $campaign->name . ' - Shopping - ' . $timestamp;
+        if (!empty($campaign->google_ads_campaign_id)) {
+            $campaignResourceName = $campaign->google_ads_campaign_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing Shopping campaign from prior attempt", [
+                'campaign_id'            => $campaign->id,
+                'google_ads_campaign_id' => $campaignResourceName,
+            ]);
+            $result->addPlatformId('campaign', $campaignResourceName);
+        } else {
+            $createCampaignService = new CreateShoppingCampaign($this->customer);
+            $campaignStructure = $plan->getCampaignStructure();
+            $campaignName = $campaign->name . ' - Shopping - ' . $timestamp;
 
-        $campaignData = [
-            'businessName' => $campaignName,
-            'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->addDay()->format('Y-m-d'),
-            'endDate' => now()->addYear()->format('Y-m-d'),
-            'merchantId' => $merchantId,
-            'feedLabel' => $campaignStructure['feed_label'] ?? null,
-            'campaignPriority' => $campaignStructure['campaign_priority'] ?? 0,
-            'enableLocal' => $campaignStructure['enable_local'] ?? false,
-            'targetCpaMicros' => $strategy->cpa_target ?? null,
-        ];
+            $campaignData = [
+                'businessName'     => $campaignName,
+                'budget'           => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'startDate'        => now()->addDay()->format('Y-m-d'),
+                'endDate'          => now()->addYear()->format('Y-m-d'),
+                'merchantId'       => $merchantId,
+                'feedLabel'        => $plan->getCampaignStructure()['feed_label'] ?? null,
+                'campaignPriority' => $plan->getCampaignStructure()['campaign_priority'] ?? 0,
+                'enableLocal'      => $plan->getCampaignStructure()['enable_local'] ?? false,
+                'targetCpaMicros'  => $strategy->cpa_target ?? null,
+            ];
 
-        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
-            throw new \Exception('Failed to create Shopping campaign');
+            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+            if (!$campaignResourceName) {
+                throw new \Exception('Failed to create Shopping campaign');
+            }
+
+            $result->addPlatformId('campaign', $campaignResourceName);
+            $campaign->google_ads_campaign_id = $campaignResourceName;
+            $campaign->save();
         }
-
-        $result->addPlatformId('campaign', $campaignResourceName);
-        $campaign->google_ads_campaign_id = $campaignResourceName;
-        $campaign->save();
 
         // 1.5 Add Location Targeting
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
 
-        // 2. Create Ad Group
-        $createAdGroupService = new CreateShoppingAdGroup($this->customer);
-        $adGroupName = 'All Products - ' . $timestamp;
-        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-        if (!$adGroupResourceName) {
-            throw new \Exception('Failed to create Shopping ad group');
-        }
+        // 2. Create Ad Group — reuse if already created in a prior attempt
+        if (!empty($strategy->google_ads_ad_group_id)) {
+            $adGroupResourceName = $strategy->google_ads_ad_group_id;
+            $result->addPlatformId('ad_group', $adGroupResourceName);
+        } else {
+            $createAdGroupService = new CreateShoppingAdGroup($this->customer);
+            $adGroupName = 'All Products - ' . $timestamp;
+            $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
+            if (!$adGroupResourceName) {
+                throw new \Exception('Failed to create Shopping ad group');
+            }
 
-        $result->addPlatformId('ad_group', $adGroupResourceName);
-        $strategy->google_ads_ad_group_id = $adGroupResourceName;
-        $strategy->save();
+            $result->addPlatformId('ad_group', $adGroupResourceName);
+            $strategy->google_ads_ad_group_id = $adGroupResourceName;
+            $strategy->save();
+        }
 
         // 3. Create Shopping Product Ad (auto-generated from feed)
         $createAdService = new CreateShoppingProductAd($this->customer);
@@ -1370,27 +1443,37 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         Log::info("GoogleAdsExecutionAgent: Creating Local Services Campaign", ['customer_id' => $customerId]);
 
         // 1. Create Campaign (Local Services campaigns don't need ad groups or ads)
-        $createCampaignService = new CreateLocalServicesCampaign($this->customer);
         $campaignStructure = $plan->getCampaignStructure();
         $timestamp = now()->format('Ymd_His');
-        $campaignName = $campaign->name . ' - Local Services - ' . $timestamp;
 
-        $campaignData = [
-            'businessName' => $campaignName,
-            'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-            'startDate' => now()->addDay()->format('Y-m-d'),
-            'endDate' => now()->addYear()->format('Y-m-d'),
-            'categoryBids' => $campaignStructure['category_bids'] ?? [],
-        ];
+        if (!empty($campaign->google_ads_campaign_id)) {
+            $campaignResourceName = $campaign->google_ads_campaign_id;
+            Log::info("GoogleAdsExecutionAgent: Reusing existing Local Services campaign from prior attempt", [
+                'campaign_id'            => $campaign->id,
+                'google_ads_campaign_id' => $campaignResourceName,
+            ]);
+            $result->addPlatformId('campaign', $campaignResourceName);
+        } else {
+            $createCampaignService = new CreateLocalServicesCampaign($this->customer);
+            $campaignName = $campaign->name . ' - Local Services - ' . $timestamp;
 
-        $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
-            throw new \Exception('Failed to create Local Services campaign');
+            $campaignData = [
+                'businessName' => $campaignName,
+                'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
+                'startDate' => now()->addDay()->format('Y-m-d'),
+                'endDate' => now()->addYear()->format('Y-m-d'),
+                'categoryBids' => $campaignStructure['category_bids'] ?? [],
+            ];
+
+            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
+            if (!$campaignResourceName) {
+                throw new \Exception('Failed to create Local Services campaign');
+            }
+
+            $result->addPlatformId('campaign', $campaignResourceName);
+            $campaign->google_ads_campaign_id = $campaignResourceName;
+            $campaign->save();
         }
-
-        $result->addPlatformId('campaign', $campaignResourceName);
-        $campaign->google_ads_campaign_id = $campaignResourceName;
-        $campaign->save();
 
         // 1.5 Add Location Targeting (critical for local services)
         $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
@@ -2054,40 +2137,66 @@ PROMPT;
     /**
      * Setup conversion tracking if needed
      */
-    protected function setupConversionTracking(string $customerId, ExecutionResult $result): void
+    protected function setupConversionTracking(string $customerId, ExecutionResult $result, ?Campaign $campaign = null): void
     {
         try {
-            // Check if conversion tracking is already set up — skip if so
-            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
-            if ($conversionService->isConversionTrackingSetUp($customerId)) {
-                Log::info("GoogleAdsExecutionAgent: Conversion tracking already exists, skipping creation");
+            // Fast path: customer already has a saved conversion action — nothing to do
+            if ($this->customer->conversion_action_id) {
+                Log::info("GoogleAdsExecutionAgent: Conversion tracking already set up, skipping creation");
                 return;
             }
 
+            // Slower API check: action may exist in Google Ads but not yet saved locally
+            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
+            if ($conversionService->isConversionTrackingSetUp($customerId)) {
+                Log::info("GoogleAdsExecutionAgent: Conversion tracking already exists in Google Ads, skipping creation");
+                return;
+            }
+
+            // Pick category based on industry — SaaS/services use LEAD, e-commerce uses PURCHASE
+            $ecommerceIndustries = ['ecommerce', 'retail', 'shopping'];
+            $industry = strtolower($campaign->industry ?? $this->customer->industry ?? '');
+            $isEcommerce = in_array($industry, $ecommerceIndustries, true);
+
+            $conversionCategory = $isEcommerce ? ConversionActionCategory::PURCHASE : ConversionActionCategory::LEAD;
+            $conversionName     = $isEcommerce ? "Default Purchase Conversion" : "Default Lead Conversion";
+            $gtmTagLabel        = $isEcommerce ? "Google Ads Conversion - Purchase" : "Google Ads Conversion - Lead";
+
             $createConversionService = new CreateConversionAction($this->customer);
-            $conversionName = "Default Purchase Conversion";
-            
-            $resourceName = ($createConversionService)($customerId, $conversionName, ConversionActionCategory::PURCHASE);
-            
+            $resourceName = ($createConversionService)($customerId, $conversionName, $conversionCategory);
+
             if ($resourceName) {
                 $result->addPlatformId('conversion_action', $resourceName);
-                Log::info("GoogleAdsExecutionAgent: Created default conversion action: $resourceName");
+
+                // Persist so HealthCheckAgent / PreLaunchComplianceAgent / setup progress see it
+                $this->customer->conversion_action_id = $resourceName;
+                $this->customer->save();
+
+                // Notify all users for this customer so they know to install the snippet
+                $this->customer->users()->each(
+                    fn ($user) => $user->notify(new ConversionTrackingReady($this->customer))
+                );
+
+                Log::info("GoogleAdsExecutionAgent: Created default conversion action: $resourceName", [
+                    'category' => $isEcommerce ? 'PURCHASE' : 'LEAD',
+                    'industry' => $industry,
+                ]);
 
                 // GTM Integration
                 try {
                     $getDetails = new GetConversionActionDetails($this->customer);
                     $details = ($getDetails)($customerId, $resourceName);
-                    
+
                     if ($details && isset($details['conversion_id'], $details['conversion_label'])) {
                         $gtmService = new GTMContainerService();
-                        
+
                         $tagResult = $gtmService->addConversionTag(
                             $this->customer,
-                            "Google Ads Conversion - Purchase",
+                            $gtmTagLabel,
                             $details['conversion_id'],
                             ['conversion_label' => $details['conversion_label']]
                         );
-                        
+
                         if ($tagResult['success']) {
                             Log::info("Created GTM Tag for conversion: " . ($tagResult['tag_id'] ?? 'unknown'));
                         } else {

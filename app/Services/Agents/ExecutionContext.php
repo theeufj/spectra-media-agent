@@ -2,8 +2,12 @@
 
 namespace App\Services\Agents;
 
+use App\Models\AgentActivity;
+use App\Models\BrandGuideline;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\FacebookAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\Strategy;
 
 /**
@@ -17,6 +21,7 @@ class ExecutionContext
     public Strategy $strategy;
     public Campaign $campaign;
     public Customer $customer;
+    public ?BrandGuideline $brandGuideline;
     public array $availableAssets;
     public array $platformStatus;
     public array $metadata;
@@ -25,6 +30,7 @@ class ExecutionContext
         Strategy $strategy,
         Campaign $campaign,
         Customer $customer,
+        ?BrandGuideline $brandGuideline = null,
         array $availableAssets = [],
         array $platformStatus = [],
         array $metadata = []
@@ -32,6 +38,7 @@ class ExecutionContext
         $this->strategy = $strategy;
         $this->campaign = $campaign;
         $this->customer = $customer;
+        $this->brandGuideline = $brandGuideline;
         $this->availableAssets = $availableAssets;
         $this->platformStatus = $platformStatus;
         $this->metadata = $metadata;
@@ -85,13 +92,115 @@ class ExecutionContext
                 ])->toArray();
         }
 
+        $brandGuideline = $customer->brandGuideline ?? null;
+
+        // Pull last 30 days of performance so execution agent avoids repeating past mistakes
+        $priorPerformance = self::buildPriorPerformance($campaign);
+
+        // Pull last Facebook learning phase outcome so re-deployments don't repeat the same mistakes
+        $fbLearningOutcome = self::buildFacebookLearningOutcome($campaign);
+
+        // Pull last Quality Score improvement data so Google execution agent avoids low-QS patterns
+        $qualityScoreContext = self::buildQualityScoreContext($campaign);
+
         return new self(
             strategy: $strategy,
             campaign: $campaign,
             customer: $customer,
+            brandGuideline: $brandGuideline,
             availableAssets: $availableAssets,
-            platformStatus: $platformStatus
+            platformStatus: $platformStatus,
+            metadata: [
+                'prior_performance'   => $priorPerformance,
+                'fb_learning_outcome' => $fbLearningOutcome,
+                'quality_score'       => $qualityScoreContext,
+            ]
         );
+    }
+
+    private static function buildPriorPerformance(Campaign $campaign): array
+    {
+        $prior = [];
+
+        $google = GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->where('date', '>=', now()->subDays(30)->toDateString())
+            ->selectRaw('AVG(ctr) as avg_ctr, AVG(cpc) as avg_cpc, AVG(cpa) as avg_cpa, SUM(conversions) as total_conversions, SUM(cost) as total_cost, COUNT(*) as days')
+            ->first();
+
+        if ($google && $google->days > 0) {
+            $prior['google'] = [
+                'avg_ctr'           => round(($google->avg_ctr ?? 0) * 100, 2),
+                'avg_cpc'           => round($google->avg_cpc ?? 0, 2),
+                'avg_cpa'           => round($google->avg_cpa ?? 0, 2),
+                'total_conversions' => round($google->total_conversions ?? 0, 1),
+                'total_spend'       => round($google->total_cost ?? 0, 2),
+                'days_of_data'      => $google->days,
+            ];
+        }
+
+        $facebook = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
+            ->where('date', '>=', now()->subDays(30)->toDateString())
+            ->selectRaw('AVG(ctr) as avg_ctr, AVG(cpc) as avg_cpc, AVG(cpa) as avg_cpa, SUM(conversions) as total_conversions, SUM(cost) as total_cost, COUNT(*) as days')
+            ->first();
+
+        if ($facebook && $facebook->days > 0) {
+            $prior['facebook'] = [
+                'avg_ctr'           => round(($facebook->avg_ctr ?? 0) * 100, 2),
+                'avg_cpc'           => round($facebook->avg_cpc ?? 0, 2),
+                'avg_cpa'           => round($facebook->avg_cpa ?? 0, 2),
+                'total_conversions' => round($facebook->total_conversions ?? 0, 1),
+                'total_spend'       => round($facebook->total_cost ?? 0, 2),
+                'days_of_data'      => $facebook->days,
+            ];
+        }
+
+        return $prior;
+    }
+
+    /**
+     * Pull the last Quality Score improvement AgentActivity for this campaign.
+     * Returns flagged keywords and applied actions so execution agent can avoid low-QS patterns.
+     */
+    private static function buildQualityScoreContext(Campaign $campaign): ?array
+    {
+        $record = AgentActivity::where('campaign_id', $campaign->id)
+            ->where('agent_type', 'quality_score')
+            ->where('action', 'qs_improvements_applied')
+            ->latest()
+            ->first();
+
+        if (!$record || empty($record->details)) {
+            return null;
+        }
+
+        return [
+            'actions'     => $record->details['actions'] ?? [],
+            'flagged'     => $record->details['flagged'] ?? [],
+            'recorded_at' => $record->created_at?->toDateString(),
+        ];
+    }
+
+    /**
+     * Pull the last Facebook learning phase AgentActivity for this campaign.
+     * Returns a summary string the execution prompt can use, or null if no record exists.
+     */
+    private static function buildFacebookLearningOutcome(Campaign $campaign): ?array
+    {
+        $record = AgentActivity::where('campaign_id', $campaign->id)
+            ->where('agent_type', 'facebook_learning')
+            ->latest()
+            ->first();
+
+        if (!$record) {
+            return null;
+        }
+
+        return [
+            'action'      => $record->action,
+            'description' => $record->description,
+            'details'     => $record->details ?? [],
+            'recorded_at' => $record->created_at?->toDateString(),
+        ];
     }
 
     /**

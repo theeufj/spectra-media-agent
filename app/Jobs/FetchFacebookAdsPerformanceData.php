@@ -52,7 +52,10 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 Log::info("Starting FetchFacebookAdsPerformanceData job for campaign ID: {$this->campaign->id}");
 
                 $insightService = new InsightService($customer);
-                $dateStart = now()->subDays(3)->format('Y-m-d');
+                // Backfill 30 days on first run; 7 days on subsequent runs.
+                $hasData = \App\Models\FacebookAdsPerformanceData::where('campaign_id', $this->campaign->id)->exists();
+                $daysBack = $hasData ? 7 : 30;
+                $dateStart = now()->subDays($daysBack)->format('Y-m-d');
                 $dateEnd = now()->format('Y-m-d');
 
                 $insights = $insightService->getCampaignInsights(

@@ -472,9 +472,19 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): array {
+        // Idempotency guard — reuse existing campaign on retry
+        if (!empty($campaign->facebook_ads_campaign_id)) {
+            Log::info("FacebookAdsExecutionAgent: Reusing existing Facebook campaign from prior attempt", [
+                'campaign_id'              => $campaign->id,
+                'facebook_ads_campaign_id' => $campaign->facebook_ads_campaign_id,
+            ]);
+            $result->addPlatformId('campaign', $campaign->facebook_ads_campaign_id);
+            return ['id' => $campaign->facebook_ads_campaign_id];
+        }
+
         $campaignStructure = $plan->getCampaignStructure();
         $dailyBudgetCents = (int)(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
-        
+
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
             $campaign->name,
@@ -482,18 +492,18 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $dailyBudgetCents,
             CampaignStatusHelper::getFacebookAdsStatus()
         );
-        
+
         if (!$fbCampaign || !isset($fbCampaign['id'])) {
             throw new \Exception('Failed to create Facebook campaign');
         }
-        
+
         $result->addPlatformId('campaign', $fbCampaign['id']);
         $campaign->facebook_ads_campaign_id = $fbCampaign['id'];
         $campaign->save();
-        
+
         $strategy->facebook_campaign_id = $fbCampaign['id'];
         $strategy->save();
-        
+
         return $fbCampaign;
     }
     
@@ -508,6 +518,16 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): array {
+        // Idempotency guard — reuse existing ad set on retry
+        if (!empty($strategy->facebook_adset_id)) {
+            Log::info("FacebookAdsExecutionAgent: Reusing existing Facebook ad set from prior attempt", [
+                'campaign_id'         => $campaign->id,
+                'facebook_adset_id'   => $strategy->facebook_adset_id,
+            ]);
+            $result->addPlatformId('ad_set', $strategy->facebook_adset_id);
+            return ['id' => $strategy->facebook_adset_id];
+        }
+
         $campaignStructure = $plan->getCampaignStructure();
         $dailyBudgetCents = (int)(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
         
@@ -740,11 +760,10 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function buildTargeting(ExecutionPlan $plan): array
     {
-        $creativeStrategy = $plan->getCreativeStrategy();
-        // Targeting lives in creative_strategy.targeting in some models, and in
-        // targeting_strategy (top-level) in others — check both.
-        $targeting = $creativeStrategy['targeting']
-            ?? $plan->rawPlan['targeting_strategy']
+        // Targeting lives in the top-level targeting_strategy block.
+        // Fall back to creative_strategy.targeting for plans generated before the schema fix.
+        $targeting = $plan->rawPlan['targeting_strategy']
+            ?? $plan->getCreativeStrategy()['targeting']
             ?? [];
 
         // Default targeting if not specified in plan

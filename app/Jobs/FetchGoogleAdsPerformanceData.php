@@ -49,10 +49,15 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                 $service = new AccountStructureService($customer);
                 $googleAdsServiceClient = $service->getClient()->getGoogleAdsServiceClient();
 
+                // Backfill 30 days on first run; 7 days on subsequent runs.
+                // The updateOrCreate below prevents duplicates on overlap.
+                $hasData = \App\Models\GoogleAdsPerformanceData::where('campaign_id', $this->campaign->id)->exists();
+                $daysBack = $hasData ? 7 : 30;
+
                 $query = "SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, "
                        . "metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM campaign "
                        . "WHERE campaign.resource_name = '{$this->campaign->google_ads_campaign_id}' "
-                       . "AND segments.date BETWEEN '" . now()->subDays(3)->format('Y-m-d') . "' AND '" . now()->format('Y-m-d') . "'";
+                       . "AND segments.date BETWEEN '" . now()->subDays($daysBack)->format('Y-m-d') . "' AND '" . now()->format('Y-m-d') . "'";
 
                 $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
                     'customer_id' => $customer->google_ads_customer_id,

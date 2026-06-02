@@ -131,9 +131,68 @@ INSTRUCTION;
 
         $verticalGuidance = self::getVerticalGuidance($campaign->customer->industry ?? null);
 
+        // Prior performance section (only shown when data exists)
+        $priorPerformance = $context->metadata['prior_performance'] ?? [];
+        $priorSection = '';
+        if (!empty($priorPerformance)) {
+            $lines = [];
+            foreach ($priorPerformance as $platform => $stats) {
+                $lines[] = "**" . ucfirst($platform) . "** ({$stats['days_of_data']} days): "
+                    . "CTR {$stats['avg_ctr']}%, CPC \${$stats['avg_cpc']}, CPA \${$stats['avg_cpa']}, "
+                    . "{$stats['total_conversions']} conversions, \${$stats['total_spend']} spend";
+            }
+            $priorSection = "\n# PRIOR CAMPAIGN PERFORMANCE (last 30 days)\n\n"
+                . "This campaign has run before. Use this data to avoid repeating past mistakes and set realistic bid targets:\n\n"
+                . implode("\n", $lines) . "\n\n---\n";
+        }
+
+        $qsContext = $context->metadata['quality_score'] ?? null;
+        $qsSection = '';
+        if ($qsContext && (!empty($qsContext['flagged']) || !empty($qsContext['actions']))) {
+            $flaggedList = !empty($qsContext['flagged'])
+                ? implode(', ', array_map(fn($k) => "\"{$k['keyword']}\"", $qsContext['flagged']))
+                : 'None';
+            $actionList = !empty($qsContext['actions'])
+                ? implode('; ', array_map(fn($a) => $a['action'] ?? json_encode($a), $qsContext['actions']))
+                : 'None';
+            $qsSection = "\n# QUALITY SCORE HISTORY (as of {$qsContext['recorded_at']})\n\n"
+                . "Previous QS improvements were applied to this campaign. Use these as starting points:\n\n"
+                . "**Low-QS keywords flagged for pausing:** {$flaggedList}\n"
+                . "**Actions taken previously:** {$actionList}\n\n"
+                . "Avoid these keywords in the new plan unless you have a specific justification. "
+                . "Use tighter match types and more specific ad groups to improve relevance.\n\n---\n";
+        }
+
+        $brandSection = '';
+        if ($context->brandGuideline) {
+            $bg = $context->brandGuideline;
+            $doNotUse = !empty($bg->do_not_use) ? implode(', ', $bg->do_not_use) : 'None specified';
+            $tone = $bg->brand_voice['primary_tone'] ?? 'professional';
+            $usps = !empty($bg->unique_selling_propositions)
+                ? implode("\n- ", $bg->unique_selling_propositions)
+                : 'Not specified';
+            $brandSection = <<<BRAND
+
+# BRAND GUIDELINES
+
+Apply these throughout all headlines, descriptions, and extensions:
+
+**Tone:** {$tone}
+**Key Attributes:** {$bg->getFormattedBrandVoice()}
+
+**Unique Selling Propositions:**
+- {$usps}
+
+**Do NOT use these words/phrases:** {$doNotUse}
+
+---
+
+BRAND;
+        }
+
         return <<<PROMPT
 Generate a comprehensive Google Ads execution plan for the following campaign.
-
+{$brandSection}{$priorSection}{$qsSection}
 # CAMPAIGN INFORMATION
 
 **Campaign Name:** {$campaign->name}
@@ -198,6 +257,7 @@ Create a detailed, step-by-step execution plan for deploying this campaign to Go
    - Choose appropriate bidding strategy (Manual CPC, Target CPA, Target ROAS, Maximize Conversions, etc.)
    - Consider: budget size, conversion tracking availability, business goals
    - Set bid amounts or targets if applicable
+   - **Smart Bidding warm-up rule:** If the account or campaign has fewer than 50 recorded conversions, use `MAXIMIZE_CONVERSIONS` for the first 4 weeks to build signal. Only switch to `TARGET_CPA` or `TARGET_ROAS` once 50+ conversions are recorded. Never launch a brand-new campaign with `TARGET_CPA` — Google's algorithm cannot set sensible bids without historical data.
 
 4. **Design Creative Strategy**
    - Specify which assets to use and how

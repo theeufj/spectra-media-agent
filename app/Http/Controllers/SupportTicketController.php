@@ -55,7 +55,12 @@ class SupportTicketController extends Controller
 
         $ticket->load(['user', 'customer']);
 
-        Mail::to('theeufj@gmail.com')->send(new SupportTicketCreated($ticket));
+        Mail::to(config('app.admin_email', 'theeufj@gmail.com'))->send(new SupportTicketCreated($ticket));
+
+        // Confirmation to the submitting user
+        if ($request->user()->email) {
+            Mail::to($request->user()->email)->queue(new \App\Mail\SupportTicketConfirmation($ticket));
+        }
 
         return redirect()->route('support-tickets.index')
             ->with('message', 'Support ticket submitted successfully. We\'ll get back to you soon!')

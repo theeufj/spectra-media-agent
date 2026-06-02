@@ -206,12 +206,43 @@ class SelfHealingAgent
     protected function handleGoogleDisapprovedAd(Customer $customer, string $customerId, array $ad, array &$results): void
     {
         $maxAttempts = $this->config['max_fix_attempts'] ?? 3;
-        
+
         // Get the policy violation reason
         $policyTopics = $ad['policy_topics'] ?? [];
-        $violationReason = !empty($policyTopics) 
+        $violationReason = !empty($policyTopics)
             ? implode(', ', array_column($policyTopics, 'topic'))
             : 'Unknown policy violation';
+
+        // Check for recurring violation — if the same violation type was attempted 3+ times
+        // without resolution, escalate instead of burning another regeneration.
+        $campaign = $customer->campaigns()->whereNotNull('google_ads_campaign_id')->latest()->first();
+        if ($campaign) {
+            $healingActions = $campaign->healing_actions ?? [];
+            $recentSameViolation = array_filter($healingActions, fn ($a) =>
+                ($a['platform'] ?? '') === 'google_ads' &&
+                str_contains($a['reason'] ?? '', explode(',', $violationReason)[0])
+            );
+            if (count($recentSameViolation) >= 3) {
+                Log::warning("SelfHealingAgent: Recurring violation detected — escalating instead of regenerating", [
+                    'violation'  => $violationReason,
+                    'past_count' => count($recentSameViolation),
+                ]);
+                $results['actions_taken'][] = [
+                    'type'    => 'escalated_recurring_violation',
+                    'platform' => 'google_ads',
+                    'reason'  => $violationReason,
+                    'message' => 'Same violation appeared 3+ times. Manual review required.',
+                ];
+                $customer->users()->each(fn ($user) => $user->notify(
+                    new \App\Notifications\CriticalAgentAlert(
+                        'self_healing',
+                        "Recurring policy violation on Google Ads: {$violationReason}. Auto-healing disabled — manual review required.",
+                        ['ad' => $ad['resource_name'], 'customer_id' => $customer->id]
+                    )
+                ));
+                return;
+            }
+        }
 
         Log::info("SelfHealingAgent: Attempting to fix disapproved Google ad", [
             'ad_resource_name' => $ad['resource_name'],
@@ -267,6 +298,10 @@ class SelfHealingAgent
                             'original' => $ad['resource_name'],
                             'new' => $newAdResourceName,
                         ]);
+
+                        // Schedule approval verification 24h later to track healing success rate
+                        \App\Jobs\VerifyAdApproval::dispatch($customer, $newAdResourceName, $campaign->id ?? 0)
+                            ->delay(now()->addHours(24));
                     }
                 }
             }

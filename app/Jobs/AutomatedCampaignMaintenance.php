@@ -281,9 +281,11 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             }
 
             $processed = count($campaignChanges);
-            $user = $customer->users()->first();
-            if ($user) {
-                $user->notify(new MaintenanceSummaryNotification($campaignChanges, $processed));
+            if ($processed > 0) {
+                $user = $customer->users()->first();
+                if ($user) {
+                    $user->notify(new MaintenanceSummaryNotification($campaignChanges, $processed));
+                }
             }
         }
     }

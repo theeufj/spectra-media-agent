@@ -133,8 +133,9 @@ class CheckVideoStatus implements ShouldQueue
 
         $campaign = $this->videoCollateral->campaign;
         if ($campaign && $campaign->customer) {
+            $videoCount = $campaign->videoCollaterals()->where('status', 'completed')->count();
             foreach ($campaign->customer->users as $user) {
-                Mail::to($user->email)->send(new VideosGenerated($user, $campaign));
+                Mail::to($user->email)->send(new VideosGenerated($user, $campaign, $videoCount));
             }
         }
 

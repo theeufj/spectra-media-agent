@@ -57,9 +57,10 @@ class CampaignOptimizationAgent
 
         try {
             $response = $this->gemini->generateContent(
-                model: config('ai.models.default'),
+                model: config('ai.models.pro'),
                 prompt: $prompt,
-                config: ['temperature' => 0.7, 'maxOutputTokens' => 4096]
+                config: ['temperature' => 0.7, 'maxOutputTokens' => 4096],
+                enableThinking: true
             );
 
             if (!$response || !isset($response['text'])) {
@@ -74,7 +75,7 @@ class CampaignOptimizationAgent
                     $recommendations = $this->scorer->enhance($recommendations, $metrics, $historical, $dataQuality);
                     $recommendations['categorized'] = $this->scorer->categorize($recommendations);
 
-                    Cache::put("optimization:campaign:{$campaign->id}", $recommendations, now()->addHours(12));
+                    Cache::put("optimization:campaign:{$campaign->id}", $recommendations, now()->addHours($this->cacheTtlHours()));
 
                     return $recommendations;
                 }
@@ -94,8 +95,82 @@ class CampaignOptimizationAgent
         return Cache::get("optimization:campaign:{$campaignId}");
     }
 
+    /**
+     * Returns cache TTL in hours — shortened during seasonal peak periods
+     * (budget_multiplier >= 1.5) so recommendations stay fresh when it matters most.
+     */
+    private function cacheTtlHours(): int
+    {
+        $seasonals = config('budget_rules.seasonal_multipliers', []);
+        $today = now();
+
+        foreach ($seasonals as $key => $multiplier) {
+            if ($multiplier < 1.5) {
+                continue;
+            }
+
+            // Date-keyed entries (MM-DD format)
+            if (str_contains($key, '-') && strlen($key) === 5) {
+                if ($today->format('m-d') === $key) {
+                    return 4;
+                }
+                continue;
+            }
+
+            // Named entries: black_friday, cyber_monday
+            if ($key === 'black_friday') {
+                // Last Friday of November
+                $lastFriday = (clone $today)->setDate((int)$today->format('Y'), 11, 1)
+                    ->endOfMonth()
+                    ->startOfDay();
+                while ($lastFriday->dayOfWeek !== 5) {
+                    $lastFriday->subDay();
+                }
+                if ($today->isSameDay($lastFriday)) {
+                    return 4;
+                }
+            } elseif ($key === 'cyber_monday') {
+                // Monday after Black Friday (4th Monday of November or 1st Monday of December)
+                $cyberMonday = (clone $today)->setDate((int)$today->format('Y'), 11, 1)
+                    ->endOfMonth()
+                    ->startOfDay();
+                while ($cyberMonday->dayOfWeek !== 5) {
+                    $cyberMonday->subDay();
+                }
+                $cyberMonday->addDays(3); // Friday + 3 = Monday
+                if ($today->isSameDay($cyberMonday)) {
+                    return 4;
+                }
+            }
+        }
+
+        return 12;
+    }
+
     public function applyRecommendation(Campaign $campaign, array $recommendation): array
     {
+        // Smart Bidding cooling-off: Google recommends at least 7 days between bid strategy changes.
+        // Downgrade bidding/budget mutations to the review queue if a change was applied recently.
+        $biddingTypes = ['adjust_bid', 'change_bid_strategy', 'adjust_target_cpa', 'adjust_target_roas', 'adjust_budget'];
+        $type = $recommendation['type'] ?? '';
+
+        if (in_array($type, $biddingTypes, true)) {
+            $strategy = $campaign->strategies()->latest()->first();
+            $lastOptimized = $strategy?->last_optimized_at;
+
+            if ($lastOptimized && \Carbon\Carbon::parse($lastOptimized)->diffInDays(now()) < 7) {
+                Log::info("CampaignOptimizationAgent: Cooling-off — last bid change was {$lastOptimized}, skipping auto-apply", [
+                    'campaign_id' => $campaign->id,
+                    'type'        => $type,
+                ]);
+                return [
+                    'success' => false,
+                    'skipped' => true,
+                    'reason'  => 'Smart Bidding cooling-off: last bidding change was less than 7 days ago. Recommendation queued for manual review.',
+                ];
+            }
+        }
+
         return $this->applier->apply($campaign, $recommendation);
     }
 }

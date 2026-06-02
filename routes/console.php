@@ -29,6 +29,7 @@ use App\Jobs\FetchLinkedInAdsPerformanceData;
 use App\Models\Customer;
 use App\Models\Campaign;
 use App\Models\User;
+use App\Jobs\RecordSiteConversion;
 use App\Notifications\ScheduledJobFailed;
 
 /**
@@ -49,6 +50,21 @@ if (!function_exists('notifyAdminOnFailure')) {
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
+
+// ============================================================
+// BILLING REPORTING
+// ============================================================
+
+// Ad spend billing report - daily summary for accounting
+Schedule::command('billing:report-ad-spend')->daily()->withoutOverlapping();
+
+// Fire seven_day_return conversion for users who signed up via Google Ad exactly 7 days ago
+Schedule::call(function () {
+    Customer::whereHas('users', fn ($q) =>
+        $q->whereNotNull('gclid')
+          ->whereBetween('created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
+    )->each(fn (Customer $c) => RecordSiteConversion::dispatch($c, 'seven_day_return'));
+})->name('record-seven-day-return-conversions')->dailyAt('10:00')->withoutOverlapping();
 
 // ============================================================
 // HEALTH & MONITORING
@@ -188,7 +204,14 @@ Schedule::call(function () {
 })->name('generate-monthly-reports')->monthlyOn(1, '07:00')->withoutOverlapping(); // Run 1st of each month at 7am
 
 // Cross-channel budget rebalance - check all auto-rebalance allocations
-Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->dailyAt('06:00')->withoutOverlapping();
+Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->weekly()->mondays()->at('06:00')->withoutOverlapping();
+
+// Quarterly executive reports — first day of each quarter at 08:00
+Schedule::call(function () {
+    Customer::whereHas('campaigns', fn ($q) => $q->where('status', 'active'))->each(function (Customer $customer) {
+        \App\Jobs\GenerateExecutiveReport::dispatch($customer->id, 'quarterly');
+    });
+})->name('generate-quarterly-executive-reports')->quarterly()->at('08:00')->withoutOverlapping();
 
 // Broad match keyword expansion — prunes poor performers, generates new keyword suggestions
 Schedule::call(function () {

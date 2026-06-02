@@ -58,11 +58,14 @@ class GenerateExecutiveReport implements ShouldQueue
 
             // Email the report to all users associated with this customer
             foreach ($customer->users as $user) {
-                if ($user->email) {
-                    Mail::to($user->email)->queue(
-                        new WeeklyExecutiveReport($user, $report)
-                    );
+                if (!$user->email) {
+                    continue;
                 }
+                $prefs = $user->notification_preferences ?? [];
+                if (isset($prefs['performance_reports']) && $prefs['performance_reports'] === false) {
+                    continue;
+                }
+                Mail::to($user->email)->queue(new WeeklyExecutiveReport($user, $report));
             }
 
             Log::info("Executive report generated for customer {$customer->id}", [

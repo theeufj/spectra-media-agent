@@ -74,9 +74,59 @@ INSTRUCTION;
             ?? $customer->website
             ?? 'Not provided';
 
+        // Prior performance section
+        $priorPerformance = $context->metadata['prior_performance'] ?? [];
+        $priorSection = '';
+        if (!empty($priorPerformance['facebook'])) {
+            $s = $priorPerformance['facebook'];
+            $priorSection = "\n# PRIOR CAMPAIGN PERFORMANCE (last 30 days)\n\n"
+                . "This campaign has run before on Facebook. Use this data to avoid repeating past mistakes:\n\n"
+                . "CTR {$s['avg_ctr']}%, CPC \${$s['avg_cpc']}, CPA \${$s['avg_cpa']}, "
+                . "{$s['total_conversions']} conversions, \${$s['total_spend']} spend over {$s['days_of_data']} days\n\n---\n";
+        }
+
+        $learningOutcome = $context->metadata['fb_learning_outcome'] ?? null;
+        $learningSection = '';
+        if ($learningOutcome) {
+            $details = !empty($learningOutcome['details'])
+                ? ' Details: ' . json_encode($learningOutcome['details'])
+                : '';
+            $learningSection = "\n# FACEBOOK LEARNING PHASE HISTORY\n\n"
+                . "The last recorded Facebook learning phase event for this campaign was **{$learningOutcome['action']}** "
+                . "on {$learningOutcome['recorded_at']}: {$learningOutcome['description']}.{$details} "
+                . "Take this into account when structuring ad sets and budgets — avoid repeating the same configuration that caused this issue.\n\n---\n";
+        }
+
+        $brandSection = '';
+        if ($context->brandGuideline) {
+            $bg = $context->brandGuideline;
+            $doNotUse = !empty($bg->do_not_use) ? implode(', ', $bg->do_not_use) : 'None specified';
+            $tone = $bg->brand_voice['primary_tone'] ?? 'professional';
+            $usps = !empty($bg->unique_selling_propositions)
+                ? implode("\n- ", $bg->unique_selling_propositions)
+                : 'Not specified';
+            $brandSection = <<<BRAND
+
+# BRAND GUIDELINES
+
+Apply these to all primary_text, headlines, and descriptions:
+
+**Tone:** {$tone}
+**Key Attributes:** {$bg->getFormattedBrandVoice()}
+
+**Unique Selling Propositions:**
+- {$usps}
+
+**Do NOT use these words/phrases:** {$doNotUse}
+
+---
+
+BRAND;
+        }
+
         return <<<PROMPT
 Generate a comprehensive Facebook/Meta Ads execution plan for the following campaign.
-
+{$brandSection}{$priorSection}{$learningSection}
 **BUYER PERSPECTIVE RULE:** Ad copy, targeting interests, and audiences must reflect the problems buyers are trying to solve and the outcomes they want — not product features or technology. Write to the person who wants to hand their ads to someone else, not to someone building their own tool.
 
 # CAMPAIGN INFORMATION
@@ -196,6 +246,12 @@ Create a detailed, step-by-step execution plan for deploying this campaign to Fa
   - Use detailed targeting expansion for better reach
   - **CRITICAL API RULE:** All ad sets use Advantage+ audience (`advantage_audience: 1`). Facebook's API rejects `age_max` below 65 with this setting (error 1870189). Always set `age_max: 65` regardless of the target demographic. Use `age_min` to restrict the lower bound instead.
   
+- **Conversion Window:**
+  - Default for conversion/sales objectives: `7d_click_1d_view`
+  - Retargeting ad sets: `1d_click` (shorter window matches intent signal)
+  - Awareness/traffic objectives: `7d_click`
+  - Always set `conversion_window` in `campaign_structure` output
+
 - **Technical Constraints:**
   - All URLs must be valid and accessible
   - Campaign names should be descriptive and unique
@@ -219,6 +275,7 @@ Provide your response as a valid JSON object with the following structure:
     "optimization_goal": "LINK_CLICKS|LANDING_PAGE_VIEWS|IMPRESSIONS|REACH|etc",
     "daily_budget": 16.67,
     "bid_strategy": "LOWEST_COST|COST_CAP|BID_CAP",
+    "conversion_window": "7d_click|1d_click|7d_click_1d_view",
     "special_ad_categories": []
   },
   "targeting_strategy": {
@@ -248,22 +305,15 @@ Provide your response as a valid JSON object with the following structure:
   "creative_strategy": {
     "ad_format": "single_image|carousel|video|collection|stories",
     "use_dynamic_creative": false,
+    "dynamic_creative_assets": {
+      "bodies": ["Primary text variation 1", "Primary text variation 2"],
+      "titles": ["Headline variation 1", "Headline variation 2"],
+      "image_descriptions": ["Image context 1", "Image context 2"]
+    },
     "primary_text": "REQUIRED: Compelling hook copy (125 chars max) — speak to buyer pain points, NOT product features. Min 20 chars.",
     "headline": "Compelling headline (40 chars max)",
     "description": "Brief description (30 chars max)",
     "call_to_action": "LEARN_MORE|SHOP_NOW|SIGN_UP|DOWNLOAD|etc",
-    "targeting": {
-      "geo_locations": {
-        "countries": ["US", "CA", "AU", "GB"],
-        "regions": [],
-        "cities": []
-      },
-      "age_min": 18,
-      "age_max": 65,
-      "genders": [1, 2],
-      "interests": [],
-      "behaviors": []
-    },
     "creative_details": {
       "image_count": 1,
       "video_count": 0,
@@ -337,7 +387,9 @@ Provide your response as a valid JSON object with the following structure:
 - Include detailed reasoning for all major decisions
 - Make sure your plan is executable with the available assets and budget
 - `creative_strategy.primary_text` is REQUIRED and must be at least 20 characters — write compelling hook copy
-- `creative_strategy.targeting.geo_locations.countries` is REQUIRED — use at minimum `["US","CA","AU","GB"]`
+- `targeting_strategy.geo_locations.countries` is REQUIRED — use at minimum `["US","CA","AU","GB"]`
+- When `use_dynamic_creative: true`, populate `dynamic_creative_assets` with at least 2 `bodies` and 2 `titles`; omit or leave empty arrays when false
+- `campaign_structure.conversion_window`: use `7d_click_1d_view` for conversion/sales objectives, `1d_click` for retargeting, `7d_click` for awareness/traffic
 - Use `OUTCOME_*` objectives ONLY — never legacy names like LINK_CLICKS, CONVERSIONS, or REACH
 - Ensure targeting produces audience of at least 50,000 people
 - Comply with Facebook's advertising policies

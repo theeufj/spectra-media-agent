@@ -17,23 +17,20 @@ class VideosGenerated extends Mailable
 
     public User $user;
     public Campaign $campaign;
+    public int $videoCount;
 
-    /**
-     * Create a new message instance.
-     */
-    public function __construct(User $user, Campaign $campaign)
+    public function __construct(User $user, Campaign $campaign, int $videoCount = 1)
     {
         $this->user = $user;
         $this->campaign = $campaign;
+        $this->videoCount = $videoCount;
     }
 
-    /**
-     * Get the message envelope.
-     */
     public function envelope(): Envelope
     {
+        $plural = $this->videoCount === 1 ? 'Video' : 'Videos';
         return new Envelope(
-            subject: 'Your Videos Have Been Generated',
+            subject: "{$this->videoCount} {$plural} Ready for \"{$this->campaign->name}\"",
         );
     }
 

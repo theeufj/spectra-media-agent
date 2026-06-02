@@ -138,7 +138,25 @@
         </table>
     @endif
 
+    {{-- Top Action for Today --}}
+    @if(!empty($summary['top_action']))
+        <div style="margin: 24px 0; padding: 16px 20px; background: #fffbeb; border-left: 4px solid #f6ad55; border-radius: 4px;">
+            <div style="font-size: 11px; color: #c05621; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px;">Top action for today</div>
+            <div style="font-size: 15px; color: #2d3748; font-weight: 600;">{{ $summary['top_action']['action'] }}</div>
+            @if(!empty($summary['top_action']['reasoning']))
+                <div style="font-size: 13px; color: #718096; margin-top: 4px;">{{ $summary['top_action']['reasoning'] }}</div>
+            @endif
+            @if(!empty($summary['top_action']['campaign']))
+                <div style="font-size: 11px; color: #a0aec0; margin-top: 6px;">Campaign: {{ $summary['top_action']['campaign'] }}</div>
+            @endif
+        </div>
+    @endif
+
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
         <a href="{{ url('/dashboard') }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Dashboard</a>
+    </p>
+
+    <p style="text-align: center; font-size: 12px; color: #a0aec0; margin-top: 24px;">
+        <a href="{{ URL::signedRoute('email.unsubscribe', ['user' => $user->id]) }}" style="color: #a0aec0;">Unsubscribe from performance reports</a>
     </p>
 @endsection

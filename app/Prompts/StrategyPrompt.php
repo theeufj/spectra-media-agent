@@ -40,11 +40,19 @@ class StrategyPrompt
      * @param array $enabledPlatforms Array of enabled platform names.
      * @return string The fully constructed prompt.
      */
-    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = [], $competitors = null): string
+    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = [], $competitors = null, $croAudit = null, $abTestWinners = null, ?string $performanceGap = null): string
     {
         $brandContext = self::formatBrandContext($brandGuidelines);
         $competitorContext = self::formatCompetitorContext($competitors);
         $verticalContext = self::formatVerticalContext($campaign);
+        $croContext = self::formatCroContext($croAudit);
+        $abTestContext = self::formatAbTestContext($abTestWinners);
+
+        // Build revenue context from customer's actual AOV so the AI doesn't have to guess
+        $aov = $campaign->customer->average_order_value ?? null;
+        $revenueContext = $aov
+            ? "**Known Customer Revenue Data:** Average order/conversion value = \${$aov}. Use this to anchor `revenue_cpa_multiple` — set it so that (target CPA × revenue_cpa_multiple) ≈ \${$aov}."
+            : '';
         
         if ($brandGuidelines) {
             Log::info("StrategyPrompt: Using brand guidelines for customer ID: {$brandGuidelines->customer_id}");
@@ -62,9 +70,13 @@ class StrategyPrompt
         $recommendationsPrompt = "";
         if (!empty($recommendations)) {
             $recommendationsJson = json_encode($recommendations, JSON_PRETTY_PRINT);
+            $gapNote = $performanceGap
+                ? "\n**WHY THE PREVIOUS STRATEGY UNDERPERFORMED:** {$performanceGap}\nYour new strategy must directly address these gaps.\n"
+                : '';
+
             $recommendationsPrompt = <<<PROMPT
 ---
-
+{$gapNote}
 **3. OPTIMIZATION RECOMMENDATIONS (Incorporate these into your strategy):**
 Based on recent performance data, the following recommendations have been generated. You MUST incorporate these into your new strategy.
 ---
@@ -91,7 +103,7 @@ PROMPT;
         return <<<PROMPT
 You are an expert digital marketing strategist. Your task is to generate a comprehensive, platform-specific marketing strategy based on the provided campaign brief, knowledge base, and brand guidelines.
 
-{$brandContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
+{$brandContext}{$croContext}{$abTestContext}**YOUR RESPONSE MUST BE A VALID, PARSABLE JSON OBJECT.**
 The JSON object should have a single root key: "strategies".
 The value of "strategies" should be an array of objects, where each object represents the strategy for a single platform.
 Each platform object must have the following keys: "platform", "ad_copy_strategy", "imagery_strategy", "video_strategy", "generate_video", "bidding_strategy", "revenue_cpa_multiple", "landing_page_url", "targeting", "ad_extensions", and "conversion_goals".
@@ -117,9 +129,8 @@ You MUST include a "conversion_goals" object to guide optimization.
 
 **Video Strategy & Generate Video Flag:**
 You MUST include a boolean "generate_video" field for every platform strategy.
-- Set "generate_video": true if video ads are applicable and worth producing for this platform (e.g., Facebook, Instagram, YouTube, Performance Max, LinkedIn).
-- Set "generate_video": false if video is not applicable for the campaign type (e.g., pure text search campaigns on Google Ads SEM where video adds no value, or platforms where video is not supported).
-- If in doubt, prefer true — it is better to generate video assets than to skip them.
+- Set "generate_video": true ONLY when ALL of the following are true: (1) the platform supports video (Facebook, Instagram, YouTube, LinkedIn Video, Performance Max), (2) the campaign duration is 7+ days, and (3) the daily budget is ≥ $20.
+- Set "generate_video": false for pure Search campaigns, low-budget campaigns (< $20/day), or text-focused verticals (legal, finance, insurance) where compliance risk outweighs video value.
 
 If "generate_video" is true, describe the video concept in "video_strategy".
 If "generate_video" is false, still populate "video_strategy" with a brief explanation of why video is not applicable.
@@ -136,7 +147,8 @@ You MUST identify the most appropriate landing page URL for this campaign strate
 {$selectedPagesPrompt}
 
 **Revenue CPA Multiple:**
-Based on the business type (e.g., e-commerce, lead generation), estimate a "revenue_cpa_multiple". This is a float representing how much revenue a single conversion is worth compared to its cost (CPA). For example, for an e-commerce business, this might be 2.5, meaning a conversion is worth 2.5 times the target CPA. For lead generation, it might be higher, like 5.0.
+{$revenueContext}
+Based on the business type (e.g., e-commerce, lead generation), set a "revenue_cpa_multiple" that reflects the actual value of a conversion. This is a float representing how much revenue a single conversion generates relative to its cost (CPA). If known revenue data is provided above, use it directly rather than estimating.
 
 **Bidding Strategy Options:**
 You MUST choose one of the following bidding strategies and format it as a JSON object for the "bidding_strategy" key.
@@ -459,5 +471,50 @@ The following competitors have been identified and analyzed. Use this intelligen
 ---
 
 COMPETITORS;
+    }
+
+    private static function formatCroContext($croAudit): string
+    {
+        if (!$croAudit || empty($croAudit->issues)) {
+            return '';
+        }
+
+        $top = array_slice($croAudit->issues, 0, 3);
+        $lines = implode("\n", array_map(
+            fn ($issue) => '- ' . ($issue['description'] ?? $issue['title'] ?? json_encode($issue)),
+            $top
+        ));
+
+        return <<<CRO
+
+**KNOWN LANDING PAGE WEAKNESSES (compensate in ad copy and targeting):**
+A CRO audit was performed on the landing page. The top issues are:
+{$lines}
+Your ad copy and targeting should set accurate expectations that help visitors overcome these friction points.
+---
+
+CRO;
+    }
+
+    private static function formatAbTestContext($abTestWinners): string
+    {
+        if (!$abTestWinners || $abTestWinners->isEmpty()) {
+            return '';
+        }
+
+        $lines = $abTestWinners->map(function ($test) {
+            $results = $test->results ?? [];
+            $summary = $results['summary'] ?? $results['winning_reason'] ?? 'Higher conversion rate';
+            return "- Test on campaign #{$test->campaign_id}: winning variant → {$summary}";
+        })->implode("\n");
+
+        return <<<ABTESTS
+
+**PROVEN A/B TEST WINNERS (prioritize these angles in your strategy):**
+The following copy and creative angles have been validated through A/B testing. Incorporate these themes where applicable:
+{$lines}
+---
+
+ABTESTS;
     }
 }

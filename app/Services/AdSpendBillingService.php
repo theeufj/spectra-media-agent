@@ -204,7 +204,7 @@ class AdSpendBillingService
                 $credit->enterGracePeriod(24);
                 
                 if ($user) {
-                    Mail::to($user->email)->queue(new AdSpendPaymentWarning($customer, $credit, $error));
+                    Mail::to($user->email)->send(new AdSpendPaymentWarning($customer, $credit, $error));
                 }
                 break;
 

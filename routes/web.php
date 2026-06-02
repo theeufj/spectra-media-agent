@@ -764,3 +764,8 @@ Route::middleware(['auth', 'admin'])->group(function () {
 
 // Callback must be outside auth middleware — Google redirects here and the session won't carry over
 Route::get('/youtube/auth/callback', [App\Http\Controllers\YouTubeAuthController::class, 'callback'])->name('youtube.auth.callback');
+
+// Email unsubscribe — signed URL so it works without login
+Route::get('/email/unsubscribe/{user}', [App\Http\Controllers\EmailPreferenceController::class, 'unsubscribe'])
+    ->name('email.unsubscribe')
+    ->middleware('signed');

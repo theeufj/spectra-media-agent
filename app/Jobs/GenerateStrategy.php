@@ -2,10 +2,14 @@
 
 namespace App\Jobs;
 
+use App\Models\ABTest;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\EnabledPlatform;
+use App\Models\FacebookAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\KnowledgeBase;
+use App\Models\LandingPageAudit;
 use App\Models\Recommendation;
 use App\Notifications\StrategyGenerationFailed;
 use App\Prompts\StrategyPrompt;
@@ -98,6 +102,31 @@ class GenerateStrategy implements ShouldQueue
                 ->get();
             Log::info("Found {$recommendations->count()} pending recommendations");
 
+            // Step 1.55: If we have recommendations (re-generation), compute a plain-English
+            // performance_gap so the AI understands *why* the previous strategy underperformed.
+            $performanceGap = null;
+            if ($recommendations->isNotEmpty()) {
+                $gData = GoogleAdsPerformanceData::where('campaign_id', $this->campaign->id)
+                    ->where('date', '>=', now()->subDays(7)->toDateString())
+                    ->selectRaw('AVG(ctr) as avg_ctr, AVG(cpc) as avg_cpc, SUM(conversions) as total_conversions, SUM(cost) as total_cost')
+                    ->first();
+                $fData = FacebookAdsPerformanceData::where('campaign_id', $this->campaign->id)
+                    ->where('date', '>=', now()->subDays(7)->toDateString())
+                    ->selectRaw('AVG(ctr) as avg_ctr, AVG(cpc) as avg_cpc, SUM(conversions) as total_conversions, SUM(cost) as total_cost')
+                    ->first();
+
+                $gaps = [];
+                foreach ([['google', $gData], ['facebook', $fData]] as [$platform, $data]) {
+                    if (!$data || !$data->total_cost) continue;
+                    $ctr = round(($data->avg_ctr ?? 0) * 100, 2);
+                    $conversions = round($data->total_conversions ?? 0, 1);
+                    $spend = round($data->total_cost ?? 0, 2);
+                    $cpa = $conversions > 0 ? round($spend / $conversions, 2) : null;
+                    $gaps[] = ucfirst($platform) . ": CTR {$ctr}%, " . ($cpa ? "CPA \${$cpa}" : "{$conversions} conversions") . " over last 7 days";
+                }
+                $performanceGap = !empty($gaps) ? implode('; ', $gaps) : null;
+            }
+
             // Step 1.75: Get enabled platforms
             Log::info("Fetching enabled platforms for campaign {$this->campaign->id}");
             $enabledPlatforms = EnabledPlatform::getEnabledPlatformNames();
@@ -135,9 +164,36 @@ class GenerateStrategy implements ShouldQueue
                 ->get();
             Log::info("Found {$competitors->count()} analyzed competitors for campaign {$this->campaign->id}");
 
+            // Step 1.95: Load CRO audit results for the campaign's landing page (if any)
+            $landingPageUrl = $this->campaign->landing_page_url ?? null;
+            $croAudit = null;
+            if ($landingPageUrl) {
+                $croAudit = LandingPageAudit::where('customer_id', $this->campaign->customer_id)
+                    ->where('url', $landingPageUrl)
+                    ->orderByDesc('created_at')
+                    ->first();
+            }
+
+            // Step 1.96: Load last 3 resolved A/B test winners for this customer's campaigns
+            $abTestWinners = ABTest::whereHas('campaign', fn ($q) => $q->where('customer_id', $this->campaign->customer_id))
+                ->whereIn('status', [ABTest::STATUS_SIGNIFICANT, ABTest::STATUS_APPLIED])
+                ->orderByDesc('updated_at')
+                ->take(3)
+                ->get();
+
             // Step 2: Construct the prompt using our dedicated prompt builder class.
             Log::info("Building strategy prompt for campaign {$this->campaign->id}");
-            $prompt = StrategyPrompt::build($this->campaign, $knowledgeBaseContent, $recommendations->toArray(), $brandGuidelines, $enabledPlatforms, $competitors);
+            $prompt = StrategyPrompt::build(
+                $this->campaign,
+                $knowledgeBaseContent,
+                $recommendations->toArray(),
+                $brandGuidelines,
+                $enabledPlatforms,
+                $competitors,
+                $croAudit,
+                $abTestWinners,
+                $performanceGap
+            );
             Log::info("Generated prompt length: " . strlen($prompt) . " characters");
 
             // Step 3: Call Gemini API with Gemini 3 Pro Preview with extended thinking and Google Search.
