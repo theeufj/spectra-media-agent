@@ -2,14 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Jobs\ExtractBrandGuidelines;
 use App\Models\Customer;
 use App\Models\CustomerPage;
 use App\Models\User;
+use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Log;
 use Spatie\Browsershot\Browsershot;
 use Symfony\Component\DomCrawler\Crawler;
@@ -106,6 +109,7 @@ class DiscoverNavigationUrls implements ShouldQueue
                 'customer_id' => $this->customer->id,
                 'nav_urls_found' => count($discoveredUrls),
             ]);
+            ExtractBrandGuidelines::dispatch($this->customer);
             return;
         }
 
@@ -117,16 +121,26 @@ class DiscoverNavigationUrls implements ShouldQueue
             'missing_count' => count($missingUrls),
         ]);
 
-        // Dispatch CrawlPage jobs for missing URLs
-        foreach ($missingUrls as $url) {
-            Log::info("DiscoverNavigationUrls: Dispatching CrawlPage for missing URL: {$url}");
-            CrawlPage::dispatch($this->user, $url, $this->customer->id, [
-                'source' => 'navigation_discovery',
-                'sitemap_gap' => true,
-            ]);
-        }
+        $jobs = array_map(fn($url) => new CrawlPage($this->user, $url, $this->customer->id, [
+            'source' => 'navigation_discovery',
+            'sitemap_gap' => true,
+        ]), $missingUrls);
 
-        Log::info('DiscoverNavigationUrls: Dispatched crawl jobs for missing navigation URLs', [
+        $customer = $this->customer;
+
+        Bus::batch($jobs)
+            ->name("Discover Navigation: {$websiteUrl}")
+            ->then(function (Batch $batch) use ($customer) {
+                Log::info('DiscoverNavigationUrls batch completed. Dispatching brand guideline extraction.', [
+                    'customer_id' => $customer->id,
+                    'pages_crawled' => $batch->totalJobs,
+                ]);
+                ExtractBrandGuidelines::dispatch($customer);
+            })
+            ->allowFailures()
+            ->dispatch();
+
+        Log::info('DiscoverNavigationUrls: Dispatched batch for missing navigation URLs', [
             'customer_id' => $this->customer->id,
             'count' => count($missingUrls),
         ]);

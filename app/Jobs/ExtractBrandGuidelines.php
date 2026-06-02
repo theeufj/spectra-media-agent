@@ -2,8 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Mail\SitemapCrawlCompleted;
 use App\Models\Customer;
-use App\Mail\BrandAssetsReady;
+use App\Models\CustomerPage;
 use Illuminate\Support\Facades\Mail;
 use App\Services\BrandGuidelineExtractorService;
 use Illuminate\Bus\Queueable;
@@ -51,9 +52,15 @@ class ExtractBrandGuidelines implements ShouldQueue
                     'quality_score' => $brandGuideline->extraction_quality_score,
                 ]);
 
-                // Notify all users in the customer account that brand assets are ready
+                $totalPages = CustomerPage::where('customer_id', $this->customer->id)->count();
+
+                // Notify all users: brand extraction is complete and the knowledge base is ready
                 foreach ($this->customer->users as $user) {
-                    Mail::to($user->email)->send(new BrandAssetsReady($user, $this->customer, 1));
+                    Mail::to($user->email)->queue(new SitemapCrawlCompleted(
+                        $this->customer->website ?? '',
+                        $totalPages,
+                        $user->name
+                    ));
                 }
             } else {
                 Log::warning("Brand guideline extraction returned null", [
