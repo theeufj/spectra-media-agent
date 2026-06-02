@@ -9,6 +9,7 @@ use App\Notifications\DeploymentFailed;
 use App\Services\DeploymentService;
 use App\Services\AdSpendBillingService;
 use App\Services\Agents\PreLaunchComplianceAgent;
+use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use App\Services\FacebookAds\PixelService;
 use App\Jobs\VerifyDeployment;
 use Illuminate\Bus\Queueable;
@@ -48,6 +49,33 @@ class DeployCampaign implements ShouldQueue
         if (!$customer) {
             Log::error("No customer found for campaign {$this->campaign->id}. Skipping deployment.");
             return;
+        }
+
+        // Auto-provision Facebook ad account on first Facebook deployment.
+        if (!$customer->facebook_ads_account_id) {
+            $hasFacebookStrategy = $this->campaign->strategies->contains(
+                fn($s) => str_contains(strtolower($s->platform), 'facebook') || str_contains(strtolower($s->platform), 'meta')
+            );
+            if ($hasFacebookStrategy) {
+                Log::info("DeployCampaign: No Facebook ad account — provisioning for customer {$customer->id}");
+                $accountResult = (new CreateFacebookAdsAccount($customer))(
+                    accountName: $customer->name . ' Ads',
+                    currency: 'USD',
+                    timezoneId: 1
+                );
+                if ($accountResult) {
+                    $customer->update(['facebook_ads_account_id' => $accountResult['account_id']]);
+                    $customer->refresh();
+                    Log::info("DeployCampaign: Facebook ad account provisioned", [
+                        'customer_id' => $customer->id,
+                        'account_id'  => $accountResult['account_id'],
+                    ]);
+                } else {
+                    Log::warning("DeployCampaign: Could not provision Facebook ad account — compliance check may fail", [
+                        'customer_id' => $customer->id,
+                    ]);
+                }
+            }
         }
 
         // Auto-provision Facebook pixel before compliance check.
