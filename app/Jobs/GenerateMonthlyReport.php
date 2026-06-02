@@ -45,18 +45,20 @@ class GenerateMonthlyReport implements ShouldQueue
 
             // Generate PDF
             $pdfPath = $pdfService->generate($customer, $report);
-            $pdfContent = $pdfPath ? $pdfService->getPdfContent($customer, $report) : null;
 
             // Store report metadata for the Reports page
             $this->storeReportRecord($customer, $report, $pdfPath);
 
             // Email to all users
             foreach ($customer->users as $user) {
-                if ($user->email) {
-                    Mail::to($user->email)->queue(
-                        new MonthlyExecutiveReport($user, $report, $pdfContent)
-                    );
+                if (!$user->email) {
+                    continue;
                 }
+                $prefs = $user->notification_preferences ?? [];
+                if (isset($prefs['performance_reports']) && $prefs['performance_reports'] === false) {
+                    continue;
+                }
+                Mail::to($user->email)->queue(new MonthlyExecutiveReport($user, $report, $pdfPath));
             }
 
             Log::info("Monthly report generated for customer {$customer->id}", [

@@ -7,6 +7,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\SerializesModels;
 
 class DailyPerformanceReport extends Mailable
@@ -36,6 +37,11 @@ class DailyPerformanceReport extends Mailable
         return new Content(
             view: 'emails.daily-performance-report',
         );
+    }
+
+    public function middleware(): array
+    {
+        return [new RateLimited('resend')];
     }
 
     public function attachments(): array

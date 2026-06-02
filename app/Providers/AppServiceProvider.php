@@ -17,7 +17,9 @@ use App\Policies\CustomerPolicy;
 use App\Policies\KnowledgeBasePolicy;
 use App\Policies\ProposalPolicy;
 use App\Policies\StrategyPolicy;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Queue\Events\JobFailed;
@@ -48,6 +50,9 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        // Rate limiter for Resend's 5 req/s API limit — applied via RateLimited middleware on queued mailables.
+        RateLimiter::for('resend', fn () => Limit::perSecond(4));
 
         // Register model observers
         Customer::observe(CustomerObserver::class);
