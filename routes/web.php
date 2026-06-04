@@ -492,6 +492,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('conversions', [App\Http\Controllers\AdminController::class, 'conversionTrackingIndex'])->name('admin.conversions.index');
     Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');
     Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
+    Route::post('customers/{customer}/reconcile-spend', [App\Http\Controllers\AdminController::class, 'reconcileSpend'])->name('admin.customers.reconcile-spend');
+    Route::get('customers/{customer}/credit-ledger', [App\Http\Controllers\AdminController::class, 'customerCreditLedger'])->name('admin.customers.credit-ledger');
     Route::put('customers/{customer}', [App\Http\Controllers\AdminController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
     Route::put('customers/{customer}/microsoft', [App\Http\Controllers\AdminController::class, 'updateCustomerMicrosoft'])->name('admin.customers.update-microsoft');
     Route::put('customers/{customer}/google', [App\Http\Controllers\AdminController::class, 'updateCustomerGoogle'])->name('admin.customers.update-google');

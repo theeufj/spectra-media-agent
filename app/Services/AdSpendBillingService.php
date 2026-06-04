@@ -381,7 +381,7 @@ class AdSpendBillingService
             foreach ($activeCampaigns as $campaign) {
                 $platformsFetched = [];
 
-                foreach ($campaign->strategies()->where('deployment_status', 'deployed')->get() as $strategy) {
+                foreach ($campaign->strategies()->whereIn('deployment_status', ['deployed', 'verified'])->get() as $strategy) {
                     $platform = strtolower(trim($strategy->platform));
 
                     if (str_contains($platform, 'google') && !in_array('google', $platformsFetched)) {

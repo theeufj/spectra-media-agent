@@ -51,14 +51,20 @@ const CustomerTable = ({ customers, plans = [] }) => {
         </span>,
         new Date(customer.created_at).toLocaleDateString(),
         <div className="flex gap-2">
-            <Link 
-                href={route('admin.customers.show', customer.id)} 
+            <Link
+                href={route('admin.customers.show', customer.id)}
                 className="text-flame-orange-600 hover:text-flame-orange-900 font-medium"
             >
                 View
             </Link>
-            <button 
-                onClick={() => handleDeleteCustomer(customer.id)} 
+            <Link
+                href={route('admin.customers.credit-ledger', customer.id)}
+                className="text-blue-600 hover:text-blue-900 font-medium"
+            >
+                Ledger
+            </Link>
+            <button
+                onClick={() => handleDeleteCustomer(customer.id)}
                 className="text-red-600 hover:text-red-900"
             >
                 Delete

@@ -140,7 +140,7 @@ class ExecutionContext
 
         $facebook = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
             ->where('date', '>=', now()->subDays(30)->toDateString())
-            ->selectRaw('AVG(ctr) as avg_ctr, AVG(cpc) as avg_cpc, AVG(cpa) as avg_cpa, SUM(conversions) as total_conversions, SUM(cost) as total_cost, COUNT(*) as days')
+            ->selectRaw('AVG(CASE WHEN impressions > 0 THEN clicks::float / impressions ELSE 0 END) as avg_ctr, AVG(cpc) as avg_cpc, AVG(cpa) as avg_cpa, SUM(conversions) as total_conversions, SUM(cost) as total_cost, COUNT(*) as days')
             ->first();
 
         if ($facebook && $facebook->days > 0) {

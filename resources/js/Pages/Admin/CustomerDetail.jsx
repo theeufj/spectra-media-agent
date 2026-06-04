@@ -1,15 +1,25 @@
 import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, usePage, useForm } from '@inertiajs/react';
+import { Head, Link, usePage, useForm, router } from '@inertiajs/react';
 import SideNav from './SideNav';
 import FacebookAdAccountModal from '@/Components/FacebookAdAccountModal';
 
 export default function CustomerDetail({ auth, bm_configured }) {
-    const { customer } = usePage().props;
+    const { customer, adSpendCredit } = usePage().props;
     const [showFacebookModal, setShowFacebookModal] = useState(false);
     const [editingFbAccount, setEditingFbAccount] = useState(false);
     const [editingMsAccount, setEditingMsAccount] = useState(false);
     const [editingGoogleAccount, setEditingGoogleAccount] = useState(false);
+    const [reconcilingSpend, setReconcilingSpend] = useState(false);
+
+    const reconcileSpend = () => {
+        if (!confirm(`Reconcile $${adSpendCredit?.unreconciled?.toFixed(2)} in untracked spend for this customer?`)) return;
+        setReconcilingSpend(true);
+        router.post(route('admin.customers.reconcile-spend', customer.id), {}, {
+            preserveScroll: true,
+            onFinish: () => setReconcilingSpend(false),
+        });
+    };
 
     const googleForm = useForm({
         google_ads_customer_id: customer.google_ads_customer_id || '',
@@ -432,6 +442,51 @@ export default function CustomerDetail({ auth, bm_configured }) {
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Ad Spend Credit */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+                <div className="bg-white shadow rounded-lg p-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4">Ad Spend Credit</h3>
+                    {adSpendCredit ? (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase tracking-wide">Balance</p>
+                                <p className="text-xl font-semibold text-gray-900">${adSpendCredit.current_balance.toFixed(2)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase tracking-wide">Total Actual Spend</p>
+                                <p className="text-xl font-semibold text-gray-900">${adSpendCredit.total_actual_spend.toFixed(2)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase tracking-wide">Total Debited</p>
+                                <p className="text-xl font-semibold text-gray-900">${adSpendCredit.total_debited.toFixed(2)}</p>
+                            </div>
+                            <div>
+                                <p className="text-xs text-gray-500 uppercase tracking-wide">Unreconciled</p>
+                                <p className={`text-xl font-semibold ${adSpendCredit.unreconciled > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    ${adSpendCredit.unreconciled.toFixed(2)}
+                                </p>
+                            </div>
+                            <div className="col-span-2 md:col-span-4 flex items-center gap-3 pt-2">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${adSpendCredit.payment_status === 'current' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    {adSpendCredit.payment_status}
+                                </span>
+                                {adSpendCredit.unreconciled > 0 && (
+                                    <button
+                                        onClick={reconcileSpend}
+                                        disabled={reconcilingSpend}
+                                        className="inline-flex items-center px-4 py-2 bg-flame-orange-600 hover:bg-flame-orange-700 disabled:opacity-50 text-white text-sm font-medium rounded-md"
+                                    >
+                                        {reconcilingSpend ? 'Reconciling…' : 'Reconcile Spend'}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-500">No ad spend credit account initialised for this customer.</p>
+                    )}
                 </div>
             </div>
 
