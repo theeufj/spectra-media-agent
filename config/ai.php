@@ -39,12 +39,12 @@ return [
         /*
          * Image generation model.
          */
-        'image' => env('AI_MODEL_IMAGE', 'imagen-3.0-generate-002'),
+        'image' => env('AI_MODEL_IMAGE', 'gemini-2.5-flash-image'),
 
         /*
          * Video generation model.
          */
-        'video' => env('AI_MODEL_VIDEO', 'veo-3.0-generate-preview'),
+        'video' => env('AI_MODEL_VIDEO', 'veo-3.0-generate-001'),
 
     ],
 
