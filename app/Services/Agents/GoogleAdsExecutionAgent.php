@@ -49,8 +49,10 @@ use App\Services\GoogleAds\ShoppingServices\CreateShoppingProductAd;
 use App\Services\GoogleAds\LocalServicesServices\CreateLocalServicesCampaign;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
+use App\Mail\GoogleAdsVerificationRequired;
 use App\Notifications\ConversionTrackingReady;
 use App\Services\Agents\CampaignReviewAgent;
+use Illuminate\Support\Facades\Mail;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
@@ -219,7 +221,13 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 'google_ads_customer_id' => $this->customer->google_ads_customer_id,
                 'mcc_id' => $this->customer->google_ads_manager_customer_id,
             ]);
-            
+
+            foreach ($this->customer->users as $user) {
+                Mail::to($user->email)->queue(
+                    new GoogleAdsVerificationRequired($user, $this->customer)
+                );
+            }
+
             return true;
         } catch (\Exception $e) {
             Log::error("Error provisioning Google Ads sub-account: " . $e->getMessage(), [

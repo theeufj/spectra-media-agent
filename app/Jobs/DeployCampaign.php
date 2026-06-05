@@ -21,6 +21,8 @@ use App\Models\Setting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Jobs\RecordSiteConversion;
+use App\Mail\GoogleAdsVerificationRequired;
+use Illuminate\Support\Facades\Mail;
 
 class DeployCampaign implements ShouldQueue
 {
@@ -294,6 +296,22 @@ class DeployCampaign implements ShouldQueue
             'failed' => $failureCount,
             'results' => $deploymentResults
         ]);
+
+        // If a Google Ads deployment failed with ACTION_NOT_PERMITTED, the account likely
+        // needs identity verification. Notify the customer so they can complete it.
+        foreach ($deploymentResults as $platform => $result) {
+            if (!$result['success'] && str_contains(strtolower($platform), 'google')) {
+                $errorText = is_string($result['error'] ?? null) ? $result['error'] : json_encode($result['error'] ?? '');
+                if (str_contains($errorText, 'ACTION_NOT_PERMITTED') || str_contains($errorText, 'PERMISSION_DENIED')) {
+                    foreach ($customer->users as $user) {
+                        Mail::to($user->email)->queue(
+                            new GoogleAdsVerificationRequired($user, $customer, $this->campaign)
+                        );
+                    }
+                    break;
+                }
+            }
+        }
 
         // Optionally: Update campaign status or send notifications based on results
         if ($failureCount > 0 && $successCount === 0) {
