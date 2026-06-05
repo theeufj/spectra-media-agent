@@ -16,34 +16,35 @@ return [
          * Default model for all general-purpose AI tasks:
          * copy generation, analysis, recommendations, reporting, etc.
          */
-        'default' => env('AI_MODEL_DEFAULT', 'gemini-3.5-flash'),
+        'default' => env('AI_MODEL_DEFAULT', 'gemini-2.5-flash'),
 
         /*
          * Pro model for complex reasoning tasks (competitor strategy,
          * campaign planning, detailed analysis).
          */
-        'pro' => env('AI_MODEL_PRO', 'gemini-3.1-pro-preview'),
+        'pro' => env('AI_MODEL_PRO', 'gemini-2.5-pro'),
 
         /*
          * Lite/budget model for high-volume, low-complexity tasks
          * (batch keyword categorization, simple scoring).
          */
-        'lite' => env('AI_MODEL_LITE', 'gemini-3.1-flash-lite-preview'),
+        'lite' => env('AI_MODEL_LITE', 'gemini-2.5-flash-lite'),
 
         /*
          * Embedding model for vector search and semantic similarity.
+         * Vertex AI native text embedding model.
          */
-        'embedding' => env('AI_MODEL_EMBEDDING', 'gemini-embedding-2-preview'),
+        'embedding' => env('AI_MODEL_EMBEDDING', 'text-embedding-005'),
 
         /*
          * Image generation model.
          */
-        'image' => env('AI_MODEL_IMAGE', 'gemini-3.1-flash-image-preview'),
+        'image' => env('AI_MODEL_IMAGE', 'imagen-3.0-generate-002'),
 
         /*
          * Video generation model.
          */
-        'video' => env('AI_MODEL_VIDEO', 'veo-3.1-generate-preview'),
+        'video' => env('AI_MODEL_VIDEO', 'veo-3.0-generate-preview'),
 
     ],
 
