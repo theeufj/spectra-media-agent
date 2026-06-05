@@ -7,16 +7,16 @@ use Illuminate\Support\Facades\Http;
 
 /**
  * Finds and fixes Google Tag (google_tag type) entries in the platform's own
- * GTM container that have invalid measurement IDs — specifically:
+ * GTM container that have invalid measurement IDs:
  *
  *   - Bare numeric IDs (e.g. "16797144138") → prepend "AW-"
  *   - Bare alphanumeric IDs (e.g. "K6YKBRF4VG") → prepend "G-"
  *
- * Valid formats accepted by GTM's google_tag type are "AW-XXXXXXXXX" and "G-XXXXXXXXX".
- * Tags that already match one of those formats are left untouched.
+ * If GTM_PLATFORM_REFRESH_TOKEN is not set, the command walks through an
+ * interactive OAuth flow in the terminal to obtain one.
  *
  * Usage:
- *   php artisan gtm:fix-platform-tags              # dry-run — shows what would change
+ *   php artisan gtm:fix-platform-tags              # dry-run
  *   php artisan gtm:fix-platform-tags --apply      # apply fixes
  *   php artisan gtm:fix-platform-tags --apply --publish  # apply + publish live
  */
@@ -24,13 +24,20 @@ class FixPlatformGtmTags extends Command
 {
     protected $signature = 'gtm:fix-platform-tags
                             {--container=GTM-KHFLQZ8S : Public container ID to target}
-                            {--apply             : Actually write the fixes (default is dry-run)}
-                            {--publish           : Publish the workspace after applying fixes}';
+                            {--apply   : Write the fixes (default is dry-run)}
+                            {--publish : Publish the workspace after applying fixes}';
 
     protected $description = 'Fix invalid google_tag measurement IDs in the platform GTM container';
 
     private string $baseUrl = 'https://tagmanager.googleapis.com/tagmanager/v2';
     private ?string $accessToken = null;
+
+    private const GTM_SCOPES = [
+        'https://www.googleapis.com/auth/tagmanager.edit.containers',
+        'https://www.googleapis.com/auth/tagmanager.edit.containerversions',
+        'https://www.googleapis.com/auth/tagmanager.publish',
+        'https://www.googleapis.com/auth/tagmanager.readonly',
+    ];
 
     public function handle(): int
     {
@@ -43,28 +50,51 @@ class FixPlatformGtmTags extends Command
             $this->newLine();
         }
 
-        $this->accessToken = $this->getAccessToken();
+        // ── Authenticate ────────────────────────────────────────────────────
+        [$clientId, $clientSecret] = $this->resolveOAuthClient();
+        if (!$clientId || !$clientSecret) {
+            $this->error('Cannot find OAuth client credentials. Set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in .env');
+            return self::FAILURE;
+        }
+
+        $refreshToken = config('services.gtm.platform_refresh_token');
+
+        if (!$refreshToken) {
+            $this->warn('GTM_PLATFORM_REFRESH_TOKEN is not set — starting OAuth flow...');
+            $this->newLine();
+            $refreshToken = $this->runOAuthFlow($clientId, $clientSecret);
+            if (!$refreshToken) {
+                return self::FAILURE;
+            }
+        }
+
+        $this->accessToken = $this->exchangeRefreshToken($clientId, $clientSecret, $refreshToken);
         if (!$this->accessToken) {
-            $this->error('Failed to obtain GTM access token. Check GTM_PLATFORM_REFRESH_TOKEN and GOOGLE_OAUTH_CLIENT_ID/SECRET in .env');
+            $this->error('Failed to obtain access token. The refresh token may be invalid or expired.');
             return self::FAILURE;
         }
         $this->info('Authenticated with GTM API');
 
-        // ── Locate the container ────────────────────────────────────────────
+        // ── Discover GTM account ID if not configured ────────────────────────
         $accountId = config('services.gtm.platform_account_id');
         if (!$accountId) {
-            $this->error('GTM_PLATFORM_ACCOUNT_ID is not configured');
-            return self::FAILURE;
+            $accountId = $this->discoverAccountId($targetContainerId);
+            if (!$accountId) {
+                return self::FAILURE;
+            }
+            $this->warn("Tip: set GTM_PLATFORM_ACCOUNT_ID={$accountId} in .env to skip this step next time.");
+            $this->newLine();
         }
 
+        // ── Locate the container ─────────────────────────────────────────────
         $containerPath = $this->findContainerPath($accountId, $targetContainerId);
         if (!$containerPath) {
             $this->error("Container {$targetContainerId} not found under account {$accountId}");
             return self::FAILURE;
         }
-        $this->info("Found container: {$containerPath}");
+        $this->info("Container: {$targetContainerId} ({$containerPath})");
 
-        // ── Get default workspace ───────────────────────────────────────────
+        // ── Get default workspace ────────────────────────────────────────────
         $workspacePath = $this->getDefaultWorkspacePath($containerPath);
         if (!$workspacePath) {
             $this->error('Could not find a workspace in the container');
@@ -73,33 +103,29 @@ class FixPlatformGtmTags extends Command
         $this->info("Workspace: {$workspacePath}");
         $this->newLine();
 
-        // ── List all tags and find broken google_tag entries ────────────────
+        // ── List tags and detect broken google_tag entries ───────────────────
         $tags = $this->listTags($workspacePath);
         if ($tags === null) {
-            $this->error('Failed to list tags');
             return self::FAILURE;
         }
 
-        $this->info(count($tags) . ' tags found in workspace');
+        $this->info(count($tags) . ' tags in workspace');
 
         $fixes = [];
         foreach ($tags as $tag) {
-            if (($tag['type'] ?? '') !== 'google_tag') {
+            if (!in_array($tag['type'] ?? '', ['google_tag', 'googtag'])) {
                 continue;
             }
-
             $currentId = $this->getMeasurementId($tag);
             if ($currentId === null || $this->isValidMeasurementId($currentId)) {
                 continue;
             }
-
-            $fixedId = $this->fixMeasurementId($currentId);
             $fixes[] = [
-                'tag'       => $tag,
-                'tag_name'  => $tag['name'],
-                'tag_id'    => $tag['tagId'],
-                'current'   => $currentId,
-                'fixed'     => $fixedId,
+                'tag'      => $tag,
+                'tag_name' => $tag['name'],
+                'tag_id'   => $tag['tagId'],
+                'current'  => $currentId,
+                'fixed'    => $this->fixMeasurementId($currentId),
             ];
         }
 
@@ -121,11 +147,10 @@ class FixPlatformGtmTags extends Command
             return self::SUCCESS;
         }
 
-        // ── Apply fixes ─────────────────────────────────────────────────────
+        // ── Apply fixes ──────────────────────────────────────────────────────
         $allOk = true;
         foreach ($fixes as $fix) {
-            $updated = $this->updateTagMeasurementId($workspacePath, $fix['tag'], $fix['fixed']);
-            if ($updated) {
+            if ($this->updateTagMeasurementId($workspacePath, $fix['tag'], $fix['fixed'])) {
                 $this->info("Fixed \"{$fix['tag_name']}\": {$fix['current']} → {$fix['fixed']}");
             } else {
                 $this->error("Failed to fix \"{$fix['tag_name']}\"");
@@ -133,37 +158,114 @@ class FixPlatformGtmTags extends Command
             }
         }
 
-        // ── Publish ─────────────────────────────────────────────────────────
+        // ── Optionally publish ───────────────────────────────────────────────
         if ($publish && $allOk) {
             $this->newLine();
             $this->info('Publishing container...');
-            $published = $this->publishWorkspace($workspacePath);
-            if ($published) {
-                $this->info('Container published successfully');
+            if ($this->publishWorkspace($workspacePath)) {
+                $this->info('Container published — changes are now live');
             } else {
-                $this->error('Publish failed — changes are saved in the workspace but not live yet');
+                $this->error('Publish failed — fixes are saved in the workspace but not live yet');
                 return self::FAILURE;
             }
-        } elseif ($publish && !$allOk) {
-            $this->warn('Skipping publish because one or more tags failed to update');
-        } else {
+        } elseif ($allOk) {
             $this->newLine();
-            $this->warn('Changes saved to workspace. Run with --publish to make them live, or publish manually in the GTM UI.');
+            $this->warn('Changes saved to workspace. Run with --publish to go live, or publish manually in the GTM UI.');
         }
 
         return $allOk ? self::SUCCESS : self::FAILURE;
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────────
+    // ── OAuth helpers ─────────────────────────────────────────────────────────
 
-    private function getAccessToken(): ?string
+    /**
+     * Resolve OAuth client credentials: prefer env vars, fall back to google_ads_php.ini.
+     */
+    private function resolveOAuthClient(): array
     {
-        $refreshToken = config('services.gtm.platform_refresh_token');
         $clientId     = config('services.google.client_id');
         $clientSecret = config('services.google.client_secret');
 
-        if (!$refreshToken || !$clientId || !$clientSecret) {
+        if (!$clientId || !$clientSecret) {
+            $ini          = @parse_ini_file(storage_path('app/google_ads_php.ini'), true) ?: [];
+            $clientId     = $ini['OAUTH2']['clientId'] ?? null;
+            $clientSecret = $ini['OAUTH2']['clientSecret'] ?? null;
+        }
+
+        return [$clientId, $clientSecret];
+    }
+
+    /**
+     * Run an interactive terminal OAuth flow and return a refresh token.
+     */
+    private function runOAuthFlow(string $clientId, string $clientSecret): ?string
+    {
+        $scopes   = implode(' ', self::GTM_SCOPES);
+        $redirect = 'http://localhost:8088'; // registered in Google Cloud Console
+
+        $authUrl = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+            'client_id'     => $clientId,
+            'redirect_uri'  => $redirect,
+            'response_type' => 'code',
+            'scope'         => $scopes,
+            'access_type'   => 'offline',
+            'prompt'        => 'consent',
+        ]);
+
+        $this->line('1. Open this URL in your browser and sign in with the Google account that owns GTM-KHFLQZ8S:');
+        $this->newLine();
+        $this->line($authUrl);
+        $this->newLine();
+        $this->line('2. After authorising, your browser will redirect to http://localhost:8088/?code=XXXX');
+        $this->line('   The page will show "This site can\'t be reached" — that\'s expected.');
+        $this->line('   Copy the "code" value from the address bar URL.');
+        $this->newLine();
+
+        $code = $this->ask('Paste the code from the address bar');
+        if (!$code) {
+            $this->error('No code provided');
             return null;
+        }
+
+        // Strip any trailing parameters that may have been copied (e.g. &scope=...)
+        $code = preg_replace('/[&?].*/', '', trim($code));
+
+        $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
+            'code'          => $code,
+            'client_id'     => $clientId,
+            'client_secret' => $clientSecret,
+            'redirect_uri'  => $redirect,
+            'grant_type'    => 'authorization_code',
+        ]);
+
+        if (!$response->successful()) {
+            $this->error('Token exchange failed: ' . ($response->json()['error_description'] ?? $response->body()));
+            return null;
+        }
+
+        $refreshToken = $response->json()['refresh_token'] ?? null;
+        if (!$refreshToken) {
+            $this->error('No refresh token returned — the account may already have a token. Try revoking access at myaccount.google.com/permissions and re-running.');
+            return null;
+        }
+
+        $this->info("Refresh token obtained.");
+        $this->newLine();
+        $this->line("Add to .env to skip this step next time:");
+        $this->line("GTM_PLATFORM_REFRESH_TOKEN={$refreshToken}");
+        $this->newLine();
+
+        // Also cache the access token we just got
+        $this->accessToken = $response->json()['access_token'] ?? null;
+
+        return $refreshToken;
+    }
+
+    private function exchangeRefreshToken(string $clientId, string $clientSecret, string $refreshToken): ?string
+    {
+        // If runOAuthFlow already set the access token, reuse it
+        if ($this->accessToken) {
+            return $this->accessToken;
         }
 
         $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
@@ -176,13 +278,51 @@ class FixPlatformGtmTags extends Command
         return $response->successful() ? ($response->json()['access_token'] ?? null) : null;
     }
 
+    /**
+     * List all GTM accounts accessible to the token and find which one
+     * contains the target container.
+     */
+    private function discoverAccountId(string $targetContainerId): ?string
+    {
+        $this->info("Discovering GTM account for {$targetContainerId}...");
+
+        $response = Http::withToken($this->accessToken)
+            ->get("{$this->baseUrl}/accounts");
+
+        if (!$response->successful()) {
+            $this->error('Failed to list GTM accounts: ' . ($response->json()['error']['message'] ?? $response->body()));
+            return null;
+        }
+
+        foreach ($response->json()['account'] ?? [] as $account) {
+            $accountId = $account['accountId'];
+            $containersResp = Http::withToken($this->accessToken)
+                ->get("{$this->baseUrl}/accounts/{$accountId}/containers");
+
+            if (!$containersResp->successful()) {
+                continue;
+            }
+
+            foreach ($containersResp->json()['container'] ?? [] as $container) {
+                if (($container['publicId'] ?? '') === $targetContainerId) {
+                    $this->info("Found in account \"{$account['name']}\" (ID: {$accountId})");
+                    return $accountId;
+                }
+            }
+        }
+
+        $this->error("Could not find {$targetContainerId} in any accessible GTM account");
+        return null;
+    }
+
+    // ── GTM API helpers ───────────────────────────────────────────────────────
+
     private function findContainerPath(string $accountId, string $publicId): ?string
     {
         $response = Http::withToken($this->accessToken)
             ->get("{$this->baseUrl}/accounts/{$accountId}/containers");
 
         if (!$response->successful()) {
-            $this->error('Failed to list containers: ' . ($response->json()['error']['message'] ?? $response->body()));
             return null;
         }
 
@@ -206,7 +346,6 @@ class FixPlatformGtmTags extends Command
 
         $workspaces = $response->json()['workspace'] ?? [];
 
-        // Prefer "Default Workspace"; fall back to first available
         foreach ($workspaces as $ws) {
             if ($ws['name'] === 'Default Workspace') {
                 return $ws['path'];
@@ -246,18 +385,11 @@ class FixPlatformGtmTags extends Command
 
     private function fixMeasurementId(string $id): string
     {
-        // Purely numeric → Google Ads conversion ID
-        if (preg_match('/^\d+$/', $id)) {
-            return 'AW-' . $id;
-        }
-
-        // Alphanumeric without prefix → GA4 Measurement ID
-        return 'G-' . $id;
+        return preg_match('/^\d+$/', $id) ? 'AW-' . $id : 'G-' . $id;
     }
 
     private function updateTagMeasurementId(string $workspacePath, array $tag, string $fixedId): bool
     {
-        // Build the updated parameter list, replacing the tagId value
         $params = array_map(function ($param) use ($fixedId) {
             if ($param['key'] === 'tagId') {
                 $param['value'] = $fixedId;
@@ -265,12 +397,9 @@ class FixPlatformGtmTags extends Command
             return $param;
         }, $tag['parameter'] ?? []);
 
-        $payload = array_merge($tag, ['parameter' => $params]);
-
-        // The GTM API update endpoint uses the tag's own path
-        $tagPath = $tag['path'];
+        $payload  = array_merge($tag, ['parameter' => $params]);
         $response = Http::withToken($this->accessToken)
-            ->put("{$this->baseUrl}/{$tagPath}", $payload);
+            ->put("{$this->baseUrl}/{$tag['path']}", $payload);
 
         if (!$response->successful()) {
             $this->line('  API error: ' . ($response->json()['error']['message'] ?? $response->body()));
@@ -281,26 +410,31 @@ class FixPlatformGtmTags extends Command
 
     private function publishWorkspace(string $workspacePath): bool
     {
-        $response = Http::withToken($this->accessToken)
+        // Create a version from the workspace
+        $versionResp = Http::withToken($this->accessToken)
             ->post("{$this->baseUrl}/{$workspacePath}:create_version", [
                 'name'  => 'Fix invalid google_tag measurement IDs',
                 'notes' => 'Automated fix: added AW-/G- prefix to bare measurement IDs',
             ]);
 
-        if (!$response->successful()) {
-            $this->line('  Publish error: ' . ($response->json()['error']['message'] ?? $response->body()));
+        if (!$versionResp->successful()) {
+            $this->line('  create_version error: ' . ($versionResp->json()['error']['message'] ?? $versionResp->body()));
             return false;
         }
 
-        // create_version returns the version; publish it
-        $versionPath = $response->json()['containerVersion']['path'] ?? null;
+        $versionPath = $versionResp->json()['containerVersion']['path'] ?? null;
         if (!$versionPath) {
+            $this->error('Version created but no path returned');
             return false;
         }
 
-        $publishResponse = Http::withToken($this->accessToken)
+        $publishResp = Http::withToken($this->accessToken)
             ->post("{$this->baseUrl}/{$versionPath}:publish");
 
-        return $publishResponse->successful();
+        if (!$publishResp->successful()) {
+            $this->line('  publish error: ' . ($publishResp->json()['error']['message'] ?? $publishResp->body()));
+        }
+
+        return $publishResp->successful();
     }
 }
