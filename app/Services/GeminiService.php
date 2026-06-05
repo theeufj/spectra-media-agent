@@ -52,7 +52,8 @@ class GeminiService
     {
         $this->project      = config('services.google.project_id');
         $this->location     = config('services.google.location', 'us-central1');
-        $this->vertexBaseUrl = "https://{$this->location}-aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
+        // Global endpoint (no region prefix) is required for Gemini 3.x models on Agent Platform.
+        $this->vertexBaseUrl = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
     }
 
     // ─── Auth ────────────────────────────────────────────────────────────────
@@ -434,7 +435,7 @@ class GeminiService
     public function checkVideoGenerationStatus(string $operationName): ?array
     {
         try {
-            $url = "https://{$this->location}-aiplatform.googleapis.com/v1/{$operationName}";
+            $url = "https://aiplatform.googleapis.com/v1/{$operationName}";
 
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
