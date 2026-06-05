@@ -4,6 +4,8 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
+use Google\Auth\ApplicationDefaultCredentials;
 
 /**
  * Currently Available Models (Verified March 2026 from ai.google.dev/gemini-api/docs/models):
@@ -37,21 +39,55 @@ use Illuminate\Support\Facades\Log;
 
 class GeminiService
 {
-    private string $apiKey;
-    private string $baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
-    private string $stableBaseUrl = 'https://generativelanguage.googleapis.com/v1/models/';
+    private string $project;
+    private string $location;
+    // Vertex AI base URL — used for text, image, and video generation
+    private string $vertexBaseUrl;
+    // Gemini Files API — used for video upload/extend (no Vertex AI equivalent yet)
+    private string $geminiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
     private int $maxRetries = 3;
     private int $initialRetryDelayMs = 1000;
 
     public function __construct()
     {
-        $this->apiKey = config('services.gemini.api_key');
+        $this->project      = config('services.google.project_id');
+        $this->location     = config('services.google.location', 'us-central1');
+        $this->vertexBaseUrl = "https://{$this->location}-aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
     }
+
+    // ─── Auth ────────────────────────────────────────────────────────────────
+
+    private function getAccessToken(): string
+    {
+        // Tokens expire after 60 min; cache for 50 to ensure we never send a stale one.
+        return Cache::remember('gcp_vertex_access_token', 3000, function () {
+            $credentials = ApplicationDefaultCredentials::getCredentials(
+                ['https://www.googleapis.com/auth/cloud-platform']
+            );
+            $token = $credentials->fetchAuthToken();
+            return $token['access_token'];
+        });
+    }
+
+    private function authHeaders(): array
+    {
+        return [
+            'Content-Type'  => 'application/json',
+            'Authorization' => 'Bearer ' . $this->getAccessToken(),
+        ];
+    }
+
+    private function flushTokenCache(): void
+    {
+        Cache::forget('gcp_vertex_access_token');
+    }
+
+    // ─── Text generation ─────────────────────────────────────────────────────
 
     /**
      * Generates content using a specified Gemini model with retry mechanism.
      *
-     * @param string $model The Gemini model to use (e.g., 'gemini-3-flash-preview').
+     * @param string $model The Gemini model to use (e.g., 'gemini-2.5-flash').
      * @param string $prompt The prompt to send to the model.
      * @param array $config Generation configuration (temperature, maxOutputTokens, etc.).
      * @param string|null $systemInstruction Optional system instruction.
@@ -61,8 +97,8 @@ class GeminiService
      * @return array|null The generated content with 'text' key, or null on failure.
      */
     public function generateContent(
-        string $model, 
-        string $prompt, 
+        string $model,
+        string $prompt,
         array $config = [],
         ?string $systemInstruction = null,
         bool $enableThinking = false,
@@ -70,79 +106,57 @@ class GeminiService
         int $maxRetries = null,
         ?string $imageBase64 = null,
         string $imageMimeType = 'image/jpeg'
-    ): ?array
-    {
+    ): ?array {
         $maxRetries = $maxRetries ?? $this->maxRetries;
-        $attempt = 0;
+        $attempt    = 0;
 
         while ($attempt < $maxRetries) {
             try {
                 $parts = [['text' => $prompt]];
 
                 if ($imageBase64) {
-                    // Ensure base64 string is clean
                     $cleanBase64 = preg_replace('#^data:image/\w+;base64,#i', '', $imageBase64);
-                    
                     $parts[] = [
                         'inlineData' => [
                             'mimeType' => $imageMimeType,
-                            'data' => $cleanBase64
+                            'data'     => $cleanBase64,
                         ]
                     ];
                 }
 
                 $payload = [
                     'contents' => [
-                        [
-                            'role' => 'user',
-                            'parts' => $parts
-                        ]
+                        ['role' => 'user', 'parts' => $parts]
                     ],
                     'generationConfig' => array_merge([
-                        'temperature' => 1,
-                        'topP' => 0.95,
-                        'topK' => 40,
+                        'temperature'     => 1,
+                        'topP'            => 0.95,
+                        'topK'            => 40,
                         'maxOutputTokens' => 8192,
-                    ], $config)
+                    ], $config),
                 ];
 
-                // Add thinking config if enabled
                 if ($enableThinking) {
-                    $payload['generationConfig']['thinkingConfig'] = [
-                        'thinkingLevel' => 'HIGH'
-                    ];
+                    $payload['generationConfig']['thinkingConfig'] = ['thinkingLevel' => 'HIGH'];
                 }
 
-                // Add system instruction if provided
                 if ($systemInstruction) {
-                    $payload['systemInstruction'] = [
-                        'parts' => [
-                            ['text' => $systemInstruction]
-                        ]
-                    ];
+                    $payload['systemInstruction'] = ['parts' => [['text' => $systemInstruction]]];
                 }
 
-                // Add Google Search tool if enabled
                 if ($enableGoogleSearch) {
-                    $payload['tools'] = [
-                        ['googleSearch' => (object)[]]
-                    ];
+                    $payload['tools'] = [['googleSearch' => (object)[]]];
                 }
 
-                $response = Http::withHeaders([
-                    'Content-Type' => 'application/json',
-                    'x-goog-api-key' => $this->apiKey,
-                ])->timeout(300)->post("{$this->baseUrl}{$model}:streamGenerateContent", $payload);
+                $response = Http::withHeaders($this->authHeaders())
+                    ->timeout(300)
+                    ->post("{$this->vertexBaseUrl}{$model}:streamGenerateContent", $payload);
 
-                // Check if response was successful
                 if ($response->successful()) {
                     $responseData = $response->json();
-                    
-                    // Handle streaming response (array of chunks)
+
                     if (is_array($responseData)) {
                         $textContent = null;
-                        
-                        // Find the last chunk with actual text content (not thoughts)
                         foreach ($responseData as $chunk) {
                             $parts = $chunk['candidates'][0]['content']['parts'] ?? [];
                             foreach ($parts as $part) {
@@ -151,63 +165,60 @@ class GeminiService
                                 }
                             }
                         }
-                        
                         if ($textContent) {
                             return ['text' => $textContent];
                         }
                     }
-                    
+
                     Log::error("GeminiService: No text content found in response", [
-                        'model' => $model,
-                        'response' => $responseData
+                        'model'    => $model,
+                        'response' => $responseData,
                     ]);
                     return null;
                 }
 
-                // Handle specific error codes
                 $statusCode = $response->status();
-                
-                // Retry on server errors (5xx) and specific client errors
+
+                if ($statusCode === 401) {
+                    $this->flushTokenCache();
+                }
+
                 if ($this->isRetryableError($statusCode)) {
                     $attempt++;
-                    
                     if ($attempt < $maxRetries) {
                         $delayMs = $this->calculateBackoffDelay($attempt);
                         Log::warning("GeminiService: Retryable error ({$statusCode}) on attempt {$attempt}/{$maxRetries}. Retrying in {$delayMs}ms...", [
-                            'model' => $model,
+                            'model'    => $model,
                             'response' => $response->body(),
                         ]);
-                        usleep($delayMs * 1000); // Convert ms to microseconds
+                        usleep($delayMs * 1000);
                         continue;
                     }
                 }
 
-                // Non-retryable error or max retries reached
                 Log::error("GeminiService: Failed to generate content from model {$model} (Status: {$statusCode}): " . $response->body(), [
-                    'model' => $model,
-                    'attempt' => $attempt + 1,
-                    'max_retries' => $maxRetries,
+                    'model'        => $model,
+                    'attempt'      => $attempt + 1,
+                    'max_retries'  => $maxRetries,
                 ]);
                 return null;
 
             } catch (\Exception $e) {
                 $attempt++;
-                
                 if ($attempt < $maxRetries) {
                     $delayMs = $this->calculateBackoffDelay($attempt);
                     Log::warning("GeminiService: Exception on attempt {$attempt}/{$maxRetries}: " . $e->getMessage() . ". Retrying in {$delayMs}ms...", [
-                        'model' => $model,
+                        'model'     => $model,
                         'exception' => get_class($e),
                     ]);
                     usleep($delayMs * 1000);
                     continue;
                 }
-
                 Log::error("GeminiService: Exception during content generation from model {$model} (Max retries reached): " . $e->getMessage(), [
-                    'model' => $model,
-                    'attempt' => $attempt,
+                    'model'       => $model,
+                    'attempt'     => $attempt,
                     'max_retries' => $maxRetries,
-                    'exception' => $e,
+                    'exception'   => $e,
                 ]);
                 return null;
             }
@@ -218,12 +229,6 @@ class GeminiService
 
     /**
      * Generate content with system instruction, thinking, and Google Search
-     *
-     * @param string $model
-     * @param string $systemInstruction
-     * @param string $prompt
-     * @param array $config
-     * @return array|null
      */
     public function generateWithThinkingAndSearch(
         string $model,
@@ -232,88 +237,36 @@ class GeminiService
         array $config = []
     ): ?array {
         return $this->generateContent(
-            $model, 
-            $prompt, 
-            $config, 
-            $systemInstruction, 
-            true,  // Enable thinking
-            true   // Enable Google Search
+            $model,
+            $prompt,
+            $config,
+            $systemInstruction,
+            true,
+            true
         );
     }
 
-    /**
-     * Determines if an HTTP status code warrants a retry.
-     * Retries on 5xx errors and specific 4xx errors like 429 (too many requests).
-     *
-     * @param int $statusCode
-     * @return bool
-     */
-    private function isRetryableError(int $statusCode): bool
-    {
-        // Retry on server errors (5xx)
-        if ($statusCode >= 500 && $statusCode < 600) {
-            return true;
-        }
-
-        // Retry on rate limiting (429) and some other transient client errors
-        if ($statusCode === 429) {
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Calculates exponential backoff delay with jitter.
-     * Formula: baseDelay * (2 ^ (attempt - 1)) + random jitter
-     *
-     * @param int $attempt The current attempt number (1-indexed)
-     * @return int Delay in milliseconds
-     */
-    private function calculateBackoffDelay(int $attempt): int
-    {
-        // Exponential backoff: 1s, 2s, 4s, 8s, etc.
-        $delay = $this->initialRetryDelayMs * (2 ** ($attempt - 1));
-        
-        // Add jitter (±10% of delay) to prevent thundering herd
-        $jitter = rand(0, (int)($delay * 0.1 * 2)) - ($delay * 0.1);
-        $finalDelay = max(100, $delay + $jitter); // Ensure minimum 100ms delay
-        
-        return (int)$finalDelay;
-    }
+    // ─── Embeddings ──────────────────────────────────────────────────────────
 
     /**
      * Generates embeddings for a given text using a specified Gemini embedding model.
-     *
-     * @param string $model The Gemini embedding model to use (e.g., 'gemini-embedding-2-preview').
-     * @param string $text The text to embed.
-     * @return array|null The embedding values as an array, or null on failure.
      */
     public function embedContent(string $model, string $text): ?array
     {
         try {
-            // Preview models need v1beta, stable models use v1
-            $baseUrl = str_contains($model, 'preview') ? $this->baseUrl : $this->stableBaseUrl;
-            $url = "{$baseUrl}{$model}:embedContent";
-            
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'x-goog-api-key' => $this->apiKey,
-            ])->timeout(300)->post($url, [
-                'model' => "models/{$model}",
-                'content' => [
-                    'parts' => [
-                        ['text' => $text]
-                    ]
-                ]
-            ]);
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(300)
+                ->post("{$this->vertexBaseUrl}{$model}:predict", [
+                    'instances' => [['content' => $text]],
+                ]);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to get embedding from model {$model}: " . $response->body());
                 return null;
             }
 
-            return $response->json()['embedding']['values'] ?? null;
+            // Vertex AI embedding response: predictions[0].embeddings.values
+            return $response->json()['predictions'][0]['embeddings']['values'] ?? null;
         } catch (\Exception $e) {
             Log::error("GeminiService: Exception during embedding generation from model {$model}: " . $e->getMessage(), [
                 'exception' => $e,
@@ -322,41 +275,32 @@ class GeminiService
         }
     }
 
+    // ─── Image generation ────────────────────────────────────────────────────
+
     /**
      * Generates an image based on a prompt using a specified Gemini image generation model.
-     *
-     * @param string $prompt The prompt for image generation.
-     * @param string $model The Gemini image generation model to use (e.g., 'gemini-3-pro-image-preview').
-     * @param int $candidateCount The number of images to generate.
-     * @return array|null An array of image data arrays, or null on failure.
      */
     public function generateImage(string $prompt, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K'): ?array
     {
         $payload = [
             'contents' => [
                 [
-                    'role' => 'user',
+                    'role'  => 'user',
                     'parts' => [['text' => $prompt]],
                 ]
             ],
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => ['image_size' => $imageSize], // Corrected to snake_case
+                'imageConfig'        => ['image_size' => $imageSize],
             ],
         ];
 
         $result = $this->sendImageRequest($model, $payload);
-        return $result ? $result[0] : null; // Return the first image
+        return $result ? $result[0] : null;
     }
 
     /**
      * Refines an existing image based on a new prompt and context images.
-     *
-     * @param string $prompt The refinement prompt.
-     * @param array $contextImages An array of context images, each with 'mime_type' and 'data' (base64).
-     * @param string $model The image generation model.
-     * @param string $imageSize The desired image size.
-     * @return array|null A single generated image data array, or null on failure.
      */
     public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K'): ?array
     {
@@ -368,53 +312,40 @@ class GeminiService
         }
 
         $payload = [
-            'contents' => [['role' => 'user', 'parts' => $parts]],
+            'contents'         => [['role' => 'user', 'parts' => $parts]],
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => ['image_size' => $imageSize], // Corrected to snake_case
-                'candidateCount' => 1, // Refinement should produce one image
+                'imageConfig'        => ['image_size' => $imageSize],
+                'candidateCount'     => 1,
             ],
         ];
 
         $result = $this->sendImageRequest($model, $payload);
-        return $result ? $result[0] : null; // Return the first (and only) image
+        return $result ? $result[0] : null;
     }
 
-    /**
-     * Private helper method to send requests to the image generation endpoint.
-     */
     private function sendImageRequest(string $model, array $payload): ?array
     {
         try {
-            // Use streamGenerateContent endpoint and correct the image_size key
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'x-goog-api-key' => $this->apiKey,
-            ])->timeout(600)->post("{$this->baseUrl}{$model}:streamGenerateContent", $payload);
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(600)
+                ->post("{$this->vertexBaseUrl}{$model}:streamGenerateContent", $payload);
 
             if ($response->failed()) {
-                $errorBody = $response->json();
-                $errorCode = $errorBody[0]['error']['code'] ?? $response->status();
+                $errorBody    = $response->json();
+                $errorCode    = $errorBody[0]['error']['code']    ?? $response->status();
                 $errorMessage = $errorBody[0]['error']['message'] ?? $response->body();
-                $errorStatus = $errorBody[0]['error']['status'] ?? 'UNKNOWN';
-                
+                $errorStatus  = $errorBody[0]['error']['status']  ?? 'UNKNOWN';
+
                 Log::error("GeminiService: Failed to generate image from model {$model}", [
-                    'status_code' => $response->status(),
-                    'error_code' => $errorCode,
+                    'status_code'  => $response->status(),
+                    'error_code'   => $errorCode,
                     'error_status' => $errorStatus,
                     'error_message' => $errorMessage,
-                    'full_response' => $response->body()
                 ]);
-                
-                // Check if this is a retryable error (500, 503, etc.)
-                if (in_array($response->status(), [500, 502, 503, 504]) || $errorStatus === 'INTERNAL') {
-                    Log::warning("GeminiService: Retryable error detected for model {$model}");
-                }
-                
                 return null;
             }
 
-            // The response is a stream (an array of JSON objects). We need to find the part with the image data.
             $responseData = $response->json();
             $images = [];
 
@@ -423,7 +354,7 @@ class GeminiService
                     if (isset($chunk['candidates'][0]['content']['parts'][0]['inlineData'])) {
                         $inlineData = $chunk['candidates'][0]['content']['parts'][0]['inlineData'];
                         $images[] = [
-                            'data' => $inlineData['data'] ?? null,
+                            'data'     => $inlineData['data']     ?? null,
                             'mimeType' => $inlineData['mimeType'] ?? null,
                         ];
                     }
@@ -443,43 +374,35 @@ class GeminiService
         }
     }
 
+    // ─── Video generation (Vertex AI) ────────────────────────────────────────
+
     /**
-     * Starts a long-running video generation operation using a specified Gemini model.
+     * Starts a long-running Veo video generation operation via Vertex AI.
      *
-     * Starts a long-running video generation operation using a specified Gemini model.
-     *
-     * @param string $prompt The prompt for video generation.
-     * @param string $model The Gemini video generation model to use (e.g., 'veo-3.1-generate-preview').
-     * @param array $parameters Additional generation parameters (e.g., aspectRatio, durationSeconds).
-     * @return string|null The operation name if successful, or null on failure.
+     * @return string|null The Vertex AI operation name, or null on failure.
      */
     public function startVideoGeneration(string $prompt, string $model = 'veo-3.1-generate-preview', array $parameters = []): ?string
     {
         try {
             $requestBody = [
-                'instances' => [
-                    [
-                        'prompt' => $prompt,
-                    ]
-                ],
+                'instances' => [['prompt' => $prompt]],
                 'parameters' => array_merge([
-                    'aspectRatio' => '16:9',
-                    'sampleCount' => 1,
-                    'durationSeconds' => 8,
+                    'aspectRatio'      => '16:9',
+                    'sampleCount'      => 1,
+                    'durationSeconds'  => 8,
                     'personGeneration' => 'ALLOW_ALL',
                 ], $parameters),
             ];
 
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'x-goog-api-key' => $this->apiKey,
-            ])->timeout(300)->post("{$this->baseUrl}{$model}:predictLongRunning", $requestBody);
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(300)
+                ->post("{$this->vertexBaseUrl}{$model}:predictLongRunning", $requestBody);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to start video generation from model {$model}", [
-                    'status'   => $response->status(),
-                    'body'     => $response->body(),
-                    'model'    => $model,
+                    'status' => $response->status(),
+                    'body'   => $response->body(),
+                    'model'  => $model,
                 ]);
                 return null;
             }
@@ -496,18 +419,20 @@ class GeminiService
     }
 
     /**
-     * Checks the status of a long-running Gemini operation.
+     * Checks the status of a Vertex AI long-running operation.
      *
-     * @param string $operationName The name of the operation to check.
-     * @return array|null The operation response if available, or null if not done or on failure.
+     * @param string $operationName Full Vertex AI operation name
+     *                              (e.g. projects/{p}/locations/{l}/operations/{id})
+     * @return array|null The operation response if done, or null if still running or on failure.
      */
     public function checkVideoGenerationStatus(string $operationName): ?array
     {
         try {
-            $response = Http::withHeaders([
-                'Content-Type' => 'application/json',
-                'x-goog-api-key' => $this->apiKey,
-            ])->timeout(300)->get("https://generativelanguage.googleapis.com/v1beta/{$operationName}");
+            $url = "https://{$this->location}-aiplatform.googleapis.com/v1/{$operationName}";
+
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(300)
+                ->get($url);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to check operation status for {$operationName}: " . $response->body());
@@ -520,7 +445,7 @@ class GeminiService
                 return $responseData;
             }
 
-            return null; // Operation not yet done
+            return null;
         } catch (\Exception $e) {
             Log::error("GeminiService: Exception during operation status check for {$operationName}: " . $e->getMessage(), [
                 'exception' => $e,
@@ -531,16 +456,13 @@ class GeminiService
 
     /**
      * Downloads video data from a given URI.
-     *
-     * @param string $uri The URI to download the video from.
-     * @return string|null The video data as a string, or null on failure.
      */
     public function downloadVideo(string $uri): ?string
     {
         try {
-            $response = Http::withHeaders([
-                'x-goog-api-key' => $this->apiKey,
-            ])->timeout(300)->get($uri);
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(300)
+                ->get($uri);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to download video from {$uri}: " . $response->body());
@@ -556,33 +478,25 @@ class GeminiService
         }
     }
 
+    // ─── Video Files API (Gemini endpoint — no Vertex AI equivalent yet) ─────
+
     /**
      * Upload a video file to the Gemini Files API and return a fresh persistent URI.
      *
-     * Gemini video URIs from generation responses expire in ~48 hours. Re-uploading
-     * via the Files API gives a URI that's valid for 48 h from upload time, which is
-     * enough for an extension call that fires immediately after.
-     *
-     * @param string $videoData  Raw video bytes
-     * @param string $mimeType   e.g. 'video/mp4'
-     * @param string $displayName Human-readable label for the file
-     * @return string|null The files API URI (e.g. https://generativelanguage.googleapis.com/v1beta/files/xxx)
+     * NOTE: The Files API has no Vertex AI equivalent. A future migration should
+     * replace this with a Cloud Storage upload and pass gs:// URIs to Veo instead.
      */
     public function uploadVideoToFilesApi(string $videoData, string $mimeType = 'video/mp4', string $displayName = 'source_video.mp4'): ?string
     {
         try {
             $numBytes = strlen($videoData);
 
-            // Step 1: Initiate resumable upload and get upload URL
-            $initResponse = Http::withHeaders([
-                'X-Goog-Upload-Protocol' => 'resumable',
-                'X-Goog-Upload-Command'  => 'start',
+            $initResponse = Http::withHeaders(array_merge($this->authHeaders(), [
+                'X-Goog-Upload-Protocol'              => 'resumable',
+                'X-Goog-Upload-Command'               => 'start',
                 'X-Goog-Upload-Header-Content-Length' => $numBytes,
                 'X-Goog-Upload-Header-Content-Type'   => $mimeType,
-                'Content-Type' => 'application/json',
-            ])->withQueryParameters([
-                'key' => $this->apiKey,
-            ])->post('https://generativelanguage.googleapis.com/upload/v1beta/files', [
+            ]))->post('https://generativelanguage.googleapis.com/upload/v1beta/files', [
                 'file' => ['display_name' => $displayName],
             ]);
 
@@ -597,11 +511,10 @@ class GeminiService
                 return null;
             }
 
-            // Step 2: Upload the actual bytes
             $uploadResponse = Http::withHeaders([
-                'Content-Length'         => $numBytes,
-                'X-Goog-Upload-Offset'   => 0,
-                'X-Goog-Upload-Command'  => 'upload, finalize',
+                'Content-Length'       => $numBytes,
+                'X-Goog-Upload-Offset' => 0,
+                'X-Goog-Upload-Command' => 'upload, finalize',
             ])->withBody($videoData, $mimeType)->put($uploadUrl);
 
             if ($uploadResponse->failed()) {
@@ -611,7 +524,6 @@ class GeminiService
 
             $fileUri = $uploadResponse->json()['file']['uri'] ?? null;
             Log::info('GeminiService: Video uploaded to Files API', ['uri' => $fileUri]);
-
             return $fileUri;
         } catch (\Exception $e) {
             Log::error('GeminiService: Exception during Files API upload: ' . $e->getMessage());
@@ -620,19 +532,11 @@ class GeminiService
     }
 
     /**
-     * Extend a Veo-generated video by up to 7 seconds using Veo 3.1.
-     * 
-     * Requirements:
-     * - Input video must be Veo-generated (from a previous operation response)
-     * - Video must be 141 seconds or less
-     * - Aspect ratio: 9:16 or 16:9
-     * - Resolution: 720p
-     * - Can extend up to 20 times (cumulative 148 seconds max)
-     * 
-     * @param string $videoUri The URI of the Veo-generated video to extend (e.g., from operation.response.generated_videos[0].video)
-     * @param string $prompt The prompt describing how to extend the video
-     * @param array $parameters Additional parameters (aspectRatio, durationSeconds, etc.)
-     * @return string|null The operation name if successful, or null on failure.
+     * Extend a Veo-generated video by up to 7 seconds.
+     *
+     * NOTE: Requires a Gemini Files API URI (from uploadVideoToFilesApi) or a
+     * Cloud Storage gs:// URI. Migrating to Vertex AI + GCS will be required once
+     * the Files API is fully deprecated for this use case.
      */
     public function extendVideo(string $videoUri, string $prompt, array $parameters = []): ?string
     {
@@ -640,32 +544,29 @@ class GeminiService
             'instances' => [
                 [
                     'prompt' => $prompt,
-                    'video' => [
-                        'uri' => $videoUri
-                    ]
+                    'video'  => ['uri' => $videoUri],
                 ]
             ],
             'parameters' => array_merge([
-                'aspectRatio' => '16:9',
-                'sampleCount' => 1,
-                'durationSeconds' => 8, // Must be 8 when using extension
+                'aspectRatio'      => '16:9',
+                'sampleCount'      => 1,
+                'durationSeconds'  => 8,
                 'personGeneration' => 'ALLOW_ALL',
-                'resolution' => '720p', // Extension only supports 720p
+                'resolution'       => '720p',
             ], $parameters),
         ];
 
         Log::info("GeminiService: Extending video with URI: {$videoUri}");
         Log::info("GeminiService: Extension prompt: {$prompt}");
 
-        $attempt = 0;
+        $attempt    = 0;
         $maxRetries = 3;
 
         while ($attempt < $maxRetries) {
             try {
-                $response = Http::withHeaders([
-                    'Content-Type' => 'application/json',
-                    'x-goog-api-key' => $this->apiKey,
-                ])->timeout(300)->post("{$this->baseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
+                $response = Http::withHeaders($this->authHeaders())
+                    ->timeout(300)
+                    ->post("{$this->vertexBaseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
 
                 if ($response->successful()) {
                     $operationName = $response->json()['name'] ?? null;
@@ -674,6 +575,10 @@ class GeminiService
                 }
 
                 $statusCode = $response->status();
+
+                if ($statusCode === 401) {
+                    $this->flushTokenCache();
+                }
 
                 if ($this->isRetryableError($statusCode)) {
                     $attempt++;
@@ -698,9 +603,7 @@ class GeminiService
                     usleep($delayMs * 1000);
                     continue;
                 }
-                Log::error("GeminiService: Exception during video extension: " . $e->getMessage(), [
-                    'exception' => $e,
-                ]);
+                Log::error("GeminiService: Exception during video extension: " . $e->getMessage(), ['exception' => $e]);
                 return null;
             }
         }
@@ -708,4 +611,17 @@ class GeminiService
         return null;
     }
 
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private function isRetryableError(int $statusCode): bool
+    {
+        return ($statusCode >= 500 && $statusCode < 600) || $statusCode === 429 || $statusCode === 401;
+    }
+
+    private function calculateBackoffDelay(int $attempt): int
+    {
+        $delay  = $this->initialRetryDelayMs * (2 ** ($attempt - 1));
+        $jitter = rand(0, (int)($delay * 0.1 * 2)) - ($delay * 0.1);
+        return (int)max(100, $delay + $jitter);
+    }
 }
