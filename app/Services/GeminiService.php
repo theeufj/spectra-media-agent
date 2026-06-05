@@ -5,7 +5,7 @@ namespace App\Services;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
-use Google\Auth\ApplicationDefaultCredentials;
+use Google\Auth\CredentialsLoader;
 
 /**
  * Currently Available Models (Verified March 2026 from ai.google.dev/gemini-api/docs/models):
@@ -61,8 +61,14 @@ class GeminiService
     {
         // Tokens expire after 60 min; cache for 50 to ensure we never send a stale one.
         return Cache::remember('gcp_vertex_access_token', 3000, function () {
-            $credentials = ApplicationDefaultCredentials::getCredentials(
-                ['https://www.googleapis.com/auth/cloud-platform']
+            // Laravel 12 does not call putenv() for .env values, so google/auth's
+            // getenv('GOOGLE_APPLICATION_CREDENTIALS') check always returns false.
+            // Load the credentials file explicitly via the Laravel config instead.
+            $credentialsPath = config('services.google.credentials_path');
+            $keyData         = json_decode(file_get_contents($credentialsPath), true);
+            $credentials     = CredentialsLoader::makeCredentials(
+                ['https://www.googleapis.com/auth/cloud-platform'],
+                $keyData
             );
             $token = $credentials->fetchAuthToken();
             return $token['access_token'];
@@ -103,7 +109,7 @@ class GeminiService
         ?string $systemInstruction = null,
         bool $enableThinking = false,
         bool $enableGoogleSearch = false,
-        int $maxRetries = null,
+        ?int $maxRetries = null,
         ?string $imageBase64 = null,
         string $imageMimeType = 'image/jpeg'
     ): ?array {
