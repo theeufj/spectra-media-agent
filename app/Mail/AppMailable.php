@@ -17,7 +17,7 @@ abstract class AppMailable extends Mailable
         return $this;
     }
 
-    protected function buildViewData(): array
+    public function buildViewData(): array
     {
         return array_merge(parent::buildViewData(), $this->tenantViewData($this->tenantKey));
     }
