@@ -57,10 +57,12 @@ class RunHealthChecks implements ShouldQueue
     {
         Log::info("RunHealthChecks: Starting health check run");
 
-        // Get all customers with active subscriptions or active campaigns
+        // Only check customers who have at least one active + deployed campaign.
+        // Paused/ended campaigns still have platform IDs (withDeployedPlatforms matches them)
+        // so we add the status filter to avoid alerting when nothing is intentionally running.
         $customers = Customer::query()
             ->whereHas('campaigns', function ($q) {
-                $q->withDeployedPlatforms();
+                $q->withDeployedPlatforms()->where('status', 'active');
             })
             ->get();
 

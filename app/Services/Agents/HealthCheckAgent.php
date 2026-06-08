@@ -177,6 +177,11 @@ class HealthCheckAgent
             return;
         }
 
+        // Don't alert on campaigns that are intentionally paused or in draft
+        if (in_array($campaign->status, ['paused', 'draft', 'ended'], true)) {
+            return;
+        }
+
         $monthStart   = now()->startOfMonth()->toDateString();
         $today        = now()->toDateString();
         $daysElapsed  = now()->day;

@@ -56,6 +56,17 @@ class GenerateExecutiveReport implements ShouldQueue
             // Store report metadata for the Reports listing page
             $this->storeReportRecord($customer, $report, $pdfPath);
 
+            // Skip sending if there's no meaningful data — zero spend and zero impressions
+            // means the campaigns weren't running during this period.
+            $hasData = ($report['summary']['total_cost'] ?? 0) > 0
+                    || ($report['summary']['total_impressions'] ?? 0) > 0
+                    || ($report['summary']['total_clicks'] ?? 0) > 0;
+
+            if (!$hasData) {
+                Log::info("Skipping {$this->period} executive report for customer {$customer->id} — no performance data in period");
+                return;
+            }
+
             // Email the report to all users associated with this customer
             foreach ($customer->users as $user) {
                 if (!$user->email) {
