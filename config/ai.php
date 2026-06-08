@@ -16,7 +16,7 @@ return [
          * Default model for all general-purpose AI tasks:
          * copy generation, analysis, recommendations, reporting, etc.
          */
-        'default' => env('AI_MODEL_DEFAULT', 'gemini-2.5-flash'),
+        'default' => env('AI_MODEL_DEFAULT', 'gemini-3.5-flash'),
 
         /*
          * Pro model for complex reasoning tasks (competitor strategy,
@@ -54,6 +54,7 @@ return [
     'fallback_chain' => [
         'gemini-3.1-pro-preview'       => 'gemini-2.5-flash',
         'gemini-2.5-pro'               => 'gemini-2.5-flash',
+        'gemini-3.5-flash'             => 'gemini-2.5-flash',
         'gemini-3-flash-preview'       => 'gemini-2.5-flash',
         'gemini-2.5-flash'             => 'gemini-2.5-flash-lite',
         'gemini-3.1-flash-lite-preview' => 'gemini-2.5-flash-lite',
@@ -99,6 +100,7 @@ return [
     'pricing' => [
         'gemini-3.1-pro-preview'        => ['input' => 1.25,   'output' => 5.00,  'cached' => 0.3125],
         'gemini-2.5-pro'                => ['input' => 1.25,   'output' => 5.00,  'cached' => 0.3125],
+        'gemini-3.5-flash'              => ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
         'gemini-3-flash-preview'        => ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
         'gemini-2.5-flash'              => ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
         'gemini-3.1-flash-lite-preview' => ['input' => 0.018,  'output' => 0.072, 'cached' => 0.0045],
