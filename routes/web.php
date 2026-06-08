@@ -523,6 +523,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('revenue', [App\Http\Controllers\Admin\RevenueController::class, 'index'])->name('admin.revenue.index');
     Route::post('revenue/refund/{chargeId}', [App\Http\Controllers\Admin\RevenueController::class, 'refund'])->name('admin.revenue.refund');
 
+    // AI Cost Dashboard
+    Route::get('ai-costs', [App\Http\Controllers\Admin\AiCostController::class, 'index'])->name('admin.ai-costs.index');
+
     // Activity Logs
     Route::get('activity-logs', [App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('admin.activity.index');
     Route::get('activity-logs/stats', [App\Http\Controllers\Admin\ActivityLogController::class, 'stats'])->name('admin.activity.stats');
