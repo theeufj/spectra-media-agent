@@ -42,8 +42,10 @@ class GeminiService
 {
     private string $project;
     private string $location;
-    // Vertex AI base URL — used for text, image, and video generation
+    // Global endpoint — required for Gemini 3.x / 2.5 text and image models on Vertex AI
     private string $vertexBaseUrl;
+    // Regional endpoint — Veo video models require a specific region (not global)
+    private string $videoBaseUrl;
     // Gemini Files API — used for video upload/extend (no Vertex AI equivalent yet)
     private string $geminiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
     private int $maxRetries = 3;
@@ -51,10 +53,11 @@ class GeminiService
 
     public function __construct()
     {
-        $this->project      = config('services.google.project_id');
-        $this->location     = config('services.google.location', 'us-central1');
-        // Global endpoint (no region prefix) is required for Gemini 3.x models on Agent Platform.
-        $this->vertexBaseUrl = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
+        $this->project  = config('services.google.project_id');
+        $this->location = config('services.google.location', 'us-central1');
+
+        $this->vertexBaseUrl = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/global/publishers/google/models/";
+        $this->videoBaseUrl  = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
     }
 
     // ─── Auth ────────────────────────────────────────────────────────────────
@@ -128,9 +131,10 @@ class GeminiService
             $imageBase64, $imageMimeType, $context, $startTime
         );
 
-        // Model fallback: if primary fails, try the next model in the chain
+        // Model fallback: if primary fails, try the next model in the chain.
+        // Use array access — dot notation breaks for model names that contain dots.
         if ($result === null) {
-            $fallback = config("ai.fallback_chain.{$model}");
+            $fallback = (config('ai.fallback_chain') ?? [])[$model] ?? null;
             if ($fallback) {
                 Log::warning("GeminiService: Primary model {$model} failed. Falling back to {$fallback}.");
                 $result = $this->attemptGenerate(
@@ -161,9 +165,10 @@ class GeminiService
     ): ?array {
         $attempt = 0;
 
-        // Apply task-type preset for temperature/topP, unless caller explicitly set them
+        // Apply task-type preset for temperature/topP, unless caller explicitly set them.
+        // Use array access — task types could theoretically contain dots.
         $taskType    = $context['task_type'] ?? null;
-        $taskPreset  = $taskType ? (config("ai.task_config.{$taskType}") ?? []) : [];
+        $taskPreset  = $taskType ? ((config('ai.task_config') ?? [])[$taskType] ?? []) : [];
         $defaultConfig = array_merge(
             ['temperature' => 1, 'topP' => 0.95, 'topK' => 40, 'maxOutputTokens' => 8192],
             $taskPreset,
@@ -301,13 +306,13 @@ class GeminiService
      */
     public function resolveModel(string $taskTypeOrKey): string
     {
-        // Direct model key in config ('default', 'pro', 'lite', 'image', 'video', 'embedding')
+        // Direct model key ('default', 'pro', 'lite', 'image', 'video', 'embedding')
         $fromModels = config("ai.models.{$taskTypeOrKey}");
         if ($fromModels) {
             return $fromModels;
         }
 
-        // Task type → model tier → model string
+        // Task type → model tier → model string (task types don't contain dots, safe to use dot-notation)
         $tier = config("ai.task_models.{$taskTypeOrKey}");
         if ($tier) {
             return config("ai.models.{$tier}", config('ai.models.default'));
@@ -507,7 +512,7 @@ class GeminiService
 
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
-                ->post("{$this->vertexBaseUrl}{$model}:predictLongRunning", $requestBody);
+                ->post("{$this->videoBaseUrl}{$model}:predictLongRunning", $requestBody);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to start video generation from model {$model}", [
@@ -678,7 +683,7 @@ class GeminiService
             try {
                 $response = Http::withHeaders($this->authHeaders())
                     ->timeout(300)
-                    ->post("{$this->vertexBaseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
+                    ->post("{$this->videoBaseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
 
                 if ($response->successful()) {
                     $operationName = $response->json()['name'] ?? null;
@@ -731,7 +736,8 @@ class GeminiService
      */
     public function calculateCost(string $model, int $inputTokens, int $outputTokens, int $cachedTokens = 0): float
     {
-        $pricing = config("ai.pricing.{$model}");
+        // Array access required — model names contain dots which break Laravel's config dot-notation.
+        $pricing = (config('ai.pricing') ?? [])[$model] ?? null;
         if (!$pricing) {
             return 0.0;
         }
