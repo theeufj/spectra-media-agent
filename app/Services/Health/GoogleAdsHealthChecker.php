@@ -141,7 +141,7 @@ class GoogleAdsHealthChecker
     {
         $health = ['warnings' => [], 'has_tracking' => false];
 
-        if ($customer->google_ads_conversion_action_id) {
+        if ($customer->conversion_action_id) {
             $health['has_tracking'] = true;
         } else {
             $health['warnings'][] = [
