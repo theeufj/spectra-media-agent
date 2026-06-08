@@ -25,11 +25,11 @@ export default function Pricing({ auth, plans = [] }) {
         <>
             <Head>
                 <title>Pricing - Simple, Transparent Plans | sitetospend</title>
-                <meta name="description" content="sitetospend pricing: Starter at $99/mo, Growth at $249/mo, Agency custom pricing. All plans include AI agents, campaign automation, and a 7-day free trial. No credit card required." />
-                <meta property="og:title" content="Pricing — AI Ad Management from $99/mo | sitetospend" />
-                <meta property="og:description" content="Starter $99/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial. No credit card required." />
-                <meta name="twitter:title" content="Pricing — AI Ad Management from $99/mo | sitetospend" />
-                <meta name="twitter:description" content="Starter $99/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial." />
+                <meta name="description" content="sitetospend pricing: Starter at $149/mo, Growth at $249/mo, Agency custom pricing. All plans include AI agents, campaign automation, and a 7-day free trial. No credit card required." />
+                <meta property="og:title" content="Pricing — AI Ad Management from $149/mo | sitetospend" />
+                <meta property="og:description" content="Starter $149/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial. No credit card required." />
+                <meta name="twitter:title" content="Pricing — AI Ad Management from $149/mo | sitetospend" />
+                <meta name="twitter:description" content="Starter $149/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial." />
                 <script type="application/ld+json">{JSON.stringify({
                     "@context": "https://schema.org",
                     "@type": "FAQPage",
@@ -77,7 +77,7 @@ export default function Pricing({ auth, plans = [] }) {
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
                                         {[
-                                            ['Cost', '$2,500 - $5,000 / month', 'From $99 / month'],
+                                            ['Cost', '$2,500 - $5,000 / month', 'From $149 / month'],
                                             ['Setup Time', '2-4 Weeks', '< 5 Minutes'],
                                             ['Brand Matching', 'Manual PDF creation (billed extra)', 'Reads your website automatically'],
                                             ['Ad Creative', 'Limited revisions, extra cost', 'AI writes and generates images for you'],

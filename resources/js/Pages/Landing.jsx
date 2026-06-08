@@ -6,7 +6,7 @@ import DemoResultsPanel from '@/Components/DemoResultsPanel';
 
 export default function Landing({ auth, plans = [] }) {
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
-    const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 99;
+    const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 149;
 
     const [url, setUrl] = useState('');
     const [loadingStage, setLoadingStage] = useState(0);
