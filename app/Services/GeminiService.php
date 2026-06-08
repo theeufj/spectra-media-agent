@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\AiCost;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -92,16 +93,19 @@ class GeminiService
     // ─── Text generation ─────────────────────────────────────────────────────
 
     /**
-     * Generates content using a specified Gemini model with retry mechanism.
+     * Generates content using a specified Gemini model with retry and fallback.
      *
-     * @param string $model The Gemini model to use (e.g., 'gemini-2.5-flash').
-     * @param string $prompt The prompt to send to the model.
-     * @param array $config Generation configuration (temperature, maxOutputTokens, etc.).
+     * @param string      $model            The Gemini model to use.
+     * @param string      $prompt           The user prompt.
+     * @param array       $config           Generation config overrides (temperature, maxOutputTokens, etc.).
      * @param string|null $systemInstruction Optional system instruction.
-     * @param bool $enableThinking Enable extended thinking (HIGH level).
-     * @param bool $enableGoogleSearch Enable Google Search tool.
-     * @param int $maxRetries Maximum number of retry attempts (default: 3).
-     * @return array|null The generated content with 'text' key, or null on failure.
+     * @param bool        $enableThinking   Enable extended thinking (HIGH level).
+     * @param bool        $enableGoogleSearch Enable Google Search grounding tool.
+     * @param int|null    $maxRetries       Override default retry count.
+     * @param string|null $imageBase64      Optional base64-encoded image for multimodal input.
+     * @param string      $imageMimeType    MIME type of the image.
+     * @param array       $context          Tracking context: campaign_id, customer_id, operation, task_type.
+     *                                      task_type applies a preset temperature/topP when not overridden in $config.
      */
     public function generateContent(
         string $model,
@@ -112,10 +116,59 @@ class GeminiService
         bool $enableGoogleSearch = false,
         ?int $maxRetries = null,
         ?string $imageBase64 = null,
-        string $imageMimeType = 'image/jpeg'
+        string $imageMimeType = 'image/jpeg',
+        array $context = []
     ): ?array {
         $maxRetries = $maxRetries ?? $this->maxRetries;
-        $attempt    = 0;
+        $startTime  = hrtime(true);
+
+        $result = $this->attemptGenerate(
+            $model, $prompt, $config, $systemInstruction,
+            $enableThinking, $enableGoogleSearch, $maxRetries,
+            $imageBase64, $imageMimeType, $context, $startTime
+        );
+
+        // Model fallback: if primary fails, try the next model in the chain
+        if ($result === null) {
+            $fallback = config("ai.fallback_chain.{$model}");
+            if ($fallback) {
+                Log::warning("GeminiService: Primary model {$model} failed. Falling back to {$fallback}.");
+                $result = $this->attemptGenerate(
+                    $fallback, $prompt, $config, $systemInstruction,
+                    $enableThinking, $enableGoogleSearch, $maxRetries,
+                    $imageBase64, $imageMimeType,
+                    array_merge($context, ['fallback_from' => $model]),
+                    hrtime(true)
+                );
+            }
+        }
+
+        return $result;
+    }
+
+    private function attemptGenerate(
+        string $model,
+        string $prompt,
+        array $config,
+        ?string $systemInstruction,
+        bool $enableThinking,
+        bool $enableGoogleSearch,
+        int $maxRetries,
+        ?string $imageBase64,
+        string $imageMimeType,
+        array $context,
+        int $startTime
+    ): ?array {
+        $attempt = 0;
+
+        // Apply task-type preset for temperature/topP, unless caller explicitly set them
+        $taskType    = $context['task_type'] ?? null;
+        $taskPreset  = $taskType ? (config("ai.task_config.{$taskType}") ?? []) : [];
+        $defaultConfig = array_merge(
+            ['temperature' => 1, 'topP' => 0.95, 'topK' => 40, 'maxOutputTokens' => 8192],
+            $taskPreset,
+            $config  // caller values always win
+        );
 
         while ($attempt < $maxRetries) {
             try {
@@ -132,15 +185,8 @@ class GeminiService
                 }
 
                 $payload = [
-                    'contents' => [
-                        ['role' => 'user', 'parts' => $parts]
-                    ],
-                    'generationConfig' => array_merge([
-                        'temperature'     => 1,
-                        'topP'            => 0.95,
-                        'topK'            => 40,
-                        'maxOutputTokens' => 8192,
-                    ], $config),
+                    'contents'         => [['role' => 'user', 'parts' => $parts]],
+                    'generationConfig' => $defaultConfig,
                 ];
 
                 if ($enableThinking) {
@@ -163,16 +209,25 @@ class GeminiService
                     $responseData = $response->json();
 
                     if (is_array($responseData)) {
-                        $textContent = null;
+                        $textContent   = null;
+                        $usageMetadata = [];
+
                         foreach ($responseData as $chunk) {
-                            $parts = $chunk['candidates'][0]['content']['parts'] ?? [];
-                            foreach ($parts as $part) {
+                            $chunkParts = $chunk['candidates'][0]['content']['parts'] ?? [];
+                            foreach ($chunkParts as $part) {
                                 if (isset($part['text']) && !isset($part['thought'])) {
                                     $textContent = ($textContent ?? '') . $part['text'];
                                 }
                             }
+                            // usageMetadata appears in the final chunk
+                            if (!empty($chunk['usageMetadata'])) {
+                                $usageMetadata = $chunk['usageMetadata'];
+                            }
                         }
+
                         if ($textContent) {
+                            $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
+                            $this->recordCost($model, 'generateContent', $usageMetadata, $durationMs, $context);
                             return ['text' => $textContent];
                         }
                     }
@@ -204,9 +259,9 @@ class GeminiService
                 }
 
                 Log::error("GeminiService: Failed to generate content from model {$model} (Status: {$statusCode}): " . $response->body(), [
-                    'model'        => $model,
-                    'attempt'      => $attempt + 1,
-                    'max_retries'  => $maxRetries,
+                    'model'       => $model,
+                    'attempt'     => $attempt + 1,
+                    'max_retries' => $maxRetries,
                 ]);
                 return null;
 
@@ -235,13 +290,42 @@ class GeminiService
     }
 
     /**
-     * Generate content with system instruction, thinking, and Google Search
+     * Resolve a model key ('default', 'pro', 'lite') or a task type to the
+     * configured model string. Pass context['task_type'] to also apply the
+     * right temperature preset automatically.
+     *
+     * Usage in agents:
+     *   $model = $this->gemini->resolveModel('strategy');
+     *   $this->gemini->generateContent($model, $prompt, [], null, false, false, null, null, 'image/jpeg',
+     *       ['task_type' => 'strategy', 'customer_id' => $customer->id]);
+     */
+    public function resolveModel(string $taskTypeOrKey): string
+    {
+        // Direct model key in config ('default', 'pro', 'lite', 'image', 'video', 'embedding')
+        $fromModels = config("ai.models.{$taskTypeOrKey}");
+        if ($fromModels) {
+            return $fromModels;
+        }
+
+        // Task type → model tier → model string
+        $tier = config("ai.task_models.{$taskTypeOrKey}");
+        if ($tier) {
+            return config("ai.models.{$tier}", config('ai.models.default'));
+        }
+
+        // Assume it's already a raw model string
+        return $taskTypeOrKey;
+    }
+
+    /**
+     * Generate content with system instruction, thinking, and Google Search.
      */
     public function generateWithThinkingAndSearch(
         string $model,
         string $systemInstruction,
         string $prompt,
-        array $config = []
+        array $config = [],
+        array $context = []
     ): ?array {
         return $this->generateContent(
             $model,
@@ -249,7 +333,11 @@ class GeminiService
             $config,
             $systemInstruction,
             true,
-            true
+            true,
+            null,
+            null,
+            'image/jpeg',
+            $context
         );
     }
 
@@ -258,8 +346,10 @@ class GeminiService
     /**
      * Generates embeddings for a given text using a specified Gemini embedding model.
      */
-    public function embedContent(string $model, string $text): ?array
+    public function embedContent(string $model, string $text, array $context = []): ?array
     {
+        $startTime = hrtime(true);
+
         try {
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
@@ -271,6 +361,11 @@ class GeminiService
                 Log::error("GeminiService: Failed to get embedding from model {$model}: " . $response->body());
                 return null;
             }
+
+            $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
+            // Approximate token count for embeddings (no usageMetadata returned)
+            $approxTokens = (int) (strlen($text) / 4);
+            $this->recordCost($model, 'embedContent', ['promptTokenCount' => $approxTokens], $durationMs, $context);
 
             // Vertex AI embedding response: predictions[0].embeddings.values
             return $response->json()['predictions'][0]['embeddings']['values'] ?? null;
@@ -287,7 +382,7 @@ class GeminiService
     /**
      * Generates an image based on a prompt using a specified Gemini image generation model.
      */
-    public function generateImage(string $prompt, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K'): ?array
+    public function generateImage(string $prompt, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K', array $context = []): ?array
     {
         $payload = [
             'contents' => [
@@ -302,14 +397,14 @@ class GeminiService
             ],
         ];
 
-        $result = $this->sendImageRequest($model, $payload);
+        $result = $this->sendImageRequest($model, $payload, $context);
         return $result ? $result[0] : null;
     }
 
     /**
      * Refines an existing image based on a new prompt and context images.
      */
-    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K'): ?array
+    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K', array $context = []): ?array
     {
         $parts = [['text' => $prompt]];
         foreach ($contextImages as $image) {
@@ -327,12 +422,14 @@ class GeminiService
             ],
         ];
 
-        $result = $this->sendImageRequest($model, $payload);
+        $result = $this->sendImageRequest($model, $payload, $context);
         return $result ? $result[0] : null;
     }
 
-    private function sendImageRequest(string $model, array $payload): ?array
+    private function sendImageRequest(string $model, array $payload, array $context = []): ?array
     {
+        $startTime = hrtime(true);
+
         try {
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(600)
@@ -345,16 +442,17 @@ class GeminiService
                 $errorStatus  = $errorBody[0]['error']['status']  ?? 'UNKNOWN';
 
                 Log::error("GeminiService: Failed to generate image from model {$model}", [
-                    'status_code'  => $response->status(),
-                    'error_code'   => $errorCode,
-                    'error_status' => $errorStatus,
+                    'status_code'   => $response->status(),
+                    'error_code'    => $errorCode,
+                    'error_status'  => $errorStatus,
                     'error_message' => $errorMessage,
                 ]);
                 return null;
             }
 
-            $responseData = $response->json();
-            $images = [];
+            $responseData  = $response->json();
+            $images        = [];
+            $usageMetadata = [];
 
             if (is_array($responseData)) {
                 foreach ($responseData as $chunk) {
@@ -365,6 +463,9 @@ class GeminiService
                             'mimeType' => $inlineData['mimeType'] ?? null,
                         ];
                     }
+                    if (!empty($chunk['usageMetadata'])) {
+                        $usageMetadata = $chunk['usageMetadata'];
+                    }
                 }
             }
 
@@ -372,6 +473,9 @@ class GeminiService
                 Log::warning("GeminiService: No inlineData found in image generation response.", ['response' => $responseData]);
                 return null;
             }
+
+            $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
+            $this->recordCost($model, 'generateImage', $usageMetadata, $durationMs, $context);
 
             return $images;
 
@@ -388,7 +492,7 @@ class GeminiService
      *
      * @return string|null The Vertex AI operation name, or null on failure.
      */
-    public function startVideoGeneration(string $prompt, string $model = 'veo-3.1-generate-preview', array $parameters = []): ?string
+    public function startVideoGeneration(string $prompt, string $model = 'veo-3.1-generate-preview', array $parameters = [], array $context = []): ?string
     {
         try {
             $requestBody = [
@@ -416,6 +520,12 @@ class GeminiService
 
             $json = $response->json();
             Log::info("GeminiService: Veo response keys: " . implode(', ', array_keys($json ?? [])));
+
+            // Record a nominal cost entry for video generation dispatch (billed per second by Google)
+            $this->recordCost($model, 'startVideoGeneration', [], 0, array_merge($context, [
+                'duration_seconds' => $parameters['durationSeconds'] ?? 8,
+            ]));
+
             return $json['name'] ?? null;
         } catch (\Exception $e) {
             Log::error("GeminiService: Exception during video generation start from model {$model}: " . $e->getMessage(), [
@@ -519,8 +629,8 @@ class GeminiService
             }
 
             $uploadResponse = Http::withHeaders([
-                'Content-Length'       => $numBytes,
-                'X-Goog-Upload-Offset' => 0,
+                'Content-Length'        => $numBytes,
+                'X-Goog-Upload-Offset'  => 0,
                 'X-Goog-Upload-Command' => 'upload, finalize',
             ])->withBody($videoData, $mimeType)->put($uploadUrl);
 
@@ -540,12 +650,8 @@ class GeminiService
 
     /**
      * Extend a Veo-generated video by up to 7 seconds.
-     *
-     * NOTE: Requires a Gemini Files API URI (from uploadVideoToFilesApi) or a
-     * Cloud Storage gs:// URI. Migrating to Vertex AI + GCS will be required once
-     * the Files API is fully deprecated for this use case.
      */
-    public function extendVideo(string $videoUri, string $prompt, array $parameters = []): ?string
+    public function extendVideo(string $videoUri, string $prompt, array $parameters = [], array $context = []): ?string
     {
         $requestBody = [
             'instances' => [
@@ -564,7 +670,6 @@ class GeminiService
         ];
 
         Log::info("GeminiService: Extending video with URI: {$videoUri}");
-        Log::info("GeminiService: Extension prompt: {$prompt}");
 
         $attempt    = 0;
         $maxRetries = 3;
@@ -578,6 +683,7 @@ class GeminiService
                 if ($response->successful()) {
                     $operationName = $response->json()['name'] ?? null;
                     Log::info("GeminiService: Video extension started successfully. Operation: {$operationName}");
+                    $this->recordCost('veo-3.1-generate-preview', 'extendVideo', [], 0, $context);
                     return $operationName;
                 }
 
@@ -618,6 +724,61 @@ class GeminiService
         return null;
     }
 
+    // ─── Cost tracking ───────────────────────────────────────────────────────
+
+    /**
+     * Calculate cost in USD from token counts and model pricing config.
+     */
+    public function calculateCost(string $model, int $inputTokens, int $outputTokens, int $cachedTokens = 0): float
+    {
+        $pricing = config("ai.pricing.{$model}");
+        if (!$pricing) {
+            return 0.0;
+        }
+
+        return round(
+            ($inputTokens  * $pricing['input']  / 1_000_000) +
+            ($outputTokens * $pricing['output'] / 1_000_000) +
+            ($cachedTokens * $pricing['cached'] / 1_000_000),
+            6
+        );
+    }
+
+    /**
+     * Record an AI API call to the ai_costs table.
+     * Fire-and-forget — exceptions are swallowed so they never break a generation call.
+     */
+    private function recordCost(string $model, string $operation, array $usageMetadata, int $durationMs, array $context = []): void
+    {
+        try {
+            $inputTokens  = (int) ($usageMetadata['promptTokenCount']     ?? 0);
+            $outputTokens = (int) ($usageMetadata['candidatesTokenCount'] ?? 0);
+            $cachedTokens = (int) ($usageMetadata['cachedContentTokenCount'] ?? 0);
+            $cost         = $this->calculateCost($model, $inputTokens, $outputTokens, $cachedTokens);
+
+            AiCost::create([
+                'campaign_id'  => $context['campaign_id']  ?? null,
+                'customer_id'  => $context['customer_id']  ?? null,
+                'service'      => 'Gemini',
+                'operation'    => $context['operation']    ?? $operation,
+                'model'        => $model,
+                'input_tokens' => $inputTokens,
+                'output_tokens'=> $outputTokens,
+                'cached_tokens'=> $cachedTokens,
+                'cost'         => $cost,
+                'duration_ms'  => $durationMs,
+                'task_type'    => $context['task_type']    ?? null,
+                'metadata'     => array_filter([
+                    'fallback_from'    => $context['fallback_from']    ?? null,
+                    'duration_seconds' => $context['duration_seconds'] ?? null,
+                ]),
+            ]);
+        } catch (\Throwable $e) {
+            // Never let cost tracking break a generation call
+            Log::warning("GeminiService: Failed to record AI cost: " . $e->getMessage());
+        }
+    }
+
     // ─── Helpers ─────────────────────────────────────────────────────────────
 
     private function isRetryableError(int $statusCode): bool
@@ -629,6 +790,6 @@ class GeminiService
     {
         $delay  = $this->initialRetryDelayMs * (2 ** ($attempt - 1));
         $jitter = rand(0, (int)($delay * 0.1 * 2)) - ($delay * 0.1);
-        return (int)max(100, $delay + $jitter);
+        return (int) max(100, $delay + $jitter);
     }
 }

@@ -278,7 +278,11 @@ Return ONLY valid JSON array: ["description 1", "description 2"]
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
+            $response = $this->gemini->generateContent(
+                config('ai.models.lite'),
+                $prompt,
+                context: ['task_type' => 'extraction'],
+            );
             $text = $response['text'] ?? '';
             $text = preg_replace('/```json\s*|\s*```/', '', $text);
             $data = json_decode(trim($text), true);

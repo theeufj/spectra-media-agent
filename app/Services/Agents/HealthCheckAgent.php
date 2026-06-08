@@ -396,7 +396,12 @@ PROMPT;
             $response = $this->gemini->generateContent(
                 model: config('ai.models.default'),
                 prompt: $prompt,
-                config: ['temperature' => 0.7, 'maxOutputTokens' => 2048],
+                config: ['maxOutputTokens' => 2048],
+                context: [
+                    'task_type'   => 'analytical',
+                    'customer_id' => $results['customer_id'] ?? null,
+                    'operation'   => 'health_check_recommendations',
+                ],
             );
 
             if ($response && isset($response['text'])) {

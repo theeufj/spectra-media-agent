@@ -270,7 +270,11 @@ Return ONLY valid JSON array:
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
+            $response = $this->gemini->generateContent(
+                config('ai.models.default'),
+                $prompt,
+                context: ['task_type' => 'creative', 'operation' => 'ad_copy_generation'],
+            );
             $text = $response['text'] ?? '';
             $text = preg_replace('/```json\s*|\s*```/', '', $text);
             $data = json_decode(trim($text), true);
@@ -440,7 +444,11 @@ Return ONLY valid JSON:
 PROMPT;
 
         try {
-            $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
+            $response = $this->gemini->generateContent(
+                config('ai.models.default'),
+                $prompt,
+                context: ['task_type' => 'creative', 'operation' => 'ad_strength_copy_generation'],
+            );
             $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
             $data = json_decode(trim($text), true);
             if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
