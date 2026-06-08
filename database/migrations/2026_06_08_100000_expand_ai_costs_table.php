@@ -3,16 +3,18 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\DB;
 
 return new class extends Migration
 {
     public function up(): void
     {
-        // Make campaign_id nullable (was NOT NULL) — many AI calls are not campaign-scoped
-        DB::statement('ALTER TABLE ai_costs MODIFY campaign_id BIGINT UNSIGNED NULL');
-
         Schema::table('ai_costs', function (Blueprint $table) {
+            // Make campaign_id nullable — many AI calls are not campaign-scoped.
+            // Drop the existing FK first, then change the column, then re-add FK.
+            $table->dropForeign(['campaign_id']);
+            $table->unsignedBigInteger('campaign_id')->nullable()->change();
+            $table->foreign('campaign_id')->references('id')->on('campaigns')->nullOnDelete();
+
             $table->foreignId('customer_id')->nullable()->after('campaign_id')
                 ->constrained()->nullOnDelete();
             $table->string('operation')->default('generateContent')->after('service');
@@ -36,12 +38,13 @@ return new class extends Migration
             $table->dropIndex(['campaign_id', 'created_at']);
             $table->dropIndex(['model']);
             $table->dropForeign(['customer_id']);
+            $table->dropForeign(['campaign_id']);
             $table->dropColumn([
                 'customer_id', 'operation', 'input_tokens', 'output_tokens',
                 'cached_tokens', 'duration_ms', 'task_type', 'metadata',
             ]);
+            $table->unsignedBigInteger('campaign_id')->nullable(false)->change();
+            $table->foreign('campaign_id')->references('id')->on('campaigns')->cascadeOnDelete();
         });
-
-        DB::statement('ALTER TABLE ai_costs MODIFY campaign_id BIGINT UNSIGNED NOT NULL');
     }
 };
