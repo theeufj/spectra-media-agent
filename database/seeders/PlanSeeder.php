@@ -46,9 +46,9 @@ class PlanSeeder extends Seeder
             [
                 'name' => 'Starter',
                 'description' => 'For local businesses and early-stage startups.',
-                'price_cents' => 9900,
+                'price_cents' => 14900,
                 'billing_interval' => 'month',
-                'stripe_price_id' => 'price_1TFYotClfeR0n0yLuE5IjLuI',
+                'stripe_price_id' => env('STRIPE_STARTER_PRICE_ID', 'price_1TFYotClfeR0n0yLuE5IjLuI'),
                 'features' => [
                     '1 Ad Platform — your choice of Google or Facebook',
                     'Unlimited Campaigns',
