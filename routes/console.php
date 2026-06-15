@@ -263,6 +263,14 @@ Schedule::call(function () {
 })->name('sync-product-feeds')->hourly()->withoutOverlapping();
 
 // ============================================================
+// PMAX ASSET OPTIMIZATION
+// ============================================================
+
+// Weekly PMax asset audit — checks all active PMax campaigns for low-performing assets
+// and auto-generates AI replacement copy for headlines/descriptions
+Schedule::command('pmax:check-assets')->weekly()->withoutOverlapping();
+
+// ============================================================
 // SEO & MAINTENANCE
 // ============================================================
 

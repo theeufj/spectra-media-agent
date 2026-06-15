@@ -9,6 +9,7 @@ use App\Models\GoogleAdsPerformanceData;
 use App\Prompts\SeasonalStrategyPrompt;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
+use App\Services\GoogleAds\CommonServices\CreateSeasonalityAdjustment;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -111,6 +112,9 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                 $campaign->id,
                 ['season' => $this->season, 'strategy_shift' => $strategyShift]
             );
+
+            // Optionally create a Google Ads BiddingSeasonalityAdjustment for Smart Bidding awareness
+            $this->applySeasonalityAdjustment($campaign);
 
         } catch (\Exception $e) {
             Log::error("Error applying seasonal strategy shift to campaign {$this->campaignId}: " . $e->getMessage(), [
@@ -235,6 +239,74 @@ class ApplySeasonalStrategyShift implements ShouldQueue
 
         // Update the campaign record
         $campaign->update(['daily_budget' => $newDailyBudget]);
+    }
+
+    /**
+     * Create a Google Ads BiddingSeasonalityAdjustment so Smart Bidding is aware
+     * of the expected conversion rate change. Failures here are non-blocking.
+     */
+    private function applySeasonalityAdjustment(Campaign $campaign): void
+    {
+        if (!$campaign->google_ads_campaign_id) {
+            return;
+        }
+
+        $customer = $campaign->customer;
+        if (!$customer || !$customer->google_ads_customer_id) {
+            return;
+        }
+
+        try {
+            // Map season names to date windows and conversion rate modifiers
+            $season = strtolower($this->season);
+            $year   = (int) now()->format('Y');
+
+            [$startDateTime, $endDateTime, $modifier] = match (true) {
+                in_array($season, ['holiday', 'christmas'], true) => [
+                    "{$year}-12-20 00:00:00",
+                    ($year + 1) . '-01-01 23:59:59',
+                    1.40,
+                ],
+                $season === 'black_friday' => [
+                    "{$year}-11-25 00:00:00",
+                    "{$year}-12-02 23:59:59",
+                    1.50,
+                ],
+                $season === 'summer' => [
+                    "{$year}-06-01 00:00:00",
+                    "{$year}-08-31 23:59:59",
+                    0.90,
+                ],
+                default => [
+                    now()->format('Y-m-d') . ' 00:00:00',
+                    now()->addDays(14)->format('Y-m-d') . ' 23:59:59',
+                    1.10,
+                ],
+            };
+
+            $createAdjustment = new CreateSeasonalityAdjustment($customer);
+            $resourceName = ($createAdjustment)($customer->google_ads_customer_id, [
+                'name'                     => ucfirst($this->season) . ' ' . $year . ' - ' . $campaign->name,
+                'scope'                    => 'CAMPAIGN',
+                'start_date_time'          => $startDateTime,
+                'end_date_time'            => $endDateTime,
+                'conversion_rate_modifier' => $modifier,
+                'campaign_resource'        => $campaign->google_ads_campaign_id,
+            ]);
+
+            if ($resourceName) {
+                Log::info("ApplySeasonalStrategyShift: Created seasonality adjustment for campaign {$campaign->id}", [
+                    'resource'  => $resourceName,
+                    'season'    => $this->season,
+                    'modifier'  => $modifier,
+                ]);
+            }
+        } catch (\Exception $e) {
+            Log::warning("ApplySeasonalStrategyShift: Seasonality adjustment failed for campaign {$campaign->id} — skipping", [
+                'season' => $this->season,
+                'error'  => $e->getMessage(),
+            ]);
+        }
     }
 
     /**

@@ -685,6 +685,14 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         // Target CPA requires 30+/month, Target ROAS requires 50+/month — fall back to
         // MaximizeConversions on accounts below those thresholds.
         $this->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
+
+        // 8. Apply conversion value rules (device + audience modifiers)
+        try {
+            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
+            $applyValueRules($customerId, $campaignResourceName, $this->customer);
+        } catch (\Exception $e) {
+            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -901,8 +909,16 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         // 5. Add Ad Extensions
         // Note: Display campaigns support fewer extensions, but Sitelinks/Callouts are often compatible.
         $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
+
+        // 6. Apply conversion value rules (device + audience modifiers)
+        try {
+            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
+            $applyValueRules($customerId, $campaignResourceName, $this->customer);
+        } catch (\Exception $e) {
+            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: ' . $e->getMessage());
+        }
     }
-    
+
     /**
      * Execute Performance Max campaign deployment
      */
@@ -1126,6 +1142,14 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
         // 4. Add Ad Extensions (Sitelinks, Callouts) - PMax can use campaign-level assets
         $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
+
+        // 5. Apply conversion value rules (device + audience modifiers)
+        try {
+            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
+            $applyValueRules($customerId, $campaignResourceName, $this->customer);
+        } catch (\Exception $e) {
+            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: ' . $e->getMessage());
+        }
     }
 
     /**

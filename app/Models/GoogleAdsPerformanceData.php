@@ -20,6 +20,11 @@ class GoogleAdsPerformanceData extends Model
         'ctr',
         'cpc',
         'cpa',
+        'search_impression_share',
+        'search_top_impression_share',
+        'view_through_conversions',
+        'all_conversions',
+        'interaction_rate',
     ];
 
     protected $casts = [
@@ -32,6 +37,11 @@ class GoogleAdsPerformanceData extends Model
         'ctr' => 'float',
         'cpc' => 'float',
         'cpa' => 'float',
+        'search_impression_share' => 'float',
+        'search_top_impression_share' => 'float',
+        'view_through_conversions' => 'float',
+        'all_conversions' => 'float',
+        'interaction_rate' => 'float',
     ];
 
     public function campaign()

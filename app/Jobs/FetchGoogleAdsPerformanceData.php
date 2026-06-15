@@ -55,7 +55,10 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                 $daysBack = $hasData ? 7 : 30;
 
                 $query = "SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, "
-                       . "metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM campaign "
+                       . "metrics.cost_micros, metrics.conversions, metrics.conversions_value, "
+                       . "metrics.search_impression_share, metrics.search_top_impression_share, "
+                       . "metrics.view_through_conversions, metrics.all_conversions, metrics.interaction_rate, "
+                       . "segments.date FROM campaign "
                        . "WHERE campaign.resource_name = '{$this->campaign->google_ads_campaign_id}' "
                        . "AND segments.date BETWEEN '" . now()->subDays($daysBack)->format('Y-m-d') . "' AND '" . now()->format('Y-m-d') . "'";
 
@@ -75,6 +78,11 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                     $cost = $metrics->getCostMicros() / 1000000;
                     $conversions = $metrics->getConversions();
                     $conversionValue = $metrics->getConversionsValue();
+                    $searchImpressionShare = $metrics->getSearchImpressionShare();
+                    $searchTopImpressionShare = $metrics->getSearchTopImpressionShare();
+                    $viewThroughConversions = $metrics->getViewThroughConversions();
+                    $allConversions = $metrics->getAllConversions();
+                    $interactionRate = $metrics->getInteractionRate();
 
                     $data = [
                         'campaign_id' => $this->campaign->id,
@@ -87,6 +95,11 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                         'ctr' => $impressions > 0 ? round($clicks / $impressions * 100, 2) : 0,
                         'cpc' => $clicks > 0 ? round($cost / $clicks, 2) : 0,
                         'cpa' => $conversions > 0 ? round($cost / $conversions, 2) : 0,
+                        'search_impression_share' => $searchImpressionShare,
+                        'search_top_impression_share' => $searchTopImpressionShare,
+                        'view_through_conversions' => $viewThroughConversions ?? 0,
+                        'all_conversions' => $allConversions ?? 0,
+                        'interaction_rate' => $interactionRate,
                     ];
 
                     GoogleAdsPerformanceData::updateOrCreate(

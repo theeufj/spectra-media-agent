@@ -3,10 +3,14 @@
 namespace App\Services\Agents;
 
 use App\Models\ABTest;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
+use App\Services\GoogleAds\CommonServices\CreateCampaignExperiment;
+use App\Services\GoogleAds\CommonServices\GetCampaignExperimentResults;
+use App\Services\GoogleAds\CommonServices\PromoteCampaignExperiment;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -549,6 +553,178 @@ class ABTestingAgent
         if ($avgLoserCtr <= 0) return 0;
 
         return (($winnerCtr - $avgLoserCtr) / $avgLoserCtr) * 100;
+    }
+
+    /**
+     * Create a native Google Ads Campaign Experiment (A/B test) for a campaign.
+     *
+     * @param  Campaign  $campaign
+     * @param  Strategy  $strategy
+     * @param  string    $testDescription  Human-readable description for the experiment name
+     * @return array{experiment_resource: string, treatment_arm_resource: string}|null
+     */
+    public function createGoogleNativeExperiment(Campaign $campaign, Strategy $strategy, string $testDescription): ?array
+    {
+        $campaignResourceName = $campaign->google_ads_campaign_id;
+        if (!$campaignResourceName) {
+            Log::warning('ABTestingAgent: Cannot create Google experiment — no google_ads_campaign_id', [
+                'campaign_id' => $campaign->id,
+            ]);
+            return null;
+        }
+
+        $customer   = $campaign->customer;
+        $customerId = $customer?->google_ads_customer_id;
+        if (!$customerId) {
+            Log::warning('ABTestingAgent: Cannot create Google experiment — no google_ads_customer_id', [
+                'campaign_id' => $campaign->id,
+            ]);
+            return null;
+        }
+
+        try {
+            $experimentName = $testDescription . ' — Campaign ' . $campaign->id . ' — ' . now()->format('Y-m-d');
+            $createExperiment = new CreateCampaignExperiment($customer);
+
+            $experimentResult = ($createExperiment)(
+                $customerId,
+                $campaignResourceName,
+                $experimentName,
+                [
+                    'traffic_split' => 50,
+                    'start_date'    => now()->addDay()->format('Y-m-d'),
+                    'end_date'      => now()->addDays(30)->format('Y-m-d'),
+                ]
+            );
+
+            if (!$experimentResult) {
+                return null;
+            }
+
+            // Persist experiment resource if column exists, otherwise log activity
+            $experimentResource = $experimentResult['experiment_resource'];
+            if (isset($campaign->getAttributes()['google_ads_experiment_id'])) {
+                $campaign->google_ads_experiment_id = $experimentResource;
+                $campaign->save();
+            } else {
+                AgentActivity::record(
+                    'ab_testing',
+                    'google_native_experiment_created',
+                    "Created Google Ads experiment for campaign \"{$campaign->name}\": {$experimentResource}",
+                    $customer->id,
+                    $campaign->id,
+                    [
+                        'experiment_resource'    => $experimentResource,
+                        'treatment_arm_resource' => $experimentResult['treatment_arm_resource'],
+                        'test_description'       => $testDescription,
+                    ]
+                );
+            }
+
+            Log::info('ABTestingAgent: Google native experiment created', [
+                'campaign_id'         => $campaign->id,
+                'experiment_resource' => $experimentResource,
+            ]);
+
+            return $experimentResult;
+        } catch (\Exception $e) {
+            Log::error('ABTestingAgent: Failed to create Google native experiment', [
+                'campaign_id' => $campaign->id,
+                'error'       => $e->getMessage(),
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Check the status of a running Google Ads experiment and promote it if conditions are met.
+     *
+     * Promotes when:
+     *  - Status is GRADUATED, OR
+     *  - Treatment arm shows >10% conversion rate improvement with >100 conversions
+     *
+     * @param  Campaign $campaign
+     * @return string|null  'promoted' | 'running' | 'insufficient_data' | null on error
+     */
+    public function checkAndPromoteExperiment(Campaign $campaign): ?string
+    {
+        $customer   = $campaign->customer;
+        $customerId = $customer?->google_ads_customer_id;
+
+        // Retrieve the experiment resource — check attribute directly to avoid errors
+        // if the column hasn't been added to the campaigns table yet.
+        $experimentResource = null;
+        try {
+            $experimentResource = $campaign->google_ads_experiment_id ?? null;
+        } catch (\Exception) {
+            // Column may not exist
+        }
+
+        if (!$experimentResource || !$customerId) {
+            Log::warning('ABTestingAgent: checkAndPromoteExperiment — missing experiment resource or customer ID', [
+                'campaign_id'         => $campaign->id,
+                'experiment_resource' => $experimentResource,
+            ]);
+            return null;
+        }
+
+        try {
+            $getResults = new GetCampaignExperimentResults($customer);
+            $results    = ($getResults)($customerId, $experimentResource);
+
+            $status = $results['experiment_status'] ?? 'UNKNOWN';
+
+            // Auto-promote if Google already graduated the experiment
+            if ($status === 'GRADUATED') {
+                $promote = new PromoteCampaignExperiment($customer);
+                $promoted = ($promote)($customerId, $experimentResource);
+                return $promoted ? 'promoted' : 'running';
+            }
+
+            // Check if treatment arm outperforms control by >10% with >100 conversions
+            $arms = $results['arms'] ?? [];
+            if (count($arms) >= 2) {
+                // Arms are returned in operation order: index 0 = control, index 1 = treatment
+                $controlArm   = $arms[0] ?? null;
+                $treatmentArm = $arms[count($arms) - 1] ?? null;
+
+                if ($controlArm && $treatmentArm) {
+                    $treatmentConversions = (float) ($treatmentArm['conversions'] ?? 0);
+                    $controlConversions   = (float) ($controlArm['conversions'] ?? 0);
+
+                    if ($treatmentConversions > 100 && $controlConversions > 0) {
+                        $lift = ($treatmentConversions - $controlConversions) / $controlConversions;
+
+                        if ($lift > 0.10) {
+                            $promote  = new PromoteCampaignExperiment($customer);
+                            $promoted = ($promote)($customerId, $experimentResource);
+
+                            Log::info('ABTestingAgent: Promoting experiment due to >10% conversion lift', [
+                                'campaign_id'         => $campaign->id,
+                                'experiment_resource' => $experimentResource,
+                                'lift_pct'            => round($lift * 100, 1),
+                                'treatment_conversions' => $treatmentConversions,
+                            ]);
+
+                            return $promoted ? 'promoted' : 'running';
+                        }
+                    }
+
+                    if ($treatmentConversions <= 100) {
+                        return 'insufficient_data';
+                    }
+                }
+            }
+
+            return 'running';
+        } catch (\Exception $e) {
+            Log::error('ABTestingAgent: checkAndPromoteExperiment failed', [
+                'campaign_id'         => $campaign->id,
+                'experiment_resource' => $experimentResource,
+                'error'               => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     /**
