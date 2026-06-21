@@ -361,7 +361,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                     prompt: $prompt,
                     config: [
                         'temperature'     => 0.7,
-                        'maxOutputTokens' => 32768,
+                        'maxOutputTokens' => 65536,
                     ],
                     systemInstruction: $systemInstruction,
                     enableGoogleSearch: false

@@ -282,13 +282,12 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         Log::info("FacebookAdsExecutionAgent: Generating execution plan for Campaign {$context->campaign->id}");
         
         try {
-            // Use Google Search grounding for real-time API documentation access
             $response = $this->gemini->generateContent(
                 model: config('ai.models.default'),
                 prompt: $prompt,
                 config: [
                     'temperature' => 0.7,
-                    'maxOutputTokens' => 8192,
+                    'maxOutputTokens' => 65536,
                 ],
                 systemInstruction: $systemInstruction,
                 enableThinking: true,

@@ -42,7 +42,7 @@ class CampaignReviewAgent
                 prompt: $prompt,
                 config: [
                     'temperature' => 0.2,
-                    'maxOutputTokens' => 8192,
+                    'maxOutputTokens' => 65536,
                 ],
                 systemInstruction: $this->getSystemInstruction($platform),
             );
