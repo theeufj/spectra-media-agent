@@ -169,7 +169,9 @@ HTML;
 
     /**
      * Add a Google Ads conversion tracking tag to the customer's container.
-     * If a tag with the same name already exists, returns the existing tag's ID.
+     *
+     * Always attaches a form-submit trigger (creating it if needed). If a tag
+     * with the same name already exists but has no trigger, patches it in place.
      */
     public function addConversionTag(Customer $customer, string $tagName, string $conversionId, array $config = []): array
     {
@@ -185,6 +187,10 @@ HTML;
 
             $workspacePath = $this->getWorkspacePath($customer);
 
+            // Resolve trigger: caller-supplied > existing form-submit trigger > newly created one
+            $triggerId = $config['firing_trigger_id']
+                ?? $this->getOrCreateFormSubmitTrigger($workspacePath, $accessToken);
+
             // awct tag type requires a bare numeric ID — strip the "AW-" prefix if present
             $numericConversionId = preg_replace('/^AW-/i', '', $conversionId);
 
@@ -195,33 +201,61 @@ HTML;
                     ['key' => 'conversionId',    'type' => 'template', 'value' => $numericConversionId],
                     ['key' => 'conversionLabel', 'type' => 'template', 'value' => $config['conversion_label'] ?? ''],
                 ],
+                'firingTriggerId' => $triggerId ? [$triggerId] : [],
             ];
-
-            if (isset($config['firing_trigger_id'])) {
-                $tagData['firingTriggerId'] = [$config['firing_trigger_id']];
-            }
 
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
             if (!$response['success']) {
-                // Tag already exists — find it and return its ID rather than failing
+                // Tag already exists — find it and patch in the trigger if it's missing
                 if (str_contains($response['error'] ?? '', 'duplicate name')) {
                     $existing = $this->findTagByName($workspacePath, $tagName, $accessToken);
                     if ($existing) {
-                        return ['success' => true, 'tag_id' => $existing['tagId'], 'tag_name' => $tagName, 'existing' => true];
+                        $tagId = $existing['tagId'];
+                        if ($triggerId && empty($existing['firingTriggerId'])) {
+                            $existing['firingTriggerId'] = [$triggerId];
+                            $this->makeApiCall('PUT', "/{$workspacePath}/tags/{$tagId}", $accessToken, $existing);
+                        }
+                        return ['success' => true, 'tag_id' => $tagId, 'tag_name' => $tagName, 'existing' => true];
                     }
                 }
                 return ['success' => false, 'error' => 'Failed to create tag: ' . ($response['error'] ?? 'Unknown error')];
             }
 
             return [
-                'success' => true,
-                'tag_id'  => $response['data']['tagId'] ?? null,
-                'tag_name' => $tagName,
+                'success'    => true,
+                'tag_id'     => $response['data']['tagId'] ?? null,
+                'tag_name'   => $tagName,
+                'trigger_id' => $triggerId,
             ];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Return the trigger ID of "Spectra — Form Submit", creating it if absent.
+     */
+    private function getOrCreateFormSubmitTrigger(string $workspacePath, string $accessToken): ?string
+    {
+        // Reuse an existing trigger rather than creating duplicates
+        $listResponse = $this->makeApiCall('GET', "/{$workspacePath}/triggers", $accessToken);
+        if ($listResponse['success']) {
+            foreach ($listResponse['data']['trigger'] ?? [] as $trigger) {
+                if ($trigger['name'] === 'Spectra — Form Submit') {
+                    return $trigger['triggerId'];
+                }
+            }
+        }
+
+        $response = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, [
+            'name'            => 'Spectra — Form Submit',
+            'type'            => 'formSubmission',
+            'waitForTags'     => ['type' => 'boolean', 'key' => 'waitForTags',     'value' => 'true'],
+            'checkValidation' => ['type' => 'boolean', 'key' => 'checkValidation', 'value' => 'false'],
+        ]);
+
+        return $response['data']['triggerId'] ?? null;
     }
 
     /**
