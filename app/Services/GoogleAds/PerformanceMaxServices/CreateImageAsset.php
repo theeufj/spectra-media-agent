@@ -31,6 +31,18 @@ class CreateImageAsset extends BaseGoogleAdsService
             return null;
         }
 
+        // Validate aspect ratio before uploading — PMax requires 1.91:1 or 1:1 (±5%)
+        $size = @getimagesizefromstring($imageContent);
+        if ($size && $size[0] > 0 && $size[1] > 0) {
+            $ratio = $size[0] / $size[1];
+            $is191 = $ratio >= 1.8145 && $ratio <= 2.0055;
+            $is1x1 = $ratio >= 0.95   && $ratio <= 1.05;
+            if (!$is191 && !$is1x1) {
+                $this->logError("Skipping image with invalid aspect ratio {$ratio} (need 1.91:1 or 1:1): $imageUrl");
+                return null;
+            }
+        }
+
         $imageAsset = new ImageAsset([
             'data' => $imageContent,
         ]);

@@ -416,15 +416,46 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             // PMax runs across all Google surfaces (Search, Display, YouTube, Gmail, Maps)
             // from day one — more efficient than a Search-only campaign for new accounts.
             if (in_array($campaignType, ['search', 'display'], true)) {
-                $hasImages  = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->count() >= 3;
-                $hasAdCopy  = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
-                $minBudget  = ($strategy->daily_budget ?: ($campaign->daily_budget ?: 0)) >= 10;
-                if ($hasImages && $hasAdCopy && $minBudget) {
+                $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
+                $minBudget = ($strategy->daily_budget ?: ($campaign->daily_budget ?: 0)) >= 10;
+
+                $validPmaxImages = 0;
+                if ($hasAdCopy && $minBudget) {
+                    $images = $strategy->imageCollaterals()
+                        ->where('is_active', true)
+                        ->where('should_deploy', true)
+                        ->get();
+
+                    foreach ($images as $img) {
+                        $url = $img->cloudfront_url ?? $img->s3_path ?? null;
+                        if (!$url) continue;
+                        try {
+                            $size = @getimagesize($url);
+                            if (!$size || $size[0] === 0 || $size[1] === 0) continue;
+                            $ratio = $size[0] / $size[1];
+                            // PMax requires 1.91:1 (±5%) or 1:1 (±5%)
+                            $is191 = $ratio >= 1.8145 && $ratio <= 2.0055;
+                            $is1x1 = $ratio >= 0.95 && $ratio <= 1.05;
+                            if ($is191 || $is1x1) {
+                                $validPmaxImages++;
+                            }
+                        } catch (\Throwable $e) {
+                            // skip unreadable images
+                        }
+                    }
+                }
+
+                if ($validPmaxImages >= 3 && $hasAdCopy && $minBudget) {
                     Log::info("GoogleAdsExecutionAgent: Upgrading {$campaignType} → performance_max (assets ready)", [
-                        'campaign_id' => $campaign->id,
+                        'campaign_id'        => $campaign->id,
+                        'valid_pmax_images'  => $validPmaxImages,
                     ]);
                     $campaignType = 'performance_max';
                     $result->addWarning('campaign_type_upgraded', 'Campaign type upgraded to Performance Max — all Google surfaces will be targeted using your uploaded assets.');
+                } else {
+                    Log::info("GoogleAdsExecutionAgent: Keeping {$campaignType} campaign type (PMax requires ≥3 valid-ratio images, found {$validPmaxImages})", [
+                        'campaign_id' => $campaign->id,
+                    ]);
                 }
             }
 

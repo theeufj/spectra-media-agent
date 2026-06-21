@@ -66,10 +66,21 @@ class ExecutionPlan
         $json = preg_replace('/^```(?:json)?\s*\n/m', '', $json);
         $json = preg_replace('/\n```\s*$/m', '', $json);
         $json = trim($json);
-        
+
         $data = json_decode($json, true);
 
-        if (json_last_error() !== JSON_ERROR_NONE) {
+        // If decode failed or returned null, try extracting the outermost JSON object
+        // from within the response (Gemini sometimes wraps JSON in explanatory text).
+        if ($data === null || json_last_error() !== JSON_ERROR_NONE) {
+            $start = strpos($json, '{');
+            $end   = strrpos($json, '}');
+            if ($start !== false && $end !== false && $end > $start) {
+                $extracted = substr($json, $start, $end - $start + 1);
+                $data = json_decode($extracted, true);
+            }
+        }
+
+        if ($data === null || json_last_error() !== JSON_ERROR_NONE) {
             \Illuminate\Support\Facades\Log::error('ExecutionPlan JSON parse error', [
                 'error' => json_last_error_msg(),
                 'json_preview' => substr($json, 0, 500)
