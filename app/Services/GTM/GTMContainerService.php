@@ -169,6 +169,7 @@ HTML;
 
     /**
      * Add a Google Ads conversion tracking tag to the customer's container.
+     * If a tag with the same name already exists, returns the existing tag's ID.
      */
     public function addConversionTag(Customer $customer, string $tagName, string $conversionId, array $config = []): array
     {
@@ -203,6 +204,13 @@ HTML;
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
             if (!$response['success']) {
+                // Tag already exists — find it and return its ID rather than failing
+                if (str_contains($response['error'] ?? '', 'duplicate name')) {
+                    $existing = $this->findTagByName($workspacePath, $tagName, $accessToken);
+                    if ($existing) {
+                        return ['success' => true, 'tag_id' => $existing['tagId'], 'tag_name' => $tagName, 'existing' => true];
+                    }
+                }
                 return ['success' => false, 'error' => 'Failed to create tag: ' . ($response['error'] ?? 'Unknown error')];
             }
 
@@ -214,6 +222,23 @@ HTML;
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * Find a tag in the workspace by name. Returns the tag array or null.
+     */
+    private function findTagByName(string $workspacePath, string $tagName, string $accessToken): ?array
+    {
+        $response = $this->makeApiCall('GET', "/{$workspacePath}/tags", $accessToken);
+        if (!$response['success']) {
+            return null;
+        }
+        foreach ($response['data']['tag'] ?? [] as $tag) {
+            if ($tag['name'] === $tagName) {
+                return $tag;
+            }
+        }
+        return null;
     }
 
     /**
@@ -356,6 +381,7 @@ JS;
 
     /**
      * Publish the current workspace as a new live version.
+     * Handles "already submitted" by finding the pending version and publishing it.
      */
     public function publishContainer(Customer $customer, string $notes = ''): array
     {
@@ -370,6 +396,8 @@ JS;
             }
 
             $workspacePath = $this->getWorkspacePath($customer);
+            $containerPath = $customer->gtm_config['container_path']
+                ?? "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}";
 
             // GTM v2 API uses RPC-style action suffixes (e.g. :create_version, :publish)
             $createVersionResponse = $this->makeApiCall('POST', "/{$workspacePath}:create_version", $accessToken, [
@@ -378,6 +406,11 @@ JS;
             ]);
 
             if (!$createVersionResponse['success']) {
+                // Workspace was already submitted — a version was created but not yet published.
+                // Find the latest version and publish it directly.
+                if (str_contains($createVersionResponse['error'] ?? '', 'already submitted')) {
+                    return $this->publishLatestVersion($containerPath, $accessToken);
+                }
                 return ['success' => false, 'error' => 'Failed to create version: ' . ($createVersionResponse['error'] ?? 'Unknown error')];
             }
 
@@ -396,6 +429,38 @@ JS;
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * List container versions and publish the most recent one.
+     * Used when the workspace is already in "submitted" state.
+     */
+    private function publishLatestVersion(string $containerPath, string $accessToken): array
+    {
+        $versionsResponse = $this->makeApiCall('GET', "/{$containerPath}/versions", $accessToken);
+        if (!$versionsResponse['success']) {
+            return ['success' => false, 'error' => 'Workspace already submitted and could not list versions: ' . ($versionsResponse['error'] ?? '')];
+        }
+
+        $headers = $versionsResponse['data']['containerVersionHeader'] ?? [];
+        // Filter out deleted versions and sort descending by numeric version ID
+        $headers = array_filter($headers, fn($v) => empty($v['deleted']));
+        usort($headers, fn($a, $b) => (int)$b['containerVersionId'] - (int)$a['containerVersionId']);
+        $latest = reset($headers);
+
+        if (!$latest) {
+            return ['success' => false, 'error' => 'Workspace already submitted but no publishable version found'];
+        }
+
+        $versionPath = $latest['path'];
+        $versionId   = $latest['containerVersionId'];
+
+        $publishResponse = $this->makeApiCall('POST', "/{$versionPath}:publish", $accessToken);
+        if (!$publishResponse['success']) {
+            return ['success' => false, 'error' => 'Found submitted version but publish failed: ' . ($publishResponse['error'] ?? '')];
+        }
+
+        return ['success' => true, 'version_id' => $versionId, 'published_at' => now()];
     }
 
     /**
