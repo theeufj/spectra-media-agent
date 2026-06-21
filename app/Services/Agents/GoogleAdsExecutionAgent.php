@@ -1100,16 +1100,18 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                         $height = $size[1] ?? 1;
                         $ratio  = $height > 0 ? $width / $height : 1;
 
-                        // Google PMax minimum sizes:
-                        //   MARKETING_IMAGE:        min 600×314 (landscape, ratio ≥ 1.91:1)
-                        //   SQUARE_MARKETING_IMAGE: min 300×300 (square,    ratio ≈ 1:1)
-                        if ($ratio >= 1.5 && $width >= 600 && $height >= 314) {
+                        // Google PMax accepted ratios (±5% tolerance):
+                        //   MARKETING_IMAGE:        1.91:1  (landscape) — ratio 1.8145–2.0055, min 600×314
+                        //   SQUARE_MARKETING_IMAGE: 1:1     (square)    — ratio 0.95–1.05,     min 300×300
+                        $is191    = $ratio >= 1.8145 && $ratio <= 2.0055 && $width >= 600 && $height >= 314;
+                        $isSquare = $ratio >= 0.95   && $ratio <= 1.05   && $width >= 300 && $height >= 300;
+                        if ($is191) {
                             $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::MARKETING_IMAGE];
-                        } elseif ($ratio >= 0.8 && $ratio < 1.5 && $width >= 300 && $height >= 300) {
+                        } elseif ($isSquare) {
                             $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
                             $firstSquareAsset ??= $assetResourceName;
                         } else {
-                            Log::info("GoogleAdsExecutionAgent: Skipping image asset — dimensions {$width}×{$height} (ratio {$ratio}) don't meet PMax minimums", [
+                            Log::info("GoogleAdsExecutionAgent: Skipping image asset — dimensions {$width}×{$height} (ratio {$ratio}) don't meet PMax ratio requirements", [
                                 's3_path' => $image->s3_path,
                             ]);
                         }
