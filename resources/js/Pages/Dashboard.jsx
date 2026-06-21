@@ -19,7 +19,7 @@ export default function Dashboard() {
         if (params.get('verified') === '1' && typeof gtag === 'function') {
             gtag('event', 'conversion', {
                 send_to: 'AW-16797144138/FHk5COLIz6ccEIytnL5D',
-                value: 99,
+                value: 149,
                 currency: 'USD',
             });
         }
