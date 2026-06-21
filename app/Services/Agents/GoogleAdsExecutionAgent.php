@@ -1130,8 +1130,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             Log::warning("GoogleAdsExecutionAgent: No logo or square image available — asset group may be rejected by Google.");
         }
 
-        // 2.3 Video Assets — look up at campaign level so portrait + landscape videos
-        // generated once are shared across all strategies in the campaign.
+        // 2.3 Video Assets — collected separately and linked AFTER the asset group
+        // is created, so a short/invalid video can't abort the whole batch.
         $uploadVideoAssetService = new UploadVideoAsset($this->customer);
         $videoCollaterals = VideoCollateral::where('campaign_id', $campaign->id)
             ->where('is_active', true)
@@ -1142,15 +1142,13 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             ->whereNull('youtube_video_id')
             ->count();
 
+        // Pre-register video assets (upload step only — linking happens after group creation)
+        $videoAssetResourceNames = [];
         foreach ($videoCollaterals as $video) {
             try {
                 $assetResourceName = ($uploadVideoAssetService)($customerId, $video->youtube_video_id, "Video Asset #{$video->id}");
                 if ($assetResourceName) {
-                    $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::YOUTUBE_VIDEO];
-                    Log::info("GoogleAdsExecutionAgent: Added video asset to PMax", [
-                        'video_id'         => $video->id,
-                        'youtube_video_id' => $video->youtube_video_id,
-                    ]);
+                    $videoAssetResourceNames[] = $assetResourceName;
                 }
             } catch (\Exception $e) {
                 $result->addWarning("Failed to register video asset {$video->id}: " . $e->getMessage());
@@ -1161,11 +1159,12 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             $result->addWarning('videos_pending_youtube', "{$videosWithoutYouTubeId} video(s) have no YouTube ID yet — they will be linked automatically once uploaded. Run: php artisan pmax:repair-assets --strategy={$strategy->id}");
         }
 
-        // 3. Create Asset Group with Assets
+        // 3. Create Asset Group with text + image assets only (no videos)
+        // Videos are linked individually below so a short/rejected video skips gracefully.
         $createAssetGroupService = new CreateAssetGroupWithAssets($this->customer);
         $assetGroupName = 'Asset Group - ' . $timestamp;
         $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
-        
+
         if (!$finalUrl) {
             throw new \Exception('No landing page URL found for Asset Group creation.');
         }
@@ -1173,6 +1172,23 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $assetGroupResourceName = ($createAssetGroupService)($customerId, $campaignResourceName, $assetGroupName, [$finalUrl], $assets);
         if (!$assetGroupResourceName) {
             throw new \Exception('Failed to create Asset Group');
+        }
+
+        // 3b. Link video assets individually — skip any that Google rejects (e.g. too short)
+        $linkAssetGroupService = new LinkAssetGroupAsset($this->customer);
+        foreach ($videoAssetResourceNames as $videoAssetResource) {
+            try {
+                ($linkAssetGroupService)($customerId, $assetGroupResourceName, $videoAssetResource, AssetFieldType::YOUTUBE_VIDEO);
+                Log::info("GoogleAdsExecutionAgent: Linked video asset to PMax asset group", [
+                    'asset_group' => $assetGroupResourceName,
+                    'video_asset' => $videoAssetResource,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning("GoogleAdsExecutionAgent: Skipping video asset (rejected by Google): " . $e->getMessage(), [
+                    'video_asset' => $videoAssetResource,
+                ]);
+                $result->addWarning("Video asset skipped: " . $e->getMessage());
+            }
         }
 
         $result->addPlatformId('asset_group', $assetGroupResourceName);
