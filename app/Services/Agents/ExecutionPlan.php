@@ -70,20 +70,24 @@ class ExecutionPlan
         $data = json_decode($json, true);
 
         // If decode failed or returned null, try extracting the outermost JSON object
-        // from within the response (Gemini sometimes wraps JSON in explanatory text).
-        if ($data === null || json_last_error() !== JSON_ERROR_NONE) {
+        // from within the response (Gemini sometimes wraps JSON in explanatory text
+        // or returns a truncated response that needs the last good closing brace found).
+        if (!is_array($data)) {
             $start = strpos($json, '{');
             $end   = strrpos($json, '}');
             if ($start !== false && $end !== false && $end > $start) {
                 $extracted = substr($json, $start, $end - $start + 1);
-                $data = json_decode($extracted, true);
+                $candidate = json_decode($extracted, true);
+                if (is_array($candidate)) {
+                    $data = $candidate;
+                }
             }
         }
 
-        if ($data === null || json_last_error() !== JSON_ERROR_NONE) {
+        if (!is_array($data)) {
             \Illuminate\Support\Facades\Log::error('ExecutionPlan JSON parse error', [
-                'error' => json_last_error_msg(),
-                'json_preview' => substr($json, 0, 500)
+                'error'        => json_last_error_msg(),
+                'json_preview' => substr($json, 0, 500),
             ]);
             throw new \Exception('Invalid JSON in execution plan: ' . json_last_error_msg());
         }

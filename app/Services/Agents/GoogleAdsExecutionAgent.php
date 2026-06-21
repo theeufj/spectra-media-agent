@@ -350,46 +350,56 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $systemInstruction = GoogleAdsExecutionPrompt::getSystemInstruction();
         
         Log::info("GoogleAdsExecutionAgent: Generating execution plan for Campaign {$context->campaign->id}");
-        
-        try {
-            // Use Google Search grounding for real-time API documentation access
-            $response = $this->gemini->generateContent(
-                model: config('ai.models.default'),
-                prompt: $prompt,
-                config: [
-                    'temperature' => 0.7,
-                    'maxOutputTokens' => 8192,
-                ],
-                systemInstruction: $systemInstruction,
-                enableGoogleSearch: true // Enable real-time grounding for current API best practices
-            );
-            
-            if (!$response || !isset($response['text'])) {
-                throw new \Exception('Empty response from AI model');
+
+        $lastException = null;
+        $maxAttempts   = 3;
+
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
+            try {
+                $response = $this->gemini->generateContent(
+                    model: config('ai.models.default'),
+                    prompt: $prompt,
+                    config: [
+                        'temperature'     => 0.7,
+                        'maxOutputTokens' => 32768,
+                    ],
+                    systemInstruction: $systemInstruction,
+                    enableGoogleSearch: false
+                );
+
+                if (!$response || !isset($response['text'])) {
+                    throw new \Exception('Empty response from AI model');
+                }
+
+                Log::debug("GoogleAdsExecutionAgent: Raw AI response", [
+                    'attempt'          => $attempt,
+                    'response_length'  => strlen($response['text']),
+                    'response_preview' => substr($response['text'], 0, 500),
+                ]);
+
+                $plan = ExecutionPlan::fromJson($response['text']);
+                $plan = (new CampaignReviewAgent($this->customer))->review($plan, 'google');
+
+                Log::info("GoogleAdsExecutionAgent: Generated execution plan", [
+                    'campaign_id'   => $context->campaign->id,
+                    'attempt'       => $attempt,
+                    'steps_count'   => count($plan->steps),
+                    'campaign_type' => $plan->getCampaignStructure()['type'] ?? 'unknown',
+                ]);
+
+                return $plan;
+
+            } catch (\Exception $e) {
+                $lastException = $e;
+                Log::warning("GoogleAdsExecutionAgent: Execution plan attempt {$attempt}/{$maxAttempts} failed: " . $e->getMessage());
+                if ($attempt < $maxAttempts) {
+                    usleep(500000 * $attempt); // 0.5s, 1s back-off
+                }
             }
-            
-            // Log the raw response for debugging
-            Log::debug("GoogleAdsExecutionAgent: Raw AI response", [
-                'response_length' => strlen($response['text']),
-                'response_preview' => substr($response['text'], 0, 500)
-            ]);
-            
-            $plan = ExecutionPlan::fromJson($response['text']);
-
-            $plan = (new CampaignReviewAgent($this->customer))->review($plan, 'google');
-
-            Log::info("GoogleAdsExecutionAgent: Generated execution plan", [
-                'campaign_id' => $context->campaign->id,
-                'steps_count' => count($plan->steps),
-                'campaign_type' => $plan->getCampaignStructure()['type'] ?? 'unknown'
-            ]);
-
-            return $plan;
-            
-        } catch (\Exception $e) {
-            Log::error("GoogleAdsExecutionAgent: Failed to generate execution plan: " . $e->getMessage());
-            throw $e;
         }
+
+        Log::error("GoogleAdsExecutionAgent: Failed to generate execution plan after {$maxAttempts} attempts: " . $lastException->getMessage());
+        throw $lastException;
     }
     
     /**
