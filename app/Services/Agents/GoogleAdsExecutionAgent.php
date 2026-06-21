@@ -2290,6 +2290,7 @@ PROMPT;
 
                         if ($tagResult['success']) {
                             Log::info("Created GTM Tag for conversion: " . ($tagResult['tag_id'] ?? 'unknown'));
+                            $gtmService->publishContainer($this->customer, 'Spectra: conversion tag wired on campaign deploy');
                         } else {
                             Log::warning("Failed to create GTM Tag: " . ($tagResult['error'] ?? 'Unknown'));
                         }
