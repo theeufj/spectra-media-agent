@@ -13,6 +13,7 @@ use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use App\Services\FacebookAds\PixelService;
 use App\Jobs\VerifyDeployment;
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -24,12 +25,18 @@ use App\Jobs\RecordSiteConversion;
 use App\Mail\GoogleAdsVerificationRequired;
 use Illuminate\Support\Facades\Mail;
 
-class DeployCampaign implements ShouldQueue
+class DeployCampaign implements ShouldQueue, ShouldBeUnique
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries = 3;
+    public $tries = 1;
     public $timeout = 1200;
+    public $uniqueFor = 1800;
+
+    public function uniqueId(): string
+    {
+        return (string) $this->campaign->id;
+    }
 
     public function __construct(
         protected Campaign $campaign,
