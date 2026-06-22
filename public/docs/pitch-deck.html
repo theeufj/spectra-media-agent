@@ -1337,93 +1337,65 @@ body.presentation-active .slide {
   to { opacity: 1; transform: scale(1); }
 }
 
+/* ── PDF EXPORT BUTTON ─────────────────────────────────────── */
+.pdf-export-btn {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 22px;
+  background: var(--orange);
+  color: #ffffff;
+  border: none;
+  border-radius: 10px;
+  font-family: 'Figtree', system-ui, sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(255,77,0,0.35);
+  transition: background 0.15s, transform 0.1s;
+}
+.pdf-export-btn:hover { background: var(--orange-hover); transform: translateY(-1px); }
+.pdf-export-btn svg { flex-shrink: 0; }
+
 @media print {
-  :root {
-    --dark: #ffffff;
-    --dark2: #ffffff;
-    --dark3: #e5e7eb;
-    --white: #111111;
-    --gray: #4b5563;
-    --gray2: #6b7280;
-  }
-  body, html {
-    background: #ffffff !important;
-    color: #111111 !important;
-  }
-  .slide {
-    background: #ffffff !important;
-    color: #111111 !important;
-    min-height: 100vh !important;
-    height: auto !important;
-    page-break-after: always !important;
-    padding: 40px !important;
-  }
-  .slide-header, .content, .slide-sub {
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-  }
-  .slide-title {
-    color: #111111 !important;
-  }
-  .slide-title em {
-    color: #cc3d00 !important;
-  }
-  .problem-card, .solution-hero, .unit-econ, .traction-card, .moat-pillar, .team-card, .ask-hero {
-    background: #f9fafb !important;
-    border: 1px solid #e5e7eb !important;
-    color: #111111 !important;
-  }
-  .problem-card::before, .moat-pillar::before, .team-card::before, .fw-step::before {
-    background: #cc3d00 !important;
-  }
-  .problem-text, .solution-desc, .fw-text, .moat-text, .team-bio, .ask-left p {
-    color: #374151 !important;
-  }
-  .problem-stat {
-    color: #cc3d00 !important;
-  }
-  .agent-card, .market-note, .fw-col-old, .fw-col-new, .fund-item, .gtm-phase {
-    background: #ffffff !important;
-    border: 1px solid #e5e7eb !important;
-    color: #111111 !important;
-  }
-  .comp-table th {
-    background: #f3f4f6 !important;
-    color: #111111 !important;
-  }
-  .comp-table td {
-    border-bottom: 1px solid #e5e7eb !important;
-  }
-  .spectra-row td {
-    background: #fff8f5 !important;
-    border-left: 3px solid #cc3d00 !important;
-  }
-  .team-avatar {
-    background: #cc3d00 !important;
-    color: #ffffff !important;
-  }
-  .ask-term {
-    background: #f3f4f6 !important;
-    border: 1px solid #e5e7eb !important;
-  }
-  .ask-term-value {
-    color: #111111 !important;
-  }
-  .ask-term-value.orange {
-    color: #cc3d00 !important;
+  /* Page setup — A4 landscape, zero margin so slides bleed to edge */
+  @page {
+    size: A4 landscape;
+    margin: 0;
   }
 
-  /* Hide interactive stuff */
+  /* Force browsers to render background colours and images */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body {
+    width: 297mm;
+    height: 210mm;
+    overflow: hidden;
+  }
+
+  /* Each slide = exactly one A4 landscape page */
+  .slide {
+    width: 297mm !important;
+    height: 210mm !important;
+    min-height: unset !important;
+    overflow: hidden !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Hide the export button when printing */
+  .pdf-export-btn,
   .presentation-controls {
     display: none !important;
-  }
-  body.presentation-active {
-    overflow: visible !important;
-  }
-  body.presentation-active .slide {
-    display: flex !important;
-    height: auto !important;
-    min-height: 100vh !important;
   }
 }
 </style>
@@ -2252,6 +2224,16 @@ body.presentation-active .slide {
     This document is confidential and intended solely for the recipient. It contains forward-looking statements based on current expectations and assumptions. Actual results may differ materially. This is not a prospectus or financial product disclosure statement. Past performance of team members is not indicative of future results.
   </div>
 </div>
+
+<!-- PDF Export Button -->
+<button class="pdf-export-btn" onclick="window.print()">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+  Export PDF
+</button>
 
 </body>
 </html>
