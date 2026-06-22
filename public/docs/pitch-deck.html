@@ -4,28 +4,28 @@
 <meta charset="UTF-8"/>
 <title>SiteToSpend — Pre-Seed Investment Deck</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap');
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 
 :root {
-  --orange: #f97316;
-  --orange-hover: #ea580c;
-  --orange-light: rgba(249, 115, 22, 0.1);
-  --orange-border: rgba(249, 115, 22, 0.25);
-  --dark: #0f172a;               /* Deep Slate */
-  --dark2: #1e293b;              /* Premium Slate Card */
-  --dark3: #334155;              /* Slate Border */
-  --white: #f8fafc;              /* Near white text */
-  --gray: #94a3b8;               /* Soft slate gray */
-  --gray2: #64748b;              /* Secondary gray */
-  --green: #10b981;              /* Success emerald */
+  --orange: #ff4d00;             /* flame-orange-500 */
+  --orange-hover: #cc3d00;       /* flame-orange-600 */
+  --orange-light: rgba(255, 77, 0, 0.08);
+  --orange-border: rgba(255, 77, 0, 0.2);
+  --dark: #f9f5f2;               /* warm light slide background */
+  --dark2: #ffffff;              /* white card background */
+  --dark3: #e2d4cc;              /* warm light border */
+  --white: #1c0800;              /* near-black warm — primary text */
+  --gray: #6b5040;               /* warm muted text */
+  --gray2: #9e7e6e;              /* warm secondary muted */
+  --green: #10b981;              /* success emerald */
   --green-bg: rgba(16, 185, 129, 0.1);
   --green-border: rgba(16, 185, 129, 0.2);
 }
 
 html {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Figtree', system-ui, sans-serif;
   background: var(--dark);
   color: var(--white);
   -webkit-font-smoothing: antialiased;
@@ -47,7 +47,7 @@ html {
 
 /* ── SLIDE: COVER ──────────────────────────────────────────── */
 .slide-cover {
-  background: var(--dark);
+  background: linear-gradient(135deg, #ffede5 0%, #fff7f5 60%, #f9f5f2 100%);
   color: var(--white);
   justify-content: center;
   padding: 80px 100px;
@@ -76,7 +76,7 @@ html {
   justify-content: center;
   font-size: 26px;
   font-weight: 900;
-  color: #fff;
+  color: #ffffff;
   letter-spacing: -1px;
   box-shadow: 0 0 20px rgba(249, 115, 22, 0.2);
 }
@@ -113,7 +113,7 @@ html {
   display: inline-flex;
   align-items: center;
   gap: 32px;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(0, 0, 0, 0.06);
   border: 1px solid var(--dark3);
   border-radius: 16px;
   padding: 24px 36px;
@@ -148,7 +148,7 @@ html {
 }
 .cover-corner-text {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.15);
+  color: rgba(0, 0, 0, 0.25);
 }
 
 /* ── SLIDE HEADER ──────────────────────────────────────────── */
@@ -395,7 +395,7 @@ html {
   background: var(--orange);
   border: 2px solid var(--orange);
   margin-left: -40px;
-  color: #fff;
+  color: #ffffff;
   box-shadow: 0 0 25px rgba(249, 115, 22, 0.25);
 }
 .mc-num {
@@ -431,7 +431,7 @@ html {
 }
 .market-note {
   background: var(--dark2);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.05);
   border-left: 3px solid var(--orange);
   border-radius: 10px;
   padding: 16px;
@@ -500,7 +500,7 @@ html {
   font-size: 12px;
   color: var(--gray);
   padding: 7px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 .pt-feature:last-child {
   border: none;
@@ -528,7 +528,7 @@ html {
   justify-content: space-between;
   align-items: center;
   padding: 10px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
 }
 .ue-row:last-child {
   border: none;
@@ -590,7 +590,7 @@ html {
   align-items: flex-start;
   gap: 16px;
   padding: 14px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
 }
 .milestone:last-child {
   border: none;
@@ -706,11 +706,11 @@ html {
 }
 .comp-table td {
   padding: 14px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
   vertical-align: middle;
 }
 .comp-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(0, 0, 0, 0.03);
 }
 .comp-name {
   font-weight: 700;
@@ -776,8 +776,8 @@ html {
   color: var(--white);
 }
 .phase-later {
-  background: rgba(255, 255, 255, 0.01);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   color: var(--gray);
 }
 .phase-later .gtm-title {
@@ -847,7 +847,7 @@ html {
   justify-content: center;
   font-size: 24px;
   font-weight: 900;
-  color: #fff;
+  color: #ffffff;
   margin-bottom: 16px;
 }
 .team-name {
@@ -858,7 +858,7 @@ html {
 .team-title {
   font-size: 10px;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(0, 0, 0, 0.45);
   text-transform: uppercase;
   letter-spacing: 0.12em;
   margin-bottom: 6px;
@@ -887,7 +887,7 @@ html {
   align-items: center;
   gap: 6px;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(0, 0, 0, 0.65);
 }
 .team-cred-dot {
   width: 4px;
@@ -1003,7 +1003,7 @@ html {
 }
 .fw-col-old .fw-col-item {
   color: var(--gray);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 .fw-col-old .fw-col-item::before {
   content: '✗  ';
@@ -1023,7 +1023,7 @@ html {
 }
 .fw-col-new .fw-col-item {
   color: var(--gray);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 }
 .fw-col-new .fw-col-item::before {
   content: '✓  ';
@@ -1040,7 +1040,7 @@ html {
   font-size: 11.5px;
   color: var(--gray);
   padding: 7px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   line-height: 1.4;
 }
 .fw-col-item:last-child {
@@ -1056,7 +1056,7 @@ html {
 .fw-industrial-title {
   font-size: 18px;
   font-weight: 800;
-  color: #fff;
+  color: var(--white);
   margin-bottom: 10px;
 }
 .fw-industrial-text {
@@ -1224,7 +1224,7 @@ html {
 }
 .final-disclaimer {
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.15);
+  color: rgba(0, 0, 0, 0.25);
   max-width: 600px;
   line-height: 1.6;
 }
@@ -1309,13 +1309,13 @@ html {
   letter-spacing: 0.05em;
   padding: 4px 10px;
   background: var(--orange);
-  color: #fff;
+  color: var(--white);
   border-radius: 4px;
   font-weight: 700;
 }
 #toggle-mode:hover {
   background: var(--orange-hover);
-  color: #fff;
+  color: var(--white);
 }
 
 body.presentation-active {
@@ -1366,7 +1366,7 @@ body.presentation-active .slide {
     color: #111111 !important;
   }
   .slide-title em {
-    color: #C1440E !important;
+    color: #cc3d00 !important;
   }
   .problem-card, .solution-hero, .unit-econ, .traction-card, .moat-pillar, .team-card, .ask-hero {
     background: #f9fafb !important;
@@ -1374,13 +1374,13 @@ body.presentation-active .slide {
     color: #111111 !important;
   }
   .problem-card::before, .moat-pillar::before, .team-card::before, .fw-step::before {
-    background: #C1440E !important;
+    background: #cc3d00 !important;
   }
   .problem-text, .solution-desc, .fw-text, .moat-text, .team-bio, .ask-left p {
     color: #374151 !important;
   }
   .problem-stat {
-    color: #C1440E !important;
+    color: #cc3d00 !important;
   }
   .agent-card, .market-note, .fw-col-old, .fw-col-new, .fund-item, .gtm-phase {
     background: #ffffff !important;
@@ -1396,10 +1396,10 @@ body.presentation-active .slide {
   }
   .spectra-row td {
     background: #fff8f5 !important;
-    border-left: 3px solid #C1440E !important;
+    border-left: 3px solid #cc3d00 !important;
   }
   .team-avatar {
-    background: #C1440E !important;
+    background: #cc3d00 !important;
     color: #ffffff !important;
   }
   .ask-term {
@@ -1410,7 +1410,7 @@ body.presentation-active .slide {
     color: #111111 !important;
   }
   .ask-term-value.orange {
-    color: #C1440E !important;
+    color: #cc3d00 !important;
   }
 
   /* Hide interactive stuff */
@@ -1530,7 +1530,7 @@ body.presentation-active .slide {
   <div class="content">
     <div class="solution-hero">
       <div class="solution-tagline">URL to live campaigns in under <em>10 minutes.</em><br>Brand synthesised by AI. Growth manufactured autonomously.</div>
-      <div class="solution-desc">SiteToSpend is not a dashboard. It is an <strong style="color:#fff;">Autonomous Growth Layer</strong> — a fully autonomous SEM system powered by Spectra, our proprietary 6-agent suite, that replaces the agency relationship entirely. Submit your URL and Gemini Vision AI reads your website the way a senior brand strategist would: extracting brand identity, tone of voice, products, and competitive positioning in minutes. No brief. No onboarding call. No account manager. The Spectra agents then build your campaigns and manage them continuously — 24 hours a day, every day. You move from in-the-loop (doing the work) to on-the-loop (directing the strategy).</div>
+      <div class="solution-desc">SiteToSpend is not a dashboard. It is an <strong style="color:var(--orange);">Autonomous Growth Layer</strong> — a fully autonomous SEM system powered by Spectra, our proprietary 6-agent suite, that replaces the agency relationship entirely. Submit your URL and Gemini Vision AI reads your website the way a senior brand strategist would: extracting brand identity, tone of voice, products, and competitive positioning in minutes. No brief. No onboarding call. No account manager. The Spectra agents then build your campaigns and manage them continuously — 24 hours a day, every day. You move from in-the-loop (doing the work) to on-the-loop (directing the strategy).</div>
     </div>
 
     <div class="agents-grid">
@@ -1566,11 +1566,11 @@ body.presentation-active .slide {
       </div>
     </div>
 
-    <div style="margin-top:16px;background:#f9fafb;border:1px solid #e5e7eb;border-radius:12px;padding:20px;border-left:4px solid var(--dark);display:flex;align-items:flex-start;gap:16px;">
+    <div style="margin-top:16px;background:var(--dark2);border:1px solid var(--dark3);border-radius:12px;padding:20px;border-left:4px solid var(--orange);display:flex;align-items:flex-start;gap:16px;">
       <div style="font-size:24px;flex-shrink:0;">🛡️</div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:var(--dark);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em;">Built-in Quality Control — The Agents Inspect Their Own Work</div>
-        <div style="font-size:12px;color:var(--gray2);line-height:1.7;">Every agent action is scored against our encoded best-practice framework before execution. High-confidence improvements are applied automatically. Low-confidence actions are flagged for human review. The system earns autonomy — acting boldly where the data is clear, deferring to human judgment where it isn't. Scale doesn't degrade quality. It improves it.</div>
+        <div style="font-size:12px;font-weight:700;color:var(--white);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.1em;">Built-in Quality Control — The Agents Inspect Their Own Work</div>
+        <div style="font-size:12px;color:var(--gray);line-height:1.7;">Every agent action is scored against our encoded best-practice framework before execution. High-confidence improvements are applied automatically. Low-confidence actions are flagged for human review. The system earns autonomy — acting boldly where the data is clear, deferring to human judgment where it isn't. Scale doesn't degrade quality. It improves it.</div>
       </div>
     </div>
   </div>
@@ -1698,9 +1698,9 @@ body.presentation-active .slide {
       </div>
     </div>
 
-    <div style="margin-top:16px;background:var(--orange-light);border-radius:12px;padding:20px;border-left:4px solid var(--orange);">
+    <div style="margin-top:16px;background:var(--dark2);border:1px solid var(--dark3);border-radius:12px;padding:20px;border-left:4px solid var(--orange);">
       <div class="section-label">Agency-to-SaaS Value Transfer</div>
-      <div style="font-size:13px;color:var(--dark);line-height:1.7;">This is not a new market. It is a <strong>migration</strong>. $35 billion of agency fee spend is already allocated, already renewing annually, already flowing out of SMB bank accounts today. SiteToSpend captures that budget at 90% lower cost to the client and 82% gross margin to us. We are not creating demand. We are redirecting existing spend.</div>
+      <div style="font-size:13px;color:var(--gray);line-height:1.7;">This is not a new market. It is a <strong style="color:var(--orange);">migration</strong>. $35 billion of agency fee spend is already allocated, already renewing annually, already flowing out of SMB bank accounts today. SiteToSpend captures that budget at 90% lower cost to the client and 82% gross margin to us. We are not creating demand. We are redirecting existing spend.</div>
     </div>
     <p class="footnote">Sources: Statista Market Forecast 2025; Precedence Research Global Digital Advertising; MarTech/Adobe acquisition announcement Nov 2025; eMarketer Martech M&amp;A Report 2024</p>
   </div>
@@ -1737,7 +1737,7 @@ body.presentation-active .slide {
           <div class="pricing-table">
             <div class="pt-header" style="background:var(--orange);">
               <div class="pt-title">Growth</div>
-              <div class="pt-price" style="color:#fff;">$249<span>/month</span></div>
+              <div class="pt-price" style="color:#ffffff;">$249<span>/month</span></div>
             </div>
             <div class="pt-body">
               <div class="pt-feature"><span class="pt-check">✓</span> 5 campaigns, 3 platforms</div>
@@ -1791,10 +1791,10 @@ body.presentation-active .slide {
           </div>
         </div>
 
-        <div style="margin-top:16px;background:#f9fafb;border-radius:12px;padding:20px;border-left:4px solid var(--orange);">
+        <div style="margin-top:16px;background:var(--dark2);border:1px solid var(--dark3);border-radius:12px;padding:20px;border-left:4px solid var(--orange);">
           <div class="section-label">Why customers stay — Collective Intelligence</div>
-          <div style="font-size:12px;color:var(--gray2);line-height:1.7;">
-            The longer SiteToSpend manages a campaign, the smarter the Spectra agents get. Budget intelligence curves, search term signals, and agent scoring models compound with every campaign cycle — creating a <strong style="color:var(--dark);">Collective Intelligence advantage</strong> that makes switching painful. This isn't contract lock-in. It's performance lock-in. The AI gets better. The alternative gets worse by comparison.
+          <div style="font-size:12px;color:var(--gray);line-height:1.7;">
+            The longer SiteToSpend manages a campaign, the smarter the Spectra agents get. Budget intelligence curves, search term signals, and agent scoring models compound with every campaign cycle — creating a <strong style="color:var(--orange);">Collective Intelligence advantage</strong> that makes switching painful. This isn't contract lock-in. It's performance lock-in. The AI gets better. The alternative gets worse by comparison.
           </div>
         </div>
       </div>
@@ -1825,7 +1825,7 @@ body.presentation-active .slide {
       </div>
       <div class="traction-card">
         <div class="tc-num">20/20</div>
-        <div class="tc-label">Google Ads API RMF requirements implemented — Standard Access application submitted</div>
+        <div class="tc-label">Google Ads API Standard Access approved — programmatic access unlocking this week</div>
       </div>
       <div class="traction-card">
         <div class="tc-num">9</div>
@@ -1856,7 +1856,7 @@ body.presentation-active .slide {
         <div class="ms-dot done"></div>
         <div>
           <div class="ms-label">Google Ads API RMF compliance — 20/20 completed</div>
-          <div class="ms-sub">All Full-Service Tool requirements implemented and documented. Standard Access application submitted.</div>
+          <div class="ms-sub">All 20 Full-Service Tool requirements implemented and documented. Standard Access approved.</div></div>
         </div>
         <div class="ms-badge badge-done">✓ Done</div>
       </div>
@@ -1869,12 +1869,12 @@ body.presentation-active .slide {
         <div class="ms-badge badge-done">✓ Done</div>
       </div>
       <div class="milestone">
-        <div class="ms-dot" style="background:#f59e0b;"></div>
+        <div class="ms-dot done"></div>
         <div>
-          <div class="ms-label">Google Ads API Standard Access — awaiting approval</div>
-          <div class="ms-sub">RMF documentation and UI evidence submitted. Review in progress.</div>
+          <div class="ms-label">Google Ads API Standard Access — approved</div>
+          <div class="ms-sub">All 20 RMF requirements met. Standard Access granted. Programmatic access unlocked this week via required $1K spend threshold.</div>
         </div>
-        <div class="ms-badge badge-progress">In Progress</div>
+        <div class="ms-badge badge-done">✓ Done</div>
       </div>
       <div class="milestone">
         <div class="ms-dot" style="background:#f59e0b;"></div>
@@ -1891,6 +1891,14 @@ body.presentation-active .slide {
           <div class="ms-sub">Warm pipeline from Matt's agency network. Beta at $149–$249/mo to establish proof of payment and case study data</div>
         </div>
         <div class="ms-badge badge-next">Next</div>
+      </div>
+      <div class="milestone">
+        <div class="ms-dot" style="background:#e5e7eb;"></div>
+        <div>
+          <div class="ms-label">Vertical brand launch — realpropertyads.com + 2 additional verticals</div>
+          <div class="ms-sub">Spin up industry-specific brands on the Spectra infrastructure. Each vertical brand has its own positioning, SEO, and pricing tuned to that industry — real estate first, then automotive and healthcare</div>
+        </div>
+        <div class="ms-badge badge-next">Q4 2026</div>
       </div>
       <div class="milestone">
         <div class="ms-dot" style="background:#e5e7eb;"></div>
@@ -1925,12 +1933,12 @@ body.presentation-active .slide {
       <div class="moat-pillar">
         <div class="moat-icon">🔐</div>
         <div class="moat-title">Standard Access: A Wall Most AI Wrappers Will Never Climb</div>
-        <div class="moat-text">Google Ads API has two tiers: Basic and Standard. Most "AI wrappers" are stuck at Basic Access — restricted, limited, insufficient for client-facing SEM. Standard Access requires clearing all 20 RMF (Required Minimum Functionality) requirements. We've cleared all 20. The compliance process alone takes 6–18 months. A competitor who starts today cannot reach our API position before late 2026 at the earliest — and that's assuming they know what they're doing.</div>
+        <div class="moat-text">Google Ads API has two tiers: Basic and Standard. Most "AI wrappers" are stuck at Basic Access — restricted, limited, insufficient for client-facing SEM. Standard Access requires clearing all 20 RMF (Required Minimum Functionality) requirements. We've cleared all 20 and have been granted Standard Access. The compliance process alone takes 6–18 months. A competitor who starts today cannot reach our API position before late 2026 at the earliest — and that's assuming they know what they're doing.</div>
       </div>
       <div class="moat-pillar">
         <div class="moat-icon">🏗️</div>
         <div class="moat-title">50+ Years of Expertise, Encoded</div>
-        <div class="moat-text">Our team's collective SEM and agency leadership knowledge is encoded into agent decision logic — not prompts. This is proprietary decision architecture built by the people who ran the industry SiteToSpend is replacing. Matt managed Google's largest SMB accounts. James ran 50 staff across 4 agencies. An LLM wrapper cannot replicate 50 years of operational judgment.</div>
+        <div class="moat-text">Our team's collective SEM and agency leadership knowledge is encoded into agent decision logic — not prompts. This is proprietary decision architecture built by the people who ran the industry SiteToSpend is replacing. Matt spent 25 years running SEM operations at Australia's top independent digital agencies. James ran 60 staff across 5 ASX-listed digital businesses simultaneously and has held CEO roles at multiple companies. An LLM wrapper cannot replicate 50+ years of operational judgment.</div>
       </div>
     </div>
 
@@ -2026,7 +2034,7 @@ body.presentation-active .slide {
       <div class="slide-title">Warm pipeline. <em>Inbound machine.</em> Platform at scale.</div>
     </div>
   </div>
-  <div class="slide-sub">Matt's 20-year SEM client network and James's 12 years running BeyondD's ANZ operations give us warm access to hundreds of SMB decision-makers — without a single cold call.</div>
+  <div class="slide-sub">Matt's 25-year SEM client network and James's 12 years running BeyondD's ANZ operations give us warm access to hundreds of SMB decision-makers — without a single cold call.</div>
   <div class="content">
     <div class="gtm-phases">
       <div class="gtm-phase phase-now">
@@ -2042,7 +2050,7 @@ body.presentation-active .slide {
         <div class="gtm-title">Inbound Machine</div>
         <div class="gtm-item">SEO content: "Replace your agency" — own the search terms agencies rely on for referrals</div>
         <div class="gtm-item">Agency white-label program — James's operator network turns competitors into distribution</div>
-        <div class="gtm-item">Google Ads API partner directory listing (post Standard Access approval)</div>
+        <div class="gtm-item">Google Ads API partner directory listing (Standard Access approved — listing live this week)</div>
         <div class="gtm-item">Accountant/bookkeeper referral channel — they control SMB budget decisions</div>
       </div>
       <div class="gtm-phase phase-later">
@@ -2057,15 +2065,15 @@ body.presentation-active .slide {
 
     <div style="margin-top:24px;">
       <div class="section-label">Why the savings story closes fast</div>
-      <div style="background:#f9fafb;border-radius:12px;padding:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
+      <div style="background:var(--dark2);border:1px solid var(--dark3);border-radius:12px;padding:24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;">
         <div style="text-align:center;">
-          <div style="font-size:32px;font-weight:900;color:#dc2626;">$1,500+/mo</div>
-          <div style="font-size:12px;color:var(--gray2);margin-top:4px;">Minimum SEM agency retainer — before ad spend, before percentage fees</div>
+          <div style="font-size:32px;font-weight:900;color:#ef4444;">$1,500+/mo</div>
+          <div style="font-size:12px;color:var(--gray);margin-top:4px;">Minimum SEM agency retainer — before ad spend, before percentage fees</div>
         </div>
         <div style="text-align:center;display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--gray);">→</div>
         <div style="text-align:center;">
           <div style="font-size:32px;font-weight:900;color:var(--green);">$249/mo</div>
-          <div style="font-size:12px;color:var(--gray2);margin-top:4px;">SiteToSpend Growth tier — all 6 Spectra agents, 3 platforms, 24/7, no contracts</div>
+          <div style="font-size:12px;color:var(--gray);margin-top:4px;">SiteToSpend Growth tier — all 6 Spectra agents, 3 platforms, 24/7, no contracts</div>
         </div>
       </div>
       <div style="text-align:center;margin-top:8px;font-size:13px;font-weight:700;color:var(--orange);">At least $1,251/month saved. $15,012+/year. The pitch writes itself.</div>
@@ -2088,58 +2096,60 @@ body.presentation-active .slide {
     <div class="team-grid">
 
       <div class="team-card">
-        <div class="team-avatar">J</div>
-        <div class="team-name">Josh</div>
-        <div class="team-title">Founder & CTO</div>
-        <div class="team-role">Built a SEM agency in code. Solo.</div>
-        <div class="team-bio">A former client of Matt and James — frustrated enough by the agency model to build the alternative. Built the entire SiteToSpend platform from scratch: Spectra — 6 AI agents, 4 platform integrations, Gemini Vision AI brand extraction, autonomous optimisation pipeline, and full SaaS product. Full-stack, AI-native engineering. Solo.</div>
-        <div class="team-creds">
-          <div class="team-cred"><div class="team-cred-dot"></div>Architected and shipped the complete SiteToSpend platform solo</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>Google Ads API integration — 20/20 RMF compliant</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>Gemini Vision AI, multi-agent orchestration</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>Laravel, React, multi-platform ad APIs</div>
-        </div>
-        <a href="josh-profile.html" class="team-profile-link">View Profile →</a>
-      </div>
-
-      <div class="team-card">
-        <div class="team-avatar">M</div>
+        <div class="team-avatar">MW</div>
         <div class="team-name">Matt Ware</div>
-        <div class="team-title">Co-Founder & CEO</div>
-        <div class="team-role">20 years running the industry SiteToSpend is replacing.</div>
-        <div class="team-bio">20+ years in SEM and digital agency leadership. Built and ran some of Australia's largest digital performance teams. The domain expert who knows exactly what SiteToSpend needs to replace — because he built it at scale, for two decades.</div>
+        <div class="team-title">Co-Founder — Ops & Growth</div>
+        <div class="team-role">25 years running the campaigns SiteToSpend now automates.</div>
+        <div class="team-bio">25+ years at the sharp end of SEM and digital agency leadership — GM, Head of Operations, speaker, published author. Spent nearly a decade leading operations at FIRST Digital, one of Australia's most respected independent agencies. The domain expert who knows exactly what SiteToSpend needs to automate — because he built it at scale, managed the retainer P&amp;L, and closed the enterprise pitches himself. Brings a warm pipeline of SMB advertisers already spending on paid search who trust him personally.</div>
         <div class="team-creds">
-          <div class="team-cred"><div class="team-cred-dot"></div>Head of Operations, FIRST Digital (9.5 years)</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>General Manager, Dynamic Creative / e-channel</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Head of Operations, FIRST Digital — 9.5 years (Aug 2015 – Dec 2024)</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>General Manager, Dynamic Creative / e-channel — 6.5 years, full P&amp;L</div>
           <div class="team-cred"><div class="team-cred-dot"></div>Google AdWords Certified Partner</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>MBA (Marketing) — University of Newcastle</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>BEc/LLB — University of New South Wales</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>SMX Guest Speaker: Keyword Selection for PPC</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Guest Speaker — SMX Melbourne (Keyword Selection for PPC)</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Industry publications: voice search, ecommerce personalisation, AI assistants</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Masters of Marketing + MBA — University of Newcastle · BEc/LLB — UNSW</div>
         </div>
-        <a href="matt-ware-profile.html" class="team-profile-link">View Profile →</a>
+        <a href="https://www.linkedin.com/in/matt-ware" target="_blank" class="team-profile-link">LinkedIn →</a>
       </div>
 
       <div class="team-card">
-        <div class="team-avatar">J</div>
+        <div class="team-avatar">JW</div>
         <div class="team-name">James Ward</div>
-        <div class="team-title">Co-Founder & COO</div>
-        <div class="team-role">Ran 50 staff across 4 agencies. Knows exactly where they break.</div>
-        <div class="team-bio">12+ years as General Manager of BeyondD, running 50 staff across 4 digital marketing businesses (ANZ). Former CEO of multiple ASX-listed digital agencies. Brings P&amp;L discipline, operational scale, and a warm network of agency decision-makers.</div>
+        <div class="team-title">Co-Founder & CEO</div>
+        <div class="team-role">20+ years running P&amp;Ls across agencies, ASX boards, and multi-brand groups.</div>
+        <div class="team-bio">One of Australia's most experienced digital agency operators and executives. 12+ years as GM of BeyondD — simultaneously overseeing four digital brands (3Di, FIRST, GreatSites, TPN) with full P&amp;L responsibility across AU/NZ. Previously held concurrent CEO roles across three ASX-listed digital businesses and managed a 60-person portfolio under a single group reporting line. A BA Mathematics and LLB (University of Sydney) gives him the analytical and commercial edge to lead the business — he reads the numbers, understands the contracts, and has built and exited companies before.</div>
         <div class="team-creds">
-          <div class="team-cred"><div class="team-cred-dot"></div>GM, BeyondD — 50 staff, AU/NZ operations (12 yrs)</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>CEO, Freestyle Media &amp; Clear Blue Day (ASX: QXQ)</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>CEO, First Rate (Search Consulting) &amp; Market United</div>
-          <div class="team-cred"><div class="team-cred-dot"></div>P&amp;L management at scale across multiple agencies</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>GM, BeyondD — 12+ years, 50 staff, 4 digital brands, full ANZ P&amp;L</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>GM, Q Ltd (ASX: QXQ) — 60-staff portfolio across 5 digital businesses</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Concurrent CEO — Market United, First Rate &amp; Clear Blue Day (ASX group)</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>CEO, Freestyle Media — M&amp;A exit preparation and ASX acquisition</div>
           <div class="team-cred"><div class="team-cred-dot"></div>BA Mathematics + LLB — University of Sydney</div>
           <div class="team-cred"><div class="team-cred-dot"></div>Google Ads Measurement Certification</div>
         </div>
-        <a href="james-ward-profile.html" class="team-profile-link">View Profile →</a>
+        <a href="https://www.linkedin.com/in/wardji" target="_blank" class="team-profile-link">LinkedIn →</a>
+      </div>
+
+      <div class="team-card">
+        <div class="team-avatar">JT</div>
+        <div class="team-name">Joshua Theeuf</div>
+        <div class="team-title">Founder & CTO</div>
+        <div class="team-role">Principal engineer with a founder's exit behind him. Built SiteToSpend solo.</div>
+        <div class="team-bio">A former client of Matt and James — frustrated enough by the agency model to build the alternative. Shipped the entire SiteToSpend platform solo: 6 autonomous agents, 4 platform integrations, Gemini Vision AI brand extraction, and a full SaaS product. Previously co-founded MyBond (AI-powered fintech lending, <strong style="color:var(--orange);">$5M raised</strong>, 30-person team, <strong style="color:var(--orange);">7:1 ROAS</strong>) and MoneyLoop (B2B fintech, <strong style="color:var(--orange);">H2 Ventures</strong> backed). Two exits. Now building the one that replaces his former agency relationship.</div>
+        <div class="team-creds">
+          <div class="team-cred"><div class="team-cred-dot"></div>Sole engineer — complete SiteToSpend platform, all 6 agents, 4 ad platforms</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Google Ads API — 20/20 RMF compliant, Standard Access approved</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Co-Founder MyBond — $5M raised, 30-person team, 7:1 ROAS (H2 2020–2024)</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Co-Founder MoneyLoop — H2 Ventures; enterprise partnerships with ASX: CL8, Splend</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>MBA — Australian Institute of Business · BE Computer Engineering — RMIT</div>
+          <div class="team-cred"><div class="team-cred-dot"></div>Laravel · React · Golang · AWS · Microservices · AI/LLM APIs</div>
+        </div>
+        <a href="https://www.linkedin.com/in/joshuatheeuf" target="_blank" class="team-profile-link">LinkedIn →</a>
       </div>
 
     </div>
 
-    <div style="margin-top:28px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:24px;text-align:center;">
-      <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:8px;">Why this team wins</div>
+    <div style="margin-top:28px;background:rgba(0,0,0,0.05);border:1px solid rgba(0,0,0,0.08);border-radius:14px;padding:24px;text-align:center;">
+      <div style="font-size:14px;font-weight:700;color:var(--white);margin-bottom:8px;">Why this team wins</div>
       <div style="font-size:13px;color:var(--gray);max-width:700px;margin:0 auto;line-height:1.7;">
         Matt and James ran some of Australia's largest digital agency operations — together. Josh was their client. He experienced the agency model firsthand, got frustrated with the cost and the latency, and built the replacement. The founders who ran the industry and the client who lived its limitations — now building the system that makes the old model obsolete. Together they represent the only team in Australia with the operator knowledge to build this product, the domain credibility to sell it, and the client-side urgency to make it undeniable.
       </div>
@@ -2162,9 +2172,9 @@ body.presentation-active .slide {
     <div class="ask-hero">
       <div class="ask-left">
         <h2>Raising<br><em>$1M</em></h2>
-        <p>One trigger: <strong style="color:#fff;">$100K MRR.</strong> At $100K MRR, SiteToSpend is a $1.2M ARR business — the proven threshold that converts this $6M pre-seed into a $20M+ Seed Round at 15–20× ARR. This $1M is not exploratory capital. It is the fuel for a single, measurable, time-bound outcome.</p>
+        <p>One trigger: <strong style="color:var(--orange);">$100K MRR.</strong> At $100K MRR, SiteToSpend is a $1.2M ARR business — the proven threshold that converts this $6M pre-seed into a $20M+ Seed Round at 15–20× ARR. This $1M is not exploratory capital. It is the fuel for two hires, a vertical brand expansion strategy, and the inbound machine that makes the old model obsolete.</p>
         <br>
-        <p style="font-size:12px;color:var(--gray);">AI-SaaS pre-seed median: $12M+ (Carta Q3 2025, with 1.6× AI premium applied). We're raising at $6M — a deliberate discount that prioritises filling the round fast and maximises returns for investors who act early.</p>
+        <p style="font-size:12px;color:var(--gray);">No existing burn to sustain — capital deploys entirely into growth. AI-SaaS pre-seed median: $12M+ (Carta Q3 2025, with 1.6× AI premium applied). We're raising at $6M — a deliberate discount that prioritises filling the round fast and maximises returns for investors who act early.</p>
       </div>
       <div class="ask-terms">
         <div class="ask-term">
@@ -2198,29 +2208,29 @@ body.presentation-active .slide {
       </div>
     </div>
 
-    <div class="section-label">Use of Funds — Deploying $1M to Scale Autonomous Labor</div>
+    <div class="section-label">Use of Funds — Deploying $1M Entirely Into Growth</div>
     <div class="use-of-funds">
       <div class="fund-item fund-tech">
         <div class="fund-pct">40%</div>
-        <div class="fund-label">Engineering &amp; Product</div>
-        <div class="fund-desc">Scaling autonomous labor: agent intelligence, infrastructure hardening, new platform integrations (LinkedIn, TikTok), production API environments, reliability at customer scale</div>
+        <div class="fund-label">Engineering &amp; Team</div>
+        <div class="fund-desc">Two key hires: an additional engineer and a dedicated agent performance specialist (monitoring agent output, identifying optimisation improvements, expanding agent capabilities). Platform integrations: LinkedIn, TikTok. Infrastructure hardening at customer scale.</div>
       </div>
       <div class="fund-item fund-gtm">
-        <div class="fund-pct">40%</div>
-        <div class="fund-label">GTM &amp; Market Capture</div>
-        <div class="fund-desc">SEO/inbound machine to disrupt agency referrals — "replace your agency" content flywheel, first sales hire, agency white-label partnerships, customer success for case study creation</div>
+        <div class="fund-pct">35%</div>
+        <div class="fund-label">Vertical Brand Build-out</div>
+        <div class="fund-desc">Spin up vertical-specific brands on the Spectra infrastructure — starting with realpropertyads.com (real estate) and expanding to automotive, healthcare, and other high-intent verticals. Each vertical brand is a standalone acquisition channel with its own SEO, positioning, and pricing tuned to that industry.</div>
       </div>
       <div class="fund-item fund-ops">
-        <div class="fund-pct">20%</div>
-        <div class="fund-label">Operations &amp; Legal</div>
-        <div class="fund-desc">Google API compliance completion, SAFE legal, R&amp;D tax offset applications (AU), accounting infrastructure, platform compliance across Microsoft and Facebook APIs</div>
+        <div class="fund-pct">25%</div>
+        <div class="fund-label">GTM &amp; Operations</div>
+        <div class="fund-desc">Inbound content machine, agency white-label partnerships, customer success for case study creation. SAFE legal, R&amp;D tax offset (AU), API compliance across Microsoft, Facebook, and LinkedIn.</div>
       </div>
     </div>
 
-    <div style="margin-top:20px;text-align:center;background:#f9fafb;border-radius:12px;padding:20px;">
-      <div style="font-size:13px;font-weight:700;color:var(--dark);margin-bottom:4px;">18-month runway at current burn. Seed round target: Q3 2027.</div>
-      <div style="font-size:12px;color:var(--gray2);margin-bottom:8px;">Milestone: $100K MRR + 5 published case studies → positions for $3–5M seed at $20–30M pre-money</div>
-      <div style="font-size:11px;color:var(--gray2);border-top:1px solid #e5e7eb;padding-top:10px;line-height:1.6;"><strong style="color:var(--dark);">On margin at scale:</strong> AI inference cost per account is minimal — a typical optimisation cycle costs cents per run. At 333 accounts ($100K MRR), total estimated monthly inference cost is under $500. The 82% gross margin is structurally protected through $1M+ MRR and does not erode with agent volume.</div>
+    <div style="margin-top:20px;text-align:center;background:var(--dark2);border:1px solid var(--dark3);border-radius:12px;padding:20px;">
+      <div style="font-size:13px;font-weight:700;color:var(--white);margin-bottom:4px;">Capital deployed entirely into growth — no existing burn to sustain.</div>
+      <div style="font-size:12px;color:var(--gray);margin-bottom:8px;">Milestone: $100K MRR + 5 published case studies → positions for $3–5M seed at $20–30M pre-money</div>
+      <div style="font-size:11px;color:var(--gray);border-top:1px solid var(--dark3);padding-top:10px;line-height:1.6;"><strong style="color:var(--orange);">On margin at scale:</strong> AI inference cost per account is minimal — a typical optimisation cycle costs cents per run. At 333 accounts ($100K MRR), total estimated monthly inference cost is under $500. The 82% gross margin is structurally protected through $1M+ MRR and does not erode with agent volume.</div>
     </div>
   </div>
 </div>
