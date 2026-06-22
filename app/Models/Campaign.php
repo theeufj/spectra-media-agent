@@ -34,6 +34,7 @@ class Campaign extends Model
         'landing_page_url',
         'exclusions',
         'google_ads_campaign_id',
+        'google_ads_experiment_id',
         'platform_status',
         'primary_status',
         'primary_status_reasons',
