@@ -138,10 +138,14 @@ class MonitorCampaignStatus implements ShouldQueue
         $statusData = $getCampaignStatus($customerId, $resourceName);
 
         if ($statusData) {
+            $reasons = [];
+            foreach ($statusData['primary_status_reasons'] as $reasonInt) {
+                $reasons[] = $this->mapPrimaryStatusReason((int) $reasonInt);
+            }
             return [
                 'platform_status' => $this->mapStatus($statusData['status']),
                 'primary_status' => $this->mapPrimaryStatus($statusData['primary_status']),
-                'primary_status_reasons' => $statusData['primary_status_reasons'] ?? null,
+                'primary_status_reasons' => $reasons ?: null,
             ];
         }
 
@@ -258,16 +262,36 @@ class MonitorCampaignStatus implements ShouldQueue
 
     private function mapPrimaryStatus(int $status): string
     {
-        // Map Google Ads Enum to string
-        // 2 = ELIGIBLE, 3 = PAUSED, 4 = REMOVED, 5 = ENDED, 6 = PENDING, 7 = MISCONFIGURED, 8 = LIMITED
+        // Google Ads API V22 CampaignPrimaryStatus enum
         return match ($status) {
-            2 => 'ELIGIBLE',
-            3 => 'PAUSED',
-            4 => 'REMOVED',
-            5 => 'ENDED',
-            6 => 'PENDING',
-            7 => 'MISCONFIGURED',
-            8 => 'LIMITED',
+            2  => 'ELIGIBLE',
+            3  => 'PAUSED',
+            4  => 'REMOVED',
+            5  => 'ENDED',
+            6  => 'PENDING',
+            7  => 'MISCONFIGURED',
+            8  => 'LIMITED',
+            9  => 'LEARNING',
+            10 => 'NOT_ELIGIBLE',
+            default => 'UNKNOWN',
+        };
+    }
+
+    private function mapPrimaryStatusReason(int $reason): string
+    {
+        // Google Ads API V22 CampaignPrimaryStatusReason enum
+        return match ($reason) {
+            2  => 'CAMPAIGN_SERVING_STATUS_RESTRICTED',
+            3  => 'CAMPAIGN_STATUS_REMOVED',
+            4  => 'CAMPAIGN_STATUS_PAUSED',
+            5  => 'CAMPAIGN_BUDGET_UNDERFUNDED',
+            6  => 'CAMPAIGN_BUDGET_MISCONFIGURED',
+            7  => 'CAMPAIGN_PENDING_SCHEDULED_START',
+            8  => 'CAMPAIGN_PENDING_BUDGET_APPROVAL',
+            9  => 'CAMPAIGN_LEARNING_PERIOD',
+            10 => 'AD_GROUP_AD_NOT_ELIGIBLE_SERVING',
+            11 => 'AD_GROUP_NOT_ELIGIBLE_SERVING',
+            12 => 'AD_GROUP_STATUS_PAUSED',
             default => 'UNKNOWN',
         };
     }

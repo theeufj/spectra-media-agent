@@ -33,7 +33,7 @@ class AutoStartABTests implements ShouldQueue
         Log::info('AutoStartABTests: Starting daily auto-test pass');
 
         $campaigns = Campaign::with(['strategies.adCopies'])
-            ->where('primary_status', 'ELIGIBLE')
+            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
             ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
                                 ->orWhereNotNull('facebook_ads_campaign_id'))
             ->get();

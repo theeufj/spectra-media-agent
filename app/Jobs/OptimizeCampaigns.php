@@ -27,7 +27,7 @@ class OptimizeCampaigns implements ShouldQueue
     {
         // Find active campaigns that are 'ELIGIBLE' (primary status)
         // This covers both Google (ENABLED/ELIGIBLE) and Facebook (ACTIVE)
-        $campaigns = Campaign::where('primary_status', 'ELIGIBLE')
+        $campaigns = Campaign::whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
                       ->orWhereNotNull('facebook_ads_campaign_id')

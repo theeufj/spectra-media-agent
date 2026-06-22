@@ -37,7 +37,7 @@ class RunSelfHealingChecks implements ShouldQueue
         Log::info('RunSelfHealingChecks: Starting 4-hour healing pass');
 
         $campaigns = Campaign::with('customer')
-            ->where('primary_status', 'ELIGIBLE')
+            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
             ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
                                 ->orWhereNotNull('facebook_ads_campaign_id')
                                 ->orWhereNotNull('microsoft_ads_campaign_id')
