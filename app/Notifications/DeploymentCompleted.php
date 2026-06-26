@@ -27,51 +27,60 @@ class DeploymentCompleted extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = (new MailMessage)
-            ->subject('Campaign Deployed: ' . $this->campaign->name)
-            ->greeting('Hi ' . $notifiable->name . ',');
+        if ($this->failureCount > 0 && $this->successCount === 0) {
+            return (new MailMessage)
+                ->subject('Campaign deployment issue: ' . $this->campaign->name)
+                ->greeting('Hi ' . $notifiable->name . ',')
+                ->line("We ran into an issue deploying your campaign \"{$this->campaign->name}\" and our team has been notified.")
+                ->line("We'll be in touch shortly to get this resolved.")
+                ->action('View Campaign', url('/campaigns/' . $this->campaign->id))
+                ->salutation('— The Site to Spend Team');
+        }
 
-        if ($this->failureCount === 0) {
-            $mail->line("Your campaign \"{$this->campaign->name}\" has been successfully deployed to all platforms.")
-                 ->line("{$this->successCount} strategy(ies) deployed successfully.");
-        } else {
-            $mail->line("Your campaign \"{$this->campaign->name}\" was partially deployed.")
-                 ->line("{$this->successCount} succeeded, {$this->failureCount} failed.");
+        $mail = (new MailMessage)
+            ->subject('Your campaign is live: ' . $this->campaign->name)
+            ->greeting('Great news, ' . $notifiable->name . '!')
+            ->line("Your campaign **\"{$this->campaign->name}\"** is now live and your ads are running.");
+
+        if ($this->failureCount > 0) {
+            $mail->line("({$this->successCount} platform(s) deployed successfully — {$this->failureCount} encountered an issue and our team has been notified.)");
         }
 
         // Budget breakdown per platform
         if (!empty($this->strategies)) {
             $totalDaily = $this->campaign->daily_budget ?? 0;
-            $mail->line('**Budget Breakdown**');
+            $mail->line('**What\'s running:**');
 
             foreach ($this->strategies as $strategy) {
                 $platform = $strategy['platform'] ?? 'Unknown';
-                $daily = isset($strategy['daily_budget']) ? '$' . number_format($strategy['daily_budget'], 2) . '/day' : 'not set';
-                $duration = null;
+                $daily = isset($strategy['daily_budget']) ? '$' . number_format($strategy['daily_budget'], 2) . '/day' : null;
+
+                $line = "• {$platform}";
+                if ($daily) {
+                    $line .= " — {$daily}";
+                }
 
                 if (!empty($this->campaign->start_date) && !empty($this->campaign->end_date)) {
                     $start = \Carbon\Carbon::parse($this->campaign->start_date);
                     $end = \Carbon\Carbon::parse($this->campaign->end_date);
                     $days = $start->diffInDays($end) + 1;
-                    $total = isset($strategy['daily_budget']) ? '$' . number_format($strategy['daily_budget'] * $days, 2) . " over {$days} days" : null;
-                    $duration = $total;
+                    if (isset($strategy['daily_budget'])) {
+                        $line .= " ($" . number_format($strategy['daily_budget'] * $days, 2) . " over {$days} days)";
+                    }
                 }
 
-                $line = "• **{$platform}**: {$daily}";
-                if ($duration) {
-                    $line .= " ({$duration})";
-                }
                 $mail->line($line);
             }
 
             if (count($this->strategies) > 1) {
-                $mail->line("**Total daily budget: \$" . number_format($totalDaily, 2) . "/day**");
+                $mail->line("**Total: \$" . number_format($totalDaily, 2) . "/day**");
             }
         }
 
         return $mail
-            ->action('View Campaign', url('/campaigns/' . $this->campaign->id))
-            ->salutation('— Site to Spend');
+            ->line('Performance data will start appearing in your dashboard within a few hours as Google begins serving your ads.')
+            ->action('View Your Dashboard', url(route('dashboard')))
+            ->salutation('— The Site to Spend Team');
     }
 
     public function toArray(object $notifiable): array
