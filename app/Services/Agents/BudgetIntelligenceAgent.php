@@ -747,6 +747,11 @@ class BudgetIntelligenceAgent
     /**
      * Update a campaign's budget on its platform.
      */
+    public function updateCampaignBudgetPublic(Customer $customer, Campaign $campaign, float $newDailyBudget): bool
+    {
+        return $this->updateCampaignBudget($campaign, $customer, $newDailyBudget);
+    }
+
     protected function updateCampaignBudget(Campaign $campaign, Customer $customer, float $newDailyBudget): bool
     {
         if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {

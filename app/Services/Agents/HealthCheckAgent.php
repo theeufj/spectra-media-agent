@@ -177,8 +177,8 @@ class HealthCheckAgent
             return;
         }
 
-        // Don't alert on campaigns that are intentionally paused or in draft
-        if (in_array($campaign->status, ['paused', 'draft', 'ended'], true)) {
+        // Don't alert on campaigns that are intentionally paused, in draft, or pending admin deployment
+        if (in_array(strtolower($campaign->status), ['paused', 'draft', 'ended', 'pending_admin_deployment'], true)) {
             return;
         }
 

@@ -562,7 +562,11 @@ class AdSpendBillingService
 
         foreach ($campaigns as $campaign) {
             try {
-                $this->budgetAgent->applyBudgetMultiplier($customer, $campaign, $multiplier);
+                if (!$campaign->google_ads_campaign_id && !$campaign->facebook_ads_campaign_id) {
+                    continue;
+                }
+                $newBudget = round(($campaign->daily_budget ?? 0) * $multiplier, 2);
+                $this->budgetAgent->updateCampaignBudgetPublic($customer, $campaign, $newBudget);
             } catch (\Exception $e) {
                 Log::error('AdSpendBilling: Failed to reduce budget', [
                     'campaign_id' => $campaign->id,

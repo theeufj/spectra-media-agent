@@ -54,13 +54,16 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                 $hasData = \App\Models\GoogleAdsPerformanceData::where('campaign_id', $this->campaign->id)->exists();
                 $daysBack = $hasData ? 7 : 30;
 
+                $resourceName = $this->campaign->google_ads_campaign_id;
+                $dateFrom     = now()->subDays($daysBack)->format('Y-m-d');
+                $dateTo       = now()->format('Y-m-d');
                 $query = "SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, "
                        . "metrics.cost_micros, metrics.conversions, metrics.conversions_value, "
                        . "metrics.search_impression_share, metrics.search_top_impression_share, "
                        . "metrics.view_through_conversions, metrics.all_conversions, metrics.interaction_rate, "
                        . "segments.date FROM campaign "
-                       . "WHERE campaign.resource_name = '{$this->campaign->google_ads_campaign_id}' "
-                       . "AND segments.date BETWEEN '" . now()->subDays($daysBack)->format('Y-m-d') . "' AND '" . now()->format('Y-m-d') . "'";
+                       . "WHERE campaign.resource_name = '" . addslashes($resourceName) . "' "
+                       . "AND segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}'";
 
                 $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
                     'customer_id' => $customer->google_ads_customer_id,
@@ -116,7 +119,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                     $recommendationService = new RecommendationGenerationService();
                     $campaignConfig = [
                         'campaignId' => $this->campaign->google_ads_campaign_id,
-                        'dailyBudget' => $strategy->budget,
+                        'dailyBudget' => $strategy->daily_budget ?? $this->campaign->daily_budget,
                     ];
                     $recommendations = ($recommendationService)($performanceData, $campaignConfig);
 

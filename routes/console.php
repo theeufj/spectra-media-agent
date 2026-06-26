@@ -136,8 +136,9 @@ Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00')->withoutOverla
 // admins if Google has flagged anything that suggests our agents made a bad decision
 Schedule::job(new ReviewGoogleAdsRecommendations)->dailyAt('04:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ReviewGoogleAdsRecommendations'));
 
-// Daily ad spend billing - bills customers for yesterday's spend, handles failures
-Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ProcessDailyAdSpendBilling'));
+// Daily ad spend billing - bills customers for yesterday's spend, handles failures.
+// Runs at 08:00 UTC to ensure Google Ads data is finalised for all timezones including US Pacific (UTC-8).
+Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('08:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ProcessDailyAdSpendBilling'));
 
 // Daily performance email - send yesterday's metrics summary to all users
 Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00')->withoutOverlapping();

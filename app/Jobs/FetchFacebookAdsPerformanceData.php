@@ -125,7 +125,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     $recommendationService = new RecommendationGenerationService();
                     $campaignConfig = [
                         'campaignId' => $this->campaign->facebook_ads_campaign_id,
-                        'dailyBudget' => $strategy->budget,
+                        'dailyBudget' => $strategy->daily_budget ?? $this->campaign->daily_budget,
                         'platform' => 'facebook',
                     ];
 
@@ -209,16 +209,23 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 }
 
                 $aggregated[$date]['impressions'] += (int) ($insight['impressions'] ?? 0);
-                $aggregated[$date]['clicks'] += (int) ($insight['clicks'] ?? 0);
-                $aggregated[$date]['spend'] += (float) ($insight['spend'] ?? 0);
-                $aggregated[$date]['reach'] += (int) ($insight['reach'] ?? 0);
-                $aggregated[$date]['frequency'] = max($aggregated[$date]['frequency'], (float) ($insight['frequency'] ?? 0));
-                $aggregated[$date]['cpc'] = (float) ($insight['cpc'] ?? $aggregated[$date]['cpc']);
-                $aggregated[$date]['cpm'] = (float) ($insight['cpm'] ?? $aggregated[$date]['cpm']);
-                $aggregated[$date]['cpa'] = (float) ($insight['cpa'] ?? $aggregated[$date]['cpa']);
-                $aggregated[$date]['actions'] = array_merge($aggregated[$date]['actions'], $insight['actions'] ?? []);
+                $aggregated[$date]['clicks']      += (int) ($insight['clicks'] ?? 0);
+                $aggregated[$date]['spend']       += (float) ($insight['spend'] ?? 0);
+                $aggregated[$date]['reach']       += (int) ($insight['reach'] ?? 0);
+                $aggregated[$date]['actions']      = array_merge($aggregated[$date]['actions'], $insight['actions'] ?? []);
             }
         }
+
+        // Recalculate per-unit metrics from aggregated totals — copying them from individual
+        // ad sets produces incorrect blended rates when multiple ad sets are present.
+        foreach ($aggregated as &$row) {
+            $row['cpc'] = $row['clicks'] > 0 ? round($row['spend'] / $row['clicks'], 4) : 0.0;
+            $row['cpm'] = $row['impressions'] > 0 ? round($row['spend'] / $row['impressions'] * 1000, 4) : 0.0;
+            $purchases  = collect($row['actions'])->where('action_type', 'purchase')->sum('value');
+            $row['cpa'] = $purchases > 0 ? round($row['spend'] / $purchases, 2) : 0.0;
+            $row['frequency'] = $row['reach'] > 0 ? round($row['impressions'] / $row['reach'], 4) : 0.0;
+        }
+        unset($row);
 
         return array_values($aggregated);
     }

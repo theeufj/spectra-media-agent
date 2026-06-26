@@ -173,7 +173,8 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
             : $this->campaign->strategies;
 
         // Filter strategies to only platforms the user's plan allows
-        $user = $this->campaign->customer->users()->first();
+        $user = $this->campaign->customer->users()->wherePivot('role', 'owner')->first()
+            ?? $this->campaign->customer->users()->first();
         if ($user) {
             $allowed = $user->allowedPlatforms();
             $strategies = $strategies->filter(function ($strategy) use ($allowed) {

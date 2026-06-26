@@ -44,10 +44,10 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
             'total_spend' => 0,
         ];
 
-        // Get all customers with active credit accounts
+        // Get all customers with active credit accounts who have at least one actively-running campaign
         $customers = Customer::whereHas('adSpendCredit')
             ->whereHas('campaigns', function ($query) {
-                $query->whereIn('status', ['active', 'paused']);
+                $query->where('status', 'active');
             })
             ->with(['adSpendCredit', 'campaigns'])
             ->get();

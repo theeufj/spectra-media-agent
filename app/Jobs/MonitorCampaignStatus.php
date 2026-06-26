@@ -139,7 +139,7 @@ class MonitorCampaignStatus implements ShouldQueue
 
         if ($statusData) {
             $reasons = [];
-            foreach ($statusData['primary_status_reasons'] as $reasonInt) {
+            foreach ($statusData['primary_status_reasons'] ?? [] as $reasonInt) {
                 $reasons[] = $this->mapPrimaryStatusReason((int) $reasonInt);
             }
             return [
