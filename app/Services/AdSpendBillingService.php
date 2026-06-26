@@ -285,13 +285,25 @@ class AdSpendBillingService
      */
     protected function checkAndReplenish(Customer $customer, AdSpendCredit $credit): void
     {
-        $avgDailySpend = $credit->getAverageDailySpend();
-        $daysRemaining = $avgDailySpend > 0 ? $credit->current_balance / $avgDailySpend : 999;
+        // Use the sum of daily budgets across active campaigns — this is the authoritative
+        // number of what Google is authorised to spend per day, not a rolling average which
+        // gets skewed by partial days and campaign ramp-up periods.
+        $dailyBudget = $customer->campaigns()
+            ->where('status', 'active')
+            ->whereNotIn('primary_status', ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED'])
+            ->sum('daily_budget');
+
+        // Fall back to rolling average if no budgets are set
+        if ($dailyBudget <= 0) {
+            $dailyBudget = $credit->getAverageDailySpend();
+        }
+
+        $daysRemaining = $dailyBudget > 0 ? $credit->current_balance / $dailyBudget : 999;
 
         // If less than 3 days remaining, auto-replenish
         if ($daysRemaining < 3 && $daysRemaining > 0) {
-            $replenishAmount = AdSpendCredit::calculateInitialCredit($avgDailySpend, 7);
-            
+            $replenishAmount = AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
+
             $chargeResult = $this->chargeCustomer($customer, $replenishAmount, 'Auto-replenishment');
 
             if ($chargeResult['success']) {
