@@ -210,7 +210,22 @@ class AdSpendCredit extends Model
             ->where('created_at', '>=', now()->subDays(7))
             ->sum('amount');
 
-        return abs($recentDeductions) / 7;
+        $avgFromTransactions = abs($recentDeductions) / 7;
+
+        // If no deduction history yet (e.g. billing job was recently fixed), fall back to
+        // actual Google Ads performance data so the topup logic has a realistic baseline.
+        if ($avgFromTransactions < 1.0) {
+            $actualSpend = GoogleAdsPerformanceData::whereHas('campaign', function ($q) {
+                    $q->where('customer_id', $this->customer_id);
+                })
+                ->where('date', '>=', now()->subDays(7)->toDateString())
+                ->where('date', '<', now()->toDateString())
+                ->sum('cost');
+
+            return $actualSpend > 0 ? $actualSpend / 7 : 0.0;
+        }
+
+        return $avgFromTransactions;
     }
 
     /**
