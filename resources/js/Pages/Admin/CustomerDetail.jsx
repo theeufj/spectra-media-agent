@@ -60,6 +60,17 @@ export default function CustomerDetail({ auth, bm_configured }) {
         });
     };
 
+    const [deployingCampaignId, setDeployingCampaignId] = useState(null);
+
+    const adminDeploy = (campaignId) => {
+        if (!confirm('Dispatch deployment job for this campaign? Make sure the Google Ads account ID is set above first.')) return;
+        setDeployingCampaignId(campaignId);
+        router.post(route('admin.campaigns.admin-deploy', campaignId), {}, {
+            preserveScroll: true,
+            onFinish: () => setDeployingCampaignId(null),
+        });
+    };
+
     const owner = customer.users?.[0];
     const campaigns = customer.campaigns || [];
 
@@ -391,13 +402,19 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                                 <div className="text-sm text-gray-500">ID: {campaign.id}</div>
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                                                    campaign.platform_status === 'ENABLED' ? 'bg-green-100 text-green-800' :
-                                                                    campaign.platform_status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800' :
-                                                                    'bg-gray-100 text-gray-800'
-                                                                }`}>
-                                                                    {campaign.platform_status || 'Draft'}
-                                                                </span>
+                                                                {campaign.status === 'pending_admin_deployment' ? (
+                                                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+                                                                        Pending Deployment
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                                                        campaign.platform_status === 'ENABLED' ? 'bg-green-100 text-green-800' :
+                                                                        campaign.platform_status === 'PAUSED' ? 'bg-yellow-100 text-yellow-800' :
+                                                                        'bg-gray-100 text-gray-800'
+                                                                    }`}>
+                                                                        {campaign.platform_status || campaign.status || 'Draft'}
+                                                                    </span>
+                                                                )}
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                                                                 ${campaign.daily_budget}/day
@@ -425,12 +442,23 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                                                 </div>
                                                             </td>
                                                             <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                                <Link
-                                                                    href={route('admin.campaigns.show', campaign.id)}
-                                                                    className="text-flame-orange-600 hover:text-flame-orange-900 font-medium"
-                                                                >
-                                                                    View Details
-                                                                </Link>
+                                                                <div className="flex items-center gap-3">
+                                                                    <Link
+                                                                        href={route('admin.campaigns.show', campaign.id)}
+                                                                        className="text-flame-orange-600 hover:text-flame-orange-900 font-medium"
+                                                                    >
+                                                                        View Details
+                                                                    </Link>
+                                                                    {campaign.status === 'pending_admin_deployment' && (
+                                                                        <button
+                                                                            onClick={() => adminDeploy(campaign.id)}
+                                                                            disabled={deployingCampaignId === campaign.id}
+                                                                            className="inline-flex items-center px-3 py-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white text-xs font-medium rounded-md"
+                                                                        >
+                                                                            {deployingCampaignId === campaign.id ? 'Deploying…' : 'Deploy'}
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                         </tr>
                                                     );

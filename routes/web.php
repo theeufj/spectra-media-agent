@@ -486,6 +486,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('campaigns/{campaign}/performance', [App\Http\Controllers\AdminController::class, 'campaignPerformance'])->name('admin.campaigns.performance');
     Route::post('campaigns/{campaign}/pause', [App\Http\Controllers\AdminController::class, 'pauseCampaign'])->name('admin.campaigns.pause');
     Route::post('campaigns/{campaign}/start', [App\Http\Controllers\AdminController::class, 'startCampaign'])->name('admin.campaigns.start');
+    Route::post('campaigns/{campaign}/admin-deploy', [App\Http\Controllers\AdminController::class, 'adminDeployCampaign'])->name('admin.campaigns.admin-deploy');
     Route::put('campaigns/{campaign}', [App\Http\Controllers\AdminController::class, 'updateCampaign'])->name('admin.campaigns.update');
     Route::get('notifications', [App\Http\Controllers\AdminController::class, 'notificationsIndex'])->name('admin.notifications.index');
     Route::get('settings', [App\Http\Controllers\AdminController::class, 'settingsIndex'])->name('admin.settings.index');

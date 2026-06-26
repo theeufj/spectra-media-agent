@@ -353,6 +353,45 @@ class AdminController extends Controller
     /**
      * Pause a campaign in Google Ads.
      */
+    /**
+     * Admin-triggered deployment for campaigns pending manual setup.
+     * Used when a customer had no Google Ads account ID at deploy time.
+     */
+    public function adminDeployCampaign(Campaign $campaign)
+    {
+        $customer = $campaign->customer;
+
+        // Verify the account ID is now attached before we try to deploy
+        $hasGoogleStrategy = $campaign->strategies()
+            ->whereNotNull('signed_off_at')
+            ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
+            ->exists();
+
+        if ($hasGoogleStrategy && empty($customer->google_ads_customer_id)) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'This customer still has no Google Ads account ID. Attach one above before deploying.',
+            ]);
+        }
+
+        // Reset deployment_status so the idempotency guard allows deployment
+        $campaign->strategies()
+            ->whereNotNull('signed_off_at')
+            ->update(['deployment_status' => null]);
+
+        \App\Jobs\DeployCampaign::dispatch($campaign, useAgents: true);
+
+        Log::info("Admin triggered deployment for campaign {$campaign->id}", [
+            'admin_user_id' => auth()->id(),
+            'customer_id' => $customer->id,
+        ]);
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => "Deployment dispatched for \"{$campaign->name}\". It will go live shortly.",
+        ]);
+    }
+
     public function pauseCampaign(Campaign $campaign)
     {
         try {

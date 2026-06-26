@@ -157,6 +157,46 @@ class DeploymentController extends Controller
             ->whereNotNull('signed_off_at')
             ->update(['deployment_status' => null]);
 
+        // If the customer doesn't have a Google Ads account ID yet, we can't deploy
+        // programmatically. Queue the campaign for manual admin deployment instead —
+        // the admin team will create the account, attach it, and deploy from the portal.
+        $hasGoogleStrategy = $campaign->strategies()
+            ->whereNotNull('signed_off_at')
+            ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
+            ->exists();
+
+        if ($hasGoogleStrategy && empty($customer->google_ads_customer_id)) {
+            $campaign->update(['status' => 'pending_admin_deployment']);
+
+            \Illuminate\Support\Facades\Mail::raw(
+                "Campaign pending deployment — admin action required\n\n"
+                . "Customer: {$customer->business_name} (ID: {$customer->id})\n"
+                . "Campaign: {$campaign->name} (ID: {$campaign->id})\n"
+                . "Budget: \${$campaign->daily_budget}/day\n"
+                . "Strategies: {$signedOffCount} signed off\n\n"
+                . "The customer has no Google Ads account ID. Create a sub-account under the MCC,\n"
+                . "attach it in the admin portal, then click Deploy on this campaign:\n\n"
+                . url(route('admin.customers.show', $customer->id)),
+                fn ($m) => $m->to('theeufj@gmail.com')
+                    ->subject("Action required: Deploy \"{$campaign->name}\" for {$customer->business_name}")
+            );
+
+            ActivityLog::log('campaign_pending_admin_deployment', "Campaign '{$campaign->name}' queued for admin deployment — no Google Ads account ID", $campaign, [
+                'campaign_id' => $campaign->id,
+                'customer_id' => $customer->id,
+            ]);
+
+            Log::info("Campaign queued for admin deployment — no Google Ads account ID", [
+                'campaign_id' => $campaign->id,
+                'customer_id' => $customer->id,
+            ]);
+
+            return redirect()->back()->with('flash', [
+                'type' => 'success',
+                'message' => 'Your campaign has been submitted! Our team will complete the setup and launch your ads within 24 hours. We\'ll notify you when it\'s live.',
+            ]);
+        }
+
         DeployCampaign::dispatch($campaign, useAgents: true);
 
         ActivityLog::log('campaign_deployed', "Campaign '{$campaign->name}' deployment initiated ({$signedOffCount} strategies)", $campaign, [
@@ -164,9 +204,9 @@ class DeploymentController extends Controller
             'customer_id' => $customer->id,
             'signed_off_strategies' => $signedOffCount,
         ]);
-        
+
         Log::info("📤 DeployCampaign job dispatched for Campaign ID: {$campaign->id}");
-        
+
         return redirect()->back()->with('flash', [
             'type' => 'success',
             'message' => 'Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.',
