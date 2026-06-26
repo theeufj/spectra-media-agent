@@ -102,6 +102,11 @@ class RegisteredUserController extends Controller
             (new \App\Mail\WelcomeEmail($user->name))->withTenant($tenant['key'] ?? null)
         );
 
+        \Illuminate\Support\Facades\Mail::raw(
+            "New registration on SiteToSpend\n\nName: {$user->name}\nEmail: {$user->email}\nTime: " . now()->format('d M Y H:i T'),
+            fn ($m) => $m->to('theeufj@gmail.com')->subject("New signup: {$user->name}")
+        );
+
         Auth::login($user);
 
         // Redirect to email verification page for email/password signups

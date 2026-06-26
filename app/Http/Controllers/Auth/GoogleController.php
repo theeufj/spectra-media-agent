@@ -57,6 +57,10 @@ class GoogleController extends Controller
 
         if ($user->wasRecentlyCreated) {
             Mail::to($user->email)->send(new WelcomeEmail($user->name));
+            Mail::raw(
+                "New registration on SiteToSpend (Google OAuth)\n\nName: {$user->name}\nEmail: {$user->email}\nTime: " . now()->format('d M Y H:i T'),
+                fn ($m) => $m->to('theeufj@gmail.com')->subject("New signup: {$user->name}")
+            );
         }
 
         if ($user->customers()->doesntExist()) {
