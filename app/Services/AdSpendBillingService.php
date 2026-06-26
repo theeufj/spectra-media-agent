@@ -195,7 +195,8 @@ class AdSpendBillingService
             'error' => $error,
         ]);
 
-        $user = $customer->users()->first();
+        $user = $customer->users()->wherePivot('role', 'owner')->first()
+            ?? $customer->users()->first();
 
         // Determine action based on failure count
         switch ($credit->failed_charge_count) {
@@ -261,7 +262,8 @@ class AdSpendBillingService
             // Restore budgets to 100%
             $this->reduceCampaignBudgets($customer, 1.0);
 
-            $user = $customer->users()->first();
+            $user = $customer->users()->wherePivot('role', 'owner')->first()
+                ?? $customer->users()->first();
             if ($user) {
                 Mail::to($user->email)->queue(new AdSpendCampaignsResumed($customer, $credit));
             }
@@ -315,7 +317,8 @@ class AdSpendBillingService
                 ]);
             } else {
                 // Send low balance warning
-                $user = $customer->users()->first();
+                $user = $customer->users()->wherePivot('role', 'owner')->first()
+                    ?? $customer->users()->first();
                 if ($user) {
                     Mail::to($user->email)->queue(new AdSpendLowBalance($customer, $credit, $daysRemaining));
                 }
@@ -378,37 +381,31 @@ class AdSpendBillingService
     }
 
     /**
-     * Get actual ad spend from Google/Facebook Ads APIs.
+     * Get actual ad spend from yesterday's performance data.
+     * Uses campaign platform IDs directly — not strategy deployment status, which can be
+     * missing for campaigns deployed outside the strategy wizard or still in 'deploying' state.
      */
     protected function getActualAdSpend(Customer $customer): float
     {
         $totalSpend = 0;
 
         try {
-            // Get spend from active campaigns
             $activeCampaigns = $customer->campaigns()
                 ->where('status', 'active')
                 ->get();
 
             foreach ($activeCampaigns as $campaign) {
-                $platformsFetched = [];
-
-                foreach ($campaign->strategies()->whereIn('deployment_status', ['deployed', 'verified'])->get() as $strategy) {
-                    $platform = strtolower(trim($strategy->platform));
-
-                    if (str_contains($platform, 'google') && !in_array('google', $platformsFetched)) {
-                        $totalSpend += $this->getGoogleAdsSpend($customer, $campaign);
-                        $platformsFetched[] = 'google';
-                    } elseif (str_contains($platform, 'facebook') && !in_array('facebook', $platformsFetched)) {
-                        $totalSpend += $this->getFacebookAdsSpend($customer, $campaign);
-                        $platformsFetched[] = 'facebook';
-                    } elseif (str_contains($platform, 'microsoft') && !in_array('microsoft', $platformsFetched)) {
-                        $totalSpend += $this->getMicrosoftAdsSpend($customer, $campaign);
-                        $platformsFetched[] = 'microsoft';
-                    } elseif (str_contains($platform, 'linkedin') && !in_array('linkedin', $platformsFetched)) {
-                        $totalSpend += $this->getLinkedInAdsSpend($customer, $campaign);
-                        $platformsFetched[] = 'linkedin';
-                    }
+                if (!empty($campaign->google_ads_campaign_id)) {
+                    $totalSpend += $this->getGoogleAdsSpend($customer, $campaign);
+                }
+                if (!empty($campaign->facebook_ads_campaign_id)) {
+                    $totalSpend += $this->getFacebookAdsSpend($customer, $campaign);
+                }
+                if (!empty($campaign->microsoft_ads_campaign_id)) {
+                    $totalSpend += $this->getMicrosoftAdsSpend($customer, $campaign);
+                }
+                if (!empty($campaign->linkedin_campaign_id)) {
+                    $totalSpend += $this->getLinkedInAdsSpend($customer, $campaign);
                 }
             }
 
@@ -545,13 +542,13 @@ class AdSpendBillingService
     }
 
     /**
-     * Get average daily budget across all customer campaigns.
+     * Get total daily budget across all customer campaigns.
      */
     protected function getAverageDailyBudget(Customer $customer): float
     {
         return $customer->campaigns()
             ->where('status', 'active')
-            ->avg('daily_budget') ?? 50; // Default to $50 if no campaigns
+            ->sum('daily_budget') ?: 50;
     }
 
     /**
