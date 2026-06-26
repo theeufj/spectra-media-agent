@@ -128,13 +128,18 @@ class CampaignAlertService
     {
         // 7-day average: for each past day, take the MAX cumulative snapshot (= actual day total),
         // then average across days. This avoids summing cumulative rows which inflates the figure.
-        $avgDailySpend = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
+        $history = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
             ->where('date', '>=', now()->subDays(7)->toDateString())
             ->where('date', '<', now()->toDateString())
             ->selectRaw('date, MAX(spend) as daily_spend')
             ->groupBy('date')
-            ->get()
-            ->avg('daily_spend') ?? 0;
+            ->get();
+
+        // Require at least 5 days of history — new campaigns have a near-zero baseline
+        // that makes any real spend look like an anomaly.
+        if ($history->count() < 5) return [];
+
+        $avgDailySpend = $history->avg('daily_spend') ?? 0;
 
         if ($avgDailySpend <= 0) return [];
 

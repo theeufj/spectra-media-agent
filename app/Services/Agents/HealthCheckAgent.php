@@ -182,6 +182,12 @@ class HealthCheckAgent
             return;
         }
 
+        // Don't alert on campaigns that aren't actively serving on the platform
+        $inactivePrimary = ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED'];
+        if ($campaign->primary_status && in_array(strtoupper($campaign->primary_status), $inactivePrimary, true)) {
+            return;
+        }
+
         $monthStart   = now()->startOfMonth()->toDateString();
         $today        = now()->toDateString();
         $daysElapsed  = now()->day;
