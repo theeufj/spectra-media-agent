@@ -412,22 +412,15 @@ class AdSpendBillingService
 
     /**
      * Get spend from Google Ads for yesterday.
+     * Reads from the local GoogleAdsPerformanceData table which is synced by the agents —
+     * avoids a redundant live API call and uses the same data source as the rest of the app.
      */
     protected function getGoogleAdsSpend(Customer $customer, Campaign $campaign): float
     {
         try {
-            $performanceService = app(\App\Services\GoogleAds\CommonServices\GetCampaignPerformance::class);
-            
-            $performance = $performanceService->getPerformance(
-                $customer->google_ads_customer_id,
-                $campaign->google_ads_campaign_id,
-                now()->subDay()->format('Y-m-d'),
-                now()->subDay()->format('Y-m-d')
-            );
-
-            // Cost is returned in micros, convert to dollars
-            return ($performance['cost_micros'] ?? 0) / 1_000_000;
-
+            return (float) \App\Models\GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
+                ->where('date', now()->subDay()->toDateString())
+                ->sum('cost');
         } catch (\Exception $e) {
             Log::warning('AdSpendBilling: Failed to get Google Ads spend', [
                 'campaign_id' => $campaign->id,
