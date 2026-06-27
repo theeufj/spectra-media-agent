@@ -323,12 +323,13 @@ export default function InboxIndex({ inbox, threads, folder }) {
     const [compose, setCompose] = useState(false);
     const [replyTo, setReplyTo] = useState(null);
     const [selectedThreadId, setSelectedThreadId] = useState(null);
+    const [readThreadIds, setReadThreadIds] = useState(new Set());
 
     const selectedThread = threads.find((t) => t.thread_id === selectedThreadId) ?? null;
 
     const openThread = (threadId) => {
         setSelectedThreadId(threadId);
-        // Fire-and-forget mark-as-read (plain fetch, not Inertia)
+        setReadThreadIds((prev) => new Set([...prev, threadId]));
         fetch(route('inbox.threads.read', threadId), {
             method: 'POST',
             headers: {
@@ -359,7 +360,7 @@ export default function InboxIndex({ inbox, threads, folder }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0H4m16 0l-2-5H6l-2 5" />
             ),
-            badge: inbox.unread_count,
+            badge: Math.max(0, inbox.unread_count - [...readThreadIds].filter(id => threads.find(t => t.thread_id === id)?.unread > 0).length),
         },
         {
             key: 'sent',
@@ -459,7 +460,7 @@ export default function InboxIndex({ inbox, threads, folder }) {
                         threads.map((t) => (
                             <ThreadItem
                                 key={t.thread_id}
-                                thread={t}
+                                thread={{ ...t, unread: readThreadIds.has(t.thread_id) ? 0 : t.unread }}
                                 isActive={selectedThreadId === t.thread_id}
                                 onClick={() => openThread(t.thread_id)}
                             />
