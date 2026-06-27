@@ -521,14 +521,15 @@ class GeminiService
     {
         $startTime = hrtime(true);
 
-        // gemini-embedding-2-preview uses embedContent on the regional endpoint.
+        // gemini-embedding-2-preview: use the global endpoint (:embedContent on vertexBaseUrl).
+        // Global quota = 50 RPM vs 5 RPM on the regional endpoint — same model, 10x capacity.
         // Older models (gemini-embedding-001, text-embedding-*) use predict on the global endpoint.
         $isGeminiEmbedding2 = str_starts_with($model, 'gemini-embedding-2');
 
         try {
             if ($isGeminiEmbedding2) {
-                $url      = "{$this->embeddingBaseUrl}{$model}:embedContent";
-                $payload  = ['content' => ['parts' => [['text' => $text]]]];
+                $url     = "{$this->vertexBaseUrl}{$model}:embedContent";
+                $payload = ['content' => ['parts' => [['text' => $text]]]];
             } else {
                 $url     = "{$this->vertexBaseUrl}{$model}:predict";
                 $payload = ['instances' => [['content' => $text]]];
