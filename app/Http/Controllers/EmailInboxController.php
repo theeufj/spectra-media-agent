@@ -19,20 +19,8 @@ class EmailInboxController extends Controller
     {
         $inbox = EmailInbox::where('user_id', Auth::id())->firstOrFail();
 
-        $folder = $request->get('folder', 'inbox');
-
-        $query = EmailMessage::where('inbox_id', $inbox->id)
-            ->orderByDesc('created_at');
-
-        if ($folder === 'inbox') {
-            $query->where('direction', 'inbound');
-        } elseif ($folder === 'sent') {
-            $query->where('direction', 'outbound');
-        }
-
-        // One row per thread_id (all messages within a thread are included regardless of direction)
-        $threadIds = (clone $query)
-            ->reorder()
+        // Load all threads regardless of direction — folder filtering happens client-side
+        $threadIds = EmailMessage::where('inbox_id', $inbox->id)
             ->select('thread_id')
             ->groupBy('thread_id')
             ->pluck('thread_id');
@@ -44,8 +32,9 @@ class EmailInboxController extends Controller
                 ->orderBy('created_at')
                 ->get();
 
-            $latest = $messages->last();
-            $unread = $messages->where('direction', 'inbound')->whereNull('read_at')->count();
+            $latest   = $messages->last();
+            $unread   = $messages->where('direction', 'inbound')->whereNull('read_at')->count();
+            $dirs     = $messages->pluck('direction')->unique()->values();
 
             return [
                 'thread_id'     => $threadId,
@@ -55,6 +44,8 @@ class EmailInboxController extends Controller
                 'date'          => $latest->created_at->toISOString(),
                 'unread'        => $unread,
                 'message_count' => $messages->count(),
+                'has_inbound'   => $dirs->contains('inbound'),
+                'has_outbound'  => $dirs->contains('outbound'),
                 'messages'      => $messages->map(fn($m) => $this->formatMessage($m))->values(),
             ];
         })->sortByDesc('date')->values();
@@ -67,7 +58,6 @@ class EmailInboxController extends Controller
                 'unread_count'  => $inbox->unreadCount(),
             ],
             'threads' => $threads,
-            'folder'  => $folder,
         ]);
     }
 

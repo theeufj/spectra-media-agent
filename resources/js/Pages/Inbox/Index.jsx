@@ -321,13 +321,20 @@ function ThreadItem({ thread, isActive, onClick }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function InboxIndex({ inbox, threads, folder }) {
+export default function InboxIndex({ inbox, threads }) {
     const [compose, setCompose] = useState(false);
     const [replyTo, setReplyTo] = useState(null);
     const [selectedThreadId, setSelectedThreadId] = useState(null);
     const [readThreadIds, setReadThreadIds] = useState(new Set());
+    const [folder, setFolder] = useState('inbox');
 
-    const selectedThread = threads.find((t) => t.thread_id === selectedThreadId) ?? null;
+    const visibleThreads = threads.filter((t) => {
+        if (folder === 'inbox') return t.has_inbound;
+        if (folder === 'sent')  return t.has_outbound;
+        return true;
+    });
+
+    const selectedThread = visibleThreads.find((t) => t.thread_id === selectedThreadId) ?? null;
 
     const openThread = (threadId) => {
         setSelectedThreadId(threadId);
@@ -343,8 +350,8 @@ export default function InboxIndex({ inbox, threads, folder }) {
     const closeThread = () => setSelectedThreadId(null);
 
     const switchFolder = (f) => {
+        setFolder(f);
         setSelectedThreadId(null);
-        router.get(route('inbox.index'), { folder: f }, { preserveState: false });
     };
 
     const handleReply = () => {
@@ -362,7 +369,7 @@ export default function InboxIndex({ inbox, threads, folder }) {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                     d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0H4m16 0l-2-5H6l-2 5" />
             ),
-            badge: Math.max(0, inbox.unread_count - [...readThreadIds].filter(id => threads.find(t => t.thread_id === id)?.unread > 0).length),
+            badge: Math.max(0, inbox.unread_count - [...readThreadIds].filter(id => threads.find(t => t.thread_id === id && t.unread > 0)).length),
         },
         {
             key: 'sent',
@@ -445,10 +452,10 @@ export default function InboxIndex({ inbox, threads, folder }) {
                 <div className={`w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${selectedThread ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'}`}>
                     <div className="px-4 py-3 border-b border-gray-100">
                         <h1 className="font-semibold text-gray-800 capitalize">{folder === 'all' ? 'All Mail' : folder}</h1>
-                        <p className="text-xs text-gray-400">{threads.length} conversation{threads.length !== 1 ? 's' : ''}</p>
+                        <p className="text-xs text-gray-400">{visibleThreads.length} conversation{visibleThreads.length !== 1 ? 's' : ''}</p>
                     </div>
 
-                    {threads.length === 0 ? (
+                    {visibleThreads.length === 0 ? (
                         <div className="flex-1 flex items-center justify-center p-8 text-center text-gray-400">
                             <div>
                                 <svg className="w-12 h-12 mx-auto mb-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -459,7 +466,7 @@ export default function InboxIndex({ inbox, threads, folder }) {
                             </div>
                         </div>
                     ) : (
-                        threads.map((t) => (
+                        visibleThreads.map((t) => (
                             <ThreadItem
                                 key={t.thread_id}
                                 thread={{ ...t, unread: readThreadIds.has(t.thread_id) ? 0 : t.unread }}
