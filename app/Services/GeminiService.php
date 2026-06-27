@@ -520,29 +520,28 @@ class GeminiService
      */
     public function embedContent(string $model, string $text, array $context = []): ?array
     {
-        // Throttle all embedding calls to 45 RPM across all workers (buffer below the 50 RPM global quota).
-        // Spin-wait in 300 ms increments until a slot is available. Shared via cache (Redis in production).
+        // Throttle all embedding calls to 4 RPM across all workers (safe margin below the 5 RPM regional quota).
+        // Spin-wait in 500 ms increments until a slot is available. Shared via cache (Redis in production).
         $throttleKey = 'gemini_embedding_rpm';
         $waited = 0;
-        while (!RateLimiter::attempt($throttleKey, 45, fn () => null, 60)) {
-            if ($waited >= 30_000) {
-                Log::error("GeminiService: Embedding throttle wait exceeded 30s — aborting");
+        while (!RateLimiter::attempt($throttleKey, 4, fn () => null, 60)) {
+            if ($waited >= 120_000) {
+                Log::error("GeminiService: Embedding throttle wait exceeded 120s — aborting");
                 return null;
             }
-            usleep(300_000);
-            $waited += 300;
+            usleep(500_000);
+            $waited += 500;
         }
 
         $startTime = hrtime(true);
 
-        // gemini-embedding-2-preview: use the global endpoint (:embedContent on vertexBaseUrl).
-        // Global quota = 50 RPM vs 5 RPM on the regional endpoint — same model, 10x capacity.
+        // gemini-embedding-2-preview: regional endpoint only (global returns 404).
         // Older models (gemini-embedding-001, text-embedding-*) use predict on the global endpoint.
         $isGeminiEmbedding2 = str_starts_with($model, 'gemini-embedding-2');
 
         try {
             if ($isGeminiEmbedding2) {
-                $url     = "{$this->vertexBaseUrl}{$model}:embedContent";
+                $url     = "{$this->embeddingBaseUrl}{$model}:embedContent";
                 $payload = ['content' => ['parts' => [['text' => $text]]]];
             } else {
                 $url     = "{$this->vertexBaseUrl}{$model}:predict";
