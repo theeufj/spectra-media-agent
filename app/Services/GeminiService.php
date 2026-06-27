@@ -254,6 +254,15 @@ class GeminiService
                     $this->flushTokenCache();
                 }
 
+                // 429 = quota exhausted — retrying the same model won't help; fall through
+                // immediately so generateContent() can try the next model in the fallback chain.
+                if ($statusCode === 429) {
+                    Log::warning("GeminiService: Rate limit (429) on model {$model}. Falling back immediately.", [
+                        'model' => $model,
+                    ]);
+                    return null;
+                }
+
                 if ($this->isRetryableError($statusCode)) {
                     $attempt++;
                     if ($attempt < $maxRetries) {
