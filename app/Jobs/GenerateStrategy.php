@@ -25,7 +25,7 @@ class GenerateStrategy implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $timeout = 300;
+    public $timeout = 720;
 
     /**
      * @var \App\Models\Campaign
@@ -72,11 +72,12 @@ class GenerateStrategy implements ShouldQueue
             $kbLength = strlen($knowledgeBaseContent);
             Log::info("Knowledge base content length: {$kbLength} characters");
 
-            // Warn and truncate if the KB is approaching Gemini's input limits
-            if ($kbLength > 800000) {
-                Log::warning("Knowledge base content is very large ({$kbLength} chars) for campaign {$this->campaign->id} — truncating to 800k chars to stay within API limits");
-                $knowledgeBaseContent = substr($knowledgeBaseContent, 0, 800000);
-            } elseif ($kbLength > 500000) {
+            // Truncate KB to stay comfortably within Vertex AI TPM quota for pro models.
+            // 300K chars ≈ 75K tokens — large enough for rich context, small enough to avoid 429s.
+            if ($kbLength > 300000) {
+                Log::warning("Knowledge base content is very large ({$kbLength} chars) for campaign {$this->campaign->id} — truncating to 300k chars to stay within API limits");
+                $knowledgeBaseContent = substr($knowledgeBaseContent, 0, 300000);
+            } elseif ($kbLength > 150000) {
                 Log::warning("Knowledge base content is large ({$kbLength} chars) for campaign {$this->campaign->id}");
             }
 
