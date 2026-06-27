@@ -34,6 +34,7 @@ class EmailInboxController extends Controller
 
         // Collapse to threads: one row per thread_id, latest message first
         $threadIds = (clone $query)
+            ->reorder()
             ->select('thread_id')
             ->groupBy('thread_id')
             ->pluck('thread_id');
