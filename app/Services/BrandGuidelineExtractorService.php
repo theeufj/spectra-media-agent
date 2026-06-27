@@ -7,7 +7,6 @@ use App\Models\Customer;
 use App\Prompts\BrandGuidelineExtractionPrompt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 
 class BrandGuidelineExtractorService
 {
@@ -221,63 +220,11 @@ class BrandGuidelineExtractorService
                 Log::notice("Could not parse robots.txt, proceeding cautiously", ['error' => $e->getMessage()]);
             }
 
-            // Try Browsershot with Screenshot for Vision AI
-            try {
-                $screenshot = Browsershot::url($websiteUrl)
-                    ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(config('browsershot.chrome_args', []))
-                    ->waitUntilNetworkIdle()
-                    ->windowSize(1920, 1080)
-                    ->timeout(60)
-                    ->base64Screenshot();
-
-                Log::info("Screenshot captured, sending to Gemini Vision AI");
-
-                // Call Gemini Vision
-                $prompt = "Analyze this website screenshot. Extract the visual brand identity. Return a JSON object with these keys: 'primary_colors' (array of hex codes), 'fonts' (array of font descriptions or names), 'image_style' (string description), 'layout_style' (string description).";
-
-                $response = $this->geminiService->generateContent(
-                    config('ai.models.default'),
-                    $prompt,
-                    ['responseMimeType' => 'application/json'],
-                    null,
-                    false,
-                    false,
-                    3,
-                    $screenshot,
-                    'image/png'
-                );
-
-                if ($response && isset($response['text'])) {
-                     $analysis = json_decode($this->cleanJsonResponse($response['text']), true);
-                     if ($analysis) {
-                         Log::info("Visual analysis completed via Vision AI");
-                         return $analysis;
-                     }
-                }
-
-            } catch (\Exception $e) {
-                Log::warning("Vision AI analysis failed, falling back to HTML scraping", [
-                    'error' => $e->getMessage(),
-                ]);
-            }
-
-            // Fallback to HTML scraping if Vision AI fails
-            try {
-                $html = Browsershot::url($websiteUrl)
-                    ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(config('browsershot.chrome_args', []))
-                    ->waitUntilNetworkIdle()
-                    ->timeout(30)
-                    ->bodyHtml();
-            } catch (\Exception $e) {
-                Log::warning("Browsershot HTML fetch failed, falling back to HTTP", [
-                    'error' => $e->getMessage(),
-                ]);
-                // Fallback to simple HTTP request
-                $response = Http::timeout(15)->get($websiteUrl);
-                $html = $response->successful() ? $response->body() : '';
-            }
+            // Fetch HTML via HTTP for CSS/color/font extraction
+            $httpResponse = Http::timeout(15)->withHeaders([
+                'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            ])->get($websiteUrl);
+            $html = $httpResponse->successful() ? $httpResponse->body() : '';
 
             if (empty($html)) {
                 Log::warning("Failed to fetch HTML for visual analysis");
