@@ -13,10 +13,11 @@ use Google\Auth\CredentialsLoader;
  *
  * --- GEMINI 3 SERIES (Preview) ---
  * - gemini-3.1-pro-preview        | Advanced intelligence, agentic & vibe coding (replaces shut-down gemini-3-pro-preview)
- * - gemini-3-flash-preview        | Frontier-class performance at low cost
- * - gemini-3.1-flash-lite-preview | Budget / Ultra-low latency
+ * - gemini-3.5-flash              | Latest stable flash — best price-performance (confirmed on Vertex AI global)
+ * - gemini-3-flash-preview        | Earlier flash preview
+ * - gemini-3.1-flash-lite-preview | Budget / Ultra-low latency (confirmed on Vertex AI global)
  * - gemini-3-pro-image-preview    | Nano Banana Pro - Studio-quality 4K image generation
- * - gemini-3.1-flash-image-preview| Nano Banana 2 - High-efficiency image generation
+ * - gemini-3.1-flash-image-preview| Nano Banana 2 - High-efficiency image generation (confirmed on Vertex AI global)
  *
  * --- GEMINI 2.5 SERIES (Stable) ---
  * - gemini-2.5-pro              | Deep reasoning & coding (stable)

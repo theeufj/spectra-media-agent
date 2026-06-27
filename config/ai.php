@@ -28,12 +28,14 @@ return [
          * Lite/budget model for high-volume, low-complexity tasks
          * (batch keyword categorisation, simple scoring, extraction).
          */
-        'lite' => env('AI_MODEL_LITE', 'gemini-2.5-flash-lite'),
+        'lite' => env('AI_MODEL_LITE', 'gemini-3.1-flash-lite-preview'),
 
         /*
          * Embedding model for vector search and semantic similarity.
+         * gemini-embedding-2-preview is not available on Vertex AI global endpoint;
+         * gemini-embedding-001 returns 3072-dim vectors and works reliably.
          */
-        'embedding' => env('AI_MODEL_EMBEDDING', 'gemini-embedding-2-preview'),
+        'embedding' => env('AI_MODEL_EMBEDDING', 'gemini-embedding-001'),
 
         /*
          * Image generation model.
@@ -52,11 +54,11 @@ return [
      * will automatically try the next model in this chain before giving up.
      */
     'fallback_chain' => [
-        'gemini-3.1-pro-preview'       => 'gemini-2.5-flash',
-        'gemini-2.5-pro'               => 'gemini-2.5-flash',
-        'gemini-3.5-flash'             => 'gemini-2.5-flash',
-        'gemini-3-flash-preview'       => 'gemini-2.5-flash',
-        'gemini-2.5-flash'             => 'gemini-2.5-flash-lite',
+        'gemini-3.1-pro-preview'        => 'gemini-3.5-flash',
+        'gemini-2.5-pro'                => 'gemini-3.5-flash',
+        'gemini-3.5-flash'              => 'gemini-2.5-flash',
+        'gemini-3-flash-preview'        => 'gemini-3.5-flash',
+        'gemini-2.5-flash'              => 'gemini-3.1-flash-lite-preview',
         'gemini-3.1-flash-lite-preview' => 'gemini-2.5-flash-lite',
     ],
 
@@ -106,8 +108,8 @@ return [
         'gemini-3.1-flash-lite-preview' => ['input' => 0.018,  'output' => 0.072, 'cached' => 0.0045],
         'gemini-2.5-flash-lite'         => ['input' => 0.018,  'output' => 0.072, 'cached' => 0.0045],
         'gemini-3.1-flash-image-preview'=> ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
-        'gemini-embedding-2-preview'    => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'gemini-embedding-001'          => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
+        'text-embedding-005'            => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'veo-3.1-generate-preview'      => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
     ],
 
