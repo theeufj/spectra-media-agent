@@ -27,12 +27,41 @@ class AdminController extends Controller
 
     public function usersIndex()
     {
-        $users = User::with(['roles', 'assignedPlan'])->get();
+        $users = User::with(['roles', 'assignedPlan', 'emailInbox'])->get();
         $plans = \App\Models\Plan::active()->ordered()->get();
         return Inertia::render('Admin/Users', [
             'users' => $users,
             'plans' => $plans,
         ]);
+    }
+
+    public function assignInbox(Request $request, User $user)
+    {
+        $validated = $request->validate([
+            'email_address' => 'required|email|unique:email_inboxes,email_address,' . ($user->emailInbox?->id ?? 0),
+            'display_name' => 'required|string|max:100',
+        ]);
+
+        \App\Models\EmailInbox::updateOrCreate(
+            ['user_id' => $user->id],
+            [
+                'email_address' => strtolower($validated['email_address']),
+                'display_name' => $validated['display_name'],
+            ]
+        );
+
+        Log::info('Admin assigned inbox to user', ['user_id' => $user->id, 'email' => $validated['email_address']]);
+
+        return redirect()->back()->with('success', "Inbox {$validated['email_address']} assigned to {$user->name}.");
+    }
+
+    public function removeInbox(User $user)
+    {
+        $user->emailInbox?->delete();
+
+        Log::info('Admin removed inbox from user', ['user_id' => $user->id]);
+
+        return redirect()->back()->with('success', "Inbox removed from {$user->name}.");
     }
 
     public function assignPlan(Request $request, User $user)

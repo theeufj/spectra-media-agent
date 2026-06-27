@@ -7,6 +7,10 @@ use Illuminate\Support\Facades\Route;
 Route::post('/stripe/webhook', [\App\Http\Controllers\StripeWebhookController::class, 'handleWebhook'])
     ->name('stripe.webhook');
 
+// Resend inbound email webhook (no auth middleware, HMAC-verified internally)
+Route::post('/resend/inbound', [\App\Http\Controllers\ResendInboundWebhookController::class, 'handle'])
+    ->name('resend.inbound');
+
 // Attribution tracking endpoints (public, rate-limited)
 Route::middleware('throttle:60,1')->group(function () {
     Route::post('/tracking/touchpoint', [\App\Http\Controllers\TrackingController::class, 'touchpoint'])

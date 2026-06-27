@@ -289,6 +289,13 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/support-tickets/{supportTicket}', [App\Http\Controllers\SupportTicketController::class, 'show'])->name('support-tickets.show');
 });
 
+// Email inbox (only users with an assigned inbox can access)
+Route::middleware(['auth'])->prefix('inbox')->name('inbox.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\EmailInboxController::class, 'index'])->name('index');
+    Route::post('/send', [\App\Http\Controllers\EmailInboxController::class, 'send'])->name('send');
+    Route::get('/attachments/{id}', [\App\Http\Controllers\EmailInboxController::class, 'attachment'])->name('attachment');
+});
+
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('platforms', App\Http\Controllers\Admin\EnabledPlatformController::class);
     Route::post('/platforms/{platform}/toggle', [App\Http\Controllers\Admin\EnabledPlatformController::class, 'toggle'])->name('platforms.toggle');
@@ -507,6 +514,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('execution-metrics', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'index'])->name('admin.execution.metrics');
     Route::get('execution-metrics/{strategy}', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'show'])->name('admin.execution.detail');
     Route::post('users/{user}/unban', [App\Http\Controllers\AdminController::class, 'unbanUser'])->name('admin.users.unban');
+    Route::post('users/{user}/inbox', [App\Http\Controllers\AdminController::class, 'assignInbox'])->name('admin.users.inbox.assign');
+    Route::delete('users/{user}/inbox', [App\Http\Controllers\AdminController::class, 'removeInbox'])->name('admin.users.inbox.remove');
     Route::post('notification', [App\Http\Controllers\AdminController::class, 'sendNotification'])->name('admin.notification.send');
 
     // Impersonation

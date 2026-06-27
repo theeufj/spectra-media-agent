@@ -78,6 +78,11 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Customer::class)->withPivot('role');
     }
 
+    public function emailInbox()
+    {
+        return $this->hasOne(\App\Models\EmailInbox::class);
+    }
+
     /**
      * Get the user's primary customer (via customer_id column).
      */
