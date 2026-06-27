@@ -539,6 +539,26 @@ class GeminiService
                 ->post($url, $payload);
 
             if ($response->failed()) {
+                $statusCode = $response->status();
+
+                // 429 on the primary embedding model — fall back to gemini-embedding-001
+                // which uses a separate quota pool and a different endpoint (predict on global).
+                if ($statusCode === 429 && $isGeminiEmbedding2) {
+                    $fallbackModel = 'gemini-embedding-001';
+                    Log::warning("GeminiService: 429 on {$model}, falling back to {$fallbackModel}");
+                    $fbUrl      = "{$this->vertexBaseUrl}{$fallbackModel}:predict";
+                    $fbPayload  = ['instances' => [['content' => $text]]];
+                    $fbResponse = Http::withHeaders($this->authHeaders())->timeout(300)->post($fbUrl, $fbPayload);
+                    if ($fbResponse->successful()) {
+                        $durationMs   = (int) ((hrtime(true) - $startTime) / 1e6);
+                        $approxTokens = (int) (strlen($text) / 4);
+                        $this->recordCost($fallbackModel, 'embedContent', ['promptTokenCount' => $approxTokens], $durationMs, array_merge($context, ['fallback_from' => $model]));
+                        return $fbResponse->json()['predictions'][0]['embeddings']['values'] ?? null;
+                    }
+                    Log::error("GeminiService: Fallback embedding {$fallbackModel} also failed: " . $fbResponse->body());
+                    return null;
+                }
+
                 Log::error("GeminiService: Failed to get embedding from model {$model}: " . $response->body());
                 return null;
             }
