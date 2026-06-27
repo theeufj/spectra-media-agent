@@ -20,10 +20,8 @@ class EmailInboxController extends Controller
         $inbox = EmailInbox::where('user_id', Auth::id())->firstOrFail();
 
         $folder = $request->get('folder', 'inbox');
-        $threadId = $request->get('thread');
 
         $query = EmailMessage::where('inbox_id', $inbox->id)
-            ->with('attachments')
             ->orderByDesc('created_at');
 
         if ($folder === 'inbox') {
@@ -32,7 +30,7 @@ class EmailInboxController extends Controller
             $query->where('direction', 'outbound');
         }
 
-        // Collapse to threads: one row per thread_id, latest message first
+        // One row per thread_id (all messages within a thread are included regardless of direction)
         $threadIds = (clone $query)
             ->reorder()
             ->select('thread_id')
@@ -50,50 +48,40 @@ class EmailInboxController extends Controller
             $unread = $messages->where('direction', 'inbound')->whereNull('read_at')->count();
 
             return [
-                'thread_id' => $threadId,
-                'subject' => $latest->subject,
-                'snippet' => $this->snippet($latest),
-                'from' => $latest->from_address,
-                'date' => $latest->created_at->toISOString(),
-                'unread' => $unread,
+                'thread_id'     => $threadId,
+                'subject'       => $latest->subject,
+                'snippet'       => $this->snippet($latest),
+                'from'          => $latest->from_address,
+                'date'          => $latest->created_at->toISOString(),
+                'unread'        => $unread,
                 'message_count' => $messages->count(),
+                'messages'      => $messages->map(fn($m) => $this->formatMessage($m))->values(),
             ];
         })->sortByDesc('date')->values();
 
-        $openThread = null;
-        if ($threadId) {
-            $threadMessages = EmailMessage::where('inbox_id', $inbox->id)
-                ->where('thread_id', $threadId)
-                ->with('attachments')
-                ->orderBy('created_at')
-                ->get()
-                ->map(fn($m) => $this->formatMessage($m));
-
-            // Mark inbound messages in the thread as read
-            EmailMessage::where('inbox_id', $inbox->id)
-                ->where('thread_id', $threadId)
-                ->where('direction', 'inbound')
-                ->whereNull('read_at')
-                ->update(['read_at' => now()]);
-
-            $openThread = [
-                'thread_id' => $threadId,
-                'subject' => $threadMessages->first()['subject'] ?? '',
-                'messages' => $threadMessages,
-            ];
-        }
-
         return Inertia::render('Inbox/Index', [
             'inbox' => [
-                'id' => $inbox->id,
+                'id'            => $inbox->id,
                 'email_address' => $inbox->email_address,
-                'display_name' => $inbox->display_name,
-                'unread_count' => $inbox->unreadCount(),
+                'display_name'  => $inbox->display_name,
+                'unread_count'  => $inbox->unreadCount(),
             ],
             'threads' => $threads,
-            'open_thread' => $openThread,
-            'folder' => $folder,
+            'folder'  => $folder,
         ]);
+    }
+
+    public function markRead(string $threadId): \Illuminate\Http\JsonResponse
+    {
+        $inbox = EmailInbox::where('user_id', Auth::id())->firstOrFail();
+
+        EmailMessage::where('inbox_id', $inbox->id)
+            ->where('thread_id', $threadId)
+            ->where('direction', 'inbound')
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['ok' => true]);
     }
 
     public function send(Request $request)

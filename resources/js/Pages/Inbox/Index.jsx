@@ -56,14 +56,14 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-end justify-end p-4 pointer-events-none">
-            <div className="pointer-events-auto w-full max-w-2xl bg-white rounded-t-2xl shadow-2xl border border-gray-200 flex flex-col"
-                style={{ maxHeight: '80vh' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-full max-w-3xl mx-4 bg-white rounded-xl shadow-2xl border border-gray-200 flex flex-col"
+                style={{ height: '75vh' }}>
                 {/* Header */}
-                <div className="flex items-center justify-between px-4 py-3 bg-gray-800 rounded-t-2xl text-white">
-                    <span className="font-medium text-sm">{replyTo ? 'Reply' : 'New Message'}</span>
+                <div className="flex items-center justify-between px-5 py-4 bg-gray-800 rounded-t-xl text-white shrink-0">
+                    <span className="font-semibold">{replyTo ? 'Reply' : 'New Message'}</span>
                     <button onClick={onClose} className="text-gray-300 hover:text-white">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>
@@ -71,10 +71,10 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
 
                 <form onSubmit={submit} className="flex flex-col flex-1 overflow-hidden">
                     {/* Fields */}
-                    <div className="border-b border-gray-200">
+                    <div className="border-b border-gray-200 shrink-0">
                         {['to', 'cc', 'bcc'].map((field) => (
                             <div key={field} className="flex items-center border-b border-gray-100 last:border-0">
-                                <span className="w-12 text-xs font-medium text-gray-500 uppercase px-4 py-2 shrink-0">
+                                <span className="w-16 text-xs font-semibold text-gray-400 uppercase px-5 py-2.5 shrink-0">
                                     {field}
                                 </span>
                                 <input
@@ -82,20 +82,20 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                                     value={data[field]}
                                     onChange={(e) => setData(field, e.target.value)}
                                     placeholder={field === 'to' ? 'Recipients' : ''}
-                                    className="flex-1 py-2 px-2 text-sm outline-none border-0 focus:ring-0"
+                                    className="flex-1 py-2.5 px-2 text-sm outline-none border-0 focus:ring-0"
                                     required={field === 'to'}
                                 />
                             </div>
                         ))}
-                        <div className="flex items-center border-b border-gray-100">
-                            <span className="w-16 text-xs font-medium text-gray-500 uppercase px-4 py-2 shrink-0">
+                        <div className="flex items-center">
+                            <span className="w-16 text-xs font-semibold text-gray-400 uppercase px-5 py-2.5 shrink-0">
                                 Subject
                             </span>
                             <input
                                 type="text"
                                 value={data.subject}
                                 onChange={(e) => setData('subject', e.target.value)}
-                                className="flex-1 py-2 px-2 text-sm outline-none border-0 focus:ring-0"
+                                className="flex-1 py-2.5 px-2 text-sm outline-none border-0 focus:ring-0"
                                 required
                             />
                         </div>
@@ -103,7 +103,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
 
                     {/* Body */}
                     <textarea
-                        className="flex-1 p-4 text-sm resize-none outline-none border-0 focus:ring-0 font-sans"
+                        className="flex-1 p-5 text-sm resize-none outline-none border-0 focus:ring-0 font-sans"
                         placeholder="Compose your message..."
                         value={data.html}
                         onChange={(e) => setData('html', e.target.value)}
@@ -111,7 +111,7 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
 
                     {/* Attachments list */}
                     {files.length > 0 && (
-                        <div className="px-4 pb-2 flex flex-wrap gap-2">
+                        <div className="px-5 pb-2 flex flex-wrap gap-2 shrink-0">
                             {files.map((f, i) => (
                                 <span key={i} className="inline-flex items-center gap-1 text-xs bg-gray-100 rounded px-2 py-1">
                                     {f.name}
@@ -123,11 +123,11 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center gap-3 px-4 py-3 border-t border-gray-200">
+                    <div className="flex items-center gap-3 px-5 py-4 border-t border-gray-200 shrink-0">
                         <button
                             type="submit"
                             disabled={processing}
-                            className="px-5 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-700 disabled:opacity-50"
+                            className="px-6 py-2 bg-blue-600 text-white text-sm font-medium rounded-full hover:bg-blue-700 disabled:opacity-50"
                         >
                             {processing ? 'Sending…' : 'Send'}
                         </button>
@@ -141,6 +141,13 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                                     d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
                             </svg>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="ml-auto text-sm text-gray-400 hover:text-gray-600"
+                        >
+                            Discard
                         </button>
                         <input
                             ref={fileRef}
@@ -227,7 +234,7 @@ function ThreadPane({ thread, inbox, onReply, onClose }) {
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [thread?.messages?.length]);
+    }, [thread?.thread_id, thread?.messages?.length]);
 
     if (!thread) {
         return (
@@ -242,8 +249,6 @@ function ThreadPane({ thread, inbox, onReply, onClose }) {
             </div>
         );
     }
-
-    const lastMessage = thread.messages[thread.messages.length - 1];
 
     return (
         <div className="flex-1 flex flex-col overflow-hidden">
@@ -314,28 +319,31 @@ function ThreadItem({ thread, isActive, onClick }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-export default function InboxIndex({ inbox, threads, open_thread, folder }) {
+export default function InboxIndex({ inbox, threads, folder }) {
     const [compose, setCompose] = useState(false);
     const [replyTo, setReplyTo] = useState(null);
+    const [selectedThreadId, setSelectedThreadId] = useState(null);
+
+    const selectedThread = threads.find((t) => t.thread_id === selectedThreadId) ?? null;
 
     const openThread = (threadId) => {
-        router.get(route('inbox.index'), { folder, thread: threadId }, { preserveState: true });
+        setSelectedThreadId(threadId);
+        // Fire-and-forget mark-as-read
+        router.post(route('inbox.threads.read', threadId), {}, { preserveState: true, preserveScroll: true });
     };
 
-    const closeThread = () => {
-        router.get(route('inbox.index'), { folder }, { preserveState: true });
-    };
+    const closeThread = () => setSelectedThreadId(null);
 
     const switchFolder = (f) => {
-        router.get(route('inbox.index'), { folder: f }, { preserveState: true });
+        setSelectedThreadId(null);
+        router.get(route('inbox.index'), { folder: f }, { preserveState: false });
     };
 
     const handleReply = () => {
-        if (!open_thread) return;
-        const lastInbound = [...open_thread.messages].reverse().find((m) => m.direction === 'inbound');
-        setReplyTo(lastInbound ?? open_thread.messages[open_thread.messages.length - 1]);
+        if (!selectedThread) return;
+        const lastInbound = [...selectedThread.messages].reverse().find((m) => m.direction === 'inbound');
+        setReplyTo(lastInbound ?? selectedThread.messages.at(-1));
         setCompose(false);
-        setReplyTo(lastInbound ?? open_thread.messages.at(-1));
     };
 
     const folders = [
@@ -426,7 +434,7 @@ export default function InboxIndex({ inbox, threads, open_thread, folder }) {
                 </div>
 
                 {/* ── Thread list ── */}
-                <div className={`w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${open_thread ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'}`}>
+                <div className={`w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${selectedThread ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'}`}>
                     <div className="px-4 py-3 border-b border-gray-100">
                         <h1 className="font-semibold text-gray-800 capitalize">{folder === 'all' ? 'All Mail' : folder}</h1>
                         <p className="text-xs text-gray-400">{threads.length} conversation{threads.length !== 1 ? 's' : ''}</p>
@@ -447,7 +455,7 @@ export default function InboxIndex({ inbox, threads, open_thread, folder }) {
                             <ThreadItem
                                 key={t.thread_id}
                                 thread={t}
-                                isActive={open_thread?.thread_id === t.thread_id}
+                                isActive={selectedThreadId === t.thread_id}
                                 onClick={() => openThread(t.thread_id)}
                             />
                         ))
@@ -456,7 +464,7 @@ export default function InboxIndex({ inbox, threads, open_thread, folder }) {
 
                 {/* ── Thread / message pane ── */}
                 <ThreadPane
-                    thread={open_thread}
+                    thread={selectedThread}
                     inbox={inbox}
                     onReply={handleReply}
                     onClose={closeThread}
