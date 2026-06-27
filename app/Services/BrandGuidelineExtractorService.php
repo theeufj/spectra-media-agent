@@ -225,10 +225,10 @@ class BrandGuidelineExtractorService
             try {
                 $screenshot = Browsershot::url($websiteUrl)
                     ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(config('browsershot.chrome_args', []))
-                    ->waitUntilNetworkIdle()
-                    ->windowSize(1920, 1080)
-                    ->timeout(60)
+                    ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
+                    ->waitUntilDOMContentLoaded()
+                    ->windowSize(1440, 900)
+                    ->timeout(30)
                     ->base64Screenshot();
 
                 Log::info("Screenshot captured, sending to Gemini Vision AI");
@@ -266,9 +266,9 @@ class BrandGuidelineExtractorService
             try {
                 $html = Browsershot::url($websiteUrl)
                     ->setNodeBinary(config('browsershot.node_binary_path'))
-                    ->addChromiumArguments(config('browsershot.chrome_args', []))
-                    ->waitUntilNetworkIdle()
-                    ->timeout(30)
+                    ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
+                    ->waitUntilDOMContentLoaded()
+                    ->timeout(20)
                     ->bodyHtml();
             } catch (\Exception $e) {
                 Log::warning("Browsershot HTML fetch failed, falling back to HTTP", [
