@@ -51,6 +51,8 @@ function ComposeModal({ inbox, onClose, replyTo = null }) {
         files.forEach((f) => fd.append('attachments[]', f));
         router.post(route('inbox.send'), fd, {
             forceFormData: true,
+            preserveState: true,
+            preserveScroll: true,
             onSuccess: () => { reset(); onClose(); },
         });
     };
