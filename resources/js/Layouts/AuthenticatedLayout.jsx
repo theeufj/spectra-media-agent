@@ -318,6 +318,13 @@ export default function AuthenticatedLayout({ header, children }) {
                                     <Dropdown.Link href={route('integrations.index')}>Integrations</Dropdown.Link>
                                     <Dropdown.Link href={route('support-tickets.index')}>Support</Dropdown.Link>
 
+                                    {user.has_inbox && (
+                                        <>
+                                            <div className="border-b border-gray-100 my-1" />
+                                            <Dropdown.Link href={route('inbox.index')}>Inbox</Dropdown.Link>
+                                        </>
+                                    )}
+
                                     {user.isAdmin && (
                                         <>
                                             <div className="border-b border-gray-100 my-1" />
