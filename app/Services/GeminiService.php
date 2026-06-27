@@ -6,6 +6,7 @@ use App\Models\AiCost;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\RateLimiter;
 use Google\Auth\CredentialsLoader;
 
 /**
@@ -519,6 +520,19 @@ class GeminiService
      */
     public function embedContent(string $model, string $text, array $context = []): ?array
     {
+        // Throttle all embedding calls to 45 RPM across all workers (buffer below the 50 RPM global quota).
+        // Spin-wait in 300 ms increments until a slot is available. Shared via cache (Redis in production).
+        $throttleKey = 'gemini_embedding_rpm';
+        $waited = 0;
+        while (!RateLimiter::attempt($throttleKey, 45, fn () => null, 60)) {
+            if ($waited >= 30_000) {
+                Log::error("GeminiService: Embedding throttle wait exceeded 30s — aborting");
+                return null;
+            }
+            usleep(300_000);
+            $waited += 300;
+        }
+
         $startTime = hrtime(true);
 
         // gemini-embedding-2-preview: use the global endpoint (:embedContent on vertexBaseUrl).
