@@ -62,21 +62,13 @@ class GeminiService
 
     // ─── Auth ────────────────────────────────────────────────────────────────
 
-    // Gemini API key — used for text, image, and embedding calls (no OAuth, never expires).
-    private function geminiApiKey(): string
-    {
-        return config('services.google.gemini_api_key');
-    }
-
-    private function geminiUrl(string $model, string $action): string
-    {
-        return "{$this->geminiBaseUrl}{$model}:{$action}?key=" . $this->geminiApiKey();
-    }
-
-    // OAuth — kept only for Vertex AI-exclusive calls (Veo video generation).
     private function getAccessToken(): string
     {
+        // Tokens expire after 60 min; cache for 50 to ensure we never send a stale one.
         return Cache::remember('gcp_vertex_access_token', 3000, function () {
+            // Laravel 12 does not call putenv() for .env values, so google/auth's
+            // getenv('GOOGLE_APPLICATION_CREDENTIALS') check always returns false.
+            // Load the credentials file explicitly via the Laravel config instead.
             $credentialsPath = config('services.google.credentials_path');
             $keyData         = json_decode(file_get_contents($credentialsPath), true);
             $credentials     = CredentialsLoader::makeCredentials(
@@ -214,9 +206,9 @@ class GeminiService
                     $payload['tools'] = [['googleSearch' => (object)[]]];
                 }
 
-                $response = Http::withHeaders(['Content-Type' => 'application/json'])
+                $response = Http::withHeaders($this->authHeaders())
                     ->timeout(300)
-                    ->post($this->geminiUrl($model, 'streamGenerateContent'), $payload);
+                    ->post("{$this->vertexBaseUrl}{$model}:streamGenerateContent", $payload);
 
                 if ($response->successful()) {
                     $responseData = $response->json();
@@ -253,6 +245,10 @@ class GeminiService
                 }
 
                 $statusCode = $response->status();
+
+                if ($statusCode === 401) {
+                    $this->flushTokenCache();
+                }
 
                 if ($this->isRetryableError($statusCode)) {
                     $attempt++;
@@ -360,10 +356,10 @@ class GeminiService
         $startTime = hrtime(true);
 
         try {
-            $response = Http::withHeaders(['Content-Type' => 'application/json'])
+            $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
-                ->post($this->geminiUrl($model, 'embedContent'), [
-                    'content' => ['parts' => [['text' => $text]]],
+                ->post("{$this->vertexBaseUrl}{$model}:predict", [
+                    'instances' => [['content' => $text]],
                 ]);
 
             if ($response->failed()) {
@@ -372,11 +368,12 @@ class GeminiService
             }
 
             $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
+            // Approximate token count for embeddings (no usageMetadata returned)
             $approxTokens = (int) (strlen($text) / 4);
             $this->recordCost($model, 'embedContent', ['promptTokenCount' => $approxTokens], $durationMs, $context);
 
-            // Gemini API embedding response: embedding.values
-            return $response->json()['embedding']['values'] ?? null;
+            // Vertex AI embedding response: predictions[0].embeddings.values
+            return $response->json()['predictions'][0]['embeddings']['values'] ?? null;
         } catch (\Exception $e) {
             Log::error("GeminiService: Exception during embedding generation from model {$model}: " . $e->getMessage(), [
                 'exception' => $e,
@@ -439,9 +436,9 @@ class GeminiService
         $startTime = hrtime(true);
 
         try {
-            $response = Http::withHeaders(['Content-Type' => 'application/json'])
+            $response = Http::withHeaders($this->authHeaders())
                 ->timeout(600)
-                ->post($this->geminiUrl($model, 'streamGenerateContent'), $payload);
+                ->post("{$this->vertexBaseUrl}{$model}:streamGenerateContent", $payload);
 
             if ($response->failed()) {
                 $errorBody    = $response->json();
