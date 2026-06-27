@@ -328,8 +328,13 @@ export default function InboxIndex({ inbox, threads, folder }) {
 
     const openThread = (threadId) => {
         setSelectedThreadId(threadId);
-        // Fire-and-forget mark-as-read
-        router.post(route('inbox.threads.read', threadId), {}, { preserveState: true, preserveScroll: true });
+        // Fire-and-forget mark-as-read (plain fetch, not Inertia)
+        fetch(route('inbox.threads.read', threadId), {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+        });
     };
 
     const closeThread = () => setSelectedThreadId(null);
