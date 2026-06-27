@@ -135,9 +135,9 @@ class CrawlPage implements ShouldQueue
             // This executes the JavaScript on the page, just like a real browser.
             $html = Browsershot::url($this->url)
                 ->setNodeBinary(config('browsershot.node_binary_path'))
-                ->addChromiumArguments(config('browsershot.chrome_args', []))
-                ->timeout(60)
-                ->waitUntilNetworkIdle()
+                ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
+                ->timeout(30)
+                ->waitUntilDOMContentLoaded()
                 ->bodyHtml();
 
             // Step 2: Extract meaningful text from the HTML.

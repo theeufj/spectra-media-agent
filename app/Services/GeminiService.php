@@ -336,6 +336,159 @@ class GeminiService
     }
 
     /**
+     * Agentic function-calling loop using Vertex AI generateContent (non-streaming).
+     *
+     * The model receives a set of tool declarations and may call them zero or more times
+     * before returning a final text response. The caller provides a $toolHandler callback
+     * that executes the tool and returns a string result.
+     *
+     * @param string   $model
+     * @param string   $systemInstruction
+     * @param string   $prompt
+     * @param array    $tools        Array of functionDeclaration objects
+     * @param callable $toolHandler  fn(string $name, array $args): string
+     * @param array    $config       generationConfig overrides
+     * @param array    $context      Cost-tracking context (campaign_id, customer_id, …)
+     * @param int      $maxToolCalls Safety cap on tool call iterations
+     */
+    public function generateWithFunctionCalling(
+        string $model,
+        string $systemInstruction,
+        string $prompt,
+        array $tools,
+        callable $toolHandler,
+        array $config = [],
+        array $context = [],
+        int $maxToolCalls = 15
+    ): ?array {
+        $startTime = hrtime(true);
+
+        $generationConfig = array_merge([
+            'temperature'     => 1,
+            'topP'            => 0.95,
+            'topK'            => 40,
+            'maxOutputTokens' => 65535,
+        ], $config);
+
+        $contents = [
+            ['role' => 'user', 'parts' => [['text' => $prompt]]],
+        ];
+
+        $payload = [
+            'contents'         => $contents,
+            'tools'            => [['functionDeclarations' => $tools]],
+            'toolConfig'       => ['functionCallingConfig' => ['mode' => 'AUTO']],
+            'generationConfig' => $generationConfig,
+        ];
+
+        if ($systemInstruction) {
+            $payload['systemInstruction'] = ['parts' => [['text' => $systemInstruction]]];
+        }
+
+        $totalUsage   = [];
+        $toolCallCount = 0;
+
+        // Resolve fallback chain once so we can switch mid-loop on 429
+        $fallback = (config('ai.fallback_chain') ?? [])[$model] ?? null;
+
+        while (true) {
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(300)
+                ->post("{$this->vertexBaseUrl}{$model}:generateContent", $payload);
+
+            if ($response->failed()) {
+                $statusCode = $response->status();
+
+                if ($statusCode === 401) {
+                    $this->flushTokenCache();
+                }
+
+                if ($statusCode === 429 && $fallback) {
+                    Log::warning("GeminiService: 429 on {$model} in function-calling loop; switching to {$fallback}");
+                    $model    = $fallback;
+                    $fallback = null; // only fall back once
+                    continue;
+                }
+
+                Log::error("GeminiService: generateWithFunctionCalling failed ({$statusCode}): " . $response->body(), [
+                    'model' => $model,
+                ]);
+                return null;
+            }
+
+            $data  = $response->json();
+            $parts = $data['candidates'][0]['content']['parts'] ?? [];
+
+            // Accumulate usage across all turns
+            foreach (($data['usageMetadata'] ?? []) as $k => $v) {
+                $totalUsage[$k] = ($totalUsage[$k] ?? 0) + $v;
+            }
+
+            // Separate function calls from text parts
+            $functionCalls = [];
+            $textContent   = null;
+
+            foreach ($parts as $part) {
+                if (isset($part['functionCall'])) {
+                    $functionCalls[] = $part['functionCall'];
+                } elseif (isset($part['text'])) {
+                    $textContent = ($textContent ?? '') . $part['text'];
+                }
+            }
+
+            if (!empty($functionCalls)) {
+                $toolCallCount += count($functionCalls);
+
+                if ($toolCallCount > $maxToolCalls) {
+                    Log::warning("GeminiService: Exceeded max tool calls ({$maxToolCalls}); aborting function-calling loop", [
+                        'model' => $model,
+                    ]);
+                    return null;
+                }
+
+                // Append the model's turn (all function call parts)
+                $contents[] = [
+                    'role'  => 'model',
+                    'parts' => array_map(fn ($fc) => ['functionCall' => $fc], $functionCalls),
+                ];
+
+                // Execute each tool and collect responses
+                $responseParts = [];
+                foreach ($functionCalls as $fc) {
+                    $fnName   = $fc['name'];
+                    $fnArgs   = $fc['args'] ?? [];
+                    Log::info("GeminiService: Tool call #{$toolCallCount}: {$fnName}", ['args' => $fnArgs]);
+                    $result   = $toolHandler($fnName, $fnArgs);
+                    $responseParts[] = [
+                        'functionResponse' => [
+                            'name'     => $fnName,
+                            'response' => ['content' => $result],
+                        ],
+                    ];
+                }
+
+                $contents[] = ['role' => 'user', 'parts' => $responseParts];
+                $payload['contents'] = $contents;
+                continue;
+            }
+
+            // Model returned a final text response
+            if ($textContent) {
+                $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
+                $this->recordCost($model, 'generateContent', $totalUsage, $durationMs, $context);
+                Log::info("GeminiService: Function-calling loop done. Tool calls: {$toolCallCount}, model: {$model}");
+                return ['text' => $textContent];
+            }
+
+            Log::error("GeminiService: No text or function call in generateContent response", [
+                'model'    => $model,
+                'response' => $data,
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Generate content with system instruction, thinking, and Google Search.
      */
     public function generateWithThinkingAndSearch(

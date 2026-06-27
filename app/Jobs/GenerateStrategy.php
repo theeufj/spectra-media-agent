@@ -8,8 +8,10 @@ use App\Models\Campaign;
 use App\Models\EnabledPlatform;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
+use App\Models\CustomerPage;
 use App\Models\KnowledgeBase;
 use App\Models\LandingPageAudit;
+use App\Services\KnowledgeBaseSearchService;
 use App\Models\Recommendation;
 use App\Notifications\StrategyGenerationFailed;
 use App\Prompts\StrategyPrompt;
@@ -57,35 +59,20 @@ class GenerateStrategy implements ShouldQueue
         ]);
         
         try {
-            // Step 1: Gather all the user's knowledge base content.
-            // Since campaigns belong to customers and knowledge bases belong to users,
-            // we need to get all knowledge bases from all users associated with this customer
-            Log::info("Fetching knowledge base content for customer {$this->campaign->customer_id}");
-            
-            $customerUserIds = $this->campaign->customer->users()->pluck('users.id');
-            Log::info("Found " . $customerUserIds->count() . " users for customer {$this->campaign->customer_id}");
-            
-            $knowledgeBaseContent = KnowledgeBase::whereIn('user_id', $customerUserIds)
-                ->pluck('content')
-                ->implode("\n\n---\n\n");
-            
-            $kbLength = strlen($knowledgeBaseContent);
-            Log::info("Knowledge base content length: {$kbLength} characters");
+            // Step 1: Resolve customer user IDs for knowledge base search
+            Log::info("Resolving user IDs for customer {$this->campaign->customer_id}");
+            $customerUserIds = $this->campaign->customer->users()->pluck('users.id')->toArray();
+            Log::info("Found " . count($customerUserIds) . " users for customer {$this->campaign->customer_id}");
 
-            // Truncate KB to stay comfortably within Vertex AI TPM quota for pro models.
-            // 300K chars ≈ 75K tokens — large enough for rich context, small enough to avoid 429s.
-            if ($kbLength > 300000) {
-                Log::warning("Knowledge base content is very large ({$kbLength} chars) for campaign {$this->campaign->id} — truncating to 300k chars to stay within API limits");
-                $knowledgeBaseContent = substr($knowledgeBaseContent, 0, 300000);
-            } elseif ($kbLength > 150000) {
-                Log::warning("Knowledge base content is large ({$kbLength} chars) for campaign {$this->campaign->id}");
-            }
-
-            if (empty($knowledgeBaseContent)) {
-                Log::warning("No knowledge base content found for customer {$this->campaign->customer_id} to generate strategy for campaign {$this->campaign->id}.");
+            // Verify that knowledge base / customer pages exist so we can give a useful error early
+            $hasKb = KnowledgeBase::whereIn('user_id', $customerUserIds)->exists();
+            $hasPages = CustomerPage::where('customer_id', $this->campaign->customer_id)->exists();
+            if (!$hasKb && !$hasPages) {
+                Log::warning("No knowledge base or customer pages found for customer {$this->campaign->customer_id}");
                 $this->failWithError('No knowledge base content found. Please add content to your knowledge base before generating strategies.');
                 return;
             }
+            Log::info("Knowledge base exists: " . ($hasKb ? 'yes' : 'no') . ", customer pages: " . ($hasPages ? 'yes' : 'no'));
 
             // Step 1.25: Fetch brand guidelines if available
             Log::info("Checking for brand guidelines for customer ID: {$this->campaign->customer_id}");
@@ -182,11 +169,11 @@ class GenerateStrategy implements ShouldQueue
                 ->take(3)
                 ->get();
 
-            // Step 2: Construct the prompt using our dedicated prompt builder class.
-            Log::info("Building strategy prompt for campaign {$this->campaign->id}");
+            // Step 2: Build a slim prompt — no KB dump; the model will search what it needs.
+            Log::info("Building agentic strategy prompt for campaign {$this->campaign->id}");
             $prompt = StrategyPrompt::build(
                 $this->campaign,
-                $knowledgeBaseContent,
+                null, // KB content is null — model uses search_knowledge_base tool instead
                 $recommendations->toArray(),
                 $brandGuidelines,
                 $enabledPlatforms,
@@ -195,28 +182,60 @@ class GenerateStrategy implements ShouldQueue
                 $abTestWinners,
                 $performanceGap
             );
-            Log::info("Generated prompt length: " . strlen($prompt) . " characters");
+            Log::info("Prompt length (no KB dump): " . strlen($prompt) . " characters");
 
-            // Step 3: Call Gemini API with Gemini 3 Pro Preview with extended thinking and Google Search.
-            Log::info("Preparing API call to Gemini 3 Pro Preview for campaign {$this->campaign->id}");
-            
-            $gemini = app(GeminiService::class);
-            $systemInstruction = StrategyPrompt::getSystemInstruction();
-            
-            Log::info("Making API request to Gemini with thinking and search enabled for campaign {$this->campaign->id}");
-            $result = $gemini->generateWithThinkingAndSearch(
-                config('ai.models.pro'),
-                $systemInstruction,
-                $prompt,
+            // Step 3: Agentic KB traversal — model calls search_knowledge_base iteratively.
+            Log::info("Starting agentic function-calling strategy generation for campaign {$this->campaign->id}");
+
+            $gemini          = app(GeminiService::class);
+            $searchService   = app(KnowledgeBaseSearchService::class);
+            $campaignCustomerId = $this->campaign->customer_id;
+            $userIds         = $customerUserIds;
+
+            $toolDeclarations = [
                 [
-                    'temperature' => 1,
-                    'topP' => 0.95,
-                    'topK' => 40,
-                    'maxOutputTokens' => 65535
+                    'name'        => 'search_knowledge_base',
+                    'description' => 'Search the client\'s website content and knowledge base for specific business information. Use this to find pricing, products, services, service areas, target audience, testimonials, brand voice, or any other details needed to craft compelling, specific ad copy.',
+                    'parameters'  => [
+                        'type'       => 'object',
+                        'properties' => [
+                            'query' => [
+                                'type'        => 'string',
+                                'description' => 'What to search for (e.g. "pricing packages", "service areas", "target audience", "testimonials", "products")',
+                            ],
+                        ],
+                        'required' => ['query'],
+                    ],
+                ],
+            ];
+
+            $result = $gemini->generateWithFunctionCalling(
+                config('ai.models.pro'),
+                StrategyPrompt::getSystemInstruction(),
+                $prompt,
+                $toolDeclarations,
+                function (string $name, array $args) use ($searchService, $campaignCustomerId, $userIds) {
+                    if ($name === 'search_knowledge_base') {
+                        $query = trim($args['query'] ?? '');
+                        Log::info("GenerateStrategy: KB search: \"{$query}\" for customer {$campaignCustomerId}");
+                        return $searchService->search($campaignCustomerId, $userIds, $query);
+                    }
+                    return "Unknown tool: {$name}";
+                },
+                [
+                    'temperature'     => 1,
+                    'topP'            => 0.95,
+                    'topK'            => 40,
+                    'maxOutputTokens' => 65535,
+                ],
+                [
+                    'campaign_id' => $this->campaign->id,
+                    'customer_id' => $this->campaign->customer_id,
+                    'task_type'   => 'strategy',
                 ]
             );
             
-            Log::info("Received API response from Vertex AI for campaign {$this->campaign->id}");
+            Log::info("Agentic generation completed for campaign {$this->campaign->id}");
             
             if (!$result) {
                 Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No response from Vertex AI");

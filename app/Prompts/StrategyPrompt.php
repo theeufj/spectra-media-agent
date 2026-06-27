@@ -40,13 +40,14 @@ class StrategyPrompt
      * @param array $enabledPlatforms Array of enabled platform names.
      * @return string The fully constructed prompt.
      */
-    public static function build(Campaign $campaign, string $knowledgeBaseContent, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = [], $competitors = null, $croAudit = null, $abTestWinners = null, ?string $performanceGap = null): string
+    public static function build(Campaign $campaign, ?string $knowledgeBaseContent = null, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = [], $competitors = null, $croAudit = null, $abTestWinners = null, ?string $performanceGap = null): string
     {
         $brandContext = self::formatBrandContext($brandGuidelines);
         $competitorContext = self::formatCompetitorContext($competitors);
         $verticalContext = self::formatVerticalContext($campaign);
         $croContext = self::formatCroContext($croAudit);
         $abTestContext = self::formatAbTestContext($abTestWinners);
+        $kbSection = self::formatKnowledgeBaseSection($knowledgeBaseContent);
 
         // Build revenue context from customer's actual AOV so the AI doesn't have to guess
         $aov = $campaign->customer->average_order_value ?? null;
@@ -247,10 +248,7 @@ CRITICAL — BUYER INTENT ONLY: Keywords must represent what a potential custome
 ---
 
 **1. KNOWLEDGE BASE (The Brand & Products):**
-This is the context about the business, its brand voice, and its products, extracted from their website.
----
-{$knowledgeBaseContent}
----
+{$kbSection}
 {$competitorContext}
 
 **2. CAMPAIGN BRIEF (The Goal):**
@@ -494,6 +492,36 @@ Your ad copy and targeting should set accurate expectations that help visitors o
 ---
 
 CRO;
+    }
+
+    /**
+     * Build the knowledge-base section of the prompt.
+     *
+     * When $content is null (agentic mode), return instructions that tell the model to
+     * use the search_knowledge_base tool instead of reading a static dump.
+     * When $content is provided (legacy mode), return the raw dump wrapped in delimiters.
+     */
+    private static function formatKnowledgeBaseSection(?string $content): string
+    {
+        if ($content !== null) {
+            return "This is the context about the business extracted from their website.\n---\n{$content}\n---";
+        }
+
+        return <<<KB
+You have access to a `search_knowledge_base` tool that lets you look up specific information about the client's business from their website and knowledge base.
+
+**Before generating the strategy JSON, use the tool to research:**
+- Core products / services and any pricing or packages
+- Service areas and geographic coverage
+- Target audience, ideal customer profile, and demographics
+- Unique value propositions and competitive advantages
+- Brand voice, tone, and messaging themes
+- Customer testimonials, reviews, or social proof
+- Specific landing pages or product pages relevant to this campaign
+- Any other details you need to write specific, high-converting ad copy
+
+Call the tool as many times as you need with different queries, then produce the final strategy JSON.
+KB;
     }
 
     private static function formatAbTestContext($abTestWinners): string
