@@ -45,8 +45,10 @@ class GeminiService
     private string $location;
     // Global endpoint — required for Gemini 3.x / 2.5 text and image models on Vertex AI
     private string $vertexBaseUrl;
-    // Regional endpoint — Veo video models require a specific region (not global)
+    // Regional endpoint — Veo video models + gemini-embedding-2 require a specific region (not global)
     private string $videoBaseUrl;
+    // Regional embedding endpoint — uses subdomain routing required by gemini-embedding-2-preview
+    private string $embeddingBaseUrl;
     // Gemini Files API — used for video upload/extend (no Vertex AI equivalent yet)
     private string $geminiBaseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
     private int $maxRetries = 3;
@@ -57,8 +59,9 @@ class GeminiService
         $this->project  = config('services.google.project_id');
         $this->location = config('services.google.location', 'us-central1');
 
-        $this->vertexBaseUrl = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/global/publishers/google/models/";
-        $this->videoBaseUrl  = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
+        $this->vertexBaseUrl    = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/global/publishers/google/models/";
+        $this->videoBaseUrl     = "https://aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
+        $this->embeddingBaseUrl = "https://{$this->location}-aiplatform.googleapis.com/v1/projects/{$this->project}/locations/{$this->location}/publishers/google/models/";
     }
 
     // ─── Auth ────────────────────────────────────────────────────────────────
@@ -362,7 +365,7 @@ class GeminiService
 
         try {
             if ($isGeminiEmbedding2) {
-                $url      = "{$this->videoBaseUrl}{$model}:embedContent";
+                $url      = "{$this->embeddingBaseUrl}{$model}:embedContent";
                 $payload  = ['content' => ['parts' => [['text' => $text]]]];
             } else {
                 $url     = "{$this->vertexBaseUrl}{$model}:predict";
