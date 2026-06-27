@@ -35,7 +35,7 @@ return [
          * gemini-embedding-2-preview is not available on Vertex AI global endpoint;
          * gemini-embedding-001 returns 3072-dim vectors and works reliably.
          */
-        'embedding' => env('AI_MODEL_EMBEDDING', 'gemini-embedding-001'),
+        'embedding' => env('AI_MODEL_EMBEDDING', 'gemini-embedding-2-preview'),
 
         /*
          * Image generation model.

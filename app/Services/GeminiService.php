@@ -356,12 +356,22 @@ class GeminiService
     {
         $startTime = hrtime(true);
 
+        // gemini-embedding-2-preview uses embedContent on the regional endpoint.
+        // Older models (gemini-embedding-001, text-embedding-*) use predict on the global endpoint.
+        $isGeminiEmbedding2 = str_starts_with($model, 'gemini-embedding-2');
+
         try {
+            if ($isGeminiEmbedding2) {
+                $url      = "{$this->videoBaseUrl}{$model}:embedContent";
+                $payload  = ['content' => ['parts' => [['text' => $text]]]];
+            } else {
+                $url     = "{$this->vertexBaseUrl}{$model}:predict";
+                $payload = ['instances' => [['content' => $text]]];
+            }
+
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
-                ->post("{$this->vertexBaseUrl}{$model}:predict", [
-                    'instances' => [['content' => $text]],
-                ]);
+                ->post($url, $payload);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to get embedding from model {$model}: " . $response->body());
@@ -369,11 +379,15 @@ class GeminiService
             }
 
             $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
-            // Approximate token count for embeddings (no usageMetadata returned)
             $approxTokens = (int) (strlen($text) / 4);
             $this->recordCost($model, 'embedContent', ['promptTokenCount' => $approxTokens], $durationMs, $context);
 
-            // Vertex AI embedding response: predictions[0].embeddings.values
+            if ($isGeminiEmbedding2) {
+                // embedContent response: embedding.values
+                return $response->json()['embedding']['values'] ?? null;
+            }
+
+            // predict response: predictions[0].embeddings.values
             return $response->json()['predictions'][0]['embeddings']['values'] ?? null;
         } catch (\Exception $e) {
             Log::error("GeminiService: Exception during embedding generation from model {$model}: " . $e->getMessage(), [
