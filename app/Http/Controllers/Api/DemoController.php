@@ -31,17 +31,16 @@ class DemoController extends Controller
 
         Log::info("DemoController: Starting full extraction demo for {$url}");
 
-        // Notify the team every time someone hits Try Now
-        $ip      = $request->ip();
-        $userAgent = $request->userAgent() ?? 'unknown';
-        $notifyList = ['theeufj@gmail.com', 'mattware75@gmail.com', 'james.ward@beyondd.com.au'];
+        // Notify the team every time someone hits Try Now — one email to all recipients
         try {
-            foreach ($notifyList as $recipient) {
-                Mail::raw(
-                    "Someone just used Try Now on the landing page.\n\nURL entered: {$url}\nIP: {$ip}\nUser-Agent: {$userAgent}\nTime: " . now()->toDateTimeString() . " UTC",
-                    fn ($m) => $m->to($recipient)->subject("Try Now: {$url}")
-                );
-            }
+            $ip        = $request->ip();
+            $userAgent = $request->userAgent() ?? 'unknown';
+            $body      = "Someone just used Try Now on the landing page.\n\nURL entered: {$url}\nIP: {$ip}\nUser-Agent: {$userAgent}\nTime: " . now()->toDateTimeString() . " UTC";
+            Mail::raw($body, fn ($m) => $m
+                ->to('theeufj@gmail.com')
+                ->cc(['mattware75@gmail.com', 'james.ward@beyondd.com.au'])
+                ->subject("Try Now: {$url}")
+            );
         } catch (\Exception $e) {
             Log::warning("DemoController: Failed to send Try Now notification: " . $e->getMessage());
         }
