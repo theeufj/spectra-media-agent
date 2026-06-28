@@ -103,7 +103,9 @@ class MonitorCampaignStatus implements ShouldQueue
 
         $this->notifyIfBecameActive($campaign, $oldStatus, 'ELIGIBLE');
 
-        if ($campaign->primary_status !== 'ELIGIBLE') {
+        // Only alert on unexpected problem states — not intentional pause/end.
+        $silentStatuses = ['PAUSED', 'ENDED', 'REMOVED', 'ELIGIBLE', 'UNKNOWN'];
+        if (!in_array($campaign->primary_status, $silentStatuses, true)) {
             $this->notifyIfStatusChanged($campaign, $oldStatus, $campaign->primary_status);
         }
     }

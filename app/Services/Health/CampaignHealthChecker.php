@@ -35,6 +35,7 @@ class CampaignHealthChecker
 
         $activeCampaigns = Campaign::where('customer_id', $customer->id)
             ->withDeployedPlatforms()
+            ->whereNotIn('status', ['paused', 'draft', 'ended'])
             ->get();
 
         foreach ($activeCampaigns as $campaign) {
@@ -120,7 +121,7 @@ class CampaignHealthChecker
                     };
 
                     // Don't alert on campaigns that are intentionally paused in our DB.
-                    $isIntentionallyPaused = in_array($campaign->status, ['paused', 'draft'], true);
+                    $isIntentionallyPaused = in_array($campaign->status, ['paused', 'draft', 'ended'], true);
 
                     if (!$isIntentionallyPaused && ($campaignStatus !== 'ENABLED' || in_array($primaryStatus, ['REMOVED', 'ENDED', 'MISCONFIGURED'], true))) {
                         $health['issues'][] = [
@@ -159,15 +160,17 @@ class CampaignHealthChecker
                     ->getCampaign($campaign->facebook_ads_campaign_id);
 
                 if ($fbCampaign) {
-                    $effectiveStatus = $fbCampaign['effective_status'] ?? 'UNKNOWN';
-                    if (in_array($effectiveStatus, ['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'DISAPPROVED', 'DELETED', 'ARCHIVED'], true)) {
+                    $effectiveStatus       = $fbCampaign['effective_status'] ?? 'UNKNOWN';
+                    $isIntentionallyPaused = in_array($campaign->status, ['paused', 'draft', 'ended'], true);
+
+                    if (!$isIntentionallyPaused && in_array($effectiveStatus, ['PAUSED', 'CAMPAIGN_PAUSED', 'ADSET_PAUSED', 'DISAPPROVED', 'DELETED', 'ARCHIVED'], true)) {
                         $health['issues'][] = [
                             'type'     => 'facebook_campaign_not_serving',
                             'severity' => 'critical',
                             'message'  => "Facebook campaign is not serving normally ({$effectiveStatus})",
                             'details'  => 'Check campaign, ad set, and policy status in Facebook Ads Manager.',
                         ];
-                    } elseif (in_array($effectiveStatus, ['WITH_ISSUES', 'PENDING_REVIEW', 'PENDING_BILLING_INFO', 'IN_PROCESS', 'UNKNOWN'], true)) {
+                    } elseif (!$isIntentionallyPaused && in_array($effectiveStatus, ['WITH_ISSUES', 'PENDING_REVIEW', 'PENDING_BILLING_INFO', 'IN_PROCESS', 'UNKNOWN'], true)) {
                         $health['warnings'][] = [
                             'type'     => 'facebook_campaign_limited',
                             'severity' => 'high',
