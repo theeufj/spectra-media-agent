@@ -4,6 +4,8 @@ namespace App\Jobs;
 
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Services\Agents\CampaignDiagnosticsAgent;
+use App\Services\Agents\CampaignRemediationAgent;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
@@ -30,6 +32,8 @@ class RunSelfHealingChecks implements ShouldQueue
 
     public function handle(
         SelfHealingAgent $selfHealingAgent,
+        CampaignDiagnosticsAgent $diagnosticsAgent,
+        CampaignRemediationAgent $remediationAgent,
         FacebookLearningPhaseAgent $fbLearningAgent,
         FacebookAdRelevanceDiagnosticsAgent $fbRelevanceAgent,
         LinkedInCampaignOptimizationAgent $linkedInAgent
@@ -54,9 +58,22 @@ class RunSelfHealingChecks implements ShouldQueue
             }
 
             try {
+                // Pass 1: existing healing (disapproved ads, budget, delivery)
                 $results = $selfHealingAgent->heal($campaign);
                 $healed += count($results['actions_taken'] ?? []);
                 $errors += count($results['errors'] ?? []);
+
+                // Pass 2: strategic diagnosis → autonomous remediation
+                $findings = $diagnosticsAgent->diagnose($campaign);
+                if (!empty($findings)) {
+                    Log::info('RunSelfHealingChecks: Diagnostic findings for campaign ' . $campaign->id, [
+                        'count'    => count($findings),
+                        'types'    => array_column($findings, 'type'),
+                    ]);
+                    $remediationResult = $remediationAgent->remediate($campaign, $findings);
+                    $healed += count($remediationResult['actions_taken'] ?? []);
+                    $errors += count($remediationResult['errors'] ?? []);
+                }
 
                 if ($campaign->facebook_ads_campaign_id) {
                     $fbLearningAgent->analyze($campaign);
