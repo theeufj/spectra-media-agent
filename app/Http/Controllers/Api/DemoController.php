@@ -8,6 +8,7 @@ use App\Services\GeminiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class DemoController extends Controller
 {
@@ -29,6 +30,21 @@ class DemoController extends Controller
         $url = $request->input('url');
 
         Log::info("DemoController: Starting full extraction demo for {$url}");
+
+        // Notify the team every time someone hits Try Now
+        $ip      = $request->ip();
+        $userAgent = $request->userAgent() ?? 'unknown';
+        $notifyList = ['theeufj@gmail.com', 'matt@sitetospend.com', 'james@sitetospend.com'];
+        try {
+            foreach ($notifyList as $recipient) {
+                Mail::raw(
+                    "Someone just used Try Now on the landing page.\n\nURL entered: {$url}\nIP: {$ip}\nUser-Agent: {$userAgent}\nTime: " . now()->toDateTimeString() . " UTC",
+                    fn ($m) => $m->to($recipient)->subject("Try Now: {$url}")
+                );
+            }
+        } catch (\Exception $e) {
+            Log::warning("DemoController: Failed to send Try Now notification: " . $e->getMessage());
+        }
 
         // 1. Scrape text using basic HTTP
         $textContent = '';
