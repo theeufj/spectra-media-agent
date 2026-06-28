@@ -7,6 +7,7 @@ use App\Jobs\MonitorCampaignStatus;
 use App\Jobs\OptimizeCampaigns;
 use App\Jobs\AutomatedCampaignMaintenance;
 use App\Jobs\RunSelfHealingChecks;
+use App\Jobs\RunStrategicDiagnosis;
 use App\Jobs\AutoStartABTests;
 use App\Jobs\RunCompetitorIntelligence;
 use App\Jobs\ProcessDailyAdSpendBilling;
@@ -107,6 +108,9 @@ Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(n
 
 // Self-healing checks — scan for disapproved ads and rewrite/resubmit every 4 hours
 Schedule::job(new RunSelfHealingChecks)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunSelfHealingChecks'));
+
+// Strategic diagnosis — daily deep audit for conversion starvation, PMax gaps, traffic quality
+Schedule::job(new RunStrategicDiagnosis)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunStrategicDiagnosis'));
 
 // Performance anomaly detection — intra-day CTR/CPC/CVR/delivery alerts
 Schedule::job(new RunPerformanceAnomalyCheck)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunPerformanceAnomalyCheck'));
