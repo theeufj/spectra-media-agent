@@ -9,6 +9,10 @@ use App\Notifications\CriticalAgentAlert;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\SearchAudience;
+use Google\Ads\GoogleAds\V22\Resources\AssetGroup;
+use Google\Ads\GoogleAds\V22\Services\AssetGroupOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupsRequest;
+use Google\Protobuf\FieldMask;
 use App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateImageAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
@@ -92,6 +96,7 @@ class CampaignRemediationAgent
         match ($finding['auto_fix_action'] ?? '') {
             'refresh_creative'      => $this->refreshCreative($campaign, $finding, $results),
             'add_audience_signals'  => $this->addAudienceSignals($campaign, $finding, $results),
+            'fix_landing_page'      => $this->fixLandingPage($campaign, $finding, $results),
             'provision_conversions' => $this->provisionConversions($finding, $results),
             default                 => $this->alertCustomer($campaign, $finding, $results),
         };
@@ -522,6 +527,253 @@ PROMPT;
         } catch (\Exception) {
             return [];
         }
+    }
+
+    // ─── Landing page fix ────────────────────────────────────────────────────
+
+    private function fixLandingPage(Campaign $campaign, array $finding, array &$results): void
+    {
+        $customer = $campaign->customer;
+        if (!$customer) {
+            return;
+        }
+
+        $cacheKey = "remediation_landing_page:{$campaign->id}";
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+
+        $website     = rtrim($finding['details']['website'] ?? $customer->website ?? '', '/');
+        $currentUrl  = $finding['details']['current_url'] ?? '';
+        $assetGroups = $finding['details']['asset_groups'] ?? [];
+
+        if (!$website || empty($assetGroups)) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 1. Fetch and parse the sitemap
+        $urls = $this->fetchSitemapUrls($website);
+        if (empty($urls)) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 2. Use AI to identify the best conversion-focused URL
+        $bestUrl = $this->selectBestLandingPage($campaign, $customer, $website, $urls, $currentUrl);
+        if (!$bestUrl || $bestUrl === $currentUrl) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 3. Update every asset group's final URL
+        $customerId = $customer->cleanGoogleCustomerId();
+        $updated    = 0;
+
+        try {
+            $service = new class($customer) extends BaseGoogleAdsService {
+                public function updateFinalUrl(string $customerId, string $assetGroupResource, string $url): bool
+                {
+                    $this->ensureClient();
+
+                    $assetGroup = new AssetGroup([
+                        'resource_name' => $assetGroupResource,
+                        'final_urls'    => [$url],
+                    ]);
+
+                    $op = new AssetGroupOperation();
+                    $op->setUpdate($assetGroup);
+                    $op->setUpdateMask(new FieldMask(['paths' => ['final_urls']]));
+
+                    $this->client->getAssetGroupServiceClient()->mutateAssetGroups(
+                        new MutateAssetGroupsRequest([
+                            'customer_id' => $customerId,
+                            'operations'  => [$op],
+                        ])
+                    );
+
+                    return true;
+                }
+            };
+
+            foreach ($assetGroups as $ag) {
+                try {
+                    if ($service->updateFinalUrl($customerId, $ag['resource_name'], $bestUrl)) {
+                        $updated++;
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('CampaignRemediationAgent: Failed to update final URL for asset group', [
+                        'asset_group' => $ag['resource_name'],
+                        'url'         => $bestUrl,
+                        'error'       => $e->getMessage(),
+                    ]);
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('CampaignRemediationAgent: Landing page fix failed', ['error' => $e->getMessage()]);
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        if ($updated > 0) {
+            Cache::put($cacheKey, true, now()->addDays(30));
+
+            $results['actions_taken'][] = [
+                'type'        => 'landing_page_fixed',
+                'platform'    => 'google_ads',
+                'message'     => "Updated {$updated} asset group(s) from {$currentUrl} → {$bestUrl}",
+                'old_url'     => $currentUrl,
+                'new_url'     => $bestUrl,
+                'urls_scanned' => count($urls),
+            ];
+
+            foreach ($customer->users as $user) {
+                $user->notify(new CriticalAgentAlert(
+                    'landing_page_fixed',
+                    'Auto-Fixed: Landing Page Updated on "' . $campaign->name . '"',
+                    "Your PMax campaign was sending paid traffic to {$currentUrl} — an informational page with no conversion path. "
+                    . "We scanned your sitemap (" . count($urls) . " pages), identified the best conversion-focused URL, "
+                    . "and updated {$updated} asset group(s) to point to: {$bestUrl}",
+                    ['campaign_id' => $campaign->id, 'old_url' => $currentUrl, 'new_url' => $bestUrl]
+                ));
+            }
+        } else {
+            $this->alertCustomer($campaign, $finding, $results);
+        }
+    }
+
+    private function fetchSitemapUrls(string $website): array
+    {
+        $urls = [];
+
+        // Try standard sitemap locations
+        $candidates = [
+            $website . '/sitemap.xml',
+            $website . '/sitemap_index.xml',
+            $website . '/sitemap/',
+        ];
+
+        foreach ($candidates as $sitemapUrl) {
+            try {
+                $ctx  = stream_context_create(['http' => ['timeout' => 8, 'user_agent' => 'Spectra/1.0 SitemapBot']]);
+                $xml  = @file_get_contents($sitemapUrl, false, $ctx);
+                if (!$xml) {
+                    continue;
+                }
+
+                libxml_use_internal_errors(true);
+                $doc = simplexml_load_string($xml);
+                if (!$doc) {
+                    continue;
+                }
+
+                // Handle sitemap index — fetch child sitemaps
+                if (isset($doc->sitemap)) {
+                    foreach ($doc->sitemap as $child) {
+                        $childUrl = (string) ($child->loc ?? '');
+                        if ($childUrl) {
+                            $childXml = @file_get_contents($childUrl, false, $ctx);
+                            if ($childXml) {
+                                $childDoc = simplexml_load_string($childXml);
+                                if ($childDoc && isset($childDoc->url)) {
+                                    foreach ($childDoc->url as $entry) {
+                                        $loc = (string) ($entry->loc ?? '');
+                                        if ($loc) {
+                                            $urls[] = $loc;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        if (count($urls) >= 200) {
+                            break;
+                        }
+                    }
+                }
+
+                // Regular sitemap
+                if (isset($doc->url)) {
+                    foreach ($doc->url as $entry) {
+                        $loc = (string) ($entry->loc ?? '');
+                        if ($loc) {
+                            $urls[] = $loc;
+                        }
+                    }
+                }
+
+                if (!empty($urls)) {
+                    break;
+                }
+            } catch (\Exception $e) {
+                Log::debug('CampaignRemediationAgent: Sitemap fetch failed', [
+                    'url'   => $sitemapUrl,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+
+        return array_unique($urls);
+    }
+
+    private function selectBestLandingPage(
+        Campaign $campaign,
+        Customer $customer,
+        string $website,
+        array $urls,
+        string $currentUrl
+    ): ?string {
+        // Cap to 150 URLs to stay within prompt limits
+        $urlList = implode("\n", array_slice($urls, 0, 150));
+
+        $name     = $customer->name ?? 'the business';
+        $industry = $customer->industry ?? 'SaaS';
+
+        $prompt = <<<PROMPT
+You are a conversion rate optimisation specialist analysing a website sitemap.
+
+Business: "{$name}" ({$industry})
+Current (wrong) landing page: {$currentUrl}
+Problem: This is an informational page. Paid traffic landing here bounces without converting.
+
+Here are all pages from the sitemap:
+{$urlList}
+
+Your task: identify the SINGLE best URL for paid ad traffic — the page most likely to convert a cold visitor into a lead or signup.
+
+Prioritise in this order:
+1. Homepage (usually the root URL — best for PMax if no dedicated landing page exists)
+2. Dedicated trial/demo/signup landing page (/try, /demo, /get-started, /start, /signup, /free-trial)
+3. Pricing page (/pricing, /plans) — only if no trial page exists
+4. Product/features overview — last resort
+
+Rules:
+- Return ONLY the full URL string, nothing else
+- Do NOT return the current wrong URL ({$currentUrl})
+- Do NOT return /blog, /about, /team, /careers, /docs, /faq, /how-it-works, /learn pages
+- If in doubt, return the homepage ({$website}/)
+PROMPT;
+
+        try {
+            $response = $this->gemini->generateContent(
+                model:   config('ai.models.default'),
+                prompt:  $prompt,
+                config:  ['temperature' => 0.1], // low temperature — deterministic URL selection
+                context: ['operation' => 'landing_page_selection', 'campaign_id' => $campaign->id],
+            );
+
+            if ($response && isset($response['text'])) {
+                $url = trim(strip_tags($response['text']));
+                // Validate it's actually from the sitemap or is the homepage
+                if (filter_var($url, FILTER_VALIDATE_URL) && str_starts_with($url, $website)) {
+                    return $url;
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('CampaignRemediationAgent: Landing page selection failed', ['error' => $e->getMessage()]);
+        }
+
+        // Safe fallback: homepage
+        return $website . '/';
     }
 
     // ─── Conversion provisioning ──────────────────────────────────────────────

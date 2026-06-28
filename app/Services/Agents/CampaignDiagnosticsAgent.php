@@ -245,12 +245,14 @@ class CampaignDiagnosticsAgent
                             'platform' => 'google_ads',
                             'message'  => "PMax is sending paid traffic to an informational page ({$path}) — visitors arrive to read, not to convert",
                             'details'  => [
-                                'url'          => $url,
+                                'current_url'  => $url,
                                 'path'         => $path,
                                 'asset_groups' => $data['asset_groups'],
+                                'website'      => $campaign->customer?->website,
                             ],
-                            'can_auto_fix'       => false,
-                            'recommended_action' => 'Update the asset group Final URL to your homepage or a dedicated demo/trial landing page',
+                            'can_auto_fix'      => true,
+                            'auto_fix_action'   => 'fix_landing_page',
+                            'recommended_action' => 'Scan sitemap and update asset group Final URL to the best conversion-focused page',
                         ];
                         break;
                     }
