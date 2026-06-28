@@ -56,6 +56,7 @@ class EmailInboxController extends Controller
                 'email_address' => $inbox->email_address,
                 'display_name'  => $inbox->display_name,
                 'unread_count'  => $inbox->unreadCount(),
+                'forward_to'    => $inbox->forward_to,
             ],
             'threads' => $threads,
         ]);
@@ -108,6 +109,18 @@ class EmailInboxController extends Controller
         $message = $this->inboxService->sendEmail($inbox, $params, $files);
 
         return back()->with('success', 'Email sent.');
+    }
+
+    public function updateForwarding(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate([
+            'forward_to' => 'nullable|email|max:255',
+        ]);
+
+        $inbox = EmailInbox::where('user_id', Auth::id())->firstOrFail();
+        $inbox->update(['forward_to' => $request->input('forward_to') ?: null]);
+
+        return response()->json(['forward_to' => $inbox->forward_to]);
     }
 
     public function attachment(int $id)

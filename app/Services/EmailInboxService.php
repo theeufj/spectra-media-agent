@@ -64,6 +64,37 @@ class EmailInboxService
         foreach ($email->attachments ?? [] as $att) {
             $this->storeAttachment($message, $resendEmailId, $att);
         }
+
+        if ($inbox->forward_to) {
+            $this->forwardMessage($inbox, $message, $email);
+        }
+    }
+
+    private function forwardMessage(EmailInbox $inbox, EmailMessage $message, object $email): void
+    {
+        try {
+            $originalFrom = $message->from_address;
+            $subject = "Fwd: {$message->subject}";
+
+            $fwdHeader = "<div style='border-left:3px solid #ccc;padding:8px 12px;margin:16px 0;color:#555;font-size:13px;'>"
+                . "<strong>---------- Forwarded message ----------</strong><br>"
+                . "From: {$originalFrom}<br>"
+                . "To: {$inbox->email_address}<br>"
+                . "Subject: {$message->subject}"
+                . "</div>";
+
+            Resend::emails()->send([
+                'from' => "{$inbox->display_name} <{$inbox->email_address}>",
+                'to'   => [$inbox->forward_to],
+                'subject' => $subject,
+                'html' => $fwdHeader . ($message->html_body ?? nl2br(e($message->text_body ?? ''))),
+                'text' => "---------- Forwarded message ----------\n"
+                    . "From: {$originalFrom}\nTo: {$inbox->email_address}\nSubject: {$message->subject}\n\n"
+                    . ($message->text_body ?? strip_tags($message->html_body ?? '')),
+            ]);
+        } catch (\Throwable $e) {
+            Log::warning("EmailInboxService: Failed to forward message {$message->id} to {$inbox->forward_to}: {$e->getMessage()}");
+        }
     }
 
     public function sendEmail(EmailInbox $inbox, array $params, array $uploadedFiles = []): EmailMessage

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Head, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -319,6 +319,113 @@ function ThreadItem({ thread, isActive, onClick }) {
     );
 }
 
+// ─── Settings pane ────────────────────────────────────────────────────────────
+
+function SettingsPane({ inbox }) {
+    const [forwardTo, setForwardTo] = useState(inbox.forward_to ?? '');
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    const save = (e) => {
+        e.preventDefault();
+        setSaving(true);
+        setSaved(false);
+        fetch(route('inbox.forwarding.update'), {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+            body: JSON.stringify({ forward_to: forwardTo || null }),
+        })
+            .then((r) => r.json())
+            .then(() => { setSaved(true); setTimeout(() => setSaved(false), 3000); })
+            .finally(() => setSaving(false));
+    };
+
+    const clear = () => {
+        setForwardTo('');
+        fetch(route('inbox.forwarding.update'), {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content ?? '',
+            },
+            body: JSON.stringify({ forward_to: null }),
+        }).then(() => { setSaved(true); setTimeout(() => setSaved(false), 3000); });
+    };
+
+    return (
+        <div className="flex-1 flex flex-col overflow-y-auto bg-gray-50 p-8">
+            <div className="max-w-lg">
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">Inbox Settings</h2>
+                <p className="text-sm text-gray-500 mb-6">Configure your <span className="font-medium text-gray-700">{inbox.email_address}</span> inbox.</p>
+
+                {/* Forwarding */}
+                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                    <div className="flex items-start gap-3 mb-4">
+                        <div className="mt-0.5 w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                    d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                            </svg>
+                        </div>
+                        <div>
+                            <h3 className="font-medium text-gray-900">Email Forwarding</h3>
+                            <p className="text-sm text-gray-500 mt-0.5">
+                                Automatically forward all inbound messages to another address. Original emails stay in this inbox too.
+                            </p>
+                        </div>
+                    </div>
+
+                    <form onSubmit={save} className="space-y-3">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Forward to address</label>
+                            <input
+                                type="email"
+                                value={forwardTo}
+                                onChange={(e) => setForwardTo(e.target.value)}
+                                placeholder="you@example.com"
+                                className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            >
+                                {saving ? 'Saving…' : 'Save'}
+                            </button>
+                            {forwardTo && (
+                                <button
+                                    type="button"
+                                    onClick={clear}
+                                    className="px-4 py-2 text-sm text-red-600 hover:text-red-700 font-medium"
+                                >
+                                    Remove forwarding
+                                </button>
+                            )}
+                            {saved && (
+                                <span className="text-sm text-green-600 font-medium">Saved</span>
+                            )}
+                        </div>
+                    </form>
+
+                    {inbox.forward_to && (
+                        <div className="mt-4 flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                            <svg className="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                            </svg>
+                            Forwarding active → <span className="font-medium">{inbox.forward_to}</span>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function InboxIndex({ inbox, threads }) {
@@ -387,6 +494,15 @@ export default function InboxIndex({ inbox, threads }) {
                     d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
             ),
         },
+        {
+            key: 'settings',
+            label: 'Settings',
+            icon: (
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            ),
+            badge: inbox.forward_to ? 0 : 0,
+        },
     ];
 
     return (
@@ -448,42 +564,48 @@ export default function InboxIndex({ inbox, threads }) {
                     </nav>
                 </div>
 
-                {/* ── Thread list ── */}
-                <div className={`w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${selectedThread ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'}`}>
-                    <div className="px-4 py-3 border-b border-gray-100">
-                        <h1 className="font-semibold text-gray-800 capitalize">{folder === 'all' ? 'All Mail' : folder}</h1>
-                        <p className="text-xs text-gray-400">{visibleThreads.length} conversation{visibleThreads.length !== 1 ? 's' : ''}</p>
-                    </div>
-
-                    {visibleThreads.length === 0 ? (
-                        <div className="flex-1 flex items-center justify-center p-8 text-center text-gray-400">
-                            <div>
-                                <svg className="w-12 h-12 mx-auto mb-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                                        d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0H4" />
-                                </svg>
-                                <p className="text-sm">No messages</p>
-                            </div>
+                {/* ── Thread list (hidden in settings) ── */}
+                {folder !== 'settings' && (
+                    <div className={`w-80 shrink-0 bg-white border-r border-gray-200 overflow-y-auto ${selectedThread ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'}`}>
+                        <div className="px-4 py-3 border-b border-gray-100">
+                            <h1 className="font-semibold text-gray-800 capitalize">{folder === 'all' ? 'All Mail' : folder}</h1>
+                            <p className="text-xs text-gray-400">{visibleThreads.length} conversation{visibleThreads.length !== 1 ? 's' : ''}</p>
                         </div>
-                    ) : (
-                        visibleThreads.map((t) => (
-                            <ThreadItem
-                                key={t.thread_id}
-                                thread={{ ...t, unread: readThreadIds.has(t.thread_id) ? 0 : t.unread }}
-                                isActive={selectedThreadId === t.thread_id}
-                                onClick={() => openThread(t.thread_id)}
-                            />
-                        ))
-                    )}
-                </div>
 
-                {/* ── Thread / message pane ── */}
-                <ThreadPane
-                    thread={selectedThread}
-                    inbox={inbox}
-                    onReply={handleReply}
-                    onClose={closeThread}
-                />
+                        {visibleThreads.length === 0 ? (
+                            <div className="flex-1 flex items-center justify-center p-8 text-center text-gray-400">
+                                <div>
+                                    <svg className="w-12 h-12 mx-auto mb-2 text-gray-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                                            d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0H4" />
+                                    </svg>
+                                    <p className="text-sm">No messages</p>
+                                </div>
+                            </div>
+                        ) : (
+                            visibleThreads.map((t) => (
+                                <ThreadItem
+                                    key={t.thread_id}
+                                    thread={{ ...t, unread: readThreadIds.has(t.thread_id) ? 0 : t.unread }}
+                                    isActive={selectedThreadId === t.thread_id}
+                                    onClick={() => openThread(t.thread_id)}
+                                />
+                            ))
+                        )}
+                    </div>
+                )}
+
+                {/* ── Thread / message pane or settings ── */}
+                {folder === 'settings' ? (
+                    <SettingsPane inbox={inbox} />
+                ) : (
+                    <ThreadPane
+                        thread={selectedThread}
+                        inbox={inbox}
+                        onReply={handleReply}
+                        onClose={closeThread}
+                    />
+                )}
             </div>
 
             {/* Compose / Reply modal */}

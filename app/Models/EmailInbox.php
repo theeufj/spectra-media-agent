@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class EmailInbox extends Model
 {
-    protected $fillable = ['user_id', 'email_address', 'display_name'];
+    protected $fillable = ['user_id', 'email_address', 'display_name', 'forward_to'];
 
     public function user(): BelongsTo
     {

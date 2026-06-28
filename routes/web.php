@@ -295,6 +295,7 @@ Route::middleware(['auth'])->prefix('inbox')->name('inbox.')->group(function () 
     Route::post('/send', [\App\Http\Controllers\EmailInboxController::class, 'send'])->name('send');
     Route::get('/attachments/{id}', [\App\Http\Controllers\EmailInboxController::class, 'attachment'])->name('attachment');
     Route::post('/threads/{threadId}/read', [\App\Http\Controllers\EmailInboxController::class, 'markRead'])->name('threads.read');
+    Route::patch('/forwarding', [\App\Http\Controllers\EmailInboxController::class, 'updateForwarding'])->name('forwarding.update');
 });
 
 Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {

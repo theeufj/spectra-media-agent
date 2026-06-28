@@ -47,6 +47,16 @@
         @vite(['resources/js/app.jsx', "resources/js/Pages/{$page['component']}.jsx"])
         @inertiaHead
 
+        <!-- Google Ads tag (ensures window.gtag is always available for conversion tracking) -->
+        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-16797144138"></script>
+        <script>
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'AW-16797144138');
+        </script>
+        <!-- End Google Ads tag -->
+
         <!-- Google Tag Manager (existing) -->
             <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
             new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
