@@ -34,7 +34,7 @@ class DemoController extends Controller
         // Notify the team every time someone hits Try Now
         $ip      = $request->ip();
         $userAgent = $request->userAgent() ?? 'unknown';
-        $notifyList = ['theeufj@gmail.com', 'matt@sitetospend.com', 'james@sitetospend.com'];
+        $notifyList = ['theeufj@gmail.com', 'digitalaf.master@gmail.com', 'mattware75@gmail.com', 'james.ward@beyondd.com.au'];
         try {
             foreach ($notifyList as $recipient) {
                 Mail::raw(
