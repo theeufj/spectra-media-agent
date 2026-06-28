@@ -9,6 +9,8 @@ export default function Landing({ auth, plans = [] }) {
     const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 149;
 
     const [url, setUrl] = useState('');
+    const [firstName, setFirstName] = useState('');
+    const [email, setEmail] = useState('');
     const [loadingStage, setLoadingStage] = useState(0);
     const [demoResult, setDemoResult] = useState(null);
     const [error, setError] = useState(null);
@@ -40,7 +42,7 @@ export default function Landing({ auth, plans = [] }) {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ url: normalisedUrl })
+                body: JSON.stringify({ url: normalisedUrl, first_name: firstName, email })
             });
             const data = await response.json();
 
@@ -171,23 +173,45 @@ export default function Landing({ auth, plans = [] }) {
                                         </p>
 
                                         <div className="mt-8 bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                                            <form onSubmit={handleDemoSubmit} className="flex flex-col sm:flex-row gap-3">
-                                                <input
-                                                    type="text"
-                                                    required
-                                                    value={url}
-                                                    onChange={e => setUrl(e.target.value)}
-                                                    placeholder="Enter your website URL..."
-                                                    className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
-                                                    disabled={loadingStage > 0}
-                                                />
-                                                <button
-                                                    type="submit"
-                                                    disabled={loadingStage > 0}
-                                                    className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-sm disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
-                                                >
-                                                    {loadingStage > 0 ? "Analyzing..." : "Build My Ads"}
-                                                </button>
+                                            <form onSubmit={handleDemoSubmit} className="flex flex-col gap-3">
+                                                <div className="flex flex-col sm:flex-row gap-3">
+                                                    <input
+                                                        type="text"
+                                                        required
+                                                        value={firstName}
+                                                        onChange={e => setFirstName(e.target.value)}
+                                                        placeholder="First name"
+                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
+                                                        disabled={loadingStage > 0}
+                                                    />
+                                                    <input
+                                                        type="email"
+                                                        required
+                                                        value={email}
+                                                        onChange={e => setEmail(e.target.value)}
+                                                        placeholder="Your email address"
+                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
+                                                        disabled={loadingStage > 0}
+                                                    />
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row gap-3">
+                                                    <input
+                                                        type="text"
+                                                        required
+                                                        value={url}
+                                                        onChange={e => setUrl(e.target.value)}
+                                                        placeholder="Enter your website URL..."
+                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
+                                                        disabled={loadingStage > 0}
+                                                    />
+                                                    <button
+                                                        type="submit"
+                                                        disabled={loadingStage > 0}
+                                                        className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-sm disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
+                                                    >
+                                                        {loadingStage > 0 ? "Analyzing..." : "Build My Ads"}
+                                                    </button>
+                                                </div>
                                             </form>
                                             {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
                                             {loadingStage > 0 && (

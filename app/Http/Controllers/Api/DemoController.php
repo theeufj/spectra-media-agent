@@ -24,10 +24,14 @@ class DemoController extends Controller
     public function generateFull(Request $request)
     {
         $request->validate([
-            'url' => 'required|url|max:255',
+            'url'        => 'required|url|max:255',
+            'first_name' => 'nullable|string|max:100',
+            'email'      => 'nullable|email|max:255',
         ]);
 
-        $url = $request->input('url');
+        $url       = $request->input('url');
+        $firstName = $request->input('first_name', '');
+        $userEmail = $request->input('email', '');
 
         Log::info("DemoController: Starting full extraction demo for {$url}");
 
@@ -35,11 +39,18 @@ class DemoController extends Controller
         try {
             $ip        = $request->ip();
             $userAgent = $request->userAgent() ?? 'unknown';
-            $body      = "Someone just used Try Now on the landing page.\n\nURL entered: {$url}\nIP: {$ip}\nUser-Agent: {$userAgent}\nTime: " . now()->toDateTimeString() . " UTC";
+            $body      = "Someone just used Try Now on the landing page.\n\n"
+                . "Name:       {$firstName}\n"
+                . "Email:      {$userEmail}\n"
+                . "URL:        {$url}\n"
+                . "IP:         {$ip}\n"
+                . "User-Agent: {$userAgent}\n"
+                . "Time:       " . now()->toDateTimeString() . " UTC";
+            $subject = $firstName ? "Try Now: {$firstName} — {$url}" : "Try Now: {$url}";
             Mail::raw($body, fn ($m) => $m
                 ->to('theeufj@gmail.com')
                 ->cc(['mattware75@gmail.com', 'james.ward@beyondd.com.au'])
-                ->subject("Try Now: {$url}")
+                ->subject($subject)
             );
         } catch (\Exception $e) {
             Log::warning("DemoController: Failed to send Try Now notification: " . $e->getMessage());
