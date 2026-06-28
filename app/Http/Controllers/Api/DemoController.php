@@ -39,15 +39,83 @@ class DemoController extends Controller
         try {
             $ip        = $request->ip();
             $userAgent = $request->userAgent() ?? 'unknown';
-            $body      = "Someone just used Try Now on the landing page.\n\n"
-                . "Name:       {$firstName}\n"
-                . "Email:      {$userEmail}\n"
-                . "URL:        {$url}\n"
-                . "IP:         {$ip}\n"
-                . "User-Agent: {$userAgent}\n"
-                . "Time:       " . now()->toDateTimeString() . " UTC";
-            $subject = $firstName ? "Try Now: {$firstName} — {$url}" : "Try Now: {$url}";
-            Mail::raw($body, fn ($m) => $m
+            $time      = now()->format('d M Y, H:i') . ' UTC';
+            $subject   = $firstName ? "Try Now: {$firstName} — {$url}" : "Try Now: {$url}";
+
+            $displayName = e($firstName ?: '—');
+            $displayEmail = $userEmail
+                ? '<a href="mailto:' . e($userEmail) . '" style="color:#ff4d00;text-decoration:none;">' . e($userEmail) . '</a>'
+                : '—';
+            $displayUrl = '<a href="' . e($url) . '" style="color:#ff4d00;text-decoration:none;">' . e($url) . '</a>';
+            $displayIp = e($ip);
+            $displayTime = e($time);
+
+            $html = <<<HTML
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f5f0ed;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f0ed;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+
+        <!-- Header -->
+        <tr><td style="background:#1c0800;border-radius:12px 12px 0 0;padding:28px 32px;">
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td>
+                <span style="display:inline-block;background:#ff4d00;border-radius:8px;width:36px;height:36px;line-height:36px;text-align:center;font-size:18px;font-weight:900;color:#fff;vertical-align:middle;">S</span>
+                <span style="color:#fff;font-size:18px;font-weight:700;vertical-align:middle;margin-left:10px;">Site<span style="color:#ff4d00;">ToSpend</span></span>
+              </td>
+              <td align="right">
+                <span style="background:#ff4d00;color:#fff;font-size:11px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:4px 10px;border-radius:20px;">Try Now</span>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style="background:#fff;padding:32px;border-left:1px solid #e8ddd8;border-right:1px solid #e8ddd8;">
+          <p style="margin:0 0 6px;font-size:20px;font-weight:700;color:#1c0800;">New lead on the landing page</p>
+          <p style="margin:0 0 28px;font-size:14px;color:#6b5040;">Someone just ran the Try Now demo.</p>
+
+          <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e8ddd8;border-radius:8px;overflow:hidden;">
+            <tr style="background:#faf7f5;">
+              <td style="padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#9e7e6e;width:90px;border-bottom:1px solid #e8ddd8;">Name</td>
+              <td style="padding:12px 16px;font-size:14px;color:#1c0800;font-weight:600;border-bottom:1px solid #e8ddd8;">{$displayName}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#9e7e6e;border-bottom:1px solid #e8ddd8;">Email</td>
+              <td style="padding:12px 16px;font-size:14px;border-bottom:1px solid #e8ddd8;">{$displayEmail}</td>
+            </tr>
+            <tr style="background:#faf7f5;">
+              <td style="padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#9e7e6e;border-bottom:1px solid #e8ddd8;">URL</td>
+              <td style="padding:12px 16px;font-size:14px;border-bottom:1px solid #e8ddd8;">{$displayUrl}</td>
+            </tr>
+            <tr>
+              <td style="padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#9e7e6e;border-bottom:1px solid #e8ddd8;">IP</td>
+              <td style="padding:12px 16px;font-size:13px;color:#6b5040;font-family:monospace;border-bottom:1px solid #e8ddd8;">{$displayIp}</td>
+            </tr>
+            <tr style="background:#faf7f5;">
+              <td style="padding:12px 16px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:#9e7e6e;">Time</td>
+              <td style="padding:12px 16px;font-size:13px;color:#6b5040;">{$displayTime}</td>
+            </tr>
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="background:#faf7f5;border:1px solid #e8ddd8;border-top:none;border-radius:0 0 12px 12px;padding:16px 32px;text-align:center;">
+          <p style="margin:0;font-size:11px;color:#9e7e6e;">SiteToSpend · <a href="https://sitetospend.com" style="color:#9e7e6e;">sitetospend.com</a></p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+HTML;
+
+            Mail::html($html, fn ($m) => $m
                 ->to('theeufj@gmail.com')
                 ->cc(['mattware75@gmail.com', 'james.ward@beyondd.com.au'])
                 ->subject($subject)
