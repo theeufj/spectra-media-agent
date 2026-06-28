@@ -47,7 +47,7 @@ class ProvisionConversionActions extends Command
         'try_now' => [
             'name'     => 'Spectra — Try Now Demo',
             'type'     => ConversionActionType::WEBPAGE,
-            'category' => ConversionActionCategory::LEAD,
+            'category' => ConversionActionCategory::SUBMIT_LEAD_FORM,
             'value'    => 50.0,
         ],
         'pricing_visit' => [
