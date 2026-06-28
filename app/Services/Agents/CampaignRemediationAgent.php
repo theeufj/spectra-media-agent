@@ -6,6 +6,10 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\FacebookAds\AdService as FacebookAdService;
+use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\CreativeService as FacebookCreativeService;
+use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\SearchAudience;
@@ -98,6 +102,7 @@ class CampaignRemediationAgent
             'add_audience_signals'  => $this->addAudienceSignals($campaign, $finding, $results),
             'fix_landing_page'      => $this->fixLandingPage($campaign, $finding, $results),
             'provision_conversions' => $this->provisionConversions($finding, $results),
+            'refresh_meta_creative' => $this->refreshMetaCreative($campaign, $finding, $results),
             default                 => $this->alertCustomer($campaign, $finding, $results),
         };
     }
@@ -774,6 +779,167 @@ PROMPT;
 
         // Safe fallback: homepage
         return $website . '/';
+    }
+
+    // ─── Meta creative refresh ────────────────────────────────────────────────
+
+    private function refreshMetaCreative(Campaign $campaign, array $finding, array &$results): void
+    {
+        $customer = $campaign->customer;
+        if (!$customer) {
+            return;
+        }
+
+        $cacheKey = "remediation_meta_creative:{$campaign->id}";
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+
+        $accountId = $customer->facebook_ads_account_id;
+        if (!$accountId) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 1. Generate AI copy (Meta limits: primary text ≤125 chars, headline ≤40 chars)
+        $copy = $this->generateMetaCopy($campaign, $customer);
+        if (!$copy) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 2. Generate image
+        $imagePrompt = "Professional advertising banner for {$customer->name}: {$copy['headline']}. "
+            . "Clean, modern design suitable for Facebook/Instagram feed. No text overlay.";
+
+        $imageResult = $this->gemini->generateImage($imagePrompt, context: ['campaign_id' => $campaign->id]);
+        if (!$imageResult) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 3. Store image and get a public URL
+        $filename  = "meta-creative/{$campaign->id}-" . now()->timestamp . '.jpg';
+        $imageUrl  = StorageHelper::put($filename, base64_decode($imageResult['data']), $imageResult['mimeType'] ?? 'image/jpeg');
+        if (!$imageUrl) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 4. Create new Meta creative
+        $creativeService = new FacebookCreativeService($customer);
+        $creative = $creativeService->createImageCreative(
+            accountId:    $accountId,
+            creativeName: 'Spectra Auto-Refresh — ' . $campaign->name . ' — ' . now()->toDateString(),
+            imageUrl:     $imageUrl,
+            headline:     $copy['headline'],
+            description:  $copy['primary_text'],
+            callToAction: 'LEARN_MORE',
+            linkUrl:      $customer->website,
+        );
+
+        if (!$creative || empty($creative['id'])) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        $creativeId = $creative['id'];
+
+        // 5. Apply new creative to all active ads in this campaign
+        $adSetService = new AdSetService($customer);
+        $adService    = new FacebookAdService($customer);
+
+        $adSets  = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+        $updated = 0;
+
+        foreach ($adSets as $adSet) {
+            $ads = $adService->listAds($adSet['id']) ?? [];
+            foreach ($ads as $ad) {
+                if (in_array($ad['status'] ?? '', ['ACTIVE', 'PAUSED'])) {
+                    if ($adService->updateAd($ad['id'], ['creative' => ['creative_id' => $creativeId]])) {
+                        $updated++;
+                    }
+                }
+            }
+        }
+
+        if ($updated > 0) {
+            Cache::put($cacheKey, true, now()->addHours(72));
+
+            $results['actions_taken'][] = [
+                'type'        => 'meta_creative_refreshed',
+                'platform'    => 'meta',
+                'message'     => "Refreshed creative on {$updated} Meta ad(s) with new AI-generated copy and image",
+                'creative_id' => $creativeId,
+                'headline'    => $copy['headline'],
+                'ads_updated' => $updated,
+            ];
+
+            foreach ($customer->users as $user) {
+                $user->notify(new CriticalAgentAlert(
+                    'meta_creative_refreshed',
+                    'Auto-Fixed: Meta Ad Creative Refreshed on "' . $campaign->name . '"',
+                    "We detected " . ($finding['type'] === 'meta_audience_fatigue'
+                        ? "audience fatigue (frequency {$finding['details']['frequency']}x)"
+                        : "conversion starvation ($" . number_format($finding['details']['spend'] ?? 0, 2) . " spent, 0 conversions)")
+                    . ". A fresh creative has been generated and applied to {$updated} ad(s).\n\n"
+                    . "New headline: \"{$copy['headline']}\"\nNew copy: \"{$copy['primary_text']}\"",
+                    ['campaign_id' => $campaign->id, 'creative_id' => $creativeId]
+                ));
+            }
+        } else {
+            $this->alertCustomer($campaign, $finding, $results);
+        }
+    }
+
+    private function generateMetaCopy(Campaign $campaign, Customer $customer): ?array
+    {
+        $name     = $customer->name ?? 'the business';
+        $industry = $customer->industry ?? 'SaaS';
+        $website  = $customer->website ?? '';
+
+        $prompt = <<<PROMPT
+You are a direct-response copywriter creating a Facebook/Instagram ad for a SaaS business.
+
+Business: "{$name}" ({$industry})
+Website: {$website}
+Campaign: "{$campaign->name}"
+
+Write ONE ad variation with:
+- primary_text: 1-2 punchy sentences, max 125 characters. Focus on the problem solved or the outcome delivered. No fluff.
+- headline: Max 40 characters. Benefit-driven, curiosity-triggering, or question-based.
+
+Return ONLY valid JSON (no markdown, no explanation):
+{"primary_text": "...", "headline": "..."}
+PROMPT;
+
+        try {
+            $response = $this->gemini->generateContent(
+                model:   config('ai.models.default'),
+                prompt:  $prompt,
+                config:  ['temperature' => 0.7],
+                context: ['operation' => 'meta_copy_generation', 'campaign_id' => $campaign->id],
+            );
+
+            if (!$response || !isset($response['text'])) {
+                return null;
+            }
+
+            $text = trim(preg_replace('/^```json\s*|\s*```$/m', '', $response['text']));
+            $data = json_decode($text, true);
+
+            if (!$data || empty($data['headline']) || empty($data['primary_text'])) {
+                return null;
+            }
+
+            return [
+                'headline'     => mb_substr(trim($data['headline']), 0, 40),
+                'primary_text' => mb_substr(trim($data['primary_text']), 0, 125),
+            ];
+        } catch (\Exception $e) {
+            Log::warning('CampaignRemediationAgent: Meta copy generation failed', ['error' => $e->getMessage()]);
+            return null;
+        }
     }
 
     // ─── Conversion provisioning ──────────────────────────────────────────────

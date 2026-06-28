@@ -4,6 +4,9 @@ namespace App\Services\Agents;
 
 use App\Models\Campaign;
 use App\Models\Setting;
+use App\Services\FacebookAds\AdService as FacebookAdService;
+use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Illuminate\Support\Facades\Log;
 
@@ -52,7 +55,200 @@ class CampaignDiagnosticsAgent
             $findings = array_merge($findings, $this->diagnoseGoogleAds($campaign));
         }
 
+        if ($campaign->facebook_ads_campaign_id && $campaign->customer?->facebook_ads_account_id) {
+            $findings = array_merge($findings, $this->diagnoseMeta($campaign));
+        }
+
         return $findings;
+    }
+
+    // ─── Meta / Facebook Ads ─────────────────────────────────────────────────
+
+    private function diagnoseMeta(Campaign $campaign): array
+    {
+        $findings = [];
+        $customer = $campaign->customer;
+
+        try {
+            $insights = $this->fetchMetaPerformance($campaign);
+
+            if ($finding = $this->checkMetaConversionStarvation($campaign, $insights)) {
+                $findings[] = $finding;
+            }
+
+            if ($finding = $this->checkMetaPixelHealth($campaign)) {
+                $findings[] = $finding;
+            }
+
+            if ($finding = $this->checkMetaAudienceFatigue($campaign, $insights)) {
+                $findings[] = $finding;
+            }
+
+            if ($finding = $this->checkMetaAdApprovals($campaign)) {
+                $findings[] = $finding;
+            }
+        } catch (\Exception $e) {
+            Log::error('CampaignDiagnosticsAgent: diagnoseMeta failed', [
+                'campaign_id' => $campaign->id,
+                'error'       => $e->getMessage(),
+            ]);
+        }
+
+        return $findings;
+    }
+
+    private function fetchMetaPerformance(Campaign $campaign): array
+    {
+        $customer = $campaign->customer;
+        $since    = now()->subDays(30)->toDateString();
+        $today    = now()->toDateString();
+
+        $service = new FacebookInsightService($customer);
+        $rows    = $service->getCampaignInsights(
+            $campaign->facebook_ads_campaign_id,
+            $since,
+            $today,
+            ['impressions', 'clicks', 'spend', 'frequency', 'actions', 'reach', 'date_start', 'date_stop']
+        ) ?? [];
+
+        $result = ['spend' => 0.0, 'clicks' => 0, 'conversions' => 0.0, 'impressions' => 0, 'frequency' => 0.0, 'days' => 0];
+
+        foreach ($rows as $row) {
+            $result['spend']       += (float) ($row['spend'] ?? 0);
+            $result['clicks']      += (int)   ($row['clicks'] ?? 0);
+            $result['impressions'] += (int)   ($row['impressions'] ?? 0);
+            $result['days']++;
+
+            // Max frequency across days (most recent signal)
+            $result['frequency'] = max($result['frequency'], (float) ($row['frequency'] ?? 0));
+
+            // Count lead/signup/registration conversions
+            foreach ($row['actions'] ?? [] as $action) {
+                if (in_array($action['action_type'], [
+                    'lead',
+                    'offsite_conversion.fb_pixel_lead',
+                    'onsite_conversion.lead_grouped',
+                    'complete_registration',
+                    'purchase',
+                ])) {
+                    $result['conversions'] += (float) ($action['value'] ?? 0);
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    private function checkMetaConversionStarvation(Campaign $campaign, array $perf): ?array
+    {
+        $deployedAt = $campaign->strategies()
+            ->whereIn('deployment_status', ['deployed', 'verified'])
+            ->whereNotNull('deployed_at')
+            ->min('deployed_at');
+
+        if (!$deployedAt || now()->diffInDays($deployedAt) < self::STARVATION_MIN_DAYS) {
+            return null;
+        }
+
+        if ($perf['spend'] < self::STARVATION_MIN_SPEND || $perf['conversions'] > 0) {
+            return null;
+        }
+
+        return [
+            'type'     => 'meta_conversion_starvation',
+            'severity' => 'critical',
+            'platform' => 'meta',
+            'message'  => sprintf(
+                'Meta campaign has spent $%s over 30 days with zero conversions — pixel may be misconfigured or creative is not resonating',
+                number_format($perf['spend'], 2)
+            ),
+            'details'           => $perf,
+            'can_auto_fix'      => true,
+            'auto_fix_action'   => 'refresh_meta_creative',
+            'recommended_action' => 'Refresh ad creative with new copy and image; verify pixel is firing on conversion pages',
+        ];
+    }
+
+    private function checkMetaPixelHealth(Campaign $campaign): ?array
+    {
+        $customer = $campaign->customer;
+
+        if (!empty($customer->facebook_pixel_id)) {
+            return null;
+        }
+
+        return [
+            'type'     => 'meta_pixel_missing',
+            'severity' => 'critical',
+            'platform' => 'meta',
+            'message'  => 'No Facebook Pixel configured — Meta cannot track conversions or optimise for leads',
+            'details'  => ['account_id' => $customer->facebook_ads_account_id],
+            'can_auto_fix'      => false,
+            'auto_fix_action'   => null,
+            'recommended_action' => 'Create a Meta Pixel in Events Manager, add the base code to your website, and link it to this ad account',
+        ];
+    }
+
+    private function checkMetaAudienceFatigue(Campaign $campaign, array $perf): ?array
+    {
+        // Need enough data to make a meaningful judgement
+        if ($perf['impressions'] < 10000 || $perf['days'] < 7) {
+            return null;
+        }
+
+        if ($perf['frequency'] < 3.5) {
+            return null;
+        }
+
+        return [
+            'type'     => 'meta_audience_fatigue',
+            'severity' => 'high',
+            'platform' => 'meta',
+            'message'  => sprintf(
+                'Meta audience frequency is %.1fx — the same people are seeing the same ad repeatedly, causing ad fatigue and rising CPCs',
+                $perf['frequency']
+            ),
+            'details'  => ['frequency' => $perf['frequency'], 'impressions' => $perf['impressions'], 'spend' => $perf['spend']],
+            'can_auto_fix'      => true,
+            'auto_fix_action'   => 'refresh_meta_creative',
+            'recommended_action' => 'Refresh creative immediately; consider broadening the audience or adding exclusions for recent converters',
+        ];
+    }
+
+    private function checkMetaAdApprovals(Campaign $campaign): ?array
+    {
+        $customer = $campaign->customer;
+
+        try {
+            $service    = new FacebookAdService($customer);
+            $accountId  = 'act_' . $customer->facebook_ads_account_id;
+            $ads        = $service->listAdsByAccount($accountId, [
+                ['field' => 'campaign.id', 'operator' => 'EQUAL', 'value' => $campaign->facebook_ads_campaign_id],
+            ]);
+
+            $disapproved = array_filter($ads, fn($ad) => in_array($ad['effective_status'] ?? '', ['DISAPPROVED', 'WITH_ISSUES']));
+
+            if (empty($disapproved)) {
+                return null;
+            }
+
+            return [
+                'type'     => 'meta_ads_disapproved',
+                'severity' => 'high',
+                'platform' => 'meta',
+                'message'  => count($disapproved) . ' ad(s) are disapproved or have policy issues and are not serving',
+                'details'  => ['ads' => array_values($disapproved)],
+                'can_auto_fix'      => false,
+                'auto_fix_action'   => null,
+                'recommended_action' => 'Review disapproved ads in Meta Ads Manager, correct policy violations, and resubmit for review',
+            ];
+        } catch (\Exception $e) {
+            Log::debug('CampaignDiagnosticsAgent: Meta ad approval check failed', [
+                'campaign_id' => $campaign->id,
+                'error'       => $e->getMessage(),
+            ]);
+            return null;
+        }
     }
 
     // ─── Google Ads ───────────────────────────────────────────────────────────
