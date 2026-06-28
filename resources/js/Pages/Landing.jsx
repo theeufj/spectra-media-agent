@@ -3,6 +3,7 @@ import { Head, Link } from '@inertiajs/react';
 import Header from '@/Components/Header';
 import Footer from '@/Components/Footer';
 import DemoResultsPanel from '@/Components/DemoResultsPanel';
+import { trackConversion } from '@/utils/conversions';
 
 export default function Landing({ auth, plans = [] }) {
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
@@ -48,6 +49,7 @@ export default function Landing({ auth, plans = [] }) {
 
             if (response.ok) {
                 setDemoResult(data);
+                trackConversion('try_now');
             } else {
                 setError(data.message || 'Something went wrong.');
             }

@@ -2,6 +2,7 @@ const AW_ID = 'AW-16797144138';
 
 const CONVERSION_VALUES = {
     signup:           { value: 149, currency: 'USD' },
+    try_now:          { value: 50,  currency: 'USD' },
     pricing_visit:    { value: 5,   currency: 'USD' },
     sandbox_launched: { value: 35,  currency: 'USD' },
 };

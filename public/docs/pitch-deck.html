@@ -1362,10 +1362,10 @@ body.presentation-active .slide {
 .pdf-export-btn svg { flex-shrink: 0; }
 
 @media print {
-  /* Page setup — A4 landscape, zero margin so slides bleed to edge */
+  /* A4 landscape with 12mm margins on all sides */
   @page {
     size: A4 landscape;
-    margin: 0;
+    margin: 12mm;
   }
 
   /* Force browsers to render background colours and images */
@@ -1375,22 +1375,22 @@ body.presentation-active .slide {
   }
 
   html, body {
-    width: 297mm;
+    width: 273mm; /* 297mm - 2×12mm */
   }
 
-  /* Each slide = exactly one A4 landscape page */
+  /* Slides fill the printable area width; height expands to fit content */
   .slide {
-    width: 297mm !important;
-    height: 210mm !important;
-    min-height: unset !important;
-    overflow: hidden !important;
+    width: 273mm !important;
+    min-height: 186mm !important; /* 210mm - 2×12mm */
+    height: auto !important;
+    overflow: visible !important;
     page-break-after: always !important;
     break-after: page !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  /* Hide the export button when printing */
+  /* Hide UI controls when printing */
   .pdf-export-btn,
   .presentation-controls {
     display: none !important;
@@ -1604,18 +1604,18 @@ body.presentation-active .slide {
       <div class="slide-title">From <em>in-the-loop</em> to on-the-loop</div>
     </div>
   </div>
-  <div class="slide-sub">Enter your URL. Gemini Vision AI synthesises your brand in under 10 minutes. Six Digital Labor agents build your campaigns and run them — perpetually. You direct strategy. The AI does everything else.</div>
+  <div class="slide-sub">Enter your URL. Vision AI synthesises your brand in under 10 minutes. Six Digital Labor agents build your campaigns and run them — perpetually. You direct strategy. The AI does everything else.</div>
   <div class="content">
     <div class="solution-hero">
       <div class="solution-tagline">URL to live campaigns in under <em>10 minutes.</em><br>Brand synthesised by AI. Growth manufactured autonomously.</div>
-      <div class="solution-desc">SiteToSpend is not a dashboard. It is an <strong style="color:var(--orange);">Autonomous Growth Layer</strong> — a fully autonomous SEM system powered by Spectra, our proprietary 6-agent suite, that replaces the agency relationship entirely. Submit your URL and Gemini Vision AI reads your website the way a senior brand strategist would: extracting brand identity, tone of voice, products, and competitive positioning in minutes. No brief. No onboarding call. No account manager. The Spectra agents then build your campaigns and manage them continuously — 24 hours a day, every day. You move from in-the-loop (doing the work) to on-the-loop (directing the strategy).</div>
+      <div class="solution-desc">SiteToSpend is not a dashboard. It is an <strong style="color:var(--orange);">Autonomous Growth Layer</strong> — a fully autonomous SEM system powered by Spectra, our proprietary 6-agent suite, that replaces the agency relationship entirely. Submit your URL and Vision AI reads your website the way a senior brand strategist would: extracting brand identity, tone of voice, products, and competitive positioning in minutes. No brief. No onboarding call. No account manager. The Spectra agents then build your campaigns and manage them continuously — 24 hours a day, every day. You move from in-the-loop (doing the work) to on-the-loop (directing the strategy).</div>
     </div>
 
     <div class="agents-grid">
       <div class="agent-card">
         <div class="agent-icon">👁️</div>
         <div class="agent-name">Vision AI Brand Synthesis</div>
-        <div class="agent-desc">What takes an agency 3 weeks of discovery calls, Gemini Vision AI extracts from your URL in under 10 minutes. Brand identity, tone, products, positioning — synthesised, not briefed. The magic moment that makes everything else possible.</div>
+        <div class="agent-desc">What takes an agency 3 weeks of discovery calls, Vision AI extracts from your URL in under 10 minutes. Brand identity, tone, products, positioning — synthesised, not briefed. The magic moment that makes everything else possible.</div>
       </div>
       <div class="agent-card">
         <div class="agent-icon">⚙️</div>
@@ -1876,6 +1876,114 @@ body.presentation-active .slide {
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- Cost breakdown table -->
+    <div style="margin-top:28px;">
+      <div class="section-label">Cost to service one Growth client per month — all AI categories, honest ranges</div>
+      <table style="width:100%;border-collapse:collapse;font-size:11.5px;background:var(--dark2);border:1px solid var(--dark3);border-radius:12px;overflow:hidden;">
+        <thead>
+          <tr style="background:var(--dark);border-bottom:2px solid var(--dark3);">
+            <th style="padding:10px 14px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray);font-weight:700;">Cost Item</th>
+            <th style="padding:10px 14px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray);font-weight:700;">Frequency · Model tier</th>
+            <th style="padding:10px 14px;text-align:right;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray);font-weight:700;">Range / Month</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- AI INFERENCE — AUTOMATED AGENTS -->
+          <tr style="background:rgba(255,77,0,0.06);">
+            <td colspan="3" style="padding:7px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--orange);">Automated AI Agents — included in subscription</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Budget intelligence</td>
+            <td style="padding:9px 14px;color:var(--gray);">Hourly · 720 runs/month · Flash model</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$0.20–$1.00</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);background:rgba(255,77,0,0.03);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Campaign optimisation</td>
+            <td style="padding:9px 14px;color:var(--gray);">Daily · 30 runs/month · <strong style="color:var(--white);">Pro model</strong> (deep reasoning)</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$0.80–$2.30</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Self-healing + anomaly detection</td>
+            <td style="padding:9px 14px;color:var(--gray);">Every 4 hrs · ~180 runs/month · Flash model</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$0.04–$0.20</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);background:rgba(255,77,0,0.03);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Reporting + intelligence agents</td>
+            <td style="padding:9px 14px;color:var(--gray);">Daily/weekly · reports, competitor, A/B, DSA · Flash &amp; Lite</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$0.06–$0.20</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Brand extraction + Vision (amortised)</td>
+            <td style="padding:9px 14px;color:var(--gray);">One-time screenshot + multimodal analysis ÷ 12 months</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$0.01–$0.03</td>
+          </tr>
+          <tr style="border-bottom:2px solid var(--orange-border);background:rgba(255,77,0,0.08);">
+            <td style="padding:9px 14px;color:var(--orange);font-weight:800;">Total AI inference</td>
+            <td style="padding:9px 14px;color:var(--gray);font-size:11px;">Scales with campaign volume and data maturity</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--orange);font-weight:800;">$1.00–$4.00</td>
+          </tr>
+
+          <!-- PLATFORM COSTS -->
+          <tr style="background:rgba(255,77,0,0.03);">
+            <td colspan="3" style="padding:7px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray);">Platform &amp; Delivery</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Infrastructure (pro-rated)</td>
+            <td style="padding:9px 14px;color:var(--gray);">Server · database · S3 · Redis · sub-linear at scale</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$1.50</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);background:rgba(255,77,0,0.03);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Email delivery (Resend)</td>
+            <td style="padding:9px 14px;color:var(--gray);">Daily reports · alerts · notifications</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$0.25</td>
+          </tr>
+          <tr style="border-bottom:2px solid var(--dark3);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">Payment processing (Stripe)</td>
+            <td style="padding:9px 14px;color:var(--gray);">2.9% + $0.30 per transaction</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$7.52</td>
+          </tr>
+
+          <!-- CREATIVE GENERATION — INCLUDED IN SUBSCRIPTION, QUOTA-GATED -->
+          <tr style="background:rgba(255,77,0,0.03);">
+            <td colspan="3" style="padding:7px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--gray);">Creative Generation — included, quota-gated per plan</td>
+          </tr>
+          <tr style="border-bottom:1px solid rgba(0,0,0,0.05);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">AI image generation</td>
+            <td style="padding:9px 14px;color:var(--gray);">~$0.08/image · 3 auto-generated per strategy at launch · up to 150/mo (Growth)</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$0.80–$2.50</td>
+          </tr>
+          <tr style="border-bottom:2px solid var(--dark3);background:rgba(255,77,0,0.03);">
+            <td style="padding:9px 14px;color:var(--white);font-weight:600;">AI video generation (Veo 3)</td>
+            <td style="padding:9px 14px;color:var(--gray);">~$2.80/clip · 2 auto-generated per campaign at launch · capped at 10/mo (Growth)</td>
+            <td style="padding:9px 14px;text-align:right;color:var(--white);font-weight:600;">$2.80–$8.40</td>
+          </tr>
+
+          <!-- TOTALS -->
+          <tr style="background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.08);">
+            <td style="padding:11px 14px;color:var(--gray);font-weight:700;">Total direct COGS</td>
+            <td style="padding:11px 14px;color:var(--gray);font-size:11px;">AI agents + creative + platform</td>
+            <td style="padding:11px 14px;text-align:right;color:var(--white);font-weight:700;">$13.87–$24.17</td>
+          </tr>
+          <tr style="background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.08);">
+            <td style="padding:11px 14px;color:var(--gray);font-weight:700;">Overhead allocation (pro-rated)</td>
+            <td style="padding:11px 14px;color:var(--gray);font-size:11px;">Engineering · compliance · customer success</td>
+            <td style="padding:11px 14px;text-align:right;color:var(--white);font-weight:700;">$20.65–$30.95</td>
+          </tr>
+          <tr style="background:rgba(0,0,0,0.04);border-bottom:1px solid rgba(0,0,0,0.08);">
+            <td style="padding:11px 14px;color:var(--gray);font-weight:700;">Revenue (Growth tier)</td>
+            <td style="padding:11px 14px;"></td>
+            <td style="padding:11px 14px;text-align:right;color:var(--white);font-weight:700;">$249.00</td>
+          </tr>
+          <tr style="background:rgba(255,77,0,0.08);">
+            <td style="padding:12px 14px;color:var(--orange);font-weight:900;font-size:13px;">Gross margin per client</td>
+            <td style="padding:12px 14px;color:var(--gray);font-size:11px;">Across the full range of typical usage</td>
+            <td style="padding:12px 14px;text-align:right;font-size:15px;font-weight:900;color:var(--orange);">$204–$225 &nbsp;<span style="font-size:11px;font-weight:700;background:var(--orange);color:#fff;padding:2px 7px;border-radius:4px;">82–90%</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <p style="font-size:10px;color:var(--gray2);margin-top:8px;font-style:italic;">* Creative ranges reflect typical usage (10–30 images, 1–3 videos/month) — not full-quota worst-case. Plans enforce hard monthly limits (Growth: 150 images / 30 videos) to cap exposure. The Campaign Optimisation agent runs daily on the Pro model (the highest-cost automated line); all other recurring agents use Flash or Lite tiers. Video is the most expensive single line at ~$2.80/clip; quota gating keeps it predictable. Overhead per client contracts as the account base scales.</p>
     </div>
   </div>
 </div>
@@ -2239,7 +2347,7 @@ body.presentation-active .slide {
         <div class="team-name">Joshua Theeuf</div>
         <div class="team-title">Founder & CTO</div>
         <div class="team-role">Selling into the startup ecosystem — and keeping the agents honest.</div>
-        <div class="team-bio">A former client of Matt and James — Matt and James delivered <strong style="color:var(--orange);">7:1 ROAS</strong> on Josh's campaigns, and he still decided agencies were the wrong model. Frustrated by the cost, the latency, and the opacity even when results were good, he built the alternative. Shipped the entire SiteToSpend platform solo: 6 autonomous agents, 4 platform integrations, Gemini Vision AI brand extraction, and a full SaaS product. Product is built. Now focused on revenue — leveraging years embedded in the Sydney startup ecosystem to bring early-stage businesses onto the platform before they ever consider an agency. An incoming engineer takes on day-to-day build velocity under his guidance while he stays in market. Previously co-founded MyBond (consumer proptech, 30-person team) and MoneyLoop (B2B healthcare fintech, <strong style="color:var(--orange);">H2 Ventures</strong> accelerator) — two startups built from scratch before each shifted into regulated financial services.</div>
+        <div class="team-bio">A former client of Matt and James — Matt and James delivered <strong style="color:var(--orange);">7:1 ROAS</strong> on Josh's campaigns, and he still decided agencies were the wrong model. Frustrated by the cost, the latency, and the opacity even when results were good, he built the alternative. Shipped the entire SiteToSpend platform solo: 6 autonomous agents, 4 platform integrations, Vision AI brand extraction, and a full SaaS product. Product is built. Now focused on revenue — leveraging years embedded in the Sydney startup ecosystem to bring early-stage businesses onto the platform before they ever consider an agency. An incoming engineer takes on day-to-day build velocity under his guidance while he stays in market. Previously co-founded MyBond (consumer proptech, 30-person team) and MoneyLoop (B2B healthcare fintech, <strong style="color:var(--orange);">H2 Ventures</strong> accelerator) — two startups built from scratch before each shifted into regulated financial services.</div>
         <div class="team-creds">
           <div class="team-cred"><div class="team-cred-dot"></div>Sole engineer — complete SiteToSpend platform, all 6 agents, 4 ad platforms</div>
           <div class="team-cred"><div class="team-cred-dot"></div>Google Ads API — 20/20 RMF compliant, Standard Access approved</div>

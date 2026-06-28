@@ -44,6 +44,12 @@ class ProvisionConversionActions extends Command
             'category' => ConversionActionCategory::SIGNUP,
             'value'    => 99.0,
         ],
+        'try_now' => [
+            'name'     => 'Spectra — Try Now Demo',
+            'type'     => ConversionActionType::WEBPAGE,
+            'category' => ConversionActionCategory::LEAD,
+            'value'    => 50.0,
+        ],
         'pricing_visit' => [
             'name'     => 'Spectra — Pricing Visit',
             'type'     => ConversionActionType::WEBPAGE,

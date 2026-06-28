@@ -100,7 +100,7 @@ class PlanSeeder extends Seeder
                 'sort_order' => 2,
                 'creative_limits' => [
                     'image_generations' => 150,
-                    'video_generations' => 30,
+                    'video_generations' => 10,
                     'refinements' => 150,
                     'max_refinements_per_item' => 3,
                     'max_extensions_per_video' => 3,
