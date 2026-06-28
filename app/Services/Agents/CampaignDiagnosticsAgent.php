@@ -229,8 +229,9 @@ class CampaignDiagnosticsAgent
                     'platform' => 'google_ads',
                     'message'  => 'PMax campaign has no audience signals — Google has zero guidance on who to target, so it is spending on broad, unqualified audiences',
                     'details'  => ['campaign_id' => $campaignId, 'asset_groups' => $data['asset_groups']],
-                    'can_auto_fix'       => false,
-                    'recommended_action' => 'Add audience signals in Google Ads: website visitors remarketing list, customer email list, or in-market segments for "Business Software" / "Marketing Services"',
+                    'can_auto_fix'      => true,
+                    'auto_fix_action'   => 'add_audience_signals',
+                    'recommended_action' => 'Add search-theme and in-market audience signals so PMax knows who to target',
                 ];
             }
 
@@ -302,14 +303,19 @@ class CampaignDiagnosticsAgent
             };
 
             if (!$service->hasSearchTerms($customerId, $campaignId)) {
+                preg_match('/campaigns\/(\d+)$/', $campaign->google_ads_campaign_id, $m2);
+                $cId = $m2[1] ?? $campaign->google_ads_campaign_id;
+                $assetGroups = $this->fetchAssetGroups($customer, $customerId, $cId);
+
                 return [
                     'type'     => 'display_only_traffic',
                     'severity' => 'medium',
                     'platform' => 'google_ads',
                     'message'  => number_format($perf['impressions']) . ' impressions with zero search-intent traffic — all clicks are from Display/Discovery, not Search',
-                    'details'  => ['impressions' => $perf['impressions'], 'clicks' => $perf['clicks']],
-                    'can_auto_fix'       => false,
-                    'recommended_action' => 'Add a dedicated Search campaign alongside PMax to capture high-intent queries from people actively searching for your product',
+                    'details'  => ['impressions' => $perf['impressions'], 'clicks' => $perf['clicks'], 'asset_groups' => $assetGroups],
+                    'can_auto_fix'      => true,
+                    'auto_fix_action'   => 'add_audience_signals',
+                    'recommended_action' => 'Add search-theme signals to guide PMax towards search-intent traffic; consider a companion Search campaign for sustained coverage',
                 ];
             }
         } catch (\Exception $e) {
@@ -320,6 +326,30 @@ class CampaignDiagnosticsAgent
         }
 
         return null;
+    }
+
+    private function fetchAssetGroups(mixed $customer, string $customerId, string $campaignId): array
+    {
+        try {
+            $service = new class($customer) extends BaseGoogleAdsService {
+                public function get(string $customerId, string $campaignId): array
+                {
+                    $this->ensureClient();
+                    $groups = [];
+                    $resp   = $this->searchQuery($customerId,
+                        "SELECT asset_group.resource_name, asset_group.name FROM asset_group WHERE campaign.id = {$campaignId}"
+                    );
+                    foreach ($resp->getIterator() as $row) {
+                        $ag       = $row->getAssetGroup();
+                        $groups[] = ['resource_name' => $ag->getResourceName(), 'name' => $ag->getName()];
+                    }
+                    return $groups;
+                }
+            };
+            return $service->get($customerId, $campaignId);
+        } catch (\Exception) {
+            return [];
+        }
     }
 
     // ─── Platform-agnostic ───────────────────────────────────────────────────

@@ -8,6 +8,8 @@ use App\Models\Customer;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\GoogleAds\CommonServices\SearchAudience;
+use App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateImageAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
@@ -89,9 +91,179 @@ class CampaignRemediationAgent
     {
         match ($finding['auto_fix_action'] ?? '') {
             'refresh_creative'      => $this->refreshCreative($campaign, $finding, $results),
+            'add_audience_signals'  => $this->addAudienceSignals($campaign, $finding, $results),
             'provision_conversions' => $this->provisionConversions($finding, $results),
             default                 => $this->alertCustomer($campaign, $finding, $results),
         };
+    }
+
+    // ─── Audience signals ─────────────────────────────────────────────────────
+
+    private function addAudienceSignals(Campaign $campaign, array $finding, array &$results): void
+    {
+        $customer = $campaign->customer;
+        if (!$customer) {
+            return;
+        }
+
+        // One signal pass per campaign per 7 days — signals are immutable once set
+        $cacheKey = "remediation_audience_signals:{$campaign->id}";
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+
+        $customerId  = $customer->cleanGoogleCustomerId();
+        $assetGroups = $finding['details']['asset_groups'] ?? $this->fetchAssetGroups($customer, $customerId, $campaign);
+
+        if (empty($assetGroups)) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        // 1. Generate search themes from the customer KB via AI
+        $themes = $this->generateSearchThemes($campaign, $customer);
+
+        // 2. Look up relevant in-market audience IDs
+        $audienceResources = $this->findRelevantAudiences($customer, $customerId);
+
+        if (empty($themes) && empty($audienceResources)) {
+            $this->alertCustomer($campaign, $finding, $results);
+            return;
+        }
+
+        $addSignals = new AddAudienceSignals($customer);
+        $totalAdded = 0;
+
+        foreach ($assetGroups as $assetGroup) {
+            $groupResource = $assetGroup['resource_name'];
+
+            if (!empty($themes)) {
+                $totalAdded += $addSignals->addSearchThemes($customerId, $groupResource, $themes);
+            }
+
+            if (!empty($audienceResources)) {
+                $totalAdded += $addSignals->addAudienceInterests($customerId, $groupResource, $audienceResources);
+            }
+        }
+
+        if ($totalAdded > 0) {
+            Cache::put($cacheKey, true, now()->addDays(7));
+
+            $results['actions_taken'][] = [
+                'type'     => 'audience_signals_added',
+                'platform' => 'google_ads',
+                'message'  => "Added {$totalAdded} audience signal(s) across " . count($assetGroups) . ' asset group(s)',
+                'themes'   => $themes,
+                'audiences' => $audienceResources,
+            ];
+
+            foreach ($customer->users as $user) {
+                $user->notify(new CriticalAgentAlert(
+                    'audience_signals_added',
+                    'Auto-Fixed: Audience Signals Added to "' . $campaign->name . '"',
+                    "Your PMax campaign had no audience signals — Google was guessing who to show ads to. "
+                    . "We automatically added " . count($themes) . " search-theme signal(s) and "
+                    . count($audienceResources) . " in-market audience(s) based on your business profile. "
+                    . "Themes: " . implode(', ', array_slice($themes, 0, 5)) . (count($themes) > 5 ? '...' : '') . ". "
+                    . "Google will now use these to find relevant, high-intent audiences.",
+                    ['campaign_id' => $campaign->id, 'themes' => $themes, 'audiences' => $audienceResources]
+                ));
+            }
+        } else {
+            $this->alertCustomer($campaign, $finding, $results);
+        }
+    }
+
+    private function generateSearchThemes(Campaign $campaign, Customer $customer): array
+    {
+        $name     = $customer->name ?? 'the business';
+        $industry = $customer->industry ?? 'SaaS';
+        $website  = $customer->website ?? '';
+
+        // Pull keywords from existing strategies if available
+        $strategyKeywords = $campaign->strategies()
+            ->whereIn('deployment_status', ['deployed', 'verified', 'signed_off'])
+            ->limit(3)
+            ->get()
+            ->flatMap(fn($s) => $s->keywords ?? [])
+            ->filter()
+            ->take(20)
+            ->values()
+            ->toArray();
+
+        $keywordContext = !empty($strategyKeywords)
+            ? "\n\nExisting campaign keywords for reference: " . implode(', ', $strategyKeywords)
+            : '';
+
+        $prompt = <<<PROMPT
+You are a Google Ads PMax specialist.
+
+Generate 10 search-theme signals for a Performance Max campaign. Search themes tell Google's AI what search intent to target — they're like keywords but guide PMax specifically.
+
+Business: "{$name}"
+Industry: {$industry}
+Website: {$website}{$keywordContext}
+
+Generate themes that represent the specific searches a high-intent buyer would make. Mix:
+- Problem-aware searches ("google ads not converting", "wasting google ads budget")
+- Solution-aware searches ("google ads management software", "automated google ads")
+- Brand/competitor-aware searches ("better than wordstream", "google ads agency alternative")
+- Outcome searches ("increase google ads roas", "lower google ads cpc")
+
+Return ONLY a JSON array of strings. Max 10 themes, max 10 words each, no special characters:
+["theme 1", "theme 2", ...]
+PROMPT;
+
+        try {
+            $response = $this->gemini->generateContent(
+                model:   config('ai.models.default'),
+                prompt:  $prompt,
+                config:  ['temperature' => 0.7],
+                context: ['operation' => 'search_themes', 'campaign_id' => $campaign->id],
+            );
+
+            if ($response && isset($response['text'])) {
+                if (preg_match('/\[.*?\]/s', $response['text'], $m)) {
+                    $themes = json_decode($m[0], true);
+                    if (is_array($themes)) {
+                        return array_values(array_filter(array_map(
+                            fn($t) => mb_substr(trim((string) $t), 0, 80),
+                            $themes
+                        )));
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::warning('CampaignRemediationAgent: Search theme generation failed', ['error' => $e->getMessage()]);
+        }
+
+        return [];
+    }
+
+    private function findRelevantAudiences(Customer $customer, string $customerId): array
+    {
+        // Search for in-market audiences relevant to B2B SaaS / marketing software
+        $searchTerms = ['business software', 'marketing', 'advertising'];
+        $found       = [];
+
+        try {
+            $searcher = new SearchAudience($customer);
+            foreach ($searchTerms as $term) {
+                $audiences = ($searcher)($customerId, $term);
+                foreach ($audiences as $a) {
+                    if (isset($a['id'])) {
+                        $found[] = $a['id'];
+                    }
+                    if (count($found) >= 3) {
+                        break 2;
+                    }
+                }
+            }
+        } catch (\Exception $e) {
+            Log::debug('CampaignRemediationAgent: Audience search failed', ['error' => $e->getMessage()]);
+        }
+
+        return $found;
     }
 
     // ─── Creative refresh ─────────────────────────────────────────────────────
