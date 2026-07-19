@@ -95,11 +95,15 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
     const isSignedOff = !!strategy.signed_off_at;
 
     return (
-        <div className={`p-6 rounded-lg shadow-md ${isSignedOff ? 'bg-gray-200' : 'bg-mint-cream'}`}>
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-2xl font-bold text-delft-blue">{strategy.platform}</h3>
+        <div className={`p-6 rounded-xl shadow-sm border ${isSignedOff ? 'bg-gray-50 border-gray-200' : 'bg-white border-gray-200'}`}>
+            <div className="flex justify-between items-center mb-5 pb-4 border-b border-gray-100">
+                <div>
+                    <h3 className="text-xl font-bold text-delft-blue">{strategy.platform}</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">AI-generated strategy</p>
+                </div>
                 {!isSignedOff && !isEditing && (
-                    <button onClick={() => setIsEditing(true)} className="text-sm text-air-superiority-blue hover:underline">
+                    <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-flame-orange-600 hover:text-flame-orange-700 hover:bg-flame-orange-50 px-3 py-1.5 rounded-lg transition">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         Edit
                     </button>
                 )}
@@ -125,18 +129,18 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                     </div>
                 </form>
             ) : (
-                <div className="space-y-4">
+                <div className="space-y-5">
                     <div>
-                        <h4 className="font-bold text-jet">Ad Copy Strategy</h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">{strategy.ad_copy_strategy}</p>
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>✍️</span>Ad Copy Strategy</h4>
+                        <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.ad_copy_strategy}</p>
                     </div>
-                    <div>
-                        <h4 className="font-bold text-jet">Imagery Strategy</h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">{strategy.imagery_strategy}</p>
+                    <div className="pt-5 border-t border-gray-100">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🖼️</span>Imagery Strategy</h4>
+                        <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.imagery_strategy}</p>
                     </div>
-                    <div>
-                        <h4 className="font-bold text-jet">Video Strategy</h4>
-                        <p className="text-gray-700 whitespace-pre-wrap">{strategy.video_strategy}</p>
+                    <div className="pt-5 border-t border-gray-100">
+                        <h4 className="flex items-center gap-2 text-sm font-semibold text-jet mb-1.5"><span>🎬</span>Video Strategy</h4>
+                        <p className="text-gray-600 leading-relaxed whitespace-pre-wrap">{strategy.video_strategy}</p>
                     </div>
                 </div>
             )}
@@ -168,10 +172,16 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                     </div>
                 </div>
             ) : (
-                <div className="mt-6">
-                    <PrimaryButton onClick={handleSignOff} disabled={processing} className="w-full justify-center bg-naples-yellow text-jet hover:bg-yellow-400">
-                        Sign Off Strategy
-                    </PrimaryButton>
+                <div className="mt-6 pt-5 border-t border-gray-100">
+                    <button
+                        onClick={handleSignOff}
+                        disabled={processing}
+                        className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 rounded-lg bg-emerald-600 text-white font-semibold shadow-sm hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                        {processing ? 'Signing off…' : 'Approve & Sign Off Strategy'}
+                    </button>
+                    <p className="mt-2 text-center text-xs text-gray-500">Locks the strategy and starts generating your ad creative — you can edit it first.</p>
                 </div>
             )}
         </div>
