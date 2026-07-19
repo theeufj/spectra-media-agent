@@ -25,6 +25,7 @@ class TestDataManagerEvent extends Command
                             {--value=1 : Conversion value}
                             {--currency=USD : Currency code}
                             {--email= : Optional email for enhanced-conversion hashing}
+                            {--source=WEB : Event source (WEB, APP, IN_STORE, PHONE, MESSAGE, OTHER)}
                             {--live : Actually ingest instead of validateOnly dry run}';
 
     protected $description = 'Send a test event to the Google Data Manager API to verify access and request shape.';
@@ -73,6 +74,7 @@ class TestDataManagerEvent extends Command
             occurredAt: now(),
             email: $this->option('email') ?: null,
             validateOnly: $validateOnly,
+            eventSource: $this->option('source'),
         );
 
         if ($result['success']) {

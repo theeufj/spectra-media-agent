@@ -48,33 +48,29 @@ $oauth2 = new OAuth2([
     'authorizationUri' => 'https://accounts.google.com/o/oauth2/v2/auth',
     'redirectUri' => $redirectUri,
     'tokenCredentialUri' => 'https://oauth2.googleapis.com/token',
-    'scope' => 'https://www.googleapis.com/auth/adwords',
+    // adwords: Google Ads API. datamanager: Data Manager API (events:ingest) for
+    // server-side / offline conversions. Both are needed on the one MCC token.
+    'scope' => 'https://www.googleapis.com/auth/adwords https://www.googleapis.com/auth/datamanager',
 ]);
 
 $authUrl = $oauth2->buildFullAuthorizationUri(['access_type' => 'offline', 'prompt' => 'consent']);
 
-printf("Log into the Google account you want to use to manage your ads.\n");
-printf("Opening browser...\n\n");
-
-// Try to open the URL in the default browser
+// Print the URL rather than auto-opening — auto-open lands in whatever profile
+// is default, which is often the wrong Google account. Paste it into the browser
+// profile that is signed into the MCC account.
 $url = (string) $authUrl;
-if (PHP_OS_FAMILY === 'Darwin') {
-    exec('open ' . escapeshellarg($url));
-} elseif (PHP_OS_FAMILY === 'Linux') {
-    exec('xdg-open ' . escapeshellarg($url));
-} else {
-    printf("Paste the following URL into your browser:\n%s\n\n", $url);
-}
+printf("Open this URL in the browser profile signed into your MCC Google account:\n\n");
+printf("%s\n\n", $url);
 
 // Start a temporary local server to capture the OAuth callback
-printf("Waiting for Google OAuth callback on %s ...\n", $redirectUri);
+printf("Waiting for Google OAuth callback on %s (up to 5 minutes) ...\n", $redirectUri);
 
 $server = stream_socket_server('tcp://127.0.0.1:8088', $errno, $errstr);
 if (!$server) {
     die("Error: Could not start local server: $errstr ($errno)\n");
 }
 
-$conn = stream_socket_accept($server, 120); // wait up to 2 minutes
+$conn = stream_socket_accept($server, 300); // wait up to 5 minutes
 if (!$conn) {
     fclose($server);
     die("Error: Timed out waiting for OAuth callback.\n");
@@ -105,11 +101,19 @@ $oauth2->setCode($code);
 $authToken = $oauth2->fetchAuthToken();
 
 if (isset($authToken['refresh_token'])) {
-    printf("\n✅ Refresh token: %s\n\n", $authToken['refresh_token']);
-    printf("Save this to:\n");
-    printf("  1. storage/app/google_ads_php.ini (refreshToken field) for local testing\n");
-    printf("  2. mcc_accounts table (refresh_token column, encrypted) for production\n");
-    printf("  3. Or set GOOGLE_ADS_MCC_REFRESH_TOKEN in .env\n");
+    $token   = $authToken['refresh_token'];
+    $outPath = __DIR__ . '/../storage/app/mcc_refresh_token.new';
+    file_put_contents($outPath, $token);
+    @chmod($outPath, 0600);
+
+    // Never print the full token — it is a long-lived credential. Show a masked
+    // preview so you can confirm it minted, and write the value to a 0600 file.
+    $masked = substr($token, 0, 8) . str_repeat('•', 12) . substr($token, -4);
+    printf("\n✅ Refresh token minted (adwords + datamanager scopes): %s\n", $masked);
+    printf("   Written to: storage/app/mcc_refresh_token.new (chmod 600)\n\n");
+    printf("Next: put this value in the SERVER .env as GOOGLE_ADS_MCC_REFRESH_TOKEN,\n");
+    printf("then run `php artisan config:cache`. MccAccount::getActive() reads it from\n");
+    printf("env, so the new scope applies to both the Ads API and Data Manager.\n");
 } else {
     printf("\nError: Could not retrieve refresh token.\n");
     printf("Response: %s\n", json_encode($authToken));

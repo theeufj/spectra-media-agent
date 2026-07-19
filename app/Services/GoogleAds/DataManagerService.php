@@ -56,6 +56,7 @@ class DataManagerService
         \DateTimeInterface $occurredAt,
         ?string $email = null,
         bool $validateOnly = false,
+        string $eventSource = 'WEB',
     ): array {
         if (! $this->mcc) {
             return ['success' => false, 'error' => 'No active MCC account'];
@@ -68,6 +69,7 @@ class DataManagerService
 
         $event = [
             'destinationReferences' => ['google_ads'],
+            'eventSource'           => $eventSource, // required: WEB | APP | IN_STORE | PHONE | ...
             'eventTimestamp'        => Carbon::instance(Carbon::parse($occurredAt))->utc()->toIso8601ZuluString(),
             'adIdentifiers'         => ['gclid' => $gclid],
             'currency'              => $currency,
