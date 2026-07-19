@@ -7,6 +7,9 @@ use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V22\Resources\AssetGroupAsset;
+use Google\Ads\GoogleAds\V22\Services\AssetGroupAssetOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupAssetsRequest;
 
 /**
  * Detects PMax asset groups with POOR/AVERAGE ad strength and heals them by
@@ -118,9 +121,12 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
 
         $generated = $this->generateAssets($needed, $existing['text']);
 
+        // Create the assets (these don't touch the asset group), then link them ALL in
+        // one atomic mutate. Linking one-at-a-time fires many modifications at the same
+        // asset group and trips CONCURRENT_MODIFICATION against Google's ad-strength recalc.
         $added = [];
+        $linkOps = [];
         $creator = new CreateTextAsset($this->customer);
-        $linker  = new LinkAssetGroupAsset($this->customer);
 
         foreach (self::SPEC as $type => $spec) {
             foreach (($generated[$type] ?? []) as $text) {
@@ -128,11 +134,19 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                 if (!$assetRes) {
                     continue;
                 }
-                $linkRes = $linker($customerId, $group['res'], $assetRes, $spec['field']);
-                if ($linkRes) {
-                    $added[$type] = ($added[$type] ?? 0) + 1;
-                }
+                $op = new AssetGroupAssetOperation();
+                $op->setCreate(new AssetGroupAsset([
+                    'asset_group' => $group['res'],
+                    'asset'       => $assetRes,
+                    'field_type'  => $spec['field'],
+                ]));
+                $linkOps[] = $op;
+                $added[$type] = ($added[$type] ?? 0) + 1;
             }
+        }
+
+        if (!empty($linkOps) && !$this->batchLink($customerId, $linkOps)) {
+            $added = []; // link failed; assets created but not attached
         }
 
         if (empty($added) && empty($missingMedia)) {
@@ -150,6 +164,27 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             'added'         => $added,
             'missing_media' => $missingMedia,
         ];
+    }
+
+    /** Link all assets in one atomic mutate, retrying transient concurrent-modification. */
+    private function batchLink(string $customerId, array $ops): bool
+    {
+        for ($attempt = 1; $attempt <= 3; $attempt++) {
+            try {
+                $this->client->getAssetGroupAssetServiceClient()->mutateAssetGroupAssets(
+                    new MutateAssetGroupAssetsRequest(['customer_id' => $customerId, 'operations' => $ops])
+                );
+                return true;
+            } catch (\Throwable $e) {
+                if ($attempt < 3 && str_contains($e->getMessage(), 'CONCURRENT_MODIFICATION')) {
+                    usleep(1_000_000 * $attempt); // 1s, then 2s backoff
+                    continue;
+                }
+                $this->logError('HealAssetGroupStrength: batch link failed: ' . $e->getMessage());
+                return false;
+            }
+        }
+        return false;
     }
 
     /**
