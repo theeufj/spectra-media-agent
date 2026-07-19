@@ -778,11 +778,17 @@ class GeminiService
     public function checkVideoGenerationStatus(string $operationName): ?array
     {
         try {
-            $url = "https://aiplatform.googleapis.com/v1/{$operationName}";
+            // Veo runs as a Vertex predictLongRunning operation. Its status is NOT
+            // retrievable via GET /v1/{operationName} (that returns a 404) — it must
+            // be fetched via POST {model}:fetchPredictOperation with the operation
+            // name in the body. The model resource is the operation name up to
+            // "/operations/".
+            $modelResource = strstr($operationName, '/operations/', true) ?: $operationName;
+            $url = "https://aiplatform.googleapis.com/v1/{$modelResource}:fetchPredictOperation";
 
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
-                ->get($url);
+                ->post($url, ['operationName' => $operationName]);
 
             if ($response->failed()) {
                 Log::error("GeminiService: Failed to check operation status for {$operationName}: " . $response->body());
