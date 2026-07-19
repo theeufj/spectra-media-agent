@@ -97,17 +97,20 @@ return [
 
     /*
      * Pricing per 1M tokens (USD). Used to calculate costs stored in ai_costs.
-     * Sourced from ai.google.dev pricing page — update when Google changes rates.
+     * Sourced from the Vertex / Gemini Enterprise Agent Platform pricing page
+     * (verified 2026-07-19). Pro tiers use the <=200K-token rate; Flash uses the
+     * global rate. Veo is billed per second, not per token, so it stays at 0.
      */
     'pricing' => [
-        'gemini-3.1-pro-preview'        => ['input' => 1.25,   'output' => 5.00,  'cached' => 0.3125],
-        'gemini-2.5-pro'                => ['input' => 1.25,   'output' => 5.00,  'cached' => 0.3125],
-        'gemini-3.5-flash'              => ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
-        'gemini-3-flash-preview'        => ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
-        'gemini-2.5-flash'              => ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
-        'gemini-3.1-flash-lite-preview' => ['input' => 0.018,  'output' => 0.072, 'cached' => 0.0045],
-        'gemini-2.5-flash-lite'         => ['input' => 0.018,  'output' => 0.072, 'cached' => 0.0045],
-        'gemini-3.1-flash-image-preview'=> ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
+        'gemini-3.1-pro-preview'        => ['input' => 2.00,   'output' => 12.00, 'cached' => 0.20],
+        'gemini-2.5-pro'                => ['input' => 1.25,   'output' => 10.00, 'cached' => 0.13],
+        'gemini-3.5-flash'              => ['input' => 1.50,   'output' => 9.00,  'cached' => 0.15],
+        'gemini-3-flash-preview'        => ['input' => 0.50,   'output' => 3.00,  'cached' => 0.05],
+        'gemini-2.5-flash'              => ['input' => 0.30,   'output' => 2.50,  'cached' => 0.03],
+        'gemini-3.1-flash-lite-preview' => ['input' => 0.25,   'output' => 1.50,  'cached' => 0.025],
+        'gemini-2.5-flash-lite'         => ['input' => 0.10,   'output' => 0.40,  'cached' => 0.01],
+        // Image model: output priced at the image-output rate ($60/1M tokens).
+        'gemini-3.1-flash-image-preview'=> ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-embedding-001'          => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'text-embedding-005'            => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'veo-3.1-generate-001'      => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
