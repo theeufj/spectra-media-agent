@@ -10,6 +10,8 @@ use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use App\Services\Agents\LinkedInCampaignOptimizationAgent;
+use App\Services\GoogleAds\CommonServices\VerifyConversionGoals;
+use App\Services\GoogleAds\PerformanceMaxServices\HealAssetGroupStrength;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -50,6 +52,7 @@ class RunSelfHealingChecks implements ShouldQueue
 
         $healed = 0;
         $errors = 0;
+        $conversionCheckedCustomers = []; // conversion-goal hygiene runs once per customer per pass
 
         foreach ($campaigns as $campaign) {
             $lock = Cache::lock("self_heal:campaign:{$campaign->id}", 3600);
@@ -84,6 +87,39 @@ class RunSelfHealingChecks implements ShouldQueue
 
                 if ($campaign->linkedin_campaign_id) {
                     $linkedInAgent->analyze($campaign);
+                }
+
+                // Pass 3 (Google): heal POOR/AVERAGE PMax ad strength + conversion-goal hygiene.
+                if ($campaign->google_ads_campaign_id) {
+                    try {
+                        foreach ((new HealAssetGroupStrength($campaign->customer))->heal($campaign) as $r) {
+                            $addedCount = array_sum($r['added'] ?? []);
+                            if ($addedCount > 0) {
+                                $healed += $addedCount;
+                                AgentActivity::record(
+                                    'maintenance', 'ad_strength_healed',
+                                    "Added {$addedCount} text asset(s) to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
+                                    $campaign->customer_id, $campaign->id, $r
+                                );
+                            }
+                        }
+
+                        // Conversion-goal hygiene — once per customer per pass.
+                        if (!in_array($campaign->customer_id, $conversionCheckedCustomers, true)) {
+                            $conversionCheckedCustomers[] = $campaign->customer_id;
+                            $conv = (new VerifyConversionGoals($campaign->customer))->verifyAndHeal();
+                            foreach (($conv['actions'] ?? []) as $action) {
+                                $healed++;
+                                AgentActivity::record('maintenance', 'conversion_goal_fixed', $action, $campaign->customer_id, $campaign->id, []);
+                            }
+                            foreach (($conv['warnings'] ?? []) as $warning) {
+                                Log::warning("RunSelfHealingChecks: conversion goal warning (customer {$campaign->customer_id}): {$warning}");
+                            }
+                        }
+                    } catch (\Throwable $e) {
+                        Log::error('RunSelfHealingChecks: Google strength/conversion pass failed for campaign ' . $campaign->id . ': ' . $e->getMessage());
+                        $errors++;
+                    }
                 }
 
                 if (!empty($results['actions_taken'])) {
