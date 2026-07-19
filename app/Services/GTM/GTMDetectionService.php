@@ -18,10 +18,13 @@ class GTMDetectionService
     public function detectGTMContainer(string $htmlContent): ?string
     {
         try {
-            // Pattern matches GTM container ID in Google Tag Manager script
-            // Handles variations in script formatting and attributes
-            $pattern = '/googletagmanager\.com\/gtm\.js\?id=([A-Z0-9\-]+)/i';
-            
+            // Match either the head script (gtm.js?id=) or the noscript body
+            // (ns.html?id=). The standard GTM snippet builds the gtm.js URL in
+            // JavaScript ('...gtm.js?id='+i), so in raw (unrendered) HTML only the
+            // ns.html?id= form is literally present — matching only gtm.js?id=
+            // fails to detect a correctly installed standard snippet.
+            $pattern = '/googletagmanager\.com\/(?:gtm\.js|ns\.html)\?id=([A-Z0-9\-]+)/i';
+
             if (preg_match($pattern, $htmlContent, $matches)) {
                 $containerId = $matches[1];
                 
@@ -46,6 +49,32 @@ class GTMDetectionService
             
             return null;
         }
+    }
+
+    /**
+     * Detect ALL GTM/GT container IDs present on the page (head gtm.js and
+     * noscript ns.html forms). A site can legitimately run multiple containers,
+     * so to confirm a *specific* container is installed, check membership of this
+     * list rather than equality with detectGTMContainer()'s single first match.
+     *
+     * @param string $htmlContent The HTML content of the webpage
+     * @return string[] Unique, valid container IDs in first-seen order
+     */
+    public function detectAllContainers(string $htmlContent): array
+    {
+        $ids = [];
+        $pattern = '/googletagmanager\.com\/(?:gtm\.js|ns\.html)\?id=([A-Z0-9\-]+)/i';
+
+        if (preg_match_all($pattern, $htmlContent, $matches)) {
+            foreach ($matches[1] as $id) {
+                $id = strtoupper($id);
+                if ($this->isValidContainerId($id) && !in_array($id, $ids, true)) {
+                    $ids[] = $id;
+                }
+            }
+        }
+
+        return $ids;
     }
 
     /**

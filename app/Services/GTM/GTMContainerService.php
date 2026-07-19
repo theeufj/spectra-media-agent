@@ -527,9 +527,11 @@ JS;
             }
 
             $detectionService = new GTMDetectionService();
-            $detected = $detectionService->detectGTMContainer($htmlContent);
-
-            $installed = $detected === $customer->gtm_container_id;
+            // Check whether OUR container is among all containers on the page.
+            // The site may run several GTM containers; a strict equality against
+            // the first-detected one would fail even when ours is installed.
+            $allDetected = $detectionService->detectAllContainers($htmlContent);
+            $installed = in_array($customer->gtm_container_id, $allDetected, true);
 
             if ($installed) {
                 $customer->update([
@@ -541,7 +543,7 @@ JS;
             return [
                 'success'   => true,
                 'installed' => $installed,
-                'detected'  => $detected,
+                'detected'  => $allDetected,
                 'expected'  => $customer->gtm_container_id,
             ];
         } catch (\Exception $e) {
