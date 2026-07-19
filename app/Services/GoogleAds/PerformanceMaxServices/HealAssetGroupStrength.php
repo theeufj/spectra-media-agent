@@ -21,8 +21,14 @@ use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupAssetsRequest;
  */
 class HealAssetGroupStrength extends BaseGoogleAdsService
 {
-    /** Heal groups at POOR (4) or AVERAGE (5). GOOD/EXCELLENT are left alone. */
-    private const HEAL_STRENGTHS = [4, 5];
+    /**
+     * Heal anything that isn't already GOOD (6) / EXCELLENT (7): POOR (4), AVERAGE (5),
+     * plus PENDING (2) / NO_ADS (3) — a freshly-built or just-modified group reports
+     * PENDING while Google recalculates, and a thin group should still be topped up.
+     * healGroup() only acts when there's an actual asset deficit, so full groups are
+     * a no-op regardless of strength.
+     */
+    private const HEAL_STRENGTHS = [2, 3, 4, 5];
 
     /** Google's targets for a strong text asset set, plus per-asset character limits. */
     private const SPEC = [
