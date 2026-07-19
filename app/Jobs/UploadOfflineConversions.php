@@ -6,11 +6,10 @@ use App\Models\Customer;
 use App\Models\MccAccount;
 use App\Models\OfflineConversion;
 use App\Services\FacebookAds\ConversionsApiService;
+use App\Services\GoogleAds\DataManagerService;
 use App\Services\MicrosoftAds\ConversionTrackingService as MicrosoftConversionTrackingService;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
-use Google\Ads\GoogleAds\V22\Services\ClickConversion;
-use Google\Ads\GoogleAds\V22\Services\UploadClickConversionsRequest;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -79,53 +78,54 @@ class UploadOfflineConversions implements ShouldQueue
                 return;
             }
 
-            $clickConversions = [];
-            foreach ($conversions as $conversion) {
-                $clickConversions[] = new ClickConversion([
-                    'gclid' => $conversion->gclid,
-                    'conversion_action' => $conversionActionResourceName,
-                    'conversion_date_time' => $conversion->conversion_time->format('Y-m-d H:i:sP'),
-                    'conversion_value' => (float) $conversion->conversion_value,
-                    'currency_code' => $conversion->currency_code ?? 'USD',
-                ]);
+            // Data Manager ingests into the conversion action by its numeric id
+            // (productDestinationId), not the full customers/{cid}/conversionActions/{id}.
+            $conversionActionId = explode('/', $conversionActionResourceName)[3] ?? null;
+            if (!$conversionActionId) {
+                Log::error('UploadOfflineConversions: Could not parse conversion action id', ['resource' => $conversionActionResourceName]);
+                return;
             }
 
-            $conversionUploadServiceClient = $client->getConversionUploadServiceClient();
-            $response = $conversionUploadServiceClient->uploadClickConversions(
-                new UploadClickConversionsRequest([
-                    'customer_id' => $customerId,
-                    'conversions' => $clickConversions,
-                    'partial_failure' => true,
-                ])
-            );
+            // Upload each conversion via the Data Manager API (the legacy
+            // UploadClickConversions endpoint is closed to new integrations).
+            $dataManager = new DataManagerService();
+            $uploaded = 0;
+            $failed = 0;
 
-            // Handle partial failures
-            $partialFailure = $response->getPartialFailureError();
-            $conversionArray = $conversions->values();
-
-            foreach ($conversionArray as $index => $conversion) {
+            foreach ($conversions as $conversion) {
                 $results = $conversion->upload_results ?? [];
 
-                if ($partialFailure && $this->hasOperationError($partialFailure, $index)) {
-                    $errorMsg = $this->getOperationError($partialFailure, $index);
-                    $results['google_ads'] = ['status' => 'failed', 'error' => $errorMsg, 'attempted_at' => now()->toDateTimeString()];
+                $result = $dataManager->ingestGclidConversion(
+                    operatingAccountId: (string) $customerId,
+                    conversionActionId: (string) $conversionActionId,
+                    gclid: $conversion->gclid,
+                    value: (float) $conversion->conversion_value,
+                    currency: $conversion->currency_code ?? 'USD',
+                    occurredAt: $conversion->conversion_time,
+                    email: $conversion->email ?? null,
+                );
+
+                if ($result['success']) {
+                    $uploaded++;
+                    $results['google_ads'] = ['status' => 'uploaded', 'request_id' => $result['requestId'] ?? null, 'uploaded_at' => now()->toDateTimeString()];
                     $conversion->update([
-                        'upload_status' => 'failed',
+                        'upload_status' => !empty($conversion->fbclid) ? 'uploaded_google' : 'uploaded_all',
                         'upload_results' => $results,
                     ]);
                 } else {
-                    $results['google_ads'] = ['status' => 'uploaded', 'uploaded_at' => now()->toDateTimeString()];
+                    $failed++;
+                    $results['google_ads'] = ['status' => 'failed', 'error' => $result['error'] ?? 'unknown', 'attempted_at' => now()->toDateTimeString()];
                     $conversion->update([
-                        'upload_status' => !empty($conversion->fbclid) ? 'uploaded_google' : 'uploaded_all',
+                        'upload_status' => 'failed',
                         'upload_results' => $results,
                     ]);
                 }
             }
 
-            Log::info('UploadOfflineConversions: Uploaded to Google Ads', [
+            Log::info('UploadOfflineConversions: Uploaded to Google Ads via Data Manager', [
                 'customer_id' => $customer->id,
-                'count' => $conversions->count(),
-                'had_partial_failures' => $partialFailure !== null,
+                'uploaded' => $uploaded,
+                'failed' => $failed,
             ]);
         } catch (\Exception $e) {
             foreach ($conversions as $conversion) {
@@ -337,52 +337,6 @@ class UploadOfflineConversions implements ShouldQueue
             Log::error('UploadOfflineConversions: Failed to build client', ['error' => $e->getMessage()]);
             return null;
         }
-    }
-
-    protected function hasOperationError($partialFailure, int $operationIndex): bool
-    {
-        if (!$partialFailure || !$partialFailure->getDetails()) {
-            return false;
-        }
-        foreach ($partialFailure->getDetails() as $detail) {
-            $errors = $detail->unpack();
-            if (method_exists($errors, 'getErrors')) {
-                foreach ($errors->getErrors() as $error) {
-                    $location = $error->getLocation();
-                    if ($location) {
-                        foreach ($location->getFieldPathElements() as $element) {
-                            if ($element->getFieldName() === 'operations' && $element->getIndex() === $operationIndex) {
-                                return true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    protected function getOperationError($partialFailure, int $operationIndex): string
-    {
-        if (!$partialFailure || !$partialFailure->getDetails()) {
-            return 'Unknown error';
-        }
-        foreach ($partialFailure->getDetails() as $detail) {
-            $errors = $detail->unpack();
-            if (method_exists($errors, 'getErrors')) {
-                foreach ($errors->getErrors() as $error) {
-                    $location = $error->getLocation();
-                    if ($location) {
-                        foreach ($location->getFieldPathElements() as $element) {
-                            if ($element->getFieldName() === 'operations' && $element->getIndex() === $operationIndex) {
-                                return $error->getMessage() ?? 'Operation failed';
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return 'Unknown error';
     }
 
     /**

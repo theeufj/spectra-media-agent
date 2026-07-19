@@ -28,6 +28,9 @@ class DataManagerService
 
     private ?MccAccount $mcc;
 
+    /** Cached access token for the lifetime of this instance (avoids re-exchanging per event). */
+    private ?string $cachedToken = null;
+
     public function __construct(?MccAccount $mcc = null)
     {
         $this->mcc = $mcc ?? MccAccount::getActive();
@@ -132,6 +135,10 @@ class DataManagerService
      */
     private function accessToken(): ?string
     {
+        if ($this->cachedToken) {
+            return $this->cachedToken;
+        }
+
         $cfg   = @parse_ini_file(storage_path('app/google_ads_php.ini'), true) ?: [];
         $oauth = $cfg['OAUTH2'] ?? [];
 
@@ -147,7 +154,7 @@ class DataManagerService
                 'grant_type'    => 'refresh_token',
             ]);
 
-            return $response->json('access_token');
+            return $this->cachedToken = $response->json('access_token');
         } catch (\Throwable $e) {
             Log::error('DataManagerService: token exchange failed: ' . $e->getMessage());
 

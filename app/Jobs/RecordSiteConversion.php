@@ -3,18 +3,14 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
-use App\Models\MccAccount;
-use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
-use Google\Ads\GoogleAds\V22\Services\ClickConversion;
-use Google\Ads\GoogleAds\V22\Services\UploadClickConversionsRequest;
+use App\Models\Setting;
+use App\Models\SpectraConversionEvent;
+use App\Services\GoogleAds\DataManagerService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Models\Setting;
-use App\Models\SpectraConversionEvent;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -22,10 +18,12 @@ use Illuminate\Support\Facades\Log;
  * for users who arrived via a Google Ad (i.e. have a stored gclid).
  *
  * Server-side events (campaign_live, seven_day_return) cannot fire in the browser
- * because there's no page load — this job handles the Conversions API upload instead.
+ * because there's no page load — this job uploads them via the Data Manager API
+ * (the legacy UploadClickConversions endpoint is closed to new integrations).
  *
- * The conversion action resource_name must be set in config/conversions.php before
- * uploads will occur. While it is null the job exits cleanly without error.
+ * The conversion action resource name must be provisioned (conversions:provision)
+ * and stored in Settings before uploads occur. While it is null the job exits
+ * cleanly without error.
  */
 class RecordSiteConversion implements ShouldQueue
 {
@@ -38,102 +36,57 @@ class RecordSiteConversion implements ShouldQueue
 
     public function handle(): void
     {
-        $config = config("conversions.events.{$this->event}");
-
-        // Resource names are stored in Settings by conversions:provision, not in config.
         $resourceName = Setting::get("conversion_resource_name.{$this->event}");
         if (!$resourceName) {
             Log::debug("RecordSiteConversion: resource_name not in settings for '{$this->event}' — skipping");
             return;
         }
 
-        $config = array_merge($config ?? [], ['resource_name' => $resourceName]);
-
-        // Extract customer ID directly from the resource_name (customers/{id}/conversionActions/{id})
-        // so this works even when SPECTRA_GOOGLE_ADS_CUSTOMER_ID is not set in env.
-        $customerId = explode('/', $resourceName)[1] ?? config('conversions.google_ads_customer_id');
-        if (!$customerId) {
-            Log::error("RecordSiteConversion: cannot determine customer_id for '{$this->event}'");
+        // resource name format: customers/{operatingAccountId}/conversionActions/{conversionActionId}
+        $parts              = explode('/', $resourceName);
+        $operatingAccountId = $parts[1] ?? null;
+        $conversionActionId = $parts[3] ?? null;
+        if (!$operatingAccountId || !$conversionActionId) {
+            Log::error("RecordSiteConversion: could not parse resource_name '{$resourceName}' for '{$this->event}'");
             return;
         }
+
+        $config   = config("conversions.events.{$this->event}", []);
+        $value    = (float) ($config['value'] ?? 0);
+        $currency = $config['currency'] ?? 'USD';
 
         $users = $this->customer->users()->whereNotNull('gclid')->get();
         if ($users->isEmpty()) {
             return;
         }
 
-        $client = $this->buildGoogleAdsClient();
-        if (!$client) {
-            Log::error("RecordSiteConversion: could not build Google Ads client for '{$this->event}'");
-            return;
-        }
+        $dataManager = new DataManagerService();
 
         foreach ($users as $user) {
-            $this->upload($client, $customerId, $user->gclid, $config);
-        }
-    }
-
-    private function upload($client, string $customerId, string $gclid, array $config): void
-    {
-        try {
-            $conversion = new ClickConversion([
-                'gclid'                => $gclid,
-                'conversion_action'    => $config['resource_name'],
-                'conversion_date_time' => now()->format('Y-m-d H:i:sP'),
-                'conversion_value'     => (float) $config['value'],
-                'currency_code'        => $config['currency'] ?? 'USD',
-            ]);
-
-            $client->getConversionUploadServiceClient()->uploadClickConversions(
-                new UploadClickConversionsRequest([
-                    'customer_id'     => $customerId,
-                    'conversions'     => [$conversion],
-                    'partial_failure' => true,
-                ])
+            $result = $dataManager->ingestGclidConversion(
+                operatingAccountId: (string) $operatingAccountId,
+                conversionActionId: (string) $conversionActionId,
+                gclid: $user->gclid,
+                value: $value,
+                currency: $currency,
+                occurredAt: now(),
+                email: $user->email ?? null,
             );
 
-            Log::info("RecordSiteConversion: uploaded '{$this->event}' for gclid {$gclid}");
-
-            SpectraConversionEvent::record($this->event, $user->id ?? null, [
-                'gclid'    => $gclid,
-                'uploaded' => true,
+            SpectraConversionEvent::record($this->event, $user->id, [
+                'gclid'    => $user->gclid,
+                'mode'     => 'server',
+                'uploaded' => $result['success'],
             ]);
-        } catch (\Exception $e) {
-            Log::error("RecordSiteConversion: upload failed for '{$this->event}': " . $e->getMessage(), [
-                'gclid'    => $gclid,
-                'customer' => $this->customer->id,
-            ]);
-        }
-    }
 
-    private function buildGoogleAdsClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
-    {
-        try {
-            $configPath = storage_path('app/google_ads_php.ini');
-            if (!file_exists($configPath)) {
-                return null;
+            if ($result['success']) {
+                Log::info("RecordSiteConversion: uploaded '{$this->event}' for gclid {$user->gclid} (request " . ($result['requestId'] ?? 'n/a') . ')');
+            } else {
+                Log::warning("RecordSiteConversion: upload failed for '{$this->event}': " . ($result['error'] ?? 'unknown'), [
+                    'gclid'    => $user->gclid,
+                    'customer' => $this->customer->id,
+                ]);
             }
-
-            $mcc = MccAccount::getActive();
-            if (!$mcc) {
-                return null;
-            }
-
-            $refreshToken = $mcc->refresh_token;
-
-            $oAuth2 = (new OAuth2TokenBuilder())
-                ->fromFile($configPath)
-                ->withRefreshToken($refreshToken)
-                ->build();
-
-            return (new GoogleAdsClientBuilder())
-                ->fromFile($configPath)
-                ->withOAuth2Credential($oAuth2)
-                ->withLoginCustomerId($mcc->google_customer_id)
-                ->build();
-        } catch (\Exception $e) {
-            Log::error('RecordSiteConversion: failed to build client: ' . $e->getMessage());
-            return null;
         }
     }
 }
