@@ -420,8 +420,14 @@ class GeminiService
             $data  = $response->json();
             $parts = $data['candidates'][0]['content']['parts'] ?? [];
 
-            // Accumulate usage across all turns
+            // Accumulate usage across all turns. usageMetadata mixes integer token
+            // counts with non-numeric fields (trafficType is a string; *TokensDetails
+            // are arrays), so only sum the numeric ones — otherwise 0 + "ON_DEMAND"
+            // throws "Unsupported operand types: int + string" and kills the call.
             foreach (($data['usageMetadata'] ?? []) as $k => $v) {
+                if (!is_numeric($v)) {
+                    continue;
+                }
                 $totalUsage[$k] = ($totalUsage[$k] ?? 0) + $v;
             }
 
