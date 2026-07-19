@@ -14,16 +14,9 @@ export default function Dashboard() {
         }
     }, [flash]);
 
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        if (params.get('verified') === '1' && typeof gtag === 'function') {
-            gtag('event', 'conversion', {
-                send_to: 'AW-16797144138/FHk5COLIz6ccEIytnL5D',
-                value: 149,
-                currency: 'USD',
-            });
-        }
-    }, []);
+    // Note: the 'signup' conversion is uploaded server-side via
+    // RecordSiteGoogleConversion (keyed off the stored gclid) on registration.
+    // Firing it client-side here as well would double-count it.
 
     return (
         <AuthenticatedLayout

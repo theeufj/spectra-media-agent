@@ -303,18 +303,22 @@ Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () 
     Route::post('/platforms/{platform}/toggle', [App\Http\Controllers\Admin\EnabledPlatformController::class, 'toggle'])->name('platforms.toggle');
 });
 
-// Spectra own-site conversion event logger (authenticated, fire-and-forget)
-Route::middleware(['auth'])->post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
+// Spectra own-site conversion event logger (public, throttled, fire-and-forget).
+// Must NOT be auth-gated: the client fires it for anonymous visitors too
+// (pricing_visit, try_now), so gating it hid every guest conversion from the
+// admin dashboard. Event names are validated against a fixed allowlist.
+Route::post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
     $event = $r->input('event');
     $allowed = array_keys(config('conversions.events', []));
     if (!in_array($event, $allowed, true)) {
         return response()->json(['ok' => false], 422);
     }
-    \App\Models\SpectraConversionEvent::record($event, $r->user()->id, [
-        'gclid' => $r->user()->gclid ?? null,
+    $user = $r->user();
+    \App\Models\SpectraConversionEvent::record($event, $user?->id, [
+        'gclid' => $user?->gclid,
     ]);
     return response()->json(['ok' => true]);
-})->name('spectra.conversion.log');
+})->middleware('throttle:30,1')->name('spectra.conversion.log');
 
 Route::middleware(['auth'])->group(function () {
     Route::post('/customers/switch/{customer}', [App\Http\Controllers\CustomerController::class, 'switch'])->name('customers.switch');

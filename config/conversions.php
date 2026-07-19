@@ -31,10 +31,17 @@ return [
      */
     'events' => [
         'signup' => [
-            'label'    => 'FHk5COLIz6ccEIytnL5D',
-            'value'    => 99.00,
+            'label'         => null,
+            'value'         => 99.00,
+            'currency'      => 'USD',
+            'mode'          => 'server',
+            'resource_name' => null,
+        ],
+        'try_now' => [
+            'label'    => null,
+            'value'    => 50.00,
             'currency' => 'USD',
-            'mode'     => 'server',
+            'mode'     => 'client',
         ],
         'pricing_visit' => [
             'label'    => null,

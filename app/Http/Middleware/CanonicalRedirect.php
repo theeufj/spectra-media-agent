@@ -33,10 +33,22 @@ class CanonicalRedirect
                 $needsRedirect = true;
             }
 
-            // Strip junk query strings on GET requests (e.g. ?$, ?fbclid=, etc.)
+            // Strip junk query strings on GET requests (e.g. ?$, ?random=)
             // Skip signed URL routes (email verification) and OAuth callbacks
             if ($request->isMethod('GET') && $request->getQueryString() !== null && !$request->is('auth/*/callback') && !$request->is('settings/*/callback') && !isset($request->query()['signature'])) {
-                $allowed = ['page', 'token', 'search', 'sort', 'filter', 'plan', 'status', 'priority', 'category'];
+                // Ad-click and campaign attribution params MUST survive: Google Ads
+                // auto-tagging (gclid/gbraid/wbraid), Meta (fbclid), Microsoft (msclid),
+                // TikTok (ttclid) and UTMs. Stripping them here breaks conversion
+                // tracking — gtag never sets its _gcl_aw cookie and CaptureClickIds
+                // never stores the gclid for server-side upload.
+                $trackingParams = [
+                    'gclid', 'gbraid', 'wbraid', 'fbclid', 'msclid', 'ttclid',
+                    'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
+                ];
+                $allowed = array_merge(
+                    ['page', 'token', 'search', 'sort', 'filter', 'plan', 'status', 'priority', 'category'],
+                    $trackingParams,
+                );
                 $query = $request->query();
                 $filtered = array_intersect_key($query, array_flip($allowed));
 
