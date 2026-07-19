@@ -100,7 +100,7 @@ class AssetHarvestingService
                 ->setNodeBinary(config('browsershot.node_binary_path'))
                 ->addChromiumArguments(config('browsershot.chrome_args', []))
                 ->timeout(30)
-                ->waitUntilNetworkIdle()
+                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
                 ->bodyHtml();
         } catch (\Exception $e) {
             // Fallback to HTTP fetch

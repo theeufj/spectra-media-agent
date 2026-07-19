@@ -511,11 +511,14 @@ JS;
             $htmlContent = null;
 
             try {
+                // Wait only for domcontentloaded — the GTM snippet is in the initial
+                // HTML. waitUntilNetworkIdle (networkidle0) never completes on a page
+                // with live analytics/ads traffic and burns the full timeout.
                 $htmlContent = \Spatie\Browsershot\Browsershot::url($customer->website)
                     ->setNodeBinary(config('browsershot.node_binary_path'))
                     ->addChromiumArguments(config('browsershot.chrome_args', []))
-                    ->timeout(30)
-                    ->waitUntilNetworkIdle()
+                    ->timeout(20)
+                    ->setOption('waitUntil', 'domcontentloaded')
                     ->bodyHtml();
             } catch (\Exception $e) {
                 Log::warning('GTMContainerService: Browsershot failed, falling back to HTTP', ['error' => $e->getMessage()]);

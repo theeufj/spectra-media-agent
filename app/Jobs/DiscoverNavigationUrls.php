@@ -56,7 +56,7 @@ class DiscoverNavigationUrls implements ShouldQueue
             $html = Browsershot::url($websiteUrl)
                 ->setNodeBinary(config('browsershot.node_binary_path'))
                 ->addChromiumArguments(config('browsershot.chrome_args', []))
-                ->waitUntilNetworkIdle()
+                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
                 ->timeout(60)
                 ->bodyHtml();
         } catch (\Exception $e) {

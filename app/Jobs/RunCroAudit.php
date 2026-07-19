@@ -41,7 +41,7 @@ class RunCroAudit implements ShouldQueue
 
             $html = Browsershot::url($this->url)
                 ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
-                ->waitUntilNetworkIdle()
+                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
                 ->timeout(60)
                 ->bodyHtml();
 

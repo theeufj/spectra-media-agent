@@ -96,7 +96,7 @@ class GenerateProposal implements ShouldQueue
                 ->setNodeBinary(config('browsershot.node_binary_path'))
                 ->addChromiumArguments(config('browsershot.chrome_args', []))
                 ->timeout(60)
-                ->waitUntilNetworkIdle()
+                ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
                 ->bodyHtml();
 
             $crawler = new Crawler($html, $url);
