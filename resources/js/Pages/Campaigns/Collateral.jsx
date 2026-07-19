@@ -1107,27 +1107,36 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         className="relative group"
                                                     >
                                                         <div
-                                                            className={`border-2 ${video.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md cursor-pointer`}
-                                                            onClick={() => handleToggleCollateral('video', video.id)}
+                                                            className={`border-2 ${video.status === 'completed' && video.should_deploy ? 'border-green-500' : 'border-gray-200'} rounded-lg overflow-hidden shadow-md ${video.status === 'completed' ? 'cursor-pointer' : ''}`}
+                                                            onClick={() => { if (video.status === 'completed') handleToggleCollateral('video', video.id); }}
                                                         >
-                                                            {/* Checkbox */}
-                                                            <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${video.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
-                                                                {video.should_deploy && (
-                                                                    <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                                                                )}
-                                                            </div>
+                                                            {/* Deploy checkbox — only completed videos can be deployed */}
+                                                            {video.status === 'completed' && (
+                                                                <div className={`absolute top-2 left-2 z-10 w-6 h-6 rounded flex items-center justify-center shadow-md border-2 ${video.should_deploy ? 'bg-green-500 border-green-500' : 'bg-white border-gray-300'}`}>
+                                                                    {video.should_deploy && (
+                                                                        <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                                                                    )}
+                                                                </div>
+                                                            )}
                                                             {video.status === 'completed' ? (
                                                                 <video controls src={video.cloudfront_url} className="w-full h-auto"></video>
+                                                            ) : video.status === 'failed' ? (
+                                                                <div className="p-6 text-center bg-red-50">
+                                                                    <svg className="mx-auto mb-2 w-6 h-6 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" /></svg>
+                                                                    <p className="font-semibold text-red-700">Generation failed</p>
+                                                                    <p className="text-sm text-red-500 mt-1">Delete this and generate again.</p>
+                                                                </div>
                                                             ) : (
-                                                                <div className="p-4 text-center bg-gray-100">
-                                                                    <p className="font-semibold text-gray-700">Status: {video.status}</p>
-                                                                    <p className="text-sm text-gray-500">Video is processing...</p>
+                                                                <div className="p-6 text-center bg-gray-100">
+                                                                    <div className="mx-auto mb-2 w-6 h-6 border-2 border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                                                                    <p className="font-semibold text-gray-700">Generating video…</p>
+                                                                    <p className="text-sm text-gray-500">This can take a few minutes.</p>
                                                                 </div>
                                                             )}
                                                         </div>
 
                                                         {/* Source badge */}
-                                                        <div className={`absolute top-2 left-2 px-2 py-0.5 rounded-full text-xs font-medium shadow ${
+                                                        <div className={`absolute top-2 right-2 px-2 py-0.5 rounded-full text-xs font-medium shadow ${
                                                             video.source === 'uploaded' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
                                                         }`}>
                                                             {video.source === 'uploaded' ? '📁 Uploaded' : '✨ AI'}
@@ -1160,7 +1169,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
                                                         {/* Extension Count Badge */}
                                                         {(video.extension_count || 0) > 0 && (
-                                                            <div className="absolute top-2 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full shadow-lg">
+                                                            <div className="absolute top-9 right-2 bg-blue-600 text-white text-xs px-2 py-1 rounded-full shadow-lg">
                                                                 Extended {video.extension_count}x
                                                             </div>
                                                         )}
