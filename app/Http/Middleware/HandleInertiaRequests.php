@@ -68,9 +68,9 @@ class HandleInertiaRequests extends Middleware
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
             'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),
             'tenant' => $request->attributes->get('tenant', config('tenants.' . config('tenants.default'))),
-            // Client-side (gtag) conversion labels only. 'signup' is intentionally
-            // absent — it is uploaded server-side via RecordSiteGoogleConversion.
+            // Client-side (gtag) conversion labels served to the frontend.
             'conversionLabels' => fn () => [
+                'signup'           => \App\Models\Setting::get('conversion_label.signup',    config('conversions.events.signup.label')),
                 'try_now'          => \App\Models\Setting::get('conversion_label.try_now'),
                 'pricing_visit'    => \App\Models\Setting::get('conversion_label.pricing_visit'),
                 'sandbox_launched' => \App\Models\Setting::get('conversion_label.sandbox_launched'),

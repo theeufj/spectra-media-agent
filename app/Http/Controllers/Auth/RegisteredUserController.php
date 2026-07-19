@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\RecordSiteFacebookConversion;
-use App\Jobs\RecordSiteGoogleConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Models\User;
 use App\Models\Customer;
@@ -84,11 +83,12 @@ class RegisteredUserController extends Controller
             $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'fbclid', 'msclid'])));
         }
 
-        // Server-side conversion signals — fire for each platform the user arrived from
+        // Server-side conversion signals — fire for each platform the user arrived from.
+        // NOTE: Google signup is tracked client-side via gtag, not here. Google has
+        // restricted the legacy ConversionUploadService.UploadClickConversions endpoint
+        // to existing users (new integrations must use the Data Manager API), so
+        // server-side click uploads are rejected for this account.
         $freshUser = $user->fresh();
-        if (!empty($freshUser->gclid)) {
-            RecordSiteGoogleConversion::dispatch($freshUser, 'signup');
-        }
         if (!empty($freshUser->fbclid)) {
             RecordSiteFacebookConversion::dispatch($freshUser, 'signup');
         }

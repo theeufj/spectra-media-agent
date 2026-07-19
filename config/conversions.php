@@ -31,11 +31,10 @@ return [
      */
     'events' => [
         'signup' => [
-            'label'         => null,
-            'value'         => 99.00,
-            'currency'      => 'USD',
-            'mode'          => 'server',
-            'resource_name' => null,
+            'label'    => 'FHk5COLIz6ccEIytnL5D',
+            'value'    => 99.00,
+            'currency' => 'USD',
+            'mode'     => 'client',
         ],
         'try_now' => [
             'label'    => null,

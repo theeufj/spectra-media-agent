@@ -38,13 +38,13 @@ class ProvisionConversionActions extends Command
     protected $description = 'Provision Google Ads conversion actions for sitetospend.com and store labels in settings.';
 
     private array $actions = [
-        // Uploaded server-side via RecordSiteGoogleConversion using the stored gclid,
-        // so it must be UPLOAD_CLICKS (Google rejects click uploads to WEBPAGE actions).
-        // The " (Import)" name creates a fresh action rather than reusing the legacy
-        // WEBPAGE "Spectra — Signup", which is left in place but no longer fed.
+        // Client-side (gtag/WEBPAGE) conversion fired after email verification.
+        // Not uploaded server-side: Google restricted the legacy click-upload
+        // endpoint (ConversionUploadService) to existing users; new server-side
+        // uploads require the Data Manager API.
         'signup' => [
-            'name'     => 'Spectra — Signup (Import)',
-            'type'     => ConversionActionType::UPLOAD_CLICKS,
+            'name'     => 'Spectra — Signup',
+            'type'     => ConversionActionType::WEBPAGE,
             'category' => ConversionActionCategory::SIGNUP,
             'value'    => 99.0,
         ],
