@@ -190,10 +190,6 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
     // GET /campaigns/wizard
     Route::get('/campaigns/wizard', [App\Http\Controllers\CampaignController::class, 'wizard'])->name('campaigns.wizard');
 
-    // Route for AI-assisted campaign creation chat.
-    // POST /api/campaigns/ai-assist
-    Route::post('/api/campaigns/ai-assist', [App\Http\Controllers\CampaignController::class, 'aiAssist'])->name('campaigns.ai-assist');
-
     // Route to handle the form submission, create the campaign, and dispatch the strategy generation job.
     // POST /campaigns
     Route::post('/campaigns', [App\Http\Controllers\CampaignController::class, 'store'])->name('campaigns.store');

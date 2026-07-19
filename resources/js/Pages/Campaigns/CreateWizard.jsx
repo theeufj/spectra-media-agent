@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import PrimaryButton from '@/Components/PrimaryButton';
@@ -260,17 +260,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
 
     const [currentStep, setCurrentStep] = useState(0);
     const [selectedTemplate, setSelectedTemplate] = useState(null);
-    const [creationMode, setCreationMode] = useState(null); // 'template' or 'ai'
-    const [aiMessages, setAiMessages] = useState([
-        {
-            role: 'assistant',
-            content: "Hi! I'm here to help you create a campaign. Just tell me about your business and what you'd like to achieve, and I'll help you build the perfect campaign.\n\nFor example, you could say:\n• \"I want to promote my new summer collection\"\n• \"I need to generate leads for my consulting business\"\n• \"Help me create a Black Friday sale campaign\"\n\nWhat would you like to promote?"
-        }
-    ]);
-    const [aiInput, setAiInput] = useState('');
-    const [aiLoading, setAiLoading] = useState(false);
-    const [aiCampaignReady, setAiCampaignReady] = useState(false);
-    const chatEndRef = useRef(null);
+    const [creationMode, setCreationMode] = useState(null); // 'template'
     const customerId = auth.user?.active_customer?.id;
     
     // Build initial form values from brand guidelines if available
@@ -313,11 +303,6 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
 
     const { data, setData, post, processing, errors, reset } = form;
 
-    // Auto-scroll chat to bottom
-    useEffect(() => {
-        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [aiMessages]);
-    
     // Auto-save draft to localStorage
     useEffect(() => {
         const savedDraft = localStorage.getItem('campaign_draft');
@@ -338,57 +323,6 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         }
     }, [data, currentStep]);
     
-    // Handle AI chat message
-    const handleAiSend = async () => {
-        if (!aiInput.trim() || aiLoading) return;
-        
-        const userMessage = aiInput.trim();
-        setAiInput('');
-        setAiMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-        setAiLoading(true);
-        
-        try {
-            const response = await fetch('/api/campaigns/ai-assist', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.content,
-                },
-                body: JSON.stringify({
-                    messages: [...aiMessages, { role: 'user', content: userMessage }],
-                    current_data: data,
-                }),
-            });
-            
-            const result = await response.json();
-            
-            setAiMessages(prev => [...prev, { role: 'assistant', content: result.message }]);
-            
-            // If AI extracted campaign data, update the form
-            if (result.campaign_data) {
-                Object.keys(result.campaign_data).forEach(key => {
-                    if (result.campaign_data[key]) {
-                        setData(key, result.campaign_data[key]);
-                    }
-                });
-                setAiCampaignReady(true);
-            }
-        } catch (error) {
-            setAiMessages(prev => [...prev, { 
-                role: 'assistant', 
-                content: "I'm sorry, I encountered an error. Please try again or use the template option instead." 
-            }]);
-        } finally {
-            setAiLoading(false);
-        }
-    };
-    
-    // Switch from AI to manual mode with extracted data
-    const continueWithAiData = () => {
-        setCreationMode('template');
-        setCurrentStep(1);
-    };
-    
     const applyTemplate = (template) => {
         setSelectedTemplate(template.id);
         setCreationMode('template');
@@ -399,16 +333,7 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
         }
         setCurrentStep(1);
     };
-    
-    const startAiMode = () => {
-        setCreationMode('ai');
-    };
-    
-    const backToMethodSelection = () => {
-        setCreationMode(null);
-        setCurrentStep(0);
-    };
-    
+
     const validateStep = (step) => {
         switch (step) {
             case 1: // Basics
@@ -495,146 +420,14 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     const renderStepContent = () => {
         switch (currentStep) {
             case 0: // Method Selection
-                // If AI mode is active, show chat interface
-                if (creationMode === 'ai') {
-                    return (
-                        <div className="space-y-4 max-w-3xl mx-auto">
-                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
-                                <button
-                                    onClick={backToMethodSelection}
-                                    className="flex items-center text-gray-600 hover:text-gray-900 order-2 sm:order-1"
-                                >
-                                    <svg className="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                    Back to options
-                                </button>
-                                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 flex items-center order-1 sm:order-2">
-                                    <span className="text-2xl mr-2">🤖</span>
-                                    AI Campaign Builder
-                                </h2>
-                            </div>
-                            
-                            {/* Chat Messages */}
-                            <div className="bg-gray-50 rounded-lg border border-gray-200 h-64 sm:h-96 overflow-y-auto p-4 space-y-4">
-                                {aiMessages.map((msg, idx) => (
-                                    <div
-                                        key={idx}
-                                        className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                    >
-                                        <div
-                                            className={`max-w-[90%] sm:max-w-[80%] rounded-lg px-3 py-2 sm:px-4 ${
-                                                msg.role === 'user'
-                                                    ? 'bg-flame-orange-600 text-white'
-                                                    : 'bg-white border border-gray-200 text-gray-800'
-                                            }`}
-                                        >
-                                            <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                                {aiLoading && (
-                                    <div className="flex justify-start">
-                                        <div className="bg-white border border-gray-200 rounded-lg px-4 py-2">
-                                            <div className="flex space-x-2">
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                                                <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                                <div ref={chatEndRef} />
-                            </div>
-                            
-                            {/* AI Ready Banner */}
-                            {aiCampaignReady && (
-                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between">
-                                    <div className="flex items-center">
-                                        <span className="text-2xl mr-3">✅</span>
-                                        <div>
-                                            <p className="font-medium text-green-800">Campaign details captured!</p>
-                                            <p className="text-sm text-green-600">Ready to review and customize your campaign</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={continueWithAiData}
-                                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium"
-                                    >
-                                        Continue to Review →
-                                    </button>
-                                </div>
-                            )}
-                            
-                            {/* Chat Input */}
-                            <div className="flex gap-1 sm:gap-2">
-                                <input
-                                    type="text"
-                                    value={aiInput}
-                                    onChange={(e) => setAiInput(e.target.value)}
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAiSend()}
-                                    placeholder="Describe your campaign..."
-                                    className="flex-1 rounded-lg border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
-                                    disabled={aiLoading}
-                                />
-                                <button
-                                    onClick={handleAiSend}
-                                    disabled={aiLoading || !aiInput.trim()}
-                                    className="px-3 py-2 sm:px-4 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    Send
-                                </button>
-                            </div>
-                        </div>
-                    );
-                }
-                
-                // Default: Method selection screen
+                // Method selection screen
                 return (
                     <div className="space-y-8">
                         <div className="text-center mb-8">
-                            <h2 className="text-2xl font-bold text-gray-900">How would you like to create your campaign?</h2>
-                            <p className="mt-2 text-gray-600">Choose AI assistance or start with a template</p>
+                            <h2 className="text-2xl font-bold text-gray-900">Choose a template to get started</h2>
+                            <p className="mt-2 text-gray-600">Pick a starting point below — you can customize everything in the next steps.</p>
                         </div>
-                        
-                        {/* AI Option - Featured */}
-                        <div 
-                            onClick={startAiMode}
-                            className="cursor-pointer bg-gradient-to-r from-flame-orange-500 via-purple-500 to-pink-500 rounded-2xl p-1 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1"
-                        >
-                            <div className="bg-white rounded-xl p-6 flex items-center space-x-6">
-                                <div className="flex-shrink-0 w-16 h-16 bg-gradient-to-br from-flame-orange-100 to-purple-100 rounded-xl flex items-center justify-center">
-                                    <span className="text-4xl">🤖</span>
-                                </div>
-                                <div className="flex-1">
-                                    <div className="flex items-center space-x-2">
-                                        <h3 className="text-xl font-bold text-gray-900">Create with AI</h3>
-                                        <span className="px-2 py-0.5 bg-gradient-to-r from-flame-orange-500 to-purple-500 text-white text-xs rounded-full font-medium">
-                                            Recommended
-                                        </span>
-                                    </div>
-                                    <p className="text-gray-600 mt-1">
-                                        Just describe what you want to achieve. Our AI will help you build the perfect campaign through a simple conversation.
-                                    </p>
-                                </div>
-                                <div className="flex-shrink-0">
-                                    <svg className="w-8 h-8 text-flame-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                    </svg>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        {/* Divider */}
-                        <div className="relative">
-                            <div className="absolute inset-0 flex items-center">
-                                <div className="w-full border-t border-gray-200"></div>
-                            </div>
-                            <div className="relative flex justify-center text-sm">
-                                <span className="px-4 bg-gray-50 text-gray-500">or choose a template</span>
-                            </div>
-                        </div>
-                        
+
                         {/* Template Options */}
                         {tenantVertical && visibleTemplates.some(t => t.verticals?.includes(tenantVertical)) && (
                             <p className="text-xs font-semibold text-brand-primary uppercase tracking-wider -mb-2">
