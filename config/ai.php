@@ -45,7 +45,7 @@ return [
         /*
          * Video generation model.
          */
-        'video' => env('AI_MODEL_VIDEO', 'veo-3.1-generate-preview'),
+        'video' => env('AI_MODEL_VIDEO', 'veo-3.1-generate-001'),
 
     ],
 
@@ -110,7 +110,7 @@ return [
         'gemini-3.1-flash-image-preview'=> ['input' => 0.075,  'output' => 0.30,  'cached' => 0.01875],
         'gemini-embedding-001'          => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'text-embedding-005'            => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
-        'veo-3.1-generate-preview'      => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
+        'veo-3.1-generate-001'      => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
     ],
 
 ];

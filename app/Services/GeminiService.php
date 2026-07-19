@@ -31,7 +31,7 @@ use Google\Auth\CredentialsLoader;
  * - gemini-embedding-001         | Text embeddings for semantic search & RAG - 768 dims (legacy)
  *
  * --- VIDEO ---
- * - veo-3.1-generate-preview     | State-of-the-art cinematic video with synced audio
+ * - veo-3.1-generate-001     | State-of-the-art cinematic video with synced audio
  *
  * --- DEPRECATED (migrate away) ---
  * - gemini-2.0-flash             | Deprecated - use gemini-2.5-flash
@@ -725,7 +725,7 @@ class GeminiService
      *
      * @return string|null The Vertex AI operation name, or null on failure.
      */
-    public function startVideoGeneration(string $prompt, string $model = 'veo-3.1-generate-preview', array $parameters = [], array $context = []): ?string
+    public function startVideoGeneration(string $prompt, string $model = 'veo-3.1-generate-001', array $parameters = [], array $context = []): ?string
     {
         try {
             $requestBody = [
@@ -911,12 +911,12 @@ class GeminiService
             try {
                 $response = Http::withHeaders($this->authHeaders())
                     ->timeout(300)
-                    ->post("{$this->videoBaseUrl}veo-3.1-generate-preview:predictLongRunning", $requestBody);
+                    ->post("{$this->videoBaseUrl}veo-3.1-generate-001:predictLongRunning", $requestBody);
 
                 if ($response->successful()) {
                     $operationName = $response->json()['name'] ?? null;
                     Log::info("GeminiService: Video extension started successfully. Operation: {$operationName}");
-                    $this->recordCost('veo-3.1-generate-preview', 'extendVideo', [], 0, $context);
+                    $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, $context);
                     return $operationName;
                 }
 
