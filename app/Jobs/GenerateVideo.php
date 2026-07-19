@@ -52,7 +52,11 @@ class GenerateVideo implements ShouldQueue
         
         // Convert to lowercase for case-insensitive checking
         $lowerContent = strtolower($content);
-        
+
+        // Verbs indicating the strategy actually describes a video to produce. Used to
+        // decide whether an "N/A" strategy still carries an actionable instruction.
+        $actionVerbs = '/\b(use|create|generate|produce|show|showcase|feature|include|display|depict|film|shoot|capture|animate|scene|video should|footage|b-?roll)\b/i';
+
         // Check if it's purely "N/A" or "Not Applicable" with no additional content
         if (preg_match('/^(n\/a|not applicable|none)\.?$/i', $content)) {
             return null;
@@ -60,38 +64,39 @@ class GenerateVideo implements ShouldQueue
         
         // If content starts with "N/A" but contains conditional statements (however, if, when, for, etc.)
         // extract everything after the conditional indicator
-        if (preg_match('/^n\/a[^.]*\.\s*(however|but|if|when|for|in cases where|alternatively)/i', $content, $matches)) {
-            // Find the position of the conditional word
-            $pos = stripos($content, $matches[1]);
-            if ($pos !== false) {
-                $actionableContent = substr($content, $pos);
-                Log::info("Extracted conditional video content after N/A: {$actionableContent}");
-                return trim($actionableContent);
-            }
+        if (preg_match('/^n\/a[^.]*\.\s*(however|but|if|when|for|in cases where|alternatively)/i', $content, $matches, PREG_OFFSET_CAPTURE)) {
+            // Slice from the exact matched position — not stripos(), which could land
+            // on an earlier substring (e.g. "if" inside "specific").
+            $actionableContent = trim(substr($content, $matches[1][1]));
+            Log::info("Extracted conditional video content after N/A: {$actionableContent}");
+            return $actionableContent;
         }
         
-        // If the content mentions both "N/A" and actionable scenarios, extract the actionable part
-        if (stripos($lowerContent, 'n/a') !== false && 
-            (stripos($lowerContent, 'however') !== false || 
-             stripos($lowerContent, 'but') !== false || 
-             stripos($lowerContent, 'if') !== false)) {
-            // Split by common transition words and take the actionable part
+        // If the content is flagged N/A and a genuine actionable instruction follows a
+        // transition word, extract that part. Transition words are matched with WORD
+        // BOUNDARIES so "if" inside "specific", "for" inside "platform", etc. never
+        // false-match — that bug turned "...for this specific setup." into "ific setup.".
+        if (stripos($lowerContent, 'n/a') !== false && preg_match($actionVerbs, $content)) {
             $transitions = ['however', 'but', 'if', 'when', 'for', 'in cases where', 'alternatively'];
             foreach ($transitions as $transition) {
-                $pos = stripos($content, $transition);
-                if ($pos !== false) {
-                    $actionableContent = substr($content, $pos);
-                    Log::info("Extracted actionable content after '{$transition}': {$actionableContent}");
-                    return trim($actionableContent);
+                if (preg_match('/\b' . preg_quote($transition, '/') . '\b/i', $content, $m, PREG_OFFSET_CAPTURE)) {
+                    $actionableContent = trim(substr($content, $m[0][1]));
+                    if (preg_match($actionVerbs, $actionableContent)) {
+                        Log::info("Extracted actionable content after '{$transition}': {$actionableContent}");
+                        return $actionableContent;
+                    }
                 }
             }
         }
         
-        // If "N/A" is mentioned but there's substantial content (more than just "N/A for X"),
-        // check if there's actionable content in the rest of the text
-        if (stripos($lowerContent, 'n/a') !== false && strlen($content) > 50) {
-            // The content is long enough that it likely contains actionable information
-            Log::info("Video strategy mentions N/A but contains substantial content ({strlen($content)} chars). Using full content.");
+        // "N/A" is mentioned: only generate a video if the text actually instructs one.
+        // Otherwise it's just an explanation of why video is N/A (e.g. "video formats
+        // inapplicable for this specific setup") and no video should be produced.
+        if (stripos($lowerContent, 'n/a') !== false) {
+            if (!preg_match($actionVerbs, $content)) {
+                Log::info("Video strategy is N/A without an actionable instruction — skipping video: {$content}");
+                return null;
+            }
             return $content;
         }
         
