@@ -431,13 +431,21 @@ class GeminiService
                 $totalUsage[$k] = ($totalUsage[$k] ?? 0) + $v;
             }
 
-            // Separate function calls from text parts
-            $functionCalls = [];
-            $textContent   = null;
+            // Separate function calls from text parts. Preserve the FULL function-call
+            // part (including thoughtSignature) — Gemini 3 thinking models reject the
+            // follow-up turn with a 400 ("missing thought_signature") if the signature
+            // from the model's function-call part is not echoed back verbatim.
+            $functionCalls     = [];
+            $functionCallParts = [];
+            $textContent       = null;
 
             foreach ($parts as $part) {
                 if (isset($part['functionCall'])) {
                     $functionCalls[] = $part['functionCall'];
+                    $functionCallParts[] = array_filter([
+                        'functionCall'     => $part['functionCall'],
+                        'thoughtSignature' => $part['thoughtSignature'] ?? null,
+                    ], fn ($v) => $v !== null);
                 } elseif (isset($part['text'])) {
                     $textContent = ($textContent ?? '') . $part['text'];
                 }
@@ -453,10 +461,10 @@ class GeminiService
                     return null;
                 }
 
-                // Append the model's turn (all function call parts)
+                // Append the model's turn, preserving each part's thoughtSignature.
                 $contents[] = [
                     'role'  => 'model',
-                    'parts' => array_map(fn ($fc) => ['functionCall' => $fc], $functionCalls),
+                    'parts' => $functionCallParts,
                 ];
 
                 // Execute each tool and collect responses
