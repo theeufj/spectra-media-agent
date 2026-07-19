@@ -340,20 +340,32 @@ class AdSpendBillingController extends Controller
             $existingCredit = $customer->adSpendCredit;
 
             if ($existingCredit) {
-                // Account already exists — top up for this campaign's budget
-                $result = $this->billingService->addCredit(
-                    $customer,
-                    $topUpAmount,
-                    "Campaign ad spend top-up ({$daysToCharge} days @ \${$dailyBudget}/day)"
-                );
+                // Account already exists — only charge the SHORTFALL needed to reach
+                // this campaign's target runway. If the current balance already covers
+                // it, charge nothing. Prevents stacking a full top-up on top of unused
+                // credit on every deploy.
+                $currentBalance = (float) $existingCredit->current_balance;
+                $shortfall = round(max(0, $topUpAmount - $currentBalance), 2);
 
-                if (!$result['success']) {
-                    throw new \Exception($result['error'] ?? 'Payment failed');
+                if ($shortfall <= 0) {
+                    $credit = $existingCredit;
+                    $chargedAmount = 0.0;
+                    $logMessage = "Ad spend for customer '{$customer->name}' — existing credit \${$currentBalance} already covers {$daysToCharge} days @ \${$dailyBudget}/day; no charge";
+                } else {
+                    $result = $this->billingService->addCredit(
+                        $customer,
+                        $shortfall,
+                        "Campaign ad spend top-up ({$daysToCharge} days @ \${$dailyBudget}/day — shortfall)"
+                    );
+
+                    if (!$result['success']) {
+                        throw new \Exception($result['error'] ?? 'Payment failed');
+                    }
+
+                    $credit = $customer->fresh()->adSpendCredit;
+                    $chargedAmount = $shortfall;
+                    $logMessage = "Ad spend top-up for customer '{$customer->name}' — \${$chargedAmount} charged (shortfall to {$daysToCharge}-day runway)";
                 }
-
-                $credit = $customer->fresh()->adSpendCredit;
-                $chargedAmount = $topUpAmount;
-                $logMessage = "Ad spend top-up for customer '{$customer->name}' — \${$chargedAmount} charged for new campaign";
             } else {
                 // First campaign — initialize the account
                 $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget);
@@ -377,7 +389,9 @@ class AdSpendBillingController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => $existingCredit ? 'Campaign funded successfully' : 'Ad spend billing set up successfully',
+                'message' => $chargedAmount <= 0
+                    ? 'Existing ad spend credit covers this campaign — no charge needed'
+                    : ($existingCredit ? 'Campaign funded successfully' : 'Ad spend billing set up successfully'),
                 'credit_amount' => $chargedAmount,
                 'new_balance' => $credit->current_balance,
             ]);

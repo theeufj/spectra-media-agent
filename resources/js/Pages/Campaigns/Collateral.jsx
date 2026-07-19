@@ -400,11 +400,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
 
     const handleAdSpendSetupSuccess = (result) => {
         setShowAdSpendSetupModal(false);
-        // After successful setup, proceed to deploy
+        const charged = Number(result.credit_amount) || 0;
+        const balance = Number(result.new_balance) || 0;
+        // Only say "payment successful" when a charge actually occurred; otherwise the
+        // existing credit already covered the campaign and nothing was charged.
+        const message = charged > 0
+            ? `Charged $${charged.toFixed(2)}. Your ad spend credit is now $${balance.toFixed(2)}. Ready to deploy?`
+            : `You already have $${balance.toFixed(2)} in ad spend credit — no additional charge needed. Ready to deploy?`;
         setConfirmModal({
             show: true,
             title: 'Deploy Collateral',
-            message: `Payment successful! Your ad spend credit of $${result.credit_amount?.toFixed(2) || '0.00'} has been set up. Ready to deploy?`,
+            message,
             onConfirm: () => confirmDeploy(),
             confirmText: 'Deploy Now',
             confirmButtonClass: 'bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800',
