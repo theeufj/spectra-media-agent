@@ -38,6 +38,21 @@ class SendDailyPerformanceReports implements ShouldQueue
             try {
                 $summary = $summaryService->forCustomer($customer);
 
+                // Skip if there was no real activity for the day. An all-zero report is
+                // noise (and reads as broken next to a cached strategic recommendation
+                // that cites cumulative campaign numbers). Compare numerically — the
+                // metrics are ints/floats, so a strict `=== 0` on the float spend never
+                // matched and empty reports were being sent. Checked before enrichment so
+                // we don't burn Gemini calls building a rollup we'll throw away.
+                $c = $summary['combined'];
+                if ((float) ($c['impressions'] ?? 0) == 0
+                    && (float) ($c['clicks'] ?? 0) == 0
+                    && (float) ($c['spend'] ?? 0) == 0
+                    && (float) ($c['conversions'] ?? 0) == 0) {
+                    Log::info("Skipping daily report for customer {$customer->id} — no activity for {$summary['date']}");
+                    continue;
+                }
+
                 // On Mondays, append a 7-day WoW rollup sentence per platform
                 if ($isMonday) {
                     $summary['weekly_rollup'] = $this->buildWeeklyRollup($customer, $gemini);
@@ -45,12 +60,6 @@ class SendDailyPerformanceReports implements ShouldQueue
 
                 // Pull highest-confidence cached recommendation across all active campaigns
                 $summary['top_action'] = $this->getTopAction($customer, $optimizer);
-
-                // Skip if no data at all
-                if ($summary['combined']['impressions'] === 0 && $summary['combined']['spend'] === 0) {
-                    Log::info("Skipping daily report for customer {$customer->id} — no data for {$summary['date']}");
-                    continue;
-                }
 
                 // Send to all users associated with this customer
                 $users = $customer->users;
