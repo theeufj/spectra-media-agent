@@ -100,9 +100,23 @@ class RunSelfHealingChecks implements ShouldQueue
                             $addedCount = array_sum($r['added'] ?? []);
                             if ($addedCount > 0) {
                                 $healed += $addedCount;
+                                $imgCount  = $r['added']['IMAGE'] ?? 0;
+                                $textCount = $addedCount - $imgCount;
+                                $parts = [];
+                                if ($textCount > 0) $parts[] = "{$textCount} text asset(s)";
+                                if ($imgCount > 0)  $parts[] = "{$imgCount} image(s)";
+                                $what = implode(' + ', $parts);
+
+                                Recommendation::create([
+                                    'campaign_id'       => $campaign->id,
+                                    'type'              => 'AD_STRENGTH',
+                                    'rationale'         => "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
+                                    'status'            => 'applied',
+                                    'requires_approval' => false,
+                                ]);
                                 AgentActivity::record(
                                     'maintenance', 'ad_strength_healed',
-                                    "Added {$addedCount} text asset(s) to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
+                                    "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
                                     $campaign->customer_id, $campaign->id, $r
                                 );
                             }

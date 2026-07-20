@@ -6,6 +6,9 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use App\Services\StorageHelper;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Resources\AssetGroupAsset;
 use Google\Ads\GoogleAds\V22\Services\AssetGroupAssetOperation;
@@ -109,18 +112,22 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             }
         }
 
-        // Media gaps we can't auto-generate here — surfaced for a human/other job.
+        // Auto-generate the marketing images PMax needs for strength (landscape + square).
+        // Idempotent: only fills when genuinely absent, so it won't regenerate each pass.
+        // The logo is intentionally left for a human — it should be the real brand mark,
+        // not an AI guess.
+        $imagesAdded = $this->healImages($customerId, $group, $existing);
+
         $missingMedia = [];
-        if (($existing['media']['LOGO'] ?? 0) === 0)         $missingMedia[] = 'logo (1:1)';
-        if (($existing['media']['SQUARE_IMAGE'] ?? 0) === 0) $missingMedia[] = 'square image (1:1)';
+        if (($existing['media']['LOGO'] ?? 0) === 0)          $missingMedia[] = 'logo (1:1)';
         if (($existing['media']['YOUTUBE_VIDEO'] ?? 0) === 0) $missingMedia[] = 'video';
 
         if (empty($needed)) {
             // Text is already full; strength is limited by media only.
-            return $missingMedia ? [
+            return ($missingMedia || $imagesAdded > 0) ? [
                 'asset_group'   => $group['name'],
                 'ad_strength'   => $this->strengthLabel($group['strength']),
-                'added'         => [],
+                'added'         => $imagesAdded > 0 ? ['IMAGE' => $imagesAdded] : [],
                 'missing_media' => $missingMedia,
             ] : null;
         }
@@ -155,6 +162,10 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             $added = []; // link failed; assets created but not attached
         }
 
+        if ($imagesAdded > 0) {
+            $added['IMAGE'] = $imagesAdded;
+        }
+
         if (empty($added) && empty($missingMedia)) {
             return null;
         }
@@ -170,6 +181,64 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             'added'         => $added,
             'missing_media' => $missingMedia,
         ];
+    }
+
+    /**
+     * Generate + link the marketing images an asset group is missing (landscape 1.91:1
+     * and square 1:1). Images are AI-generated, then cropped to the exact ratio Google
+     * requires before upload. Only fills genuine gaps (idempotent by count). Returns the
+     * number of images added.
+     */
+    private function healImages(string $customerId, array $group, array $existing): int
+    {
+        $specs = [];
+        if (($existing['media']['MARKETING_IMAGE'] ?? 0) === 0) {
+            $specs[] = ['field' => AssetFieldType::MARKETING_IMAGE, 'w' => 1200, 'h' => 628, 'ratio' => '1.91:1'];
+        }
+        if (($existing['media']['SQUARE_IMAGE'] ?? 0) === 0) {
+            $specs[] = ['field' => AssetFieldType::SQUARE_MARKETING_IMAGE, 'w' => 1200, 'h' => 1200, 'ratio' => '1:1'];
+        }
+        if (empty($specs)) {
+            return 0;
+        }
+
+        $brand   = $this->customer->name ?? 'the brand';
+        $creator = new CreateImageAsset($this->customer);
+        $linker  = new LinkAssetGroupAsset($this->customer);
+        $added   = 0;
+
+        foreach ($specs as $spec) {
+            try {
+                $prompt = "Clean, professional marketing image for \"{$brand}\". Bold, modern, high-contrast, "
+                    . "no text, no logos, no watermarks, no people's faces. Suitable as a Google Ads asset. "
+                    . "Aspect ratio {$spec['ratio']}.";
+
+                $result = $this->gemini->generateImage($prompt, config('ai.models.image', 'gemini-3.1-flash-image-preview'));
+                if (!$result || empty($result['data'])) {
+                    continue;
+                }
+
+                // Crop/resize to the exact dimensions Google validates against.
+                $manager = new ImageManager(new Driver());
+                $image   = $manager->read(base64_decode($result['data']))->cover($spec['w'], $spec['h']);
+                $binary  = (string) $image->toJpeg(85);
+
+                $path = 'ad-assets/' . $group['id'] . '/' . uniqid('img_', true) . '.jpg';
+                [$s3Path, $publicUrl] = StorageHelper::put($path, $binary, 'image/jpeg');
+                if (!$publicUrl) {
+                    continue;
+                }
+
+                $assetRes = $creator($customerId, $publicUrl, 'Auto image ' . now()->format('Y-m-d'));
+                if ($assetRes && $linker($customerId, $group['res'], $assetRes, $spec['field'])) {
+                    $added++;
+                }
+            } catch (\Throwable $e) {
+                $this->logError('HealAssetGroupStrength: image heal failed: ' . $e->getMessage());
+            }
+        }
+
+        return $added;
     }
 
     /** Link all assets in one atomic mutate, retrying transient concurrent-modification. */
@@ -199,7 +268,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
     private function existingAssets(string $customerId, int $assetGroupId): array
     {
         $text = ['HEADLINE' => [], 'LONG_HEADLINE' => [], 'DESCRIPTION' => []];
-        $media = ['LOGO' => 0, 'SQUARE_IMAGE' => 0, 'YOUTUBE_VIDEO' => 0];
+        $media = ['LOGO' => 0, 'SQUARE_IMAGE' => 0, 'MARKETING_IMAGE' => 0, 'YOUTUBE_VIDEO' => 0];
 
         $fieldName = [
             AssetFieldType::HEADLINE => 'HEADLINE',
@@ -207,6 +276,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             AssetFieldType::DESCRIPTION => 'DESCRIPTION',
             AssetFieldType::LOGO => 'LOGO',
             AssetFieldType::SQUARE_MARKETING_IMAGE => 'SQUARE_IMAGE',
+            AssetFieldType::MARKETING_IMAGE => 'MARKETING_IMAGE',
             AssetFieldType::YOUTUBE_VIDEO => 'YOUTUBE_VIDEO',
         ];
 
