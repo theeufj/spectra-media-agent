@@ -35,7 +35,8 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
         // How many sitelinks does the campaign already have?
         $existing = 0;
         try {
-            $q = "SELECT campaign_asset.resource_name FROM campaign_asset "
+            // campaign.id must be in the SELECT clause when filtering campaign_asset by it.
+            $q = "SELECT campaign.id, campaign_asset.resource_name FROM campaign_asset "
                 . "WHERE campaign.id = {$campaignId} AND campaign_asset.field_type = 'SITELINK'";
             foreach ($this->searchQuery($customerId, $q)->getIterator() as $_) {
                 $existing++;

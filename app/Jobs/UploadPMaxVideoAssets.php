@@ -2,9 +2,11 @@
 
 namespace App\Jobs;
 
+use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
 use App\Services\GoogleAds\VideoServices\UploadVideoToYouTube;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
@@ -33,7 +35,7 @@ class UploadPMaxVideoAssets implements ShouldQueue
     public function __construct(
         protected int $strategyId,
         protected string $customerId,
-        protected string $assetGroupResourceName
+        protected ?string $assetGroupResourceName = null
     ) {}
 
     public function handle(): void
@@ -47,6 +49,14 @@ class UploadPMaxVideoAssets implements ShouldQueue
         $customer = $strategy->campaign?->customer;
         if (!$customer) {
             Log::error("UploadPMaxVideoAssets: No customer found for strategy {$this->strategyId}");
+            return;
+        }
+
+        // Resolve the asset group if a caller (e.g. video-completion) didn't pass one.
+        $assetGroupResourceName = $this->assetGroupResourceName
+            ?: $this->resolveAssetGroupResource($customer, $strategy->campaign);
+        if (!$assetGroupResourceName) {
+            Log::warning("UploadPMaxVideoAssets: No asset group resolved for strategy {$this->strategyId}");
             return;
         }
 
@@ -101,7 +111,7 @@ class UploadPMaxVideoAssets implements ShouldQueue
                 // Step 3: Link to asset group
                 $linkResourceName = ($assetLinker)(
                     $this->customerId,
-                    $this->assetGroupResourceName,
+                    $assetGroupResourceName,
                     $assetResourceName,
                     AssetFieldType::YOUTUBE_VIDEO
                 );
@@ -122,8 +132,36 @@ class UploadPMaxVideoAssets implements ShouldQueue
 
         Log::info("UploadPMaxVideoAssets: Done — linked {$linked}/{$videos->count()} videos to asset group", [
             'strategy_id'          => $this->strategyId,
-            'asset_group'          => $this->assetGroupResourceName,
+            'asset_group'          => $assetGroupResourceName,
         ]);
+    }
+
+    /** Resolve the first enabled asset group resource name for a PMax campaign. */
+    private function resolveAssetGroupResource(Customer $customer, ?Campaign $campaign): ?string
+    {
+        $campId = $campaign?->googleCampaignNumericId();
+        if (!$campId) {
+            return null;
+        }
+
+        try {
+            $svc = new class($customer) extends BaseGoogleAdsService {
+                public function get(string $cid, string $campId): ?string
+                {
+                    $this->ensureClient();
+                    $q = "SELECT asset_group.resource_name FROM asset_group "
+                        . "WHERE campaign.id = {$campId} AND asset_group.status = 'ENABLED'";
+                    foreach ($this->searchQuery($cid, $q)->getIterator() as $row) {
+                        return $row->getAssetGroup()->getResourceName();
+                    }
+                    return null;
+                }
+            };
+            return $svc->get($customer->cleanGoogleCustomerId(), $campId);
+        } catch (\Throwable $e) {
+            Log::warning('UploadPMaxVideoAssets: asset group resolve failed: ' . $e->getMessage());
+            return null;
+        }
     }
 
     public function failed(\Throwable $e): void

@@ -137,6 +137,18 @@ class CheckVideoStatus implements ShouldQueue
             foreach ($campaign->customer->users as $user) {
                 Mail::to($user->email)->send(new VideosGenerated($user, $campaign, $videoCount));
             }
+
+            // For a live PMax campaign, link the finished video to its asset group so it
+            // lifts ad strength. Previously only the creation flow did this, so healed /
+            // regenerated videos never attached. UploadPMaxVideoAssets self-resolves the
+            // asset group when none is passed.
+            if ($campaign->google_ads_campaign_id) {
+                $strategyId = $this->videoCollateral->strategy_id ?? $campaign->strategies()->latest()->value('id');
+                if ($strategyId) {
+                    \App\Jobs\UploadPMaxVideoAssets::dispatch($strategyId, $campaign->customer->cleanGoogleCustomerId())
+                        ->delay(now()->addSeconds(30));
+                }
+            }
         }
 
         Log::info("--- CheckVideoStatus Completed for VideoCollateral ID: {$this->videoCollateral->id} ---");

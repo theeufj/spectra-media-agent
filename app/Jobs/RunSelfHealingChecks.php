@@ -12,6 +12,9 @@ use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Models\Recommendation;
+use App\Models\VideoCollateral;
+use App\Jobs\GenerateVideo;
+use App\Jobs\UploadPMaxVideoAssets;
 use App\Services\GoogleAds\CommonServices\CreateSitelinkAssets;
 use App\Services\GoogleAds\CommonServices\VerifyConversionGoals;
 use App\Services\GoogleAds\PerformanceMaxServices\HealAssetGroupStrength;
@@ -120,6 +123,11 @@ class RunSelfHealingChecks implements ShouldQueue
                                     $campaign->customer_id, $campaign->id, $r
                                 );
                             }
+
+                            // Missing video is a major ad-strength gap PMax weights heavily.
+                            if (in_array('video', $r['missing_media'] ?? [], true)) {
+                                $this->ensurePMaxVideo($campaign);
+                            }
                         }
 
                         // Ensure the campaign has sitelinks (improves ad strength + real estate).
@@ -183,6 +191,47 @@ class RunSelfHealingChecks implements ShouldQueue
         ]);
 
         $this->finishRun($runStart, actions: $healed, errors: $errors, scope: $campaigns->count() . ' campaigns');
+    }
+
+    /**
+     * Ensure a PMax campaign has a video asset. Links an already-completed video, or
+     * generates one (completion auto-links it). Guarded to one action per campaign/day
+     * since video generation is slow and costly.
+     */
+    private function ensurePMaxVideo(Campaign $campaign): void
+    {
+        $key = "pmax_video_heal:{$campaign->id}";
+        if (Cache::has($key)) {
+            return;
+        }
+
+        $strategy = $campaign->strategies()->latest()->first();
+        if (!$strategy || !$campaign->customer) {
+            return;
+        }
+
+        $customerId = $campaign->customer->cleanGoogleCustomerId();
+
+        // A completed video exists but isn't attached → just link it.
+        if (VideoCollateral::where('campaign_id', $campaign->id)->where('status', 'completed')->exists()) {
+            UploadPMaxVideoAssets::dispatch($strategy->id, $customerId);
+            Cache::put($key, true, now()->addDay());
+            return;
+        }
+
+        // A video is already being generated → let it finish (it auto-links on completion).
+        if (VideoCollateral::where('campaign_id', $campaign->id)->whereNotIn('status', ['completed', 'failed'])->exists()) {
+            return;
+        }
+
+        // Nothing yet → generate one.
+        GenerateVideo::dispatch($campaign, $strategy, 'Google Ads (Performance Max)');
+        AgentActivity::record(
+            'maintenance', 'video_generation_started',
+            "Generating a video for '{$campaign->name}' to lift PMax ad strength",
+            $campaign->customer_id, $campaign->id, []
+        );
+        Cache::put($key, true, now()->addDay());
     }
 
     public function failed(\Throwable $exception): void
