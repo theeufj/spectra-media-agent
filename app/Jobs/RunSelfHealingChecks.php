@@ -11,6 +11,8 @@ use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use App\Services\Agents\LinkedInCampaignOptimizationAgent;
+use App\Models\Recommendation;
+use App\Services\GoogleAds\CommonServices\CreateSitelinkAssets;
 use App\Services\GoogleAds\CommonServices\VerifyConversionGoals;
 use App\Services\GoogleAds\PerformanceMaxServices\HealAssetGroupStrength;
 use Illuminate\Bus\Queueable;
@@ -104,6 +106,24 @@ class RunSelfHealingChecks implements ShouldQueue
                                     $campaign->customer_id, $campaign->id, $r
                                 );
                             }
+                        }
+
+                        // Ensure the campaign has sitelinks (improves ad strength + real estate).
+                        $sitelinksAdded = (new CreateSitelinkAssets($campaign->customer))->heal($campaign);
+                        if ($sitelinksAdded > 0) {
+                            $healed += $sitelinksAdded;
+                            Recommendation::create([
+                                'campaign_id'       => $campaign->id,
+                                'type'              => 'SITELINKS',
+                                'rationale'         => "Added {$sitelinksAdded} sitelink(s) to improve ad strength",
+                                'status'            => 'applied',
+                                'requires_approval' => false,
+                            ]);
+                            AgentActivity::record(
+                                'maintenance', 'sitelinks_added',
+                                "Added {$sitelinksAdded} sitelink(s) to '{$campaign->name}'",
+                                $campaign->customer_id, $campaign->id, []
+                            );
                         }
 
                         // Conversion-goal hygiene — once per customer per pass.

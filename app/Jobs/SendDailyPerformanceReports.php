@@ -152,6 +152,7 @@ class SendDailyPerformanceReports implements ShouldQueue
             'AUDIENCE'         => 'Updated audiences',
             'NETWORK_SETTINGS' => 'Disabled out-of-network placements',
             'AD_GROUP_PAUSE'   => 'Paused underperforming ad group',
+            'SITELINKS'        => 'Added sitelinks',
             default            => 'Optimisation applied',
         };
     }
