@@ -47,7 +47,8 @@ class FindUnderperformingKeywords implements ShouldQueue
             $service = new AccountStructureService($campaign->customer);
             $googleAdsServiceClient = $service->getClient()->getGoogleAdsServiceClient();
 
-            $query = "SELECT ad_group_criterion.keyword.text, metrics.clicks, metrics.impressions, metrics.conversions FROM keyword_view WHERE campaign.id = {$campaign->google_ads_campaign_id} AND metrics.conversions = 0 AND metrics.clicks > 100";
+            $campaignId = $campaign->googleCampaignNumericId();
+            $query = "SELECT ad_group_criterion.keyword.text, metrics.clicks, metrics.impressions, metrics.conversions FROM keyword_view WHERE campaign.id = {$campaignId} AND metrics.conversions = 0 AND metrics.clicks > 100";
 
             $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
                 'customer_id' => $campaign->customer->google_ads_customer_id,

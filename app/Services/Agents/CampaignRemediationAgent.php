@@ -549,8 +549,7 @@ PROMPT;
      */
     private function assetGroupsWithSignals(Customer $customer, string $customerId, Campaign $campaign): array
     {
-        preg_match('/campaigns\/(\d+)$/', (string) $campaign->google_ads_campaign_id, $m);
-        $campaignId = $m[1] ?? preg_replace('/\D/', '', (string) $campaign->google_ads_campaign_id);
+        $campaignId = $campaign->googleCampaignNumericId();
         if (!$campaignId) {
             return [];
         }

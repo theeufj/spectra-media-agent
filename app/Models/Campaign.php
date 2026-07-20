@@ -103,6 +103,24 @@ class Campaign extends Model
     }
 
     /**
+     * The numeric Google Ads campaign ID, whether google_ads_campaign_id is stored as a
+     * bare number or a full "customers/{cid}/campaigns/{id}" resource name. Safe to
+     * interpolate into a GAQL `campaign.id = ` filter — stripping non-digits from a
+     * resource name would fuse the customer and campaign IDs into an invalid number.
+     */
+    public function googleCampaignNumericId(): ?string
+    {
+        $val = (string) ($this->google_ads_campaign_id ?? '');
+        if ($val === '') {
+            return null;
+        }
+        if (preg_match('/campaigns\/(\d+)/', $val, $m)) {
+            return $m[1];
+        }
+        return ctype_digit($val) ? $val : null;
+    }
+
+    /**
      * Check if strategy generation is currently in progress.
      */
     public function isGeneratingStrategies(): bool

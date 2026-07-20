@@ -25,8 +25,8 @@ class PauseZeroConversionAdGroups extends BaseGoogleAdsService
     {
         $this->ensureClient();
 
-        $campaignId = preg_replace('/\D/', '', (string) $campaign->google_ads_campaign_id);
-        if ($campaignId === '') {
+        $campaignId = $campaign->googleCampaignNumericId();
+        if (!$campaignId) {
             return ['paused' => [], 'scanned' => 0];
         }
 

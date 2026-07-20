@@ -63,8 +63,8 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             $this->ensureClient();
 
             $filter = "campaign.status = 'ENABLED' AND asset_group.status = 'ENABLED'";
-            if ($campaign && $campaign->google_ads_campaign_id) {
-                $filter .= ' AND campaign.id = ' . (int) $campaign->google_ads_campaign_id;
+            if ($campaign && ($campId = $campaign->googleCampaignNumericId())) {
+                $filter .= ' AND campaign.id = ' . $campId;
             }
 
             $groups = [];

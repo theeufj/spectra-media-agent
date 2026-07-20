@@ -59,7 +59,7 @@ class GetKeywordQualityScore implements ShouldQueue
                 . "metrics.conversions, "
                 . "metrics.cost_micros "
                 . "FROM keyword_view "
-                . "WHERE campaign.id = {$campaign->google_ads_campaign_id}";
+                . "WHERE campaign.id = {$campaign->googleCampaignNumericId()}";
 
             $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
                 'customer_id' => $campaign->customer->google_ads_customer_id,
