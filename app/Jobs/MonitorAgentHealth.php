@@ -23,10 +23,13 @@ class MonitorAgentHealth implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /** Max hours between runs before a job is considered stale (≈ 2× its cadence). */
-    private const EXPECTED_MAX_GAP_HOURS = [
-        'RunSelfHealingChecks'       => 9,   // scheduled every 4h
-        'RunStrategicDiagnosis'      => 30,  // daily
-        'RunPerformanceAnomalyCheck' => 9,   // every 4h
+    public const EXPECTED_MAX_GAP_HOURS = [
+        'RunSelfHealingChecks'          => 9,   // every 4h
+        'RunPerformanceAnomalyCheck'    => 9,   // every 4h
+        'RunHealthChecks'               => 14,  // every 6h
+        'RunStrategicDiagnosis'         => 30,  // daily
+        'OptimizeCampaigns'             => 30,  // daily
+        'AutomatedCampaignMaintenance'  => 30,  // daily
     ];
 
     public function handle(): void

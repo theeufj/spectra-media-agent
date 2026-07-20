@@ -33,7 +33,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class RunHealthChecks implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     /**
      * The number of times the job may be attempted.
@@ -56,6 +56,7 @@ class RunHealthChecks implements ShouldQueue
     public function handle(HealthCheckAgent $healthCheckAgent): void
     {
         Log::info("RunHealthChecks: Starting health check run");
+        $runStart = $this->startRun();
 
         // Only check customers who have at least one active + deployed campaign.
         // Paused/ended campaigns still have platform IDs (withDeployedPlatforms matches them)
@@ -118,6 +119,13 @@ class RunHealthChecks implements ShouldQueue
         ], now()->addDay());
 
         Log::info("RunHealthChecks: Completed health check run", $summary);
+
+        $this->finishRun($runStart,
+            actions: ($summary['critical'] ?? 0) + ($summary['unhealthy'] ?? 0),
+            errors: count($summary['errors'] ?? []),
+            scope: $customers->count() . ' customers',
+            details: ['critical' => $summary['critical'] ?? 0, 'unhealthy' => $summary['unhealthy'] ?? 0]
+        );
 
         // Send daily summary to admins if there are issues
         if ($summary['critical'] > 0 || $summary['unhealthy'] > 0) {
@@ -257,5 +265,6 @@ class RunHealthChecks implements ShouldQueue
             'error' => $exception->getMessage(),
             'trace' => $exception->getTraceAsString(),
         ]);
+        $this->recordRunFailure($exception);
     }
 }

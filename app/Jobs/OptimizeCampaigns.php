@@ -18,13 +18,17 @@ use Illuminate\Support\Facades\Log;
 
 class OptimizeCampaigns implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     /**
      * Execute the job.
      */
     public function handle(CampaignOptimizationAgent $optimizationAgent, FacebookAdRelevanceDiagnosticsAgent $fbDiagnostics): void
     {
+        $runStart = $this->startRun();
+        $totalApplied = 0;
+        $errors = 0;
+
         // Find active campaigns that are 'ELIGIBLE' (primary status)
         // This covers both Google (ENABLED/ELIGIBLE) and Facebook (ACTIVE)
         $campaigns = Campaign::whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
@@ -132,6 +136,8 @@ class OptimizeCampaigns implements ShouldQueue
                 // when there's insufficient data for recommendations (e.g. brand-new campaigns).
                 $campaign->update(['last_optimized_at' => now()]);
 
+                $totalApplied += $appliedCount;
+
                 Log::info("Optimization complete for campaign {$campaign->id}", [
                     'auto_applied'   => $appliedCount,
                     'pending_review' => $pendingCount,
@@ -166,6 +172,7 @@ class OptimizeCampaigns implements ShouldQueue
                 }
 
             } catch (\Exception $e) {
+                $errors++;
                 Log::error("Failed to optimize campaign {$campaign->id}: " . $e->getMessage(), [
                     'campaign_id' => $campaign->id,
                     'exception' => get_class($e),
@@ -173,6 +180,8 @@ class OptimizeCampaigns implements ShouldQueue
                 // Continue to next campaign — don't let one failure block others
             }
         }
+
+        $this->finishRun($runStart, actions: $totalApplied, errors: $errors, scope: $campaigns->count() . ' campaigns');
     }
 
     /**
@@ -183,5 +192,6 @@ class OptimizeCampaigns implements ShouldQueue
         Log::error('OptimizeCampaigns failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+        $this->recordRunFailure($exception);
     }
 }

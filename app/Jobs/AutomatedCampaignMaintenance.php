@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\Log;
 
 class AutomatedCampaignMaintenance implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     /**
      * Execute the job.
@@ -48,6 +48,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         AudienceIntelligenceAgent $audienceAgent
     ): void {
         Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
+        $runStart = $this->startRun();
 
         // Per-customer digest: customer_id → [campaign_name => changes]
         $customerDigests = [];
@@ -288,6 +289,17 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 }
             }
         }
+
+        $totalActions = ($summary['healing_actions'] ?? 0) + ($summary['keywords_added'] ?? 0)
+            + ($summary['negatives_added'] ?? 0) + ($summary['creative_adjustments'] ?? 0)
+            + ($summary['budget_adjustments'] ?? 0);
+        $this->finishRun($runStart,
+            actions: $totalActions,
+            errors: $summary['errors'] ?? 0,
+            warnings: $summary['healing_warnings'] ?? 0,
+            scope: ($summary['campaigns_processed'] ?? 0) . ' campaigns',
+            details: $summary
+        );
     }
 
     /**
@@ -298,5 +310,6 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         Log::error('AutomatedCampaignMaintenance failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+        $this->recordRunFailure($exception);
     }
 }

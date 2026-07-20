@@ -490,6 +490,7 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
 */
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('dashboard', [App\Http\Controllers\AdminController::class, 'index'])->name('admin.dashboard');
+    Route::get('automation-health', [\App\Http\Controllers\AgentActivityController::class, 'healthPage'])->name('admin.automation-health');
     Route::get('help', fn () => \Inertia\Inertia::render('Admin/PlatformSetupGuide'))->name('admin.help');
     Route::get('users', [App\Http\Controllers\AdminController::class, 'usersIndex'])->name('admin.users.index');
     Route::get('customers', [App\Http\Controllers\AdminController::class, 'customersIndex'])->name('admin.customers.index');
