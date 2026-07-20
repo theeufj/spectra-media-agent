@@ -93,6 +93,16 @@ class Customer extends Model
         'google_ads_refresh_token',
     ];
 
+    /**
+     * The ISO-4217 currency this customer is billed in — the native currency of their
+     * ad account. Ad spend comes back in this currency and is deducted / charged 1:1
+     * (no cross-currency FX). Falls back to the platform default.
+     */
+    public function billingCurrency(): string
+    {
+        return strtoupper($this->currency_code ?: config('cashier.currency', 'aud'));
+    }
+
     // Secrets encrypted at rest (tolerant of legacy plaintext rows).
     protected function trackingSigningSecret(): Attribute
     {

@@ -148,6 +148,10 @@ Schedule::job(new ReviewGoogleAdsRecommendations)->dailyAt('04:30')->withoutOver
 // Runs at 08:00 UTC to ensure Google Ads data is finalised for all timezones including US Pacific (UTC-8).
 Schedule::job(new ProcessDailyAdSpendBilling)->dailyAt('08:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ProcessDailyAdSpendBilling'));
 
+// Weekly ad spend reconciliation - compares platform spend to ledger deductions and
+// alerts admins on divergence (alert-only, no auto-correction). (BILL-7)
+Schedule::job(new \App\Jobs\ReconcileAdSpend)->weeklyOn(1, '09:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ReconcileAdSpend'));
+
 // Daily performance email - send yesterday's metrics summary to all users
 Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00')->withoutOverlapping();
 

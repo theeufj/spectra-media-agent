@@ -69,7 +69,7 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
                 Log::info("DeployCampaign: No Facebook ad account — provisioning for customer {$customer->id}");
                 $accountResult = (new CreateFacebookAdsAccount($customer))(
                     accountName: $customer->name . ' Ads',
-                    currency: 'USD',
+                    currency: $customer->billingCurrency(),
                     timezoneId: 1
                 );
                 if ($accountResult) {

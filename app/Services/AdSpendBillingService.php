@@ -80,7 +80,7 @@ class AdSpendBillingService
             'customer_id' => $customer->id,
             'initial_credit_amount' => $initialCredit,
             'current_balance' => $initialCredit,
-            'currency' => 'USD',
+            'currency' => $customer->billingCurrency(),
             'status' => AdSpendCredit::STATUS_ACTIVE,
             'payment_status' => AdSpendCredit::PAYMENT_CURRENT,
             'last_successful_charge_at' => now(),
@@ -356,8 +356,10 @@ class AdSpendBillingService
             // Amount in cents for Stripe
             $amountCents = (int) round($amount * 100);
 
-            // Use Laravel Cashier to charge
+            // Charge in the customer's own currency (their ad-account currency) so we
+            // never bill USD for AUD spend. Ad spend is deducted 1:1 in this currency.
             $payment = $user->charge($amountCents, $user->defaultPaymentMethod()->id, [
+                'currency' => strtolower($customer->billingCurrency()),
                 'description' => $description,
                 'metadata' => [
                     'customer_id' => $customer->id,
