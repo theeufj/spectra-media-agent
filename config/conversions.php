@@ -31,7 +31,10 @@ return [
      */
     'events' => [
         'signup' => [
-            'label'    => 'FHk5COLIz6ccEIytnL5D',
+            // Sign-up conversion lives in a separate Google Ads account (AW-18115663500),
+            // so it carries a per-event aw_id override rather than the global one.
+            'aw_id'    => 'AW-18115663500',
+            'label'    => 'P4yoCNWvnNMcEIytnL5D',
             'value'    => 99.00,
             'currency' => 'USD',
             'mode'     => 'client',

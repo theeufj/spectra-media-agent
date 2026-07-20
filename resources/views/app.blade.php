@@ -54,6 +54,10 @@
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
             gtag('config', 'AW-16797144138');
+            // Second Google Ads account that owns the sign-up conversion, plus its GA4 property.
+            // Both must be configured here or their conversions/events silently never fire.
+            gtag('config', 'AW-18115663500');
+            gtag('config', 'G-WKHRP9NJPD');
         </script>
         <!-- End Google Ads tag -->
 

@@ -20,7 +20,7 @@ export default function Dashboard() {
         const params = new URLSearchParams(window.location.search);
         if (params.get('verified') === '1' && typeof gtag === 'function') {
             gtag('event', 'conversion', {
-                send_to: 'AW-16797144138/FHk5COLIz6ccEIytnL5D',
+                send_to: 'AW-18115663500/P4yoCNWvnNMcEIytnL5D',
                 value: 149,
                 currency: 'USD',
             });

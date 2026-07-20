@@ -675,11 +675,12 @@ class AdminController extends Controller
             $label        = Setting::get("conversion_label.{$key}", $def['label'] ?? null);
             $resourceName = Setting::get("conversion_resource_name.{$key}");
             $isServer     = ($def['mode'] ?? 'client') === 'server';
+            $eventAwId    = $def['aw_id'] ?? $awId; // per-event account override
             return [
                 'key'           => $key,
                 'name'          => 'Spectra — ' . ucfirst(str_replace('_', ' ', $key)),
                 'label'         => $label,
-                'send_to'       => $label ? "{$awId}/{$label}" : null,
+                'send_to'       => $label ? "{$eventAwId}/{$label}" : null,
                 'resource_name' => $resourceName,
                 'mode'          => $def['mode'] ?? 'client',
                 'value'         => $def['value'] ?? null,
