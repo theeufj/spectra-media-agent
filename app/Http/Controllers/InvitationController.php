@@ -40,20 +40,39 @@ class InvitationController extends Controller
     {
         $invitation = Invitation::where('token', $token)->firstOrFail();
 
-        if ($user = User::where('email', $invitation->email)->first()) {
-            // User exists, attach them to the customer
-            $user->customers()->attach($invitation->customer_id, ['role' => $invitation->role]);
-            Auth::login($user);
-        } else {
-            // User does not exist, redirect to registration
-            return redirect()->route('register')->with([
-                'email' => $invitation->email,
-                'invitation_token' => $token,
-            ]);
+        // Invitations expire after 7 days so a leaked link can't be redeemed indefinitely.
+        if ($invitation->created_at && $invitation->created_at->lt(now()->subDays(7))) {
+            $invitation->delete();
+            abort(410, 'This invitation has expired. Please request a new one.');
         }
 
-        $invitation->delete();
+        $existingUser = User::where('email', $invitation->email)->first();
 
-        return redirect()->route('dashboard');
+        if ($existingUser) {
+            // An invite addressed to an existing account may only be redeemed by that
+            // account while authenticated. Never log a user in from a bare token — that
+            // would let anyone holding the link take over the invited account.
+            if (Auth::check() && Auth::id() !== $existingUser->id) {
+                abort(403, 'This invitation was sent to a different account. Please log in as ' . $invitation->email . '.');
+            }
+
+            if (!Auth::check()) {
+                // Stash the accept URL as the intended destination and send to login.
+                return redirect()->guest(route('login'));
+            }
+
+            $existingUser->customers()->syncWithoutDetaching([
+                $invitation->customer_id => ['role' => $invitation->role],
+            ]);
+            $invitation->delete();
+
+            return redirect()->route('dashboard')->with('success', 'Invitation accepted.');
+        }
+
+        // No account yet — carry the token to registration, which consumes it on signup.
+        return redirect()->route('register')->with([
+            'email' => $invitation->email,
+            'invitation_token' => $token,
+        ]);
     }
 }

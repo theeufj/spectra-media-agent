@@ -13,6 +13,9 @@ class CustomerPageController extends Controller
      */
     public function index(Request $request, Customer $customer)
     {
+        $active = $this->getActiveCustomer($request);
+        abort_unless($active && $active->id === $customer->id, 403);
+
         // If no customer_pages exist, backfill from knowledge_bases
         if ($customer->pages()->count() === 0) {
             $userIds = $customer->users()->pluck('users.id');

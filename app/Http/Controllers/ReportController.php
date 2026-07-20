@@ -71,6 +71,13 @@ class ReportController extends Controller
             abort(403);
         }
 
+        // $period/$date are interpolated into a filesystem path — restrict to a
+        // charset that cannot traverse directories (no '.', '/' or '\').
+        abort_unless(
+            preg_match('/^[A-Za-z0-9_-]+$/', $period) && preg_match('/^[A-Za-z0-9_-]+$/', $date),
+            404
+        );
+
         $filename = "reports/{$customer->id}/{$period}_{$date}.pdf";
 
         if (!Storage::disk('local')->exists($filename)) {
