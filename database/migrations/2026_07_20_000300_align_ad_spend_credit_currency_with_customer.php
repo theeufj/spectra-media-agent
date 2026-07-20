@@ -13,12 +13,18 @@ return new class extends Migration
 {
     public function up(): void
     {
-        DB::table('ad_spend_credits')
-            ->join('customers', 'customers.id', '=', 'ad_spend_credits.customer_id')
-            ->whereRaw('UPPER(ad_spend_credits.currency) <> UPPER(COALESCE(customers.currency_code, ad_spend_credits.currency))')
-            ->update([
-                'ad_spend_credits.currency' => DB::raw('UPPER(customers.currency_code)'),
-            ]);
+        // Per-row update (not a JOIN update) so it compiles identically on every driver —
+        // Postgres UPDATE ... FROM rejects table-qualified SET columns.
+        DB::table('ad_spend_credits')->orderBy('id')->chunkById(200, function ($rows) {
+            foreach ($rows as $row) {
+                $currency = DB::table('customers')->where('id', $row->customer_id)->value('currency_code');
+                if ($currency && strtoupper($currency) !== strtoupper((string) $row->currency)) {
+                    DB::table('ad_spend_credits')
+                        ->where('id', $row->id)
+                        ->update(['currency' => strtoupper($currency)]);
+                }
+            }
+        });
     }
 
     public function down(): void
