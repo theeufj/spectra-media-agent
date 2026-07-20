@@ -224,8 +224,9 @@ class RunSelfHealingChecks implements ShouldQueue
             return;
         }
 
-        // Nothing yet → generate one.
-        GenerateVideo::dispatch($campaign, $strategy, 'Google Ads (Performance Max)');
+        // Nothing yet → generate one. force=true because PMax needs a video for ad
+        // strength even when the written strategy marked video as N/A.
+        GenerateVideo::dispatch($campaign, $strategy, 'Google Ads (Performance Max)', 0, true);
         AgentActivity::record(
             'maintenance', 'video_generation_started',
             "Generating a video for '{$campaign->name}' to lift PMax ad strength",

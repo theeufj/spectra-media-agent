@@ -29,7 +29,8 @@ class GenerateVideo implements ShouldQueue
         protected Campaign $campaign,
         protected Strategy $strategy,
         protected string $platform,
-        protected int $variationIndex = 0
+        protected int $variationIndex = 0,
+        protected bool $force = false
     ) {
     }
 
@@ -161,10 +162,20 @@ class GenerateVideo implements ShouldQueue
             
             // Extract actionable content from strategy
             $actionableContent = $this->extractActionableVideoContent($videoStrategy);
-            
+
             if (!$actionableContent) {
-                Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content found. Original strategy: '{$videoStrategy}'");
-                return;
+                if (!$this->force) {
+                    Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content found. Original strategy: '{$videoStrategy}'");
+                    return;
+                }
+                // Forced (e.g. PMax ad-strength healing): PMax needs a video asset even when
+                // the written strategy said video was N/A. Fall back to a generic brief.
+                $brand = $this->campaign->customer->name ?? 'the brand';
+                $focus = $this->campaign->product_focus ?: 'the product/service';
+                $actionableContent = "Short, modern product-showcase video for {$brand}. Highlight {$focus} "
+                    . "with clean, high-quality visuals and upbeat pacing. No on-screen text overlays. "
+                    . "Suitable as a Performance Max video asset.";
+                Log::info("GenerateVideo: forced generation with fallback brief for Strategy ID: {$this->strategy->id}");
             }
 
             // Step 1: Generate Video Script using Gemini
