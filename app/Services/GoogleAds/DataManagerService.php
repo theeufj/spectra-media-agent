@@ -150,7 +150,7 @@ class DataManagerService
             $response = Http::asForm()->timeout(15)->post(self::TOKEN_ENDPOINT, [
                 'client_id'     => $oauth['clientId'],
                 'client_secret' => $oauth['clientSecret'],
-                'refresh_token' => $this->mcc->refresh_token,
+                'refresh_token' => $this->mcc->getDecryptedRefreshToken(),
                 'grant_type'    => 'refresh_token',
             ]);
 

@@ -8,7 +8,6 @@ use App\Models\MccAccount;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
 
@@ -114,9 +113,7 @@ abstract class BaseGoogleAdsService
                 return null;
             }
 
-            $mccRefreshToken = $mccAccount->exists
-                ? Crypt::decryptString($mccAccount->refresh_token)
-                : $mccAccount->refresh_token;
+            $mccRefreshToken = $mccAccount->getDecryptedRefreshToken();
             // Strip dashes — Google Ads API requires plain numeric IDs (e.g. 8701023448 not 870-102-3448)
             $mccCustomerId = preg_replace('/[^0-9]/', '', $mccAccount->google_customer_id);
 

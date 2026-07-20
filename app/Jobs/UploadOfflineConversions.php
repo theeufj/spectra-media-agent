@@ -321,7 +321,7 @@ class UploadOfflineConversions implements ShouldQueue
                 return null;
             }
 
-            $mccRefreshToken = $mccAccount->refresh_token;
+            $mccRefreshToken = $mccAccount->getDecryptedRefreshToken();
 
             $oAuth2Credential = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)

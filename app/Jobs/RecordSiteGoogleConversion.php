@@ -113,7 +113,7 @@ class RecordSiteGoogleConversion implements ShouldQueue
 
             $oAuth2 = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)
-                ->withRefreshToken($mcc->refresh_token)
+                ->withRefreshToken($mcc->getDecryptedRefreshToken())
                 ->build();
 
             return (new GoogleAdsClientBuilder())

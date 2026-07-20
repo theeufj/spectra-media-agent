@@ -279,7 +279,7 @@ class ProvisionConversionActions extends Command
         }
 
         try {
-            $refreshToken = $mcc->refresh_token;
+            $refreshToken = $mcc->getDecryptedRefreshToken();
 
             $oAuth2 = (new OAuth2TokenBuilder())
                 ->fromFile($configPath)
