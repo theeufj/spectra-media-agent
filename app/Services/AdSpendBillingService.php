@@ -12,6 +12,7 @@ use App\Mail\AdSpendCampaignsPaused;
 use App\Mail\AdSpendCampaignsResumed;
 use App\Mail\AdSpendLowBalance;
 use App\Services\Agents\BudgetIntelligenceAgent;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Cashier\Exceptions\IncompletePayment;
@@ -49,21 +50,30 @@ class AdSpendBillingService
      */
     public function initializeCreditAccount(Customer $customer, float $dailyBudget): AdSpendCredit
     {
-        // Check if customer already has a credit account
-        $existing = $customer->adSpendCredit;
-        if ($existing) {
-            return $existing;
-        }
+        // Serialize per-customer: without a DB unique constraint, two concurrent calls
+        // (racing deploys, a double-clicked deploy button) would both see "no account",
+        // both charge the card, and create duplicate credit rows. The lock makes the
+        // check-charge-create sequence atomic. (BILL-3)
+        $lock = Cache::lock("adspend_init:{$customer->id}", 60);
 
-        // Calculate initial credit (7 days of estimated spend)
-        $initialCredit = AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
+        try {
+            $lock->block(20);
 
-        // Charge the customer's card for the initial credit
-        $chargeResult = $this->chargeCustomer($customer, $initialCredit, 'Initial ad spend credit (7 days)');
+            // Re-read inside the lock — the relation accessor may be stale.
+            $existing = $customer->adSpendCredit()->first();
+            if ($existing) {
+                return $existing;
+            }
 
-        if (!$chargeResult['success']) {
-            throw new \Exception('Failed to charge initial ad spend credit: ' . $chargeResult['error']);
-        }
+            // Calculate initial credit (7 days of estimated spend)
+            $initialCredit = AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
+
+            // Charge the customer's card for the initial credit
+            $chargeResult = $this->chargeCustomer($customer, $initialCredit, 'Initial ad spend credit (7 days)');
+
+            if (!$chargeResult['success']) {
+                throw new \Exception('Failed to charge initial ad spend credit: ' . $chargeResult['error']);
+            }
 
         // Create the credit account
         $credit = AdSpendCredit::create([
@@ -91,7 +101,10 @@ class AdSpendBillingService
             'initial_credit' => $initialCredit,
         ]);
 
-        return $credit;
+            return $credit;
+        } finally {
+            optional($lock)->release();
+        }
     }
 
     /**
