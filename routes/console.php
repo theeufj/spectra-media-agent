@@ -263,6 +263,24 @@ Schedule::call(function () {
         });
 })->name('sync-crm-conversions')->everyFourHours()->withoutOverlapping();
 
+// Re-drive offline-conversion uploads: retries pending rows and previously-failed
+// rows with retries left. Without this, failed uploads were never re-attempted. (JOB-3)
+Schedule::call(function () {
+    \App\Models\OfflineConversion::query()
+        ->where(function ($q) {
+            $q->where('upload_status', 'pending')
+              ->orWhere(function ($q) {
+                  $q->where('upload_status', 'failed')
+                    ->where('upload_attempts', '<', \App\Jobs\UploadOfflineConversions::MAX_ATTEMPTS);
+              });
+        })
+        ->distinct()
+        ->pluck('customer_id')
+        ->each(function ($customerId) {
+            \App\Jobs\UploadOfflineConversions::dispatch($customerId);
+        });
+})->name('retry-offline-conversions')->hourly()->withoutOverlapping();
+
 // Product feed sync - sync Merchant Center product feeds
 Schedule::call(function () {
     \App\Models\ProductFeed::where('status', 'active')

@@ -22,6 +22,12 @@ class UploadOfflineConversions implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    /** Rows processed per run; a full batch self-redispatches for the remainder. */
+    protected const BATCH_SIZE = 200;
+
+    /** Max upload attempts before a failed row is left alone (avoids hammering a bad row). */
+    public const MAX_ATTEMPTS = 5;
+
     public function __construct(
         protected int $customerId
     ) {}
@@ -31,29 +37,48 @@ class UploadOfflineConversions implements ShouldQueue
         $customer = Customer::find($this->customerId);
         if (!$customer) return;
 
+        // Include previously-failed rows that still have retries left, so a transient
+        // ad-network outage doesn't cause permanent conversion loss. (JOB-3)
         $pending = OfflineConversion::where('customer_id', $this->customerId)
-            ->where('upload_status', 'pending')
-            ->limit(200)
+            ->where(function ($q) {
+                $q->where('upload_status', 'pending')
+                  ->orWhere(function ($q) {
+                      $q->where('upload_status', 'failed')
+                        ->where('upload_attempts', '<', self::MAX_ATTEMPTS);
+                  });
+            })
+            ->limit(self::BATCH_SIZE)
             ->get();
 
         if ($pending->isEmpty()) return;
 
+        // Per-platform idempotency: a retried row (upload_status='failed') may already
+        // have succeeded on one platform, so gate each platform on its own recorded
+        // status in upload_results — never re-upload a platform that already succeeded
+        // (which would double-count the conversion). (JOB-3)
+        $alreadyUploaded = fn ($c, $platform) => ($c->upload_results[$platform]['status'] ?? null) === 'uploaded';
+
         // Upload to Google Ads (conversions with gclid)
-        $googleConversions = $pending->filter(fn ($c) => !empty($c->gclid));
+        $googleConversions = $pending->filter(fn ($c) => !empty($c->gclid) && !$alreadyUploaded($c, 'google_ads'));
         if ($googleConversions->isNotEmpty()) {
             $this->uploadToGoogleAds($customer, $googleConversions);
         }
 
         // Upload to Facebook (conversions with fbclid)
-        $facebookConversions = $pending->filter(fn ($c) => !empty($c->fbclid));
+        $facebookConversions = $pending->filter(fn ($c) => !empty($c->fbclid) && !$alreadyUploaded($c, 'facebook'));
         if ($facebookConversions->isNotEmpty()) {
             $this->uploadToFacebook($customer, $facebookConversions);
         }
 
         // Upload to Microsoft (conversions with msclkid)
-        $microsoftConversions = $pending->filter(fn ($c) => !empty($c->msclid));
+        $microsoftConversions = $pending->filter(fn ($c) => !empty($c->msclid) && !$alreadyUploaded($c, 'microsoft'));
         if ($microsoftConversions->isNotEmpty()) {
             $this->uploadToMicrosoft($customer, $microsoftConversions);
+        }
+
+        // A full batch means more rows are likely waiting — self-redispatch for them.
+        if ($pending->count() >= self::BATCH_SIZE) {
+            self::dispatch($this->customerId)->delay(now()->addMinute());
         }
     }
 
@@ -118,6 +143,7 @@ class UploadOfflineConversions implements ShouldQueue
                     $conversion->update([
                         'upload_status' => 'failed',
                         'upload_results' => $results,
+                        'upload_attempts' => $conversion->upload_attempts + 1,
                     ]);
                 }
             }
@@ -132,6 +158,7 @@ class UploadOfflineConversions implements ShouldQueue
                 $conversion->update([
                     'upload_status' => 'failed',
                     'upload_results' => array_merge($conversion->upload_results ?? [], ['google_ads_error' => $e->getMessage()]),
+                    'upload_attempts' => $conversion->upload_attempts + 1,
                 ]);
             }
             Log::error('UploadOfflineConversions: Google Ads upload failed', ['error' => $e->getMessage()]);
@@ -184,6 +211,7 @@ class UploadOfflineConversions implements ShouldQueue
                     $conversion->update([
                         'upload_status' => 'failed',
                         'upload_results' => $results,
+                        'upload_attempts' => $conversion->upload_attempts + 1,
                     ]);
                 }
             }
@@ -237,11 +265,11 @@ class UploadOfflineConversions implements ShouldQueue
                         ]);
                     } else {
                         $results['microsoft'] = ['status' => 'failed', 'attempted_at' => now()->toDateTimeString()];
-                        $conversion->update(['upload_status' => 'failed', 'upload_results' => $results]);
+                        $conversion->update(['upload_status' => 'failed', 'upload_results' => $results, 'upload_attempts' => $conversion->upload_attempts + 1]);
                     }
                 } catch (\Exception $e) {
                     $results['microsoft'] = ['status' => 'failed', 'error' => $e->getMessage()];
-                    $conversion->update(['upload_status' => 'failed', 'upload_results' => $results]);
+                    $conversion->update(['upload_status' => 'failed', 'upload_results' => $results, 'upload_attempts' => $conversion->upload_attempts + 1]);
                 }
             }
 

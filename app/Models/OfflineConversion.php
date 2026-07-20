@@ -20,6 +20,7 @@ class OfflineConversion extends Model
         'conversion_time',
         'upload_status',
         'upload_results',
+        'upload_attempts',
         'crm_data',
     ];
 
@@ -27,6 +28,7 @@ class OfflineConversion extends Model
         'conversion_value' => 'decimal:2',
         'conversion_time' => 'datetime',
         'upload_results' => 'array',
+        'upload_attempts' => 'integer',
         'crm_data' => 'array',
     ];
 
