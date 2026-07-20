@@ -86,6 +86,9 @@ return [
         'client_secret' => env('FACEBOOK_APP_SECRET'),
         'redirect'      => env('FACEBOOK_REDIRECT_URI', '/auth/facebook/callback'),
         'config_id'     => env('FACEBOOK_CONFIG_ID'),
+        // Single source of truth for the Graph API version. Meta retires versions on a
+        // ~2-year cycle; keep every FacebookAds service aligned here (v18.0 is retired).
+        'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v22.0'),
 
         // Platform Business Manager (Path A — zero OAuth for new clients)
         // Create at business.facebook.com → System Users → Generate Token

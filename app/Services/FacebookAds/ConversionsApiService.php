@@ -21,7 +21,7 @@ class ConversionsApiService
 {
     protected ?string $accessToken = null;
     protected ?Customer $customer = null;
-    protected string $apiVersion = 'v18.0';
+    protected string $apiVersion;
     protected string $graphApiUrl = 'https://graph.facebook.com';
     
     /**
@@ -46,6 +46,7 @@ class ConversionsApiService
 
     public function __construct(Customer $customer)
     {
+        $this->apiVersion = config('services.facebook.graph_version', 'v22.0');
         $this->customer = $customer;
         $this->accessToken = config('services.facebook.system_user_token');
     }

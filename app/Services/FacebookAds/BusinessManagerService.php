@@ -20,13 +20,14 @@ use Illuminate\Support\Facades\Log;
  */
 class BusinessManagerService
 {
-    protected string $apiVersion = 'v18.0';
+    protected string $apiVersion;
     protected string $graphApiUrl = 'https://graph.facebook.com';
     protected string $systemUserToken;
     protected string $businessManagerId;
 
     public function __construct()
     {
+        $this->apiVersion        = config('services.facebook.graph_version', 'v22.0');
         $this->systemUserToken   = config('services.facebook.system_user_token', '');
         $this->businessManagerId = config('services.facebook.business_manager_id', '');
     }
