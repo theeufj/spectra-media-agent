@@ -69,10 +69,31 @@ class CheckVideoStatus implements ShouldQueue
             throw new \Exception("Veo generation failed: " . json_encode($operation['error']));
         }
 
-        $videoUri = $operation['response']['generateVideoResponse']['generatedSamples'][0]['video']['uri'] ?? null;
+        $response = $operation['response'] ?? [];
+
+        // Veo 3.1 returns the video as inline base64 (response.videos[].bytesBase64Encoded);
+        // older/other configs return a download URI. Handle both.
+        $inlineBytes = $response['videos'][0]['bytesBase64Encoded']
+            ?? $response['generateVideoResponse']['generatedSamples'][0]['video']['bytesBase64Encoded']
+            ?? null;
+
+        if ($inlineBytes) {
+            $videoData = base64_decode($inlineBytes, true);
+            if ($videoData === false || $videoData === '') {
+                $this->videoCollateral->update(['status' => 'failed']);
+                throw new \Exception('Veo inline video bytes could not be decoded.');
+            }
+            Log::info('CheckVideoStatus: Veo video ready (inline bytes).');
+            $this->storeAndComplete($videoData, ['gemini_video_inline' => true]);
+            return;
+        }
+
+        $videoUri = $response['generateVideoResponse']['generatedSamples'][0]['video']['uri']
+            ?? $response['videos'][0]['uri']
+            ?? null;
         if (!$videoUri) {
             $this->videoCollateral->update(['status' => 'failed']);
-            throw new \Exception('Veo response is missing video URI.');
+            throw new \Exception('Veo response is missing both inline bytes and a video URI.');
         }
 
         Log::info("CheckVideoStatus: Veo video ready. Downloading from: {$videoUri}");
