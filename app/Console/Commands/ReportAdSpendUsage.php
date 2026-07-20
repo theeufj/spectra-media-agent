@@ -30,6 +30,26 @@ class ReportAdSpendUsage extends Command
      */
     public function handle()
     {
+        // Ad spend is billed through the managed prepaid-credit system
+        // (ProcessDailyAdSpendBilling / AdSpendCredit). This Stripe-metered path is a
+        // second, mutually-exclusive billing model and is OFF by default so the two can
+        // never double-charge the same customer. It also previously called the
+        // Cashier v15 `recordUsageFor()` which no longer exists in v16 and threw on
+        // every run — silently invoicing $0. Only enable this once metered billing is
+        // the chosen model for a tier AND a Stripe meter is configured.
+        if (!config('billing.metered_ad_spend_enabled', false)) {
+            $this->info('Metered ad-spend reporting is disabled (managed-credit billing is authoritative). Skipping.');
+            Log::info('billing:report-ad-spend skipped — metered billing disabled.');
+            return 0;
+        }
+
+        $meterName = config('billing.ad_spend_meter');
+        if (!$meterName) {
+            $this->error('Metered ad-spend reporting is enabled but no billing.ad_spend_meter is configured.');
+            Log::error('billing:report-ad-spend enabled but billing.ad_spend_meter is not set.');
+            return 1;
+        }
+
         $this->info('Starting daily ad spend reporting...');
         Log::info('Starting daily ad spend reporting job.');
 
@@ -65,8 +85,9 @@ class ReportAdSpendUsage extends Command
                 if ($totalSpend > 0) {
                     // Report usage to Stripe. The quantity should be in the smallest currency unit (cents).
                     $usageQuantity = (int) round($totalSpend * 100);
-                    
-                    $user->recordUsageFor($adSpendPriceId, $usageQuantity);
+
+                    // Cashier v16: report a meter event (recordUsageFor was removed).
+                    $user->reportMeterEvent($meterName, $usageQuantity);
 
                     $this->info("Reported {$usageQuantity} cents of ad spend for user {$user->id}.");
                     Log::info("Reported usage for user {$user->id}: {$usageQuantity} cents.");

@@ -120,6 +120,9 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             Log::error("Error applying seasonal strategy shift to campaign {$this->campaignId}: " . $e->getMessage(), [
                 'exception' => $e,
             ]);
+            // Rethrow so the queue marks this failed (retry + failed() + health monitor)
+            // instead of silently reporting success on every run.
+            throw $e;
         }
     }
 
@@ -197,8 +200,31 @@ class ApplySeasonalStrategyShift implements ShouldQueue
         $currentBudget = $campaign->daily_budget ?? $campaign->total_budget ?? 0;
 
         // Use the AI-generated budget if available, otherwise apply the config multiplier
-        $newDailyBudget = $strategyShift['budget_adjustment']['new_daily_budget']
-            ?? round($currentBudget * $budgetMultiplier, 2);
+        $candidateBudget = (float) ($strategyShift['budget_adjustment']['new_daily_budget']
+            ?? round($currentBudget * $budgetMultiplier, 2));
+
+        // Clamp the candidate to a safe band around the existing baseline. The budget
+        // may originate from an LLM, so an unbounded value (hallucination or prompt
+        // drift) could otherwise push thousands of dollars/day of live spend. Never
+        // move more than 2x/0.5x the current daily budget, and hard-cap absolutely.
+        $absoluteCap = (float) config('ai.seasonal.max_daily_budget', 2000.0);
+        if ($currentBudget > 0) {
+            $floor = round($currentBudget * 0.5, 2);
+            $ceil  = round($currentBudget * 2.0, 2);
+            $newDailyBudget = max($floor, min($candidateBudget, $ceil));
+        } else {
+            // No baseline to bound against — fall back to a conservative absolute cap.
+            $newDailyBudget = min($candidateBudget, (float) config('ai.seasonal.no_baseline_cap', 500.0));
+        }
+        $newDailyBudget = round(min($newDailyBudget, $absoluteCap), 2);
+
+        if ($newDailyBudget !== $candidateBudget) {
+            Log::warning("Seasonal budget clamped for campaign {$campaign->id}", [
+                'requested' => $candidateBudget,
+                'applied'   => $newDailyBudget,
+                'baseline'  => $currentBudget,
+            ]);
+        }
 
         if ($newDailyBudget <= 0) {
             Log::warning("Skipping budget adjustment — calculated budget is zero for campaign {$campaign->id}");

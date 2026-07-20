@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 /**
  * AdSpendCredit
@@ -141,26 +142,32 @@ class AdSpendCredit extends Model
      */
     public function deduct(float $amount, string $description = null): bool
     {
-        if ($amount > $this->current_balance) {
-            return false;
-        }
+        // Lock the row for the read-modify-write so concurrent billing runs and
+        // top-ups can't lose updates or overdraw the balance.
+        return DB::transaction(function () use ($amount, $description) {
+            $locked = static::whereKey($this->getKey())->lockForUpdate()->first();
 
-        $this->current_balance -= $amount;
-        
-        // Update status based on balance
-        $this->updateBalanceStatus();
-        
-        $this->save();
+            if (!$locked || $amount > $locked->current_balance) {
+                return false;
+            }
 
-        // Record transaction
-        $this->transactions()->create([
-            'type' => 'deduction',
-            'amount' => -$amount,
-            'balance_after' => $this->current_balance,
-            'description' => $description ?? 'Daily ad spend charge',
-        ]);
+            $locked->current_balance -= $amount;
+            $locked->updateBalanceStatus();
+            $locked->save();
 
-        return true;
+            $locked->transactions()->create([
+                'type' => 'deduction',
+                'amount' => -$amount,
+                'balance_after' => $locked->current_balance,
+                'description' => $description ?? 'Daily ad spend charge',
+            ]);
+
+            // Reflect the committed state on the in-memory instance the caller holds.
+            $this->current_balance = $locked->current_balance;
+            $this->status = $locked->status;
+
+            return true;
+        });
     }
 
     /**
@@ -168,18 +175,24 @@ class AdSpendCredit extends Model
      */
     public function addCredit(float $amount, string $description = null, string $stripeChargeId = null): void
     {
-        $this->current_balance += $amount;
-        $this->updateBalanceStatus();
-        $this->save();
+        DB::transaction(function () use ($amount, $description, $stripeChargeId) {
+            $locked = static::whereKey($this->getKey())->lockForUpdate()->first() ?? $this;
 
-        // Record transaction
-        $this->transactions()->create([
-            'type' => 'credit',
-            'amount' => $amount,
-            'balance_after' => $this->current_balance,
-            'description' => $description ?? 'Credit added',
-            'stripe_charge_id' => $stripeChargeId,
-        ]);
+            $locked->current_balance += $amount;
+            $locked->updateBalanceStatus();
+            $locked->save();
+
+            $locked->transactions()->create([
+                'type' => 'credit',
+                'amount' => $amount,
+                'balance_after' => $locked->current_balance,
+                'description' => $description ?? 'Credit added',
+                'stripe_charge_id' => $stripeChargeId,
+            ]);
+
+            $this->current_balance = $locked->current_balance;
+            $this->status = $locked->status;
+        });
     }
 
     /**

@@ -10,6 +10,16 @@
  */
 return [
 
+    /*
+     * Guardrails for the seasonal strategy job. new_daily_budget may come from an
+     * LLM, so budgets are clamped to a band around the campaign's current daily
+     * budget and hard-capped by these absolute ceilings.
+     */
+    'seasonal' => [
+        'max_daily_budget' => (float) env('AI_SEASONAL_MAX_DAILY_BUDGET', 2000.0),
+        'no_baseline_cap'  => (float) env('AI_SEASONAL_NO_BASELINE_CAP', 500.0),
+    ],
+
     'models' => [
 
         /*
