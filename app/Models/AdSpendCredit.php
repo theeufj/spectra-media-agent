@@ -113,6 +113,14 @@ class AdSpendCredit extends Model
      */
     public function getBudgetMultiplier(): float
     {
+        // Hard stop first — a paused/suspended account must get 0 budget regardless
+        // of its balance status (otherwise a paused+low_balance account fell through
+        // to the 0.75 branch below and kept spending).
+        if ($this->payment_status === self::PAYMENT_PAUSED ||
+            $this->status === self::STATUS_SUSPENDED) {
+            return 0.0;
+        }
+
         // If in grace period, reduce budget to 50%
         if ($this->isInGracePeriod()) {
             return 0.5;
@@ -126,12 +134,6 @@ class AdSpendCredit extends Model
         // If balance is low (less than 3 days of typical spend), reduce to 75%
         if ($this->status === self::STATUS_LOW_BALANCE) {
             return 0.75;
-        }
-
-        // If paused/suspended, no budget
-        if ($this->payment_status === self::PAYMENT_PAUSED || 
-            $this->status === self::STATUS_SUSPENDED) {
-            return 0.0;
         }
 
         return 1.0;
