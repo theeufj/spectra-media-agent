@@ -17,13 +17,15 @@ use Illuminate\Support\Facades\Log;
 
 class MonitorCampaignStatus implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     /**
      * Execute the job.
      */
     public function handle(GetCampaignStatus $getCampaignStatus): void
     {
+        $runStart = $this->startRun();
+
         $campaigns = Campaign::with('customer.users')
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
@@ -33,6 +35,9 @@ class MonitorCampaignStatus implements ShouldQueue
             })
             ->whereNotNull('customer_id')
             ->get();
+
+        $processed = 0;
+        $errors = 0;
 
         foreach ($campaigns as $campaign) {
             try {
@@ -63,11 +68,15 @@ class MonitorCampaignStatus implements ShouldQueue
                 }
 
                 $this->updateOverallStatus($campaign, $platformResults);
+                $processed++;
 
             } catch (\Exception $e) {
+                $errors++;
                 Log::error("Failed to monitor campaign {$campaign->id}: " . $e->getMessage());
             }
         }
+
+        $this->finishRun($runStart, actions: $processed, errors: $errors, scope: $campaigns->count() . ' campaigns');
     }
 
     private function updateOverallStatus(Campaign $campaign, array $platformResults): void
@@ -384,5 +393,6 @@ class MonitorCampaignStatus implements ShouldQueue
         Log::error('MonitorCampaignStatus failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+        $this->recordRunFailure($exception);
     }
 }

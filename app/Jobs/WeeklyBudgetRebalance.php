@@ -14,11 +14,16 @@ use Illuminate\Support\Facades\Log;
 
 class WeeklyBudgetRebalance implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public function handle(): void
     {
+        $runStart = $this->startRun();
+
         $allocations = PlatformBudgetAllocation::where('auto_rebalance', true)->get();
+
+        $rebalanced = 0;
+        $errors = 0;
 
         foreach ($allocations as $allocation) {
             try {
@@ -40,18 +45,22 @@ class WeeklyBudgetRebalance implements ShouldQueue
 
                 $allocator = new CrossChannelBudgetAllocator();
                 $result = $allocator->rebalance($customer, 'scheduled');
+                $rebalanced++;
 
                 Log::info('WeeklyBudgetRebalance: Processed', [
                     'customer_id' => $customer->id,
                     'status' => $result['status'] ?? 'unknown',
                 ]);
             } catch (\Exception $e) {
+                $errors++;
                 Log::error('WeeklyBudgetRebalance: Failed for customer', [
                     'customer_id' => $allocation->customer_id,
                     'error' => $e->getMessage(),
                 ]);
             }
         }
+
+        $this->finishRun($runStart, actions: $rebalanced, errors: $errors, scope: $allocations->count() . ' allocations');
     }
 
     /**
@@ -62,5 +71,6 @@ class WeeklyBudgetRebalance implements ShouldQueue
         Log::error('WeeklyBudgetRebalance failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+        $this->recordRunFailure($exception);
     }
 }

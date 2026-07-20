@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  */
 class DetectKeywordCannibalization implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public int $tries = 2;
     public int $timeout = 600;
@@ -29,6 +29,10 @@ class DetectKeywordCannibalization implements ShouldQueue
     public function handle(): void
     {
         Log::info("DetectKeywordCannibalization: Starting weekly cannibalization scan");
+        $runStart = $this->startRun();
+
+        $found = 0;
+        $errors = 0;
 
         $googleCustomers = Customer::whereNotNull('google_ads_customer_id')
             ->whereHas('campaigns', fn($q) => $q->whereNotNull('google_ads_campaign_id')->where('status', 'active'))
@@ -36,8 +40,9 @@ class DetectKeywordCannibalization implements ShouldQueue
 
         foreach ($googleCustomers as $customer) {
             try {
-                $this->scanCustomer($customer);
+                $found += $this->scanCustomer($customer);
             } catch (\Exception $e) {
+                $errors++;
                 Log::error("DetectKeywordCannibalization: Failed for customer {$customer->id}: " . $e->getMessage());
             }
         }
@@ -49,16 +54,19 @@ class DetectKeywordCannibalization implements ShouldQueue
 
         foreach ($microsoftCustomers as $customer) {
             try {
-                $this->scanMicrosoftCustomer($customer);
+                $found += $this->scanMicrosoftCustomer($customer);
             } catch (\Exception $e) {
+                $errors++;
                 Log::error("DetectKeywordCannibalization: Failed (Microsoft) for customer {$customer->id}: " . $e->getMessage());
             }
         }
 
         Log::info("DetectKeywordCannibalization: Scan complete");
+
+        $this->finishRun($runStart, actions: $found, errors: $errors, scope: ($googleCustomers->count() + $microsoftCustomers->count()) . ' customers');
     }
 
-    private function scanCustomer(Customer $customer): void
+    private function scanCustomer(Customer $customer): int
     {
         $customerId = $customer->cleanGoogleCustomerId();
 
@@ -93,7 +101,7 @@ class DetectKeywordCannibalization implements ShouldQueue
         $keywords = $service->fetchAllKeywords($customerId);
 
         if (empty($keywords)) {
-            return;
+            return 0;
         }
 
         // Group by normalized keyword text
@@ -123,7 +131,7 @@ class DetectKeywordCannibalization implements ShouldQueue
         }
 
         if (empty($cannibalized)) {
-            return;
+            return 0;
         }
 
         $count = count($cannibalized);
@@ -143,7 +151,7 @@ class DetectKeywordCannibalization implements ShouldQueue
 
         $cacheKey = "cannibalization_alert:{$customer->id}";
         if (Cache::has($cacheKey)) {
-            return;
+            return $count;
         }
         Cache::put($cacheKey, true, now()->addHours(168)); // 7 days
 
@@ -161,9 +169,11 @@ class DetectKeywordCannibalization implements ShouldQueue
                 ]
             ));
         }
+
+        return $count;
     }
 
-    private function scanMicrosoftCustomer(Customer $customer): void
+    private function scanMicrosoftCustomer(Customer $customer): int
     {
         $service = new MicrosoftAdGroupService($customer);
         $keywords = [];
@@ -188,7 +198,7 @@ class DetectKeywordCannibalization implements ShouldQueue
             }
         }
 
-        if (empty($keywords)) return;
+        if (empty($keywords)) return 0;
 
         $grouped = [];
         foreach ($keywords as $kw) {
@@ -209,7 +219,7 @@ class DetectKeywordCannibalization implements ShouldQueue
             }
         }
 
-        if (empty($cannibalized)) return;
+        if (empty($cannibalized)) return 0;
 
         $count = count($cannibalized);
         Log::warning("DetectKeywordCannibalization (Microsoft): Found {$count} cannibalized keywords for customer {$customer->id}");
@@ -228,7 +238,7 @@ class DetectKeywordCannibalization implements ShouldQueue
         );
 
         $cacheKey = "cannibalization_alert_microsoft:{$customer->id}";
-        if (Cache::has($cacheKey)) return;
+        if (Cache::has($cacheKey)) return $count;
         Cache::put($cacheKey, true, now()->addHours(168));
 
         foreach ($customer->users as $user) {
@@ -245,10 +255,13 @@ class DetectKeywordCannibalization implements ShouldQueue
                 ]
             ));
         }
+
+        return $count;
     }
 
     public function failed(\Throwable $exception): void
     {
         Log::error('DetectKeywordCannibalization failed: ' . $exception->getMessage());
+        $this->recordRunFailure($exception);
     }
 }

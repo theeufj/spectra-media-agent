@@ -15,16 +15,21 @@ use Illuminate\Support\Facades\Log;
 
 class VerifyConversionTracking implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public $tries = 2;
     public $timeout = 300;
 
     public function handle(): void
     {
+        $runStart = $this->startRun();
+
         $customers = Customer::whereNotNull('google_ads_customer_id')
             ->whereHas('campaigns', fn ($q) => $q->where('status', 'active'))
             ->get();
+
+        $flagged = 0;
+        $errors = 0;
 
         foreach ($customers as $customer) {
             try {
@@ -33,6 +38,7 @@ class VerifyConversionTracking implements ShouldQueue
                 $count      = $service->getConversionCountLast30Days($customerId);
 
                 if ($count === 0) {
+                    $flagged++;
                     Log::warning('VerifyConversionTracking: Zero conversions in last 30 days', [
                         'customer_id' => $customer->id,
                         'name'        => $customer->name,
@@ -55,13 +61,17 @@ class VerifyConversionTracking implements ShouldQueue
                     ]);
                 }
             } catch (\Exception $e) {
+                $errors++;
                 Log::error('VerifyConversionTracking: Error for customer ' . $customer->id . ': ' . $e->getMessage());
             }
         }
+
+        $this->finishRun($runStart, actions: $flagged, errors: $errors, scope: $customers->count() . ' customers');
     }
 
     public function failed(\Throwable $exception): void
     {
         Log::error('VerifyConversionTracking failed: ' . $exception->getMessage());
+        $this->recordRunFailure($exception);
     }
 }

@@ -30,6 +30,16 @@ class MonitorAgentHealth implements ShouldQueue
         'RunStrategicDiagnosis'         => 30,  // daily
         'OptimizeCampaigns'             => 30,  // daily
         'AutomatedCampaignMaintenance'  => 30,  // daily
+        'MonitorCampaignStatus'         => 3,   // hourly
+        'HourlyBudgetOptimization'      => 3,   // hourly
+        'AutoStartABTests'              => 30,  // daily
+        'EvaluateABTests'               => 30,  // daily
+        'ReviewGoogleAdsRecommendations' => 30, // daily
+        'RunAudienceIntelligence'       => 190, // weekly
+        'DetectNegativeKeywordConflicts' => 190, // weekly
+        'DetectKeywordCannibalization'  => 190, // weekly
+        'WeeklyBudgetRebalance'         => 190, // weekly
+        'VerifyConversionTracking'      => 190, // weekly
     ];
 
     public function handle(): void

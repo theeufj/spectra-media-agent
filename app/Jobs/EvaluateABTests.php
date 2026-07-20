@@ -15,18 +15,23 @@ use Illuminate\Support\Facades\Log;
 
 class EvaluateABTests implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public int $tries = 2;
     public int $timeout = 300;
 
     public function handle(ABTestingAgent $agent, NotificationService $notifications): void
     {
+        $runStart = $this->startRun();
+
         $tests = ABTest::running()
             ->with(['campaign.customer.user'])
             ->get();
 
         Log::info("EvaluateABTests: Evaluating {$tests->count()} running tests");
+
+        $applied = 0;
+        $errors = 0;
 
         foreach ($tests as $test) {
             try {
@@ -35,6 +40,7 @@ class EvaluateABTests implements ShouldQueue
                 if ($result['action'] === 'significant') {
                     // Auto-apply results
                     $applyResult = $agent->applyResults($test);
+                    $applied++;
 
                     // Notify the campaign owner
                     $user = $test->campaign?->customer?->user;
@@ -79,12 +85,15 @@ class EvaluateABTests implements ShouldQueue
                     }
                 }
             } catch (\Exception $e) {
+                $errors++;
                 Log::error('EvaluateABTests: Failed to evaluate test', [
                     'test_id' => $test->id,
                     'error' => $e->getMessage(),
                 ]);
             }
         }
+
+        $this->finishRun($runStart, actions: $applied, errors: $errors, scope: $tests->count() . ' tests');
     }
 
     protected function maxTestDurationLabel(ABTest $test): string
@@ -101,5 +110,6 @@ class EvaluateABTests implements ShouldQueue
         Log::error('EvaluateABTests failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+        $this->recordRunFailure($exception);
     }
 }

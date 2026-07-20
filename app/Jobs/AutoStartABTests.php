@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Log;
  */
 class AutoStartABTests implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public $tries = 1;
     public $timeout = 300;
@@ -31,6 +31,7 @@ class AutoStartABTests implements ShouldQueue
     public function handle(ABTestingAgent $agent): void
     {
         Log::info('AutoStartABTests: Starting daily auto-test pass');
+        $runStart = $this->startRun();
 
         $campaigns = Campaign::with(['strategies.adCopies'])
             ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
@@ -40,6 +41,7 @@ class AutoStartABTests implements ShouldQueue
 
         $started = 0;
         $skipped = 0;
+        $errors = 0;
 
         foreach ($campaigns as $campaign) {
             foreach ($campaign->strategies as $strategy) {
@@ -117,16 +119,20 @@ class AutoStartABTests implements ShouldQueue
 
                     $started++;
                 } catch (\Exception $e) {
+                    $errors++;
                     Log::error('AutoStartABTests: Failed to create test for strategy ' . $strategy->id . ': ' . $e->getMessage());
                 }
             }
         }
 
         Log::info('AutoStartABTests: Completed', ['started' => $started, 'skipped' => $skipped]);
+
+        $this->finishRun($runStart, actions: $started, errors: $errors, scope: $campaigns->count() . ' campaigns');
     }
 
     public function failed(\Throwable $exception): void
     {
         Log::error('AutoStartABTests failed: ' . $exception->getMessage());
+        $this->recordRunFailure($exception);
     }
 }

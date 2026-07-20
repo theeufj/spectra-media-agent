@@ -42,7 +42,7 @@ use Illuminate\Support\Facades\Log;
  */
 class ReviewGoogleAdsRecommendations implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public $tries   = 2;
     public $timeout = 300;
@@ -82,6 +82,8 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
     public function handle(): void
     {
+        $runStart = $this->startRun();
+
         $customers = Customer::whereNotNull('google_ads_customer_id')
             ->whereHas('campaigns', fn($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id'))
             ->with(['campaigns' => fn($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id')])
@@ -89,12 +91,22 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
         Log::info("ReviewGoogleAdsRecommendations: Checking {$customers->count()} customer(s)");
 
+        $actions = 0;
+        $errors = 0;
+
         foreach ($customers as $customer) {
-            $this->reviewCustomer($customer);
+            try {
+                $actions += $this->reviewCustomer($customer);
+            } catch (\Throwable $e) {
+                $errors++;
+                Log::error("ReviewGoogleAdsRecommendations: Failed for customer {$customer->id}: " . $e->getMessage());
+            }
         }
+
+        $this->finishRun($runStart, actions: $actions, errors: $errors, scope: $customers->count() . ' customers');
     }
 
-    private function reviewCustomer(Customer $customer): void
+    private function reviewCustomer(Customer $customer): int
     {
         $customerId     = $customer->cleanGoogleCustomerId();
         $getRecs        = new GetGoogleAdsRecommendations($customer);
@@ -104,7 +116,7 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
         $allRecs = ($getRecs)($customerId);
 
         if (empty($allRecs)) {
-            return;
+            return 0;
         }
 
         $toApply        = [];
@@ -182,6 +194,8 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
         }
 
         Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — applied: " . count($toApply) . ", dismissed: " . count($toDismiss) . ", creative-fix: " . count($creativeCampaigns) . ", human-needed: " . count($humanNeeded));
+
+        return count($toApply) + count($toDismiss) + count($creativeCampaigns);
     }
 
     private function notifyClientBudget(Customer $customer, array $rec): void
@@ -256,5 +270,6 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
     public function failed(\Throwable $exception): void
     {
         Log::error("ReviewGoogleAdsRecommendations failed: " . $exception->getMessage());
+        $this->recordRunFailure($exception);
     }
 }

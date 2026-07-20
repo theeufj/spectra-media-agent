@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  */
 class DetectNegativeKeywordConflicts implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public int $tries = 2;
     public int $timeout = 600;
@@ -29,6 +29,10 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
     public function handle(): void
     {
         Log::info("DetectNegativeKeywordConflicts: Starting weekly conflict scan");
+        $runStart = $this->startRun();
+
+        $found = 0;
+        $errors = 0;
 
         $googleCustomers = Customer::whereNotNull('google_ads_customer_id')
             ->whereHas('campaigns', fn($q) => $q->whereNotNull('google_ads_campaign_id')->where('status', 'active'))
@@ -36,8 +40,9 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
 
         foreach ($googleCustomers as $customer) {
             try {
-                $this->scanCustomer($customer);
+                $found += $this->scanCustomer($customer);
             } catch (\Exception $e) {
+                $errors++;
                 Log::error("DetectNegativeKeywordConflicts: Failed for customer {$customer->id}: " . $e->getMessage());
             }
         }
@@ -49,16 +54,19 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
 
         foreach ($microsoftCustomers as $customer) {
             try {
-                $this->scanMicrosoftCustomer($customer);
+                $found += $this->scanMicrosoftCustomer($customer);
             } catch (\Exception $e) {
+                $errors++;
                 Log::error("DetectNegativeKeywordConflicts: Failed (Microsoft) for customer {$customer->id}: " . $e->getMessage());
             }
         }
 
         Log::info("DetectNegativeKeywordConflicts: Scan complete");
+
+        $this->finishRun($runStart, actions: $found, errors: $errors, scope: ($googleCustomers->count() + $microsoftCustomers->count()) . ' customers');
     }
 
-    private function scanCustomer(Customer $customer): void
+    private function scanCustomer(Customer $customer): int
     {
         $customerId = $customer->cleanGoogleCustomerId();
 
@@ -108,7 +116,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         $negatives = $service->fetchNegativeKeywords($customerId);
 
         if (empty($positives) || empty($negatives)) {
-            return;
+            return 0;
         }
 
         // Index negatives by campaign for quick lookup
@@ -133,7 +141,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         }
 
         if (empty($conflicts)) {
-            return;
+            return 0;
         }
 
         $conflictCount = count($conflicts);
@@ -150,7 +158,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
 
         $cacheKey = "neg_conflict_alert:{$customer->id}";
         if (Cache::has($cacheKey)) {
-            return;
+            return $conflictCount;
         }
         Cache::put($cacheKey, true, now()->addHours(4));
 
@@ -168,9 +176,11 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
                 ]
             ));
         }
+
+        return $conflictCount;
     }
 
-    private function scanMicrosoftCustomer(Customer $customer): void
+    private function scanMicrosoftCustomer(Customer $customer): int
     {
         $service   = new MicrosoftAdGroupService($customer);
         $positives = [];
@@ -211,7 +221,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
             }
         }
 
-        if (empty($positives) || empty($negsByCampaign)) return;
+        if (empty($positives) || empty($negsByCampaign)) return 0;
 
         $conflicts = [];
         foreach ($positives as $pos) {
@@ -226,7 +236,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
             }
         }
 
-        if (empty($conflicts)) return;
+        if (empty($conflicts)) return 0;
 
         $conflictCount = count($conflicts);
         Log::warning("DetectNegativeKeywordConflicts (Microsoft): Found {$conflictCount} conflicts for customer {$customer->id}");
@@ -241,7 +251,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         );
 
         $cacheKey = "neg_conflict_alert_microsoft:{$customer->id}";
-        if (Cache::has($cacheKey)) return;
+        if (Cache::has($cacheKey)) return $conflictCount;
         Cache::put($cacheKey, true, now()->addHours(4));
 
         foreach ($customer->users as $user) {
@@ -258,10 +268,13 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
                 ]
             ));
         }
+
+        return $conflictCount;
     }
 
     public function failed(\Throwable $exception): void
     {
         Log::error('DetectNegativeKeywordConflicts failed: ' . $exception->getMessage());
+        $this->recordRunFailure($exception);
     }
 }

@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\Log;
  */
 class HourlyBudgetOptimization implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public $timeout = 300; // 5 minutes max
 
@@ -51,6 +51,7 @@ class HourlyBudgetOptimization implements ShouldQueue
     private function run(BudgetIntelligenceAgent $budgetAgent): void
     {
         Log::info('HourlyBudgetOptimization: Starting hourly run');
+        $runStart = $this->startRun();
 
         $alertService = new CampaignAlertService();
 
@@ -99,6 +100,8 @@ class HourlyBudgetOptimization implements ShouldQueue
         }
 
         Log::info('HourlyBudgetOptimization: Completed', $summary);
+
+        $this->finishRun($runStart, actions: $summary['budget_adjustments'], errors: $summary['errors'], scope: $campaigns->count() . ' campaigns', details: $summary);
     }
 
     /**
@@ -266,5 +269,6 @@ class HourlyBudgetOptimization implements ShouldQueue
         Log::error('HourlyBudgetOptimization failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+        $this->recordRunFailure($exception);
     }
 }
