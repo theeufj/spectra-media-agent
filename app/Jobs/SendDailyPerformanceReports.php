@@ -142,8 +142,9 @@ class SendDailyPerformanceReports implements ShouldQueue
     private function optimizationLabel(?string $type): string
     {
         return match ($type) {
-            'BUDGET'        => 'Adjusted daily budget',
-            'KEYWORDS'      => 'Updated keywords',
+            'BUDGET'           => 'Adjusted daily budget',
+            'KEYWORDS'         => 'Updated keywords',
+            'NEGATIVE_KEYWORDS', 'NEGATIVE_KEYWORD_ADDITION', 'SEARCH_TERM_REVIEW' => 'Added negative keywords',
             'BIDDING'       => 'Tuned bidding strategy',
             'TARGETING'     => 'Refined targeting',
             'AD_EXTENSIONS'    => 'Added ad extensions',

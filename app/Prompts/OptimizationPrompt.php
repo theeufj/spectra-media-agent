@@ -52,6 +52,12 @@ Focus Areas:
 6. Ad extensions (structured snippets, call, price, promotion extensions to improve ad real estate)
 7. Ad scheduling / dayparting (optimize delivery to high-converting hours/days)
 8. Audience creation (ONLY if the campaign is 30+ days old with 30+ conversions — create remarketing or customer match audiences)
+9. Negative keywords (block irrelevant or wasteful query themes that spend without converting)
+
+NEGATIVE KEYWORDS RULE — IMPORTANT:
+- When query themes are clearly irrelevant to the product/offer (e.g. "free", "jobs", "cheap", "diy", competitor brand terms on a non-competitor campaign), recommend type "NEGATIVE_KEYWORDS" with action "ADD".
+- Include a "keywords" array of the exact terms to block, and optionally "match_type": "EXACT|PHRASE|BROAD" (default EXACT to avoid over-blocking).
+- Only propose terms you are confident are wasteful for THIS product — negatives are hard to reverse in effect (they suppress traffic). Prefer EXACT/PHRASE over BROAD. Do not exceed 20 terms.
 
 NETWORK SETTINGS RULE — IMPORTANT:
 - On a SEARCH campaign, if a low average CPC combined with high impression volume suggests budget is being spent on low-intent, out-of-network placements (Search Partners and/or the Display Network expansion) rather than high-intent Google Search queries, recommend type "NETWORK_SETTINGS" with action "MODIFY".
@@ -72,7 +78,7 @@ Return your response in the following JSON format:
     "trend_summary": "Brief description of performance trends (improving, declining, stable)",
     "recommendations": [
         {
-            "type": "BUDGET|BIDDING|KEYWORDS|ADS|TARGETING|CREATIVE|AD_EXTENSIONS|SCHEDULE|AUDIENCE|NETWORK_SETTINGS|OTHER",
+            "type": "BUDGET|BIDDING|KEYWORDS|NEGATIVE_KEYWORDS|ADS|TARGETING|CREATIVE|AD_EXTENSIONS|SCHEDULE|AUDIENCE|NETWORK_SETTINGS|OTHER",
             "action": "INCREASE|DECREASE|ADD|REMOVE|MODIFY|TEST",
             "description": "Detailed description of the recommendation.",
             "reasoning": "Why this recommendation will help achieve the campaign goals, with supporting data points.",

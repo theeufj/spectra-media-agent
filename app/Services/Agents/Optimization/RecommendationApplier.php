@@ -16,6 +16,7 @@ use App\Services\GoogleAds\CommonServices\CreateRemarketingAudience;
 use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
 use App\Services\GoogleAds\CommonServices\CreateUserList;
 use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
+use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\RemoveKeyword;
 use App\Services\GoogleAds\CommonServices\SetAdSchedule;
 use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
@@ -25,6 +26,7 @@ use App\Services\GoogleAds\CommonServices\UpdateCampaignNetworkSettings;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use App\Features\AutoOptimization;
 use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
@@ -57,6 +59,8 @@ class RecommendationApplier
             return match ($type) {
                 'BUDGET'       => $this->applyBudget($campaign, $recommendation),
                 'KEYWORDS'     => $this->applyKeyword($campaign, $recommendation),
+                'NEGATIVE_KEYWORDS', 'NEGATIVE_KEYWORD_ADDITION', 'SEARCH_TERM_REVIEW'
+                               => $this->applyNegativeKeywords($campaign, $recommendation),
                 'BIDDING'      => $this->applyBidding($campaign, $recommendation),
                 'TARGETING'    => $this->applyTargeting($campaign, $recommendation),
                 'AD_EXTENSIONS' => $this->applyExtension($campaign, $recommendation),
@@ -170,6 +174,81 @@ class RecommendationApplier
             $campaign->customer_id,
             $campaign->id,
             ['network_settings' => $settings]
+        );
+
+        return ['applied' => true, 'message' => $message, 'recommendation' => $rec];
+    }
+
+    /**
+     * Add campaign negative keywords (e.g. wasteful terms the model flagged) so budget
+     * stops serving on irrelevant queries. Google-only; capped per run so one bad
+     * response can't build a runaway block-list. Defaults to EXACT match to avoid
+     * over-blocking legitimate traffic.
+     */
+    private function applyNegativeKeywords(Campaign $campaign, array $rec): array
+    {
+        $customer = $campaign->customer;
+
+        if (!$campaign->google_ads_campaign_id || !$customer) {
+            return ['applied' => false, 'message' => 'Negative keywords apply to Google Ads campaigns only', 'recommendation' => $rec];
+        }
+
+        // Accept the various shapes the model may emit.
+        $raw = $rec['keywords']
+            ?? $rec['negative_keywords']
+            ?? $rec['parameters']['keywords']
+            ?? $rec['params']['keywords']
+            ?? [];
+
+        if (is_string($raw)) {
+            $raw = explode(',', $raw);
+        }
+
+        $keywords = collect((array) $raw)
+            ->map(fn ($k) => is_array($k) ? ($k['text'] ?? null) : $k)
+            ->filter(fn ($k) => is_string($k) && trim($k) !== '')
+            ->map(fn ($k) => trim($k))
+            ->unique()
+            ->take(20) // cap per run — guardrail against a hallucinated block-list
+            ->values()
+            ->all();
+
+        if (empty($keywords)) {
+            return ['applied' => false, 'message' => 'No negative keywords supplied', 'recommendation' => $rec];
+        }
+
+        $matchType = match (strtoupper($rec['match_type'] ?? 'EXACT')) {
+            'PHRASE' => KeywordMatchType::PHRASE,
+            'BROAD'  => KeywordMatchType::BROAD,
+            default  => KeywordMatchType::EXACT,
+        };
+
+        $customerId = $customer->cleanGoogleCustomerId();
+        $resource   = $campaign->googleAdsResourceName();
+        $service    = new AddNegativeKeyword($customer);
+
+        $added = [];
+        foreach ($keywords as $kw) {
+            if ($service($customerId, $resource, $kw, $matchType)) {
+                $added[] = $kw;
+            }
+        }
+
+        if (empty($added)) {
+            return ['applied' => false, 'message' => 'Failed to add negative keywords', 'recommendation' => $rec];
+        }
+
+        $n = count($added);
+        $message = "Added {$n} negative keyword" . ($n === 1 ? '' : 's')
+            . ': ' . implode(', ', array_slice($added, 0, 5)) . ($n > 5 ? '…' : '');
+
+        AgentActivity::record(
+            'optimization',
+            'negative_keywords_added',
+            "Added {$n} negative keyword" . ($n === 1 ? '' : 's') . " to \"{$campaign->name}\"",
+            $campaign->customer_id,
+            $campaign->id,
+            ['keywords' => $added]
         );
 
         return ['applied' => true, 'message' => $message, 'recommendation' => $rec];
