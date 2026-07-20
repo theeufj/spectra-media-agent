@@ -122,9 +122,12 @@ class GenerateVideo implements ShouldQueue
 
         // Idempotency: if a non-failed collateral already exists for this strategy+platform
         // (e.g. from a previous attempt that survived a retry), skip creation.
+        // Only active collaterals block regeneration — a retired video (e.g. one too
+        // short for PMax that we deactivated) should not prevent a fresh attempt.
         $alreadyStarted = VideoCollateral::where('campaign_id', $this->campaign->id)
             ->where('strategy_id', $this->strategy->id)
             ->where('platform', $this->platform)
+            ->where('is_active', true)
             ->whereIn('status', ['pending', 'generating', 'completed'])
             ->exists();
 

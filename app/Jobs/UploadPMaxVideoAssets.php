@@ -130,6 +130,14 @@ class UploadPMaxVideoAssets implements ShouldQueue
                     ]);
                 }
             } catch (\Exception $e) {
+                // A video Google rejects as too short can never link — retire it so it
+                // stops being retried and the self-heal can generate a compliant one.
+                if (str_contains($e->getMessage(), 'YOUTUBE_VIDEO_TOO_SHORT')) {
+                    $video->update(['is_active' => false]);
+                    Log::warning("UploadPMaxVideoAssets: video {$video->id} too short for PMax — retired", [
+                        'youtube_video_id' => $video->youtube_video_id,
+                    ]);
+                }
                 Log::error("UploadPMaxVideoAssets: Error processing video {$video->id}: " . $e->getMessage());
             }
         }
