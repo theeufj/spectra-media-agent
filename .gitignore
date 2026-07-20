@@ -28,3 +28,11 @@ GOOGLE_ADS_API_TESTING_GUIDE.md
 scripts/generate_google_ads_refresh_token.php
 scripts/generate_google_ads_token_simple.php
 .commitmsg
+
+# Scratch / local-only artifacts (keep these out of the repo)
+/test_*.php
+/response.json
+/docs.zip
+/generate_documentation.py
+/run_app.sh
+/google_ads_php.ini
