@@ -2,13 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasEncryptedAttributes;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
-    use HasFactory;
+    use HasFactory, HasEncryptedAttributes;
 
     protected $fillable = [
         'name',
@@ -88,7 +90,19 @@ class Customer extends Model
 
     protected $hidden = [
         'tracking_signing_secret',
+        'google_ads_refresh_token',
     ];
+
+    // Secrets encrypted at rest (tolerant of legacy plaintext rows).
+    protected function trackingSigningSecret(): Attribute
+    {
+        return $this->encryptedAttribute();
+    }
+
+    protected function googleAdsRefreshToken(): Attribute
+    {
+        return $this->encryptedAttribute();
+    }
 
     public function scopeSandbox($query)
     {
