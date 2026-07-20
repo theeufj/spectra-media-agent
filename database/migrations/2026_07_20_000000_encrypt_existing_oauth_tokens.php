@@ -2,8 +2,10 @@
 
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Encrypt OAuth tokens / secrets that were stored in plaintext before the
@@ -23,6 +25,18 @@ return new class extends Migration
 
     public function up(): void
     {
+        // An encrypted value is far longer than the plaintext it replaces (a 64-char
+        // secret becomes ~250 chars of base64). Widen any narrow columns to TEXT first
+        // so the encrypted values don't overflow. tracking_signing_secret is varchar(64);
+        // the other target columns are already TEXT.
+        if (DB::getDriverName() === 'pgsql') {
+            DB::statement('ALTER TABLE customers ALTER COLUMN tracking_signing_secret TYPE text');
+        } else {
+            Schema::table('customers', function (Blueprint $table) {
+                $table->text('tracking_signing_secret')->nullable()->change();
+            });
+        }
+
         foreach ($this->targets as $table => $columns) {
             DB::table($table)->orderBy('id')->chunkById(200, function ($rows) use ($table, $columns) {
                 foreach ($rows as $row) {
