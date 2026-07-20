@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  */
 class RunPerformanceAnomalyCheck implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public int $tries   = 2;
     public int $timeout = 600; // 10 minutes
@@ -29,16 +29,19 @@ class RunPerformanceAnomalyCheck implements ShouldQueue
     public function handle(PerformanceAnomalyAlertAgent $agent): void
     {
         Log::info("RunPerformanceAnomalyCheck: Starting anomaly check");
+        $runStart = $this->startRun();
 
         $customers = Customer::whereHas('campaigns', fn($q) => $q->withDeployedPlatforms())->get();
 
         $totalAlerts = 0;
+        $errors = 0;
 
         foreach ($customers as $customer) {
             try {
                 $alerts = $agent->runForCustomer($customer);
                 $totalAlerts += count($alerts);
             } catch (\Exception $e) {
+                $errors++;
                 Log::error("RunPerformanceAnomalyCheck: Error for customer {$customer->id}: " . $e->getMessage());
             }
         }
@@ -47,10 +50,13 @@ class RunPerformanceAnomalyCheck implements ShouldQueue
             'customers_checked' => $customers->count(),
             'alerts_sent'       => $totalAlerts,
         ]);
+
+        $this->finishRun($runStart, actions: $totalAlerts, errors: $errors, scope: $customers->count() . ' customers');
     }
 
     public function failed(\Throwable $e): void
     {
         Log::error("RunPerformanceAnomalyCheck: Job failed: " . $e->getMessage());
+        $this->recordRunFailure($e);
     }
 }

@@ -475,6 +475,10 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
     // Agent activity feed
     Route::get('/agent-activities', [\App\Http\Controllers\AgentActivityController::class, 'index'])
         ->name('api.agent-activities.index');
+
+    // Automation health summary (admin-only) — per-job run traces from agent_runs
+    Route::get('/admin/agent-health', [\App\Http\Controllers\AgentActivityController::class, 'health'])
+        ->middleware('admin')->name('admin.agent-health');
 });
 
 

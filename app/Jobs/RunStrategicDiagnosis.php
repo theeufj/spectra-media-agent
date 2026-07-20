@@ -29,7 +29,7 @@ use Illuminate\Support\Facades\Log;
  */
 class RunStrategicDiagnosis implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
 
     public int $tries   = 1;
     public int $timeout = 900; // 15 minutes
@@ -39,6 +39,7 @@ class RunStrategicDiagnosis implements ShouldQueue
         CampaignRemediationAgent $remediationAgent
     ): void {
         Log::info('RunStrategicDiagnosis: Starting daily diagnosis pass');
+        $runStart = $this->startRun();
 
         $campaigns = Campaign::with('customer')
             ->withDeployedPlatforms()
@@ -106,10 +107,14 @@ class RunStrategicDiagnosis implements ShouldQueue
             'alerts_sent'       => $totalAlerts,
             'errors'            => $errors,
         ]);
+
+        $this->finishRun($runStart, actions: $totalFixed, errors: $errors, warnings: $totalAlerts,
+            scope: $campaigns->count() . ' campaigns', details: ['findings' => $totalFindings]);
     }
 
     public function failed(\Throwable $e): void
     {
         Log::error('RunStrategicDiagnosis: Job failed — ' . $e->getMessage());
+        $this->recordRunFailure($e);
     }
 }

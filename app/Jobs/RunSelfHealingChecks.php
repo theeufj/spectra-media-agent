@@ -6,6 +6,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\Agents\CampaignDiagnosticsAgent;
 use App\Services\Agents\CampaignRemediationAgent;
+use App\Jobs\Concerns\RecordsAgentRun;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\Agents\FacebookLearningPhaseAgent;
 use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
@@ -27,7 +28,7 @@ use Illuminate\Support\Facades\Log;
  */
 class RunSelfHealingChecks implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, RecordsAgentRun;
 
     public $tries = 1;
     public $timeout = 600;
@@ -41,6 +42,7 @@ class RunSelfHealingChecks implements ShouldQueue
         LinkedInCampaignOptimizationAgent $linkedInAgent
     ): void {
         Log::info('RunSelfHealingChecks: Starting 4-hour healing pass');
+        $runStart = $this->startRun();
 
         $campaigns = Campaign::with('customer')
             ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
@@ -145,10 +147,13 @@ class RunSelfHealingChecks implements ShouldQueue
             'healed'    => $healed,
             'errors'    => $errors,
         ]);
+
+        $this->finishRun($runStart, actions: $healed, errors: $errors, scope: $campaigns->count() . ' campaigns');
     }
 
     public function failed(\Throwable $exception): void
     {
         Log::error('RunSelfHealingChecks failed: ' . $exception->getMessage());
+        $this->recordRunFailure($exception);
     }
 }
