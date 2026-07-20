@@ -35,6 +35,12 @@ class RecommendationScorer
         'KEYWORD_EXPANSION'           => 'KEYWORDS',
         'AUDIENCE'                    => 'AUDIENCE',
         'SCHEDULE'                    => 'SCHEDULE',
+        'NETWORK_SETTINGS'            => 'NETWORK_SETTINGS',
+        'DISABLE_SEARCH_PARTNERS'     => 'NETWORK_SETTINGS',
+        'SEARCH_PARTNERS'             => 'NETWORK_SETTINGS',
+        'DISABLE_DISPLAY_EXPANSION'   => 'NETWORK_SETTINGS',
+        'DISPLAY_EXPANSION'           => 'NETWORK_SETTINGS',
+        'DISABLE_CONTENT_NETWORK'     => 'NETWORK_SETTINGS',
         'CONVERSION_TRACKING_AUDIT'   => 'AUDIT',
     ];
 
@@ -50,6 +56,9 @@ class RecommendationScorer
         'TARGETING'         => 0.80,
         'BIDDING'           => 0.85,
         'AUDIENCE'          => 0.85,
+        // Disabling Search Partners / Display expansion on a Search campaign is a safe,
+        // reversible, high-value change — auto-apply at a moderate confidence.
+        'NETWORK_SETTINGS'  => 0.70,
         'AUDIT'             => 1.01,
     ];
 
@@ -206,6 +215,8 @@ class RecommendationScorer
             'AUDIENCE'          => $conversions >= 30 ? 0.80 : 0.30,
             'ADS'               => $clicks >= 100 ? 0.70 : 0.45,
             'TARGETING'         => $impressions >= 5000 ? 0.70 : 0.35,
+            // Confident once there's enough volume to show out-of-network waste.
+            'NETWORK_SETTINGS'  => $impressions >= 5000 ? 0.85 : 0.60,
             'AUDIT'             => 0.0,
             default             => 0.50,
         };

@@ -21,6 +21,7 @@ use App\Services\GoogleAds\CommonServices\SetAdSchedule;
 use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
 use App\Services\GoogleAds\CommonServices\SetLocationBidAdjustment;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
+use App\Services\GoogleAds\CommonServices\UpdateCampaignNetworkSettings;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
 use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
@@ -61,6 +62,7 @@ class RecommendationApplier
                 'AD_EXTENSIONS' => $this->applyExtension($campaign, $recommendation),
                 'SCHEDULE'     => $this->applySchedule($campaign, $recommendation),
                 'AUDIENCE'     => $this->applyAudience($campaign, $recommendation),
+                'NETWORK_SETTINGS' => $this->applyNetworkSettings($campaign, $recommendation),
                 default        => ['applied' => false, 'message' => "Auto-apply not yet supported for type: {$type}", 'recommendation' => $recommendation],
             };
         } catch (\Exception $e) {
@@ -115,6 +117,62 @@ class RecommendationApplier
         }
 
         return ['applied' => true, 'message' => "Budget adjusted from {$oldBudget} to {$newBudget}", 'recommendation' => $rec];
+    }
+
+    /**
+     * Disable out-of-network reach on a Google Search campaign — Search Partners and/or
+     * Display Network expansion — which typically drains budget on low-intent placements.
+     * The default action turns both off; an explicit parameters.network_settings map can
+     * override. Google-only; the service itself refuses non-Search campaigns.
+     */
+    private function applyNetworkSettings(Campaign $campaign, array $rec): array
+    {
+        $customer = $campaign->customer;
+
+        if (!$campaign->google_ads_campaign_id || !$customer) {
+            return ['applied' => false, 'message' => 'Network settings changes apply to Google Ads campaigns only', 'recommendation' => $rec];
+        }
+
+        // Default: disable Search Partners + Display expansion. An explicit map wins,
+        // but we never allow disabling Google Search itself.
+        $settings = $rec['parameters']['network_settings']
+            ?? $rec['params']['network_settings']
+            ?? ['target_search_network' => false, 'target_content_network' => false];
+        unset($settings['target_google_search']);
+
+        if (empty($settings)) {
+            return ['applied' => false, 'message' => 'No network settings to change', 'recommendation' => $rec];
+        }
+
+        $ok = (new UpdateCampaignNetworkSettings($customer))(
+            $customer->cleanGoogleCustomerId(),
+            $campaign->googleAdsResourceName(),
+            $settings
+        );
+
+        if (!$ok) {
+            return ['applied' => false, 'message' => 'Failed to update network settings (non-Search campaign or API error)', 'recommendation' => $rec];
+        }
+
+        $disabled = [];
+        if (($settings['target_search_network'] ?? null) === false) {
+            $disabled[] = 'Search Partners';
+        }
+        if (($settings['target_content_network'] ?? null) === false) {
+            $disabled[] = 'Display Network';
+        }
+        $message = 'Disabled ' . (empty($disabled) ? 'out-of-network placements' : implode(' + ', $disabled));
+
+        AgentActivity::record(
+            'optimization',
+            'network_settings_updated',
+            "{$message} on \"{$campaign->name}\"",
+            $campaign->customer_id,
+            $campaign->id,
+            ['network_settings' => $settings]
+        );
+
+        return ['applied' => true, 'message' => $message, 'recommendation' => $rec];
     }
 
     private function applyKeyword(Campaign $campaign, array $rec): array

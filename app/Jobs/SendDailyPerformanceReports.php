@@ -146,10 +146,11 @@ class SendDailyPerformanceReports implements ShouldQueue
             'KEYWORDS'      => 'Updated keywords',
             'BIDDING'       => 'Tuned bidding strategy',
             'TARGETING'     => 'Refined targeting',
-            'AD_EXTENSIONS' => 'Added ad extensions',
-            'SCHEDULE'      => 'Optimised ad schedule',
-            'AUDIENCE'      => 'Updated audiences',
-            default         => 'Optimisation applied',
+            'AD_EXTENSIONS'    => 'Added ad extensions',
+            'SCHEDULE'         => 'Optimised ad schedule',
+            'AUDIENCE'         => 'Updated audiences',
+            'NETWORK_SETTINGS' => 'Disabled out-of-network placements',
+            default            => 'Optimisation applied',
         };
     }
 

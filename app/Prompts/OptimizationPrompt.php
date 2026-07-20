@@ -53,6 +53,11 @@ Focus Areas:
 7. Ad scheduling / dayparting (optimize delivery to high-converting hours/days)
 8. Audience creation (ONLY if the campaign is 30+ days old with 30+ conversions — create remarketing or customer match audiences)
 
+NETWORK SETTINGS RULE — IMPORTANT:
+- On a SEARCH campaign, if a low average CPC combined with high impression volume suggests budget is being spent on low-intent, out-of-network placements (Search Partners and/or the Display Network expansion) rather than high-intent Google Search queries, recommend type "NETWORK_SETTINGS" with action "MODIFY".
+- Include "parameters": { "network_settings": { "target_search_network": false, "target_content_network": false } } to turn off Search Partners and Display expansion. Never set target_google_search to false.
+- Only use NETWORK_SETTINGS for Search campaigns — never for Display, Demand Gen, Video, Shopping or Performance Max.
+
 AUDIENCE CREATION RULES — IMPORTANT:
 - Do NOT recommend AUDIENCE type unless the campaign has been running for at least 30 days AND has accumulated meaningful conversion data (30+ conversions).
 - When recommending AUDIENCE, set sub_type to "remarketing" (url-based visitors) or "customer_match" (email/phone list upload).
@@ -67,7 +72,7 @@ Return your response in the following JSON format:
     "trend_summary": "Brief description of performance trends (improving, declining, stable)",
     "recommendations": [
         {
-            "type": "BUDGET|BIDDING|KEYWORDS|ADS|TARGETING|CREATIVE|AD_EXTENSIONS|SCHEDULE|AUDIENCE|OTHER",
+            "type": "BUDGET|BIDDING|KEYWORDS|ADS|TARGETING|CREATIVE|AD_EXTENSIONS|SCHEDULE|AUDIENCE|NETWORK_SETTINGS|OTHER",
             "action": "INCREASE|DECREASE|ADD|REMOVE|MODIFY|TEST",
             "description": "Detailed description of the recommendation.",
             "reasoning": "Why this recommendation will help achieve the campaign goals, with supporting data points.",
