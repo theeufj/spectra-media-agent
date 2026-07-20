@@ -60,9 +60,13 @@ class UploadPMaxVideoAssets implements ShouldQueue
             return;
         }
 
-        // Look up at campaign level — videos are shared across all strategies.
+        // Look up at campaign level — videos are shared across all strategies. Only
+        // completed videos with a stored file are linkable; skipping failed/in-progress
+        // ones avoids passing a null s3_path into the YouTube uploader.
         $videos = VideoCollateral::where('campaign_id', $strategy->campaign_id)
             ->where('is_active', true)
+            ->where('status', 'completed')
+            ->whereNotNull('s3_path')
             ->get();
 
         if ($videos->isEmpty()) {

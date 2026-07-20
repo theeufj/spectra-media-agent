@@ -733,7 +733,9 @@ class GeminiService
                 'parameters' => array_merge([
                     'aspectRatio'      => '16:9',
                     'sampleCount'      => 1,
-                    'durationSeconds'  => 8,
+                    // 10s: Google Ads PMax rejects video assets shorter than 10 seconds
+                    // (YOUTUBE_VIDEO_TOO_SHORT). 8s clips uploaded fine but never linked.
+                    'durationSeconds'  => 10,
                     'personGeneration' => 'ALLOW_ALL',
                 ], $parameters),
             ];
