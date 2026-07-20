@@ -106,6 +106,9 @@ Schedule::call(function () {
 // AI-powered optimization analysis - reviews performance and suggests improvements
 Schedule::job(new OptimizeCampaigns)->daily()->withoutOverlapping()->onFailure(notifyAdminOnFailure('OptimizeCampaigns'));
 
+// Pause ad groups that spend without converting (deterministic; reported in the daily email).
+Schedule::job(new \App\Jobs\PauseWastefulAdGroups)->dailyAt('02:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('PauseWastefulAdGroups'));
+
 // Self-healing checks — scan for disapproved ads and rewrite/resubmit every 4 hours
 Schedule::job(new RunSelfHealingChecks)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunSelfHealingChecks'));
 

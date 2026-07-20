@@ -25,6 +25,13 @@ return [
         'facebook_daypart_enabled'     => true,
     ],
 
+    // Auto-pause ad groups that spend without converting.
+    'ad_group_pause' => [
+        'min_spend'       => 50.0, // must have spent at least this (account currency) over the window
+        'window_days'     => 30,
+        'max_per_campaign' => 5,   // cap pauses per campaign per run
+    ],
+
     'search_terms' => [
         'min_impressions'          => 300,
         'min_clicks'               => 5,

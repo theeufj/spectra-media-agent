@@ -151,6 +151,7 @@ class SendDailyPerformanceReports implements ShouldQueue
             'SCHEDULE'         => 'Optimised ad schedule',
             'AUDIENCE'         => 'Updated audiences',
             'NETWORK_SETTINGS' => 'Disabled out-of-network placements',
+            'AD_GROUP_PAUSE'   => 'Paused underperforming ad group',
             default            => 'Optimisation applied',
         };
     }
