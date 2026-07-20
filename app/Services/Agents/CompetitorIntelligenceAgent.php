@@ -22,6 +22,8 @@ use Illuminate\Support\Facades\Notification;
  */
 class CompetitorIntelligenceAgent
 {
+    use \App\Services\Agents\Concerns\ParsesLlmJson;
+
     protected GeminiService $gemini;
     protected CompetitorDiscoveryAgent $discoveryAgent;
     protected CompetitorAnalysisAgent $analysisAgent;
@@ -523,23 +525,5 @@ Based on the competitive analysis above, create an actionable advertising strate
 PROMPT;
     }
 
-    /**
-     * Parse JSON response.
-     */
-    protected function parseJson(string $text): array
-    {
-        $cleaned = trim($text);
-        
-        if (str_starts_with($cleaned, '```json')) {
-            $cleaned = substr($cleaned, 7);
-        }
-        if (str_starts_with($cleaned, '```')) {
-            $cleaned = substr($cleaned, 3);
-        }
-        if (str_ends_with($cleaned, '```')) {
-            $cleaned = substr($cleaned, 0, -3);
-        }
-
-        return json_decode(trim($cleaned), true) ?? [];
-    }
+    // parseJson() provided by the ParsesLlmJson trait.
 }
