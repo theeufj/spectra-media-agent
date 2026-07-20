@@ -27,7 +27,9 @@
         <env name="DB_PORT" value="54320"/>
         <env name="DB_DATABASE" value="forge"/>
         <env name="DB_USERNAME" value="forge"/>
-        <env name="DB_PASSWORD" value="taDQ8xX3HzjUx39i0f4G"/>
+        <!-- DB_PASSWORD must be supplied via the environment (.env.testing / CI secret).
+             Never commit a real credential here. -->
+
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

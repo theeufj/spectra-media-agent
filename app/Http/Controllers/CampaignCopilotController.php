@@ -30,7 +30,7 @@ class CampaignCopilotController extends Controller
         $user = $request->user();
 
         // Verify user owns this campaign
-        if ($campaign->customer?->user_id !== $user->id) {
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
             abort(403);
         }
 
@@ -93,7 +93,7 @@ class CampaignCopilotController extends Controller
     {
         $user = $request->user();
 
-        if ($campaign->customer?->user_id !== $user->id) {
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
             abort(403);
         }
 
@@ -113,7 +113,7 @@ class CampaignCopilotController extends Controller
     {
         $user = $request->user();
 
-        if ($campaign->customer?->user_id !== $user->id) {
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
             abort(403);
         }
 

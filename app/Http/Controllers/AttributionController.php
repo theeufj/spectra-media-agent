@@ -20,7 +20,7 @@ class AttributionController extends Controller
     public function show(Request $request, Campaign $campaign)
     {
         $user = $request->user();
-        if ($campaign->customer?->user_id !== $user->id) {
+        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
             abort(403);
         }
 
@@ -29,15 +29,17 @@ class AttributionController extends Controller
         // Get conversions attributed to this campaign (via utm_campaign = spectra_{id})
         $campaignTag = 'spectra_' . $campaign->id;
 
+        // Fetch recent conversions for the customer and match the campaign tag in PHP.
+        // Avoids DB-specific JSON-path SQL (prod is Postgres, tests are sqlite) — the
+        // previous MySQL JSON_EXTRACT would throw a QueryException on Postgres.
         $conversions = AttributionConversion::forCustomer($customerId)
-            ->whereJsonContains('touchpoints', [['utm_campaign' => $campaignTag]])
-            ->orWhere(function ($q) use ($customerId, $campaignTag) {
-                $q->where('customer_id', $customerId)
-                    ->whereRaw("JSON_EXTRACT(touchpoints, '$[*].utm_campaign') LIKE ?", ["%{$campaignTag}%"]);
-            })
             ->orderBy('created_at', 'desc')
-            ->limit(500)
+            ->limit(2000)
             ->get()
+            ->filter(fn ($c) => collect($c->touchpoints ?? [])
+                ->contains(fn ($t) => is_array($t) && ($t['utm_campaign'] ?? null) === $campaignTag))
+            ->take(500)
+            ->values()
             ->toArray();
 
         // Aggregate by channel for each model

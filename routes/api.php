@@ -3,8 +3,11 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-// Stripe webhook endpoint (no auth middleware)
+// Stripe webhook endpoint — signature-verified (STRIPE_WEBHOOK_SECRET). Cashier's
+// verification lives entirely in this middleware; our custom route must attach it
+// or the endpoint accepts forged events.
 Route::post('/stripe/webhook', [\App\Http\Controllers\StripeWebhookController::class, 'handleWebhook'])
+    ->middleware(\Laravel\Cashier\Http\Middleware\VerifyWebhookSignature::class)
     ->name('stripe.webhook');
 
 // Resend inbound email webhook (no auth middleware, HMAC-verified internally)

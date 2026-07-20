@@ -21,9 +21,10 @@ class StripeWebhookController extends CashierController
     {
         $payload = json_decode($request->getContent(), true);
         $type = $payload['type'] ?? 'unknown';
-        
+
+        // Log only the event type + id — never the full payload (PII, billing details).
         Log::info('Stripe Webhook Received: ' . $type, [
-            'payload' => $payload
+            'event_id' => $payload['id'] ?? null,
         ]);
 
         return parent::handleWebhook($request);

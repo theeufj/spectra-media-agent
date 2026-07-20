@@ -294,7 +294,7 @@ Route::middleware(['auth'])->prefix('inbox')->name('inbox.')->group(function () 
     Route::patch('/forwarding', [\App\Http\Controllers\EmailInboxController::class, 'updateForwarding'])->name('forwarding.update');
 });
 
-Route::middleware(['auth'])->prefix('admin')->name('admin.')->group(function () {
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::resource('platforms', App\Http\Controllers\Admin\EnabledPlatformController::class);
     Route::post('/platforms/{platform}/toggle', [App\Http\Controllers\Admin\EnabledPlatformController::class, 'toggle'])->name('platforms.toggle');
 });
