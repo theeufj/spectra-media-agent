@@ -23,7 +23,7 @@ class SyncCrmConversions implements ShouldQueue
     public function handle(): void
     {
         $integration = CrmIntegration::find($this->crmIntegrationId);
-        if (!$integration || !$integration->isConnected()) return;
+        if (!$integration || !$integration->isSyncable()) return;
 
         try {
             $integration->update(['status' => 'syncing']);
@@ -94,6 +94,17 @@ class SyncCrmConversions implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
+        // A hard failure (outside the handle() try/catch) can strand the integration
+        // in 'syncing'. Reset it to 'error' so the scheduler retries it next run
+        // instead of it being skipped forever.
+        $integration = CrmIntegration::find($this->crmIntegrationId);
+        if ($integration && $integration->status === 'syncing') {
+            $integration->update([
+                'status' => 'error',
+                'last_error' => $exception->getMessage(),
+            ]);
+        }
+
         Log::error('SyncCrmConversions failed: ' . $exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);

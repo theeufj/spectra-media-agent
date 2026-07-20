@@ -44,4 +44,15 @@ class CrmIntegration extends Model
     {
         return in_array($this->status, ['connected', 'syncing']);
     }
+
+    /**
+     * Whether the daily scheduler should still attempt to sync this integration.
+     * Includes 'error' so a transient failure self-heals on the next run instead of
+     * disabling the integration forever, and 'syncing' so a crash-stranded run is
+     * retried. Excludes a deliberate 'disconnected'.
+     */
+    public function isSyncable(): bool
+    {
+        return in_array($this->status, ['connected', 'syncing', 'error']);
+    }
 }

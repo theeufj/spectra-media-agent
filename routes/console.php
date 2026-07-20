@@ -246,11 +246,21 @@ Schedule::call(function () {
     });
 })->name('apply-seasonal-strategy-shift')->monthly()->withoutOverlapping();
 
-// CRM sync - sync offline conversions from connected CRMs
+// CRM sync - sync offline conversions from connected CRMs.
+// Include 'error' so a transient failure self-heals, and 'syncing' only when stale
+// (>2h) so a crash-stranded run is retried without racing a genuinely in-flight sync.
 Schedule::call(function () {
-    \App\Models\CrmIntegration::where('status', 'connected')->each(function ($integration) {
-        \App\Jobs\SyncCrmConversions::dispatch($integration->id);
-    });
+    \App\Models\CrmIntegration::query()
+        ->where(function ($q) {
+            $q->whereIn('status', ['connected', 'error'])
+              ->orWhere(function ($q) {
+                  $q->where('status', 'syncing')
+                    ->where('updated_at', '<', now()->subHours(2));
+              });
+        })
+        ->each(function ($integration) {
+            \App\Jobs\SyncCrmConversions::dispatch($integration->id);
+        });
 })->name('sync-crm-conversions')->everyFourHours()->withoutOverlapping();
 
 // Product feed sync - sync Merchant Center product feeds
