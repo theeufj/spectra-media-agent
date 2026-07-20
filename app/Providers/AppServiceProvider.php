@@ -18,6 +18,8 @@ use App\Policies\KnowledgeBasePolicy;
 use App\Policies\ProposalPolicy;
 use App\Policies\StrategyPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
@@ -53,6 +55,26 @@ class AppServiceProvider extends ServiceProvider
 
         // Rate limiter for Resend's 5 req/s API limit — applied via RateLimited middleware on queued mailables.
         RateLimiter::for('resend', fn () => Limit::perSecond(4));
+
+        // Block scratch Test* commands that create/send REAL ad resources when running
+        // in production. They are auto-discovered and would otherwise be runnable live
+        // (e.g. minting a real MCC sub-account or publishing a real campaign). Read-only
+        // connection diagnostics are intentionally left available. (QUAL-3)
+        Event::listen(function (CommandStarting $event) {
+            $blockedInProduction = [
+                'googleads:test-all-campaigns',
+                'googleads:test-campaign-publish',
+                'googleads:test-mcc-auto-create',
+                'microsoftads:test',
+                'datamanager:test-event',
+                'facebook:test',
+            ];
+
+            if (app()->environment('production') && in_array($event->command, $blockedInProduction, true)) {
+                $event->output?->writeln("<error>'{$event->command}' creates real ad resources and is disabled in production.</error>");
+                throw new \RuntimeException("Command '{$event->command}' is disabled in production.");
+            }
+        });
 
         // Register model observers
         Customer::observe(CustomerObserver::class);
