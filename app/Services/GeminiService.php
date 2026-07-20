@@ -733,9 +733,10 @@ class GeminiService
                 'parameters' => array_merge([
                     'aspectRatio'      => '16:9',
                     'sampleCount'      => 1,
-                    // 10s: Google Ads PMax rejects video assets shorter than 10 seconds
-                    // (YOUTUBE_VIDEO_TOO_SHORT). 8s clips uploaded fine but never linked.
-                    'durationSeconds'  => 10,
+                    // Veo 3.1 text_to_video only supports [4,6,8]s. (PMax wants >=10s, which
+                    // this model can't produce — that gap is handled by not auto-generating
+                    // PMax videos; see RunSelfHealingChecks::ensurePMaxVideo.)
+                    'durationSeconds'  => 8,
                     'personGeneration' => 'ALLOW_ALL',
                 ], $parameters),
             ];
