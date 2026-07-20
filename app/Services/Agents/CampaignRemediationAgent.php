@@ -116,12 +116,6 @@ class CampaignRemediationAgent
             return;
         }
 
-        // One signal pass per campaign per 7 days — signals are immutable once set
-        $cacheKey = "remediation_audience_signals:{$campaign->id}";
-        if (Cache::has($cacheKey)) {
-            return;
-        }
-
         $customerId  = $customer->cleanGoogleCustomerId();
         $assetGroups = $finding['details']['asset_groups'] ?? $this->fetchAssetGroups($customer, $customerId, $campaign);
 
@@ -130,8 +124,26 @@ class CampaignRemediationAgent
             return;
         }
 
-        // 1. Generate search themes from the customer KB via AI
+        // Only heal asset groups that genuinely have zero signals. Checking real state
+        // (instead of a 7-day cache) makes this idempotent and self-correcting: a prior
+        // partial/failed attempt retries next pass rather than being blocked for a week,
+        // and we never pile signals onto groups that already have them.
+        $withSignals  = $this->assetGroupsWithSignals($customer, $customerId, $campaign);
+        $targetGroups = array_values(array_filter(
+            $assetGroups,
+            fn ($g) => !in_array($g['resource_name'], $withSignals, true)
+        ));
+
+        if (empty($targetGroups)) {
+            return; // every asset group already has signals
+        }
+
+        // 1. Search themes — AI first, deterministic fallback so an empty AI response
+        //    never dead-ends the fix into a customer alert.
         $themes = $this->generateSearchThemes($campaign, $customer);
+        if (empty($themes)) {
+            $themes = $this->fallbackSearchThemes($campaign, $customer);
+        }
 
         // 2. Look up relevant in-market audience IDs
         $audienceResources = $this->findRelevantAudiences($customer, $customerId);
@@ -144,7 +156,7 @@ class CampaignRemediationAgent
         $addSignals = new AddAudienceSignals($customer);
         $totalAdded = 0;
 
-        foreach ($assetGroups as $assetGroup) {
+        foreach ($targetGroups as $assetGroup) {
             $groupResource = $assetGroup['resource_name'];
 
             if (!empty($themes)) {
@@ -157,12 +169,10 @@ class CampaignRemediationAgent
         }
 
         if ($totalAdded > 0) {
-            Cache::put($cacheKey, true, now()->addDays(7));
-
             $results['actions_taken'][] = [
                 'type'     => 'audience_signals_added',
                 'platform' => 'google_ads',
-                'message'  => "Added {$totalAdded} audience signal(s) across " . count($assetGroups) . ' asset group(s)',
+                'message'  => "Added {$totalAdded} audience signal(s) across " . count($targetGroups) . ' asset group(s)',
                 'themes'   => $themes,
                 'audiences' => $audienceResources,
             ];
@@ -532,6 +542,69 @@ PROMPT;
         } catch (\Exception) {
             return [];
         }
+    }
+
+    /**
+     * Asset-group resource names in this campaign that already have ≥1 signal.
+     */
+    private function assetGroupsWithSignals(Customer $customer, string $customerId, Campaign $campaign): array
+    {
+        preg_match('/campaigns\/(\d+)$/', (string) $campaign->google_ads_campaign_id, $m);
+        $campaignId = $m[1] ?? preg_replace('/\D/', '', (string) $campaign->google_ads_campaign_id);
+        if (!$campaignId) {
+            return [];
+        }
+
+        try {
+            $service = new class($customer) extends BaseGoogleAdsService {
+                public function get(string $customerId, string $campaignId): array
+                {
+                    $this->ensureClient();
+                    $groups = [];
+                    $resp = $this->searchQuery($customerId,
+                        "SELECT asset_group_signal.asset_group FROM asset_group_signal WHERE campaign.id = {$campaignId}"
+                    );
+                    foreach ($resp->getIterator() as $row) {
+                        $groups[] = $row->getAssetGroupSignal()->getAssetGroup();
+                    }
+                    return array_values(array_unique($groups));
+                }
+            };
+
+            return $service->get($customerId, $campaignId);
+        } catch (\Exception) {
+            return [];
+        }
+    }
+
+    /**
+     * Deterministic search themes derived from the customer/campaign — used when AI
+     * generation returns nothing so a signal fix never dead-ends into an alert.
+     */
+    private function fallbackSearchThemes(Campaign $campaign, Customer $customer): array
+    {
+        $themes = $campaign->strategies()
+            ->whereIn('deployment_status', ['deployed', 'verified', 'signed_off'])
+            ->limit(3)->get()
+            ->flatMap(fn ($s) => $s->keywords ?? [])
+            ->all();
+
+        foreach ([$customer->name, $customer->industry ?? null, $campaign->product_focus ?? null] as $v) {
+            if (is_string($v) && trim($v) !== '') {
+                $themes[] = trim($v);
+            }
+        }
+
+        if (is_array($campaign->goals ?? null)) {
+            $themes = array_merge($themes, array_filter($campaign->goals, 'is_string'));
+        }
+
+        $themes = array_values(array_unique(array_filter(array_map(
+            fn ($t) => mb_substr(trim((string) $t), 0, 80),
+            $themes
+        ))));
+
+        return array_slice($themes, 0, 10);
     }
 
     // ─── Landing page fix ────────────────────────────────────────────────────

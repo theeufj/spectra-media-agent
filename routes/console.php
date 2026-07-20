@@ -113,7 +113,10 @@ Schedule::job(new \App\Jobs\PauseWastefulAdGroups)->dailyAt('02:30')->withoutOve
 Schedule::job(new RunSelfHealingChecks)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunSelfHealingChecks'));
 
 // Strategic diagnosis — daily deep audit for conversion starvation, PMax gaps, traffic quality
-Schedule::job(new RunStrategicDiagnosis)->dailyAt('06:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunStrategicDiagnosis'));
+// Every 6h (was daily) so structural gaps on freshly-deployed campaigns — e.g. missing
+// PMax audience signals — get diagnosed and auto-remediated within hours, not a day.
+// diagnose() is rule-based GAQL, so the extra cadence is cheap.
+Schedule::job(new RunStrategicDiagnosis)->everySixHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunStrategicDiagnosis'));
 
 // Performance anomaly detection — intra-day CTR/CPC/CVR/delivery alerts
 Schedule::job(new RunPerformanceAnomalyCheck)->everyFourHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunPerformanceAnomalyCheck'));
