@@ -202,8 +202,10 @@ class AdSpendBillingController extends Controller
         );
 
         if ($result['success']) {
-            // Restore the account status
+            // Restore the account status AND actually resume the paused campaigns +
+            // restore their budgets — restoreAccount() alone only clears ledger flags.
             $credit->restoreAccount();
+            $this->billingService->recoverCampaigns($customer);
 
             Log::info('AdSpendBilling: Payment recovered via retry', [
                 'customer_id' => $customer->id,
@@ -260,6 +262,7 @@ class AdSpendBillingController extends Controller
 
                     if ($result['success']) {
                         $credit->restoreAccount();
+                        $this->billingService->recoverCampaigns($customer);
 
                         return response()->json([
                             'success' => true,

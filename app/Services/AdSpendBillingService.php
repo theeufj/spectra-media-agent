@@ -255,12 +255,9 @@ class AdSpendBillingService
         if ($chargeResult['success']) {
             $credit->addCredit($replenishAmount, 'Credit recovery', $chargeResult['charge_id']);
             $credit->restoreAccount();
-            
-            // Resume campaigns
-            $this->resumeAllCampaigns($customer);
-            
-            // Restore budgets to 100%
-            $this->reduceCampaignBudgets($customer, 1.0);
+
+            // Resume campaigns and restore budgets to 100%.
+            $this->recoverCampaigns($customer);
 
             $user = $customer->users()->wherePivot('role', 'owner')->first()
                 ?? $customer->users()->first();
@@ -704,6 +701,22 @@ class AdSpendBillingService
         }
     }
     
+    /**
+     * Resume payment-paused campaigns and restore their budgets to 100%.
+     *
+     * Safe to call unconditionally: resumeAllCampaigns only touches campaigns that
+     * were paused with paused_reason='Payment failure', and the 1.0 budget multiplier
+     * re-pushes the stored daily_budget (a no-op when nothing was reduced). This is the
+     * single entry point used by the daily recovery job AND the user-facing retry /
+     * update-payment-method paths, so a successful recovery charge always actually
+     * brings the campaigns back — not just the credit ledger flags.
+     */
+    public function recoverCampaigns(Customer $customer): void
+    {
+        $this->resumeAllCampaigns($customer);
+        $this->reduceCampaignBudgets($customer, 1.0);
+    }
+
     /**
      * Pause a Facebook Ads campaign.
      */

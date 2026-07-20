@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\AdSpendCredit;
 use App\Models\Customer;
 use App\Services\AdSpendBillingService;
 use Illuminate\Bus\Queueable;
@@ -9,6 +10,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -44,25 +46,58 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
             'total_spend' => 0,
         ];
 
-        // Get all customers with active credit accounts who have at least one actively-running campaign
+        // Bill every customer with a credit account that either has a running campaign
+        // OR whose credit is in a paused/failed/grace state — the latter would otherwise
+        // never reach the recovery path once their campaigns are paused (they have no
+        // 'active' campaigns left), stranding them permanently. (BILL-2)
+        $recoverableStatuses = [
+            AdSpendCredit::PAYMENT_PAUSED,
+            AdSpendCredit::PAYMENT_FAILED,
+            AdSpendCredit::PAYMENT_GRACE_PERIOD,
+        ];
+
         $customers = Customer::whereHas('adSpendCredit')
-            ->whereHas('campaigns', function ($query) {
-                $query->where('status', 'active');
+            ->where(function ($query) use ($recoverableStatuses) {
+                $query->whereHas('campaigns', function ($q) {
+                        $q->where('status', 'active');
+                    })
+                    ->orWhereHas('adSpendCredit', function ($q) use ($recoverableStatuses) {
+                        $q->whereIn('payment_status', $recoverableStatuses);
+                    });
             })
             ->with(['adSpendCredit', 'campaigns'])
             ->get();
 
+        // Idempotency: bill each customer at most once per calendar day. On a mid-run
+        // crash + retry (tries=3) this stops already-charged customers being re-deducted
+        // and re-charged. Cache::add is atomic; the marker is cleared on failure so a
+        // failed customer is retried. (BILL-3)
+        $billingDate = now()->toDateString();
+
         foreach ($customers as $customer) {
+            $marker = "adspend_billed:{$customer->id}:{$billingDate}";
+
+            if (!Cache::add($marker, true, now()->addHours(47))) {
+                $results['skipped']++;
+                Log::info('ProcessDailyAdSpendBilling: Skipping already-billed customer', [
+                    'customer_id' => $customer->id,
+                    'billing_date' => $billingDate,
+                ]);
+                continue;
+            }
+
             try {
                 $result = $billingService->processDailyBilling($customer);
-                
+
                 $results['processed']++;
-                
+
                 if ($result['success']) {
                     $results['successful']++;
                     $results['total_spend'] += $result['actual_spend'];
                 } else {
                     $results['failed']++;
+                    // A failed charge is an expected business outcome (grace/pause flow),
+                    // not a reason to re-bill — keep the marker so we don't double-charge.
                 }
 
                 Log::info('ProcessDailyAdSpendBilling: Processed customer', [
@@ -72,7 +107,10 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
 
             } catch (\Exception $e) {
                 $results['failed']++;
-                
+
+                // Unexpected failure — release the marker so a retry reprocesses this customer.
+                Cache::forget($marker);
+
                 Log::error('ProcessDailyAdSpendBilling: Customer billing failed', [
                     'customer_id' => $customer->id,
                     'error' => $e->getMessage(),
@@ -81,6 +119,12 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         }
 
         Log::info('ProcessDailyAdSpendBilling: Completed daily billing run', $results);
+
+        // Surface partial failures — per-customer errors are caught above, so onFailure()
+        // would otherwise never fire and a customer failing every day would go unnoticed.
+        if ($results['failed'] > 0) {
+            Log::error('ProcessDailyAdSpendBilling: Completed with failures', $results);
+        }
     }
 
     /**
