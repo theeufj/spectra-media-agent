@@ -4,11 +4,12 @@ namespace App\Jobs;
 
 use App\Mail\DailyPerformanceReport;
 use App\Models\Customer;
-use App\Services\Agents\CampaignOptimizationAgent;
+use App\Models\Recommendation;
 use App\Services\Reporting\YesterdayPerformanceSummary;
 use App\Services\GeminiService;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
+use Illuminate\Support\Carbon;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,7 +25,7 @@ class SendDailyPerformanceReports implements ShouldQueue
     public int $tries = 2;
     public int $timeout = 300;
 
-    public function handle(YesterdayPerformanceSummary $summaryService, GeminiService $gemini, CampaignOptimizationAgent $optimizer): void
+    public function handle(YesterdayPerformanceSummary $summaryService, GeminiService $gemini): void
     {
         $isMonday = now()->dayOfWeek === 1;
 
@@ -58,8 +59,10 @@ class SendDailyPerformanceReports implements ShouldQueue
                     $summary['weekly_rollup'] = $this->buildWeeklyRollup($customer, $gemini);
                 }
 
-                // Pull highest-confidence cached recommendation across all active campaigns
-                $summary['top_action'] = $this->getTopAction($customer, $optimizer);
+                // Report what WE did on the client's behalf — the optimisations applied
+                // automatically — rather than handing them a to-do. This is the product:
+                // an autonomous agent that acts and reports back.
+                $summary['optimizations'] = $this->getOptimizationsMade($customer, $summary['date']);
 
                 // Send to all users associated with this customer
                 $users = $customer->users;
@@ -95,34 +98,59 @@ class SendDailyPerformanceReports implements ShouldQueue
     }
 
     /**
-     * Find the highest-confidence cached recommendation across all active campaigns for this customer.
-     * Returns a ['action' => '...', 'reasoning' => '...'] array or null if nothing cached.
+     * Summarise the optimisations we actually applied on the client's behalf during the
+     * reporting window (the overnight OptimizeCampaigns run), plus a count of any
+     * recommendations still awaiting their approval.
+     *
+     * @return array{applied: array<int,array{label:string,rationale:?string,campaign:?string}>, pending: int}
      */
-    private function getTopAction(Customer $customer, CampaignOptimizationAgent $optimizer): ?array
+    private function getOptimizationsMade(Customer $customer, string $date): array
     {
-        $campaigns = $customer->campaigns()->where('status', 'active')->get();
-        $best = null;
-        $bestScore = -1;
-
-        foreach ($campaigns as $campaign) {
-            $recs = $optimizer->getCachedRecommendations($campaign->id);
-            if (empty($recs['recommendations'])) {
-                continue;
-            }
-            foreach ($recs['recommendations'] as $rec) {
-                $score = $rec['confidence_score'] ?? 0;
-                if ($score > $bestScore) {
-                    $bestScore = $score;
-                    $best = [
-                        'action'    => $rec['action'] ?? $rec['type'] ?? 'Review campaign performance',
-                        'reasoning' => $rec['reasoning'] ?? $rec['reason'] ?? '',
-                        'campaign'  => $campaign->name,
-                    ];
-                }
-            }
+        $campaigns = $customer->campaigns()->pluck('name', 'id');
+        if ($campaigns->isEmpty()) {
+            return ['applied' => [], 'pending' => 0];
         }
 
-        return $best;
+        // Changes applied since the start of the reporting day cover the overnight
+        // optimisation run that the 08:00 report follows.
+        $since = Carbon::parse($date)->startOfDay();
+
+        $applied = Recommendation::whereIn('campaign_id', $campaigns->keys())
+            ->where('status', 'applied')
+            ->where('created_at', '>=', $since)
+            ->latest()
+            ->limit(10)
+            ->get()
+            ->map(fn (Recommendation $r) => [
+                'label'     => $this->optimizationLabel($r->type),
+                'rationale' => $r->rationale,
+                'campaign'  => $campaigns[$r->campaign_id] ?? null,
+            ])
+            ->all();
+
+        $pending = Recommendation::whereIn('campaign_id', $campaigns->keys())
+            ->where('status', 'pending')
+            ->where('requires_approval', true)
+            ->count();
+
+        return ['applied' => $applied, 'pending' => $pending];
+    }
+
+    /**
+     * Human-readable label for an applied recommendation type.
+     */
+    private function optimizationLabel(?string $type): string
+    {
+        return match ($type) {
+            'BUDGET'        => 'Adjusted daily budget',
+            'KEYWORDS'      => 'Updated keywords',
+            'BIDDING'       => 'Tuned bidding strategy',
+            'TARGETING'     => 'Refined targeting',
+            'AD_EXTENSIONS' => 'Added ad extensions',
+            'SCHEDULE'      => 'Optimised ad schedule',
+            'AUDIENCE'      => 'Updated audiences',
+            default         => 'Optimisation applied',
+        };
     }
 
     /**

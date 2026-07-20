@@ -138,17 +138,29 @@
         </table>
     @endif
 
-    {{-- Top Action for Today --}}
-    @if(!empty($summary['top_action']))
-        <div style="margin: 24px 0; padding: 16px 20px; background: #fffbeb; border-left: 4px solid #f6ad55; border-radius: 4px;">
-            <div style="font-size: 11px; color: #c05621; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px;">Top action for today</div>
-            <div style="font-size: 15px; color: #2d3748; font-weight: 600;">{{ $summary['top_action']['action'] }}</div>
-            @if(!empty($summary['top_action']['reasoning']))
-                <div style="font-size: 13px; color: #718096; margin-top: 4px;">{{ $summary['top_action']['reasoning'] }}</div>
+    {{-- What we optimised on the client's behalf --}}
+    @php $opt = $summary['optimizations'] ?? ['applied' => [], 'pending' => 0]; @endphp
+    @if(!empty($opt['applied']))
+        <div style="margin: 24px 0; padding: 16px 20px; background: #f0fdf4; border-left: 4px solid #10b981; border-radius: 4px;">
+            <div style="font-size: 11px; color: #047857; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 10px;">What we optimised for you</div>
+            @foreach($opt['applied'] as $o)
+                <div style="margin-bottom: 10px;">
+                    <div style="font-size: 14px; color: #2d3748; font-weight: 600;">
+                        <span style="color: #10b981;">&#10003;</span> {{ $o['label'] }}@if(!empty($o['campaign']))<span style="font-weight: 400; color: #a0aec0;"> — {{ $o['campaign'] }}</span>@endif
+                    </div>
+                    @if(!empty($o['rationale']))
+                        <div style="font-size: 13px; color: #718096; margin-top: 2px; margin-left: 18px;">{{ $o['rationale'] }}</div>
+                    @endif
+                </div>
+            @endforeach
+            @if(($opt['pending'] ?? 0) > 0)
+                <div style="font-size: 12px; color: #a0aec0; margin-top: 8px;">{{ $opt['pending'] }} further {{ \Illuminate\Support\Str::plural('recommendation', $opt['pending']) }} awaiting your review in the dashboard.</div>
             @endif
-            @if(!empty($summary['top_action']['campaign']))
-                <div style="font-size: 11px; color: #a0aec0; margin-top: 6px;">Campaign: {{ $summary['top_action']['campaign'] }}</div>
-            @endif
+        </div>
+    @elseif(($opt['pending'] ?? 0) > 0)
+        <div style="margin: 24px 0; padding: 16px 20px; background: #f7fafc; border-left: 4px solid #cbd5e0; border-radius: 4px;">
+            <div style="font-size: 14px; color: #2d3748; font-weight: 600;">{{ $opt['pending'] }} optimisation {{ \Illuminate\Support\Str::plural('recommendation', $opt['pending']) }} ready for your review</div>
+            <div style="font-size: 13px; color: #718096; margin-top: 2px;">We've queued {{ $opt['pending'] > 1 ? 'these' : 'this' }} for your approval in the dashboard.</div>
         </div>
     @endif
 
