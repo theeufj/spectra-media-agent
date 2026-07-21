@@ -159,15 +159,21 @@ class CheckVideoStatus implements ShouldQueue
                 Mail::to($user->email)->send(new VideosGenerated($user, $campaign, $videoCount));
             }
 
-            // For a live PMax campaign, link the finished video to its asset group so it
-            // lifts ad strength. Previously only the creation flow did this, so healed /
-            // regenerated videos never attached. UploadPMaxVideoAssets self-resolves the
-            // asset group when none is passed.
-            if ($campaign->google_ads_campaign_id) {
-                $strategyId = $this->videoCollateral->strategy_id ?? $campaign->strategies()->latest()->value('id');
-                if ($strategyId) {
-                    \App\Jobs\UploadPMaxVideoAssets::dispatch($strategyId, $campaign->customer->cleanGoogleCustomerId())
-                        ->delay(now()->addSeconds(30));
+            // PMax video flow: an 8s Veo clip is too short for PMax (min 10s), so extend
+            // the original once (~15s) before linking. An already-extended clip links
+            // straight to the asset group to lift ad strength.
+            $isPmax = str_contains(strtolower($this->videoCollateral->platform ?? ''), 'performance max')
+                && $campaign->google_ads_campaign_id;
+
+            if ($isPmax) {
+                if (($this->videoCollateral->extension_count ?? 0) < 1) {
+                    \App\Jobs\ExtendPMaxVideo::dispatch($this->videoCollateral)->delay(now()->addSeconds(20));
+                } else {
+                    $strategyId = $this->videoCollateral->strategy_id ?? $campaign->strategies()->latest()->value('id');
+                    if ($strategyId) {
+                        \App\Jobs\UploadPMaxVideoAssets::dispatch($strategyId, $campaign->customer->cleanGoogleCustomerId())
+                            ->delay(now()->addSeconds(30));
+                    }
                 }
             }
         }

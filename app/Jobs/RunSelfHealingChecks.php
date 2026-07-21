@@ -13,6 +13,7 @@ use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
 use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Models\Recommendation;
 use App\Models\VideoCollateral;
+use App\Jobs\GenerateVideo;
 use App\Jobs\UploadPMaxVideoAssets;
 use App\Services\GoogleAds\CommonServices\CreateSitelinkAssets;
 use App\Services\GoogleAds\CommonServices\VerifyConversionGoals;
@@ -211,23 +212,33 @@ class RunSelfHealingChecks implements ShouldQueue
 
         $customerId = $campaign->customer->cleanGoogleCustomerId();
 
-        // If a usable (active, completed) video already exists, link it.
-        if (VideoCollateral::where('campaign_id', $campaign->id)->where('is_active', true)->where('status', 'completed')->exists()) {
+        // A completed, extended (link-ready) video exists → link it.
+        if (VideoCollateral::where('campaign_id', $campaign->id)
+                ->where('is_active', true)->where('status', 'completed')
+                ->where('extension_count', '>=', 1)->exists()) {
             UploadPMaxVideoAssets::dispatch($strategy->id, $customerId);
             Cache::put($key, true, now()->addDay());
             return;
         }
 
-        // No compliant video. The available model (Veo 3.1) only produces <=8s clips,
-        // which Google Ads rejects for PMax (min 10s). Auto-generating would loop forever
-        // on videos that can never link, so surface the gap for a human to upload a >=10s
-        // video instead. (Weekly, not daily, to avoid nagging.)
+        // A video is already generating/extending → let the pipeline finish (it extends
+        // to >=10s then links on completion).
+        if (VideoCollateral::where('campaign_id', $campaign->id)
+                ->where('is_active', true)
+                ->whereNotIn('status', ['completed', 'failed'])->exists()) {
+            return;
+        }
+
+        // Nothing usable yet → generate. The 8s clip is auto-extended to ~15s (PMax's
+        // 10s minimum) and linked on completion. force=true since a PMax strategy may
+        // have marked video as N/A.
+        GenerateVideo::dispatch($campaign, $strategy, 'Google Ads (Performance Max)', 0, true);
         AgentActivity::record(
-            'maintenance', 'video_asset_needed',
-            "\"{$campaign->name}\" needs a video asset (>=10s) to reach higher PMax ad strength — the current model can't auto-produce one",
+            'maintenance', 'video_generation_started',
+            "Generating a video for '{$campaign->name}' (auto-extended to PMax length) to lift ad strength",
             $campaign->customer_id, $campaign->id, []
         );
-        Cache::put($key, true, now()->addWeek());
+        Cache::put($key, true, now()->addDay());
     }
 
     public function failed(\Throwable $exception): void

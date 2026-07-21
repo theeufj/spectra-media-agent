@@ -966,6 +966,50 @@ class GeminiService
         return null;
     }
 
+    /**
+     * Extend a Veo-generated video passed as inline bytes (rather than a Gemini Files
+     * URI). Used for Vertex-generated clips (which come back as inline base64, not a
+     * file URI). Veo's video_extension feature only supports a 7-second extension, so an
+     * 8s source becomes ~15s — enough to satisfy Google Ads PMax's 10s minimum.
+     *
+     * @return string|null Operation name to poll, or null on failure.
+     */
+    public function extendVideoFromBytes(string $base64Video, string $mimeType, string $prompt, array $context = []): ?string
+    {
+        $requestBody = [
+            'instances' => [[
+                'prompt' => $prompt,
+                'video'  => ['bytesBase64Encoded' => $base64Video, 'mimeType' => $mimeType],
+            ]],
+            'parameters' => [
+                'aspectRatio'      => '16:9',
+                'sampleCount'      => 1,
+                'durationSeconds'  => 7, // video_extension only supports [7]
+                'personGeneration' => 'ALLOW_ALL',
+                'resolution'       => '720p',
+            ],
+        ];
+
+        try {
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(300)
+                ->post("{$this->videoBaseUrl}veo-3.1-generate-001:predictLongRunning", $requestBody);
+
+            if ($response->successful()) {
+                $operationName = $response->json()['name'] ?? null;
+                $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, $context);
+                Log::info("GeminiService: Video extension (from bytes) started. Operation: {$operationName}");
+                return $operationName;
+            }
+
+            Log::error("GeminiService: Failed to extend video from bytes: " . $response->body());
+            return null;
+        } catch (\Exception $e) {
+            Log::error("GeminiService: Exception extending video from bytes: " . $e->getMessage());
+            return null;
+        }
+    }
+
     // ─── Cost tracking ───────────────────────────────────────────────────────
 
     /**
