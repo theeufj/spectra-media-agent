@@ -16,10 +16,13 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\DetectTenant::class,
             \App\Http\Middleware\SecurityHeaders::class,
             \App\Http\Middleware\CanonicalRedirect::class,
-            \App\Http\Middleware\CaptureClickIds::class,
         ]);
 
         $middleware->web(append: [
+            // MUST run after StartSession: it persists ad click IDs (gclid/fbclid/…)
+            // into the session for capture at registration. Prepended (pre-session) the
+            // writes were silently discarded, so no user ever got a gclid.
+            \App\Http\Middleware\CaptureClickIds::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
