@@ -112,7 +112,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             }
         }
 
-        // Auto-generate the marketing images PMax needs for strength (landscape + square).
+        // Auto-generate the marketing images PMax needs for strength (landscape + square + portrait).
         // Idempotent: only fills when genuinely absent, so it won't regenerate each pass.
         // The logo is intentionally left for a human — it should be the real brand mark,
         // not an AI guess.
@@ -184,8 +184,8 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
     }
 
     /**
-     * Generate + link the marketing images an asset group is missing (landscape 1.91:1
-     * and square 1:1). Images are AI-generated, then cropped to the exact ratio Google
+     * Generate + link the marketing images an asset group is missing (landscape 1.91:1,
+     * square 1:1, portrait 4:5). Images are AI-generated, then cropped to the exact ratio Google
      * requires before upload. Only fills genuine gaps (idempotent by count). Returns the
      * number of images added.
      */
@@ -197,6 +197,11 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         }
         if (($existing['media']['SQUARE_IMAGE'] ?? 0) === 0) {
             $specs[] = ['field' => AssetFieldType::SQUARE_MARKETING_IMAGE, 'w' => 1200, 'h' => 1200, 'ratio' => '1:1'];
+        }
+        if (($existing['media']['PORTRAIT_IMAGE'] ?? 0) === 0) {
+            // Portrait (4:5) unlocks vertical placements; without it PMax reports the
+            // group as "limited by incomplete assets — can only serve in certain formats".
+            $specs[] = ['field' => AssetFieldType::PORTRAIT_MARKETING_IMAGE, 'w' => 960, 'h' => 1200, 'ratio' => '4:5'];
         }
         if (empty($specs)) {
             return 0;
@@ -268,7 +273,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
     private function existingAssets(string $customerId, int $assetGroupId): array
     {
         $text = ['HEADLINE' => [], 'LONG_HEADLINE' => [], 'DESCRIPTION' => []];
-        $media = ['LOGO' => 0, 'SQUARE_IMAGE' => 0, 'MARKETING_IMAGE' => 0, 'YOUTUBE_VIDEO' => 0];
+        $media = ['LOGO' => 0, 'SQUARE_IMAGE' => 0, 'MARKETING_IMAGE' => 0, 'PORTRAIT_IMAGE' => 0, 'YOUTUBE_VIDEO' => 0];
 
         $fieldName = [
             AssetFieldType::HEADLINE => 'HEADLINE',
@@ -277,6 +282,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             AssetFieldType::LOGO => 'LOGO',
             AssetFieldType::SQUARE_MARKETING_IMAGE => 'SQUARE_IMAGE',
             AssetFieldType::MARKETING_IMAGE => 'MARKETING_IMAGE',
+            AssetFieldType::PORTRAIT_MARKETING_IMAGE => 'PORTRAIT_IMAGE',
             AssetFieldType::YOUTUBE_VIDEO => 'YOUTUBE_VIDEO',
         ];
 
