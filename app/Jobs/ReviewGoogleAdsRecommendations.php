@@ -200,7 +200,8 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
     private function notifyClientBudget(Customer $customer, array $rec): void
     {
-        $user = $customer->user;
+        $user = $customer->users()->wherePivot('role', 'owner')->first()
+            ?? $customer->users()->first();
         if (!$user) {
             return;
         }

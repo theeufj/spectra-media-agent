@@ -25,7 +25,7 @@ class EvaluateABTests implements ShouldQueue
         $runStart = $this->startRun();
 
         $tests = ABTest::running()
-            ->with(['campaign.customer.user'])
+            ->with(['campaign.customer.users'])
             ->get();
 
         Log::info("EvaluateABTests: Evaluating {$tests->count()} running tests");
@@ -43,7 +43,7 @@ class EvaluateABTests implements ShouldQueue
                     $applied++;
 
                     // Notify the campaign owner
-                    $user = $test->campaign?->customer?->user;
+                    $user = $this->campaignOwner($test);
                     if ($user) {
                         $winner = $result['winner'];
                         $lift = round($result['results']['lift_pct'] ?? 0, 1);
@@ -71,7 +71,7 @@ class EvaluateABTests implements ShouldQueue
                 }
 
                 if ($result['action'] === 'stopped') {
-                    $user = $test->campaign?->customer?->user;
+                    $user = $this->campaignOwner($test);
                     if ($user) {
                         $notifications->notify(
                             $user,
@@ -94,6 +94,21 @@ class EvaluateABTests implements ShouldQueue
         }
 
         $this->finishRun($runStart, actions: $applied, errors: $errors, scope: $tests->count() . ' tests');
+    }
+
+    /**
+     * The user to notify for a test: the customer's owner, falling back to any member.
+     * Customer <-> User is many-to-many (pivot role); there is no `user` relationship.
+     */
+    protected function campaignOwner(ABTest $test): ?\App\Models\User
+    {
+        $customer = $test->campaign?->customer;
+        if (!$customer) {
+            return null;
+        }
+
+        return $customer->users()->wherePivot('role', 'owner')->first()
+            ?? $customer->users()->first();
     }
 
     protected function maxTestDurationLabel(ABTest $test): string
