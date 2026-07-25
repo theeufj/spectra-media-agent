@@ -218,8 +218,12 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                     . "no text, no logos, no watermarks, no people's faces. Suitable as a Google Ads asset. "
                     . "Aspect ratio {$spec['ratio']}.";
 
-                $result = $this->gemini->generateImage($prompt, config('ai.models.image', 'gemini-3.1-flash-image-preview'));
+                $result = $this->gemini->generateImage($prompt, config('ai.models.image', 'gemini-2.5-flash-image'));
                 if (!$result || empty($result['data'])) {
+                    // Don't fail silently — a broken/unavailable image model here means
+                    // ad-strength healing never adds an image yet reports no error.
+                    $this->logError("HealAssetGroupStrength: image generation returned no data for {$spec['ratio']} (model "
+                        . config('ai.models.image') . ') — skipping');
                     continue;
                 }
 

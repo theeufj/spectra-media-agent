@@ -18,7 +18,8 @@ use Google\Auth\CredentialsLoader;
  * - gemini-3-flash-preview        | Earlier flash preview
  * - gemini-3.1-flash-lite-preview | Budget / Ultra-low latency (confirmed on Vertex AI global)
  * - gemini-3-pro-image-preview    | Nano Banana Pro - Studio-quality 4K image generation
- * - gemini-3.1-flash-image-preview| Nano Banana 2 - High-efficiency image generation (confirmed on Vertex AI global)
+ * - gemini-3.1-flash-image-preview| NOT available on this Vertex project (returns 404 NOT_FOUND) — do not use
+ * - gemini-2.5-flash-image        | High-efficiency image generation (confirmed working via streamGenerateContent)
  *
  * --- GEMINI 2.5 SERIES (Stable) ---
  * - gemini-2.5-pro              | Deep reasoning & coding (stable)
@@ -615,7 +616,7 @@ class GeminiService
     /**
      * Generates an image based on a prompt using a specified Gemini image generation model.
      */
-    public function generateImage(string $prompt, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K', array $context = []): ?array
+    public function generateImage(string $prompt, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K', array $context = []): ?array
     {
         $payload = [
             'contents' => [
@@ -637,7 +638,7 @@ class GeminiService
     /**
      * Refines an existing image based on a new prompt and context images.
      */
-    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-3.1-flash-image-preview', string $imageSize = '1K', array $context = []): ?array
+    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K', array $context = []): ?array
     {
         $parts = [['text' => $prompt]];
         foreach ($contextImages as $image) {

@@ -50,7 +50,7 @@ return [
         /*
          * Image generation model.
          */
-        'image' => env('AI_MODEL_IMAGE', 'gemini-3.1-flash-image-preview'),
+        'image' => env('AI_MODEL_IMAGE', 'gemini-2.5-flash-image'),
 
         /*
          * Video generation model.
@@ -120,6 +120,7 @@ return [
         'gemini-3.1-flash-lite-preview' => ['input' => 0.25,   'output' => 1.50,  'cached' => 0.025],
         'gemini-2.5-flash-lite'         => ['input' => 0.10,   'output' => 0.40,  'cached' => 0.01],
         // Image model: output priced at the image-output rate ($60/1M tokens).
+        'gemini-2.5-flash-image'        => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-3.1-flash-image-preview'=> ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-embedding-001'          => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'text-embedding-005'            => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
