@@ -402,11 +402,24 @@ class AdSpendBillingService
         $totalSpend = 0;
 
         try {
-            $activeCampaigns = $customer->campaigns()
-                ->where('status', 'active')
+            // Bill on ACTUAL recorded spend, independent of the local `status` field.
+            // `status` is a lifecycle flag set only by deploy/pause code paths and is
+            // never reconciled against the platform, so a live campaign can sit as
+            // DRAFT/paused locally (e.g. created by a remediation agent, or a deploy that
+            // reached the platform but never flipped status) while it spends real money.
+            // Keying billing off `status` silently under-bills — the leak behind the
+            // ReconcileAdSpend divergence. Any campaign with a platform ID is a billing
+            // candidate; getXAdsSpend returns 0 for days with no recorded spend. (BILL-8)
+            $billableCampaigns = $customer->campaigns()
+                ->where(function ($q) {
+                    $q->whereNotNull('google_ads_campaign_id')
+                      ->orWhereNotNull('facebook_ads_campaign_id')
+                      ->orWhereNotNull('microsoft_ads_campaign_id')
+                      ->orWhereNotNull('linkedin_campaign_id');
+                })
                 ->get();
 
-            foreach ($activeCampaigns as $campaign) {
+            foreach ($billableCampaigns as $campaign) {
                 if (!empty($campaign->google_ads_campaign_id)) {
                     $totalSpend += $this->getGoogleAdsSpend($customer, $campaign);
                 }
