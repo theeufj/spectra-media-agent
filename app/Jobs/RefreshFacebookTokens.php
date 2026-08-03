@@ -39,6 +39,7 @@ class RefreshFacebookTokens implements ShouldQueue
             foreach ($admins as $admin) {
                 $admin->notify(new CriticalAgentAlert(
                     'facebook',
+                    'Facebook System User token is invalid',
                     'Facebook System User token is invalid: ' . ($health['error'] ?? 'unknown error'),
                     ['action_required' => 'Regenerate the System User token in Business Manager and update FACEBOOK_SYSTEM_USER_TOKEN in .env']
                 ));

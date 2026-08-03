@@ -48,6 +48,7 @@ class VerifyConversionTracking implements ShouldQueue
                     foreach ($admins as $admin) {
                         $admin->notify(new CriticalAgentAlert(
                             'conversion_tracking',
+                            "Conversion tracking may be broken: {$customer->name}",
                             "0 conversions recorded in last 30 days for {$customer->name} — conversion tracking may be broken.",
                             ['customer_id' => $customer->id, 'action_required' => 'Check GTM installation and conversion action status']
                         ));

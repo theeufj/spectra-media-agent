@@ -45,6 +45,7 @@ class SetupConversionTracking implements ShouldQueue
                 foreach ($admins as $admin) {
                     $admin->notify(new CriticalAgentAlert(
                         'conversion_tracking',
+                        'Conversion tracking setup failed: ' . $this->customer->name,
                         'Failed to set up conversion tracking for customer: ' . $this->customer->name,
                         ['errors' => $result['errors'], 'customer_id' => $this->customer->id]
                     ));
