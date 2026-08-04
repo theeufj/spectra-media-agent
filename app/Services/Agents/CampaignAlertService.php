@@ -5,6 +5,7 @@ namespace App\Services\Agents;
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\AgentActivity;
+use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -154,20 +155,34 @@ class CampaignAlertService
         if ($projectedSpend <= $avgDailySpend * 2) return [];
         if ($todaySpend <= 20) return [];
 
+        // Gate against the daily budget cap. Google allows a campaign to spend up to ~2x its
+        // daily budget on any single day (trued up over the month), so a projection anywhere
+        // up to 2x the cap is normal pacing, NOT an anomaly — even if the recent average was
+        // lower. Only a projection that clears 2x the cap is genuine runaway spend. Without
+        // this, a campaign simply pacing up to its budget (e.g. $63 projected against a $40
+        // cap, well within Google's $80 daily ceiling) triggered false "unusual spend" alerts.
+        $dailyBudget = (float) ($campaign->daily_budget ?? 0);
+        if ($dailyBudget > 0 && $projectedSpend <= $dailyBudget * 2) return [];
+
         $alertType = 'spend_anomaly';
         if ($this->isOnCooldown($campaign, $alertType)) return [];
+
+        $budgetNote = $dailyBudget > 0
+            ? " and exceeds its \$" . round($dailyBudget, 2) . " daily budget cap"
+            : "";
 
         return [[
             'type'            => $alertType,
             'severity'        => 'warning',
             'title'           => "Unusual spend detected for \"{$campaign->name}\"",
-            'message'         => "Campaign \"{$campaign->name}\" has spent \$" . round($todaySpend, 2) . " so far today and is projected to reach \$" . round($projectedSpend, 2) . " vs a \$" . round($avgDailySpend, 2) . " daily average (" . round(($projectedSpend / $avgDailySpend) * 100) . "% of normal).",
+            'message'         => "Campaign \"{$campaign->name}\" has spent \$" . round($todaySpend, 2) . " so far today and is projected to reach \$" . round($projectedSpend, 2) . " — " . round(($projectedSpend / $avgDailySpend) * 100) . "% of its \$" . round($avgDailySpend, 2) . " daily average{$budgetNote}.",
             'action_required' => 'Review bid strategy and check for competitive pressure driving up costs.',
             'campaign_id'     => $campaign->id,
             'campaign_name'   => $campaign->name,
             'projected_spend' => round($projectedSpend, 2),
             'avg_daily_spend' => round($avgDailySpend, 2),
             'today_spend'     => round($todaySpend, 2),
+            'daily_budget'    => round($dailyBudget, 2),
         ]];
     }
 
@@ -227,7 +242,15 @@ class CampaignAlertService
                 $alert
             );
 
-            foreach ($customer->users as $user) {
+            // Spend-anomaly alerts are operational triage (bid/competitive review), not a
+            // customer-facing "action required" — route them to admins only. All other
+            // alert types (budget exhaustion, conversion drop) stay customer-facing.
+            $adminOnlyTypes = ['spend_anomaly'];
+            $recipients = in_array($alert['type'], $adminOnlyTypes, true)
+                ? User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get()
+                : $customer->users;
+
+            foreach ($recipients as $user) {
                 $user->notify($notification);
             }
 
