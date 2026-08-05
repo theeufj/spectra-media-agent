@@ -1,28 +1,33 @@
-@component('mail::message')
-# ✅ Payment Received - Campaigns Resumed!
+@extends('layouts.email')
 
-Hi there,
+@section('title', 'Payment Received - Campaigns Resumed!')
 
-Great news! Your payment has been successfully processed and **all your campaigns are now running again**.
+@section('content')
+    <h1>✅ Payment Received - Campaigns Resumed!</h1>
 
-**New Credit Balance:** ${{ number_format($credit->current_balance, 2) }}
+    <p>Hi there,</p>
 
-## What Happened
+    <p>Great news! Your payment has been successfully processed and <strong>all your campaigns are now running again</strong>.</p>
 
-- Payment was successfully processed
-- Campaign budgets restored to 100%
-- All paused campaigns have been resumed
+    <div style="background:#f7fafc;border:1px solid #e8e5ef;border-radius:6px;padding:16px;margin:16px 0;">
+        <p style="margin:0;"><strong>New Credit Balance:</strong> ${{ number_format($credit->current_balance, 2) }}</p>
+    </div>
 
-## Your Campaigns
+    <h2>What Happened</h2>
 
-Your ads should begin serving within the next 30-60 minutes as the ad networks re-enable them.
+    <ul>
+        <li>Payment was successfully processed</li>
+        <li>Campaign budgets restored to 100%</li>
+        <li>All paused campaigns have been resumed</li>
+    </ul>
 
-@component('mail::button', ['url' => config('app.url') . '/campaigns'])
-View Your Campaigns
-@endcomponent
+    <h2>Your Campaigns</h2>
 
-Thank you for resolving this promptly. If you have any questions, please don't hesitate to reach out.
+    <p>Your ads should begin serving within the next 30-60 minutes as the ad networks re-enable them.</p>
 
-Thanks,<br>
-{{ config('app.name') }}
-@endcomponent
+    <p style="text-align:center;margin:24px 0;">
+        <a href="{{ config('app.url') . '/campaigns' }}" class="btn-primary">View Your Campaigns</a>
+    </p>
+
+    <p>Thank you for resolving this promptly. If you have any questions, please don't hesitate to reach out.</p>
+@endsection

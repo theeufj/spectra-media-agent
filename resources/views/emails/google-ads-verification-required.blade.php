@@ -1,37 +1,36 @@
-<x-mail::message>
-# Action Required: Verify Your Google Ads Account
+@extends('layouts.email')
 
-Hi {{ $user->name }},
+@section('title', 'Verify your Google Ads account')
 
-Your Google Ads account has been set up under our platform, but **Google requires identity verification before your campaigns can go live**.
+@section('content')
+    <h1>Verify your Google Ads account</h1>
 
-This is a standard Google requirement for all new advertising accounts. Until verification is complete, your campaigns cannot be deployed.
+    <p>Hi {{ $user->name }},</p>
 
-<x-mail::panel>
-**Account:** {{ $customer->name }}@if($customer->google_ads_customer_id) (ID: {{ $customer->google_ads_customer_id }})@endif
-@if($campaign)
-**Campaign:** {{ $campaign->name }}
-@endif
-</x-mail::panel>
+    <p>Your Google Ads account is set up and ready, but Google requires identity verification before your campaigns can go live. This is a standard requirement for all new advertising accounts.</p>
 
-## How to Complete Verification
+    <div style="background:#f7fafc;border:1px solid #e8e5ef;border-radius:6px;padding:16px;margin:16px 0;">
+        <p style="margin:0;"><strong>Account:</strong> {{ $customer->name }}@if($customer->google_ads_customer_id) (ID: {{ $customer->google_ads_customer_id }})@endif</p>
+        @if($campaign)
+        <p style="margin:8px 0 0;"><strong>Campaign:</strong> {{ $campaign->name }}</p>
+        @endif
+    </div>
 
-<x-mail::button url="https://ads.google.com/aw/businessidentity">
-Complete Google Ads Verification
-</x-mail::button>
+    <p>Completing verification takes just a few minutes:</p>
+    <ol>
+        <li>Open Google's verification portal using the button below</li>
+        <li>Sign in with the Google account linked to your ads account</li>
+        <li>Submit your business identity documents as requested</li>
+        <li>Google typically reviews submissions within 3&ndash;5 business days</li>
+    </ol>
 
-**Steps:**
-1. Click the button above to open Google's verification portal
-2. Sign in with the Google account linked to your ads account
-3. Submit your business identity documents as requested
-4. Google typically reviews submissions within 3–5 business days
+    <p style="text-align:center;margin:28px 0;">
+        <a href="https://ads.google.com/aw/businessidentity" class="btn-primary">Complete Google Ads verification</a>
+    </p>
 
-## What Happens Next
+    <p>Once Google approves your verification, your campaigns will deploy automatically on your next publish &mdash; nothing further is needed on our end.</p>
 
-Once Google approves your verification, your campaigns will deploy automatically on your next publish attempt. You don't need to do anything else on our end.
+    <p>If you have any questions or need a hand, just reply to this email.</p>
 
-If you have any questions or need help, just reply to this email.
-
-Thanks,<br>
-The {{ config('app.name') }} Team
-</x-mail::message>
+    <p>Thanks,<br>The {{ config('app.name') }} Team</p>
+@endsection

@@ -1,58 +1,46 @@
-<x-mail::message>
-# ⚠️ We Found {{ $issuesFound }} Issues on Your Landing Page
+@extends('layouts.email')
 
-Hi {{ $user->name }},
+@section('title', 'Your landing page audit is ready')
 
-Our AI just finished auditing **{{ $audit->url }}**, and we discovered some conversion killers that could be costing you money.
+@section('content')
+    <h1>Your landing page audit is ready</h1>
 
-## Your CRO Score: {{ $audit->overall_score }}/100
+    <p>Hi {{ $user->name }},</p>
 
-@if($audit->overall_score < 50)
-**Critical:** Your page is losing more than half of your potential customers.
-@elseif($audit->overall_score < 70)
-**Warning:** There's significant room for improvement.
-@else
-**Good Start:** A few tweaks could push you to elite status.
-@endif
+    <p>We've finished auditing <strong>{{ $audit->url }}</strong> and found {{ $issuesFound }} {{ \Illuminate\Support\Str::plural('issue', $issuesFound) }} worth reviewing.</p>
 
-### Top Issues We Found:
+    <div style="background:#f7fafc;border:1px solid #e8e5ef;border-radius:6px;padding:16px;margin:16px 0;">
+        <p style="margin:0 0 8px;"><strong>Conversion score: {{ $audit->overall_score }}/100</strong></p>
+        @if($audit->overall_score < 50)
+        <p style="margin:0;">There's substantial room to improve how this page converts visitors.</p>
+        @elseif($audit->overall_score < 70)
+        <p style="margin:0;">A solid foundation with meaningful opportunities to improve.</p>
+        @else
+        <p style="margin:0;">A strong page &mdash; a few refinements could push it higher.</p>
+        @endif
+    </div>
 
-@if($audit->issues && count($audit->issues) > 0)
-@foreach(array_slice($audit->issues, 0, 3) as $issue)
-- ⚠️ {{ $issue['title'] ?? $issue }}
-@endforeach
-@endif
+    @if($audit->issues && count($audit->issues) > 0)
+    <p><strong>Top issues we found:</strong></p>
+    <ul>
+        @foreach(array_slice($audit->issues, 0, 3) as $issue)
+        <li>{{ is_array($issue) ? ($issue['title'] ?? 'Issue') : $issue }}</li>
+        @endforeach
+    </ul>
+    @endif
 
-Want the full breakdown with **step-by-step fixes**?
+    <p>The full report includes step-by-step fixes and A/B testing recommendations for each issue.</p>
 
-<x-mail::button :url="route('subscription.pricing')">
-Unlock Full CRO Report
-</x-mail::button>
+    <p style="text-align:center;margin:28px 0;">
+        <a href="{{ route('subscription.pricing') }}" class="btn-primary">See the full report</a>
+    </p>
 
-## Why This Matters
+    @php($auditsLeft = max(0, 3 - $customer->landingPageAudits->count()))
+    @if($auditsLeft > 0)
+    <p>You have {{ $auditsLeft }} free {{ \Illuminate\Support\Str::plural('audit', $auditsLeft) }} remaining on your account.</p>
+    @endif
 
-If you're spending money on ads right now, these issues are **bleeding your budget**. 
+    <p>Questions? Just reply to this email.</p>
 
-For every 100 clicks you buy:
-- **{{ 100 - $audit->overall_score }} visitors** are bouncing due to fixable problems
-- Potential lost revenue: **~${{ number_format((100 - $audit->overall_score) * 40, 0) }}/month** (based on industry averages)
-
-Our Pro plan gives you:
-✅ Unlimited CRO audits  
-✅ Detailed fix instructions  
-✅ Before/after projections  
-✅ Automated A/B testing recommendations  
-
-Starting at just **$99/month** - less than the cost of 10 clicks.
-
-Not ready to upgrade? No problem—you still have **{{ 3 - $customer->landingPageAudits->count() }} free audits left**.
-
-Questions? Hit reply.
-
-Thanks,<br>
-The {{ config('app.name') }} Team
-
----
-
-<small>P.S. Fixing just ONE of these issues could pay for a year of Site to Spend. [See the full report →]({{ route('subscription.pricing') }})</small>
-</x-mail::message>
+    <p>Thanks,<br>The {{ config('app.name') }} Team</p>
+@endsection

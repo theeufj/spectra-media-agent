@@ -33,7 +33,7 @@ class CROAuditComplete extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '⚠️ We Found {$this->issuesFound} Issues on Your Landing Page',
+            subject: "⚠️ We Found {$this->issuesFound} Issues on Your Landing Page",
         );
     }
 

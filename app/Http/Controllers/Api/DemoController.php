@@ -116,7 +116,7 @@ class DemoController extends Controller
 HTML;
 
             Mail::html($html, fn ($m) => $m
-                ->to('theeufj@gmail.com')
+                ->to(config('app.admin_email'))
                 ->cc(['mattware75@gmail.com', 'james.ward@beyondd.com.au'])
                 ->subject($subject)
             );

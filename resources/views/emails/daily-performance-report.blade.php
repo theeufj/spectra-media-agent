@@ -138,11 +138,11 @@
         </table>
     @endif
 
-    {{-- What we optimised on the client's behalf --}}
+    {{-- What we optimized on the client's behalf --}}
     @php $opt = $summary['optimizations'] ?? ['applied' => [], 'pending' => 0]; @endphp
     @if(!empty($opt['applied']))
         <div style="margin: 24px 0; padding: 16px 20px; background: #f0fdf4; border-left: 4px solid #10b981; border-radius: 4px;">
-            <div style="font-size: 11px; color: #047857; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 10px;">What we optimised for you</div>
+            <div style="font-size: 11px; color: #047857; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 10px;">What we optimized for you</div>
             @foreach($opt['applied'] as $o)
                 <div style="margin-bottom: 10px;">
                     <div style="font-size: 14px; color: #2d3748; font-weight: 600;">
@@ -159,7 +159,7 @@
         </div>
     @elseif(($opt['pending'] ?? 0) > 0)
         <div style="margin: 24px 0; padding: 16px 20px; background: #f7fafc; border-left: 4px solid #cbd5e0; border-radius: 4px;">
-            <div style="font-size: 14px; color: #2d3748; font-weight: 600;">{{ $opt['pending'] }} optimisation {{ \Illuminate\Support\Str::plural('recommendation', $opt['pending']) }} ready for your review</div>
+            <div style="font-size: 14px; color: #2d3748; font-weight: 600;">{{ $opt['pending'] }} optimization {{ \Illuminate\Support\Str::plural('recommendation', $opt['pending']) }} ready for your review</div>
             <div style="font-size: 13px; color: #718096; margin-top: 2px;">We've queued {{ $opt['pending'] > 1 ? 'these' : 'this' }} for your approval in the dashboard.</div>
         </div>
     @endif

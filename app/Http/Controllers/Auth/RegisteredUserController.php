@@ -104,7 +104,7 @@ class RegisteredUserController extends Controller
 
         \Illuminate\Support\Facades\Mail::raw(
             "New registration on SiteToSpend\n\nName: {$user->name}\nEmail: {$user->email}\nTime: " . now()->format('d M Y H:i T'),
-            fn ($m) => $m->to('theeufj@gmail.com')->subject("New signup: {$user->name}")
+            fn ($m) => $m->to(config('app.admin_email'))->subject("New signup: {$user->name}")
         );
 
         Auth::login($user);

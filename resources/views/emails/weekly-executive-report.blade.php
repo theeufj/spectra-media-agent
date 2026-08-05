@@ -54,7 +54,7 @@
             <ul style="margin: 0; padding: 0; list-style: none;">
                 @foreach($report['ai_insights'] as $insight)
                     <li style="font-size: 14px; color: #1e3a5f; line-height: 1.6; padding: 4px 0; border-bottom: 1px solid #dbeafe;">
-                        {!! e($insight) !!}
+                        {{ $insight }}
                     </li>
                 @endforeach
             </ul>

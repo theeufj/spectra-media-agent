@@ -31,7 +31,7 @@
     </table>
 
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ url('/campaigns/create') }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Create Your First Campaign</a>
+        <a href="{{ url('/campaigns/create') }}" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Create Your First Campaign</a>
     </p>
 
     <p style="text-align: center; font-size: 13px; color: #a0aec0;">

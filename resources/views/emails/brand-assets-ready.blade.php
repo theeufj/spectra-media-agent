@@ -1,37 +1,35 @@
-<x-mail::message>
-# 🎨 Your Brand DNA is Ready!
+@extends('layouts.email')
 
-Hi {{ $user->name }},
+@section('title', 'Your brand assets are ready')
 
-Great news! We've successfully analyzed **{{ $pagesExtracted }} pages** from **{{ $customer->name }}** and extracted your brand's visual DNA.
+@section('content')
+    <h1>Your brand assets are ready</h1>
 
-## What We Found:
+    <p>Hi {{ $user->name }},</p>
 
-✅ **Primary Colors** - Your hex codes are locked and loaded  
-✅ **Typography** - Fonts identified and ready to use  
-✅ **Brand Voice** - Tone and messaging patterns extracted  
-✅ **Visual Style** - Design elements captured
+    <p>We've analyzed {{ $pagesExtracted }} {{ \Illuminate\Support\Str::plural('page', $pagesExtracted) }} from <strong>{{ $customer->name }}</strong> and captured your brand's visual identity.</p>
 
-Your personalized dashboard is now populated with **on-brand ad campaigns** ready to review.
+    <div style="background:#f7fafc;border:1px solid #e8e5ef;border-radius:6px;padding:16px;margin:16px 0;">
+        <p style="margin:0 0 8px;"><strong>Primary colors</strong> &mdash; your brand palette, captured as hex codes</p>
+        <p style="margin:0 0 8px;"><strong>Typography</strong> &mdash; fonts identified and ready to use</p>
+        <p style="margin:0 0 8px;"><strong>Brand voice</strong> &mdash; tone and messaging patterns</p>
+        <p style="margin:0;"><strong>Visual style</strong> &mdash; key design elements</p>
+    </div>
 
-<x-mail::button :url="route('dashboard')">
-View Your Brand Assets
-</x-mail::button>
+    <p>Your dashboard is now populated with on-brand ad campaigns ready for you to review.</p>
 
-### What's Next?
+    <p style="text-align:center;margin:28px 0;">
+        <a href="{{ route('dashboard') }}" class="btn-primary">View your brand assets</a>
+    </p>
 
-1. **Review your brand profile** - Make sure everything looks accurate
-2. **Generate more ads** - Create unlimited variations (it's free!)
-3. **Run a CRO audit** - We'll analyze your landing pages for conversion killers
+    <p><strong>What's next?</strong></p>
+    <ol>
+        <li>Review your brand profile to make sure everything looks right</li>
+        <li>Generate more ad variations whenever you need them</li>
+        <li>Run a CRO audit to see how your landing pages convert</li>
+    </ol>
 
-The best part? All of this is **completely free**. When you're ready to go live, upgrading takes just 2 clicks.
+    <p>Questions? Just reply to this email &mdash; we're happy to help.</p>
 
-Questions? Just hit reply—we're here to help.
-
-Thanks,<br>
-The {{ config('app.name') }} Team
-
----
-
-<small>P.S. Your free tier includes **3 landing page audits**. Want to see what's holding back your conversions? [Run an audit now →]({{ route('dashboard') }})</small>
-</x-mail::message>
+    <p>Thanks,<br>The {{ config('app.name') }} Team</p>
+@endsection

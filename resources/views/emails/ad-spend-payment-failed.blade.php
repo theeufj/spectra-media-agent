@@ -1,32 +1,51 @@
-@component('mail::message')
-# 🚨 Payment Still Failing - Budgets Reduced
+@extends('layouts.email')
 
-Hi there,
+@section('title', 'Payment Still Failing - Budgets Reduced')
 
-Your payment has failed for the second time. To protect your account, we've **reduced your campaign budgets by 50%**.
+@section('content')
+    <h1>🚨 Payment Still Failing - Budgets Reduced</h1>
 
-**Error:** {{ $error }}
+    <p>Hi there,</p>
 
-**Current Balance:** ${{ number_format($credit->current_balance, 2) }}
+    <p>Your payment has failed for the second time. To protect your account, we've <strong>reduced your campaign budgets by 50%</strong>.</p>
 
-## Urgent Action Required
+    <div style="background:#f7fafc;border:1px solid #e8e5ef;border-radius:6px;padding:16px;margin:16px 0;">
+        <p style="margin:0 0 8px;"><strong>Error:</strong> {{ $error }}</p>
+        <p style="margin:0;"><strong>Current Balance:</strong> ${{ number_format($credit->current_balance, 2) }}</p>
+    </div>
 
-If we cannot successfully charge your payment method within the next **24 hours**, all your campaigns will be **paused**.
+    <h2>Urgent Action Required</h2>
 
-@component('mail::button', ['url' => config('app.url') . '/billing', 'color' => 'red'])
-Fix Payment Now
-@endcomponent
+    <p>If we cannot successfully charge your payment method within the next <strong>24 hours</strong>, all your campaigns will be <strong>paused</strong>.</p>
 
-## Current Status:
+    <p style="text-align:center;margin:24px 0;">
+        <a href="{{ config('app.url') . '/billing' }}" class="btn-primary">Fix Payment Now</a>
+    </p>
 
-| Status | Value |
-|--------|-------|
-| Budget Reduction | 50% |
-| Failed Attempts | {{ $credit->failed_charge_count }} |
-| Time Until Pause | ~24 hours |
+    <h2>Current Status:</h2>
 
-Please update your payment method immediately to prevent campaign interruption.
+    <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+        <thead>
+            <tr>
+                <th style="text-align:left;padding:8px 12px;border:1px solid #e8e5ef;background:#f7fafc;">Status</th>
+                <th style="text-align:left;padding:8px 12px;border:1px solid #e8e5ef;background:#f7fafc;">Value</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding:8px 12px;border:1px solid #e8e5ef;">Budget Reduction</td>
+                <td style="padding:8px 12px;border:1px solid #e8e5ef;">50%</td>
+            </tr>
+            <tr>
+                <td style="padding:8px 12px;border:1px solid #e8e5ef;">Failed Attempts</td>
+                <td style="padding:8px 12px;border:1px solid #e8e5ef;">{{ $credit->failed_charge_count }}</td>
+            </tr>
+            <tr>
+                <td style="padding:8px 12px;border:1px solid #e8e5ef;">Time Until Pause</td>
+                <td style="padding:8px 12px;border:1px solid #e8e5ef;">~24 hours</td>
+            </tr>
+        </tbody>
+    </table>
 
-Thanks,<br>
-{{ config('app.name') }}
-@endcomponent
+    <p>Please update your payment method immediately to prevent campaign interruption.</p>
+@endsection

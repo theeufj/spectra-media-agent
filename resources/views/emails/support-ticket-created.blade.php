@@ -30,7 +30,7 @@
                         @elseif($ticket->priority === 'high') background-color: #feebc8; color: #9c4221;
                         @else background-color: #c6f6d5; color: #276749;
                         @endif
-                    ">{{ $ticket->priority }}</span>
+                    ">{{ ucfirst($ticket->priority) }}</span>
                 </td>
             </tr>
             <tr>
@@ -46,6 +46,6 @@
     </div>
 
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ url('/admin/support-tickets/' . $ticket->id) }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Ticket in Admin</a>
+        <a href="{{ url('/admin/support-tickets/' . $ticket->id) }}" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Ticket in Admin</a>
     </p>
 @endsection

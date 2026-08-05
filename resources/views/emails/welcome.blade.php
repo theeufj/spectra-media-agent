@@ -10,7 +10,7 @@
     <ul>
         <li><strong>Create a Campaign:</strong> Head to your dashboard to start your first campaign.</li>
         <li><strong>Set Your Goals:</strong> Define your objectives and let our AI handle the strategy.</li>
-        <li><strong>Launch &amp; Optimise:</strong> Deploy your ads and watch the results come in.</li>
+        <li><strong>Launch &amp; Optimize:</strong> Deploy your ads and watch the results come in.</li>
     </ul>
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
         <a href="{{ url('/dashboard') }}" class="btn-primary" style="background: linear-gradient(135deg, {{ $tenantPrimary ?? '#ff4d00' }} 0%, {{ $tenantDark ?? '#cc3d00' }} 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Go to Your Dashboard</a>

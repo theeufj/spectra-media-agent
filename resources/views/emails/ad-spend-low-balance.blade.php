@@ -1,28 +1,32 @@
-@component('mail::message')
-# ⚠️ Low Ad Spend Balance
+@extends('layouts.email')
 
-Hi there,
+@section('title', 'Low Ad Spend Balance')
 
-Your ad spend credit balance is running low. Based on your current spending rate, you have approximately **{{ number_format($daysRemaining, 1) }} days** of credit remaining.
+@section('content')
+    <h1>⚠️ Low Ad Spend Balance</h1>
 
-**Current Balance:** ${{ number_format($credit->current_balance, 2) }}
+    <p>Hi there,</p>
 
-**Average Daily Spend:** ${{ number_format($credit->getAverageDailySpend(), 2) }}
+    <p>Your ad spend credit balance is running low. Based on your current spending rate, you have approximately <strong>{{ number_format($daysRemaining, 1) }} days</strong> of credit remaining.</p>
 
-## What Happens Next
+    <div style="background:#f7fafc;border:1px solid #e8e5ef;border-radius:6px;padding:16px;margin:16px 0;">
+        <p style="margin:0 0 8px;"><strong>Current Balance:</strong> ${{ number_format($credit->current_balance, 2) }}</p>
+        <p style="margin:0;"><strong>Average Daily Spend:</strong> ${{ number_format($credit->getAverageDailySpend(), 2) }}</p>
+    </div>
 
-We'll automatically attempt to replenish your credit balance using your payment method on file. If the automatic charge fails, you may experience campaign interruptions.
+    <h2>What Happens Next</h2>
 
-@component('mail::button', ['url' => config('app.url') . '/billing'])
-Add Credit Now
-@endcomponent
+    <p>We'll automatically attempt to replenish your credit balance using your payment method on file. If the automatic charge fails, you may experience campaign interruptions.</p>
 
-## Why Am I Seeing This?
+    <p style="text-align:center;margin:24px 0;">
+        <a href="{{ config('app.url') . '/billing' }}" class="btn-primary">Add Credit Now</a>
+    </p>
 
-- Your campaigns are spending faster than expected
-- The automatic replenishment charge may have failed
-- You may have multiple campaigns running
+    <h2>Why Am I Seeing This?</h2>
 
-Thanks,<br>
-{{ config('app.name') }}
-@endcomponent
+    <ul>
+        <li>Your campaigns are spending faster than expected</li>
+        <li>The automatic replenishment charge may have failed</li>
+        <li>You may have multiple campaigns running</li>
+    </ul>
+@endsection

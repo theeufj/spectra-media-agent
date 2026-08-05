@@ -10,11 +10,11 @@
     <ul>
         <li>View campaign performance across Google, Facebook, and more</li>
         <li>Review and approve AI-generated ad creatives</li>
-        <li>Monitor spend, conversions, and optimisation recommendations</li>
+        <li>Monitor spend, conversions, and optimization recommendations</li>
     </ul>
 
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ route('invitations.accept', $invitation->token) }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Accept Invitation</a>
+        <a href="{{ route('invitations.accept', $invitation->token) }}" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Accept Invitation</a>
     </p>
 
     <p style="color: #e53e3e; font-size: 13px; text-align: center;">

@@ -159,7 +159,10 @@ class RunCompetitorIntelligence implements ShouldQueue
 
         if (!empty($summary)) {
             try {
-                $user->notify(new \App\Notifications\CompetitorIntelligenceComplete($this->customer, $summary));
+                // Notify all users on the account, not just the first.
+                foreach ($this->customer->users as $u) {
+                    $u->notify(new \App\Notifications\CompetitorIntelligenceComplete($this->customer, $summary));
+                }
             } catch (\Exception $e) {
                 Log::warning('RunCompetitorIntelligence: Failed to send notification', [
                     'user_id' => $user->id,

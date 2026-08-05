@@ -177,7 +177,7 @@ class DeploymentController extends Controller
                 . "The customer has no Google Ads account ID. Create a sub-account under the MCC,\n"
                 . "attach it in the admin portal, then click Deploy on this campaign:\n\n"
                 . url(route('admin.customers.show', $customer->id)),
-                fn ($m) => $m->to('theeufj@gmail.com')
+                fn ($m) => $m->to(config('app.admin_email'))
                     ->subject("Action required: Deploy \"{$campaign->name}\" for {$customer->business_name}")
             );
 

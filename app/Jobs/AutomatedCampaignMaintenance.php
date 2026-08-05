@@ -283,8 +283,8 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
             $processed = count($campaignChanges);
             if ($processed > 0) {
-                $user = $customer->users()->first();
-                if ($user) {
+                // Notify all users on the account, not just the first.
+                foreach ($customer->users as $user) {
                     $user->notify(new MaintenanceSummaryNotification($campaignChanges, $processed));
                 }
             }
