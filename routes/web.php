@@ -503,6 +503,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('campaigns/{campaign}/admin-deploy', [App\Http\Controllers\AdminController::class, 'adminDeployCampaign'])->name('admin.campaigns.admin-deploy');
     Route::put('campaigns/{campaign}', [App\Http\Controllers\AdminController::class, 'updateCampaign'])->name('admin.campaigns.update');
     Route::get('notifications', [App\Http\Controllers\AdminController::class, 'notificationsIndex'])->name('admin.notifications.index');
+    Route::get('notification-templates', [App\Http\Controllers\AdminController::class, 'notificationTemplatesIndex'])->name('admin.notification-templates.index');
+    Route::post('notification-templates', [App\Http\Controllers\AdminController::class, 'updateNotificationTemplate'])->name('admin.notification-templates.update');
+    Route::post('notification-templates/preview', [App\Http\Controllers\AdminController::class, 'previewNotificationTemplate'])->name('admin.notification-templates.preview');
+    Route::post('notification-templates/test', [App\Http\Controllers\AdminController::class, 'sendTestNotificationTemplate'])->name('admin.notification-templates.test');
     Route::get('settings', [App\Http\Controllers\AdminController::class, 'settingsIndex'])->name('admin.settings.index');
     Route::get('conversions', [App\Http\Controllers\AdminController::class, 'conversionTrackingIndex'])->name('admin.conversions.index');
     Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');

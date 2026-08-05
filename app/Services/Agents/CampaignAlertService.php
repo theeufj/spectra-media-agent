@@ -235,24 +235,21 @@ class CampaignAlertService
                 $alert
             );
 
-            $notification = new CriticalAgentAlert(
+            // Default recipients per type (admins can override each in the template manager):
+            // spend-anomaly is operational triage → admins; budget-exhaustion and
+            // conversion-drop are customer-facing.
+            $defaultRecipients = $alert['type'] === 'spend_anomaly'
+                ? CriticalAgentAlert::RECIPIENTS_ADMINS
+                : CriticalAgentAlert::RECIPIENTS_CUSTOMERS;
+
+            CriticalAgentAlert::deliver(
                 $alert['type'],
                 $alert['title'],
                 $alert['message'],
-                $alert
+                $alert,
+                $defaultRecipients,
+                $customer
             );
-
-            // Spend-anomaly alerts are operational triage (bid/competitive review), not a
-            // customer-facing "action required" — route them to admins only. All other
-            // alert types (budget exhaustion, conversion drop) stay customer-facing.
-            $adminOnlyTypes = ['spend_anomaly'];
-            $recipients = in_array($alert['type'], $adminOnlyTypes, true)
-                ? User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get()
-                : $customer->users;
-
-            foreach ($recipients as $user) {
-                $user->notify($notification);
-            }
 
             Log::info('CampaignAlertService: Alert sent', [
                 'type'        => $alert['type'],

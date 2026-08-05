@@ -160,14 +160,16 @@ class RunHealthChecks implements ShouldQueue
                 'warnings' => $results['warnings'] ?? [],
             ];
 
-            foreach ($customer->users as $user) {
-                $user->notify(new CriticalAgentAlert(
-                    'health_check_critical',
-                    $title,
-                    $message,
-                    $details
-                ));
+            CriticalAgentAlert::deliver(
+                'health_check_critical',
+                $title,
+                $message,
+                $details,
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+                $customer
+            );
 
+            foreach ($customer->users as $user) {
                 Notification::notify(
                     $user,
                     $notificationType,
@@ -240,14 +242,13 @@ class RunHealthChecks implements ShouldQueue
 
         $message = "Health check found {$summary['critical']} critical and {$summary['unhealthy']} unhealthy accounts across {$summary['customers_checked']} customers.";
 
-        foreach ($admins as $admin) {
-            $admin->notify(new CriticalAgentAlert(
-                'health_check_summary',
-                'Platform Health Alert',
-                $message,
-                $summary
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'health_check_summary',
+            'Platform Health Alert',
+            $message,
+            $summary,
+            CriticalAgentAlert::RECIPIENTS_ADMINS
+        );
 
         Log::info('RunHealthChecks: Admin summary sent', [
             'recipients' => $admins->pluck('email')->all(),

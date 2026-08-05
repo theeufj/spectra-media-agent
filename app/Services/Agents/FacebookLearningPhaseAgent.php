@@ -154,15 +154,14 @@ class FacebookLearningPhaseAgent
             'learning_too_long' => "Campaign \"{$campaign->name}\" has been in Facebook learning phase for {$days} days. Check conversion event setup, audience breadth, and minimum budget.",
         ];
 
-        $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-        foreach ($admins as $admin) {
-            $admin->notify(new CriticalAgentAlert(
-                'facebook_learning',
-                'Facebook Learning Phase Issue',
-                $messages[$type],
-                ['campaign_id' => $campaign->id, 'campaign_name' => $campaign->name, 'type' => $type]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'facebook_learning',
+            'Facebook Learning Phase Issue',
+            $messages[$type],
+            ['campaign_id' => $campaign->id, 'campaign_name' => $campaign->name, 'type' => $type],
+            CriticalAgentAlert::RECIPIENTS_ADMINS,
+            $campaign->customer
+        );
 
         Cache::put($cacheKey, true, now()->addHours(24));
     }

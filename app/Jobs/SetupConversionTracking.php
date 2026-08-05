@@ -41,15 +41,14 @@ class SetupConversionTracking implements ShouldQueue
 
             // Notify admins on final failure
             if ($this->attempts() >= $this->tries) {
-                $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-                foreach ($admins as $admin) {
-                    $admin->notify(new CriticalAgentAlert(
-                        'conversion_tracking',
-                        'Conversion tracking setup failed: ' . $this->customer->name,
-                        'Failed to set up conversion tracking for customer: ' . $this->customer->name,
-                        ['errors' => $result['errors'], 'customer_id' => $this->customer->id]
-                    ));
-                }
+                CriticalAgentAlert::deliver(
+                    'conversion_tracking',
+                    'Conversion tracking setup failed: ' . $this->customer->name,
+                    'Failed to set up conversion tracking for customer: ' . $this->customer->name,
+                    ['errors' => $result['errors'], 'customer_id' => $this->customer->id],
+                    CriticalAgentAlert::RECIPIENTS_ADMINS,
+                    $this->customer
+                );
             }
 
             throw new \RuntimeException('Conversion tracking setup failed: ' . implode(', ', $result['errors']));

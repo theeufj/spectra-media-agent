@@ -158,15 +158,14 @@ class PerformanceAnomalyAlertAgent
 
         $customer = $campaign->customer;
         if ($customer) {
-            $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-            foreach ($admins as $admin) {
-                $admin->notify(new CriticalAgentAlert(
-                    'performance_anomaly',
-                    'Performance Anomaly Detected',
-                    $message,
-                    array_merge($metrics, ['campaign_id' => $campaign->id, 'anomaly_type' => $type])
-                ));
-            }
+            CriticalAgentAlert::deliver(
+                'performance_anomaly',
+                'Performance Anomaly Detected',
+                $message,
+                array_merge($metrics, ['campaign_id' => $campaign->id, 'anomaly_type' => $type]),
+                CriticalAgentAlert::RECIPIENTS_ADMINS,
+                $customer
+            );
         }
 
         Cache::put($cacheKey, true, now()->addHours(6));

@@ -162,20 +162,20 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         }
         Cache::put($cacheKey, true, now()->addHours(4));
 
-        foreach ($customer->users as $user) {
-            $user->notify(new CriticalAgentAlert(
-                'negative_keyword_conflict',
-                'Negative Keyword Conflicts Detected',
-                "{$conflictCount} negative keyword(s) are blocking active positive keywords in your campaigns.",
-                [
-                    'issues'          => array_map(
-                        fn($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
-                        array_slice($conflicts, 0, 5)
-                    ),
-                    'action_required' => 'Review your negative keyword lists in Google Ads to remove conflicting terms.',
-                ]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'negative_keyword_conflict',
+            'Negative Keyword Conflicts Detected',
+            "{$conflictCount} negative keyword(s) are blocking active positive keywords in your campaigns.",
+            [
+                'issues'          => array_map(
+                    fn($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
+                    array_slice($conflicts, 0, 5)
+                ),
+                'action_required' => 'Review your negative keyword lists in Google Ads to remove conflicting terms.',
+            ],
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $customer
+        );
 
         return $conflictCount;
     }
@@ -254,20 +254,20 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         if (Cache::has($cacheKey)) return $conflictCount;
         Cache::put($cacheKey, true, now()->addHours(4));
 
-        foreach ($customer->users as $user) {
-            $user->notify(new CriticalAgentAlert(
-                'negative_keyword_conflict',
-                'Negative Keyword Conflicts Detected (Microsoft Ads)',
-                "{$conflictCount} negative keyword(s) are blocking active positive keywords in your Microsoft Ads campaigns.",
-                [
-                    'issues'          => array_map(
-                        fn($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
-                        array_slice($conflicts, 0, 5)
-                    ),
-                    'action_required' => 'Review your negative keyword lists in Microsoft Ads to remove conflicting terms.',
-                ]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'negative_keyword_conflict',
+            'Negative Keyword Conflicts Detected (Microsoft Ads)',
+            "{$conflictCount} negative keyword(s) are blocking active positive keywords in your Microsoft Ads campaigns.",
+            [
+                'issues'          => array_map(
+                    fn($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
+                    array_slice($conflicts, 0, 5)
+                ),
+                'action_required' => 'Review your negative keyword lists in Microsoft Ads to remove conflicting terms.',
+            ],
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $customer
+        );
 
         return $conflictCount;
     }

@@ -193,20 +193,20 @@ class PreLaunchComplianceAgent
             'failed'
         );
 
-        if ($campaign->customer && $campaign->customer->users) {
-            foreach ($campaign->customer->users as $user) {
-                $user->notify(new CriticalAgentAlert(
-                    'compliance_failure',
-                    'Campaign Compliance Check Failed',
-                    "Your campaign \"{$campaign->name}\" cannot be deployed due to compliance issues.",
-                    [
-                        'campaign_id'   => $campaign->id,
-                        'campaign_name' => $campaign->name,
-                        'issues'        => array_column($failures, 'message'),
-                        'action_required' => 'Please review and fix the issues listed before deploying.',
-                    ]
-                ));
-            }
+        if ($campaign->customer) {
+            CriticalAgentAlert::deliver(
+                'compliance_failure',
+                'Campaign Compliance Check Failed',
+                "Your campaign \"{$campaign->name}\" cannot be deployed due to compliance issues.",
+                [
+                    'campaign_id'   => $campaign->id,
+                    'campaign_name' => $campaign->name,
+                    'issues'        => array_column($failures, 'message'),
+                    'action_required' => 'Please review and fix the issues listed before deploying.',
+                ],
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+                $campaign->customer
+            );
         }
     }
 }

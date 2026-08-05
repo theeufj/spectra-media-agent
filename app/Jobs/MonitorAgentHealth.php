@@ -73,15 +73,13 @@ class MonitorAgentHealth implements ShouldQueue
 
         Log::warning('MonitorAgentHealth: detected automation health issues', ['problems' => $problems]);
 
-        $admins = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-        foreach ($admins as $admin) {
-            $admin->notify(new CriticalAgentAlert(
-                'agent_health',
-                'Automation health: ' . count($problems) . ' issue(s) detected',
-                "One or more optimization jobs are stale or failing:\n\n• " . implode("\n• ", $problems),
-                ['problems' => $problems]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'agent_health',
+            'Automation health: ' . count($problems) . ' issue(s) detected',
+            "One or more optimization jobs are stale or failing:\n\n• " . implode("\n• ", $problems),
+            ['problems' => $problems],
+            CriticalAgentAlert::RECIPIENTS_ADMINS
+        );
     }
 
     public function failed(\Throwable $e): void

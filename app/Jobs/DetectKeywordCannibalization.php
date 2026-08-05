@@ -155,20 +155,20 @@ class DetectKeywordCannibalization implements ShouldQueue
         }
         Cache::put($cacheKey, true, now()->addHours(168)); // 7 days
 
-        foreach ($customer->users as $user) {
-            $user->notify(new CriticalAgentAlert(
-                'keyword_cannibalization',
-                'Keyword Cannibalization Detected',
-                "{$count} keyword(s) are appearing in multiple ad groups, causing your campaigns to compete against themselves.",
-                [
-                    'issues' => array_map(
-                        fn($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
-                        array_slice($cannibalized, 0, 5)
-                    ),
-                    'action_required' => 'Consolidate duplicate keywords into single ad groups and use negatives to prevent overlap.',
-                ]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'keyword_cannibalization',
+            'Keyword Cannibalization Detected',
+            "{$count} keyword(s) are appearing in multiple ad groups, causing your campaigns to compete against themselves.",
+            [
+                'issues' => array_map(
+                    fn($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
+                    array_slice($cannibalized, 0, 5)
+                ),
+                'action_required' => 'Consolidate duplicate keywords into single ad groups and use negatives to prevent overlap.',
+            ],
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $customer
+        );
 
         return $count;
     }
@@ -241,20 +241,20 @@ class DetectKeywordCannibalization implements ShouldQueue
         if (Cache::has($cacheKey)) return $count;
         Cache::put($cacheKey, true, now()->addHours(168));
 
-        foreach ($customer->users as $user) {
-            $user->notify(new CriticalAgentAlert(
-                'keyword_cannibalization',
-                'Keyword Cannibalization Detected (Microsoft Ads)',
-                "{$count} keyword(s) are appearing in multiple ad groups in Microsoft Ads, causing your campaigns to compete against themselves.",
-                [
-                    'issues'          => array_map(
-                        fn($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
-                        array_slice($cannibalized, 0, 5)
-                    ),
-                    'action_required' => 'Consolidate duplicate keywords into single ad groups and use negatives to prevent overlap.',
-                ]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'keyword_cannibalization',
+            'Keyword Cannibalization Detected (Microsoft Ads)',
+            "{$count} keyword(s) are appearing in multiple ad groups in Microsoft Ads, causing your campaigns to compete against themselves.",
+            [
+                'issues'          => array_map(
+                    fn($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
+                    array_slice($cannibalized, 0, 5)
+                ),
+                'action_required' => 'Consolidate duplicate keywords into single ad groups and use negatives to prevent overlap.',
+            ],
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $customer
+        );
 
         return $count;
     }

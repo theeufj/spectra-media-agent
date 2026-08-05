@@ -252,20 +252,18 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
     private function notifyAdminHumanRequired(Customer $customer, array $issues): void
     {
-        $admins = User::whereHas('roles', fn($q) => $q->where('name', 'admin'))->get();
-
-        foreach ($admins as $admin) {
-            $admin->notify(new CriticalAgentAlert(
-                'google_ads_human_required',
-                $customer->name . ': Google Ads issue requires human review',
-                'The following issue(s) in "' . $customer->name . '" cannot be fixed automatically and need a human to resolve:',
-                [
-                    'issues'          => array_values($issues),
-                    'customer_name'   => $customer->name,
-                    'action_required' => 'Log into the Google Ads account for ' . $customer->name . ' and resolve the flagged issue(s).',
-                ]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'google_ads_human_required',
+            $customer->name . ': Google Ads issue requires human review',
+            'The following issue(s) in "' . $customer->name . '" cannot be fixed automatically and need a human to resolve:',
+            [
+                'issues'          => array_values($issues),
+                'customer_name'   => $customer->name,
+                'action_required' => 'Log into the Google Ads account for ' . $customer->name . ' and resolve the flagged issue(s).',
+            ],
+            CriticalAgentAlert::RECIPIENTS_ADMINS,
+            $customer
+        );
     }
 
     public function failed(\Throwable $exception): void

@@ -264,11 +264,15 @@ class LinkedInCampaignOptimizationAgent
             return;
         }
 
-        Notification::send($admins, new CriticalAgentAlert(
+        // NB: recipients here are the customer's users (the local variable is historically
+        // mislabeled $admins). Routed via the template so admins can retarget it.
+        CriticalAgentAlert::deliver(
             $type,
             $title,
             $message,
-            array_merge(['campaign_id' => $campaign->id], $extra)
-        ));
+            array_merge(['campaign_id' => $campaign->id], $extra),
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $campaign->customer
+        );
     }
 }

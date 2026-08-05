@@ -245,23 +245,23 @@ class HealthCheckAgent
 
         Log::warning("HealthCheckAgent: Monthly pacing alert — {$direction} for campaign {$campaign->id}");
 
-        if ($campaign->customer && $campaign->customer->users) {
-            foreach ($campaign->customer->users as $user) {
-                $user->notify(new CriticalAgentAlert(
-                    "budget_{$direction}",
-                    'Budget Pacing Alert',
-                    $message,
-                    [
-                        'campaign_id'    => $campaign->id,
-                        'campaign_name'  => $campaign->name,
-                        'pacing_pct'     => $pacingPct,
-                        'actual_spend'   => $actualSpend,
-                        'expected_spend' => $expectedSpend,
-                        'projected_spend' => $projected,
-                        'monthly_budget' => $monthlyBudget,
-                    ]
-                ));
-            }
+        if ($campaign->customer) {
+            CriticalAgentAlert::deliver(
+                "budget_{$direction}",
+                'Budget Pacing Alert',
+                $message,
+                [
+                    'campaign_id'    => $campaign->id,
+                    'campaign_name'  => $campaign->name,
+                    'pacing_pct'     => $pacingPct,
+                    'actual_spend'   => $actualSpend,
+                    'expected_spend' => $expectedSpend,
+                    'projected_spend' => $projected,
+                    'monthly_budget' => $monthlyBudget,
+                ],
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+                $campaign->customer
+            );
         }
     }
 

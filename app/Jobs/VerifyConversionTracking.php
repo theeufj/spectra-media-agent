@@ -44,15 +44,14 @@ class VerifyConversionTracking implements ShouldQueue
                         'name'        => $customer->name,
                     ]);
 
-                    $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-                    foreach ($admins as $admin) {
-                        $admin->notify(new CriticalAgentAlert(
-                            'conversion_tracking',
-                            "Conversion tracking may be broken: {$customer->name}",
-                            "0 conversions recorded in last 30 days for {$customer->name} — conversion tracking may be broken.",
-                            ['customer_id' => $customer->id, 'action_required' => 'Check GTM installation and conversion action status']
-                        ));
-                    }
+                    CriticalAgentAlert::deliver(
+                        'conversion_tracking',
+                        "Conversion tracking may be broken: {$customer->name}",
+                        "0 conversions recorded in last 30 days for {$customer->name} — conversion tracking may be broken.",
+                        ['customer_id' => $customer->id, 'action_required' => 'Check GTM installation and conversion action status'],
+                        CriticalAgentAlert::RECIPIENTS_ADMINS,
+                        $customer
+                    );
                 } else {
                     $customer->update(['conversion_tracking_verified_at' => now()]);
 

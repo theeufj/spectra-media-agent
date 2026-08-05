@@ -169,15 +169,14 @@ class FacebookAdRelevanceDiagnosticsAgent
         $count   = count($paused);
         $message = "{$count} Facebook ad(s) were paused in \"{$campaign->name}\" — all three Ad Relevance Diagnostics ranked BELOW_AVERAGE with 2000+ impressions: {$adList}.";
 
-        $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-        foreach ($admins as $admin) {
-            $admin->notify(new CriticalAgentAlert(
-                'facebook_relevance',
-                'Low-Relevance Facebook Ads Paused',
-                $message,
-                ['campaign_id' => $campaign->id, 'paused' => $paused]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            'facebook_relevance',
+            'Low-Relevance Facebook Ads Paused',
+            $message,
+            ['campaign_id' => $campaign->id, 'paused' => $paused],
+            CriticalAgentAlert::RECIPIENTS_ADMINS,
+            $campaign->customer
+        );
 
         Cache::put($cacheKey, true, now()->addHours(24));
     }

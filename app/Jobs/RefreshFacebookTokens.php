@@ -34,16 +34,13 @@ class RefreshFacebookTokens implements ShouldQueue
         if (!$health['valid']) {
             Log::critical('Facebook System User token is invalid or missing', $health);
 
-            // Notify admin users
-            $admins = \App\Models\User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
-            foreach ($admins as $admin) {
-                $admin->notify(new CriticalAgentAlert(
-                    'facebook',
-                    'Facebook System User token is invalid',
-                    'Facebook System User token is invalid: ' . ($health['error'] ?? 'unknown error'),
-                    ['action_required' => 'Regenerate the System User token in Business Manager and update FACEBOOK_SYSTEM_USER_TOKEN in .env']
-                ));
-            }
+            CriticalAgentAlert::deliver(
+                'facebook',
+                'Facebook System User token is invalid',
+                'Facebook System User token is invalid: ' . ($health['error'] ?? 'unknown error'),
+                ['action_required' => 'Regenerate the System User token in Business Manager and update FACEBOOK_SYSTEM_USER_TOKEN in .env'],
+                CriticalAgentAlert::RECIPIENTS_ADMINS
+            );
 
             return;
         }

@@ -177,18 +177,18 @@ class CampaignRemediationAgent
                 'audiences' => $audienceResources,
             ];
 
-            foreach ($customer->users as $user) {
-                $user->notify(new CriticalAgentAlert(
-                    'audience_signals_added',
-                    'Auto-Fixed: Audience Signals Added to "' . $campaign->name . '"',
-                    "Your PMax campaign had no audience signals — Google was guessing who to show ads to. "
-                    . "We automatically added " . count($themes) . " search-theme signal(s) and "
-                    . count($audienceResources) . " in-market audience(s) based on your business profile. "
-                    . "Themes: " . implode(', ', array_slice($themes, 0, 5)) . (count($themes) > 5 ? '...' : '') . ". "
-                    . "Google will now use these to find relevant, high-intent audiences.",
-                    ['campaign_id' => $campaign->id, 'themes' => $themes, 'audiences' => $audienceResources]
-                ));
-            }
+            CriticalAgentAlert::deliver(
+                'audience_signals_added',
+                'Auto-Fixed: Audience Signals Added to "' . $campaign->name . '"',
+                "Your PMax campaign had no audience signals — Google was guessing who to show ads to. "
+                . "We automatically added " . count($themes) . " search-theme signal(s) and "
+                . count($audienceResources) . " in-market audience(s) based on your business profile. "
+                . "Themes: " . implode(', ', array_slice($themes, 0, 5)) . (count($themes) > 5 ? '...' : '') . ". "
+                . "Google will now use these to find relevant, high-intent audiences.",
+                ['campaign_id' => $campaign->id, 'themes' => $themes, 'audiences' => $audienceResources, 'auto_resolved' => true],
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+                $customer
+            );
         } else {
             $this->alertCustomer($campaign, $finding, $results);
         }
@@ -350,16 +350,16 @@ PROMPT;
             ];
 
             $spend = number_format($finding['details']['spend'] ?? 0, 2);
-            foreach ($customer->users as $user) {
-                $user->notify(new CriticalAgentAlert(
-                    'creative_refresh',
-                    'Auto-Fixed: Creative Refresh on "' . $campaign->name . '"',
-                    "Your campaign spent \${$spend} with no conversions. We automatically added "
-                    . implode(' and ', $summaryParts) . ' to give the algorithm fresh signals to optimise from. '
-                    . 'Allow 3–5 days for Google to test the new variants before judging performance.',
-                    ['campaign_id' => $campaign->id, 'actions' => array_merge($copySummary, $imageSummary)]
-                ));
-            }
+            CriticalAgentAlert::deliver(
+                'creative_refresh',
+                'Auto-Fixed: Creative Refresh on "' . $campaign->name . '"',
+                "Your campaign spent \${$spend} with no conversions. We automatically added "
+                . implode(' and ', $summaryParts) . ' to give the algorithm fresh signals to optimise from. '
+                . 'Allow 3–5 days for Google to test the new variants before judging performance.',
+                ['campaign_id' => $campaign->id, 'actions' => array_merge($copySummary, $imageSummary), 'auto_resolved' => true],
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+                $customer
+            );
         } else {
             // Nothing could be auto-generated, fall back to alert
             $this->alertCustomer($campaign, $finding, $results);
@@ -704,16 +704,16 @@ PROMPT;
                 'urls_scanned' => count($urls),
             ];
 
-            foreach ($customer->users as $user) {
-                $user->notify(new CriticalAgentAlert(
-                    'landing_page_fixed',
-                    'Auto-Fixed: Landing Page Updated on "' . $campaign->name . '"',
-                    "Your PMax campaign was sending paid traffic to {$currentUrl} — an informational page with no conversion path. "
-                    . "We scanned your sitemap (" . count($urls) . " pages), identified the best conversion-focused URL, "
-                    . "and updated {$updated} asset group(s) to point to: {$bestUrl}",
-                    ['campaign_id' => $campaign->id, 'old_url' => $currentUrl, 'new_url' => $bestUrl]
-                ));
-            }
+            CriticalAgentAlert::deliver(
+                'landing_page_fixed',
+                'Auto-Fixed: Landing Page Updated on "' . $campaign->name . '"',
+                "Your PMax campaign was sending paid traffic to {$currentUrl} — an informational page with no conversion path. "
+                . "We scanned your sitemap (" . count($urls) . " pages), identified the best conversion-focused URL, "
+                . "and updated {$updated} asset group(s) to point to: {$bestUrl}",
+                ['campaign_id' => $campaign->id, 'old_url' => $currentUrl, 'new_url' => $bestUrl, 'auto_resolved' => true],
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+                $customer
+            );
         } else {
             $this->alertCustomer($campaign, $finding, $results);
         }
@@ -947,18 +947,18 @@ PROMPT;
                 'ads_updated' => $updated,
             ];
 
-            foreach ($customer->users as $user) {
-                $user->notify(new CriticalAgentAlert(
-                    'meta_creative_refreshed',
-                    'Auto-Fixed: Meta Ad Creative Refreshed on "' . $campaign->name . '"',
-                    "We detected " . ($finding['type'] === 'meta_audience_fatigue'
-                        ? "audience fatigue (frequency {$finding['details']['frequency']}x)"
-                        : "conversion starvation ($" . number_format($finding['details']['spend'] ?? 0, 2) . " spent, 0 conversions)")
-                    . ". A fresh creative has been generated and applied to {$updated} ad(s).\n\n"
-                    . "New headline: \"{$copy['headline']}\"\nNew copy: \"{$copy['primary_text']}\"",
-                    ['campaign_id' => $campaign->id, 'creative_id' => $creativeId]
-                ));
-            }
+            CriticalAgentAlert::deliver(
+                'meta_creative_refreshed',
+                'Auto-Fixed: Meta Ad Creative Refreshed on "' . $campaign->name . '"',
+                "We detected " . ($finding['type'] === 'meta_audience_fatigue'
+                    ? "audience fatigue (frequency {$finding['details']['frequency']}x)"
+                    : "conversion starvation ($" . number_format($finding['details']['spend'] ?? 0, 2) . " spent, 0 conversions)")
+                . ". A fresh creative has been generated and applied to {$updated} ad(s).\n\n"
+                . "New headline: \"{$copy['headline']}\"\nNew copy: \"{$copy['primary_text']}\"",
+                ['campaign_id' => $campaign->id, 'creative_id' => $creativeId, 'auto_resolved' => true],
+                CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+                $customer
+            );
         } else {
             $this->alertCustomer($campaign, $finding, $results);
         }
@@ -1054,18 +1054,18 @@ PROMPT;
             $body .= "\n\nWhat to do: " . $finding['recommended_action'];
         }
 
-        foreach ($customer->users as $user) {
-            $user->notify(new CriticalAgentAlert(
-                $finding['type'],
-                'Campaign Issue: ' . $campaign->name,
-                $body,
-                [
-                    'campaign_id' => $campaign->id,
-                    'severity'    => $finding['severity'],
-                    'details'     => $finding['details'] ?? [],
-                ]
-            ));
-        }
+        CriticalAgentAlert::deliver(
+            $finding['type'],
+            'Campaign Issue: ' . $campaign->name,
+            $body,
+            [
+                'campaign_id' => $campaign->id,
+                'severity'    => $finding['severity'],
+                'details'     => $finding['details'] ?? [],
+            ],
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $customer
+        );
 
         $results['alerts_sent'][] = [
             'type'    => $finding['type'],

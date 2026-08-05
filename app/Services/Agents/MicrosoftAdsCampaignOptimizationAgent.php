@@ -304,11 +304,13 @@ class MicrosoftAdsCampaignOptimizationAgent
             return;
         }
 
-        Notification::send($users, new CriticalAgentAlert(
+        CriticalAgentAlert::deliver(
             $type,
             $title,
             $message,
-            array_merge(['campaign_id' => $campaign->id], $extra)
-        ));
+            array_merge(['campaign_id' => $campaign->id], $extra),
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $campaign->customer
+        );
     }
 }
