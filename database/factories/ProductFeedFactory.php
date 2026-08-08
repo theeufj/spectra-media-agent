@@ -5,6 +5,9 @@ namespace Database\Factories;
 use App\Models\Customer;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/**
+ * @extends Factory<\App\Models\ProductFeed>
+ */
 class ProductFeedFactory extends Factory
 {
     public function definition(): array

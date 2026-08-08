@@ -104,11 +104,14 @@ class Customer extends Model
     }
 
     // Secrets encrypted at rest (tolerant of legacy plaintext rows).
+
+    /** @return Attribute<string|null, string|null> */
     protected function trackingSigningSecret(): Attribute
     {
         return $this->encryptedAttribute();
     }
 
+    /** @return Attribute<string|null, string|null> */
     protected function googleAdsRefreshToken(): Attribute
     {
         return $this->encryptedAttribute();

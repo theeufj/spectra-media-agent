@@ -29,7 +29,7 @@ class ActivateCampaigns extends Command
         $campaignId = $this->argument('campaign');
 
         $query = Strategy::with('campaign.customer')
-            ->whereIn('deployment_status', ['deployed', 'verified']);
+            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES);
 
         if ($campaignId) {
             $query->where('campaign_id', $campaignId);

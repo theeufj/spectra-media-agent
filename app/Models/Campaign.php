@@ -141,8 +141,8 @@ class Campaign extends Model
 
     /**
      * A Campaign has many Strategies.
-     * This defines the one-to-many relationship between the Campaign and Strategy models.
-     * In Go, you might represent this with a slice of Strategy structs: `Strategies []Strategy`.
+     *
+     * @return HasMany<Strategy, $this>
      */
     public function strategies(): HasMany
     {
@@ -161,7 +161,7 @@ class Campaign extends Model
                 ->orWhereNotNull('microsoft_ads_campaign_id')
                 ->orWhereNotNull('linkedin_campaign_id')
                 ->orWhereHas('strategies', function ($strategyQuery) {
-                    $strategyQuery->whereIn('deployment_status', ['deployed', 'verified']);
+                    $strategyQuery->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES);
                 });
         });
     }

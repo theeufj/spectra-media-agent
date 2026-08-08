@@ -45,8 +45,12 @@ class AutoStartABTests implements ShouldQueue
 
         foreach ($campaigns as $campaign) {
             foreach ($campaign->strategies as $strategy) {
-                // Only test deployed strategies
-                if (! in_array($strategy->deployment_status, ['deployed', 'live', 'active'])) {
+                // Only test deployed strategies. This previously looked for
+                // ['deployed', 'live', 'active'] — 'live' and 'active' are not values
+                // this column holds, and 'verified' (the terminal success state) was
+                // missing, so the best-deployed strategies were skipped and no test
+                // was ever started.
+                if (! $strategy->isDeployed()) {
                     $skipped++;
 
                     continue;

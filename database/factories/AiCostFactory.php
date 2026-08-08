@@ -5,6 +5,9 @@ namespace Database\Factories;
 use App\Models\AiCost;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/**
+ * @extends Factory<\App\Models\AiCost>
+ */
 class AiCostFactory extends Factory
 {
     protected $model = AiCost::class;
