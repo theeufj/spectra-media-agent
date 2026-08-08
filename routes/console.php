@@ -27,6 +27,7 @@ use App\Jobs\RunStrategicDiagnosis;
 use App\Jobs\SendDailyPerformanceReports;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\EnabledPlatform;
 use App\Models\User;
 use App\Notifications\ScheduledJobFailed;
 use Illuminate\Foundation\Inspiring;
@@ -83,16 +84,16 @@ Schedule::job(new RunHealthChecks)->everySixHours()->withoutOverlapping()->onFai
 // Performance data fetch - pull metrics from all ad platforms for active campaigns
 Schedule::call(function () {
     Campaign::withDeployedPlatforms()->each(function ($campaign) {
-        if ($campaign->google_ads_campaign_id) {
+        if ($campaign->google_ads_campaign_id && EnabledPlatform::isEnabled('google')) {
             FetchGoogleAdsPerformanceData::dispatch($campaign);
         }
-        if ($campaign->facebook_ads_campaign_id) {
+        if ($campaign->facebook_ads_campaign_id && EnabledPlatform::isEnabled('facebook')) {
             FetchFacebookAdsPerformanceData::dispatch($campaign);
         }
-        if ($campaign->microsoft_ads_campaign_id) {
+        if ($campaign->microsoft_ads_campaign_id && EnabledPlatform::isEnabled('microsoft')) {
             FetchMicrosoftAdsPerformanceData::dispatch($campaign);
         }
-        if ($campaign->linkedin_campaign_id) {
+        if ($campaign->linkedin_campaign_id && EnabledPlatform::isEnabled('linkedin')) {
             FetchLinkedInAdsPerformanceData::dispatch($campaign);
         }
     });

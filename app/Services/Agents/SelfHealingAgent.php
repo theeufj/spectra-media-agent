@@ -6,6 +6,7 @@ use App\Enums\CampaignStatus;
 use App\Features\AutoHealing;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\EnabledPlatform;
 use App\Prompts\AdCompliancePrompt;
 use App\Services\Agents\Concerns\ParsesLlmJson;
 use App\Services\Agents\Traits\RetryableApiOperation;
@@ -89,13 +90,13 @@ class SelfHealingAgent
         $results['auto_healing_enabled'] = $autoHealingEnabled;
 
         // Heal Google Ads campaign
-        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
+        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id && EnabledPlatform::isEnabled('google')) {
             $results['platform'] = 'google_ads';
             $this->healGoogleAdsCampaign($campaign, $customer, $results);
         }
 
         // Heal Facebook Ads campaign
-        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
+        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id && EnabledPlatform::isEnabled('facebook')) {
             $results['platform'] = $results['platform']
                 ? 'multi_platform'
                 : 'facebook_ads';
@@ -103,7 +104,7 @@ class SelfHealingAgent
         }
 
         // Heal Microsoft Ads campaign
-        if ($campaign->microsoft_ads_campaign_id && $customer->microsoft_ads_account_id) {
+        if ($campaign->microsoft_ads_campaign_id && $customer->microsoft_ads_account_id && EnabledPlatform::isEnabled('microsoft')) {
             $results['platform'] = $results['platform']
                 ? 'multi_platform'
                 : 'microsoft_ads';
@@ -111,7 +112,7 @@ class SelfHealingAgent
         }
 
         // Heal LinkedIn Ads campaign
-        if ($campaign->linkedin_campaign_id && $customer->linkedin_ads_account_id) {
+        if ($campaign->linkedin_campaign_id && $customer->linkedin_ads_account_id && EnabledPlatform::isEnabled('linkedin')) {
             $results['platform'] = $results['platform']
                 ? 'multi_platform'
                 : 'linkedin_ads';

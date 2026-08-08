@@ -5,6 +5,7 @@ namespace App\Services\Agents;
 use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\EnabledPlatform;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\KeywordQualityScore;
@@ -52,22 +53,22 @@ class HealthCheckAgent
             'recommendations' => [],
         ];
 
-        if ($customer->google_ads_customer_id) {
+        if ($customer->google_ads_customer_id && EnabledPlatform::isEnabled('google')) {
             $results['google_ads'] = $this->googleChecker->check($customer);
             $this->mergeIssues($results, $results['google_ads']);
         }
 
-        if ($customer->facebook_ads_account_id) {
+        if ($customer->facebook_ads_account_id && EnabledPlatform::isEnabled('facebook')) {
             $results['facebook_ads'] = $this->facebookChecker->check($customer);
             $this->mergeIssues($results, $results['facebook_ads']);
         }
 
-        if ($customer->microsoft_ads_account_id) {
+        if ($customer->microsoft_ads_account_id && EnabledPlatform::isEnabled('microsoft')) {
             $results['microsoft_ads'] = $this->checkMicrosoftAdsHealth($customer);
             $this->mergeIssues($results, $results['microsoft_ads']);
         }
 
-        if ($customer->linkedin_ads_account_id) {
+        if ($customer->linkedin_ads_account_id && EnabledPlatform::isEnabled('linkedin')) {
             $results['linkedin_ads'] = $this->checkLinkedInAdsHealth($customer);
             $this->mergeIssues($results, $results['linkedin_ads']);
         }
