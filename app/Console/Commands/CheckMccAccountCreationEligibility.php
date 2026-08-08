@@ -172,7 +172,7 @@ class CheckMccAccountCreationEligibility extends Command
             $svc = $client->getGoogleAdsServiceClient();
             $tree = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
                 'customer_id' => $mccId,
-                'query' => 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.manager FROM customer_client',
+                'query' => 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.manager, customer_client.status FROM customer_client',
             ]);
 
             $byCurrency = [];
@@ -197,7 +197,16 @@ class CheckMccAccountCreationEligibility extends Command
                         $byCurrency[$currency] = ($byCurrency[$currency] ?? 0.0) + $amount;
                     }
                 } catch (\Throwable $e) {
-                    $unreadable[] = sprintf('%s (%s)', $id, $cc->getDescriptiveName() ?: 'unnamed');
+                    // A non-ENABLED account (cancelled/suspended/closed) returns
+                    // CUSTOMER_NOT_ENABLED — that is expected and not a problem to
+                    // chase, so name the status rather than reporting it as a
+                    // mysterious permission failure.
+                    $unreadable[] = sprintf(
+                        '%s (%s, %s)',
+                        $id,
+                        $cc->getDescriptiveName() ?: 'unnamed',
+                        $this->statusName($cc->getStatus())
+                    );
                 }
             }
 
@@ -224,6 +233,16 @@ class CheckMccAccountCreationEligibility extends Command
             Log::warning('[MccEligibility] Could not read lifetime spend: '.$e->getMessage());
 
             return null;
+        }
+    }
+
+    /** Human-readable CustomerStatus, falling back to the raw value. */
+    private function statusName(int $status): string
+    {
+        try {
+            return \Google\Ads\GoogleAds\V22\Enums\CustomerStatusEnum\CustomerStatus::name($status);
+        } catch (\Throwable $e) {
+            return "status {$status}";
         }
     }
 
