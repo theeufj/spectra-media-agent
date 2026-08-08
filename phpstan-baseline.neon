@@ -355,66 +355,6 @@ parameters:
 			path: app/Http/Controllers/CampaignController.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$ad_copies_count\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$deployed_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$deployment_error\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$image_collaterals_count\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$platform\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$video_collaterals_count\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:adCopies\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:imageCollaterals\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:videoCollaterals\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/CampaignController.php
-
-		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 3 parameters, 1 required\.$#'
 			identifier: arguments.count
 			count: 1
@@ -424,12 +364,6 @@ parameters:
 			message: '#^Method App\\Http\\Controllers\\CampaignController\:\:formatDailyData\(\) should return array but returns stdClass\.$#'
 			identifier: return.type
 			count: 1
-			path: app/Http/Controllers/CampaignController.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 2
 			path: app/Http/Controllers/CampaignController.php
 
 		-
@@ -454,12 +388,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Http/Controllers/CollateralController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$adCopies\.$#'
-			identifier: property.notFound
-			count: 2
 			path: app/Http/Controllers/CollateralController.php
 
 		-
@@ -515,24 +443,6 @@ parameters:
 			identifier: instanceof.alwaysTrue
 			count: 1
 			path: app/Http/Controllers/DashboardController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Http/Controllers/DeploymentController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$platform\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Http/Controllers/DeploymentController.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Collection\<int, Illuminate\\Database\\Eloquent\\Model\>\|Illuminate\\Database\\Eloquent\\Model\:\:\$signed_off_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/DeploymentController.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$campaign\.$#'
@@ -895,12 +805,6 @@ parameters:
 			path: app/Jobs/ApplySeasonalStrategyShift.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$bidding_strategy\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/ApplySeasonalStrategyShift.php
-
-		-
 			message: '#^Call to an undefined method App\\Models\\Campaign\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Campaign\>\:\:adCopies\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -911,36 +815,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: app/Jobs/ApplySeasonalStrategyShift.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$adCopies\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Jobs/AutoStartABTests.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$deployment_status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/AutoStartABTests.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Jobs/AutoStartABTests.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$platform\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Jobs/AutoStartABTests.php
-
-		-
-			message: '#^Parameter \#1 \$strategy of method App\\Services\\Agents\\ABTestingAgent\:\:createTest\(\) expects App\\Models\\Strategy, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Jobs/AutoStartABTests.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
@@ -1075,36 +949,6 @@ parameters:
 			path: app/Jobs/DeployCampaign.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$daily_budget\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Jobs/DeployCampaign.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$deployment_status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/DeployCampaign.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 8
-			path: app/Jobs/DeployCampaign.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$platform\.$#'
-			identifier: property.notFound
-			count: 12
-			path: app/Jobs/DeployCampaign.php
-
-		-
-			message: '#^Parameter \#2 \$strategy of static method App\\Services\\DeploymentService\:\:deploy\(\) expects App\\Models\\Strategy, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Jobs/DeployCampaign.php
-
-		-
 			message: '#^Relation ''campaigns'' is not found in App\\Models\\Customer model\.$#'
 			identifier: larastan.relationExistence
 			count: 2
@@ -1207,19 +1051,7 @@ parameters:
 			path: app/Jobs/FetchLinkedInAdsPerformanceData.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$budget\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/FetchLinkedInAdsPerformanceData.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/FetchMicrosoftAdsPerformanceData.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$budget\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Jobs/FetchMicrosoftAdsPerformanceData.php
@@ -1253,12 +1085,6 @@ parameters:
 			identifier: function.impossibleType
 			count: 1
 			path: app/Jobs/GenerateAdCopy.php
-
-		-
-			message: '#^Parameter \#1 \$strategy of method App\\Jobs\\GenerateCampaignCollateral\:\:buildJobsForStrategy\(\) expects App\\Models\\Strategy, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Jobs/GenerateCampaignCollateral.php
 
 		-
 			message: '#^Variable \$totalAssets on left side of \?\? always exists and is not nullable\.$#'
@@ -1311,18 +1137,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\FacebookAdsPerformanceData\|App\\Models\\GoogleAdsPerformanceData\:\:\$total_cost\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Jobs/GenerateStrategy.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/GenerateStrategy.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Model\:\:targetingConfig\(\)\.$#'
-			identifier: method.notFound
 			count: 1
 			path: app/Jobs/GenerateStrategy.php
 
@@ -1555,12 +1369,6 @@ parameters:
 			path: app/Jobs/RunSelfHealingChecks.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
 			message: '#^Offset ''actions'' on array\{actions\: array\<string\>, warnings\: array\<string\>\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -1581,12 +1389,6 @@ parameters:
 		-
 			message: '#^Offset ''warnings'' on array\{actions\: array\<string\>, warnings\: array\<string\>\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
-			count: 1
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
-			message: '#^Parameter \#2 \$strategy of job class App\\Jobs\\GenerateVideo constructor expects App\\Models\\Strategy in App\\Jobs\\GenerateVideo\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Jobs/RunSelfHealingChecks.php
 
@@ -1677,24 +1479,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Jobs/VerifyDeployment.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Jobs/VerifyDeployment.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$platform\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/VerifyDeployment.php
-
-		-
-			message: '#^Parameter \#1 \$strategy of method App\\Jobs\\VerifyDeployment\:\:verifyStrategy\(\) expects App\\Models\\Strategy, Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
 			count: 1
 			path: app/Jobs/VerifyDeployment.php
 
@@ -2137,12 +1921,6 @@ parameters:
 			path: app/Services/Agents/BiddingStrategyProgressionAgent.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$bidding_strategy\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Services/Agents/BiddingStrategyProgressionAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
 			identifier: property.notFound
 			count: 5
@@ -2177,12 +1955,6 @@ parameters:
 			identifier: property.notFound
 			count: 10
 			path: app/Services/Agents/CampaignDiagnosticsAgent.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$last_optimized_at\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/CampaignOptimizationAgent.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
@@ -2281,12 +2053,6 @@ parameters:
 			path: app/Services/Agents/FacebookAdRelevanceDiagnosticsAgent.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/FacebookAdRelevanceDiagnosticsAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Services\\Agents\\FacebookAdsExecutionAgent\:\:\$geminiService\.$#'
 			identifier: property.notFound
 			count: 1
@@ -2347,12 +2113,6 @@ parameters:
 			path: app/Services/Agents/FacebookLearningPhaseAgent.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$facebook_adset_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/FacebookLearningPhaseAgent.php
-
-		-
 			message: '#^Parameter \#2 \$days of method App\\Services\\Agents\\FacebookLearningPhaseAgent\:\:notifyStalled\(\) expects int, float given\.$#'
 			identifier: argument.type
 			count: 1
@@ -2371,28 +2131,10 @@ parameters:
 			path: app/Services/Agents/Google/AdExtensionBuilder.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$targetingConfig\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/Google/AudienceTargeter.php
-
-		-
 			message: '#^Comparison operation "\<" between int\<min, 49\> and 50 is always true\.$#'
 			identifier: smaller.alwaysTrue
 			count: 1
 			path: app/Services/Agents/Google/Executors/PerformanceMaxCampaignExecutor.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$targetingConfig\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/Google/GeoTargetResolver.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$targetingConfig\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/Google/SearchKeywordBuilder.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>business_name" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
@@ -2509,18 +2251,6 @@ parameters:
 			path: app/Services/Agents/MicrosoftAdsCampaignOptimizationAgent.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$bidding_strategy\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/MicrosoftAdsCampaignOptimizationAgent.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$daily_budget\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/MicrosoftAdsCampaignOptimizationAgent.php
-
-		-
 			message: '#^Constant App\\Services\\Agents\\MicrosoftAdsCampaignOptimizationAgent\:\:CPC_BENCHMARKS is unused\.$#'
 			identifier: classConstant.unused
 			count: 1
@@ -2605,12 +2335,6 @@ parameters:
 			path: app/Services/Agents/PerformanceAnomalyAlertAgent.php
 
 		-
-			message: '#^Parameter \#2 \$strategy of job class App\\Jobs\\GenerateAdCopy constructor expects App\\Models\\Strategy in App\\Jobs\\GenerateAdCopy\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/PerformanceAnomalyAlertAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
 			identifier: property.notFound
 			count: 2
@@ -2626,12 +2350,6 @@ parameters:
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
 			identifier: property.notFound
 			count: 3
-			path: app/Services/Agents/QualityScoreImprovementAgent.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
 			path: app/Services/Agents/QualityScoreImprovementAgent.php
 
 		-
@@ -2737,7 +2455,7 @@ parameters:
 			path: app/Services/BrandGuidelineExtractorService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$performanceData\.$#'
+			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$performanceData\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Services/Campaigns/PortfolioOptimizationService.php
@@ -2767,57 +2485,9 @@ parameters:
 			path: app/Services/CopilotContextService.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$ad_copy_strategy\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CopilotContextService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$bidding_strategy\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CopilotContextService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$campaign_type\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CopilotContextService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CopilotContextService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$imagery_strategy\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CopilotContextService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$platform\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CopilotContextService.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$signed_off_at\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/CopilotContextService.php
-
-		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.expr
 			count: 2
-			path: app/Services/CopilotContextService.php
-
-		-
-			message: '#^Parameter \#1 \$callback of method Illuminate\\Database\\Eloquent\\Collection\<int,Illuminate\\Database\\Eloquent\\Model\>\:\:map\(\) contains unresolvable type\.$#'
-			identifier: argument.unresolvableType
-			count: 1
 			path: app/Services/CopilotContextService.php
 
 		-
@@ -2843,18 +2513,6 @@ parameters:
 			identifier: property.notFound
 			count: 2
 			path: app/Services/Deployment/FacebookAdsDeploymentStrategy.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$targetingConfig\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Deployment/FacebookAdsDeploymentStrategy.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$targetingConfig\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Deployment/GoogleAdsDeploymentStrategy.php
 
 		-
 			message: '#^Match arm comparison between ''app'' and ''app'' is always true\.$#'
@@ -4243,7 +3901,7 @@ parameters:
 			path: app/Services/Health/CampaignHealthChecker.php
 
 		-
-			message: '#^Method App\\Services\\GoogleAds\\BaseGoogleAdsService@anonymous/app/Services/Health/CampaignHealthChecker\.php\:506\:\:getMetrics\(\) never returns null so it can be removed from the return type\.$#'
+			message: '#^Method App\\Services\\GoogleAds\\BaseGoogleAdsService@anonymous/app/Services/Health/CampaignHealthChecker\.php\:507\:\:getMetrics\(\) never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1
 			path: app/Services/Health/CampaignHealthChecker.php

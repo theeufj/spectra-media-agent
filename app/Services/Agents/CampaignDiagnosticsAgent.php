@@ -4,6 +4,7 @@ namespace App\Services\Agents;
 
 use App\Models\Campaign;
 use App\Models\Setting;
+use App\Models\Strategy;
 use App\Services\FacebookAds\AdService as FacebookAdService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
@@ -144,7 +145,7 @@ class CampaignDiagnosticsAgent
     private function checkMetaConversionStarvation(Campaign $campaign, array $perf): ?array
     {
         $deployedAt = $campaign->strategies()
-            ->whereIn('deployment_status', ['deployed', 'verified'])
+            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
             ->whereNotNull('deployed_at')
             ->min('deployed_at');
 
@@ -341,7 +342,7 @@ class CampaignDiagnosticsAgent
     private function checkConversionStarvation(Campaign $campaign, array $perf): ?array
     {
         $deployedAt = $campaign->strategies()
-            ->whereIn('deployment_status', ['deployed', 'verified'])
+            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
             ->whereNotNull('deployed_at')
             ->min('deployed_at');
 

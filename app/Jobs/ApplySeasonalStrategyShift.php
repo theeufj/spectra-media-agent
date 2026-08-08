@@ -57,10 +57,9 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             // Extract bidding strategy name from JSON if it exists
             $biddingStrategyName = 'MAXIMIZE_CONVERSIONS'; // Default fallback
             if ($currentStrategy && $currentStrategy->bidding_strategy) {
-                $biddingData = is_string($currentStrategy->bidding_strategy)
-                    ? json_decode($currentStrategy->bidding_strategy, true)
-                    : $currentStrategy->bidding_strategy;
-                $biddingStrategyName = $biddingData['name'] ?? 'MAXIMIZE_CONVERSIONS';
+                // bidding_strategy is cast to array on the model, so the previous
+                // is_string()/json_decode() branch here was unreachable.
+                $biddingStrategyName = $currentStrategy->bidding_strategy['name'] ?? 'MAXIMIZE_CONVERSIONS';
             }
 
             // Fetch top performing keywords from ad copies

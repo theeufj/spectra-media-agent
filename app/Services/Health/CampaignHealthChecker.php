@@ -7,6 +7,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
+use App\Models\Strategy;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use Carbon\Carbon;
@@ -200,7 +201,7 @@ class CampaignHealthChecker
         $health = ['issues' => [], 'warnings' => []];
 
         $deployedAt = $campaign->strategies()
-            ->whereIn('deployment_status', ['deployed', 'verified'])
+            ->whereIn('deployment_status', Strategy::DEPLOYED_STATUSES)
             ->whereNotNull('deployed_at')
             ->min('deployed_at');
 

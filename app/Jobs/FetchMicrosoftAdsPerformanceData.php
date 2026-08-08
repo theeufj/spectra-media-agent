@@ -82,7 +82,9 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
                         $recommendationService = new RecommendationGenerationService;
                         $recommendations = ($recommendationService)($performanceData, [
                             'campaignId' => $this->campaign->microsoft_ads_campaign_id,
-                            'dailyBudget' => $strategy->budget,
+                            // strategies has no 'budget' column — it is daily_budget, so this
+                            // silently passed null into the recommendation engine.
+                            'dailyBudget' => $strategy->daily_budget,
                             'platform' => 'microsoft',
                         ]);
 

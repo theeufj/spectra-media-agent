@@ -160,8 +160,11 @@ class CampaignOptimizationAgent
         $type = $recommendation['type'] ?? '';
 
         if (in_array($type, $biddingTypes, true)) {
-            $strategy = $campaign->strategies()->latest()->first();
-            $lastOptimized = $strategy?->last_optimized_at;
+            // last_optimized_at is a campaigns column; strategies has no such
+            // field, so this always read null and the cooling-off period below
+            // never applied — bid recommendations were auto-applied regardless of
+            // how recently we had already changed the bids.
+            $lastOptimized = $campaign->last_optimized_at;
 
             if ($lastOptimized && \Carbon\Carbon::parse($lastOptimized)->diffInDays(now()) < 7) {
                 Log::info("CampaignOptimizationAgent: Cooling-off — last bid change was {$lastOptimized}, skipping auto-apply", [
