@@ -2,35 +2,36 @@
 
 namespace App\Jobs;
 
+use App\Enums\CampaignStatus;
+use App\Mail\GoogleAdsVerificationRequired;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\Setting;
 use App\Notifications\DeploymentCompleted;
 use App\Notifications\DeploymentFailed;
-use App\Services\DeploymentService;
 use App\Services\AdSpendBillingService;
 use App\Services\Agents\PreLaunchComplianceAgent;
+use App\Services\DeploymentService;
 use App\Services\FacebookAds\CreateFacebookAdsAccount;
 use App\Services\FacebookAds\PixelService;
-use App\Jobs\VerifyDeployment;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldBeUnique;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Models\Setting;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use App\Jobs\RecordSiteConversion;
-use App\Mail\GoogleAdsVerificationRequired;
 use Illuminate\Support\Facades\Mail;
 
-class DeployCampaign implements ShouldQueue, ShouldBeUnique
+class DeployCampaign implements ShouldBeUnique, ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 1;
+
     public $timeout = 1200;
+
     public $uniqueFor = 1800;
 
     public function uniqueId(): string
@@ -42,45 +43,45 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
         protected Campaign $campaign,
         protected bool $useAgents = true,
         protected ?int $strategyId = null
-    ) {
-    }
+    ) {}
 
     public function handle(AdSpendBillingService $billingService): void
     {
         Log::info("Starting deployment job for Campaign ID: {$this->campaign->id}", [
             'campaign_name' => $this->campaign->name,
             'total_budget' => $this->campaign->total_budget,
-            'use_agents' => $this->useAgents
+            'use_agents' => $this->useAgents,
         ]);
 
         $customer = $this->campaign->customer;
 
-        if (!$customer) {
+        if (! $customer) {
             Log::error("No customer found for campaign {$this->campaign->id}. Skipping deployment.");
+
             return;
         }
 
         // Auto-provision Facebook ad account on first Facebook deployment.
-        if (!$customer->facebook_ads_account_id) {
+        if (! $customer->facebook_ads_account_id) {
             $hasFacebookStrategy = $this->campaign->strategies->contains(
-                fn($s) => str_contains(strtolower($s->platform), 'facebook') || str_contains(strtolower($s->platform), 'meta')
+                fn ($s) => str_contains(strtolower($s->platform), 'facebook') || str_contains(strtolower($s->platform), 'meta')
             );
             if ($hasFacebookStrategy) {
                 Log::info("DeployCampaign: No Facebook ad account — provisioning for customer {$customer->id}");
                 $accountResult = (new CreateFacebookAdsAccount($customer))(
-                    accountName: $customer->name . ' Ads',
+                    accountName: $customer->name.' Ads',
                     currency: $customer->billingCurrency(),
                     timezoneId: 1
                 );
                 if ($accountResult) {
                     $customer->update(['facebook_ads_account_id' => $accountResult['account_id']]);
                     $customer->refresh();
-                    Log::info("DeployCampaign: Facebook ad account provisioned", [
+                    Log::info('DeployCampaign: Facebook ad account provisioned', [
                         'customer_id' => $customer->id,
-                        'account_id'  => $accountResult['account_id'],
+                        'account_id' => $accountResult['account_id'],
                     ]);
                 } else {
-                    Log::warning("DeployCampaign: Could not provision Facebook ad account — compliance check may fail", [
+                    Log::warning('DeployCampaign: Could not provision Facebook ad account — compliance check may fail', [
                         'customer_id' => $customer->id,
                     ]);
                 }
@@ -90,79 +91,80 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
         // Auto-provision Facebook pixel before compliance check.
         // PixelService will find an existing pixel on the ad account or create a
         // new BM-owned one and share it — no manual steps required.
-        if ($customer->facebook_ads_account_id && !$customer->facebook_pixel_id) {
+        if ($customer->facebook_ads_account_id && ! $customer->facebook_pixel_id) {
             Log::info("DeployCampaign: No pixel on record — attempting auto-provision for customer {$customer->id}");
             $pixelId = (new PixelService($customer))->resolvePixelId();
             if ($pixelId) {
-                Log::info("DeployCampaign: Facebook pixel provisioned", [
+                Log::info('DeployCampaign: Facebook pixel provisioned', [
                     'customer_id' => $customer->id,
-                    'pixel_id'    => $pixelId,
+                    'pixel_id' => $pixelId,
                 ]);
                 $customer->refresh(); // ensure compliance check sees the updated pixel_id
             } else {
-                Log::warning("DeployCampaign: Could not auto-provision Facebook pixel — compliance check may fail", [
+                Log::warning('DeployCampaign: Could not auto-provision Facebook pixel — compliance check may fail', [
                     'customer_id' => $customer->id,
                 ]);
             }
         }
 
         // Pre-launch compliance check — abort if any check fails
-        $complianceResult = (new PreLaunchComplianceAgent())->check($this->campaign);
-        if (!$complianceResult['passed']) {
+        $complianceResult = (new PreLaunchComplianceAgent)->check($this->campaign);
+        if (! $complianceResult['passed']) {
             Log::warning("DeployCampaign: Campaign {$this->campaign->id} failed compliance check, aborting deployment.", [
                 'failures' => $complianceResult['failures'],
             ]);
             $this->notifyUsers(new \App\Notifications\DeploymentFailed(
                 $this->campaign,
-                'Pre-launch compliance check failed: ' . implode('; ', array_column($complianceResult['failures'], 'message'))
+                'Pre-launch compliance check failed: '.implode('; ', array_column($complianceResult['failures'], 'message'))
             ));
+
             return;
         }
 
         // Initialize ad spend credit if managed billing is enabled
         $managedBillingEnabled = Setting::get('managed_billing_enabled', true);
-        
+
         if ($managedBillingEnabled) {
             try {
                 $credit = $customer->adSpendCredit;
-                
-                if (!$credit) {
-                    Log::info("Initializing ad spend credit for customer", [
+
+                if (! $credit) {
+                    Log::info('Initializing ad spend credit for customer', [
                         'customer_id' => $customer->id,
                         'daily_budget' => $this->campaign->daily_budget,
                     ]);
-                    
+
                     $credit = $billingService->initializeCreditAccount(
-                        $customer, 
+                        $customer,
                         $this->campaign->daily_budget ?? 50 // Default $50/day if not set
                     );
-                    
-                    Log::info("Ad spend credit initialized", [
+
+                    Log::info('Ad spend credit initialized', [
                         'customer_id' => $customer->id,
                         'initial_credit' => $credit->initial_credit_amount,
                     ]);
                 }
 
                 // Check if customer can run campaigns (payment status OK)
-                if (!$credit->canRunCampaigns()) {
-                    Log::warning("Customer cannot run campaigns - payment issue", [
+                if (! $credit->canRunCampaigns()) {
+                    Log::warning('Customer cannot run campaigns - payment issue', [
                         'customer_id' => $customer->id,
                         'status' => $credit->status,
                         'payment_status' => $credit->payment_status,
                     ]);
-                    
+
                     // Fail the job with a message
                     throw new \Exception("Cannot deploy campaign: Payment issue. Status: {$credit->payment_status}");
                 }
             } catch (\Exception $e) {
-                Log::error("Ad spend credit initialization failed", [
+                Log::error('Ad spend credit initialization failed', [
                     'customer_id' => $customer->id,
                     'error' => $e->getMessage(),
                 ]);
                 throw $e; // Re-throw to fail the job
             }
         } else {
-            Log::info("Managed billing is disabled - skipping ad spend credit initialization", [
+            Log::info('Managed billing is disabled - skipping ad spend credit initialization', [
                 'customer_id' => $customer->id,
             ]);
         }
@@ -184,9 +186,10 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
                         return true;
                     }
                 }
+
                 return false;
             });
-            Log::info("Plan-filtered strategies for deployment: " . $strategies->pluck('platform')->implode(', '));
+            Log::info('Plan-filtered strategies for deployment: '.$strategies->pluck('platform')->implode(', '));
         }
 
         if ($strategies->count() > 0 && $this->campaign->daily_budget) {
@@ -219,7 +222,7 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
                     }
 
                     foreach ($strategies as $strategy) {
-                        if (!$strategy->daily_budget) {
+                        if (! $strategy->daily_budget) {
                             if ($totalPct > 0) {
                                 $share = $strategyPcts[$strategy->id] / $totalPct;
                                 $budget = round($this->campaign->daily_budget * $share, 2);
@@ -236,7 +239,7 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
                     // Fallback: even split
                     $budgetPerStrategy = round($this->campaign->daily_budget / $strategies->count(), 2);
                     foreach ($strategies as $strategy) {
-                        if (!$strategy->daily_budget) {
+                        if (! $strategy->daily_budget) {
                             if ($budgetPerStrategy < 5.00) {
                                 Log::warning("Strategy {$strategy->id} ({$strategy->platform}) allocated only \${$budgetPerStrategy}/day for campaign {$this->campaign->id}");
                             }
@@ -255,20 +258,21 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
             // Skip strategies that are already deployed/verified — prevents duplicate campaigns
             // when the user clicks Deploy more than once or the job retries.
             if (in_array($strategy->deployment_status, ['deployed', 'verified'])) {
-                Log::info("Skipping already-deployed strategy", [
-                    'campaign_id'       => $this->campaign->id,
-                    'strategy_id'       => $strategy->id,
-                    'platform'          => $strategy->platform,
+                Log::info('Skipping already-deployed strategy', [
+                    'campaign_id' => $this->campaign->id,
+                    'strategy_id' => $strategy->id,
+                    'platform' => $strategy->platform,
                     'deployment_status' => $strategy->deployment_status,
                 ]);
                 $successCount++;
+
                 continue;
             }
 
             Log::info("Deploying strategy for platform: {$strategy->platform}", [
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => $strategy->id,
-                'platform' => $strategy->platform
+                'platform' => $strategy->platform,
             ]);
 
             $result = DeploymentService::deploy(
@@ -282,18 +286,18 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
 
             if ($result['success']) {
                 $successCount++;
-                Log::info("Successfully deployed strategy", [
-                    'campaign_id' => $this->campaign->id,
-                    'strategy_id' => $strategy->id,
-                    'platform' => $strategy->platform
-                ]);
-            } else {
-                $failureCount++;
-                Log::error("Failed to deploy strategy", [
+                Log::info('Successfully deployed strategy', [
                     'campaign_id' => $this->campaign->id,
                     'strategy_id' => $strategy->id,
                     'platform' => $strategy->platform,
-                    'error' => $result['error'] ?? 'Unknown error'
+                ]);
+            } else {
+                $failureCount++;
+                Log::error('Failed to deploy strategy', [
+                    'campaign_id' => $this->campaign->id,
+                    'strategy_id' => $strategy->id,
+                    'platform' => $strategy->platform,
+                    'error' => $result['error'] ?? 'Unknown error',
                 ]);
             }
         }
@@ -302,13 +306,13 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
             'total_strategies' => count($this->campaign->strategies),
             'successful' => $successCount,
             'failed' => $failureCount,
-            'results' => $deploymentResults
+            'results' => $deploymentResults,
         ]);
 
         // If a Google Ads deployment failed with ACTION_NOT_PERMITTED, the account likely
         // needs identity verification. Notify the customer so they can complete it.
         foreach ($deploymentResults as $platform => $result) {
-            if (!$result['success'] && str_contains(strtolower($platform), 'google')) {
+            if (! $result['success'] && str_contains(strtolower($platform), 'google')) {
                 $errorText = is_string($result['error'] ?? null) ? $result['error'] : json_encode($result['error'] ?? '');
                 if (str_contains($errorText, 'ACTION_NOT_PERMITTED') || str_contains($errorText, 'PERMISSION_DENIED')) {
                     foreach ($customer->users as $user) {
@@ -345,8 +349,8 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
             $failureCount === 0 ? 'completed' : 'failed'
         );
 
-        if ($successCount > 0 && $this->campaign->status !== 'active') {
-            $this->campaign->update(['status' => 'active']);
+        if ($successCount > 0 && $this->campaign->status !== CampaignStatus::Active) {
+            $this->campaign->update(['status' => CampaignStatus::Active]);
             RecordSiteConversion::dispatch($this->campaign->customer, 'campaign_live');
         }
 
@@ -375,7 +379,7 @@ class DeployCampaign implements ShouldQueue, ShouldBeUnique
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('DeployCampaign failed: ' . $exception->getMessage(), [
+        Log::error('DeployCampaign failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

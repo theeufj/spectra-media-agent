@@ -2,8 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Jobs\FetchGoogleAdsPerformanceData;
+use App\Enums\CampaignStatus;
 use App\Jobs\FetchFacebookAdsPerformanceData;
+use App\Jobs\FetchGoogleAdsPerformanceData;
 use App\Jobs\FetchLinkedInAdsPerformanceData;
 use App\Jobs\FetchMicrosoftAdsPerformanceData;
 use App\Models\Campaign;
@@ -17,7 +18,7 @@ class CampaignFetchPerformanceData extends Command
 
     public function handle()
     {
-        $campaigns = Campaign::where('status', 'active')->get();
+        $campaigns = Campaign::where('status', CampaignStatus::Active)->get();
 
         $counts = ['google' => 0, 'facebook' => 0, 'linkedin' => 0, 'microsoft' => 0];
 
@@ -44,8 +45,8 @@ class CampaignFetchPerformanceData extends Command
         }
 
         $this->info(
-            "Dispatched performance jobs — " .
-            "Google: {$counts['google']}, Facebook: {$counts['facebook']}, " .
+            'Dispatched performance jobs — '.
+            "Google: {$counts['google']}, Facebook: {$counts['facebook']}, ".
             "LinkedIn: {$counts['linkedin']}, Microsoft: {$counts['microsoft']}."
         );
     }

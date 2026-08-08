@@ -2,11 +2,10 @@
 
 namespace App\Models;
 
+use App\Enums\CampaignStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use App\Models\ImageCollateral;
-use App\Models\VideoCollateral;
 
 class Campaign extends Model
 {
@@ -63,6 +62,7 @@ class Campaign extends Model
      * @var array
      */
     protected $casts = [
+        'status' => CampaignStatus::class,
         'goals' => 'array',
         'start_date' => 'date',
         'end_date' => 'date',
@@ -90,13 +90,14 @@ class Campaign extends Model
      */
     public function googleAdsResourceName(): ?string
     {
-        if (!$this->google_ads_campaign_id) {
+        if (! $this->google_ads_campaign_id) {
             return null;
         }
         if (str_starts_with($this->google_ads_campaign_id, 'customers/')) {
             return $this->google_ads_campaign_id;
         }
         $customerId = $this->customer?->cleanGoogleCustomerId();
+
         return $customerId
             ? "customers/{$customerId}/campaigns/{$this->google_ads_campaign_id}"
             : null;
@@ -117,6 +118,7 @@ class Campaign extends Model
         if (preg_match('/campaigns\/(\d+)/', $val, $m)) {
             return $m[1];
         }
+
         return ctype_digit($val) ? $val : null;
     }
 
@@ -125,7 +127,7 @@ class Campaign extends Model
      */
     public function isGeneratingStrategies(): bool
     {
-        return $this->strategy_generation_started_at !== null 
+        return $this->strategy_generation_started_at !== null
             && $this->strategy_generation_completed_at === null;
     }
 
@@ -141,8 +143,6 @@ class Campaign extends Model
      * A Campaign has many Strategies.
      * This defines the one-to-many relationship between the Campaign and Strategy models.
      * In Go, you might represent this with a slice of Strategy structs: `Strategies []Strategy`.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\HasMany
      */
     public function strategies(): HasMany
     {

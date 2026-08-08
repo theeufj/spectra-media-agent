@@ -2,19 +2,16 @@
 
 namespace App\Services\Monitoring;
 
-use App\Models\Campaign;
 use App\Models\Conflict;
 use App\Models\Customer;
-use App\Models\PerformanceData;
 use App\Models\Recommendation;
-use Illuminate\Support\Facades\DB;
 
 class DashboardDataService
 {
     public function __invoke(Customer $customer): array
     {
         $campaigns = $customer->campaigns()->with('strategies.performanceData')->get();
-        
+
         $performanceMetrics = $this->calculatePerformanceMetrics($campaigns);
 
         return [
@@ -44,7 +41,7 @@ class DashboardDataService
                 if ($performanceData) {
                     $totalSpend += $performanceData->spend;
                     $totalConversions += $performanceData->conversions;
-                    
+
                     $revenueMultiple = $strategy->revenue_cpa_multiple ?? 1.0;
                     $cpaInDollars = ($strategy->cpa_target ?? 0) / 1000000;
                     $totalRevenue += $performanceData->conversions * $cpaInDollars * $revenueMultiple;
@@ -64,10 +61,11 @@ class DashboardDataService
     {
         return $campaigns->map(function ($campaign) {
             $metrics = $this->calculatePerformanceMetrics(collect([$campaign]));
+
             return [
                 'id' => $campaign->id,
                 'name' => $campaign->name,
-                'status' => $campaign->status,
+                'status' => $campaign->status?->value,
                 'spend' => $metrics['total_spend'],
                 'revenue' => $metrics['total_revenue'],
                 'roas' => $metrics['overall_roas'],

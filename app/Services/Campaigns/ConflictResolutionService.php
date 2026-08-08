@@ -20,7 +20,7 @@ class ConflictResolutionService
 
         Log::warning("Conflict detected and recorded for campaign {$campaign->id}. Conflict ID: {$conflict->id}", [
             'recommendation' => $recommendation->toArray(),
-            'campaign_status' => $campaign->status,
+            'campaign_status' => $campaign->status->value,
         ]);
 
         // Depending on the rules, you might notify someone here,
