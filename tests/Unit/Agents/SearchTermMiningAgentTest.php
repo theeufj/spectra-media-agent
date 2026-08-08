@@ -10,6 +10,17 @@ use Tests\TestCase;
 
 class SearchTermMiningAgentTest extends TestCase
 {
+    /** Effective threshold the agent uses (optimization overrides budget_rules). */
+    private static function negativeCostThreshold(): float
+    {
+        $config = array_merge(
+            config('budget_rules.search_term_mining', []),
+            config('optimization.search_terms', [])
+        );
+
+        return (float) ($config['negative_cost_threshold'] ?? 50.0);
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -68,7 +79,7 @@ class SearchTermMiningAgentTest extends TestCase
 
         $agentMock->shouldReceive('addAsKeyword')
             ->once()
-            ->andReturnUsing(function ($cust, $custId, $adGroup, $keyword, &$results) {
+            ->andReturnUsing(function ($cust, $custId, $adGroup, $keyword, $matchType, &$results) {
                 $results['keywords_added'][] = [
                     'keyword' => $keyword,
                     'match_type' => 'EXACT',
@@ -108,7 +119,11 @@ class SearchTermMiningAgentTest extends TestCase
             'search_term' => 'free marketing stuff',
             'impressions' => 1000,
             'clicks' => 10,
-            'cost' => 25.00,
+            // Derived from config: the effective negative_cost_threshold is the
+            // merge of budget_rules (20) and optimization (50), and optimization
+            // wins — so the old hardcoded 25.00 stopped qualifying as wasteful
+            // when that threshold was raised, and no negative was ever added.
+            'cost' => self::negativeCostThreshold() + 5,
             'conversions' => 0,
             'ctr' => 0.01,
             'ad_group_resource_name' => 'customers/1234567890/adGroups/222',

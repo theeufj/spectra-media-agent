@@ -11,6 +11,15 @@ use Tests\TestCase;
 
 class FacebookAdAccountControllerTest extends TestCase
 {
+    /**
+     * Fakes hardcoded v18.0 while the service reads
+     * services.facebook.graph_version (v22.0), so nothing matched.
+     */
+    private static function graph(): string
+    {
+        return 'https://graph.facebook.com/'.config('services.facebook.graph_version', 'v22.0');
+    }
+
     use RefreshDatabase;
 
     private User $admin;
@@ -51,7 +60,7 @@ class FacebookAdAccountControllerTest extends TestCase
     public function test_assign_links_ad_account_to_customer(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_1991968421347247*' => Http::response([
+            self::graph().'/act_1991968421347247*' => Http::response([
                 'id' => 'act_1991968421347247',
                 'name' => 'Proveably Ad Account',
                 'account_status' => 1,
@@ -85,7 +94,7 @@ class FacebookAdAccountControllerTest extends TestCase
     public function test_assign_returns_error_when_api_rejects(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_999999999*' => Http::response([
+            self::graph().'/act_999999999*' => Http::response([
                 'error' => [
                     'message' => 'Unsupported get request',
                     'type' => 'GraphMethodException',
@@ -114,7 +123,7 @@ class FacebookAdAccountControllerTest extends TestCase
         ]);
 
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_1991968421347247*' => Http::response([
+            self::graph().'/act_1991968421347247*' => Http::response([
                 'id' => 'act_1991968421347247',
                 'name' => 'Proveably Ad Account',
                 'account_status' => 1,

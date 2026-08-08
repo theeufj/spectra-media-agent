@@ -6,16 +6,52 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\HealthCheckAgent;
 use App\Services\GeminiService;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
 class HealthCheckAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     protected HealthCheckAgent $agent;
 
+    protected $googleChecker;
+
+    protected $facebookChecker;
+
     protected GeminiService $geminiMock;
+
+    /**
+     * HealthCheckAgent's constructor grew from 1 dependency to 5 when the
+     * per-platform checks were extracted into their own classes. The test still
+     * passed only Gemini, so every case died with ArgumentCountError before
+     * reaching an assertion.
+     *
+     * @return list<mixed>
+     */
+    private function agentDependencies(): array
+    {
+        $empty = ['status' => 'healthy', 'issues' => [], 'warnings' => []];
+
+        $this->googleChecker = Mockery::mock(\App\Services\Health\GoogleAdsHealthChecker::class);
+        $this->googleChecker->shouldReceive('check')->andReturn($empty)->byDefault();
+
+        $this->facebookChecker = Mockery::mock(\App\Services\Health\FacebookAdsHealthChecker::class);
+        $this->facebookChecker->shouldReceive('check')->andReturn($empty)->byDefault();
+
+        $billing = Mockery::mock(\App\Services\Health\BillingHealthChecker::class);
+        $billing->shouldReceive('check')->andReturn($empty)->byDefault();
+
+        $campaigns = Mockery::mock(\App\Services\Health\CampaignHealthChecker::class);
+        $campaigns->shouldReceive('checkAll')->andReturn($empty + ['campaigns' => []])->byDefault();
+
+        return [$this->geminiMock, $this->googleChecker, $this->facebookChecker, $billing, $campaigns];
+    }
 
     protected function setUp(): void
     {
@@ -23,112 +59,60 @@ class HealthCheckAgentTest extends TestCase
 
         $this->geminiMock = Mockery::mock(GeminiService::class);
         $this->geminiMock->shouldReceive('generateContent')->andReturn(['text' => '[]'])->byDefault();
-        $this->agent = Mockery::mock(HealthCheckAgent::class, [$this->geminiMock])
+        $this->agent = Mockery::mock(HealthCheckAgent::class, $this->agentDependencies())
             ->makePartial()
             ->shouldAllowMockingProtectedMethods();
     }
 
     public function test_detects_google_ads_account_suspension(): void
     {
-        $customer = new Customer([
-            'name' => 'Test Company',
-            'google_ads_customer_id' => '1234567890',
+        // The per-platform checks were extracted into their own classes, so this
+        // stubs GoogleAdsHealthChecker rather than protected methods on the agent
+        // that no longer exist — the old mocks silently did nothing.
+        $this->googleChecker->shouldReceive('check')->andReturn([
+            'status' => 'critical',
+            'issues' => [[
+                'type' => 'account_suspended',
+                'severity' => 'critical',
+                'message' => 'Google Ads account is suspended',
+            ]],
+            'warnings' => [],
         ]);
+
+        $customer = new Customer(['name' => 'Test Company', 'google_ads_customer_id' => '1234567890']);
         $customer->id = 1;
 
-        // Override the protected methods to simulate account suspension
-        $this->agent->shouldReceive('testGoogleAdsConnectivity')
-            ->andReturn(['connected' => true]);
-
-        $this->agent->shouldReceive('checkGoogleAdsTokenHealth')
-            ->andReturn(['issues' => [], 'warnings' => []]);
-
-        $this->agent->shouldReceive('checkGoogleAdsAccountStatus')
-            ->andReturn([
-                'issues' => [
-                    [
-                        'type' => 'account_suspended',
-                        'severity' => 'critical',
-                        'message' => 'Google Ads account is suspended',
-                        'details' => 'Contact Google Ads support to resolve account suspension',
-                    ],
-                ],
-                'warnings' => [],
-            ]);
-
-        $this->agent->shouldReceive('checkGoogleConversionTracking')
-            ->andReturn(['warnings' => [], 'has_tracking' => true]);
-
-        // Let the remaining methods run with defaults
-        $this->agent->shouldReceive('checkFacebookAdsHealth')->andReturn([
-            'status' => 'healthy', 'issues' => [], 'warnings' => [],
-        ]);
-        $this->agent->shouldReceive('checkBillingHealth')->andReturn([
-            'status' => 'healthy', 'issues' => [], 'warnings' => [],
-        ]);
-        $this->agent->shouldReceive('checkCampaignsHealth')->andReturn([
-            'status' => 'healthy', 'issues' => [], 'warnings' => [], 'campaigns' => [],
-        ]);
-
         Log::spy();
-
         $results = $this->agent->checkCustomerHealth($customer);
 
         $this->assertNotEquals('healthy', $results['overall_health']);
-        $this->assertNotEmpty($results['issues']);
 
-        $suspensionIssue = collect($results['issues'])->firstWhere('type', 'account_suspended');
-        $this->assertNotNull($suspensionIssue);
-        $this->assertEquals('critical', $suspensionIssue['severity']);
+        $issue = collect($results['issues'])->firstWhere('type', 'account_suspended');
+        $this->assertNotNull($issue);
+        $this->assertEquals('critical', $issue['severity']);
     }
 
     public function test_detects_facebook_account_restrictions(): void
     {
-        $customer = new Customer([
-            'name' => 'Test Company',
-            'facebook_ads_account_id' => 'act_123456',
-            'facebook_ads_access_token' => 'test_token_123',
-        ]);
-        $customer->id = 2;
-
-        Http::fake([
-            'graph.facebook.com/*' => Http::response([
-                'account_status' => 2, // DISABLED
-                'disable_reason' => 'POLICY_VIOLATION',
-                'name' => 'Test Account',
-            ], 200),
+        $this->facebookChecker->shouldReceive('check')->andReturn([
+            'status' => 'critical',
+            'issues' => [[
+                'type' => 'account_disabled',
+                'severity' => 'critical',
+                'message' => 'Facebook ad account is disabled',
+            ]],
+            'warnings' => [],
         ]);
 
-        // Let Google health return healthy (no google account)
-        $this->agent->shouldReceive('checkGoogleAdsHealth')->andReturn([
-            'status' => 'healthy', 'issues' => [], 'warnings' => [],
-        ]);
-        $this->agent->shouldReceive('checkBillingHealth')->andReturn([
-            'status' => 'healthy', 'issues' => [], 'warnings' => [],
-        ]);
-        $this->agent->shouldReceive('checkCampaignsHealth')->andReturn([
-            'status' => 'healthy', 'issues' => [], 'warnings' => [], 'campaigns' => [],
-        ]);
-
-        // Let the Facebook health check use real logic for restrictions
-        $this->agent->shouldReceive('testFacebookAdsConnectivity')
-            ->andReturn(['connected' => true]);
-        $this->agent->shouldReceive('checkFacebookTokenHealth')
-            ->andReturn(['issues' => [], 'warnings' => []]);
-        $this->agent->shouldReceive('checkFacebookPixelHealth')
-            ->andReturn(['warnings' => []]);
-
-        // Let checkFacebookAccountRestrictions run the real code (uses Http::fake)
-        $this->agent->shouldReceive('checkFacebookAccountRestrictions')->passthru();
-        $this->agent->shouldReceive('checkFacebookAdsHealth')->passthru();
+        $customer = new Customer(['name' => 'Test Company', 'facebook_ads_account_id' => 'act_123']);
+        $customer->id = 1;
 
         Log::spy();
-
         $results = $this->agent->checkCustomerHealth($customer);
 
-        $disabledIssue = collect($results['issues'])->firstWhere('type', 'account_disabled');
-        $this->assertNotNull($disabledIssue);
-        $this->assertEquals('critical', $disabledIssue['severity']);
+        $issue = collect($results['issues'])->firstWhere('type', 'account_disabled');
+        $this->assertNotNull($issue);
+        $this->assertEquals('critical', $issue['severity']);
     }
 
     public function test_detects_performance_anomalies(): void
@@ -146,7 +130,7 @@ class HealthCheckAgentTest extends TestCase
 
         // Mock the agent's detectPerformanceAnomalies to return a CTR drop warning
         // instead of querying GoogleAdsPerformanceData from DB
-        $realAgent = Mockery::mock(HealthCheckAgent::class, [$this->geminiMock])
+        $realAgent = Mockery::mock(HealthCheckAgent::class, $this->agentDependencies())
             ->makePartial()
             ->shouldAllowMockingProtectedMethods();
 
@@ -188,7 +172,7 @@ class HealthCheckAgentTest extends TestCase
 
         // Mock the agent's checkCreativeFatigue to return a fatigue warning
         // instead of querying GoogleAdsPerformanceData from DB
-        $realAgent = Mockery::mock(HealthCheckAgent::class, [$this->geminiMock])
+        $realAgent = Mockery::mock(HealthCheckAgent::class, $this->agentDependencies())
             ->makePartial()
             ->shouldAllowMockingProtectedMethods();
 

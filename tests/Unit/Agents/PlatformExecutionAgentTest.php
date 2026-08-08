@@ -11,11 +11,17 @@ use App\Services\Agents\PlatformExecutionAgent;
 use App\Services\Agents\RecoveryPlan;
 use App\Services\Agents\ValidationResult;
 use App\Services\GeminiService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Mockery;
 use Tests\TestCase;
 
 class PlatformExecutionAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     public function test_can_be_instantiated_with_customer(): void
     {
         $geminiMock = Mockery::mock(GeminiService::class);

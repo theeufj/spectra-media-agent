@@ -10,12 +10,18 @@ use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\LinkedInAdsExecutionAgent;
 use App\Services\Agents\ValidationResult;
 use App\Services\GeminiService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
 class LinkedInAdsExecutionAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     protected function setUp(): void
     {
         parent::setUp();

@@ -10,12 +10,18 @@ use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\ValidationResult;
 use App\Services\GeminiService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
 class GoogleAdsExecutionAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -70,9 +76,10 @@ class GoogleAdsExecutionAgentTest extends TestCase
             ->once()
             ->andReturn(new ValidationResult(true));
 
-        $agent->shouldReceive('analyzeOptimizationOpportunities')
-            ->once()
-            ->andReturn(Mockery::mock('App\Services\Agents\OptimizationAnalysis'));
+        // execute() no longer calls analyzeOptimizationOpportunities — its result was
+        // computed and discarded, costing a Google Ads conversion query per deploy.
+        // (The expectation never held even before that: validatePrerequisites
+        // returns early on failure, so it was asserting a call that didn't happen.)
 
         $agent->shouldReceive('generateExecutionPlan')
             ->once()
@@ -156,9 +163,10 @@ class GoogleAdsExecutionAgentTest extends TestCase
             ->once()
             ->andReturn(new ValidationResult(true));
 
-        $agent->shouldReceive('analyzeOptimizationOpportunities')
-            ->once()
-            ->andReturn(Mockery::mock('App\Services\Agents\OptimizationAnalysis'));
+        // execute() no longer calls analyzeOptimizationOpportunities — its result was
+        // computed and discarded, costing a Google Ads conversion query per deploy.
+        // (The expectation never held even before that: validatePrerequisites
+        // returns early on failure, so it was asserting a call that didn't happen.)
 
         $agent->shouldReceive('generateExecutionPlan')
             ->once()

@@ -19,7 +19,13 @@ class BrandGuidelineExtractorTest extends TestCase
     {
         echo "\n🔍 Starting Brand Guideline Extraction Test\n";
 
-        // Skip if we don't have Gemini API key configured
+        // This fetches the live Cloudflare homepage and calls the real Gemini API,
+        // so it belongs with the opt-in integration suites rather than the default
+        // run. phpunit.xml pins these flags off; phpunit.integration.xml enables them.
+        if (! filter_var($_ENV['RUN_INTEGRATION_TESTS'] ?? getenv('RUN_INTEGRATION_TESTS'), FILTER_VALIDATE_BOOLEAN)) {
+            $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run — hits the live web and Gemini.');
+        }
+
         if (empty(config('services.gemini.api_key'))) {
             $this->markTestSkipped('Gemini API key not configured');
         }

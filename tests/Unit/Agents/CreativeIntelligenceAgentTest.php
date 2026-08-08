@@ -7,12 +7,18 @@ use App\Models\Customer;
 use App\Services\Agents\CreativeIntelligenceAgent;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
 class CreativeIntelligenceAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     protected CreativeIntelligenceAgent $agent;
 
     protected GeminiService $geminiMock;
