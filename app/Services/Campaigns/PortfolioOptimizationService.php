@@ -2,6 +2,7 @@
 
 namespace App\Services\Campaigns;
 
+use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Recommendation;
@@ -17,7 +18,7 @@ class PortfolioOptimizationService
     {
         try {
             $campaigns = $customer->campaigns()
-                ->where('status', 'ACTIVE')
+                ->where('status', CampaignStatus::Active)
                 ->with('strategies.performanceData')
                 ->get();
 
