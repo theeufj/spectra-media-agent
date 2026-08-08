@@ -19,7 +19,7 @@ class GetGoogleAdsRecommendations extends BaseGoogleAdsService
     {
         $this->ensureClient();
 
-        $where = "recommendation.dismissed = FALSE";
+        $where = 'recommendation.dismissed = FALSE';
         if ($campaignResourceName) {
             $where .= " AND recommendation.campaign = '$campaignResourceName'";
         }
@@ -32,21 +32,22 @@ class GetGoogleAdsRecommendations extends BaseGoogleAdsService
                   WHERE {$where}";
 
         try {
-            $response        = $this->searchQuery($customerId, $query);
+            $response = $this->searchQuery($customerId, $query);
             $recommendations = [];
 
             foreach ($response->getIterator() as $row) {
-                $rec               = $row->getRecommendation();
+                $rec = $row->getRecommendation();
                 $recommendations[] = [
-                    'resource_name'     => $rec->getResourceName(),
-                    'type'              => $rec->getType(),
+                    'resource_name' => $rec->getResourceName(),
+                    'type' => $rec->getType(),
                     'campaign_resource' => $rec->getCampaign(),
                 ];
             }
 
             return $recommendations;
         } catch (GoogleAdsException $e) {
-            $this->logError('GetGoogleAdsRecommendations: ' . $e->getMessage());
+            $this->logError('GetGoogleAdsRecommendations: '.$e->getMessage());
+
             return [];
         }
     }

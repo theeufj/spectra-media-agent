@@ -23,27 +23,30 @@ use Illuminate\Support\Facades\Log;
 class UploadVideoToYouTube
 {
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+
     private const UPLOAD_URL = 'https://www.googleapis.com/upload/youtube/v3/videos';
 
     public function __invoke(string $s3Path, string $title, string $description = ''): ?string
     {
-        $clientId     = config('services.youtube.client_id');
+        $clientId = config('services.youtube.client_id');
         $clientSecret = config('services.youtube.client_secret');
         $refreshToken = config('services.youtube.refresh_token');
 
-        if (!$clientId || !$clientSecret || !$refreshToken) {
+        if (! $clientId || ! $clientSecret || ! $refreshToken) {
             Log::warning('UploadVideoToYouTube: Missing YouTube credentials (GOOGLE_YOUTUBE_CLIENT_ID / SECRET / REFRESH_TOKEN)');
+
             return null;
         }
 
         $accessToken = $this->getAccessToken($clientId, $clientSecret, $refreshToken);
-        if (!$accessToken) {
+        if (! $accessToken) {
             return null;
         }
 
         $videoData = StorageHelper::get($s3Path);
-        if (!$videoData) {
+        if (! $videoData) {
             Log::error('UploadVideoToYouTube: Could not read video from S3', ['s3_path' => $s3Path]);
+
             return null;
         }
 
@@ -52,9 +55,9 @@ class UploadVideoToYouTube
         // Step 1: Initiate resumable upload — get upload URL
         $metadata = [
             'snippet' => [
-                'title'       => mb_substr($title, 0, 100),
+                'title' => mb_substr($title, 0, 100),
                 'description' => mb_substr($description, 0, 5000),
-                'categoryId'  => '22', // People & Blogs
+                'categoryId' => '22', // People & Blogs
             ],
             'status' => [
                 'privacyStatus' => 'unlisted', // Unlisted so ads can use it
@@ -62,53 +65,57 @@ class UploadVideoToYouTube
         ];
 
         $initiateResponse = Http::withHeaders([
-            'Authorization'          => 'Bearer ' . $accessToken,
-            'Content-Type'           => 'application/json',
-            'X-Upload-Content-Type'  => 'video/mp4',
+            'Authorization' => 'Bearer '.$accessToken,
+            'Content-Type' => 'application/json',
+            'X-Upload-Content-Type' => 'video/mp4',
             'X-Upload-Content-Length' => $videoSize,
-        ])->post(self::UPLOAD_URL . '?uploadType=resumable&part=snippet,status', $metadata);
+        ])->post(self::UPLOAD_URL.'?uploadType=resumable&part=snippet,status', $metadata);
 
-        if (!$initiateResponse->successful()) {
+        if (! $initiateResponse->successful()) {
             Log::error('UploadVideoToYouTube: Failed to initiate upload', [
                 'status' => $initiateResponse->status(),
-                'body'   => $initiateResponse->body(),
+                'body' => $initiateResponse->body(),
             ]);
+
             return null;
         }
 
         $uploadUri = $initiateResponse->header('Location');
-        if (!$uploadUri) {
+        if (! $uploadUri) {
             Log::error('UploadVideoToYouTube: No Location header in initiate response');
+
             return null;
         }
 
         // Step 2: Upload the video bytes
         $uploadResponse = Http::withHeaders([
-            'Authorization'  => 'Bearer ' . $accessToken,
-            'Content-Type'   => 'video/mp4',
+            'Authorization' => 'Bearer '.$accessToken,
+            'Content-Type' => 'video/mp4',
             'Content-Length' => $videoSize,
         ])->withBody($videoData, 'video/mp4')->put($uploadUri);
 
-        if (!$uploadResponse->successful()) {
+        if (! $uploadResponse->successful()) {
             Log::error('UploadVideoToYouTube: Upload failed', [
                 'status' => $uploadResponse->status(),
-                'body'   => $uploadResponse->body(),
+                'body' => $uploadResponse->body(),
             ]);
+
             return null;
         }
 
         $youtubeVideoId = $uploadResponse->json('id');
 
-        if (!$youtubeVideoId) {
+        if (! $youtubeVideoId) {
             Log::error('UploadVideoToYouTube: No video ID in upload response', [
                 'body' => $uploadResponse->body(),
             ]);
+
             return null;
         }
 
         Log::info('UploadVideoToYouTube: Video uploaded successfully', [
             'youtube_video_id' => $youtubeVideoId,
-            's3_path'          => $s3Path,
+            's3_path' => $s3Path,
         ]);
 
         return $youtubeVideoId;
@@ -117,17 +124,18 @@ class UploadVideoToYouTube
     private function getAccessToken(string $clientId, string $clientSecret, string $refreshToken): ?string
     {
         $response = Http::asForm()->post(self::TOKEN_URL, [
-            'client_id'     => $clientId,
+            'client_id' => $clientId,
             'client_secret' => $clientSecret,
             'refresh_token' => $refreshToken,
-            'grant_type'    => 'refresh_token',
+            'grant_type' => 'refresh_token',
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             Log::error('UploadVideoToYouTube: Failed to get access token', [
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
+
             return null;
         }
 

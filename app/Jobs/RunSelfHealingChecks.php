@@ -2,19 +2,17 @@
 
 namespace App\Jobs;
 
+use App\Jobs\Concerns\RecordsAgentRun;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
-use App\Services\Agents\CampaignDiagnosticsAgent;
-use App\Services\Agents\CampaignRemediationAgent;
-use App\Jobs\Concerns\RecordsAgentRun;
-use App\Services\Agents\SelfHealingAgent;
-use App\Services\Agents\FacebookLearningPhaseAgent;
-use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
-use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Models\Recommendation;
 use App\Models\VideoCollateral;
-use App\Jobs\GenerateVideo;
-use App\Jobs\UploadPMaxVideoAssets;
+use App\Services\Agents\CampaignDiagnosticsAgent;
+use App\Services\Agents\CampaignRemediationAgent;
+use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
+use App\Services\Agents\FacebookLearningPhaseAgent;
+use App\Services\Agents\LinkedInCampaignOptimizationAgent;
+use App\Services\Agents\SelfHealingAgent;
 use App\Services\GoogleAds\CommonServices\CreateSitelinkAssets;
 use App\Services\GoogleAds\CommonServices\VerifyConversionGoals;
 use App\Services\GoogleAds\PerformanceMaxServices\HealAssetGroupStrength;
@@ -33,9 +31,10 @@ use Illuminate\Support\Facades\Log;
  */
 class RunSelfHealingChecks implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, RecordsAgentRun;
+    use Dispatchable, InteractsWithQueue, Queueable, RecordsAgentRun, SerializesModels;
 
     public $tries = 1;
+
     public $timeout = 600;
 
     public function handle(
@@ -51,10 +50,10 @@ class RunSelfHealingChecks implements ShouldQueue
 
         $campaigns = Campaign::with('customer')
             ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
-            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
-                                ->orWhereNotNull('facebook_ads_campaign_id')
-                                ->orWhereNotNull('microsoft_ads_campaign_id')
-                                ->orWhereNotNull('linkedin_campaign_id'))
+            ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
+                ->orWhereNotNull('facebook_ads_campaign_id')
+                ->orWhereNotNull('microsoft_ads_campaign_id')
+                ->orWhereNotNull('linkedin_campaign_id'))
             ->get();
 
         $healed = 0;
@@ -63,7 +62,7 @@ class RunSelfHealingChecks implements ShouldQueue
 
         foreach ($campaigns as $campaign) {
             $lock = Cache::lock("self_heal:campaign:{$campaign->id}", 3600);
-            if (!$lock->get()) {
+            if (! $lock->get()) {
                 continue;
             }
 
@@ -75,10 +74,10 @@ class RunSelfHealingChecks implements ShouldQueue
 
                 // Pass 2: strategic diagnosis → autonomous remediation
                 $findings = $diagnosticsAgent->diagnose($campaign);
-                if (!empty($findings)) {
-                    Log::info('RunSelfHealingChecks: Diagnostic findings for campaign ' . $campaign->id, [
-                        'count'    => count($findings),
-                        'types'    => array_column($findings, 'type'),
+                if (! empty($findings)) {
+                    Log::info('RunSelfHealingChecks: Diagnostic findings for campaign '.$campaign->id, [
+                        'count' => count($findings),
+                        'types' => array_column($findings, 'type'),
                     ]);
                     $remediationResult = $remediationAgent->remediate($campaign, $findings);
                     $healed += count($remediationResult['actions_taken'] ?? []);
@@ -87,7 +86,7 @@ class RunSelfHealingChecks implements ShouldQueue
 
                 if ($campaign->facebook_ads_campaign_id) {
                     $fbLearningAgent->analyze($campaign);
-                    if (!FacebookLearningPhaseAgent::isOnHold($campaign)) {
+                    if (! FacebookLearningPhaseAgent::isOnHold($campaign)) {
                         $fbRelevanceAgent->analyze($campaign);
                     }
                 }
@@ -103,18 +102,22 @@ class RunSelfHealingChecks implements ShouldQueue
                             $addedCount = array_sum($r['added'] ?? []);
                             if ($addedCount > 0) {
                                 $healed += $addedCount;
-                                $imgCount  = $r['added']['IMAGE'] ?? 0;
+                                $imgCount = $r['added']['IMAGE'] ?? 0;
                                 $textCount = $addedCount - $imgCount;
                                 $parts = [];
-                                if ($textCount > 0) $parts[] = "{$textCount} text asset(s)";
-                                if ($imgCount > 0)  $parts[] = "{$imgCount} image(s)";
+                                if ($textCount > 0) {
+                                    $parts[] = "{$textCount} text asset(s)";
+                                }
+                                if ($imgCount > 0) {
+                                    $parts[] = "{$imgCount} image(s)";
+                                }
                                 $what = implode(' + ', $parts);
 
                                 Recommendation::create([
-                                    'campaign_id'       => $campaign->id,
-                                    'type'              => 'AD_STRENGTH',
-                                    'rationale'         => "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
-                                    'status'            => 'applied',
+                                    'campaign_id' => $campaign->id,
+                                    'type' => 'AD_STRENGTH',
+                                    'rationale' => "Added {$what} to '{$r['asset_group']}' (ad strength was {$r['ad_strength']})",
+                                    'status' => 'applied',
                                     'requires_approval' => false,
                                 ]);
                                 AgentActivity::record(
@@ -135,10 +138,10 @@ class RunSelfHealingChecks implements ShouldQueue
                         if ($sitelinksAdded > 0) {
                             $healed += $sitelinksAdded;
                             Recommendation::create([
-                                'campaign_id'       => $campaign->id,
-                                'type'              => 'SITELINKS',
-                                'rationale'         => "Added {$sitelinksAdded} sitelink(s) to improve ad strength",
-                                'status'            => 'applied',
+                                'campaign_id' => $campaign->id,
+                                'type' => 'SITELINKS',
+                                'rationale' => "Added {$sitelinksAdded} sitelink(s) to improve ad strength",
+                                'status' => 'applied',
                                 'requires_approval' => false,
                             ]);
                             AgentActivity::record(
@@ -149,7 +152,7 @@ class RunSelfHealingChecks implements ShouldQueue
                         }
 
                         // Conversion-goal hygiene — once per customer per pass.
-                        if (!in_array($campaign->customer_id, $conversionCheckedCustomers, true)) {
+                        if (! in_array($campaign->customer_id, $conversionCheckedCustomers, true)) {
                             $conversionCheckedCustomers[] = $campaign->customer_id;
                             $conv = (new VerifyConversionGoals($campaign->customer))->verifyAndHeal();
                             foreach (($conv['actions'] ?? []) as $action) {
@@ -161,23 +164,23 @@ class RunSelfHealingChecks implements ShouldQueue
                             }
                         }
                     } catch (\Throwable $e) {
-                        Log::error('RunSelfHealingChecks: Google strength/conversion pass failed for campaign ' . $campaign->id . ': ' . $e->getMessage());
+                        Log::error('RunSelfHealingChecks: Google strength/conversion pass failed for campaign '.$campaign->id.': '.$e->getMessage());
                         $errors++;
                     }
                 }
 
-                if (!empty($results['actions_taken'])) {
+                if (! empty($results['actions_taken'])) {
                     AgentActivity::record(
                         'maintenance',
                         'self_healed',
-                        'Fixed ' . count($results['actions_taken']) . ' issue(s) in "' . $campaign->name . '"',
+                        'Fixed '.count($results['actions_taken']).' issue(s) in "'.$campaign->name.'"',
                         $campaign->customer_id,
                         $campaign->id,
                         ['actions' => $results['actions_taken']]
                     );
                 }
             } catch (\Exception $e) {
-                Log::error('RunSelfHealingChecks: Error processing campaign ' . $campaign->id . ': ' . $e->getMessage());
+                Log::error('RunSelfHealingChecks: Error processing campaign '.$campaign->id.': '.$e->getMessage());
                 $errors++;
             } finally {
                 $lock->release();
@@ -186,11 +189,11 @@ class RunSelfHealingChecks implements ShouldQueue
 
         Log::info('RunSelfHealingChecks: Completed', [
             'campaigns' => $campaigns->count(),
-            'healed'    => $healed,
-            'errors'    => $errors,
+            'healed' => $healed,
+            'errors' => $errors,
         ]);
 
-        $this->finishRun($runStart, actions: $healed, errors: $errors, scope: $campaigns->count() . ' campaigns');
+        $this->finishRun($runStart, actions: $healed, errors: $errors, scope: $campaigns->count().' campaigns');
     }
 
     /**
@@ -206,7 +209,7 @@ class RunSelfHealingChecks implements ShouldQueue
         }
 
         $strategy = $campaign->strategies()->latest()->first();
-        if (!$strategy || !$campaign->customer) {
+        if (! $strategy || ! $campaign->customer) {
             return;
         }
 
@@ -214,18 +217,19 @@ class RunSelfHealingChecks implements ShouldQueue
 
         // A completed, extended (link-ready) video exists → link it.
         if (VideoCollateral::where('campaign_id', $campaign->id)
-                ->where('is_active', true)->where('status', 'completed')
-                ->where('extension_count', '>=', 1)->exists()) {
+            ->where('is_active', true)->where('status', 'completed')
+            ->where('extension_count', '>=', 1)->exists()) {
             UploadPMaxVideoAssets::dispatch($strategy->id, $customerId);
             Cache::put($key, true, now()->addDay());
+
             return;
         }
 
         // A video is already generating/extending → let the pipeline finish (it extends
         // to >=10s then links on completion).
         if (VideoCollateral::where('campaign_id', $campaign->id)
-                ->where('is_active', true)
-                ->whereNotIn('status', ['completed', 'failed'])->exists()) {
+            ->where('is_active', true)
+            ->whereNotIn('status', ['completed', 'failed'])->exists()) {
             return;
         }
 
@@ -243,7 +247,7 @@ class RunSelfHealingChecks implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('RunSelfHealingChecks failed: ' . $exception->getMessage());
+        Log::error('RunSelfHealingChecks failed: '.$exception->getMessage());
         $this->recordRunFailure($exception);
     }
 }

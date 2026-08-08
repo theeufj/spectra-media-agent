@@ -126,7 +126,7 @@ class BudgetIntelligenceAgentTest extends TestCase
         $campaign->id = 1;
         $campaign->setRelation('customer', $customer);
 
-        $agent = new BudgetIntelligenceAgent();
+        $agent = new BudgetIntelligenceAgent;
 
         $result = $agent->optimize($campaign);
 

@@ -2,9 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Models\User;
-use App\Models\Plan;
 use App\Models\PerformanceData;
+use App\Models\Plan;
+use App\Models\User;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -37,16 +37,18 @@ class ReportAdSpendUsage extends Command
         // Cashier v15 `recordUsageFor()` which no longer exists in v16 and threw on
         // every run — silently invoicing $0. Only enable this once metered billing is
         // the chosen model for a tier AND a Stripe meter is configured.
-        if (!config('billing.metered_ad_spend_enabled', false)) {
+        if (! config('billing.metered_ad_spend_enabled', false)) {
             $this->info('Metered ad-spend reporting is disabled (managed-credit billing is authoritative). Skipping.');
             Log::info('billing:report-ad-spend skipped — metered billing disabled.');
+
             return 0;
         }
 
         $meterName = config('billing.ad_spend_meter');
-        if (!$meterName) {
+        if (! $meterName) {
             $this->error('Metered ad-spend reporting is enabled but no billing.ad_spend_meter is configured.');
             Log::error('billing:report-ad-spend enabled but billing.ad_spend_meter is not set.');
+
             return 1;
         }
 
@@ -62,7 +64,7 @@ class ReportAdSpendUsage extends Command
             try {
                 // Find the user's subscription
                 $subscription = $user->subscription('default');
-                if (!$subscription) {
+                if (! $subscription) {
                     continue;
                 }
 
@@ -70,8 +72,9 @@ class ReportAdSpendUsage extends Command
                 $plan = Plan::where('stripe_price_id', $subscription->stripe_price)->first();
                 $adSpendPriceId = $plan?->stripe_ad_spend_price_id;
 
-                if (!$adSpendPriceId) {
+                if (! $adSpendPriceId) {
                     $this->line("No ad spend price configured for user {$user->id}'s plan, skipping.");
+
                     continue;
                 }
 
@@ -79,8 +82,8 @@ class ReportAdSpendUsage extends Command
                 $totalSpend = PerformanceData::whereHas('strategy.campaign', function ($query) use ($user) {
                     $query->where('user_id', $user->id);
                 })
-                ->whereDate('created_at', $yesterday)
-                ->sum('spend');
+                    ->whereDate('created_at', $yesterday)
+                    ->sum('spend');
 
                 if ($totalSpend > 0) {
                     // Report usage to Stripe. The quantity should be in the smallest currency unit (cents).
@@ -102,6 +105,7 @@ class ReportAdSpendUsage extends Command
 
         $this->info('Daily ad spend reporting complete.');
         Log::info('Daily ad spend reporting job finished.');
+
         return 0;
     }
 }

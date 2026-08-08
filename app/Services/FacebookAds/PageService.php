@@ -3,12 +3,11 @@
 namespace App\Services\FacebookAds;
 
 use App\Models\Customer;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Facebook Page Service
- * 
+ *
  * Handles fetching and managing Facebook Pages for customers.
  * Users may have multiple Pages and need to select which one to use for ads.
  */
@@ -21,8 +20,6 @@ class PageService extends BaseFacebookAdsService
 
     /**
      * Get all Facebook Pages the user has access to.
-     *
-     * @return array
      */
     public function getPages(): array
     {
@@ -37,24 +34,23 @@ class PageService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'page_count' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
             return [];
 
         } catch (\Exception $e) {
-            Log::error('Error fetching Facebook pages: ' . $e->getMessage(), [
+            Log::error('Error fetching Facebook pages: '.$e->getMessage(), [
                 'customer_id' => $this->customer->id,
             ]);
+
             return [];
         }
     }
 
     /**
      * Get details of a specific Facebook Page.
-     *
-     * @param string $pageId
-     * @return array|null
      */
     public function getPage(string $pageId): ?array
     {
@@ -63,17 +59,14 @@ class PageService extends BaseFacebookAdsService
                 'fields' => 'id,name,access_token,category,picture,fan_count,link,is_published,verification_status,about,description,website',
             ]);
         } catch (\Exception $e) {
-            Log::error('Error fetching Facebook page: ' . $e->getMessage());
+            Log::error('Error fetching Facebook page: '.$e->getMessage());
+
             return null;
         }
     }
 
     /**
      * Set the selected page for a customer.
-     *
-     * @param string $pageId
-     * @param string $pageName
-     * @return bool
      */
     public function setSelectedPage(string $pageId, string $pageName): bool
     {
@@ -92,31 +85,28 @@ class PageService extends BaseFacebookAdsService
             return true;
 
         } catch (\Exception $e) {
-            Log::error('Error setting Facebook page: ' . $e->getMessage(), [
+            Log::error('Error setting Facebook page: '.$e->getMessage(), [
                 'customer_id' => $this->customer->id,
             ]);
+
             return false;
         }
     }
 
     /**
      * Check if the customer has a Facebook Page connected.
-     *
-     * @return bool
      */
     public function hasPage(): bool
     {
-        return !empty($this->customer->facebook_page_id);
+        return ! empty($this->customer->facebook_page_id);
     }
 
     /**
      * Get the currently selected page info.
-     *
-     * @return array|null
      */
     public function getSelectedPage(): ?array
     {
-        if (!$this->hasPage()) {
+        if (! $this->hasPage()) {
             return null;
         }
 
@@ -128,8 +118,6 @@ class PageService extends BaseFacebookAdsService
 
     /**
      * Clear the selected page.
-     *
-     * @return bool
      */
     public function clearSelectedPage(): bool
     {
@@ -142,7 +130,8 @@ class PageService extends BaseFacebookAdsService
             return true;
 
         } catch (\Exception $e) {
-            Log::error('Error clearing Facebook page: ' . $e->getMessage());
+            Log::error('Error clearing Facebook page: '.$e->getMessage());
+
             return false;
         }
     }
@@ -154,7 +143,7 @@ class PageService extends BaseFacebookAdsService
      */
     public function validateSelectedPage(): array
     {
-        if (!$this->hasPage()) {
+        if (! $this->hasPage()) {
             return [
                 'valid' => false,
                 'error' => 'No page selected',
@@ -163,14 +152,14 @@ class PageService extends BaseFacebookAdsService
 
         $page = $this->getPage($this->customer->facebook_page_id);
 
-        if (!$page) {
+        if (! $page) {
             return [
                 'valid' => false,
                 'error' => 'Page no longer accessible',
             ];
         }
 
-        if (!($page['is_published'] ?? true)) {
+        if (! ($page['is_published'] ?? true)) {
             return [
                 'valid' => true,
                 'warning' => 'Page is not published',

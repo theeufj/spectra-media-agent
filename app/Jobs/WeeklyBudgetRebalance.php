@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\Customer;
 use App\Models\PlatformBudgetAllocation;
 use App\Services\CrossChannelBudgetAllocator;
 use Illuminate\Bus\Queueable;
@@ -14,7 +13,7 @@ use Illuminate\Support\Facades\Log;
 
 class WeeklyBudgetRebalance implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public function handle(): void
     {
@@ -28,22 +27,26 @@ class WeeklyBudgetRebalance implements ShouldQueue
         foreach ($allocations as $allocation) {
             try {
                 $customer = $allocation->customer;
-                if (!$customer) continue;
+                if (! $customer) {
+                    continue;
+                }
 
                 $frequency = $allocation->rebalance_frequency;
                 $last = $allocation->last_rebalanced_at;
 
                 // Check if it's time to rebalance
                 $shouldRun = match ($frequency) {
-                    'daily' => !$last || $last->diffInHours(now()) >= 20,
-                    'weekly' => !$last || $last->diffInDays(now()) >= 6,
-                    'monthly' => !$last || $last->diffInDays(now()) >= 28,
+                    'daily' => ! $last || $last->diffInHours(now()) >= 20,
+                    'weekly' => ! $last || $last->diffInDays(now()) >= 6,
+                    'monthly' => ! $last || $last->diffInDays(now()) >= 28,
                     default => false,
                 };
 
-                if (!$shouldRun) continue;
+                if (! $shouldRun) {
+                    continue;
+                }
 
-                $allocator = new CrossChannelBudgetAllocator();
+                $allocator = new CrossChannelBudgetAllocator;
                 $result = $allocator->rebalance($customer, 'scheduled');
                 $rebalanced++;
 
@@ -60,7 +63,7 @@ class WeeklyBudgetRebalance implements ShouldQueue
             }
         }
 
-        $this->finishRun($runStart, actions: $rebalanced, errors: $errors, scope: $allocations->count() . ' allocations');
+        $this->finishRun($runStart, actions: $rebalanced, errors: $errors, scope: $allocations->count().' allocations');
     }
 
     /**
@@ -68,7 +71,7 @@ class WeeklyBudgetRebalance implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('WeeklyBudgetRebalance failed: ' . $exception->getMessage(), [
+        Log::error('WeeklyBudgetRebalance failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
         $this->recordRunFailure($exception);

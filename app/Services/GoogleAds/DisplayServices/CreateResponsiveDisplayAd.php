@@ -2,18 +2,17 @@
 
 namespace App\Services\GoogleAds\DisplayServices;
 
+use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\Ad;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Common\ResponsiveDisplayAdInfo;
-use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
 use Google\Ads\GoogleAds\V22\Common\AdImageAsset;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdService;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
+use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V22\Common\ResponsiveDisplayAdInfo;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Resources\Ad;
+use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
 
 class CreateResponsiveDisplayAd extends BaseGoogleAdsService
 {
@@ -25,9 +24,9 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
     /**
      * Creates a Responsive Display Ad within a Display Ad Group, linking headlines, descriptions, and image assets.
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param string $adGroupResourceName The resource name of the parent Display Ad Group.
-     * @param array $adData Ad details including finalUrls, headlines, descriptions, imageAssets, etc.
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  string  $adGroupResourceName  The resource name of the parent Display Ad Group.
+     * @param  array  $adData  Ad details including finalUrls, headlines, descriptions, imageAssets, etc.
      * @return string|null The resource name of the created Responsive Display Ad, or null on failure.
      */
     public function __invoke(string $customerId, string $adGroupResourceName, array $adData): ?string
@@ -78,7 +77,7 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
 
         // Create ResponsiveDisplayAdInfo
         // long_headline is singular (one AdTextAsset), not an array
-        $longHeadline = !empty($longHeadlines) ? $longHeadlines[0] : new AdTextAsset(['text' => $adData['headlines'][0] ?? 'Learn More']);
+        $longHeadline = ! empty($longHeadlines) ? $longHeadlines[0] : new AdTextAsset(['text' => $adData['headlines'][0] ?? 'Learn More']);
 
         $rdaFields = [
             'headlines' => $headlines,
@@ -88,10 +87,10 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
             'square_marketing_images' => $squareMarketingImages,
             'business_name' => $adData['businessName'] ?? null,
         ];
-        if (!empty($logoAssets)) {
+        if (! empty($logoAssets)) {
             $rdaFields['logo_images'] = $logoAssets; // 4:1 landscape logos
         }
-        if (!empty($squareLogoAssets)) {
+        if (! empty($squareLogoAssets)) {
             $rdaFields['square_logo_images'] = $squareLogoAssets; // 1:1 square logos
         }
 
@@ -111,7 +110,7 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
         ]);
 
         // Create AdGroupAdOperation
-        $adGroupAdOperation = new AdGroupAdOperation();
+        $adGroupAdOperation = new AdGroupAdOperation;
         $adGroupAdOperation->setCreate($adGroupAd);
 
         try {
@@ -122,10 +121,12 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
             ]);
             $response = $adGroupAdServiceClient->mutateAdGroupAds($request);
             $newAdGroupAdResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Responsive Display Ad: " . $newAdGroupAdResourceName);
+            $this->logInfo('Successfully created Responsive Display Ad: '.$newAdGroupAdResourceName);
+
             return $newAdGroupAdResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Responsive Display Ad for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Responsive Display Ad for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

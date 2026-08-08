@@ -3,27 +3,25 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\CampaignCriterion;
 use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\CampaignCriterion;
 use Google\Ads\GoogleAds\V22\Services\CampaignCriterionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignCriteriaRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class AddNegativeKeyword extends BaseGoogleAdsService
 {
     /**
      * Add a negative keyword to a campaign.
      *
-     * @param string $customerId
-     * @param string $campaignResourceName
-     * @param string $keyword The keyword text
-     * @param int $matchType KeywordMatchType enum value (default: EXACT)
+     * @param  string  $keyword  The keyword text
+     * @param  int  $matchType  KeywordMatchType enum value (default: EXACT)
      * @return string|null Resource name of the created criterion
      */
     public function __invoke(
-        string $customerId, 
-        string $campaignResourceName, 
+        string $customerId,
+        string $campaignResourceName,
         string $keyword,
         int $matchType = KeywordMatchType::EXACT
     ): ?string {
@@ -40,7 +38,7 @@ class AddNegativeKeyword extends BaseGoogleAdsService
             'negative' => true,
         ]);
 
-        $operation = new CampaignCriterionOperation();
+        $operation = new CampaignCriterionOperation;
         $operation->setCreate($campaignCriterion);
 
         try {
@@ -53,10 +51,12 @@ class AddNegativeKeyword extends BaseGoogleAdsService
             );
 
             $result = $response->getResults()[0];
+
             return $result->getResourceName();
 
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to add negative keyword: " . $e->getMessage());
+            $this->logError('Failed to add negative keyword: '.$e->getMessage());
+
             return null;
         }
     }

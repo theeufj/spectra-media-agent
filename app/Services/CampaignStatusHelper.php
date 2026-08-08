@@ -2,26 +2,24 @@
 
 namespace App\Services;
 
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 use App\Models\Setting;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 
 class CampaignStatusHelper
 {
     /**
      * Check if the application is in campaign testing mode.
      * Reads from database Setting, falls back to config/env.
-     *
-     * @return bool
      */
     public static function isTestingMode(): bool
     {
         // Read from database Setting first
         $setting = Setting::where('key', 'campaign_testing_mode')->first();
-        
+
         if ($setting) {
             return $setting->value === '1' || $setting->value === 'true';
         }
-        
+
         // Fallback to config/env default
         return config('campaigns.testing_mode_default', false);
     }
@@ -29,7 +27,7 @@ class CampaignStatusHelper
     /**
      * Get the appropriate Google Ads campaign status based on testing mode.
      *
-     * @param string|null $intendedStatus The intended status ('ENABLED', 'PAUSED'). Defaults to config.
+     * @param  string|null  $intendedStatus  The intended status ('ENABLED', 'PAUSED'). Defaults to config.
      * @return int The Google Ads CampaignStatus enum value
      */
     public static function getGoogleAdsStatus(?string $intendedStatus = null): int
@@ -53,7 +51,7 @@ class CampaignStatusHelper
     /**
      * Get the appropriate Facebook Ads campaign status based on testing mode.
      *
-     * @param string|null $intendedStatus The intended status ('ACTIVE', 'PAUSED'). Defaults to config.
+     * @param  string|null  $intendedStatus  The intended status ('ACTIVE', 'PAUSED'). Defaults to config.
      * @return string The Facebook Ads status string
      */
     public static function getFacebookAdsStatus(?string $intendedStatus = null): string
@@ -76,8 +74,6 @@ class CampaignStatusHelper
 
     /**
      * Get a human-readable description of the current mode.
-     *
-     * @return string
      */
     public static function getModeDescription(): string
     {
@@ -86,6 +82,7 @@ class CampaignStatusHelper
         }
 
         $defaultStatus = config('campaigns.default_status', 'ENABLED');
+
         return "Production Mode (campaigns created as {$defaultStatus})";
     }
 }

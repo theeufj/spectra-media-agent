@@ -20,6 +20,7 @@ class RunCroAudit implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 120;
 
     public function __construct(
@@ -31,8 +32,9 @@ class RunCroAudit implements ShouldQueue
     {
         $customer = Customer::find($this->customerId);
 
-        if (!$customer) {
+        if (! $customer) {
             Log::warning('RunCroAudit: Customer not found', ['customer_id' => $this->customerId]);
+
             return;
         }
 
@@ -45,7 +47,7 @@ class RunCroAudit implements ShouldQueue
                 ->timeout(60)
                 ->bodyHtml();
 
-            $service = new LandingPageCROAuditService(new GeminiService());
+            $service = new LandingPageCROAuditService(new GeminiService);
             $audit = $service->auditPage($customer, $this->url, $html);
 
             $customer->increment('cro_audits_used');
@@ -76,7 +78,7 @@ class RunCroAudit implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('RunCroAudit failed: ' . $exception->getMessage(), [
+        Log::error('RunCroAudit failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

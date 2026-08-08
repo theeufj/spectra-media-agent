@@ -33,6 +33,7 @@ class PromptTestingService
         foreach ($promptInputs as $key => $value) {
             $promptText = str_replace("{{{$key}}}", $value, $promptText);
         }
+
         return $promptText;
     }
 }

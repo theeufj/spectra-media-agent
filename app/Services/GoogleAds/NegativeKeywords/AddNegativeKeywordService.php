@@ -21,7 +21,7 @@ class AddNegativeKeywordService
 
             Log::info("Added '{$keyword}' to negative keyword list for campaign {$campaignId}.");
         } catch (\Exception $e) {
-            Log::error("Error adding negative keyword for campaign {$campaignId}: " . $e->getMessage());
+            Log::error("Error adding negative keyword for campaign {$campaignId}: ".$e->getMessage());
         }
     }
 }

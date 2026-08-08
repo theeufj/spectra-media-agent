@@ -26,29 +26,29 @@ class PauseZeroConversionAdGroups extends BaseGoogleAdsService
         $this->ensureClient();
 
         $campaignId = $campaign->googleCampaignNumericId();
-        if (!$campaignId) {
+        if (! $campaignId) {
             return ['paused' => [], 'scanned' => 0];
         }
 
         $customerId = $this->customer->cleanGoogleCustomerId();
         $start = now()->subDays($windowDays)->toDateString();
-        $end   = now()->subDay()->toDateString();
+        $end = now()->subDay()->toDateString();
 
-        $query = "SELECT ad_group.resource_name, ad_group.name, metrics.cost_micros, metrics.conversions "
-            . "FROM ad_group "
-            . "WHERE campaign.id = {$campaignId} AND ad_group.status = 'ENABLED' "
-            . "AND segments.date BETWEEN '{$start}' AND '{$end}'";
+        $query = 'SELECT ad_group.resource_name, ad_group.name, metrics.cost_micros, metrics.conversions '
+            .'FROM ad_group '
+            ."WHERE campaign.id = {$campaignId} AND ad_group.status = 'ENABLED' "
+            ."AND segments.date BETWEEN '{$start}' AND '{$end}'";
 
         try {
             $rows = [];
             foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
-                $adGroup  = $row->getAdGroup();
-                $metrics  = $row->getMetrics();
+                $adGroup = $row->getAdGroup();
+                $metrics = $row->getMetrics();
                 $resource = $adGroup->getResourceName();
 
                 // Aggregate in PHP in case the API segments by date.
                 $rows[$resource] ??= ['name' => $adGroup->getName(), 'cost' => 0.0, 'conversions' => 0.0];
-                $rows[$resource]['cost']        += ($metrics->getCostMicros() ?? 0) / 1_000_000;
+                $rows[$resource]['cost'] += ($metrics->getCostMicros() ?? 0) / 1_000_000;
                 $rows[$resource]['conversions'] += $metrics->getConversions() ?? 0;
             }
 
@@ -76,8 +76,8 @@ class PauseZeroConversionAdGroups extends BaseGoogleAdsService
                 if ($result['success']) {
                     $paused[] = [
                         'resource' => $resource,
-                        'name'     => $info['name'],
-                        'cost'     => round($info['cost'], 2),
+                        'name' => $info['name'],
+                        'cost' => round($info['cost'], 2),
                     ];
                 }
             }
@@ -85,7 +85,8 @@ class PauseZeroConversionAdGroups extends BaseGoogleAdsService
             return ['paused' => $paused, 'scanned' => $enabledCount];
 
         } catch (GoogleAdsException $e) {
-            $this->logError("PauseZeroConversionAdGroups: query/pause failed for campaign {$campaign->id}: " . $e->getMessage());
+            $this->logError("PauseZeroConversionAdGroups: query/pause failed for campaign {$campaign->id}: ".$e->getMessage());
+
             return ['paused' => [], 'scanned' => 0];
         }
     }

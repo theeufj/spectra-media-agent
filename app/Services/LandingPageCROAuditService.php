@@ -5,12 +5,11 @@ namespace App\Services;
 use App\Models\Customer;
 use App\Models\LandingPageAudit;
 use Illuminate\Support\Facades\Log;
-use Spatie\Browsershot\Browsershot;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
  * Landing Page CRO Audit Service
- * 
+ *
  * Automatically audits landing pages for conversion optimization issues:
  * - Page Speed (Core Web Vitals)
  * - CTA Detection (Above the fold)
@@ -30,7 +29,7 @@ class LandingPageCROAuditService
      */
     public function auditPage(Customer $customer, string $url, string $html, ?array $crawledData = []): LandingPageAudit
     {
-        Log::info("Starting CRO audit for page", [
+        Log::info('Starting CRO audit for page', [
             'customer_id' => $customer->id,
             'url' => $url,
         ]);
@@ -85,7 +84,7 @@ class LandingPageCROAuditService
             $endTime = microtime(true);
             $duration = round(($endTime - $startTime) * 1000, 2);
 
-            Log::info("CRO audit completed", [
+            Log::info('CRO audit completed', [
                 'customer_id' => $customer->id,
                 'url' => $url,
                 'overall_score' => $overallScore,
@@ -95,7 +94,7 @@ class LandingPageCROAuditService
             return $audit;
 
         } catch (\Exception $e) {
-            Log::error("CRO audit failed", [
+            Log::error('CRO audit failed', [
                 'customer_id' => $customer->id,
                 'url' => $url,
                 'error' => $e->getMessage(),
@@ -173,7 +172,7 @@ class LandingPageCROAuditService
         $imagesWithoutDimensions = 0;
 
         $crawler->filter('img')->each(function (Crawler $node) use (&$imagesWithoutDimensions) {
-            if (!$node->attr('width') || !$node->attr('height')) {
+            if (! $node->attr('width') || ! $node->attr('height')) {
                 $imagesWithoutDimensions++;
             }
         });
@@ -223,7 +222,7 @@ class LandingPageCROAuditService
             try {
                 $crawler->filter($selector)->each(function (Crawler $node) use (&$ctaButtons, &$seen) {
                     $text = trim($node->text());
-                    if (!empty($text) && !isset($seen[$text])) {
+                    if (! empty($text) && ! isset($seen[$text])) {
                         $seen[$text] = true;
                         $ctaButtons[] = [
                             'text' => $text,
@@ -243,7 +242,7 @@ class LandingPageCROAuditService
         try {
             $crawler->filter('a, span[onclick], div[onclick]')->each(function (Crawler $node) use (&$ctaButtons, &$seen, $ctaPhrases) {
                 $text = trim($node->text());
-                if (!empty($text) && strlen($text) < 60 && !isset($seen[$text]) && preg_match($ctaPhrases, $text)) {
+                if (! empty($text) && strlen($text) < 60 && ! isset($seen[$text]) && preg_match($ctaPhrases, $text)) {
                     $seen[$text] = true;
                     $ctaButtons[] = [
                         'text' => $text,
@@ -279,13 +278,13 @@ class LandingPageCROAuditService
 
             // Fallback: if we found CTAs but couldn't identify a hero section,
             // assume the first CTA is above the fold
-            if (!$hasAboveFoldCTA) {
+            if (! $hasAboveFoldCTA) {
                 $hasAboveFoldCTA = true;
             }
         }
 
         // Identify primary CTA (usually the first button or most prominent)
-        $primaryCTA = !empty($ctaButtons) ? $ctaButtons[0]['text'] : null;
+        $primaryCTA = ! empty($ctaButtons) ? $ctaButtons[0]['text'] : null;
 
         return [
             'cta_buttons' => $ctaButtons,
@@ -304,21 +303,21 @@ class LandingPageCROAuditService
             // Extract page headline and key messaging
             $h1 = $crawler->filter('h1')->first()->text('No H1 found');
             $metaDescription = $crawler->filter('meta[name="description"]')->first()->attr('content', '');
-            
+
             // Get first paragraph of body content
             $bodyText = $crawler->filter('body')->first()->text('');
             $firstParagraph = substr($bodyText, 0, 500);
 
             // Prepare prompt for Gemini
-            $prompt = "Analyze this landing page content for message clarity and conversion optimization:\n\n" .
-                      "Headline (H1): {$h1}\n" .
-                      "Meta Description: {$metaDescription}\n" .
-                      "First Content: {$firstParagraph}\n\n" .
-                      "Provide:\n" .
-                      "1. A message match score (0-100) based on clarity, relevance, and persuasiveness\n" .
-                      "2. Key issues with the messaging\n" .
-                      "3. Top 5 keywords/phrases detected\n\n" .
-                      "Format as JSON with keys: score, analysis, keywords";
+            $prompt = "Analyze this landing page content for message clarity and conversion optimization:\n\n".
+                      "Headline (H1): {$h1}\n".
+                      "Meta Description: {$metaDescription}\n".
+                      "First Content: {$firstParagraph}\n\n".
+                      "Provide:\n".
+                      "1. A message match score (0-100) based on clarity, relevance, and persuasiveness\n".
+                      "2. Key issues with the messaging\n".
+                      "3. Top 5 keywords/phrases detected\n\n".
+                      'Format as JSON with keys: score, analysis, keywords';
 
             $response = $this->geminiService->generateContent(config('ai.models.default'), $prompt);
             $text = $response['text'] ?? '';
@@ -344,12 +343,12 @@ class LandingPageCROAuditService
             return [
                 'score' => 50,
                 'analysis' => $text ?: 'Analysis unavailable',
-                'keywords' => $this->extractKeywords($h1 . ' ' . $metaDescription),
+                'keywords' => $this->extractKeywords($h1.' '.$metaDescription),
             ];
 
         } catch (\Exception $e) {
-            Log::warning("Message match analysis failed", ['error' => $e->getMessage()]);
-            
+            Log::warning('Message match analysis failed', ['error' => $e->getMessage()]);
+
             return [
                 'score' => 50,
                 'analysis' => 'AI analysis unavailable',
@@ -365,9 +364,9 @@ class LandingPageCROAuditService
     {
         $words = str_word_count(strtolower($text), 1);
         $stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for'];
-        
-        $keywords = array_filter($words, function($word) use ($stopWords) {
-            return strlen($word) > 3 && !in_array($word, $stopWords);
+
+        $keywords = array_filter($words, function ($word) use ($stopWords) {
+            return strlen($word) > 3 && ! in_array($word, $stopWords);
         });
 
         return array_slice(array_unique($keywords), 0, 5);
@@ -400,7 +399,7 @@ class LandingPageCROAuditService
         }
 
         // CTA Issues
-        if (!$ctaAnalysis['has_above_fold_cta']) {
+        if (! $ctaAnalysis['has_above_fold_cta']) {
             $issues[] = [
                 'category' => 'cta',
                 'severity' => 'critical',
@@ -433,7 +432,7 @@ class LandingPageCROAuditService
                 'category' => 'messaging',
                 'severity' => 'high',
                 'title' => 'Weak Message Match',
-                'description' => 'The page messaging lacks clarity or persuasiveness. Score: ' . ($messageAnalysis['score'] ?? 'N/A'),
+                'description' => 'The page messaging lacks clarity or persuasiveness. Score: '.($messageAnalysis['score'] ?? 'N/A'),
             ];
         }
 
@@ -451,7 +450,7 @@ class LandingPageCROAuditService
             $recommendation = [
                 'issue_category' => $issue['category'],
                 'priority' => $issue['severity'],
-                'title' => 'Fix: ' . $issue['title'],
+                'title' => 'Fix: '.$issue['title'],
             ];
 
             switch ($issue['category']) {
@@ -491,7 +490,7 @@ class LandingPageCROAuditService
         }
 
         // CTA scoring (-40 max)
-        if (!$ctaAnalysis['has_above_fold_cta']) {
+        if (! $ctaAnalysis['has_above_fold_cta']) {
             $score -= 25;
         }
         if ($ctaAnalysis['cta_count'] < 1) {

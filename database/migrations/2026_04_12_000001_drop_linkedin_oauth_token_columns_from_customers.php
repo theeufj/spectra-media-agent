@@ -22,7 +22,7 @@ return new class extends Migration
                     $columns[] = $col;
                 }
             }
-            if (!empty($columns)) {
+            if (! empty($columns)) {
                 $table->dropColumn($columns);
             }
         });

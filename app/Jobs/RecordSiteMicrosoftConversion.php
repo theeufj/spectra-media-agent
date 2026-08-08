@@ -25,35 +25,36 @@ class RecordSiteMicrosoftConversion implements ShouldQueue
 
     // Map own-site event keys → Microsoft conversion goal names
     private const GOAL_MAP = [
-        'signup'           => 'Spectra Signup',
-        'pricing_visit'    => 'Spectra Pricing Visit',
+        'signup' => 'Spectra Signup',
+        'pricing_visit' => 'Spectra Pricing Visit',
         'sandbox_launched' => 'Spectra Sandbox Launch',
-        'campaign_live'    => 'Spectra Campaign Live',
+        'campaign_live' => 'Spectra Campaign Live',
         'seven_day_return' => 'Spectra 7-Day Return',
     ];
 
     public function __construct(
-        protected User   $user,
+        protected User $user,
         protected string $event
     ) {}
 
     public function handle(): void
     {
-        if (!$this->user->msclid) {
+        if (! $this->user->msclid) {
             return;
         }
 
         $goalName = self::GOAL_MAP[$this->event] ?? null;
-        if (!$goalName) {
+        if (! $goalName) {
             Log::debug("RecordSiteMicrosoftConversion: no goal mapping for '{$this->event}'");
+
             return;
         }
 
         $config = config("conversions.events.{$this->event}", []);
 
         // Use a minimal customer stub — Microsoft service only needs account credentials from config
-        $customer = new \App\Models\Customer();
-        $service  = new ConversionTrackingService($customer);
+        $customer = new \App\Models\Customer;
+        $service = new ConversionTrackingService($customer);
 
         try {
             $uploaded = $service->applyOfflineConversion(
@@ -65,9 +66,9 @@ class RecordSiteMicrosoftConversion implements ShouldQueue
             );
 
             SpectraConversionEvent::record($this->event, $this->user->id, [
-                'gclid'    => null,
-                'fbclid'   => null,
-                'mode'     => 'server_microsoft',
+                'gclid' => null,
+                'fbclid' => null,
+                'mode' => 'server_microsoft',
                 'uploaded' => $uploaded,
             ]);
 
@@ -77,7 +78,7 @@ class RecordSiteMicrosoftConversion implements ShouldQueue
                 Log::warning("RecordSiteMicrosoftConversion: upload returned false for '{$this->event}' user {$this->user->id}");
             }
         } catch (\Exception $e) {
-            Log::error("RecordSiteMicrosoftConversion: failed for '{$this->event}': " . $e->getMessage(), [
+            Log::error("RecordSiteMicrosoftConversion: failed for '{$this->event}': ".$e->getMessage(), [
                 'user_id' => $this->user->id,
             ]);
         }

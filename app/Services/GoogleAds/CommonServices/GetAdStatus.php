@@ -10,32 +10,31 @@ class GetAdStatus extends BaseGoogleAdsService
     /**
      * Get the status and policy details of ads in a campaign or ad group.
      *
-     * @param string $customerId
-     * @param string|null $campaignResourceName Filter by campaign (optional)
-     * @param string|null $adGroupResourceName Filter by ad group (optional)
+     * @param  string|null  $campaignResourceName  Filter by campaign (optional)
+     * @param  string|null  $adGroupResourceName  Filter by ad group (optional)
      * @return array List of ads with their status and policy info
      */
     public function __invoke(string $customerId, ?string $campaignResourceName = null, ?string $adGroupResourceName = null): array
     {
         $this->ensureClient();
 
-        $whereClause = "";
+        $whereClause = '';
         if ($campaignResourceName) {
             $whereClause = "WHERE campaign.resource_name = '$campaignResourceName'";
         } elseif ($adGroupResourceName) {
             $whereClause = "WHERE ad_group.resource_name = '$adGroupResourceName'";
         }
 
-        $query = "SELECT " .
-                 "ad_group_ad.resource_name, " .
-                 "ad_group_ad.status, " .
-                 "ad_group_ad.policy_summary.approval_status, " .
-                 "ad_group_ad.policy_summary.policy_topic_entries, " .
-                 "ad_group_ad.policy_summary.review_status, " .
-                 "ad_group_ad.ad.responsive_search_ad.headlines, " .
-                 "ad_group_ad.ad.responsive_search_ad.descriptions, " .
-                 "ad_group.resource_name " .
-                 "FROM ad_group_ad " .
+        $query = 'SELECT '.
+                 'ad_group_ad.resource_name, '.
+                 'ad_group_ad.status, '.
+                 'ad_group_ad.policy_summary.approval_status, '.
+                 'ad_group_ad.policy_summary.policy_topic_entries, '.
+                 'ad_group_ad.policy_summary.review_status, '.
+                 'ad_group_ad.ad.responsive_search_ad.headlines, '.
+                 'ad_group_ad.ad.responsive_search_ad.descriptions, '.
+                 'ad_group.resource_name '.
+                 'FROM ad_group_ad '.
                  $whereClause;
 
         try {
@@ -45,7 +44,7 @@ class GetAdStatus extends BaseGoogleAdsService
             foreach ($response->getIterator() as $googleAdsRow) {
                 $adGroupAd = $googleAdsRow->getAdGroupAd();
                 $policySummary = $adGroupAd->getPolicySummary();
-                
+
                 $policyTopics = [];
                 foreach ($policySummary->getPolicyTopicEntries() as $entry) {
                     $policyTopics[] = [
@@ -56,7 +55,7 @@ class GetAdStatus extends BaseGoogleAdsService
 
                 $headlines = [];
                 $descriptions = [];
-                
+
                 $ad = $adGroupAd->getAd();
                 if ($ad->hasResponsiveSearchAd()) {
                     $rsa = $ad->getResponsiveSearchAd();
@@ -83,7 +82,8 @@ class GetAdStatus extends BaseGoogleAdsService
             return $ads;
 
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to get ad status: " . $e->getMessage());
+            $this->logError('Failed to get ad status: '.$e->getMessage());
+
             return [];
         }
     }

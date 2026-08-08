@@ -3,7 +3,6 @@
 namespace App\Services\Agents;
 
 use App\Models\Customer;
-use App\Services\Agents\PlatformConstraints;
 use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
 
@@ -18,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 class CampaignReviewAgent
 {
     private GeminiService $gemini;
+
     private Customer $customer;
 
     public function __construct(Customer $customer)
@@ -47,18 +47,19 @@ class CampaignReviewAgent
                 systemInstruction: $this->getSystemInstruction($platform),
             );
 
-            if (!$response || !isset($response['text'])) {
+            if (! $response || ! isset($response['text'])) {
                 Log::warning('[CampaignReviewAgent] Empty response from review model, using original plan', [
                     'platform' => $platform,
                     'customer_id' => $this->customer->id,
                 ]);
+
                 return $plan;
             }
 
             $corrected = ExecutionPlan::fromJson($response['text']);
 
             $changes = $this->detectChanges($plan->rawPlan, $corrected->rawPlan);
-            if (!empty($changes)) {
+            if (! empty($changes)) {
                 Log::info('[CampaignReviewAgent] Plan corrected before execution', [
                     'platform' => $platform,
                     'customer_id' => $this->customer->id,
@@ -73,10 +74,10 @@ class CampaignReviewAgent
 
             // Deterministic safety net: auto-fix any constraint violations the AI missed.
             $result = PlatformConstraints::autoFix($platform, $corrected->rawPlan);
-            if (!empty($result['fixes_applied'])) {
+            if (! empty($result['fixes_applied'])) {
                 Log::warning('[CampaignReviewAgent] Deterministic constraint fixes applied after AI review', [
-                    'platform'      => $platform,
-                    'customer_id'   => $this->customer->id,
+                    'platform' => $platform,
+                    'customer_id' => $this->customer->id,
                     'fixes_applied' => $result['fixes_applied'],
                 ]);
                 $corrected = ExecutionPlan::fromArray($result['plan']);
@@ -84,9 +85,9 @@ class CampaignReviewAgent
 
             // Log any remaining non-fixable violations as warnings (they will surface as API errors).
             $violations = PlatformConstraints::validate($platform, $corrected->rawPlan);
-            if (!empty($violations)) {
+            if (! empty($violations)) {
                 Log::warning('[CampaignReviewAgent] Non-fixable constraint violations remain after review', [
-                    'platform'   => $platform,
+                    'platform' => $platform,
                     'customer_id' => $this->customer->id,
                     'violations' => $violations,
                 ]);
@@ -100,13 +101,14 @@ class CampaignReviewAgent
                 'customer_id' => $this->customer->id,
                 'error' => $e->getMessage(),
             ]);
+
             return $plan;
         }
     }
 
     private function getSystemInstruction(string $platform): string
     {
-        return "You are a senior paid media QA specialist. Your only job is to receive an ad campaign execution plan JSON and return a corrected version of that exact JSON. Fix any violations of the rules provided. Return ONLY valid JSON — no markdown fences, no commentary.";
+        return 'You are a senior paid media QA specialist. Your only job is to receive an ad campaign execution plan JSON and return a corrected version of that exact JSON. Fix any violations of the rules provided. Return ONLY valid JSON — no markdown fences, no commentary.';
     }
 
     private function buildPrompt(string $rawJson, string $platform): string
@@ -115,8 +117,8 @@ class CampaignReviewAgent
 
         $platformRules = match ($platform) {
             'facebook' => $this->facebookRules(),
-            'google'   => $this->googleRules(),
-            default    => '',
+            'google' => $this->googleRules(),
+            default => '',
         };
 
         return <<<PROMPT
@@ -141,7 +143,7 @@ PROMPT;
 
     private function facebookRules(): string
     {
-        return <<<RULES
+        return <<<'RULES'
 ## FACEBOOK-SPECIFIC RULES
 
 1. **Objective selection**
@@ -171,7 +173,7 @@ RULES;
 
     private function googleRules(): string
     {
-        return <<<RULES
+        return <<<'RULES'
 ## GOOGLE ADS-SPECIFIC RULES
 
 1. **Campaign type**
@@ -226,11 +228,12 @@ RULES;
     {
         $current = $data;
         foreach ($keys as $key) {
-            if (!is_array($current) || !array_key_exists($key, $current)) {
+            if (! is_array($current) || ! array_key_exists($key, $current)) {
                 return null;
             }
             $current = $current[$key];
         }
+
         return $current;
     }
 }

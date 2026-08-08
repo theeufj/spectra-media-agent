@@ -5,9 +5,9 @@ namespace Tests\Unit\Agents;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\FacebookAds\InsightService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\FacebookAds\InsightService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Mockery;
@@ -16,7 +16,9 @@ use Tests\TestCase;
 class CampaignOptimizationAgentTest extends TestCase
 {
     protected CampaignOptimizationAgent $agent;
+
     protected GeminiService $geminiMock;
+
     protected $getPerformanceMock;
 
     protected function setUp(): void

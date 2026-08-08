@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\UserInvitationEmail;
 use App\Models\Customer;
 use App\Models\Invitation;
 use App\Models\User;
-use App\Mail\UserInvitationEmail;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Mail;
@@ -53,10 +53,10 @@ class InvitationController extends Controller
             // account while authenticated. Never log a user in from a bare token — that
             // would let anyone holding the link take over the invited account.
             if (Auth::check() && Auth::id() !== $existingUser->id) {
-                abort(403, 'This invitation was sent to a different account. Please log in as ' . $invitation->email . '.');
+                abort(403, 'This invitation was sent to a different account. Please log in as '.$invitation->email.'.');
             }
 
-            if (!Auth::check()) {
+            if (! Auth::check()) {
                 // Stash the accept URL as the intended destination and send to login.
                 return redirect()->guest(route('login'));
             }

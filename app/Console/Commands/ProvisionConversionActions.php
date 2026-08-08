@@ -32,9 +32,10 @@ use Illuminate\Console\Command;
  */
 class ProvisionConversionActions extends Command
 {
-    protected $signature   = 'conversions:provision
+    protected $signature = 'conversions:provision
                               {--force : Re-create already provisioned actions}
                               {--archive= : Archive (remove) a conversion action by exact name}';
+
     protected $description = 'Provision Google Ads conversion actions for sitetospend.com and store labels in settings.';
 
     private array $actions = [
@@ -43,40 +44,40 @@ class ProvisionConversionActions extends Command
         // endpoint (ConversionUploadService) to existing users; new server-side
         // uploads require the Data Manager API.
         'signup' => [
-            'name'     => 'Spectra — Signup',
-            'type'     => ConversionActionType::WEBPAGE,
+            'name' => 'Spectra — Signup',
+            'type' => ConversionActionType::WEBPAGE,
             'category' => ConversionActionCategory::SIGNUP,
-            'value'    => 99.0,
+            'value' => 99.0,
         ],
         'try_now' => [
-            'name'     => 'Spectra — Try Now Demo',
-            'type'     => ConversionActionType::WEBPAGE,
+            'name' => 'Spectra — Try Now Demo',
+            'type' => ConversionActionType::WEBPAGE,
             'category' => ConversionActionCategory::SUBMIT_LEAD_FORM,
-            'value'    => 50.0,
+            'value' => 50.0,
         ],
         'pricing_visit' => [
-            'name'     => 'Spectra — Pricing Visit',
-            'type'     => ConversionActionType::WEBPAGE,
+            'name' => 'Spectra — Pricing Visit',
+            'type' => ConversionActionType::WEBPAGE,
             'category' => ConversionActionCategory::SIGNUP,
-            'value'    => 5.0,
+            'value' => 5.0,
         ],
         'sandbox_launched' => [
-            'name'     => 'Spectra — Sandbox Launched',
-            'type'     => ConversionActionType::WEBPAGE,
+            'name' => 'Spectra — Sandbox Launched',
+            'type' => ConversionActionType::WEBPAGE,
             'category' => ConversionActionCategory::SIGNUP,
-            'value'    => 35.0,
+            'value' => 35.0,
         ],
         'campaign_live' => [
-            'name'     => 'Spectra — Campaign Live',
-            'type'     => ConversionActionType::UPLOAD_CLICKS,
+            'name' => 'Spectra — Campaign Live',
+            'type' => ConversionActionType::UPLOAD_CLICKS,
             'category' => ConversionActionCategory::SIGNUP,
-            'value'    => 80.0,
+            'value' => 80.0,
         ],
         'seven_day_return' => [
-            'name'     => 'Spectra — 7-Day Return',
-            'type'     => ConversionActionType::UPLOAD_CLICKS,
+            'name' => 'Spectra — 7-Day Return',
+            'type' => ConversionActionType::UPLOAD_CLICKS,
             'category' => ConversionActionCategory::SIGNUP,
-            'value'    => 50.0,
+            'value' => 50.0,
         ],
     ];
 
@@ -85,7 +86,7 @@ class ProvisionConversionActions extends Command
         $customerId = config('conversions.google_ads_customer_id');
 
         $client = $this->buildClient();
-        if (!$client) {
+        if (! $client) {
             return self::FAILURE;
         }
 
@@ -99,14 +100,16 @@ class ProvisionConversionActions extends Command
         foreach ($this->actions as $event => $def) {
             $settingKey = "conversion_resource_name.{$event}";
 
-            if (Setting::get($settingKey) && !$this->option('force')) {
+            if (Setting::get($settingKey) && ! $this->option('force')) {
                 $this->line("  <comment>skipped</comment>  {$event} — already provisioned");
+
                 continue;
             }
 
             $resourceName = $this->createOrFind($client, $customerId, $def);
-            if (!$resourceName) {
+            if (! $resourceName) {
                 $this->error("  failed    {$event} — could not create conversion action");
+
                 continue;
             }
 
@@ -138,15 +141,16 @@ class ProvisionConversionActions extends Command
             $response = $client->getGoogleAdsServiceClient()->search(
                 new SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
-                    'query'       => "SELECT conversion_action.resource_name "
-                        . "FROM conversion_action "
-                        . "WHERE conversion_action.name = '" . addslashes($def['name']) . "' "
-                        . "AND conversion_action.status = 'ENABLED' LIMIT 1",
+                    'query' => 'SELECT conversion_action.resource_name '
+                        .'FROM conversion_action '
+                        ."WHERE conversion_action.name = '".addslashes($def['name'])."' "
+                        ."AND conversion_action.status = 'ENABLED' LIMIT 1",
                 ])
             );
             foreach ($response->iterateAllElements() as $row) {
                 $existing = $row->getConversionAction()->getResourceName();
                 $this->line("  <comment>found</comment>     {$def['name']} — using existing action");
+
                 return $existing;
             }
         } catch (\Exception $e) {
@@ -155,32 +159,33 @@ class ProvisionConversionActions extends Command
 
         try {
             $action = new ConversionAction([
-                'name'                               => $def['name'],
-                'type'                               => $def['type'],
-                'category'                           => $def['category'],
-                'status'                             => ConversionActionStatus::ENABLED,
-                'view_through_lookback_window_days'  => 1,
+                'name' => $def['name'],
+                'type' => $def['type'],
+                'category' => $def['category'],
+                'status' => ConversionActionStatus::ENABLED,
+                'view_through_lookback_window_days' => 1,
                 'click_through_lookback_window_days' => 30,
-                'value_settings'                     => new ValueSettings([
-                    'default_value'            => $def['value'],
-                    'default_currency_code'    => 'USD',
+                'value_settings' => new ValueSettings([
+                    'default_value' => $def['value'],
+                    'default_currency_code' => 'USD',
                     'always_use_default_value' => true,
                 ]),
             ]);
 
-            $op = new ConversionActionOperation();
+            $op = new ConversionActionOperation;
             $op->setCreate($action);
 
             $response = $client->getConversionActionServiceClient()->mutateConversionActions(
                 new MutateConversionActionsRequest([
                     'customer_id' => $customerId,
-                    'operations'  => [$op],
+                    'operations' => [$op],
                 ])
             );
 
             return $response->getResults()[0]->getResourceName();
         } catch (\Exception $e) {
-            $this->error("    API error: " . $e->getMessage());
+            $this->error('    API error: '.$e->getMessage());
+
             return null;
         }
     }
@@ -191,9 +196,9 @@ class ProvisionConversionActions extends Command
             $response = $client->getGoogleAdsServiceClient()->search(
                 new SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
-                    'query'       => "SELECT conversion_action.tag_snippets "
-                        . "FROM conversion_action "
-                        . "WHERE conversion_action.resource_name = '{$resourceName}'",
+                    'query' => 'SELECT conversion_action.tag_snippets '
+                        .'FROM conversion_action '
+                        ."WHERE conversion_action.resource_name = '{$resourceName}'",
                 ])
             );
 
@@ -208,7 +213,7 @@ class ProvisionConversionActions extends Command
                 }
             }
         } catch (\Exception $e) {
-            $this->warn("    Label extraction error: " . $e->getMessage());
+            $this->warn('    Label extraction error: '.$e->getMessage());
         }
 
         return null;
@@ -222,9 +227,9 @@ class ProvisionConversionActions extends Command
             $response = $client->getGoogleAdsServiceClient()->search(
                 new SearchGoogleAdsRequest([
                     'customer_id' => $customerId,
-                    'query'       => "SELECT conversion_action.resource_name, conversion_action.status "
-                        . "FROM conversion_action "
-                        . "WHERE conversion_action.name = '" . addslashes($name) . "' LIMIT 1",
+                    'query' => 'SELECT conversion_action.resource_name, conversion_action.status '
+                        .'FROM conversion_action '
+                        ."WHERE conversion_action.name = '".addslashes($name)."' LIMIT 1",
                 ])
             );
 
@@ -233,8 +238,9 @@ class ProvisionConversionActions extends Command
                 $resourceName = $row->getConversionAction()->getResourceName();
             }
 
-            if (!$resourceName) {
-                $this->warn("No conversion action found with that name. Nothing changed.");
+            if (! $resourceName) {
+                $this->warn('No conversion action found with that name. Nothing changed.');
+
                 return self::SUCCESS;
             }
 
@@ -242,24 +248,26 @@ class ProvisionConversionActions extends Command
 
             $action = new ConversionAction([
                 'resource_name' => $resourceName,
-                'status'        => ConversionActionStatus::REMOVED,
+                'status' => ConversionActionStatus::REMOVED,
             ]);
 
-            $op = new ConversionActionOperation();
+            $op = new ConversionActionOperation;
             $op->setUpdate($action);
             $op->setUpdateMask(new FieldMask(['paths' => ['status']]));
 
             $client->getConversionActionServiceClient()->mutateConversionActions(
                 new MutateConversionActionsRequest([
                     'customer_id' => $customerId,
-                    'operations'  => [$op],
+                    'operations' => [$op],
                 ])
             );
 
             $this->info("Archived \"{$name}\" — it will no longer appear in Google Ads conversion reporting.");
+
             return self::SUCCESS;
         } catch (\Exception $e) {
-            $this->error('Archive failed: ' . $e->getMessage());
+            $this->error('Archive failed: '.$e->getMessage());
+
             return self::FAILURE;
         }
     }
@@ -267,32 +275,35 @@ class ProvisionConversionActions extends Command
     private function buildClient(): ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient
     {
         $configPath = storage_path('app/google_ads_php.ini');
-        if (!file_exists($configPath)) {
-            $this->error('google_ads_php.ini not found at ' . $configPath);
+        if (! file_exists($configPath)) {
+            $this->error('google_ads_php.ini not found at '.$configPath);
+
             return null;
         }
 
         $mcc = MccAccount::getActive();
-        if (!$mcc) {
+        if (! $mcc) {
             $this->error('No active MCC account found.');
+
             return null;
         }
 
         try {
             $refreshToken = $mcc->getDecryptedRefreshToken();
 
-            $oAuth2 = (new OAuth2TokenBuilder())
+            $oAuth2 = (new OAuth2TokenBuilder)
                 ->fromFile($configPath)
                 ->withRefreshToken($refreshToken)
                 ->build();
 
-            return (new GoogleAdsClientBuilder())
+            return (new GoogleAdsClientBuilder)
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2)
                 ->withLoginCustomerId($mcc->google_customer_id)
                 ->build();
         } catch (\Exception $e) {
-            $this->error('Failed to build Google Ads client: ' . $e->getMessage());
+            $this->error('Failed to build Google Ads client: '.$e->getMessage());
+
             return null;
         }
     }

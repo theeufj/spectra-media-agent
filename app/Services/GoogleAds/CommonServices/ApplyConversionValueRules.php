@@ -17,12 +17,6 @@ use Illuminate\Support\Facades\Log;
  */
 class ApplyConversionValueRules extends BaseGoogleAdsService
 {
-    /**
-     * @param  string   $customerId
-     * @param  string   $campaignResourceName
-     * @param  Customer $customer
-     * @return bool
-     */
     public function __invoke(
         string $customerId,
         string $campaignResourceName,
@@ -51,14 +45,14 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
             $userListId = $customer->google_ads_customer_match_list_id ?? null;
             if ($userListId) {
                 $audienceRuleResource = ($createRule)($customerId, [
-                    'action'   => ['operation' => 'ADD', 'value' => 1.5],
+                    'action' => ['operation' => 'ADD', 'value' => 1.5],
                     'audience' => ['user_list' => $userListId],
                 ]);
 
                 if ($audienceRuleResource) {
                     $ruleResourceNames[] = $audienceRuleResource;
                     Log::info('ApplyConversionValueRules: Created audience rule', [
-                        'rule'      => $audienceRuleResource,
+                        'rule' => $audienceRuleResource,
                         'user_list' => $userListId,
                     ]);
                 }
@@ -66,6 +60,7 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
 
             if (empty($ruleResourceNames)) {
                 Log::warning('ApplyConversionValueRules: No rules were created, skipping rule set');
+
                 return false;
             }
 
@@ -73,26 +68,28 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
             $createRuleSet = new CreateConversionValueRuleSet($this->customer);
             $ruleSetResource = ($createRuleSet)($customerId, $campaignResourceName, $ruleResourceNames);
 
-            if (!$ruleSetResource) {
+            if (! $ruleSetResource) {
                 Log::warning('ApplyConversionValueRules: Failed to create rule set for campaign', [
                     'campaign' => $campaignResourceName,
                 ]);
+
                 return false;
             }
 
             Log::info('ApplyConversionValueRules: Successfully applied conversion value rules', [
-                'campaign'    => $campaignResourceName,
-                'rule_set'    => $ruleSetResource,
-                'rule_count'  => count($ruleResourceNames),
+                'campaign' => $campaignResourceName,
+                'rule_set' => $ruleSetResource,
+                'rule_count' => count($ruleResourceNames),
             ]);
 
             return true;
         } catch (\Exception $e) {
             Log::error('ApplyConversionValueRules: Unexpected error', [
                 'customer_id' => $customerId,
-                'campaign'    => $campaignResourceName,
-                'error'       => $e->getMessage(),
+                'campaign' => $campaignResourceName,
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }

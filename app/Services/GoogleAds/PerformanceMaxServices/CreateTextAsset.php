@@ -4,10 +4,10 @@ namespace App\Services\GoogleAds\PerformanceMaxServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Common\TextAsset;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Asset;
 use Google\Ads\GoogleAds\V22\Services\AssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class CreateTextAsset extends BaseGoogleAdsService
 {
@@ -20,7 +20,7 @@ class CreateTextAsset extends BaseGoogleAdsService
             // 'name' => ... // Optional, auto-generated if omitted
         ]);
 
-        $operation = new AssetOperation();
+        $operation = new AssetOperation;
         $operation->setCreate($asset);
 
         try {
@@ -35,7 +35,8 @@ class CreateTextAsset extends BaseGoogleAdsService
 
             return $resourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to create Text Asset: " . $e->getMessage());
+            $this->logError('Failed to create Text Asset: '.$e->getMessage());
+
             return null;
         }
     }

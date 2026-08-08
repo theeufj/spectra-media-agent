@@ -41,7 +41,7 @@ class Competitor extends Model
         'pricing_info' => 'array',
         'ad_copy_samples' => 'array',
         'auction_insights' => 'array',
-        'auction_trends'   => 'array',
+        'auction_trends' => 'array',
         'impression_share' => 'decimal:2',
         'overlap_rate' => 'decimal:2',
         'position_above_rate' => 'decimal:2',
@@ -63,7 +63,7 @@ class Competitor extends Model
     {
         $parsed = parse_url($url);
         $host = $parsed['host'] ?? $url;
-        
+
         // Remove www. prefix
         return preg_replace('/^www\./', '', $host);
     }
@@ -83,7 +83,7 @@ class Competitor extends Model
     {
         return $query->where(function ($q) use ($daysOld) {
             $q->whereNull('last_analyzed_at')
-              ->orWhere('last_analyzed_at', '<', now()->subDays($daysOld));
+                ->orWhere('last_analyzed_at', '<', now()->subDays($daysOld));
         });
     }
 }

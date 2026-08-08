@@ -9,7 +9,7 @@ class ProposalPrompt
      */
     public static function getSystemInstruction(): string
     {
-        return <<<SYSTEM
+        return <<<'SYSTEM'
 You are an elite digital advertising strategist preparing a professional advertising proposal for a prospective client.
 You write compelling, data-informed proposals that win business. Your tone is confident yet approachable, and you back every recommendation with reasoning.
 Output valid JSON only — no markdown, no commentary outside the JSON structure.

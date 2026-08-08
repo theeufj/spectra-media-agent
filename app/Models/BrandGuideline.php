@@ -63,15 +63,15 @@ class BrandGuideline extends Model
         $voice = $this->brand_voice;
         $output = "**Primary Tone:** {$voice['primary_tone']}\n";
         $output .= "**Description:** {$voice['description']}\n";
-        $output .= "**Key Attributes:** " . implode(', ', $this->tone_attributes) . "\n";
-        
-        if (!empty($voice['examples'])) {
+        $output .= '**Key Attributes:** '.implode(', ', $this->tone_attributes)."\n";
+
+        if (! empty($voice['examples'])) {
             $output .= "**Examples from their content:**\n";
             foreach ($voice['examples'] as $example) {
                 $output .= "- \"{$example}\"\n";
             }
         }
-        
+
         return $output;
     }
 
@@ -81,10 +81,10 @@ class BrandGuideline extends Model
     public function getFormattedColorPalette(): string
     {
         $palette = $this->color_palette;
-        $output = "**Primary Colors:** " . implode(', ', $palette['primary_colors']) . "\n";
-        $output .= "**Secondary Colors:** " . implode(', ', $palette['secondary_colors'] ?? []) . "\n";
+        $output = '**Primary Colors:** '.implode(', ', $palette['primary_colors'])."\n";
+        $output .= '**Secondary Colors:** '.implode(', ', $palette['secondary_colors'] ?? [])."\n";
         $output .= "**Usage:** {$palette['description']}\n";
-        
+
         return $output;
     }
 
@@ -94,7 +94,7 @@ class BrandGuideline extends Model
     public function getFormattedUSPs(): string
     {
         return implode("\n", array_map(
-            fn($usp, $index) => ($index + 1) . ". {$usp}",
+            fn ($usp, $index) => ($index + 1).". {$usp}",
             $this->unique_selling_propositions,
             array_keys($this->unique_selling_propositions)
         ));
@@ -110,11 +110,11 @@ class BrandGuideline extends Model
         $output .= "**Demographics:** {$audience['demographics']}\n";
         $output .= "**Psychographics:** {$audience['psychographics']}\n";
         $output .= "**Language Level:** {$audience['language_level']}\n";
-        
-        if (!empty($audience['pain_points'])) {
-            $output .= "**Pain Points:** " . implode(', ', $audience['pain_points']) . "\n";
+
+        if (! empty($audience['pain_points'])) {
+            $output .= '**Pain Points:** '.implode(', ', $audience['pain_points'])."\n";
         }
-        
+
         return $output;
     }
 
@@ -157,7 +157,7 @@ GUIDELINES;
     private function getFormattedMessagingThemes(): string
     {
         return implode("\n", array_map(
-            fn($theme) => "- {$theme}",
+            fn ($theme) => "- {$theme}",
             $this->messaging_themes
         ));
     }
@@ -168,8 +168,9 @@ GUIDELINES;
     private function getFormattedVisualStyle(): string
     {
         $style = $this->visual_style;
-        return "Aesthetic: {$style['overall_aesthetic']}\n" .
-               "Imagery: {$style['imagery_style']}\n" .
+
+        return "Aesthetic: {$style['overall_aesthetic']}\n".
+               "Imagery: {$style['imagery_style']}\n".
                "Description: {$style['description']}";
     }
 
@@ -189,9 +190,9 @@ GUIDELINES;
         if (empty($this->do_not_use)) {
             return '';
         }
-        
-        return "**DO NOT USE:**\n" . implode("\n", array_map(
-            fn($item) => "- {$item}",
+
+        return "**DO NOT USE:**\n".implode("\n", array_map(
+            fn ($item) => "- {$item}",
             $this->do_not_use
         ));
     }
@@ -209,6 +210,6 @@ GUIDELINES;
      */
     public function isVerified(): bool
     {
-        return !is_null($this->last_verified_at);
+        return ! is_null($this->last_verified_at);
     }
 }

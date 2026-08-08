@@ -5,7 +5,9 @@ namespace App\Prompts;
 class SeasonalStrategyPrompt
 {
     private array $campaignData;
+
     private string $season;
+
     private array $baselineStrategy;
 
     public function __construct(array $campaignData, string $season, array $baselineStrategy)
@@ -18,8 +20,8 @@ class SeasonalStrategyPrompt
     public function getPrompt(): string
     {
         $prompt = "You are an expert marketing strategist. Based on the current campaign data, the upcoming season ({$this->season}), and the baseline seasonal strategy, generate a comprehensive and nuanced strategy shift. The output should be a JSON object detailing the recommended changes.\n\n";
-        $prompt .= "Current Campaign Data:\n" . json_encode($this->campaignData, JSON_PRETTY_PRINT) . "\n\n";
-        $prompt .= "Baseline Strategy for {$this->season}:\n" . json_encode($this->baselineStrategy, JSON_PRETTY_PRINT) . "\n\n";
+        $prompt .= "Current Campaign Data:\n".json_encode($this->campaignData, JSON_PRETTY_PRINT)."\n\n";
+        $prompt .= "Baseline Strategy for {$this->season}:\n".json_encode($this->baselineStrategy, JSON_PRETTY_PRINT)."\n\n";
         $prompt .= "Analyze this information and generate a specific, actionable strategy shift. The JSON output should include keys like 'budget_adjustment', 'bidding_strategy_change', 'new_keywords', 'ad_copy_suggestions', and 'targeting_refinements'.\n\n";
         $prompt .= "Example of desired JSON output:\n";
         $prompt .= "```json\n";

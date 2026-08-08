@@ -7,12 +7,12 @@ use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\StorageHelper;
-use Intervention\Image\Drivers\Gd\Driver;
-use Intervention\Image\ImageManager;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Resources\AssetGroupAsset;
 use Google\Ads\GoogleAds\V22\Services\AssetGroupAssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupAssetsRequest;
+use Intervention\Image\Drivers\Gd\Driver;
+use Intervention\Image\ImageManager;
 
 /**
  * Detects PMax asset groups with POOR/AVERAGE ad strength and heals them by
@@ -35,9 +35,9 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
 
     /** Google's targets for a strong text asset set, plus per-asset character limits. */
     private const SPEC = [
-        'HEADLINE'      => ['field' => AssetFieldType::HEADLINE,      'target' => 15, 'max' => 30],
+        'HEADLINE' => ['field' => AssetFieldType::HEADLINE,      'target' => 15, 'max' => 30],
         'LONG_HEADLINE' => ['field' => AssetFieldType::LONG_HEADLINE, 'target' => 5,  'max' => 90],
-        'DESCRIPTION'   => ['field' => AssetFieldType::DESCRIPTION,   'target' => 5,  'max' => 90],
+        'DESCRIPTION' => ['field' => AssetFieldType::DESCRIPTION,   'target' => 5,  'max' => 90],
     ];
 
     private GeminiService $gemini;
@@ -58,7 +58,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
     {
         $actions = [];
         $customerId = $this->customer->google_ads_customer_id;
-        if (!$customerId) {
+        if (! $customerId) {
             return $actions;
         }
 
@@ -67,7 +67,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
 
             $filter = "campaign.status = 'ENABLED' AND asset_group.status = 'ENABLED'";
             if ($campaign && ($campId = $campaign->googleCampaignNumericId())) {
-                $filter .= ' AND campaign.id = ' . $campId;
+                $filter .= ' AND campaign.id = '.$campId;
             }
 
             $groups = [];
@@ -75,15 +75,15 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             foreach ($this->searchQuery($customerId, $q)->iterateAllElements() as $row) {
                 $ag = $row->getAssetGroup();
                 $groups[] = [
-                    'res'      => $ag->getResourceName(),
-                    'id'       => $ag->getId(),
-                    'name'     => $ag->getName(),
+                    'res' => $ag->getResourceName(),
+                    'id' => $ag->getId(),
+                    'name' => $ag->getName(),
                     'strength' => $ag->getAdStrength(),
                 ];
             }
 
             foreach ($groups as $g) {
-                if (!in_array($g['strength'], self::HEAL_STRENGTHS, true)) {
+                if (! in_array($g['strength'], self::HEAL_STRENGTHS, true)) {
                     continue;
                 }
                 $result = $this->healGroup($customerId, $g);
@@ -92,7 +92,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                 }
             }
         } catch (\Throwable $e) {
-            $this->logError('HealAssetGroupStrength: heal failed: ' . $e->getMessage());
+            $this->logError('HealAssetGroupStrength: heal failed: '.$e->getMessage());
         }
 
         return $actions;
@@ -119,15 +119,19 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         $imagesAdded = $this->healImages($customerId, $group, $existing);
 
         $missingMedia = [];
-        if (($existing['media']['LOGO'] ?? 0) === 0)          $missingMedia[] = 'logo (1:1)';
-        if (($existing['media']['YOUTUBE_VIDEO'] ?? 0) === 0) $missingMedia[] = 'video';
+        if (($existing['media']['LOGO'] ?? 0) === 0) {
+            $missingMedia[] = 'logo (1:1)';
+        }
+        if (($existing['media']['YOUTUBE_VIDEO'] ?? 0) === 0) {
+            $missingMedia[] = 'video';
+        }
 
         if (empty($needed)) {
             // Text is already full; strength is limited by media only.
             return ($missingMedia || $imagesAdded > 0) ? [
-                'asset_group'   => $group['name'],
-                'ad_strength'   => $this->strengthLabel($group['strength']),
-                'added'         => $imagesAdded > 0 ? ['IMAGE' => $imagesAdded] : [],
+                'asset_group' => $group['name'],
+                'ad_strength' => $this->strengthLabel($group['strength']),
+                'added' => $imagesAdded > 0 ? ['IMAGE' => $imagesAdded] : [],
                 'missing_media' => $missingMedia,
             ] : null;
         }
@@ -144,21 +148,21 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         foreach (self::SPEC as $type => $spec) {
             foreach (($generated[$type] ?? []) as $text) {
                 $assetRes = $creator($customerId, $text);
-                if (!$assetRes) {
+                if (! $assetRes) {
                     continue;
                 }
-                $op = new AssetGroupAssetOperation();
+                $op = new AssetGroupAssetOperation;
                 $op->setCreate(new AssetGroupAsset([
                     'asset_group' => $group['res'],
-                    'asset'       => $assetRes,
-                    'field_type'  => $spec['field'],
+                    'asset' => $assetRes,
+                    'field_type' => $spec['field'],
                 ]));
                 $linkOps[] = $op;
                 $added[$type] = ($added[$type] ?? 0) + 1;
             }
         }
 
-        if (!empty($linkOps) && !$this->batchLink($customerId, $linkOps)) {
+        if (! empty($linkOps) && ! $this->batchLink($customerId, $linkOps)) {
             $added = []; // link failed; assets created but not attached
         }
 
@@ -172,13 +176,13 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
 
         $this->logInfo('HealAssetGroupStrength: topped up asset group', [
             'asset_group' => $group['name'],
-            'added'       => $added,
+            'added' => $added,
         ]);
 
         return [
-            'asset_group'   => $group['name'],
-            'ad_strength'   => $this->strengthLabel($group['strength']),
-            'added'         => $added,
+            'asset_group' => $group['name'],
+            'ad_strength' => $this->strengthLabel($group['strength']),
+            'added' => $added,
             'missing_media' => $missingMedia,
         ];
     }
@@ -207,43 +211,44 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             return 0;
         }
 
-        $brand   = $this->customer->name ?? 'the brand';
+        $brand = $this->customer->name ?? 'the brand';
         $creator = new CreateImageAsset($this->customer);
-        $linker  = new LinkAssetGroupAsset($this->customer);
-        $added   = 0;
+        $linker = new LinkAssetGroupAsset($this->customer);
+        $added = 0;
 
         foreach ($specs as $spec) {
             try {
                 $prompt = "Clean, professional marketing image for \"{$brand}\". Bold, modern, high-contrast, "
-                    . "no text, no logos, no watermarks, no people's faces. Suitable as a Google Ads asset. "
-                    . "Aspect ratio {$spec['ratio']}.";
+                    ."no text, no logos, no watermarks, no people's faces. Suitable as a Google Ads asset. "
+                    ."Aspect ratio {$spec['ratio']}.";
 
                 $result = $this->gemini->generateImage($prompt, config('ai.models.image', 'gemini-2.5-flash-image'));
-                if (!$result || empty($result['data'])) {
+                if (! $result || empty($result['data'])) {
                     // Don't fail silently — a broken/unavailable image model here means
                     // ad-strength healing never adds an image yet reports no error.
                     $this->logError("HealAssetGroupStrength: image generation returned no data for {$spec['ratio']} (model "
-                        . config('ai.models.image') . ') — skipping');
+                        .config('ai.models.image').') — skipping');
+
                     continue;
                 }
 
                 // Crop/resize to the exact dimensions Google validates against.
-                $manager = new ImageManager(new Driver());
-                $image   = $manager->read(base64_decode($result['data']))->cover($spec['w'], $spec['h']);
-                $binary  = (string) $image->toJpeg(85);
+                $manager = new ImageManager(new Driver);
+                $image = $manager->read(base64_decode($result['data']))->cover($spec['w'], $spec['h']);
+                $binary = (string) $image->toJpeg(85);
 
-                $path = 'ad-assets/' . $group['id'] . '/' . uniqid('img_', true) . '.jpg';
+                $path = 'ad-assets/'.$group['id'].'/'.uniqid('img_', true).'.jpg';
                 [$s3Path, $publicUrl] = StorageHelper::put($path, $binary, 'image/jpeg');
-                if (!$publicUrl) {
+                if (! $publicUrl) {
                     continue;
                 }
 
-                $assetRes = $creator($customerId, $publicUrl, 'Auto image ' . now()->format('Y-m-d'));
+                $assetRes = $creator($customerId, $publicUrl, 'Auto image '.now()->format('Y-m-d'));
                 if ($assetRes && $linker($customerId, $group['res'], $assetRes, $spec['field'])) {
                     $added++;
                 }
             } catch (\Throwable $e) {
-                $this->logError('HealAssetGroupStrength: image heal failed: ' . $e->getMessage());
+                $this->logError('HealAssetGroupStrength: image heal failed: '.$e->getMessage());
             }
         }
 
@@ -258,16 +263,20 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                 $this->client->getAssetGroupAssetServiceClient()->mutateAssetGroupAssets(
                     new MutateAssetGroupAssetsRequest(['customer_id' => $customerId, 'operations' => $ops])
                 );
+
                 return true;
             } catch (\Throwable $e) {
                 if ($attempt < 3 && str_contains($e->getMessage(), 'CONCURRENT_MODIFICATION')) {
                     usleep(1_000_000 * $attempt); // 1s, then 2s backoff
+
                     continue;
                 }
-                $this->logError('HealAssetGroupStrength: batch link failed: ' . $e->getMessage());
+                $this->logError('HealAssetGroupStrength: batch link failed: '.$e->getMessage());
+
                 return false;
             }
         }
+
         return false;
     }
 
@@ -290,12 +299,12 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
             AssetFieldType::YOUTUBE_VIDEO => 'YOUTUBE_VIDEO',
         ];
 
-        $q = "SELECT asset_group_asset.field_type, asset.text_asset.text FROM asset_group_asset "
-            . "WHERE asset_group.id = {$assetGroupId} AND asset_group_asset.status = 'ENABLED'";
+        $q = 'SELECT asset_group_asset.field_type, asset.text_asset.text FROM asset_group_asset '
+            ."WHERE asset_group.id = {$assetGroupId} AND asset_group_asset.status = 'ENABLED'";
         foreach ($this->searchQuery($customerId, $q)->iterateAllElements() as $row) {
             $ft = $row->getAssetGroupAsset()->getFieldType();
             $label = $fieldName[$ft] ?? null;
-            if (!$label) {
+            if (! $label) {
                 continue;
             }
             if (isset($text[$label])) {
@@ -315,25 +324,25 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
      * Ask Gemini for the needed text assets, then enforce character limits and
      * dedupe against what already exists.
      *
-     * @param  array<string, int>        $needed    type => count
-     * @param  array<string, string[]>   $existing  current texts by type
+     * @param  array<string, int>  $needed  type => count
+     * @param  array<string, string[]>  $existing  current texts by type
      * @return array<string, string[]>
      */
     private function generateAssets(array $needed, array $existing): array
     {
-        $brand = trim(($this->customer->name ?? '') . ' — ' . ($this->customer->website ?? ''));
+        $brand = trim(($this->customer->name ?? '').' — '.($this->customer->website ?? ''));
         $existingSample = collect($existing)->flatten()->take(10)->implode(' | ');
 
         $ask = [];
         foreach ($needed as $type => $n) {
-            $ask[] = "{$n} {$type}(s) (max " . self::SPEC[$type]['max'] . ' chars each)';
+            $ask[] = "{$n} {$type}(s) (max ".self::SPEC[$type]['max'].' chars each)';
         }
 
         $prompt = "You are writing Google Ads Performance Max text assets for: {$brand}.\n"
-            . 'Existing assets (do NOT repeat these, and match their tone): ' . ($existingSample ?: '(none)') . "\n\n"
-            . 'Generate distinct, high-converting, benefit-led copy. Strictly respect character limits. '
-            . 'Return ONLY a JSON object with keys headlines, long_headlines, descriptions (arrays of strings). '
-            . 'Provide exactly: ' . implode('; ', $ask) . ". Omit keys you were not asked for.";
+            .'Existing assets (do NOT repeat these, and match their tone): '.($existingSample ?: '(none)')."\n\n"
+            .'Generate distinct, high-converting, benefit-led copy. Strictly respect character limits. '
+            .'Return ONLY a JSON object with keys headlines, long_headlines, descriptions (arrays of strings). '
+            .'Provide exactly: '.implode('; ', $ask).'. Omit keys you were not asked for.';
 
         $result = $this->gemini->generateContent(
             config('ai.models.default'),
@@ -388,6 +397,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
                 return $decoded;
             }
         }
+
         return [];
     }
 

@@ -2,45 +2,35 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use App\Models\Customer;
+use App\Jobs\GetKeywordQualityScore;
 use App\Models\Campaign;
+use App\Models\Customer;
 use App\Models\KeywordQualityScore;
-use App\Services\GoogleAds\AccountStructureService;
-
+use App\Services\GeminiService;
 // Keyword optimization
-use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
-use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
-use App\Services\GoogleAds\CommonServices\RemoveKeyword;
+use App\Services\GoogleAds\AccountStructureService;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
-
-// Bid adjustments
-use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
-use App\Services\GoogleAds\CommonServices\SetLocationBidAdjustment;
-use App\Services\GoogleAds\CommonServices\SetAdSchedule;
-
-// Ad extensions
-use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
 use App\Services\GoogleAds\CommonServices\CreateCallAsset;
 use App\Services\GoogleAds\CommonServices\CreatePriceAsset;
+// Bid adjustments
 use App\Services\GoogleAds\CommonServices\CreatePromotionAsset;
-use App\Services\GoogleAds\CommonServices\CreateCalloutAsset;
+use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
 use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
-
+// Ad extensions
+use App\Services\GoogleAds\CommonServices\RemoveKeyword;
+use App\Services\GoogleAds\CommonServices\SetAdSchedule;
+use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
+use App\Services\GoogleAds\CommonServices\SetLocationBidAdjustment;
+use App\Services\GoogleAds\CommonServices\UpdateKeywordBid;
+use App\Services\GoogleAds\CommonServices\UpdateKeywordStatus;
 // Reporting
 use App\Services\Reporting\ExecutiveReportService;
 use App\Services\Reporting\QualityScoreTrendingService;
-use App\Jobs\GetKeywordQualityScore;
-
+use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 // Optimization agent
-use App\Services\Agents\CampaignOptimizationAgent;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\GeminiService;
-
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
 use Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device;
+use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Illuminate\Console\Command;
 
 class TestNewServices extends Command
 {
@@ -53,6 +43,7 @@ class TestNewServices extends Command
     protected $description = 'Test all new SEM services: keyword optimization, bid adjustments, ad extensions, reporting, and optimization agent actuators.';
 
     private array $results = [];
+
     private ?string $testKeywordResource = null;
 
     public function handle(): int
@@ -62,7 +53,7 @@ class TestNewServices extends Command
 
         // Resolve customer
         $customer = $this->resolveCustomer();
-        if (!$customer) {
+        if (! $customer) {
             return 1;
         }
         $customerId = $customer->google_ads_customer_id;
@@ -71,8 +62,9 @@ class TestNewServices extends Command
 
         // Find a Search campaign with an ad group
         $searchCampaign = $this->findSearchCampaign($customer, $customerId);
-        if (!$searchCampaign) {
+        if (! $searchCampaign) {
             $this->error('No Search campaign found in this account. Run googleads:test-all-campaigns first.');
+
             return 1;
         }
 
@@ -102,7 +94,7 @@ class TestNewServices extends Command
         $this->testEnableKeyword($customer, $customerId);
 
         // 1e. Remove keyword (destructive)
-        if (!$this->option('skip-destructive')) {
+        if (! $this->option('skip-destructive')) {
             $this->testRemoveKeyword($customer, $customerId);
         } else {
             $this->warn('  [SKIPPED] RemoveKeyword (--skip-destructive)');
@@ -140,7 +132,7 @@ class TestNewServices extends Command
         // ────────────────────────────────────────────────
         // PHASE 4: Reporting
         // ────────────────────────────────────────────────
-        if (!$this->option('skip-reporting')) {
+        if (! $this->option('skip-reporting')) {
             $this->info('━━━ PHASE 4: Reporting ━━━');
             $this->testQualityScoreTrending($customer);
             $this->testExecutiveReport($customer);
@@ -185,18 +177,22 @@ class TestNewServices extends Command
 
         if ($specifiedId) {
             $customer = Customer::where('google_ads_customer_id', $specifiedId)->first();
-            if (!$customer) {
+            if (! $customer) {
                 $this->error("No customer found with Google Ads ID: {$specifiedId}");
+
                 return null;
             }
+
             return $customer;
         }
 
         $customer = Customer::whereNotNull('google_ads_customer_id')->latest()->first();
-        if (!$customer) {
+        if (! $customer) {
             $this->error('No customer with a Google Ads account found. Use --customer-id= to specify one.');
+
             return null;
         }
+
         return $customer;
     }
 
@@ -209,12 +205,12 @@ class TestNewServices extends Command
             $clientProp->setAccessible(true);
             $client = $clientProp->getValue($service);
 
-            $query = "SELECT campaign.resource_name, campaign.name, ad_group.resource_name "
-                   . "FROM ad_group "
-                   . "WHERE campaign.advertising_channel_type = 'SEARCH' "
-                   . "AND campaign.status != 'REMOVED' "
-                   . "AND ad_group.status != 'REMOVED' "
-                   . "LIMIT 1";
+            $query = 'SELECT campaign.resource_name, campaign.name, ad_group.resource_name '
+                   .'FROM ad_group '
+                   ."WHERE campaign.advertising_channel_type = 'SEARCH' "
+                   ."AND campaign.status != 'REMOVED' "
+                   ."AND ad_group.status != 'REMOVED' "
+                   .'LIMIT 1';
 
             $response = $client->getGoogleAdsServiceClient()->search(
                 new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -231,8 +227,9 @@ class TestNewServices extends Command
                 ];
             }
         } catch (\Exception $e) {
-            $this->warn("  Error finding search campaign: " . $e->getMessage());
+            $this->warn('  Error finding search campaign: '.$e->getMessage());
         }
+
         return null;
     }
 
@@ -245,7 +242,7 @@ class TestNewServices extends Command
         $this->line('  [1/6] Adding test keyword for manipulation...');
         try {
             $service = new AddKeyword($customer);
-            $testKeyword = 'spectra test keyword ' . substr(uniqid(), -6);
+            $testKeyword = 'spectra test keyword '.substr(uniqid(), -6);
             $resource = ($service)($customerId, $adGroupResource, $testKeyword, KeywordMatchType::EXACT);
 
             if ($resource) {
@@ -257,7 +254,7 @@ class TestNewServices extends Command
                 $this->logResult('AddKeyword (test)', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('AddKeyword (test)', 'FAILED', $this->extractError($e));
         }
     }
@@ -265,9 +262,10 @@ class TestNewServices extends Command
     private function testUpdateKeywordBid(Customer $customer, string $customerId): void
     {
         $this->line('  [2/6] Updating keyword bid...');
-        if (!$this->testKeywordResource) {
+        if (! $this->testKeywordResource) {
             $this->warn('    Skipped — no test keyword available');
             $this->logResult('UpdateKeywordBid', 'SKIPPED', 'No test keyword');
+
             return;
         }
 
@@ -284,7 +282,7 @@ class TestNewServices extends Command
                 $this->logResult('UpdateKeywordBid', 'FAILED', 'Returned false');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('UpdateKeywordBid', 'FAILED', $this->extractError($e));
         }
     }
@@ -292,9 +290,10 @@ class TestNewServices extends Command
     private function testPauseKeyword(Customer $customer, string $customerId): void
     {
         $this->line('  [3/6] Pausing keyword...');
-        if (!$this->testKeywordResource) {
+        if (! $this->testKeywordResource) {
             $this->warn('    Skipped — no test keyword available');
             $this->logResult('PauseKeyword', 'SKIPPED', 'No test keyword');
+
             return;
         }
 
@@ -310,7 +309,7 @@ class TestNewServices extends Command
                 $this->logResult('PauseKeyword', 'FAILED', 'Returned false');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('PauseKeyword', 'FAILED', $this->extractError($e));
         }
     }
@@ -318,9 +317,10 @@ class TestNewServices extends Command
     private function testEnableKeyword(Customer $customer, string $customerId): void
     {
         $this->line('  [4/6] Re-enabling keyword...');
-        if (!$this->testKeywordResource) {
+        if (! $this->testKeywordResource) {
             $this->warn('    Skipped — no test keyword available');
             $this->logResult('EnableKeyword', 'SKIPPED', 'No test keyword');
+
             return;
         }
 
@@ -336,7 +336,7 @@ class TestNewServices extends Command
                 $this->logResult('EnableKeyword', 'FAILED', 'Returned false');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('EnableKeyword', 'FAILED', $this->extractError($e));
         }
     }
@@ -344,9 +344,10 @@ class TestNewServices extends Command
     private function testRemoveKeyword(Customer $customer, string $customerId): void
     {
         $this->line('  [5/6] Removing test keyword...');
-        if (!$this->testKeywordResource) {
+        if (! $this->testKeywordResource) {
             $this->warn('    Skipped — no test keyword available');
             $this->logResult('RemoveKeyword', 'SKIPPED', 'No test keyword');
+
             return;
         }
 
@@ -363,7 +364,7 @@ class TestNewServices extends Command
                 $this->logResult('RemoveKeyword', 'FAILED', 'Returned false');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('RemoveKeyword', 'FAILED', $this->extractError($e));
         }
     }
@@ -382,13 +383,13 @@ class TestNewServices extends Command
             ->where('google_ads_campaign_id', $googleCampaignId)
             ->first();
 
-        if (!$campaign) {
+        if (! $campaign) {
             $this->warn('    ⚠ No Campaign model found — trying any campaign for this customer');
             $campaign = Campaign::where('customer_id', $customer->id)->first();
         }
 
-        if (!$campaign) {
-            $this->line('    Creating Campaign record for Google Ads campaign ' . $googleCampaignId);
+        if (! $campaign) {
+            $this->line('    Creating Campaign record for Google Ads campaign '.$googleCampaignId);
             $campaign = Campaign::create([
                 'customer_id' => $customer->id,
                 'name' => 'Test Search Campaign',
@@ -403,7 +404,7 @@ class TestNewServices extends Command
                 'end_date' => now()->addMonth(),
                 'primary_kpi' => 'conversions',
             ]);
-            $this->info('    Created Campaign record (ID: ' . $campaign->id . ')');
+            $this->info('    Created Campaign record (ID: '.$campaign->id.')');
         }
 
         try {
@@ -429,7 +430,7 @@ class TestNewServices extends Command
                 if ($sample->isNotEmpty()) {
                     $this->table(
                         ['Keyword', 'QS', 'Impressions', 'Clicks'],
-                        $sample->map(fn($s) => [$s->keyword_text, $s->quality_score ?? 'N/A', $s->impressions, $s->clicks])->toArray()
+                        $sample->map(fn ($s) => [$s->keyword_text, $s->quality_score ?? 'N/A', $s->impressions, $s->clicks])->toArray()
                     );
                 }
             } else {
@@ -437,7 +438,7 @@ class TestNewServices extends Command
                 $this->logResult('QS Persistence', 'OK', 'Job ran but no data (new campaign)');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('QS Persistence', 'FAILED', $this->extractError($e));
         }
     }
@@ -461,7 +462,7 @@ class TestNewServices extends Command
                 $this->logResult('DeviceBidAdjustment', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('DeviceBidAdjustment', 'FAILED', $this->extractError($e));
         }
     }
@@ -482,7 +483,7 @@ class TestNewServices extends Command
                 $this->logResult('LocationBidAdjustment', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('LocationBidAdjustment', 'FAILED', $this->extractError($e));
         }
     }
@@ -503,7 +504,7 @@ class TestNewServices extends Command
                 $this->logResult('AdSchedule', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('AdSchedule', 'FAILED', $this->extractError($e));
         }
     }
@@ -534,7 +535,7 @@ class TestNewServices extends Command
                 $this->logResult('StructuredSnippet', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('StructuredSnippet', 'FAILED', $this->extractError($e));
         }
     }
@@ -556,7 +557,7 @@ class TestNewServices extends Command
                 $this->logResult('CallAsset', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('CallAsset', 'FAILED', $this->extractError($e));
         }
     }
@@ -582,7 +583,7 @@ class TestNewServices extends Command
                 $this->logResult('PriceAsset', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('PriceAsset', 'FAILED', $this->extractError($e));
         }
     }
@@ -609,7 +610,7 @@ class TestNewServices extends Command
                 $this->logResult('PromotionAsset', 'FAILED', 'Returned null');
             }
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('PromotionAsset', 'FAILED', $this->extractError($e));
         }
     }
@@ -632,11 +633,11 @@ class TestNewServices extends Command
                 $this->info("    ✓ Linked to campaign: {$linkResource}");
                 $this->logResult("{$label} Link", 'OK', 'Linked to campaign');
             } else {
-                $this->warn("    ⚠ Asset created but linking returned null");
+                $this->warn('    ⚠ Asset created but linking returned null');
                 $this->logResult("{$label} Link", 'FAILED', 'Link returned null');
             }
         } catch (\Exception $e) {
-            $this->warn("    ⚠ Asset created but linking failed: " . substr($e->getMessage(), 0, 100));
+            $this->warn('    ⚠ Asset created but linking failed: '.substr($e->getMessage(), 0, 100));
             $this->logResult("{$label} Link", 'FAILED', $this->extractError($e));
         }
     }
@@ -649,17 +650,17 @@ class TestNewServices extends Command
     {
         $this->line('  [1/2] Quality Score trending...');
         try {
-            $service = new QualityScoreTrendingService();
+            $service = new QualityScoreTrendingService;
             $trends = $service->getTrends($customer, 30);
 
-            $this->info("    ✓ Average QS: " . ($trends['average_qs'] ?? 'N/A'));
-            $this->info("    Trending up: " . count($trends['trending_up']) . " keywords");
-            $this->info("    Trending down: " . count($trends['trending_down']) . " keywords");
-            $this->info("    Best keywords: " . count($trends['best_keywords']));
-            $this->info("    Worst keywords: " . count($trends['worst_keywords']));
-            $this->logResult('QS Trending', 'OK', 'Avg QS: ' . ($trends['average_qs'] ?? 'N/A'));
+            $this->info('    ✓ Average QS: '.($trends['average_qs'] ?? 'N/A'));
+            $this->info('    Trending up: '.count($trends['trending_up']).' keywords');
+            $this->info('    Trending down: '.count($trends['trending_down']).' keywords');
+            $this->info('    Best keywords: '.count($trends['best_keywords']));
+            $this->info('    Worst keywords: '.count($trends['worst_keywords']));
+            $this->logResult('QS Trending', 'OK', 'Avg QS: '.($trends['average_qs'] ?? 'N/A'));
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('QS Trending', 'FAILED', $this->extractError($e));
         }
     }
@@ -673,22 +674,22 @@ class TestNewServices extends Command
             $report = $service->generate($customer, 'weekly');
 
             $summary = $report['summary'] ?? [];
-            $this->info("    ✓ Report generated");
-            $this->info("    Campaigns: " . ($summary['total_campaigns'] ?? 0));
-            $this->info("    Impressions: " . number_format($summary['total_impressions'] ?? 0));
-            $this->info("    Clicks: " . number_format($summary['total_clicks'] ?? 0));
-            $this->info("    Cost: $" . ($summary['total_cost'] ?? 0));
+            $this->info('    ✓ Report generated');
+            $this->info('    Campaigns: '.($summary['total_campaigns'] ?? 0));
+            $this->info('    Impressions: '.number_format($summary['total_impressions'] ?? 0));
+            $this->info('    Clicks: '.number_format($summary['total_clicks'] ?? 0));
+            $this->info('    Cost: $'.($summary['total_cost'] ?? 0));
 
-            if (!empty($report['ai_executive_summary'])) {
+            if (! empty($report['ai_executive_summary'])) {
                 $this->newLine();
                 $this->line('    --- AI Executive Summary ---');
-                $this->line('    ' . str_replace("\n", "\n    ", substr($report['ai_executive_summary'], 0, 500)));
+                $this->line('    '.str_replace("\n", "\n    ", substr($report['ai_executive_summary'], 0, 500)));
                 $this->line('    ---');
             }
 
-            $this->logResult('ExecutiveReport', 'OK', ($summary['total_campaigns'] ?? 0) . ' campaigns analyzed');
+            $this->logResult('ExecutiveReport', 'OK', ($summary['total_campaigns'] ?? 0).' campaigns analyzed');
         } catch (\Exception $e) {
-            $this->error('    ✗ ' . $this->extractError($e));
+            $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('ExecutiveReport', 'FAILED', $this->extractError($e));
         }
     }
@@ -708,13 +709,13 @@ class TestNewServices extends Command
             $client = $clientProp->getValue($service);
 
             // Check campaign criteria (device bids, location, schedules)
-            $query = "SELECT campaign_criterion.type, campaign_criterion.bid_modifier, "
-                   . "campaign_criterion.device.type, campaign_criterion.location.geo_target_constant, "
-                   . "campaign_criterion.ad_schedule.day_of_week, campaign.name "
-                   . "FROM campaign_criterion "
-                   . "WHERE campaign.status != 'REMOVED' "
-                   . "AND campaign_criterion.negative = false "
-                   . "AND campaign_criterion.type IN ('DEVICE', 'LOCATION', 'AD_SCHEDULE')";
+            $query = 'SELECT campaign_criterion.type, campaign_criterion.bid_modifier, '
+                   .'campaign_criterion.device.type, campaign_criterion.location.geo_target_constant, '
+                   .'campaign_criterion.ad_schedule.day_of_week, campaign.name '
+                   .'FROM campaign_criterion '
+                   ."WHERE campaign.status != 'REMOVED' "
+                   .'AND campaign_criterion.negative = false '
+                   ."AND campaign_criterion.type IN ('DEVICE', 'LOCATION', 'AD_SCHEDULE')";
 
             $response = $client->getGoogleAdsServiceClient()->search(
                 new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -730,9 +731,9 @@ class TestNewServices extends Command
                 $modifier = $cc->getBidModifier() ?: '-';
 
                 $detail = match ($type) {
-                    'DEVICE' => 'Device: ' . \Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device::name($cc->getDevice()->getType()),
-                    'LOCATION' => 'Location: ' . ($cc->getLocation()?->getGeoTargetConstant() ?? '?'),
-                    'AD_SCHEDULE' => 'Day: ' . \Google\Ads\GoogleAds\V22\Enums\DayOfWeekEnum\DayOfWeek::name($cc->getAdSchedule()->getDayOfWeek()),
+                    'DEVICE' => 'Device: '.\Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device::name($cc->getDevice()->getType()),
+                    'LOCATION' => 'Location: '.($cc->getLocation()?->getGeoTargetConstant() ?? '?'),
+                    'AD_SCHEDULE' => 'Day: '.\Google\Ads\GoogleAds\V22\Enums\DayOfWeekEnum\DayOfWeek::name($cc->getAdSchedule()->getDayOfWeek()),
                     default => $type,
                 };
 
@@ -744,19 +745,19 @@ class TestNewServices extends Command
                 ];
             }
 
-            if (!empty($criteria)) {
+            if (! empty($criteria)) {
                 $this->table(['Campaign', 'Criterion Type', 'Detail', 'Bid Modifier'], $criteria);
-                $this->logResult('Criteria Verification', 'OK', count($criteria) . ' criteria found');
+                $this->logResult('Criteria Verification', 'OK', count($criteria).' criteria found');
             } else {
                 $this->warn('  No campaign criteria found');
                 $this->logResult('Criteria Verification', 'OK', 'No criteria (may be expected)');
             }
 
             // Check campaign assets (extensions)
-            $assetQuery = "SELECT campaign_asset.resource_name, campaign_asset.field_type, "
-                        . "asset.type, asset.name, campaign.name, campaign.status "
-                        . "FROM campaign_asset "
-                        . "WHERE campaign.status != 'REMOVED'";
+            $assetQuery = 'SELECT campaign_asset.resource_name, campaign_asset.field_type, '
+                        .'asset.type, asset.name, campaign.name, campaign.status '
+                        .'FROM campaign_asset '
+                        ."WHERE campaign.status != 'REMOVED'";
 
             $assetResponse = $client->getGoogleAdsServiceClient()->search(
                 new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -776,16 +777,16 @@ class TestNewServices extends Command
                 ];
             }
 
-            if (!empty($assets)) {
+            if (! empty($assets)) {
                 $this->table(['Campaign', 'Asset Type', 'Asset Name'], $assets);
-                $this->logResult('Assets Verification', 'OK', count($assets) . ' campaign assets linked');
+                $this->logResult('Assets Verification', 'OK', count($assets).' campaign assets linked');
             } else {
                 $this->warn('  No campaign assets found');
                 $this->logResult('Assets Verification', 'OK', 'No campaign assets (may be expected)');
             }
 
         } catch (\Exception $e) {
-            $this->warn('  Verification error: ' . $this->extractError($e));
+            $this->warn('  Verification error: '.$this->extractError($e));
             $this->logResult('Verification', 'FAILED', $this->extractError($e));
         }
     }
@@ -808,6 +809,7 @@ class TestNewServices extends Command
         if (preg_match('/"(\w+Error)":\s*"(\w+)"/', $msg, $m)) {
             return "{$m[1]}: {$m[2]}";
         }
+
         return substr($msg, 0, 300);
     }
 }

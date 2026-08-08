@@ -22,20 +22,21 @@ class PixelService extends BaseFacebookAdsService
             return $this->customer->facebook_pixel_id;
         }
 
-        if (!$this->customer->facebook_ads_account_id) {
+        if (! $this->customer->facebook_ads_account_id) {
             return null;
         }
 
         $accountId = $this->customer->facebook_ads_account_id;
-        $response  = $this->get("/act_{$accountId}/adspixels", [
+        $response = $this->get("/act_{$accountId}/adspixels", [
             'fields' => 'id,name,creation_time',
-            'limit'  => 5,
+            'limit' => 5,
         ]);
 
-        if (!$response || empty($response['data'])) {
+        if (! $response || empty($response['data'])) {
             Log::info('PixelService: No existing pixel found, will create one', [
                 'customer_id' => $this->customer->id,
             ]);
+
             return $this->createPixel();
         }
 
@@ -44,7 +45,7 @@ class PixelService extends BaseFacebookAdsService
 
         Log::info('PixelService: Resolved pixel ID from ad account', [
             'customer_id' => $this->customer->id,
-            'pixel_id'    => $pixelId,
+            'pixel_id' => $pixelId,
         ]);
 
         return $pixelId;
@@ -59,37 +60,39 @@ class PixelService extends BaseFacebookAdsService
     {
         $businessId = config('services.facebook.business_manager_id');
 
-        if (!$businessId) {
+        if (! $businessId) {
             Log::error('PixelService: FACEBOOK_BUSINESS_MANAGER_ID not configured — cannot create BM-owned pixel', [
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
 
         // Create pixel at BM level so Spectra owns it
         $response = $this->post("/{$businessId}/adspixels", [
-            'name' => 'Spectra — ' . $this->customer->name,
+            'name' => 'Spectra — '.$this->customer->name,
         ]);
 
-        if (!$response || empty($response['id'])) {
+        if (! $response || empty($response['id'])) {
             Log::error('PixelService: Failed to create BM-level pixel', [
                 'customer_id' => $this->customer->id,
-                'response'    => $response,
+                'response' => $response,
             ]);
+
             return null;
         }
 
-        $pixelId   = $response['id'];
+        $pixelId = $response['id'];
         $accountId = $this->customer->facebook_ads_account_id;
 
         // Share with the customer's ad account so their campaigns can use it
         if ($accountId) {
             $shared = $this->sharePixelWithAccount($pixelId, $accountId);
-            if (!$shared) {
+            if (! $shared) {
                 Log::warning('PixelService: Pixel created but could not be shared with ad account', [
                     'customer_id' => $this->customer->id,
-                    'pixel_id'    => $pixelId,
-                    'account_id'  => $accountId,
+                    'pixel_id' => $pixelId,
+                    'account_id' => $accountId,
                 ]);
             }
         }
@@ -98,8 +101,8 @@ class PixelService extends BaseFacebookAdsService
 
         Log::info('PixelService: Created BM-owned pixel and shared with ad account', [
             'customer_id' => $this->customer->id,
-            'pixel_id'    => $pixelId,
-            'account_id'  => $accountId,
+            'pixel_id' => $pixelId,
+            'account_id' => $accountId,
         ]);
 
         return $pixelId;
@@ -111,15 +114,15 @@ class PixelService extends BaseFacebookAdsService
     public function sharePixelWithAccount(string $pixelId, string $accountId): bool
     {
         $businessId = config('services.facebook.business_manager_id');
-        if (!$businessId) {
+        if (! $businessId) {
             return false;
         }
 
         $response = $this->post("/{$pixelId}/shared_accounts", [
-            'business'   => $businessId,
+            'business' => $businessId,
             'account_id' => $accountId,
         ]);
 
-        return !empty($response['success']);
+        return ! empty($response['success']);
     }
 }

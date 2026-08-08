@@ -9,24 +9,25 @@ use Illuminate\Support\Facades\Log;
 class KeywordResearchService
 {
     protected Customer $customer;
+
     protected GeminiService $gemini;
 
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
-        $this->gemini = new GeminiService();
+        $this->gemini = new GeminiService;
     }
 
     /**
      * Research keywords for a business using Gemini AI + Google Ads Keyword Planner.
      *
-     * @param string $customerId Google Ads customer ID
-     * @param string $businessName Business name
-     * @param string|null $industry Industry or vertical description
-     * @param string|null $landingPageUrl Landing page URL for context
-     * @param string|null $language Language resource name (default: English)
-     * @param array $geoTargets Geo target constants (default: empty for global)
-     * @param int $maxKeywords Maximum keywords to return
+     * @param  string  $customerId  Google Ads customer ID
+     * @param  string  $businessName  Business name
+     * @param  string|null  $industry  Industry or vertical description
+     * @param  string|null  $landingPageUrl  Landing page URL for context
+     * @param  string|null  $language  Language resource name (default: English)
+     * @param  array  $geoTargets  Geo target constants (default: empty for global)
+     * @param  int  $maxKeywords  Maximum keywords to return
      * @return array ['keywords' => [...], 'negative_keywords' => [...]]
      */
     public function research(
@@ -40,20 +41,21 @@ class KeywordResearchService
         array $userSeedKeywords = []
     ): array {
         // Step 1: Use user-provided seeds if given, otherwise generate via Gemini AI
-        if (!empty($userSeedKeywords)) {
+        if (! empty($userSeedKeywords)) {
             $seedKeywords = $userSeedKeywords;
-            Log::info("KeywordResearchService: Using " . count($seedKeywords) . " user-provided seed keywords", [
+            Log::info('KeywordResearchService: Using '.count($seedKeywords).' user-provided seed keywords', [
                 'seeds' => $seedKeywords,
             ]);
         } else {
             $seedKeywords = $this->generateSeedKeywords($businessName, $industry, $landingPageUrl);
-            Log::info("KeywordResearchService: Generated " . count($seedKeywords) . " seed keywords via Gemini", [
+            Log::info('KeywordResearchService: Generated '.count($seedKeywords).' seed keywords via Gemini', [
                 'seeds' => $seedKeywords,
             ]);
         }
 
         if (empty($seedKeywords)) {
             Log::warning("KeywordResearchService: No seed keywords for '{$businessName}'");
+
             return ['keywords' => [], 'negative_keywords' => []];
         }
 
@@ -63,11 +65,11 @@ class KeywordResearchService
         );
 
         // Step 3: If Keyword Planner returned data, rank and select best
-        if (!empty($keywordIdeas)) {
+        if (! empty($keywordIdeas)) {
             $keywords = $this->rankAndSelect($keywordIdeas, $maxKeywords);
         } else {
             // Fallback: use seed keywords directly with recommended match types
-            Log::info("KeywordResearchService: Keyword Planner returned no results, using Gemini seeds directly");
+            Log::info('KeywordResearchService: Keyword Planner returned no results, using Gemini seeds directly');
             $keywords = $this->seedsToKeywords(array_slice($seedKeywords, 0, $maxKeywords));
         }
 
@@ -85,7 +87,7 @@ class KeywordResearchService
      */
     protected function generateSeedKeywords(string $businessName, ?string $industry, ?string $landingPageUrl): array
     {
-        $prompt  = "You are a Google Ads keyword research expert. Generate exactly 15 seed keywords for a Google Search campaign.\n\n";
+        $prompt = "You are a Google Ads keyword research expert. Generate exactly 15 seed keywords for a Google Search campaign.\n\n";
         $prompt .= "Business: {$businessName}\n";
         if ($industry) {
             $prompt .= "Industry: {$industry}\n";
@@ -111,7 +113,7 @@ class KeywordResearchService
             ['temperature' => 0.7, 'maxOutputTokens' => 1024],
         );
 
-        if (!$result || empty($result['text'])) {
+        if (! $result || empty($result['text'])) {
             return [];
         }
 
@@ -131,11 +133,13 @@ class KeywordResearchService
     ): array {
         try {
             $service = new GenerateKeywordIdeas($this->customer);
+
             return ($service)($customerId, $seedKeywords, $url, $language, $geoTargets, $maxResults);
         } catch (\Exception $e) {
-            Log::warning("KeywordResearchService: Keyword Planner unavailable, using seeds only", [
+            Log::warning('KeywordResearchService: Keyword Planner unavailable, using seeds only', [
                 'error' => $e->getMessage(),
             ]);
+
             return [];
         }
     }
@@ -169,7 +173,7 @@ class KeywordResearchService
         }, $keywordIdeas);
 
         // Sort by score descending
-        usort($scored, fn($a, $b) => $b['score'] <=> $a['score']);
+        usort($scored, fn ($a, $b) => $b['score'] <=> $a['score']);
 
         // Take top N and format
         return array_map(function ($idea) {
@@ -195,6 +199,7 @@ class KeywordResearchService
         if ($competitionIndex > 70 || $cpc > 5.0) {
             return 'EXACT';
         }
+
         // Default → PHRASE (balanced)
         return 'PHRASE';
     }
@@ -213,6 +218,7 @@ class KeywordResearchService
             } else {
                 $matchType = 'BROAD';
             }
+
             return [
                 'text' => $seed,
                 'match_type' => $matchType,
@@ -233,7 +239,7 @@ class KeywordResearchService
             $prompt .= "Industry: {$industry}\n";
         }
         $prompt .= "\nGenerate negative keywords that would waste ad spend — queries from people NOT looking to buy.\n";
-        $prompt .= "Include universal negatives (free, cheap, DIY, jobs, salary, reddit, wiki, how to, tutorial) ";
+        $prompt .= 'Include universal negatives (free, cheap, DIY, jobs, salary, reddit, wiki, how to, tutorial) ';
         $prompt .= "plus industry-specific negatives.\n";
         $prompt .= "\nReturn ONLY a JSON array of keyword strings. Example: [\"free\", \"jobs\", \"salary\"]";
 
@@ -243,13 +249,14 @@ class KeywordResearchService
             ['temperature' => 0.5, 'maxOutputTokens' => 512],
         );
 
-        if (!$result || empty($result['text'])) {
+        if (! $result || empty($result['text'])) {
             // Fallback: universal negative keywords
             return $this->getUniversalNegatives();
         }
 
         $negatives = $this->parseJsonArray($result['text']);
-        return !empty($negatives) ? $negatives : $this->getUniversalNegatives();
+
+        return ! empty($negatives) ? $negatives : $this->getUniversalNegatives();
     }
 
     /**
@@ -275,7 +282,7 @@ class KeywordResearchService
         $text = trim($text);
 
         $decoded = json_decode($text, true);
-        if (is_array($decoded) && !empty($decoded)) {
+        if (is_array($decoded) && ! empty($decoded)) {
             return array_values(array_filter($decoded, 'is_string'));
         }
 

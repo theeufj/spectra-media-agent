@@ -35,18 +35,18 @@ class QuickStartController extends Controller
 
     private function doProcess(string $url, $user, Request $request): RedirectResponse
     {
-        $host         = parse_url($url, PHP_URL_HOST) ?: $url;
+        $host = parse_url($url, PHP_URL_HOST) ?: $url;
         $businessName = ucfirst(str_replace('www.', '', $host));
-        $scheme       = parse_url($url, PHP_URL_SCHEME) ?: 'https';
-        $sitemapUrl   = "{$scheme}://{$host}/sitemap.xml";
+        $scheme = parse_url($url, PHP_URL_SCHEME) ?: 'https';
+        $sitemapUrl = "{$scheme}://{$host}/sitemap.xml";
 
         $timezone = $request->input('timezone', 'UTC');
-        $country  = $request->input('country', 'US');
+        $country = $request->input('country', 'US');
 
         $customer = Customer::create([
-            'name'     => $businessName,
-            'website'  => $url,
-            'country'  => $country,
+            'name' => $businessName,
+            'website' => $url,
+            'country' => $country,
             'timezone' => $timezone,
         ]);
 

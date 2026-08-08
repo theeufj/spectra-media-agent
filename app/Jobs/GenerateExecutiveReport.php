@@ -20,9 +20,11 @@ class GenerateExecutiveReport implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 300;
 
     protected int $customerId;
+
     protected string $period;
 
     public function __construct(int $customerId, string $period = 'weekly')
@@ -50,7 +52,7 @@ class GenerateExecutiveReport implements ShouldQueue
                 $pdfService = app(ReportPdfService::class);
                 $pdfPath = $pdfService->generate($customer, $report);
             } catch (\Exception $e) {
-                Log::warning("PDF generation failed for weekly report, continuing: " . $e->getMessage());
+                Log::warning('PDF generation failed for weekly report, continuing: '.$e->getMessage());
             }
 
             // Store report metadata for the Reports listing page
@@ -62,14 +64,15 @@ class GenerateExecutiveReport implements ShouldQueue
                     || ($report['summary']['total_impressions'] ?? 0) > 0
                     || ($report['summary']['total_clicks'] ?? 0) > 0;
 
-            if (!$hasData) {
+            if (! $hasData) {
                 Log::info("Skipping {$this->period} executive report for customer {$customer->id} — no performance data in period");
+
                 return;
             }
 
             // Email the report to all users associated with this customer
             foreach ($customer->users as $user) {
-                if (!$user->email) {
+                if (! $user->email) {
                     continue;
                 }
                 $prefs = $user->notification_preferences ?? [];
@@ -85,7 +88,7 @@ class GenerateExecutiveReport implements ShouldQueue
                 'total_spend' => $report['summary']['total_cost'],
             ]);
         } catch (\Exception $e) {
-            Log::error("Failed to generate executive report for customer {$this->customerId}: " . $e->getMessage(), [
+            Log::error("Failed to generate executive report for customer {$this->customerId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
             throw $e;
@@ -120,7 +123,7 @@ class GenerateExecutiveReport implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateExecutiveReport failed: ' . $exception->getMessage(), [
+        Log::error('GenerateExecutiveReport failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

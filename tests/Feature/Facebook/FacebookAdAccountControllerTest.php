@@ -5,7 +5,6 @@ namespace Tests\Feature\Facebook;
 use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
-use App\Services\FacebookAds\BusinessManagerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
@@ -15,6 +14,7 @@ class FacebookAdAccountControllerTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Customer $customer;
 
     protected function setUp(): void

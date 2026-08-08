@@ -19,17 +19,17 @@ class BillingHealthChecker
 
                 if ($subscription->stripe_status === 'past_due') {
                     $health['issues'][] = [
-                        'type'     => 'payment',
+                        'type' => 'payment',
                         'severity' => 'critical',
-                        'message'  => 'Subscription payment is past due',
-                        'details'  => 'Campaign delivery may be paused if not resolved',
+                        'message' => 'Subscription payment is past due',
+                        'details' => 'Campaign delivery may be paused if not resolved',
                     ];
                 } elseif ($subscription->stripe_status === 'incomplete') {
                     $health['warnings'][] = [
-                        'type'     => 'payment',
+                        'type' => 'payment',
                         'severity' => 'high',
-                        'message'  => 'Subscription setup is incomplete',
-                        'details'  => 'Complete setup to enable full features',
+                        'message' => 'Subscription setup is incomplete',
+                        'details' => 'Complete setup to enable full features',
                     ];
                 }
             }
@@ -42,10 +42,10 @@ class BillingHealthChecker
 
             if ($adSpendCredits < 10) {
                 $health['warnings'][] = [
-                    'type'     => 'credits',
+                    'type' => 'credits',
                     'severity' => 'medium',
-                    'message'  => 'Low ad spend credits balance',
-                    'details'  => "Current balance: \${$adSpendCredits}. Consider adding more credits.",
+                    'message' => 'Low ad spend credits balance',
+                    'details' => "Current balance: \${$adSpendCredits}. Consider adding more credits.",
                 ];
             }
 
@@ -58,21 +58,22 @@ class BillingHealthChecker
 
             if ($recentDebits > 0) {
                 $health['warnings'][] = [
-                    'type'     => 'payment_failures',
+                    'type' => 'payment_failures',
                     'severity' => 'high',
-                    'message'  => 'Recent credit reversals detected',
-                    'details'  => "{$recentDebits} reversal(s) in the last 7 days",
+                    'message' => 'Recent credit reversals detected',
+                    'details' => "{$recentDebits} reversal(s) in the last 7 days",
                 ];
             }
 
         } catch (\Exception $e) {
-            Log::error("BillingHealthChecker: Error checking billing health", [
+            Log::error('BillingHealthChecker: Error checking billing health', [
                 'customer_id' => $customer->id,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
         $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+
         return $health;
     }
 }

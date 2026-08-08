@@ -17,7 +17,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (!Schema::hasColumn('negative_keyword_lists', 'campaign_id')) {
+        if (! Schema::hasColumn('negative_keyword_lists', 'campaign_id')) {
             return;
         }
 

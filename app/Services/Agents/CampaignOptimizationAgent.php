@@ -31,24 +31,25 @@ class CampaignOptimizationAgent
 
     public function analyze(Campaign $campaign): ?array
     {
-        $metrics   = $this->fetcher->fetchCurrent($campaign);
-        $platform  = $this->fetcher->platform($campaign);
+        $metrics = $this->fetcher->fetchCurrent($campaign);
+        $platform = $this->fetcher->platform($campaign);
         $historical = $this->fetcher->fetchHistorical($campaign);
 
-        if (!$metrics) {
+        if (! $metrics) {
             Log::info("CampaignOptimizationAgent: No performance data for campaign {$campaign->id} ({$platform}).");
+
             return null;
         }
 
-        $dataQuality  = $this->scorer->assessDataQuality($metrics);
+        $dataQuality = $this->scorer->assessDataQuality($metrics);
         $campaignData = [
-            'name'              => $campaign->name,
-            'platform'          => $platform,
-            'goals'             => $campaign->goals,
-            'total_budget'      => $campaign->total_budget,
-            'daily_budget'      => $campaign->daily_budget,
-            'primary_kpi'       => $campaign->primary_kpi,
-            'product_focus'     => $campaign->product_focus,
+            'name' => $campaign->name,
+            'platform' => $platform,
+            'goals' => $campaign->goals,
+            'total_budget' => $campaign->total_budget,
+            'daily_budget' => $campaign->daily_budget,
+            'primary_kpi' => $campaign->primary_kpi,
+            'product_focus' => $campaign->product_focus,
             'data_quality_score' => $dataQuality['score'],
             'data_quality_notes' => $dataQuality['notes'],
         ];
@@ -63,8 +64,9 @@ class CampaignOptimizationAgent
                 enableThinking: true
             );
 
-            if (!$response || !isset($response['text'])) {
+            if (! $response || ! isset($response['text'])) {
                 Log::error("CampaignOptimizationAgent: Empty AI response for campaign {$campaign->id}");
+
                 return null;
             }
 
@@ -82,10 +84,12 @@ class CampaignOptimizationAgent
             }
 
             Log::error("CampaignOptimizationAgent: Failed to parse AI response for campaign {$campaign->id}");
+
             return null;
 
         } catch (\Exception $e) {
-            Log::error("CampaignOptimizationAgent: Failed for campaign {$campaign->id}: " . $e->getMessage());
+            Log::error("CampaignOptimizationAgent: Failed for campaign {$campaign->id}: ".$e->getMessage());
+
             return null;
         }
     }
@@ -114,13 +118,14 @@ class CampaignOptimizationAgent
                 if ($today->format('m-d') === $key) {
                     return 4;
                 }
+
                 continue;
             }
 
             // Named entries: black_friday, cyber_monday
             if ($key === 'black_friday') {
                 // Last Friday of November
-                $lastFriday = (clone $today)->setDate((int)$today->format('Y'), 11, 1)
+                $lastFriday = (clone $today)->setDate((int) $today->format('Y'), 11, 1)
                     ->endOfMonth()
                     ->startOfDay();
                 while ($lastFriday->dayOfWeek !== 5) {
@@ -131,7 +136,7 @@ class CampaignOptimizationAgent
                 }
             } elseif ($key === 'cyber_monday') {
                 // Monday after Black Friday (4th Monday of November or 1st Monday of December)
-                $cyberMonday = (clone $today)->setDate((int)$today->format('Y'), 11, 1)
+                $cyberMonday = (clone $today)->setDate((int) $today->format('Y'), 11, 1)
                     ->endOfMonth()
                     ->startOfDay();
                 while ($cyberMonday->dayOfWeek !== 5) {
@@ -161,12 +166,13 @@ class CampaignOptimizationAgent
             if ($lastOptimized && \Carbon\Carbon::parse($lastOptimized)->diffInDays(now()) < 7) {
                 Log::info("CampaignOptimizationAgent: Cooling-off — last bid change was {$lastOptimized}, skipping auto-apply", [
                     'campaign_id' => $campaign->id,
-                    'type'        => $type,
+                    'type' => $type,
                 ]);
+
                 return [
                     'success' => false,
                     'skipped' => true,
-                    'reason'  => 'Smart Bidding cooling-off: last bidding change was less than 7 days ago. Recommendation queued for manual review.',
+                    'reason' => 'Smart Bidding cooling-off: last bidding change was less than 7 days ago. Recommendation queued for manual review.',
                 ];
             }
         }

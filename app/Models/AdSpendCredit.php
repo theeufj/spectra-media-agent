@@ -10,11 +10,11 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * AdSpendCredit
- * 
+ *
  * Tracks prepaid ad spend credits for customers.
  * When a campaign is created, we capture 7 days of estimated ad spend upfront.
  * Daily billing deducts from this credit first, then charges the card.
- * 
+ *
  * Risk Management:
  * - Customers prepay estimated ad spend
  * - Daily billing ensures we're never more than 24 hours behind
@@ -50,14 +50,20 @@ class AdSpendCredit extends Model
 
     // Status constants
     const STATUS_ACTIVE = 'active';
+
     const STATUS_LOW_BALANCE = 'low_balance';
+
     const STATUS_DEPLETED = 'depleted';
+
     const STATUS_SUSPENDED = 'suspended';
 
     // Payment status constants
     const PAYMENT_CURRENT = 'current';
+
     const PAYMENT_GRACE_PERIOD = 'grace_period';
+
     const PAYMENT_FAILED = 'failed';
+
     const PAYMENT_PAUSED = 'paused';
 
     /**
@@ -92,7 +98,7 @@ class AdSpendCredit extends Model
      */
     public function canRunCampaigns(): bool
     {
-        return $this->isInGoodStanding() && 
+        return $this->isInGoodStanding() &&
                $this->current_balance > 0 &&
                $this->status !== self::STATUS_SUSPENDED;
     }
@@ -103,7 +109,7 @@ class AdSpendCredit extends Model
     public function isInGracePeriod(): bool
     {
         return $this->payment_status === self::PAYMENT_GRACE_PERIOD &&
-               $this->grace_period_ends_at && 
+               $this->grace_period_ends_at &&
                now()->lt($this->grace_period_ends_at);
     }
 
@@ -142,14 +148,14 @@ class AdSpendCredit extends Model
     /**
      * Deduct an amount from the credit balance.
      */
-    public function deduct(float $amount, string $description = null): bool
+    public function deduct(float $amount, ?string $description = null): bool
     {
         // Lock the row for the read-modify-write so concurrent billing runs and
         // top-ups can't lose updates or overdraw the balance.
         return DB::transaction(function () use ($amount, $description) {
             $locked = static::whereKey($this->getKey())->lockForUpdate()->first();
 
-            if (!$locked || $amount > $locked->current_balance) {
+            if (! $locked || $amount > $locked->current_balance) {
                 return false;
             }
 
@@ -175,7 +181,7 @@ class AdSpendCredit extends Model
     /**
      * Add credit to the account.
      */
-    public function addCredit(float $amount, string $description = null, string $stripeChargeId = null): void
+    public function addCredit(float $amount, ?string $description = null, ?string $stripeChargeId = null): void
     {
         DB::transaction(function () use ($amount, $description, $stripeChargeId) {
             $locked = static::whereKey($this->getKey())->lockForUpdate()->first() ?? $this;
@@ -231,8 +237,8 @@ class AdSpendCredit extends Model
         // actual Google Ads performance data so the topup logic has a realistic baseline.
         if ($avgFromTransactions < 1.0) {
             $actualSpend = GoogleAdsPerformanceData::whereHas('campaign', function ($q) {
-                    $q->where('customer_id', $this->customer_id);
-                })
+                $q->where('customer_id', $this->customer_id);
+            })
                 ->where('date', '>=', now()->subDays(7)->toDateString())
                 ->where('date', '<', now()->toDateString())
                 ->sum('cost');
@@ -289,10 +295,9 @@ class AdSpendCredit extends Model
 
     /**
      * Calculate required initial credit for campaign.
-     * 
-     * @param float $dailyBudget The daily ad spend budget
-     * @param int $days Number of days to prepay (default 7)
-     * @return float
+     *
+     * @param  float  $dailyBudget  The daily ad spend budget
+     * @param  int  $days  Number of days to prepay (default 7)
      */
     public static function calculateInitialCredit(float $dailyBudget, int $days = 7): float
     {

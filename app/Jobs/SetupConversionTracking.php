@@ -3,9 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
-use App\Services\ConversionSetupService;
-use App\Notifications\CriticalAgentAlert;
 use App\Notifications\ConversionTrackingReady;
+use App\Notifications\CriticalAgentAlert;
+use App\Services\ConversionSetupService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -18,7 +18,9 @@ class SetupConversionTracking implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $backoff = [60, 300, 600];
+
     public $timeout = 120;
 
     public function __construct(protected Customer $customer) {}
@@ -28,34 +30,35 @@ class SetupConversionTracking implements ShouldQueue
         // Skip if already set up
         if ($this->customer->conversion_action_id) {
             Log::info('SetupConversionTracking: Already set up, skipping', ['customer_id' => $this->customer->id]);
+
             return;
         }
 
         $result = $service->setup($this->customer);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             Log::error('SetupConversionTracking: Failed', [
                 'customer_id' => $this->customer->id,
-                'errors'      => $result['errors'],
+                'errors' => $result['errors'],
             ]);
 
             // Notify admins on final failure
             if ($this->attempts() >= $this->tries) {
                 CriticalAgentAlert::deliver(
                     'conversion_tracking',
-                    'Conversion tracking setup failed: ' . $this->customer->name,
-                    'Failed to set up conversion tracking for customer: ' . $this->customer->name,
+                    'Conversion tracking setup failed: '.$this->customer->name,
+                    'Failed to set up conversion tracking for customer: '.$this->customer->name,
                     ['errors' => $result['errors'], 'customer_id' => $this->customer->id],
                     CriticalAgentAlert::RECIPIENTS_ADMINS,
                     $this->customer
                 );
             }
 
-            throw new \RuntimeException('Conversion tracking setup failed: ' . implode(', ', $result['errors']));
+            throw new \RuntimeException('Conversion tracking setup failed: '.implode(', ', $result['errors']));
         }
 
         Log::info('SetupConversionTracking: Complete', [
-            'customer_id'   => $this->customer->id,
+            'customer_id' => $this->customer->id,
             'resource_name' => $result['resource_name'],
         ]);
 
@@ -65,7 +68,7 @@ class SetupConversionTracking implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('SetupConversionTracking failed: ' . $exception->getMessage(), [
+        Log::error('SetupConversionTracking failed: '.$exception->getMessage(), [
             'customer_id' => $this->customer->id,
         ]);
     }

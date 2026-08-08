@@ -3,10 +3,7 @@
 namespace App\Services\Agents;
 
 use App\Models\Campaign;
-use App\Models\Customer;
-use App\Services\GeminiService;
 use App\Services\LinkedInAds\CampaignService;
-use App\Services\LinkedInAds\PerformanceService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -39,10 +36,10 @@ class LinkedInAdsExecutionAgent extends PlatformExecutionAgent
 
         try {
             $validation = $this->validatePrerequisites($context);
-            if (!$validation->passed) {
+            if (! $validation->passed) {
                 return new ExecutionResult(
                     success: false,
-                    message: 'Prerequisites not met: ' . implode(', ', $validation->errors),
+                    message: 'Prerequisites not met: '.implode(', ', $validation->errors),
                     data: ['validation' => $validation],
                 );
             }
@@ -56,7 +53,7 @@ class LinkedInAdsExecutionAgent extends PlatformExecutionAgent
 
             return new ExecutionResult(
                 success: false,
-                message: 'Execution failed: ' . $e->getMessage(),
+                message: 'Execution failed: '.$e->getMessage(),
                 data: ['recovery_plan' => $recovery],
             );
         }
@@ -66,18 +63,18 @@ class LinkedInAdsExecutionAgent extends PlatformExecutionAgent
     {
         $errors = [];
 
-        if (!$this->customer->linkedin_ads_account_id) {
+        if (! $this->customer->linkedin_ads_account_id) {
             $errors[] = 'LinkedIn Ads account ID not configured';
         }
 
         $clientId = config('linkedinads.client_id');
         $clientSecret = config('linkedinads.client_secret');
 
-        if (!$clientId || !$clientSecret) {
+        if (! $clientId || ! $clientSecret) {
             $errors[] = 'LinkedIn API credentials not configured';
         }
 
-        if (!config('linkedinads.refresh_token')) {
+        if (! config('linkedinads.refresh_token')) {
             $errors[] = 'No LinkedIn management credential configured (set LINKEDIN_ADS_REFRESH_TOKEN in .env)';
         }
 
@@ -187,9 +184,10 @@ PROMPT;
         // Idempotency: skip if this campaign was already deployed to LinkedIn
         if ($campaign && $campaign->linkedin_campaign_id) {
             Log::info('[LinkedInAdsExecutionAgent] Campaign already deployed to LinkedIn, skipping creation', [
-                'campaign_id'         => $campaign->id,
+                'campaign_id' => $campaign->id,
                 'linkedin_campaign_id' => $campaign->linkedin_campaign_id,
             ]);
+
             return ['status' => 'already_deployed', 'linkedin_campaign_id' => $campaign->linkedin_campaign_id];
         }
 
@@ -223,6 +221,7 @@ PROMPT;
         Log::info('[LinkedInAdsExecutionAgent] Targeting applied during campaign creation — no separate API call required', [
             'campaign_id' => $context->campaign->id,
         ]);
+
         return ['status' => 'success', 'reason' => 'Targeting applied during campaign creation'];
     }
 
@@ -232,7 +231,7 @@ PROMPT;
         $strategy = $context->strategy;
 
         $campaignId = $campaign->linkedin_campaign_id ?? null;
-        if (!$campaignId) {
+        if (! $campaignId) {
             return ['status' => 'skipped', 'reason' => 'No LinkedIn campaign ID — campaign creation must succeed first'];
         }
 
@@ -241,8 +240,9 @@ PROMPT;
             ->first()
             ?? $strategy->adCopies()->first();
 
-        if (!$adCopy) {
+        if (! $adCopy) {
             Log::warning('[LinkedInAdsExecutionAgent] No ad copy for creative creation', ['strategy_id' => $strategy->id]);
+
             return ['status' => 'skipped', 'reason' => 'No ad copy available'];
         }
 
@@ -251,13 +251,14 @@ PROMPT;
             ?? $this->customer->website
             ?? null;
 
-        if (!$landingUrl) {
+        if (! $landingUrl) {
             Log::warning('[LinkedInAdsExecutionAgent] No landing URL for creative', ['strategy_id' => $strategy->id]);
+
             return ['status' => 'skipped', 'reason' => 'No landing page URL'];
         }
 
         $creative = $service->createCreative($campaignId, [
-            'headline'    => $adCopy->headlines[0] ?? 'Learn More',
+            'headline' => $adCopy->headlines[0] ?? 'Learn More',
             'description' => $adCopy->descriptions[0] ?? '',
             'destination' => $landingUrl,
         ]);
@@ -265,9 +266,10 @@ PROMPT;
         if ($creative) {
             Log::info('[LinkedInAdsExecutionAgent] Created LinkedIn creative', [
                 'campaign_id' => $campaign->id,
-                'creative'    => $creative,
+                'creative' => $creative,
             ]);
             $strategy->update(['linkedin_creative_id' => $creative['id'] ?? null]);
+
             return ['status' => 'success', 'creative' => $creative];
         }
 
@@ -277,6 +279,7 @@ PROMPT;
     protected function executeSetupTracking(CampaignService $service): array
     {
         $tag = $service->getInsightTag();
+
         return ['status' => $tag ? 'success' : 'skipped', 'insight_tag' => $tag];
     }
 

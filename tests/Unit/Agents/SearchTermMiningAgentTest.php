@@ -5,10 +5,6 @@ namespace Tests\Unit\Agents;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\SearchTermMiningAgent;
-use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
-use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
-use App\Services\GoogleAds\CommonServices\AddKeyword;
-use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
@@ -172,7 +168,7 @@ class SearchTermMiningAgentTest extends TestCase
         $campaign->id = 1;
         $campaign->setRelation('customer', $customer);
 
-        $agent = new SearchTermMiningAgent();
+        $agent = new SearchTermMiningAgent;
         $results = $agent->mine($campaign);
 
         $this->assertEquals($campaign->id, $results['campaign_id']);

@@ -16,6 +16,7 @@ class RunSandboxSimulation implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 300;
+
     public int $tries = 1;
 
     public function __construct(
@@ -24,10 +25,11 @@ class RunSandboxSimulation implements ShouldQueue
 
     public function handle(SandboxAgentRunner $runner): void
     {
-        if (!$this->customer->is_sandbox) {
+        if (! $this->customer->is_sandbox) {
             Log::warning('RunSandboxSimulation dispatched for non-sandbox customer', [
                 'customer_id' => $this->customer->id,
             ]);
+
             return;
         }
 

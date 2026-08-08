@@ -5,6 +5,7 @@ namespace App\Prompts;
 class VideoFromScriptPrompt
 {
     private string $strategy;
+
     private string $script;
 
     public function __construct(string $strategy, string $script)

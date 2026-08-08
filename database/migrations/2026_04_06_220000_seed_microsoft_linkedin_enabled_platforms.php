@@ -9,7 +9,7 @@ return new class extends Migration
     {
         $now = now();
 
-        if (!DB::table('enabled_platforms')->where('slug', 'microsoft')->exists()) {
+        if (! DB::table('enabled_platforms')->where('slug', 'microsoft')->exists()) {
             DB::table('enabled_platforms')->insert([
                 'name' => 'Microsoft',
                 'slug' => 'microsoft',
@@ -21,7 +21,7 @@ return new class extends Migration
             ]);
         }
 
-        if (!DB::table('enabled_platforms')->where('slug', 'linkedin')->exists()) {
+        if (! DB::table('enabled_platforms')->where('slug', 'linkedin')->exists()) {
             DB::table('enabled_platforms')->insert([
                 'name' => 'LinkedIn',
                 'slug' => 'linkedin',

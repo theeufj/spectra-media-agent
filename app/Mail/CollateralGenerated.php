@@ -18,8 +18,7 @@ class CollateralGenerated extends Mailable
     public function __construct(
         public Campaign $campaign,
         public User $user
-    ) {
-    }
+    ) {}
 
     public function envelope(): Envelope
     {

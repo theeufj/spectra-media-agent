@@ -7,12 +7,12 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Facebook Custom Audiences Service
- * 
+ *
  * Handles:
  * - Customer list custom audiences (email/phone)
  * - Website custom audiences (pixel-based)
  * - Lookalike audience creation
- * 
+ *
  * Note: Customer data is hashed before being sent to Facebook per their requirements.
  */
 class CustomAudienceService extends BaseFacebookAdsService
@@ -25,12 +25,11 @@ class CustomAudienceService extends BaseFacebookAdsService
     /**
      * Create a custom audience from a customer list (emails/phones).
      *
-     * @param string $accountId Ad account ID (without 'act_' prefix)
-     * @param string $name Audience name
-     * @param string $description Audience description
-     * @param array $emails List of customer emails (will be hashed)
-     * @param array $phones List of customer phones (will be hashed)
-     * @return array|null
+     * @param  string  $accountId  Ad account ID (without 'act_' prefix)
+     * @param  string  $name  Audience name
+     * @param  string  $description  Audience description
+     * @param  array  $emails  List of customer emails (will be hashed)
+     * @param  array  $phones  List of customer phones (will be hashed)
      */
     public function createCustomerListAudience(
         string $accountId,
@@ -48,11 +47,12 @@ class CustomAudienceService extends BaseFacebookAdsService
                 'customer_file_source' => 'USER_PROVIDED_ONLY',
             ]);
 
-            if (!$audience || !isset($audience['id'])) {
+            if (! $audience || ! isset($audience['id'])) {
                 Log::error('Failed to create custom audience container', [
                     'customer_id' => $this->customer->id,
                     'account_id' => $accountId,
                 ]);
+
                 return null;
             }
 
@@ -62,14 +62,14 @@ class CustomAudienceService extends BaseFacebookAdsService
             $schema = [];
             $data = [];
 
-            if (!empty($emails)) {
+            if (! empty($emails)) {
                 $schema[] = 'EMAIL';
                 foreach ($emails as $email) {
                     $data[] = [$this->hashValue(strtolower(trim($email)))];
                 }
             }
 
-            if (!empty($phones)) {
+            if (! empty($phones)) {
                 $schema[] = 'PHONE';
                 foreach ($phones as $index => $phone) {
                     $hashedPhone = $this->hashValue($this->normalizePhone($phone));
@@ -81,7 +81,7 @@ class CustomAudienceService extends BaseFacebookAdsService
                 }
             }
 
-            if (!empty($data)) {
+            if (! empty($data)) {
                 $this->addUsersToAudience($audienceId, $schema, $data);
             }
 
@@ -95,10 +95,11 @@ class CustomAudienceService extends BaseFacebookAdsService
             return $audience;
 
         } catch (\Exception $e) {
-            Log::error('Error creating custom audience: ' . $e->getMessage(), [
+            Log::error('Error creating custom audience: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -106,10 +107,8 @@ class CustomAudienceService extends BaseFacebookAdsService
     /**
      * Add users to an existing custom audience.
      *
-     * @param string $audienceId
-     * @param array $schema Schema array (e.g., ['EMAIL', 'PHONE'])
-     * @param array $data User data (pre-hashed)
-     * @return array|null
+     * @param  array  $schema  Schema array (e.g., ['EMAIL', 'PHONE'])
+     * @param  array  $data  User data (pre-hashed)
      */
     public function addUsersToAudience(string $audienceId, array $schema, array $data): ?array
     {
@@ -140,9 +139,10 @@ class CustomAudienceService extends BaseFacebookAdsService
             return $results[0] ?? null;
 
         } catch (\Exception $e) {
-            Log::error('Error adding users to audience: ' . $e->getMessage(), [
+            Log::error('Error adding users to audience: '.$e->getMessage(), [
                 'audience_id' => $audienceId,
             ]);
+
             return null;
         }
     }
@@ -150,10 +150,8 @@ class CustomAudienceService extends BaseFacebookAdsService
     /**
      * Remove users from an existing custom audience.
      *
-     * @param string $audienceId
-     * @param array $schema Schema array
-     * @param array $data User data (pre-hashed)
-     * @return array|null
+     * @param  array  $schema  Schema array
+     * @param  array  $data  User data (pre-hashed)
      */
     public function removeUsersFromAudience(string $audienceId, array $schema, array $data): ?array
     {
@@ -173,9 +171,10 @@ class CustomAudienceService extends BaseFacebookAdsService
             return $response;
 
         } catch (\Exception $e) {
-            Log::error('Error removing users from audience: ' . $e->getMessage(), [
+            Log::error('Error removing users from audience: '.$e->getMessage(), [
                 'audience_id' => $audienceId,
             ]);
+
             return null;
         }
     }
@@ -183,13 +182,12 @@ class CustomAudienceService extends BaseFacebookAdsService
     /**
      * Create a website custom audience based on pixel events.
      *
-     * @param string $accountId Ad account ID
-     * @param string $pixelId Facebook Pixel ID
-     * @param string $name Audience name
-     * @param string $description Audience description
-     * @param int $retentionDays Number of days to retain users (1-180)
-     * @param array $rules Optional rules for audience (e.g., URL contains)
-     * @return array|null
+     * @param  string  $accountId  Ad account ID
+     * @param  string  $pixelId  Facebook Pixel ID
+     * @param  string  $name  Audience name
+     * @param  string  $description  Audience description
+     * @param  int  $retentionDays  Number of days to retain users (1-180)
+     * @param  array  $rules  Optional rules for audience (e.g., URL contains)
      */
     public function createWebsiteAudience(
         string $accountId,
@@ -235,16 +233,18 @@ class CustomAudienceService extends BaseFacebookAdsService
                     'audience_id' => $response['id'],
                     'pixel_id' => $pixelId,
                 ]);
+
                 return $response;
             }
 
             return null;
 
         } catch (\Exception $e) {
-            Log::error('Error creating website audience: ' . $e->getMessage(), [
+            Log::error('Error creating website audience: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -252,12 +252,11 @@ class CustomAudienceService extends BaseFacebookAdsService
     /**
      * Create a lookalike audience from a source audience.
      *
-     * @param string $accountId Ad account ID
-     * @param string $sourceAudienceId Source custom audience ID
-     * @param string $name Audience name
-     * @param string $countryCode Target country (ISO 2-letter code)
-     * @param float $ratio Lookalike ratio (0.01 to 0.20 for 1%-20%)
-     * @return array|null
+     * @param  string  $accountId  Ad account ID
+     * @param  string  $sourceAudienceId  Source custom audience ID
+     * @param  string  $name  Audience name
+     * @param  string  $countryCode  Target country (ISO 2-letter code)
+     * @param  float  $ratio  Lookalike ratio (0.01 to 0.20 for 1%-20%)
      */
     public function createLookalikeAudience(
         string $accountId,
@@ -285,25 +284,24 @@ class CustomAudienceService extends BaseFacebookAdsService
                     'source_audience_id' => $sourceAudienceId,
                     'ratio' => $ratio,
                 ]);
+
                 return $response;
             }
 
             return null;
 
         } catch (\Exception $e) {
-            Log::error('Error creating lookalike audience: ' . $e->getMessage(), [
+            Log::error('Error creating lookalike audience: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
 
     /**
      * List all custom audiences for an ad account.
-     *
-     * @param string $accountId
-     * @return array|null
      */
     public function listAudiences(string $accountId): ?array
     {
@@ -315,16 +313,14 @@ class CustomAudienceService extends BaseFacebookAdsService
             return $response['data'] ?? [];
 
         } catch (\Exception $e) {
-            Log::error('Error listing custom audiences: ' . $e->getMessage());
+            Log::error('Error listing custom audiences: '.$e->getMessage());
+
             return null;
         }
     }
 
     /**
      * Get details of a specific custom audience.
-     *
-     * @param string $audienceId
-     * @return array|null
      */
     public function getAudience(string $audienceId): ?array
     {
@@ -333,33 +329,30 @@ class CustomAudienceService extends BaseFacebookAdsService
                 'fields' => 'id,name,description,subtype,approximate_count,delivery_status,operation_status,time_created,time_updated',
             ]);
         } catch (\Exception $e) {
-            Log::error('Error getting custom audience: ' . $e->getMessage());
+            Log::error('Error getting custom audience: '.$e->getMessage());
+
             return null;
         }
     }
 
     /**
      * Delete a custom audience.
-     *
-     * @param string $audienceId
-     * @return bool
      */
     public function deleteAudience(string $audienceId): bool
     {
         try {
             $response = $this->delete("/{$audienceId}");
+
             return $response['success'] ?? false;
         } catch (\Exception $e) {
-            Log::error('Error deleting custom audience: ' . $e->getMessage());
+            Log::error('Error deleting custom audience: '.$e->getMessage());
+
             return false;
         }
     }
 
     /**
      * Hash a value using SHA256 as required by Facebook.
-     *
-     * @param string $value
-     * @return string
      */
     protected function hashValue(string $value): string
     {
@@ -368,9 +361,6 @@ class CustomAudienceService extends BaseFacebookAdsService
 
     /**
      * Normalize a phone number to E.164 format (numbers only).
-     *
-     * @param string $phone
-     * @return string
      */
     protected function normalizePhone(string $phone): string
     {
@@ -379,20 +369,16 @@ class CustomAudienceService extends BaseFacebookAdsService
 
     /**
      * Make an HTTP DELETE request to the Facebook Graph API.
-     *
-     * @param string $endpoint
-     * @param array $params
-     * @return array|null
      */
     protected function delete(string $endpoint, array $params = []): ?array
     {
         try {
-            if (!$this->accessToken) {
+            if (! $this->accessToken) {
                 return null;
             }
 
             $params['access_token'] = $this->accessToken;
-            $url = $this->graphApiUrl . '/' . $this->apiVersion . $endpoint;
+            $url = $this->graphApiUrl.'/'.$this->apiVersion.$endpoint;
 
             $response = \Http::delete($url, $params);
 
@@ -400,7 +386,7 @@ class CustomAudienceService extends BaseFacebookAdsService
                 return $response->json();
             }
 
-            Log::error("Facebook API DELETE request failed", [
+            Log::error('Facebook API DELETE request failed', [
                 'endpoint' => $endpoint,
                 'status' => $response->status(),
                 'response' => $response->body(),
@@ -408,7 +394,8 @@ class CustomAudienceService extends BaseFacebookAdsService
 
             return null;
         } catch (\Exception $e) {
-            Log::error("Exception during Facebook API DELETE request: " . $e->getMessage());
+            Log::error('Exception during Facebook API DELETE request: '.$e->getMessage());
+
             return null;
         }
     }

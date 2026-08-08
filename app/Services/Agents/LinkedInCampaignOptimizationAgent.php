@@ -2,42 +2,43 @@
 
 namespace App\Services\Agents;
 
-use App\Models\Campaign;
-use App\Models\Customer;
 use App\Models\AgentActivity;
+use App\Models\Campaign;
 use App\Models\CreativeBrief;
+use App\Models\Customer;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\LinkedInAds\CampaignService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 
 class LinkedInCampaignOptimizationAgent
 {
     // LinkedIn benchmark CPL ranges by objective (USD)
     private const CPL_BENCHMARKS = [
-        'LEAD_GEN'         => ['low' => 50,  'high' => 200],
-        'WEBSITE_VISITS'   => ['low' => 5,   'high' => 30],
-        'BRAND_AWARENESS'  => ['low' => 2,   'high' => 15],
-        'ENGAGEMENT'       => ['low' => 3,   'high' => 20],
-        'VIDEO_VIEWS'      => ['low' => 0.10, 'high' => 0.50],
+        'LEAD_GEN' => ['low' => 50,  'high' => 200],
+        'WEBSITE_VISITS' => ['low' => 5,   'high' => 30],
+        'BRAND_AWARENESS' => ['low' => 2,   'high' => 15],
+        'ENGAGEMENT' => ['low' => 3,   'high' => 20],
+        'VIDEO_VIEWS' => ['low' => 0.10, 'high' => 0.50],
     ];
 
     private const FREQUENCY_FATIGUE_THRESHOLD = 4.0;  // impressions/reach per 30 days
-    private const OPEN_RATE_DROP_THRESHOLD     = 0.30; // 30% WoW decline triggers pause
-    private const CPL_OVERSPEND_MULTIPLIER     = 3.0;  // CPL >3x benchmark triggers objective review
+
+    private const OPEN_RATE_DROP_THRESHOLD = 0.30; // 30% WoW decline triggers pause
+
+    private const CPL_OVERSPEND_MULTIPLIER = 3.0;  // CPL >3x benchmark triggers objective review
 
     public function analyze(Campaign $campaign): array
     {
         $results = [
             'campaign_id' => $campaign->id,
-            'actions'     => [],
-            'issues'      => [],
-            'briefs'      => [],
+            'actions' => [],
+            'issues' => [],
+            'briefs' => [],
         ];
 
-        if (!$campaign->linkedin_campaign_id) {
+        if (! $campaign->linkedin_campaign_id) {
             return $results;
         }
 
@@ -45,13 +46,13 @@ class LinkedInCampaignOptimizationAgent
         $this->checkMessageAdOpenRate($campaign, $results);
         $this->checkCplVsBenchmark($campaign, $results);
 
-        if (!empty($results['actions']) || !empty($results['issues'])) {
+        if (! empty($results['actions']) || ! empty($results['issues'])) {
             AgentActivity::create([
                 'campaign_id' => $campaign->id,
-                'agent'       => 'LinkedInCampaignOptimizationAgent',
-                'action'      => 'linkedin_optimization_analysis',
-                'details'     => $results,
-                'status'      => 'completed',
+                'agent' => 'LinkedInCampaignOptimizationAgent',
+                'action' => 'linkedin_optimization_analysis',
+                'details' => $results,
+                'status' => 'completed',
             ]);
         }
 
@@ -65,7 +66,7 @@ class LinkedInCampaignOptimizationAgent
             ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')
             ->first();
 
-        if (!$data || ($data->impressions ?? 0) < 500) {
+        if (! $data || ($data->impressions ?? 0) < 500) {
             return;
         }
 
@@ -77,17 +78,17 @@ class LinkedInCampaignOptimizationAgent
 
         if ($estimatedFrequency >= self::FREQUENCY_FATIGUE_THRESHOLD) {
             $results['issues'][] = [
-                'type'                => 'audience_frequency_fatigue',
+                'type' => 'audience_frequency_fatigue',
                 'estimated_frequency' => round($estimatedFrequency, 1),
-                'impressions_30d'     => $data->impressions,
-                'ctr'                 => round($ctr, 3),
+                'impressions_30d' => $data->impressions,
+                'ctr' => round($ctr, 3),
             ];
 
             $this->createCreativeBrief($campaign, 'fatigue_refresh', [
-                'reason'              => 'LinkedIn audience frequency fatigue detected',
+                'reason' => 'LinkedIn audience frequency fatigue detected',
                 'estimated_frequency' => round($estimatedFrequency, 1),
-                'ctr_30d'             => round($ctr, 3),
-                'spend_30d'           => round($data->cost ?? 0, 2),
+                'ctr_30d' => round($ctr, 3),
+                'spend_30d' => round($data->cost ?? 0, 2),
             ]);
 
             $results['briefs'][] = 'fatigue_refresh';
@@ -112,7 +113,7 @@ class LinkedInCampaignOptimizationAgent
             ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks')
             ->first();
 
-        if (!$thisWeek || !$lastWeek) {
+        if (! $thisWeek || ! $lastWeek) {
             return;
         }
 
@@ -123,8 +124,8 @@ class LinkedInCampaignOptimizationAgent
             return;
         }
 
-        $thisCtr  = $thisWeek->clicks  > 0 ? $thisWeek->clicks  / $thisImpressions : 0;
-        $lastCtr  = $lastWeek->clicks  > 0 ? $lastWeek->clicks  / $lastImpressions : 0;
+        $thisCtr = $thisWeek->clicks > 0 ? $thisWeek->clicks / $thisImpressions : 0;
+        $lastCtr = $lastWeek->clicks > 0 ? $lastWeek->clicks / $lastImpressions : 0;
 
         if ($lastCtr <= 0) {
             return;
@@ -140,19 +141,19 @@ class LinkedInCampaignOptimizationAgent
                 $service->updateStatus($campaign->linkedin_campaign_id, 'PAUSED');
                 $results['actions'][] = ['type' => 'campaign_paused', 'reason' => 'message_ad_open_rate_drop'];
             } catch (\Exception $e) {
-                Log::warning("LinkedInCampaignOptimizationAgent: pause failed for campaign {$campaign->id}: " . $e->getMessage());
+                Log::warning("LinkedInCampaignOptimizationAgent: pause failed for campaign {$campaign->id}: ".$e->getMessage());
             }
 
             $this->createCreativeBrief($campaign, 'fatigue_refresh', [
-                'reason'       => 'LinkedIn Message Ad CTR/open rate dropped WoW',
+                'reason' => 'LinkedIn Message Ad CTR/open rate dropped WoW',
                 'this_week_ctr' => round($thisCtr * 100, 3),
                 'last_week_ctr' => round($lastCtr * 100, 3),
-                'drop_pct'     => $dropPct,
+                'drop_pct' => $dropPct,
             ]);
 
             $results['issues'][] = [
-                'type'          => 'message_ad_open_rate_drop',
-                'drop_pct'      => $dropPct,
+                'type' => 'message_ad_open_rate_drop',
+                'drop_pct' => $dropPct,
                 'this_week_ctr' => round($thisCtr * 100, 3),
                 'last_week_ctr' => round($lastCtr * 100, 3),
             ];
@@ -171,7 +172,7 @@ class LinkedInCampaignOptimizationAgent
             ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions')
             ->first();
 
-        if (!$data || ($data->conversions ?? 0) < 5 || ($data->cost ?? 0) <= 0) {
+        if (! $data || ($data->conversions ?? 0) < 5 || ($data->cost ?? 0) <= 0) {
             return;
         }
 
@@ -186,17 +187,17 @@ class LinkedInCampaignOptimizationAgent
         }
 
         $benchmarkHigh = $benchmark['high'];
-        $threshold     = $benchmarkHigh * self::CPL_OVERSPEND_MULTIPLIER;
+        $threshold = $benchmarkHigh * self::CPL_OVERSPEND_MULTIPLIER;
         $currentCplFmt = number_format($cpl, 2);
 
         $suggestedObjective = $this->suggestObjectiveSwitch($objective);
 
         $results['issues'][] = [
-            'type'               => 'cpl_above_benchmark',
-            'current_cpl'        => round($cpl, 2),
-            'benchmark_high'     => $benchmarkHigh,
-            'threshold'          => $threshold,
-            'current_objective'  => $objective,
+            'type' => 'cpl_above_benchmark',
+            'current_cpl' => round($cpl, 2),
+            'benchmark_high' => $benchmarkHigh,
+            'threshold' => $threshold,
+            'current_objective' => $objective,
             'suggested_objective' => $suggestedObjective,
         ];
 
@@ -205,10 +206,10 @@ class LinkedInCampaignOptimizationAgent
 
         if ($suggestedObjective) {
             $results['actions'][] = [
-                'type'               => 'objective_switch_recommended',
-                'from'               => $objective,
-                'to'                 => $suggestedObjective,
-                'reason'             => "CPL \${$currentCplFmt} exceeds 3x benchmark",
+                'type' => 'objective_switch_recommended',
+                'from' => $objective,
+                'to' => $suggestedObjective,
+                'reason' => "CPL \${$currentCplFmt} exceeds 3x benchmark",
             ];
 
             $this->notify($campaign, 'linkedin_cpl_above_benchmark',
@@ -223,9 +224,9 @@ class LinkedInCampaignOptimizationAgent
     {
         return match ($current) {
             'BRAND_AWARENESS' => 'LEAD_GEN',
-            'ENGAGEMENT'      => 'WEBSITE_VISITS',
-            'WEBSITE_VISITS'  => 'LEAD_GEN',
-            default           => null,
+            'ENGAGEMENT' => 'WEBSITE_VISITS',
+            'WEBSITE_VISITS' => 'LEAD_GEN',
+            default => null,
         };
     }
 
@@ -240,14 +241,14 @@ class LinkedInCampaignOptimizationAgent
         }
 
         CreativeBrief::create([
-            'campaign_id'      => $campaign->id,
-            'customer_id'      => $campaign->customer_id,
-            'platform'         => 'linkedin',
-            'brief_type'       => $briefType,
-            'status'           => 'pending',
+            'campaign_id' => $campaign->id,
+            'customer_id' => $campaign->customer_id,
+            'platform' => 'linkedin',
+            'brief_type' => $briefType,
+            'status' => 'pending',
             'created_by_agent' => 'LinkedInCampaignOptimizationAgent',
-            'ai_brief'         => "LinkedIn campaign requires creative refresh. Reason: {$context['reason']}. Review performance data and produce fresh ad creatives.",
-            'context'          => $context,
+            'ai_brief' => "LinkedIn campaign requires creative refresh. Reason: {$context['reason']}. Review performance data and produce fresh ad creatives.",
+            'context' => $context,
         ]);
     }
 

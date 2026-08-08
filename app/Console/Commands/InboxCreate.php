@@ -18,6 +18,7 @@ class InboxCreate extends Command
 
         if (! $user) {
             $this->error("No user found with email: {$this->argument('user_email')}");
+
             return 1;
         }
 
@@ -30,6 +31,7 @@ class InboxCreate extends Command
         );
 
         $this->info("Inbox ready: {$inbox->email_address} → user #{$user->id} ({$user->email})");
+
         return 0;
     }
 }

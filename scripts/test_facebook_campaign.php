@@ -12,9 +12,9 @@
  * Falls back to first BM-owned customer if no args given.
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__.'/../vendor/autoload.php';
 
-$app = require __DIR__ . '/../bootstrap/app.php';
+$app = require __DIR__.'/../bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
@@ -22,69 +22,73 @@ use App\Models\Customer;
 use App\Services\FacebookAds\BusinessManagerService;
 
 // ── resolve target account ────────────────────────────────────────────────────
-$keepObjects   = in_array('--keep', $argv, true);
-$cleanArgs     = array_values(array_filter($argv, fn($a) => $a !== '--keep'));
-$argAccountId  = $cleanArgs[1] ?? null;
-$argPageId     = $cleanArgs[2] ?? null;
+$keepObjects = in_array('--keep', $argv, true);
+$cleanArgs = array_values(array_filter($argv, fn ($a) => $a !== '--keep'));
+$argAccountId = $cleanArgs[1] ?? null;
+$argPageId = $cleanArgs[2] ?? null;
 $argLandingUrl = $cleanArgs[3] ?? null;
 
 if ($argAccountId) {
     $accountId = ltrim($argAccountId, 'act_');
-    $customer  = Customer::where('facebook_ads_account_id', $accountId)->first();
+    $customer = Customer::where('facebook_ads_account_id', $accountId)->first();
 } else {
-    $customer  = Customer::where('facebook_bm_owned', true)
+    $customer = Customer::where('facebook_bm_owned', true)
         ->whereNotNull('facebook_ads_account_id')
         ->first();
     $accountId = $customer?->facebook_ads_account_id;
 }
 
-if (!$accountId) {
+if (! $accountId) {
     echo "ERROR: No target ad account. Pass one: php scripts/test_facebook_campaign.php 1991968421347247\n";
     exit(1);
 }
 
-$pageId     = $argPageId ?? $customer?->facebook_page_id ?? config('services.facebook.page_id');
+$pageId = $argPageId ?? $customer?->facebook_page_id ?? config('services.facebook.page_id');
 $landingUrl = $argLandingUrl ?? $customer?->website ?? 'https://sitetospend.com.au';
 
-$bm = new BusinessManagerService();
-if (!$bm->isConfigured()) {
+$bm = new BusinessManagerService;
+if (! $bm->isConfigured()) {
     echo "ERROR: FACEBOOK_SYSTEM_USER_TOKEN / FACEBOOK_BUSINESS_MANAGER_ID missing\n";
     exit(1);
 }
 
-$token   = $bm->getSystemUserToken();
+$token = $bm->getSystemUserToken();
 $version = 'v18.0';
-$base    = "https://graph.facebook.com/{$version}";
+$base = "https://graph.facebook.com/{$version}";
 
 echo "=== Facebook End-to-End Ad Creation Test ===\n";
 echo "Ad Account : act_{$accountId}\n";
-echo "Page ID    : " . ($pageId ?: '(none — creative step will be skipped)') . "\n";
+echo 'Page ID    : '.($pageId ?: '(none — creative step will be skipped)')."\n";
 echo "Landing URL: {$landingUrl}\n";
-echo "Cleanup    : " . ($keepObjects ? 'DISABLED (--keep)' : 'enabled') . "\n\n";
+echo 'Cleanup    : '.($keepObjects ? 'DISABLED (--keep)' : 'enabled')."\n\n";
 
 $created = ['campaign' => null, 'adset' => null, 'creative' => null, 'ad' => null, 'image_hash' => null];
 
 // ── Step 1: verify account access ────────────────────────────────────────────
 echo "Step 1: Verify System User access...\n";
 $verify = $bm->verifyAdAccountAccess($accountId);
-if (!$verify['success']) { echo "FAILED: " . $verify['error'] . "\n"; exit(1); }
+if (! $verify['success']) {
+    echo 'FAILED: '.$verify['error']."\n";
+    exit(1);
+}
 echo "  OK — \"{$verify['name']}\"\n\n";
 
 // ── Step 2: create campaign (CBO, PAUSED) ────────────────────────────────────
 echo "Step 2: Create PAUSED campaign...\n";
 $r = \Illuminate\Support\Facades\Http::post("{$base}/act_{$accountId}/campaigns", [
-    'name'                            => '[SPECTRA TEST] ' . date('Y-m-d H:i:s'),
-    'objective'                       => 'OUTCOME_TRAFFIC',
-    'status'                          => 'PAUSED',
-    'special_ad_categories'           => [],
-    'daily_budget'                    => 500,
+    'name' => '[SPECTRA TEST] '.date('Y-m-d H:i:s'),
+    'objective' => 'OUTCOME_TRAFFIC',
+    'status' => 'PAUSED',
+    'special_ad_categories' => [],
+    'daily_budget' => 500,
     'is_adset_budget_sharing_enabled' => false,
-    'bid_strategy'                    => 'LOWEST_COST_WITHOUT_CAP',
-    'access_token'                    => $token,
+    'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP',
+    'access_token' => $token,
 ]);
 $b = $r->json();
-if (!$r->successful() || !isset($b['id'])) {
-    echo "FAILED:\n" . json_encode($b, JSON_PRETTY_PRINT) . "\n"; exit(1);
+if (! $r->successful() || ! isset($b['id'])) {
+    echo "FAILED:\n".json_encode($b, JSON_PRETTY_PRINT)."\n";
+    exit(1);
 }
 $created['campaign'] = $b['id'];
 echo "  OK — campaign_id: {$created['campaign']}\n\n";
@@ -92,21 +96,21 @@ echo "  OK — campaign_id: {$created['campaign']}\n\n";
 // ── Step 3: create ad set (no budget — CBO handles it) ───────────────────────
 echo "Step 3: Create PAUSED ad set...\n";
 $r = \Illuminate\Support\Facades\Http::post("{$base}/act_{$accountId}/adsets", [
-    'campaign_id'      => $created['campaign'],
-    'name'             => '[SPECTRA TEST] Ad Set',
-    'billing_event'    => 'IMPRESSIONS',
-    'optimization_goal'=> 'LANDING_PAGE_VIEWS',
-    'targeting'        => json_encode([
+    'campaign_id' => $created['campaign'],
+    'name' => '[SPECTRA TEST] Ad Set',
+    'billing_event' => 'IMPRESSIONS',
+    'optimization_goal' => 'LANDING_PAGE_VIEWS',
+    'targeting' => json_encode([
         'geo_locations' => ['countries' => ['AU']],
         'age_min' => 18,
         'age_max' => 65,
     ]),
-    'status'           => 'PAUSED',
-    'access_token'     => $token,
+    'status' => 'PAUSED',
+    'access_token' => $token,
 ]);
 $b = $r->json();
-if (!$r->successful() || !isset($b['id'])) {
-    echo "FAILED:\n" . json_encode($b, JSON_PRETTY_PRINT) . "\n";
+if (! $r->successful() || ! isset($b['id'])) {
+    echo "FAILED:\n".json_encode($b, JSON_PRETTY_PRINT)."\n";
     goto cleanup;
 }
 $created['adset'] = $b['id'];
@@ -116,12 +120,12 @@ echo "  OK — adset_id: {$created['adset']}\n\n";
 echo "Step 4: Upload test image...\n";
 
 // Generate a minimal 1200x628 JPEG in memory using GD
-if (!function_exists('imagecreatetruecolor')) {
+if (! function_exists('imagecreatetruecolor')) {
     echo "  SKIP — GD extension not available, using external placeholder\n";
     // Fall back to downloading a tiny placeholder
     $imgData = @file_get_contents('https://placehold.co/1200x628.jpg');
 } else {
-    $img  = imagecreatetruecolor(1200, 628);
+    $img = imagecreatetruecolor(1200, 628);
     $blue = imagecolorallocate($img, 30, 100, 200);
     imagefill($img, 0, 0, $blue);
     $white = imagecolorallocate($img, 255, 255, 255);
@@ -132,10 +136,10 @@ if (!function_exists('imagecreatetruecolor')) {
     imagedestroy($img);
 }
 
-if (!$imgData) {
+if (! $imgData) {
     echo "  SKIP — could not generate/download test image\n";
 } else {
-    $tempImg = sys_get_temp_dir() . '/spectra_test_' . uniqid() . '.jpg';
+    $tempImg = sys_get_temp_dir().'/spectra_test_'.uniqid().'.jpg';
     file_put_contents($tempImg, $imgData);
 
     $r = \Illuminate\Support\Facades\Http::asMultipart()
@@ -149,7 +153,7 @@ if (!$imgData) {
         $created['image_hash'] = $first['hash'] ?? null;
         echo "  OK — image_hash: {$created['image_hash']}\n\n";
     } else {
-        echo "  FAILED:\n" . json_encode($b, JSON_PRETTY_PRINT) . "\n";
+        echo "  FAILED:\n".json_encode($b, JSON_PRETTY_PRINT)."\n";
     }
 }
 
@@ -157,14 +161,14 @@ if (!$imgData) {
 if ($pageId && $created['image_hash']) {
     echo "Step 5: Create ad creative...\n";
     $r = \Illuminate\Support\Facades\Http::post("{$base}/act_{$accountId}/adcreatives", [
-        'name'               => '[SPECTRA TEST] Creative',
-        'object_story_spec'  => json_encode([
-            'page_id'   => $pageId,
+        'name' => '[SPECTRA TEST] Creative',
+        'object_story_spec' => json_encode([
+            'page_id' => $pageId,
             'link_data' => [
-                'image_hash'     => $created['image_hash'],
-                'link'           => $landingUrl,
-                'message'        => 'This is a Spectra platform test ad.',
-                'name'           => 'Spectra Test',
+                'image_hash' => $created['image_hash'],
+                'link' => $landingUrl,
+                'message' => 'This is a Spectra platform test ad.',
+                'name' => 'Spectra Test',
                 'call_to_action' => ['type' => 'LEARN_MORE'],
             ],
         ]),
@@ -175,9 +179,9 @@ if ($pageId && $created['image_hash']) {
         $created['creative'] = $b['id'];
         echo "  OK — creative_id: {$created['creative']}\n\n";
     } else {
-        echo "  FAILED:\n" . json_encode($b, JSON_PRETTY_PRINT) . "\n";
+        echo "  FAILED:\n".json_encode($b, JSON_PRETTY_PRINT)."\n";
     }
-} elseif (!$pageId) {
+} elseif (! $pageId) {
     echo "Step 5: SKIP creative — no Page ID (pass as 3rd arg or set facebook_page_id on customer)\n\n";
 } else {
     echo "Step 5: SKIP creative — image upload failed\n\n";
@@ -187,10 +191,10 @@ if ($pageId && $created['image_hash']) {
 if ($created['adset'] && $created['creative']) {
     echo "Step 6: Create ad...\n";
     $r = \Illuminate\Support\Facades\Http::post("{$base}/act_{$accountId}/ads", [
-        'name'         => '[SPECTRA TEST] Ad',
-        'adset_id'     => $created['adset'],
-        'creative'     => json_encode(['creative_id' => $created['creative']]),
-        'status'       => 'PAUSED',
+        'name' => '[SPECTRA TEST] Ad',
+        'adset_id' => $created['adset'],
+        'creative' => json_encode(['creative_id' => $created['creative']]),
+        'status' => 'PAUSED',
         'access_token' => $token,
     ]);
     $b = $r->json();
@@ -198,7 +202,7 @@ if ($created['adset'] && $created['creative']) {
         $created['ad'] = $b['id'];
         echo "  OK — ad_id: {$created['ad']}\n\n";
     } else {
-        echo "  FAILED:\n" . json_encode($b, JSON_PRETTY_PRINT) . "\n";
+        echo "  FAILED:\n".json_encode($b, JSON_PRETTY_PRINT)."\n";
     }
 } else {
     echo "Step 6: SKIP ad — creative not available\n\n";
@@ -209,16 +213,20 @@ cleanup:
 if ($keepObjects) {
     echo "Cleanup: SKIPPED (--keep flag set) — objects left in Ads Manager:\n";
     foreach (['campaign' => $created['campaign'], 'adset' => $created['adset'], 'creative' => $created['creative'], 'ad' => $created['ad']] as $type => $id) {
-        if ($id) echo "  {$type}: {$id}\n";
+        if ($id) {
+            echo "  {$type}: {$id}\n";
+        }
     }
     echo "  ⚠️  Remember to delete these manually from Ads Manager when done.\n";
 } else {
     echo "Cleanup: deleting test objects...\n";
     foreach (['ad' => $created['ad'], 'creative' => $created['creative'], 'adset' => $created['adset'], 'campaign' => $created['campaign']] as $type => $id) {
-        if (!$id) continue;
+        if (! $id) {
+            continue;
+        }
         $del = \Illuminate\Support\Facades\Http::delete("{$base}/{$id}", ['access_token' => $token]);
-        $ok  = $del->successful() && ($del->json()['success'] ?? false);
-        echo "  {$type} {$id}: " . ($ok ? "deleted" : "could not delete — remove manually") . "\n";
+        $ok = $del->successful() && ($del->json()['success'] ?? false);
+        echo "  {$type} {$id}: ".($ok ? 'deleted' : 'could not delete — remove manually')."\n";
     }
 }
 
@@ -226,7 +234,7 @@ echo "\n";
 
 // ── Result ────────────────────────────────────────────────────────────────────
 $allPassed = $created['campaign'] && $created['adset'];
-$fullFlow  = $created['campaign'] && $created['adset'] && $created['creative'] && $created['ad'];
+$fullFlow = $created['campaign'] && $created['adset'] && $created['creative'] && $created['ad'];
 
 if ($fullFlow) {
     echo "✅  RESULT: Full ad creation flow works (campaign → ad set → creative → ad).\n";

@@ -2,15 +2,13 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Services\CustomerServiceClient;
 use Google\Ads\GoogleAds\V22\Resources\Customer;
-use Google\ApiCore\ApiException;
-use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
 use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
+use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
+use Google\ApiCore\ApiException;
+use Illuminate\Console\Command;
 
 class TestGoogleAdsConnection extends Command
 {
@@ -37,12 +35,12 @@ class TestGoogleAdsConnection extends Command
 
         try {
             // Create a credential builder for OAuth2.
-            $oAuth2Credential = (new OAuth2TokenBuilder())
+            $oAuth2Credential = (new OAuth2TokenBuilder)
                 ->fromFile(storage_path('app/google_ads_php.ini'))
                 ->build();
 
             // Create a GoogleAdsClient.
-            $googleAdsClient = (new \Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder())
+            $googleAdsClient = (new \Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder)
                 ->fromFile(storage_path('app/google_ads_php.ini'))
                 ->withOAuth2Credential($oAuth2Credential)
                 ->build();
@@ -53,10 +51,10 @@ class TestGoogleAdsConnection extends Command
             // List accessible customers.
             $this->info('Listing accessible customers:');
             $accessibleCustomers = $customerServiceClient->listAccessibleCustomers(
-                new ListAccessibleCustomersRequest()
+                new ListAccessibleCustomersRequest
             );
             foreach ($accessibleCustomers->getResourceNames() as $resourceName) {
-                $this->line('- ' . $resourceName);
+                $this->line('- '.$resourceName);
             }
 
             $this->info('Successfully connected to the Google Ads API.');
@@ -68,7 +66,7 @@ class TestGoogleAdsConnection extends Command
 
             // Create a new customer.
             $customer = new Customer([
-                'descriptive_name' => 'Test Account ' . uniqid(),
+                'descriptive_name' => 'Test Account '.uniqid(),
                 'currency_code' => 'USD',
                 'time_zone' => 'America/New_York',
             ]);
@@ -80,12 +78,11 @@ class TestGoogleAdsConnection extends Command
             ]);
             $response = $customerServiceClient->createCustomerClient($createCustomerRequest);
 
-            $this->info('Created a new test customer with resource name: ' . $response->getResourceName());
-
+            $this->info('Created a new test customer with resource name: '.$response->getResourceName());
 
         } catch (GoogleAdsException $e) {
-            $this->error('Google Ads API request failed with status: ' . $e->getStatus());
-            $this->error('Request ID: ' . $e->getRequestId());
+            $this->error('Google Ads API request failed with status: '.$e->getStatus());
+            $this->error('Request ID: '.$e->getRequestId());
             foreach ($e->getFailure()->getErrors() as $error) {
                 $this->error(sprintf(
                     "\tCode: %s, Message: %s",
@@ -94,10 +91,10 @@ class TestGoogleAdsConnection extends Command
                 ));
             }
         } catch (ApiException $e) {
-            $this->error('Google Ads API request failed with status: ' . $e->getStatus());
-            $this->error('Failure message: ' . $e);
+            $this->error('Google Ads API request failed with status: '.$e->getStatus());
+            $this->error('Failure message: '.$e);
         } catch (\Exception $e) {
-            $this->error('An error occurred: ' . $e->getMessage());
+            $this->error('An error occurred: '.$e->getMessage());
         }
     }
 }

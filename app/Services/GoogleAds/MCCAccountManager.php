@@ -3,11 +3,10 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer as CustomerModel;
-use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Google\Ads\GoogleAds\V22\Resources\Customer;
 use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
+use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
 use Illuminate\Support\Facades\Log;
-use App\Services\GoogleAds\BillingSetupService;
 
 class MCCAccountManager extends BaseGoogleAdsService
 {
@@ -19,7 +18,7 @@ class MCCAccountManager extends BaseGoogleAdsService
     /**
      * Check if an account is a Manager (MCC) account or Standard account.
      *
-     * @param string $accountId The Google Ads account ID
+     * @param  string  $accountId  The Google Ads account ID
      * @return ?array Returns ['is_manager' => bool, 'descriptive_name' => string] or null on error
      */
     public function getAccountInfo(string $accountId): ?array
@@ -27,14 +26,14 @@ class MCCAccountManager extends BaseGoogleAdsService
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
 
-            $query = "SELECT 
+            $query = 'SELECT 
                         customer.id,
                         customer.descriptive_name,
                         customer.manager,
                         customer.time_zone,
                         customer.currency_code
                       FROM customer 
-                      LIMIT 1";
+                      LIMIT 1';
 
             $request = new SearchGoogleAdsRequest([
                 'customer_id' => $accountId,
@@ -44,8 +43,9 @@ class MCCAccountManager extends BaseGoogleAdsService
             $response = $googleAdsServiceClient->search($request);
             $row = $response->getIterator()->current();
 
-            if (!$row) {
+            if (! $row) {
                 Log::warning("Could not fetch account info for {$accountId}");
+
                 return null;
             }
 
@@ -59,9 +59,10 @@ class MCCAccountManager extends BaseGoogleAdsService
                 'currency_code' => $customer->getCurrencyCode(),
             ];
         } catch (\Exception $e) {
-            Log::error("Error fetching account info for {$accountId}: " . $e->getMessage(), [
+            Log::error("Error fetching account info for {$accountId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return null;
         }
     }
@@ -70,8 +71,8 @@ class MCCAccountManager extends BaseGoogleAdsService
      * If the account is an MCC, create a new Standard account under it.
      * Updates the customer record with both the MCC ID and the new Standard account ID.
      *
-     * @param string $mccAccountId The MCC account ID
-     * @param string $accountName The name for the new Standard account
+     * @param  string  $mccAccountId  The MCC account ID
+     * @param  string  $accountName  The name for the new Standard account
      * @return ?array Returns ['account_id' => string, 'resource_name' => string] or null on error
      */
     public function createStandardAccountUnderMCC(
@@ -82,22 +83,24 @@ class MCCAccountManager extends BaseGoogleAdsService
             // First, verify it's actually an MCC account
             $accountInfo = $this->getAccountInfo($mccAccountId);
 
-            if (!$accountInfo) {
-                Log::error("Could not verify account info before creating sub-account", [
+            if (! $accountInfo) {
+                Log::error('Could not verify account info before creating sub-account', [
                     'mcc_account_id' => $mccAccountId,
                 ]);
+
                 return null;
             }
 
-            if (!$accountInfo['is_manager']) {
+            if (! $accountInfo['is_manager']) {
                 Log::warning("Account {$mccAccountId} is not an MCC account, cannot create sub-account");
+
                 return null;
             }
 
             // Use provided name or default to customer name + account info
-            $displayName = $accountName ?: ($this->customer->name . ' - Sub-account');
+            $displayName = $accountName ?: ($this->customer->name.' - Sub-account');
 
-            Log::info("Creating Standard account under MCC", [
+            Log::info('Creating Standard account under MCC', [
                 'mcc_account_id' => $mccAccountId,
                 'account_name' => $displayName,
                 'customer_id' => $this->customer->id,
@@ -121,11 +124,12 @@ class MCCAccountManager extends BaseGoogleAdsService
             $customerServiceClient = $this->client->getCustomerServiceClient();
             $response = $customerServiceClient->createCustomerClient($request);
 
-            if (!$response->getResourceName()) {
-                Log::error("Failed to create managed account: No resource name returned", [
+            if (! $response->getResourceName()) {
+                Log::error('Failed to create managed account: No resource name returned', [
                     'mcc_account_id' => $mccAccountId,
                     'account_name' => $displayName,
                 ]);
+
                 return null;
             }
 
@@ -135,10 +139,11 @@ class MCCAccountManager extends BaseGoogleAdsService
             preg_match('/customers\/(\d+)/', $resourceName, $matches);
             $newAccountId = $matches[1] ?? null;
 
-            if (!$newAccountId) {
-                Log::error("Failed to extract account ID from resource name", [
+            if (! $newAccountId) {
+                Log::error('Failed to extract account ID from resource name', [
                     'resource_name' => $resourceName,
                 ]);
+
                 return null;
             }
 
@@ -155,13 +160,13 @@ class MCCAccountManager extends BaseGoogleAdsService
                 $billingService->setupBillingForSubAccount($newAccountId);
             } catch (\Exception $e) {
                 // Non-fatal — campaigns can still be created, billing can be set up later
-                Log::warning("Could not set up billing for new sub-account", [
+                Log::warning('Could not set up billing for new sub-account', [
                     'sub_account_id' => $newAccountId,
                     'error' => $e->getMessage(),
                 ]);
             }
 
-            Log::info("Successfully created and linked Standard account under MCC", [
+            Log::info('Successfully created and linked Standard account under MCC', [
                 'mcc_account_id' => $mccAccountId,
                 'new_account_id' => $newAccountId,
                 'resource_name' => $resourceName,
@@ -174,11 +179,12 @@ class MCCAccountManager extends BaseGoogleAdsService
                 'mcc_account_id' => $mccAccountId,
             ];
         } catch (\Exception $e) {
-            Log::error("Error creating Standard account under MCC: " . $e->getMessage(), [
+            Log::error('Error creating Standard account under MCC: '.$e->getMessage(), [
                 'exception' => $e,
                 'mcc_account_id' => $mccAccountId,
                 'trace' => $e->getTraceAsString(),
             ]);
+
             return null;
         }
     }
@@ -186,12 +192,12 @@ class MCCAccountManager extends BaseGoogleAdsService
     /**
      * Handle account selection: if MCC, create Standard account; if Standard, just store the ID.
      *
-     * @param string $selectedAccountId The account ID selected by the user
+     * @param  string  $selectedAccountId  The account ID selected by the user
      * @return ?array Returns ['account_id' => string, 'is_new_account' => bool, 'mcc_account_id' => ?string]
      */
     public function handleAccountSelection(string $selectedAccountId): ?array
     {
-        Log::info("Handling Google Ads account selection", [
+        Log::info('Handling Google Ads account selection', [
             'selected_account_id' => $selectedAccountId,
             'customer_id' => $this->customer->id,
         ]);
@@ -199,16 +205,17 @@ class MCCAccountManager extends BaseGoogleAdsService
         // Get account info to check if it's an MCC
         $accountInfo = $this->getAccountInfo($selectedAccountId);
 
-        if (!$accountInfo) {
-            Log::error("Could not fetch account info for selected account", [
+        if (! $accountInfo) {
+            Log::error('Could not fetch account info for selected account', [
                 'account_id' => $selectedAccountId,
             ]);
+
             return null;
         }
 
         if ($accountInfo['is_manager']) {
             // It's an MCC, create a Standard account under it
-            Log::info("Selected account is an MCC, creating Standard account", [
+            Log::info('Selected account is an MCC, creating Standard account', [
                 'mcc_account_id' => $selectedAccountId,
             ]);
 
@@ -227,7 +234,7 @@ class MCCAccountManager extends BaseGoogleAdsService
         } else {
             // External Standard accounts are not allowed — all accounts must be
             // created under the platform MCC so we control billing & management.
-            Log::warning("Rejected external Standard account selection — only MCC accounts are accepted", [
+            Log::warning('Rejected external Standard account selection — only MCC accounts are accepted', [
                 'account_id' => $selectedAccountId,
                 'account_name' => $accountInfo['descriptive_name'],
                 'customer_id' => $this->customer->id,
@@ -241,8 +248,8 @@ class MCCAccountManager extends BaseGoogleAdsService
      * Rename account (locally - Google Ads API doesn't support renaming via API).
      * Updates the customer's name field for display purposes.
      *
-     * @param string $accountId The Google Ads account ID
-     * @param string $newName The new descriptive name
+     * @param  string  $accountId  The Google Ads account ID
+     * @param  string  $newName  The new descriptive name
      * @return bool True if successful
      */
     public function renameAccount(string $accountId, string $newName): bool
@@ -250,29 +257,31 @@ class MCCAccountManager extends BaseGoogleAdsService
         try {
             // Get the account info to verify it exists
             $accountInfo = $this->getAccountInfo($accountId);
-            if (!$accountInfo) {
-                Log::error("Account not found", ['account_id' => $accountId]);
+            if (! $accountInfo) {
+                Log::error('Account not found', ['account_id' => $accountId]);
+
                 return false;
             }
 
-            Log::info("Renamed account locally", [
+            Log::info('Renamed account locally', [
                 'account_id' => $accountId,
                 'old_name' => $accountInfo['descriptive_name'],
                 'new_name' => $newName,
                 'customer_id' => $this->customer->id,
             ]);
 
-            // Update customer record with the new name  
+            // Update customer record with the new name
             $this->customer->update([
                 'name' => $newName,
             ]);
 
             return true;
         } catch (\Exception $e) {
-            Log::error("Error renaming account: " . $e->getMessage(), [
+            Log::error('Error renaming account: '.$e->getMessage(), [
                 'account_id' => $accountId,
                 'exception' => $e,
             ]);
+
             return false;
         }
     }

@@ -21,13 +21,13 @@ class MccAccountController extends Controller
                 'google_customer_id' => $account->google_customer_id,
                 'is_active' => $account->is_active,
                 'notes' => $account->notes,
-                'has_refresh_token' => !empty($account->refresh_token),
+                'has_refresh_token' => ! empty($account->refresh_token),
                 'created_at' => $account->created_at,
                 'updated_at' => $account->updated_at,
             ]);
 
         // Check if currently using env fallback (no DB accounts active)
-        $usingEnvFallback = !MccAccount::active()->exists()
+        $usingEnvFallback = ! MccAccount::active()->exists()
             && config('googleads.mcc_customer_id')
             && config('googleads.mcc_refresh_token');
 
@@ -79,7 +79,7 @@ class MccAccountController extends Controller
         $validated['google_customer_id'] = preg_replace('/[^0-9]/', '', $validated['google_customer_id']);
 
         // Only update refresh token if a new one is provided
-        if (!empty($validated['refresh_token'])) {
+        if (! empty($validated['refresh_token'])) {
             $validated['refresh_token'] = Crypt::encryptString($validated['refresh_token']);
         } else {
             unset($validated['refresh_token']);

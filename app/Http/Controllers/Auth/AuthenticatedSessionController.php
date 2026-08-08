@@ -39,7 +39,7 @@ class AuthenticatedSessionController extends Controller
         $request->authenticate();
 
         $request->session()->regenerate();
-        
+
         ActivityLogger::login();
 
         return redirect()->intended(route('dashboard', absolute: false));
@@ -51,7 +51,7 @@ class AuthenticatedSessionController extends Controller
     public function destroy(Request $request): RedirectResponse
     {
         ActivityLogger::logout();
-        
+
         Auth::guard('web')->logout();
 
         $request->session()->invalidate();

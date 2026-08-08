@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
-use App\Models\Notification;
-use App\Models\User;
-use App\Models\Customer;
 use App\Models\Campaign;
+use App\Models\Customer;
+use App\Models\Notification;
 use App\Models\Strategy;
+use App\Models\User;
 
 class NotificationService
 {
@@ -41,7 +41,7 @@ class NotificationService
     public function notifyStrategyReady(Campaign $campaign, Strategy $strategy): Notification
     {
         $user = $campaign->customer->user;
-        
+
         return $this->notify(
             $user,
             Notification::TYPE_STRATEGY_READY,
@@ -63,7 +63,7 @@ class NotificationService
     public function notifyCollateralReady(Campaign $campaign, Strategy $strategy): Notification
     {
         $user = $campaign->customer->user;
-        
+
         return $this->notify(
             $user,
             Notification::TYPE_COLLATERAL_READY,
@@ -85,7 +85,7 @@ class NotificationService
     public function notifyDeploymentStarted(Campaign $campaign, Strategy $strategy): Notification
     {
         $user = $campaign->customer->user;
-        
+
         return $this->notify(
             $user,
             Notification::TYPE_DEPLOYMENT_STARTED,
@@ -107,7 +107,7 @@ class NotificationService
     public function notifyDeploymentCompleted(Campaign $campaign, Strategy $strategy): Notification
     {
         $user = $campaign->customer->user;
-        
+
         return $this->notify(
             $user,
             Notification::TYPE_DEPLOYMENT_COMPLETED,
@@ -129,7 +129,7 @@ class NotificationService
     public function notifyDeploymentFailed(Campaign $campaign, Strategy $strategy, string $error): Notification
     {
         $user = $campaign->customer->user;
-        
+
         return $this->notify(
             $user,
             Notification::TYPE_DEPLOYMENT_FAILED,
@@ -212,8 +212,8 @@ class NotificationService
             $user,
             Notification::TYPE_AB_TEST_COMPLETE,
             'A/B Test Winner Found',
-            "Your {$test->test_type} test reached " . round($confidence * 100, 1) . "% confidence. " .
-            "\"{$winner['label']}\" won with a " . round($liftPct, 1) . "% lift in CTR.",
+            "Your {$test->test_type} test reached ".round($confidence * 100, 1).'% confidence. '.
+            "\"{$winner['label']}\" won with a ".round($liftPct, 1).'% lift in CTR.',
             route('campaigns.show', $test->campaign_id),
             'View Results',
             $test->campaign->customer,
@@ -233,14 +233,14 @@ class NotificationService
     public function getUnreadCount(User $user, ?int $customerId = null): int
     {
         $query = Notification::where('user_id', $user->id)->unread();
-        
+
         if ($customerId) {
             $query->where(function ($q) use ($customerId) {
                 $q->where('customer_id', $customerId)
-                  ->orWhereNull('customer_id');
+                    ->orWhereNull('customer_id');
             });
         }
-        
+
         return $query->count();
     }
 
@@ -252,14 +252,14 @@ class NotificationService
         $query = Notification::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
             ->limit($limit);
-        
+
         if ($customerId) {
             $query->where(function ($q) use ($customerId) {
                 $q->where('customer_id', $customerId)
-                  ->orWhereNull('customer_id');
+                    ->orWhereNull('customer_id');
             });
         }
-        
+
         return $query->get()->toArray();
     }
 
@@ -269,12 +269,13 @@ class NotificationService
     public function markAsRead(string $notificationId): bool
     {
         $notification = Notification::find($notificationId);
-        
+
         if ($notification) {
             $notification->markAsRead();
+
             return true;
         }
-        
+
         return false;
     }
 
@@ -284,14 +285,14 @@ class NotificationService
     public function markAllAsRead(User $user, ?int $customerId = null): int
     {
         $query = Notification::where('user_id', $user->id)->unread();
-        
+
         if ($customerId) {
             $query->where(function ($q) use ($customerId) {
                 $q->where('customer_id', $customerId)
-                  ->orWhereNull('customer_id');
+                    ->orWhereNull('customer_id');
             });
         }
-        
+
         return $query->update(['read_at' => now()]);
     }
 

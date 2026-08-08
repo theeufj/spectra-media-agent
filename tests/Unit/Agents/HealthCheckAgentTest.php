@@ -14,6 +14,7 @@ use Tests\TestCase;
 class HealthCheckAgentTest extends TestCase
 {
     protected HealthCheckAgent $agent;
+
     protected GeminiService $geminiMock;
 
     protected function setUp(): void

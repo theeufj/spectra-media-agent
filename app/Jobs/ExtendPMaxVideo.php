@@ -23,6 +23,7 @@ class ExtendPMaxVideo implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $timeout = 600;
 
     public function __construct(protected VideoCollateral $sourceVideo) {}
@@ -31,32 +32,36 @@ class ExtendPMaxVideo implements ShouldQueue
     {
         $source = $this->sourceVideo;
 
-        if ($source->status !== 'completed' || !$source->s3_path) {
+        if ($source->status !== 'completed' || ! $source->s3_path) {
             Log::warning("ExtendPMaxVideo: source video {$source->id} not completed / has no file — skipping");
+
             return;
         }
 
         // Don't extend an already-extended clip (avoids runaway length + cost).
         if (($source->extension_count ?? 0) >= 1) {
             Log::info("ExtendPMaxVideo: video {$source->id} already extended — skipping");
+
             return;
         }
 
         try {
             $bytes = Storage::disk('s3')->get($source->s3_path);
         } catch (\Throwable $e) {
-            Log::error("ExtendPMaxVideo: could not read source video {$source->id}: " . $e->getMessage());
+            Log::error("ExtendPMaxVideo: could not read source video {$source->id}: ".$e->getMessage());
+
             return;
         }
-        if (!$bytes) {
+        if (! $bytes) {
             Log::error("ExtendPMaxVideo: empty source video {$source->id}");
+
             return;
         }
 
         $brand = $source->campaign?->customer?->name ?? 'the brand';
         $prompt = "Seamlessly continue this product-showcase video for {$brand}. Maintain the exact "
-            . "same subjects, lighting, colour grading, camera style and environment — one continuous take. "
-            . "No on-screen text, no watermarks.";
+            .'same subjects, lighting, colour grading, camera style and environment — one continuous take. '
+            .'No on-screen text, no watermarks.';
 
         $operationName = $geminiService->extendVideoFromBytes(
             base64_encode($bytes),
@@ -65,8 +70,9 @@ class ExtendPMaxVideo implements ShouldQueue
             ['operation' => 'pmax_video_extension', 'campaign_id' => $source->campaign_id]
         );
 
-        if (!$operationName) {
+        if (! $operationName) {
             Log::error("ExtendPMaxVideo: failed to start extension for video {$source->id}");
+
             return;
         }
 
@@ -74,13 +80,13 @@ class ExtendPMaxVideo implements ShouldQueue
         $source->update(['is_active' => false]);
 
         $extended = VideoCollateral::create([
-            'campaign_id'     => $source->campaign_id,
-            'strategy_id'     => $source->strategy_id,
-            'platform'        => $source->platform,
-            'script'          => $source->script,
-            'status'          => 'generating',
-            'operation_name'  => $operationName,
-            'is_active'       => true,
+            'campaign_id' => $source->campaign_id,
+            'strategy_id' => $source->strategy_id,
+            'platform' => $source->platform,
+            'script' => $source->script,
+            'status' => 'generating',
+            'operation_name' => $operationName,
+            'is_active' => true,
             'parent_video_id' => $source->id,
             'extension_count' => ($source->extension_count ?? 0) + 1,
         ]);
@@ -91,6 +97,6 @@ class ExtendPMaxVideo implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('ExtendPMaxVideo failed: ' . $exception->getMessage());
+        Log::error('ExtendPMaxVideo failed: '.$exception->getMessage());
     }
 }

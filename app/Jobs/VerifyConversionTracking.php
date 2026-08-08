@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Models\Campaign;
 use App\Models\Customer;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\GoogleAds\ConversionTrackingService;
@@ -15,9 +14,10 @@ use Illuminate\Support\Facades\Log;
 
 class VerifyConversionTracking implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
+
     public $timeout = 300;
 
     public function handle(): void
@@ -34,14 +34,14 @@ class VerifyConversionTracking implements ShouldQueue
         foreach ($customers as $customer) {
             try {
                 $customerId = $customer->cleanGoogleCustomerId();
-                $service    = new ConversionTrackingService($customer);
-                $count      = $service->getConversionCountLast30Days($customerId);
+                $service = new ConversionTrackingService($customer);
+                $count = $service->getConversionCountLast30Days($customerId);
 
                 if ($count === 0) {
                     $flagged++;
                     Log::warning('VerifyConversionTracking: Zero conversions in last 30 days', [
                         'customer_id' => $customer->id,
-                        'name'        => $customer->name,
+                        'name' => $customer->name,
                     ]);
 
                     CriticalAgentAlert::deliver(
@@ -62,16 +62,16 @@ class VerifyConversionTracking implements ShouldQueue
                 }
             } catch (\Exception $e) {
                 $errors++;
-                Log::error('VerifyConversionTracking: Error for customer ' . $customer->id . ': ' . $e->getMessage());
+                Log::error('VerifyConversionTracking: Error for customer '.$customer->id.': '.$e->getMessage());
             }
         }
 
-        $this->finishRun($runStart, actions: $flagged, errors: $errors, scope: $customers->count() . ' customers');
+        $this->finishRun($runStart, actions: $flagged, errors: $errors, scope: $customers->count().' customers');
     }
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('VerifyConversionTracking failed: ' . $exception->getMessage());
+        Log::error('VerifyConversionTracking failed: '.$exception->getMessage());
         $this->recordRunFailure($exception);
     }
 }

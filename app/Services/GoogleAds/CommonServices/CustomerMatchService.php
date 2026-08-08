@@ -3,22 +3,20 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use Google\Ads\GoogleAds\V22\Enums\CustomerMatchUploadKeyTypeEnum\CustomerMatchUploadKeyType;
-use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobTypeEnum\OfflineUserDataJobType;
-use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobStatusEnum\OfflineUserDataJobStatus;
+use Google\Ads\GoogleAds\V22\Common\UserData;
 use Google\Ads\GoogleAds\V22\Common\UserIdentifier;
-use Google\Ads\GoogleAds\V22\Common\OfflineUserAddressInfo;
+use Google\Ads\GoogleAds\V22\Enums\CustomerMatchUploadKeyTypeEnum\CustomerMatchUploadKeyType;
+use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobStatusEnum\OfflineUserDataJobStatus;
+use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobTypeEnum\OfflineUserDataJobType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\OfflineUserDataJob;
 use Google\Ads\GoogleAds\V22\Resources\UserList;
-use Google\Ads\GoogleAds\V22\Services\OfflineUserDataJobOperation;
 use Google\Ads\GoogleAds\V22\Services\UserDataOperation;
-use Google\Ads\GoogleAds\V22\Common\UserData;
 use Illuminate\Support\Facades\Log;
 
 /**
  * CustomerMatchService
- * 
+ *
  * Manages Customer Match audiences in Google Ads.
  * Enables uploading email lists for targeted advertising.
  */
@@ -27,9 +25,6 @@ class CustomerMatchService extends BaseGoogleAdsService
     /**
      * Create a new Customer Match user list.
      *
-     * @param string $customerId
-     * @param string $listName
-     * @param string $description
      * @return string|null The user list resource name
      */
     public function createUserList(
@@ -55,12 +50,12 @@ class CustomerMatchService extends BaseGoogleAdsService
             ]);
 
             // Create the operation
-            $userListOperation = new \Google\Ads\GoogleAds\V22\Services\UserListOperation();
+            $userListOperation = new \Google\Ads\GoogleAds\V22\Services\UserListOperation;
             $userListOperation->setCreate($userList);
 
             // Execute
             $response = $userListServiceClient->mutateUserLists($customerId, [$userListOperation]);
-            
+
             $userListResourceName = $response->getResults()[0]->getResourceName();
 
             Log::info('CustomerMatchService: User list created', [
@@ -76,6 +71,7 @@ class CustomerMatchService extends BaseGoogleAdsService
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -83,9 +79,7 @@ class CustomerMatchService extends BaseGoogleAdsService
     /**
      * Upload customer emails to a Customer Match list.
      *
-     * @param string $customerId
-     * @param string $userListResourceName
-     * @param array $emails Array of email addresses
+     * @param  array  $emails  Array of email addresses
      * @return array Upload result
      */
     public function uploadEmails(
@@ -126,8 +120,9 @@ class CustomerMatchService extends BaseGoogleAdsService
             $operations = [];
             foreach ($emails as $email) {
                 $normalizedEmail = $this->normalizeEmail($email);
-                if (!$normalizedEmail) {
+                if (! $normalizedEmail) {
                     $result['failed']++;
+
                     continue;
                 }
 
@@ -139,7 +134,7 @@ class CustomerMatchService extends BaseGoogleAdsService
                     'user_identifiers' => [$userIdentifier],
                 ]);
 
-                $operation = new UserDataOperation();
+                $operation = new UserDataOperation;
                 $operation->setCreate($userData);
                 $operations[] = $operation;
                 $result['uploaded']++;
@@ -185,18 +180,18 @@ class CustomerMatchService extends BaseGoogleAdsService
         $this->ensureClient();
 
         try {
-            $query = "SELECT " .
-                     "offline_user_data_job.resource_name, " .
-                     "offline_user_data_job.status, " .
-                     "offline_user_data_job.failure_reason " .
-                     "FROM offline_user_data_job " .
+            $query = 'SELECT '.
+                     'offline_user_data_job.resource_name, '.
+                     'offline_user_data_job.status, '.
+                     'offline_user_data_job.failure_reason '.
+                     'FROM offline_user_data_job '.
                      "WHERE offline_user_data_job.resource_name = '$jobResourceName'";
 
             $response = $this->searchQuery($customerId, $query);
 
             foreach ($response->getIterator() as $googleAdsRow) {
                 $job = $googleAdsRow->getOfflineUserDataJob();
-                
+
                 return [
                     'status' => $this->formatJobStatus($job->getStatus()),
                     'failure_reason' => $job->getFailureReason() ?: null,
@@ -220,14 +215,14 @@ class CustomerMatchService extends BaseGoogleAdsService
         $this->ensureClient();
 
         try {
-            $query = "SELECT " .
-                     "user_list.resource_name, " .
-                     "user_list.name, " .
-                     "user_list.description, " .
-                     "user_list.membership_status, " .
-                     "user_list.size_for_display, " .
-                     "user_list.size_for_search " .
-                     "FROM user_list " .
+            $query = 'SELECT '.
+                     'user_list.resource_name, '.
+                     'user_list.name, '.
+                     'user_list.description, '.
+                     'user_list.membership_status, '.
+                     'user_list.size_for_display, '.
+                     'user_list.size_for_search '.
+                     'FROM user_list '.
                      "WHERE user_list.type = 'CRM_BASED'";
 
             $response = $this->searchQuery($customerId, $query);
@@ -235,7 +230,7 @@ class CustomerMatchService extends BaseGoogleAdsService
             $lists = [];
             foreach ($response->getIterator() as $googleAdsRow) {
                 $userList = $googleAdsRow->getUserList();
-                
+
                 $lists[] = [
                     'resource_name' => $userList->getResourceName(),
                     'name' => $userList->getName(),
@@ -252,6 +247,7 @@ class CustomerMatchService extends BaseGoogleAdsService
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
             ]);
+
             return [];
         }
     }
@@ -262,8 +258,8 @@ class CustomerMatchService extends BaseGoogleAdsService
     protected function normalizeEmail(string $email): ?string
     {
         $email = trim(strtolower($email));
-        
-        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+
+        if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
             return null;
         }
 

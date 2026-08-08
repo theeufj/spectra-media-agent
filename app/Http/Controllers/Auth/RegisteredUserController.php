@@ -5,8 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Jobs\RecordSiteFacebookConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
-use App\Models\User;
 use App\Models\Customer;
+use App\Models\User;
 use App\Rules\CloudflareTurnstile;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
@@ -43,7 +43,7 @@ class RegisteredUserController extends Controller
     {
         $rules = [
             'name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:' . User::class,
+            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ];
 
@@ -56,13 +56,13 @@ class RegisteredUserController extends Controller
 
         $demoUrl = $request->input('demo_url');
 
-        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
+        $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
         $user = User::create([
-            'name'       => $request->name,
-            'email'      => $request->email,
-            'password'   => Hash::make($request->password),
-            'demo_url'   => $demoUrl ? filter_var($demoUrl, FILTER_VALIDATE_URL) ?: null : null,
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => Hash::make($request->password),
+            'demo_url' => $demoUrl ? filter_var($demoUrl, FILTER_VALIDATE_URL) ?: null : null,
             'tenant_key' => $tenant['key'] ?? null,
         ]);
 
@@ -79,7 +79,7 @@ class RegisteredUserController extends Controller
 
         // Capture any ad click IDs stored by CaptureClickIds middleware
         $clickIds = \App\Http\Middleware\CaptureClickIds::all();
-        if (!empty($clickIds)) {
+        if (! empty($clickIds)) {
             $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'fbclid', 'msclid'])));
         }
 
@@ -89,10 +89,10 @@ class RegisteredUserController extends Controller
         // to existing users (new integrations must use the Data Manager API), so
         // server-side click uploads are rejected for this account.
         $freshUser = $user->fresh();
-        if (!empty($freshUser->fbclid)) {
+        if (! empty($freshUser->fbclid)) {
             RecordSiteFacebookConversion::dispatch($freshUser, 'signup');
         }
-        if (!empty($freshUser->msclid)) {
+        if (! empty($freshUser->msclid)) {
             RecordSiteMicrosoftConversion::dispatch($freshUser, 'signup');
         }
 
@@ -103,7 +103,7 @@ class RegisteredUserController extends Controller
         );
 
         \Illuminate\Support\Facades\Mail::raw(
-            "New registration on SiteToSpend\n\nName: {$user->name}\nEmail: {$user->email}\nTime: " . now()->format('d M Y H:i T'),
+            "New registration on SiteToSpend\n\nName: {$user->name}\nEmail: {$user->email}\nTime: ".now()->format('d M Y H:i T'),
             fn ($m) => $m->to(config('app.admin_email'))->subject("New signup: {$user->name}")
         );
 

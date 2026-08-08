@@ -4,8 +4,6 @@ namespace App\Services\Agents;
 
 use App\Models\AgentActivity;
 use App\Models\Campaign;
-use App\Notifications\CampaignStatusUpdated;
-use App\Services\Agents\AdaptiveThresholds;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy;
 use App\Support\Json;
@@ -36,9 +34,9 @@ class BiddingStrategyProgressionAgent
 
         return [
             'MAXIMIZE_CONVERSIONS' => ['min_conversions' => $cfg['MAXIMIZE_CONVERSIONS'] ?? 30,  'next' => 'TARGET_CPA',   'stability_check' => false],
-            'MANUAL_CPC'           => ['min_conversions' => $cfg['MANUAL_CPC']           ?? 30,  'next' => 'ENHANCED_CPC', 'stability_check' => false],
-            'ENHANCED_CPC'         => ['min_conversions' => $cfg['ENHANCED_CPC']         ?? 50,  'next' => 'TARGET_CPA',   'stability_check' => true],
-            'TARGET_CPA'           => ['min_conversions' => $cfg['TARGET_CPA']           ?? 100, 'next' => 'TARGET_ROAS',  'stability_check' => true],
+            'MANUAL_CPC' => ['min_conversions' => $cfg['MANUAL_CPC'] ?? 30,  'next' => 'ENHANCED_CPC', 'stability_check' => false],
+            'ENHANCED_CPC' => ['min_conversions' => $cfg['ENHANCED_CPC'] ?? 50,  'next' => 'TARGET_CPA',   'stability_check' => true],
+            'TARGET_CPA' => ['min_conversions' => $cfg['TARGET_CPA'] ?? 100, 'next' => 'TARGET_ROAS',  'stability_check' => true],
         ];
     }
 
@@ -46,13 +44,13 @@ class BiddingStrategyProgressionAgent
     {
         $customer = $campaign->customer;
 
-        if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
+        if (! $customer?->google_ads_customer_id || ! $campaign->google_ads_campaign_id) {
             return ['skipped' => true];
         }
 
         $strategy = $campaign->strategies()->latest()->first();
 
-        if (!$strategy) {
+        if (! $strategy) {
             return ['skipped' => true, 'reason' => 'no strategy'];
         }
 
@@ -65,42 +63,43 @@ class BiddingStrategyProgressionAgent
 
         $thresholds = $this->thresholds();
 
-        if (!array_key_exists($currentStrategy, $thresholds)) {
+        if (! array_key_exists($currentStrategy, $thresholds)) {
             return ['skipped' => true, 'reason' => "Strategy {$currentStrategy} not in progression ladder"];
         }
 
-        $threshold   = $thresholds[$currentStrategy];
-        $customerId  = $customer->cleanGoogleCustomerId();
+        $threshold = $thresholds[$currentStrategy];
+        $customerId = $customer->cleanGoogleCustomerId();
         $perfService = new GetCampaignPerformance($customer);
-        $perf        = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_30_DAYS');
+        $perf = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_30_DAYS');
 
-        if (!$perf) {
+        if (! $perf) {
             return ['skipped' => true, 'reason' => 'no performance data'];
         }
 
         $conversions = $perf['conversions'] ?? 0;
 
         if ($conversions < $threshold['min_conversions']) {
-            Log::info("BiddingStrategyProgressionAgent: Not enough conversions for graduation", [
+            Log::info('BiddingStrategyProgressionAgent: Not enough conversions for graduation', [
                 'campaign_id' => $campaign->id,
-                'current'     => $currentStrategy,
+                'current' => $currentStrategy,
                 'conversions' => $conversions,
-                'needed'      => $threshold['min_conversions'],
+                'needed' => $threshold['min_conversions'],
             ]);
+
             return ['skipped' => true, 'reason' => "Need {$threshold['min_conversions']} conversions, have {$conversions}"];
         }
 
         // Stability check gates any graduation that involves setting a CPA target.
         // Graduating with a volatile CPA means Google picks an unrealistic target.
-        if ($threshold['stability_check'] && !$this->hasStableCpa($campaign)) {
+        if ($threshold['stability_check'] && ! $this->hasStableCpa($campaign)) {
             return ['skipped' => true, 'reason' => 'CPA not stable enough for next strategy'];
         }
 
         $nextStrategy = $threshold['next'];
-        $targetCpa    = null;
-        $targetRoas   = null;
-        $cpaMult      = config('optimization.bidding_strategy.cpa_target_multiplier', 0.9);
-        $roasMult     = config('optimization.bidding_strategy.roas_target_multiplier', 0.9);
+        $targetCpa = null;
+        $targetRoas = null;
+        $cpaMult = config('optimization.bidding_strategy.cpa_target_multiplier', 0.9);
+        $roasMult = config('optimization.bidding_strategy.roas_target_multiplier', 0.9);
 
         if ($nextStrategy === 'TARGET_CPA' && ($perf['cost_per_conversion'] ?? 0) > 0) {
             $targetCpa = round($perf['cost_per_conversion'] * $cpaMult, 2);
@@ -122,14 +121,18 @@ class BiddingStrategyProgressionAgent
             $targetRoas
         );
 
-        if (!$success) {
-            return ['success' => false, 'error' => "API call to update strategy failed"];
+        if (! $success) {
+            return ['success' => false, 'error' => 'API call to update strategy failed'];
         }
 
         // Update strategy model
         $biddingData['bid_strategy'] = $nextStrategy;
-        if ($targetCpa)  $biddingData['target_cpa']  = $targetCpa;
-        if ($targetRoas) $biddingData['target_roas'] = $targetRoas;
+        if ($targetCpa) {
+            $biddingData['target_cpa'] = $targetCpa;
+        }
+        if ($targetRoas) {
+            $biddingData['target_roas'] = $targetRoas;
+        }
 
         $strategy->update(['bidding_strategy' => $biddingData]);
 
@@ -140,25 +143,25 @@ class BiddingStrategyProgressionAgent
             $campaign->customer_id,
             $campaign->id,
             [
-                'from'        => $currentStrategy,
-                'to'          => $nextStrategy,
+                'from' => $currentStrategy,
+                'to' => $nextStrategy,
                 'conversions' => $conversions,
-                'target_cpa'  => $targetCpa,
+                'target_cpa' => $targetCpa,
                 'target_roas' => $targetRoas,
             ]
         );
 
-        Log::info("BiddingStrategyProgressionAgent: Graduated campaign", [
+        Log::info('BiddingStrategyProgressionAgent: Graduated campaign', [
             'campaign_id' => $campaign->id,
-            'from'        => $currentStrategy,
-            'to'          => $nextStrategy,
+            'from' => $currentStrategy,
+            'to' => $nextStrategy,
         ]);
 
         return [
-            'success'     => true,
-            'from'        => $currentStrategy,
-            'to'          => $nextStrategy,
-            'target_cpa'  => $targetCpa,
+            'success' => true,
+            'from' => $currentStrategy,
+            'to' => $nextStrategy,
+            'target_cpa' => $targetCpa,
             'target_roas' => $targetRoas,
         ];
     }
@@ -176,21 +179,21 @@ class BiddingStrategyProgressionAgent
     {
         $customer = $campaign->customer;
 
-        if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
+        if (! $customer?->google_ads_customer_id || ! $campaign->google_ads_campaign_id) {
             return ['skipped' => true];
         }
 
         $strategy = $campaign->strategies()->latest()->first();
-        if (!$strategy) {
+        if (! $strategy) {
             return ['skipped' => true, 'reason' => 'no strategy'];
         }
 
-        $biddingData     = Json::safeDecode($strategy->bidding_strategy) ?? (array) $strategy->bidding_strategy;
-        $rawName         = $biddingData['name'] ?? $biddingData['bid_strategy'] ?? $biddingData['bidding_strategy_type'] ?? '';
+        $biddingData = Json::safeDecode($strategy->bidding_strategy) ?? (array) $strategy->bidding_strategy;
+        $rawName = $biddingData['name'] ?? $biddingData['bid_strategy'] ?? $biddingData['bidding_strategy_type'] ?? '';
         $currentStrategy = strtoupper(preg_replace('/([a-z])([A-Z])/', '$1_$2', $rawName));
 
         // Only revert strategies that have a numeric target they can fail against
-        if (!in_array($currentStrategy, ['TARGET_CPA', 'TARGET_ROAS'], true)) {
+        if (! in_array($currentStrategy, ['TARGET_CPA', 'TARGET_ROAS'], true)) {
             return ['skipped' => true, 'reason' => 'strategy not regression-eligible'];
         }
 
@@ -200,26 +203,26 @@ class BiddingStrategyProgressionAgent
             ->latest()
             ->first();
 
-        if (!$lastGraduation || $lastGraduation->created_at->gt(now()->subDays(14))) {
+        if (! $lastGraduation || $lastGraduation->created_at->gt(now()->subDays(14))) {
             return ['skipped' => true, 'reason' => 'too soon after graduation'];
         }
 
-        $customerId  = $customer->cleanGoogleCustomerId();
+        $customerId = $customer->cleanGoogleCustomerId();
         $perfService = new GetCampaignPerformance($customer);
-        $perf        = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_14_DAYS');
+        $perf = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_14_DAYS');
 
-        if (!$perf) {
+        if (! $perf) {
             return ['skipped' => true, 'reason' => 'no performance data'];
         }
 
         // Use per-campaign tolerance derived from historical CPA/ROAS variance.
         // Stable campaigns revert sooner; volatile campaigns get a wider band.
-        $thresholds    = AdaptiveThresholds::forCampaign($campaign);
-        $cpaTolerance  = $thresholds['cpa_regression_tolerance'];   // e.g. 0.18 for stable, 0.35 for volatile
+        $thresholds = AdaptiveThresholds::forCampaign($campaign);
+        $cpaTolerance = $thresholds['cpa_regression_tolerance'];   // e.g. 0.18 for stable, 0.35 for volatile
         $roasTolerance = $thresholds['roas_regression_tolerance'];
 
-        $revertTo        = null;
-        $reason          = null;
+        $revertTo = null;
+        $reason = null;
         $revertTargetCpa = null;
 
         if ($currentStrategy === 'TARGET_CPA') {
@@ -228,7 +231,7 @@ class BiddingStrategyProgressionAgent
 
             if ($targetCpa > 0 && $actualCpa > $targetCpa * (1 + $cpaTolerance)) {
                 $revertTo = 'MAXIMIZE_CONVERSIONS';
-                $reason   = sprintf(
+                $reason = sprintf(
                     'CPA $%.2f exceeds target $%.2f by >%.0f%% (campaign tolerance)',
                     $actualCpa, $targetCpa, $cpaTolerance * 100
                 );
@@ -253,7 +256,7 @@ class BiddingStrategyProgressionAgent
             }
         }
 
-        if (!$revertTo) {
+        if (! $revertTo) {
             return ['skipped' => true, 'reason' => 'no regression detected'];
         }
 
@@ -268,7 +271,7 @@ class BiddingStrategyProgressionAgent
             null
         );
 
-        if (!$success) {
+        if (! $success) {
             return ['success' => false, 'error' => 'API call to revert strategy failed'];
         }
 
@@ -287,25 +290,25 @@ class BiddingStrategyProgressionAgent
             $campaign->customer_id,
             $campaign->id,
             [
-                'from'            => $currentStrategy,
-                'to'              => $revertTo,
-                'reason'          => $reason,
-                'target_cpa'      => $targetCpaForRevert,
+                'from' => $currentStrategy,
+                'to' => $revertTo,
+                'reason' => $reason,
+                'target_cpa' => $targetCpaForRevert,
             ]
         );
 
-        Log::info("BiddingStrategyProgressionAgent: Reverted campaign due to regression", [
+        Log::info('BiddingStrategyProgressionAgent: Reverted campaign due to regression', [
             'campaign_id' => $campaign->id,
-            'from'        => $currentStrategy,
-            'to'          => $revertTo,
-            'reason'      => $reason,
+            'from' => $currentStrategy,
+            'to' => $revertTo,
+            'reason' => $reason,
         ]);
 
         return [
-            'success'    => true,
-            'from'       => $currentStrategy,
-            'to'         => $revertTo,
-            'reason'     => $reason,
+            'success' => true,
+            'from' => $currentStrategy,
+            'to' => $revertTo,
+            'reason' => $reason,
             'target_cpa' => $targetCpaForRevert ?? null,
         ];
     }
@@ -313,25 +316,26 @@ class BiddingStrategyProgressionAgent
     private function hasStableCpa(Campaign $campaign): bool
     {
         // Compare last 14 days CPA vs prior 14 days CPA — stable means <20% variance
-        $customer    = $campaign->customer;
-        $customerId  = $customer->cleanGoogleCustomerId();
+        $customer = $campaign->customer;
+        $customerId = $customer->cleanGoogleCustomerId();
         $perfService = new GetCampaignPerformance($customer);
 
         $recent = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_14_DAYS');
-        $prior  = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_30_DAYS');
+        $prior = ($perfService)($customerId, $campaign->google_ads_campaign_id, 'LAST_30_DAYS');
 
-        if (!$recent || !$prior) {
+        if (! $recent || ! $prior) {
             return false;
         }
 
         $recentCpa = $recent['cost_per_conversion'] ?? 0;
-        $priorCpa  = $prior['cost_per_conversion']  ?? 0;
+        $priorCpa = $prior['cost_per_conversion'] ?? 0;
 
         if ($priorCpa <= 0) {
             return false;
         }
 
         $variance = abs($recentCpa - $priorCpa) / $priorCpa;
+
         return $variance < 0.20;
     }
 }

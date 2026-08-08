@@ -28,16 +28,16 @@ class FacebookLearningPhaseAgent
     {
         $customer = $campaign->customer;
 
-        if (!$campaign->facebook_ads_campaign_id || !$customer?->facebook_ads_account_id) {
+        if (! $campaign->facebook_ads_campaign_id || ! $customer?->facebook_ads_account_id) {
             return ['skipped' => true];
         }
 
         $result = [
-            'campaign_id'    => $campaign->id,
+            'campaign_id' => $campaign->id,
             'learning_status' => null,
-            'issues'          => [],
-            'warnings'        => [],
-            'hold_applied'    => false,
+            'issues' => [],
+            'warnings' => [],
+            'hold_applied' => false,
         ];
 
         try {
@@ -45,7 +45,7 @@ class FacebookLearningPhaseAgent
             // Fetch it from the first ad set of this campaign instead.
             $insightService = new InsightService($customer);
             $strategy = $campaign->strategies()->where('platform', 'like', '%facebook%')->latest()->first();
-            $adSetId  = $strategy?->facebook_adset_id ?? null;
+            $adSetId = $strategy?->facebook_adset_id ?? null;
 
             $learningInfo = null;
             if ($adSetId) {
@@ -58,11 +58,11 @@ class FacebookLearningPhaseAgent
                 $learningInfo = $adSetInsights[0]['learning_stage_info'] ?? null;
             }
 
-            if (!$learningInfo) {
+            if (! $learningInfo) {
                 return $result;
             }
 
-            $status      = $learningInfo['status'] ?? null;
+            $status = $learningInfo['status'] ?? null;
             $attribution = $learningInfo['attribution_windows'] ?? [];
             $result['learning_status'] = $status;
 
@@ -75,8 +75,8 @@ class FacebookLearningPhaseAgent
                     $result['hold_applied'] = true;
 
                     $result['warnings'][] = [
-                        'type'    => 'learning_reset',
-                        'message' => "Campaign edit detected during learning phase — optimisation hold applied for 72h",
+                        'type' => 'learning_reset',
+                        'message' => 'Campaign edit detected during learning phase — optimisation hold applied for 72h',
                     ];
                 }
 
@@ -84,10 +84,10 @@ class FacebookLearningPhaseAgent
                 $campaignAge = $campaign->created_at?->diffInDays(now()) ?? 0;
                 if ($campaignAge >= 14) {
                     $result['issues'][] = [
-                        'type'     => 'learning_stalled',
+                        'type' => 'learning_stalled',
                         'severity' => 'high',
-                        'message'  => "Campaign has been in Learning phase for {$campaignAge} days without graduating",
-                        'fix'      => 'Check conversion event is firing, audience is not too narrow, and daily budget allows ≥50 events/week',
+                        'message' => "Campaign has been in Learning phase for {$campaignAge} days without graduating",
+                        'fix' => 'Check conversion event is firing, audience is not too narrow, and daily budget allows ≥50 events/week',
                     ];
 
                     $this->notifyStalled($campaign, $campaignAge, 'learning_too_long');
@@ -97,10 +97,10 @@ class FacebookLearningPhaseAgent
             if ($status === 'LEARNING_LIMITED') {
                 // Stuck in limited learning — common causes: budget too low, audience overlap, too many ad sets
                 $result['issues'][] = [
-                    'type'     => 'learning_limited',
+                    'type' => 'learning_limited',
                     'severity' => 'high',
-                    'message'  => 'Campaign is LEARNING_LIMITED: not receiving enough optimisation events',
-                    'fix'      => 'Consolidate ad sets, increase daily budget, or broaden targeting to reach ≥50 events/week',
+                    'message' => 'Campaign is LEARNING_LIMITED: not receiving enough optimisation events',
+                    'fix' => 'Consolidate ad sets, increase daily budget, or broaden targeting to reach ≥50 events/week',
                 ];
 
                 // Suppress other agents mutating this campaign — edits reset learning
@@ -120,7 +120,7 @@ class FacebookLearningPhaseAgent
             }
 
         } catch (\Exception $e) {
-            Log::warning("FacebookLearningPhaseAgent: Could not check learning phase for campaign {$campaign->id}: " . $e->getMessage());
+            Log::warning("FacebookLearningPhaseAgent: Could not check learning phase for campaign {$campaign->id}: ".$e->getMessage());
         }
 
         return $result;
@@ -150,7 +150,7 @@ class FacebookLearningPhaseAgent
         }
 
         $messages = [
-            'learning_limited'  => "Campaign \"{$campaign->name}\" is stuck in Facebook LEARNING_LIMITED. Consolidate ad sets or increase budget to reach ≥50 events/week.",
+            'learning_limited' => "Campaign \"{$campaign->name}\" is stuck in Facebook LEARNING_LIMITED. Consolidate ad sets or increase budget to reach ≥50 events/week.",
             'learning_too_long' => "Campaign \"{$campaign->name}\" has been in Facebook learning phase for {$days} days. Check conversion event setup, audience breadth, and minimum budget.",
         ];
 

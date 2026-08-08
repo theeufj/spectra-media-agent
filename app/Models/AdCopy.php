@@ -35,8 +35,6 @@ class AdCopy extends Model
 
     /**
      * An AdCopy belongs to a Strategy.
-     *
-     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
      */
     public function strategy(): BelongsTo
     {

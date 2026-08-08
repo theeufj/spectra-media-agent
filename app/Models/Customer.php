@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
 {
-    use HasFactory, HasEncryptedAttributes;
+    use HasEncryptedAttributes, HasFactory;
 
     protected $fillable = [
         'name',
@@ -131,16 +131,16 @@ class Customer extends Model
     {
         $platforms = [];
 
-        if (!empty($this->google_ads_customer_id)) {
+        if (! empty($this->google_ads_customer_id)) {
             $platforms[] = 'google';
         }
-        if (!empty($this->facebook_ads_account_id)) {
+        if (! empty($this->facebook_ads_account_id)) {
             $platforms[] = 'facebook';
         }
-        if (!empty($this->microsoft_ads_customer_id) && !empty($this->microsoft_ads_account_id)) {
+        if (! empty($this->microsoft_ads_customer_id) && ! empty($this->microsoft_ads_account_id)) {
             $platforms[] = 'microsoft';
         }
-        if (!empty($this->linkedin_ads_account_id)) {
+        if (! empty($this->linkedin_ads_account_id)) {
             $platforms[] = 'linkedin';
         }
 
@@ -158,7 +158,7 @@ class Customer extends Model
             if ($mcc && $value === $mcc->google_customer_id) {
                 throw new \InvalidArgumentException(
                     "Cannot assign the MCC account ({$value}) as a customer's Google Ads account. "
-                    . "Customers must have sub-accounts created under the MCC."
+                    .'Customers must have sub-accounts created under the MCC.'
                 );
             }
         }
@@ -266,7 +266,7 @@ class Customer extends Model
             // profile.php?id=123
             if (str_contains($path, 'profile.php')) {
                 parse_str($parsed['query'] ?? '', $query);
-                if (!empty($query['id']) && preg_match('/^\d+$/', $query['id'])) {
+                if (! empty($query['id']) && preg_match('/^\d+$/', $query['id'])) {
                     return ['page_id' => $query['id'], 'page_name' => null];
                 }
             }
@@ -280,12 +280,13 @@ class Customer extends Model
             }
 
             // /PageName or /PageName/
-            if ($path && !str_contains($path, '/') || preg_match('#^[^/]+/?$#', $path)) {
+            if ($path && ! str_contains($path, '/') || preg_match('#^[^/]+/?$#', $path)) {
                 $slug = trim($path, '/');
                 // If slug is numeric, it's a page ID
                 if (preg_match('/^\d{5,}$/', $slug)) {
                     return ['page_id' => $slug, 'page_name' => null];
                 }
+
                 // Otherwise it's a vanity slug — use as both
                 return ['page_id' => $slug, 'page_name' => $slug];
             }

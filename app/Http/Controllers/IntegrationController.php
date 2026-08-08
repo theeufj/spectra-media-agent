@@ -15,7 +15,9 @@ class IntegrationController extends Controller
     public function index(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $integrations = CrmIntegration::where('customer_id', $customer->id)->get();
 
         $conversionStats = OfflineConversion::where('customer_id', $customer->id)
@@ -40,7 +42,9 @@ class IntegrationController extends Controller
     public function connect(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $validated = $request->validate([
             'provider' => 'required|in:hubspot,salesforce',
             'access_token' => 'required|string',
@@ -60,22 +64,24 @@ class IntegrationController extends Controller
         // Test connection
         try {
             $connector = CrmConnectorFactory::make($integration);
-            if (!$connector->testConnection()) {
+            if (! $connector->testConnection()) {
                 $integration->update(['status' => 'error', 'last_error' => 'Connection test failed']);
+
                 return back()->with('error', 'Could not connect. Check your credentials.');
             }
         } catch (\Exception $e) {
             $integration->update(['status' => 'error', 'last_error' => $e->getMessage()]);
-            return back()->with('error', 'Connection failed: ' . $e->getMessage());
+
+            return back()->with('error', 'Connection failed: '.$e->getMessage());
         }
 
-        return back()->with('success', ucfirst($validated['provider']) . ' connected successfully.');
+        return back()->with('success', ucfirst($validated['provider']).' connected successfully.');
     }
 
     public function disconnect(Request $request, CrmIntegration $integration)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $integration->customer_id !== $customer->id) {
+        if (! $customer || $integration->customer_id !== $customer->id) {
             abort(403);
         }
 
@@ -90,11 +96,11 @@ class IntegrationController extends Controller
     public function sync(Request $request, CrmIntegration $integration)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $integration->customer_id !== $customer->id) {
+        if (! $customer || $integration->customer_id !== $customer->id) {
             abort(403);
         }
 
-        if (!$integration->isConnected()) {
+        if (! $integration->isConnected()) {
             return back()->with('error', 'Integration is not connected.');
         }
 
@@ -106,7 +112,9 @@ class IntegrationController extends Controller
     public function conversions(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $conversions = OfflineConversion::where('customer_id', $customer->id)
             ->orderBy('conversion_time', 'desc')
             ->limit(100)
@@ -120,7 +128,9 @@ class IntegrationController extends Controller
     public function retryUpload(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         OfflineConversion::where('customer_id', $customer->id)
             ->where('upload_status', 'failed')
             ->update(['upload_status' => 'pending']);

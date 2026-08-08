@@ -5,23 +5,22 @@ namespace App\Services\Agents;
 use App\Models\Campaign;
 use App\Models\CreativeBrief;
 use App\Models\Customer;
+use App\Services\FacebookAds\AdService as FacebookAdService;
+use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
-use App\Services\FacebookAds\AdService as FacebookAdService;
-use App\Services\Agents\AdaptiveThresholds;
 use Illuminate\Support\Facades\Log;
 
 /**
  * CreativeIntelligenceAgent
- * 
+ *
  * Analyzes creative performance at the asset level (headlines, descriptions, images).
  * Identifies winners, losers, and generates AI-powered creative variations.
- * 
+ *
  * Supported Platforms:
  * - Google Ads: RSA asset-level analysis (headlines, descriptions, images)
  * - Facebook Ads: Ad-level creative performance analysis
- * 
+ *
  * Capabilities:
  * - A/B test tracking at headline/image level
  * - Automatic winner detection
@@ -31,7 +30,7 @@ use Illuminate\Support\Facades\Log;
 class CreativeIntelligenceAgent
 {
     protected GeminiService $gemini;
-    
+
     // Thresholds for creative decisions
     protected array $thresholds = [
         'min_impressions_for_decision' => 1000,
@@ -80,7 +79,7 @@ class CreativeIntelligenceAgent
             'auto_actions' => [],
         ];
 
-        if (!$campaign->customer) {
+        if (! $campaign->customer) {
             return $results;
         }
 
@@ -156,18 +155,19 @@ class CreativeIntelligenceAgent
             $this->createBrief($campaign, $platform, 'fatigue_refresh', $fatigueRec['message'] ?? 'Creative fatigue detected', [
                 'recommendation' => $fatigueRec,
             ]);
+
             return;
         }
 
         // Winning headlines detected → AB winner brief with new variation suggestions
         $headlineWinners = $results['headlines']['winners'] ?? [];
-        $adWinners       = $results['ads']['winners'] ?? [];
-        $winners         = array_merge($headlineWinners, $adWinners);
+        $adWinners = $results['ads']['winners'] ?? [];
+        $winners = array_merge($headlineWinners, $adWinners);
 
-        if (!empty($winners) && !empty($results['new_variations'])) {
+        if (! empty($winners) && ! empty($results['new_variations'])) {
             $winningTexts = array_column(array_slice($winners, 0, 3), 'text');
-            $this->createBrief($campaign, $platform, 'ab_winner', "A/B winner brief: test next-gen variations based on winning creative", [
-                'winning_examples'  => $winningTexts,
+            $this->createBrief($campaign, $platform, 'ab_winner', 'A/B winner brief: test next-gen variations based on winning creative', [
+                'winning_examples' => $winningTexts,
                 'generated_variants' => $results['new_variations'],
             ]);
         }
@@ -199,10 +199,15 @@ class CreativeIntelligenceAgent
         }
 
         $platform = null;
-        if ($campaign->google_ads_campaign_id)   $platform = 'google';
-        elseif ($campaign->facebook_ads_campaign_id) $platform = 'facebook';
-        elseif ($campaign->microsoft_ads_campaign_id) $platform = 'microsoft';
-        elseif ($campaign->linkedin_campaign_id)  $platform = 'linkedin';
+        if ($campaign->google_ads_campaign_id) {
+            $platform = 'google';
+        } elseif ($campaign->facebook_ads_campaign_id) {
+            $platform = 'facebook';
+        } elseif ($campaign->microsoft_ads_campaign_id) {
+            $platform = 'microsoft';
+        } elseif ($campaign->linkedin_campaign_id) {
+            $platform = 'linkedin';
+        }
 
         $this->createBrief($campaign, $platform ?? 'unknown', 'scheduled_refresh',
             "Campaign has been running {$campaignAge} days — proactive creative refresh recommended before fatigue sets in.",
@@ -240,8 +245,7 @@ class CreativeIntelligenceAgent
         }
 
         // Only promote headlines beating the median by >20%
-        $strongWinners = array_filter($winners, fn($h) =>
-            ($h['ctr'] ?? 0) > $medianCtr * 1.20
+        $strongWinners = array_filter($winners, fn ($h) => ($h['ctr'] ?? 0) > $medianCtr * 1.20
         );
 
         if (empty($strongWinners)) {
@@ -257,13 +261,13 @@ class CreativeIntelligenceAgent
         }
 
         $winnerTexts = array_column(array_slice(array_values($strongWinners), 0, 3), 'text');
-        $winnerList  = implode("\n- ", $winnerTexts);
-        $customer    = $campaign->customer;
+        $winnerList = implode("\n- ", $winnerTexts);
+        $customer = $campaign->customer;
 
         $brandContext = '';
         if ($customer->brandGuideline) {
-            $brandContext  = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
-            $brandContext .= "USPs: " . implode(', ', $customer->brandGuideline->unique_selling_propositions ?? []);
+            $brandContext = 'Brand Voice: '.($customer->brandGuideline->brand_voice ?? 'professional')."\n";
+            $brandContext .= 'USPs: '.implode(', ', $customer->brandGuideline->unique_selling_propositions ?? []);
         }
 
         $prompt = <<<PROMPT
@@ -292,15 +296,15 @@ PROMPT;
                 $facebookVariants = json_decode($response['text'], true) ?? [];
             }
         } catch (\Exception $e) {
-            Log::warning("CreativeIntelligenceAgent: Cross-platform winner Gemini call failed for campaign {$campaign->id}: " . $e->getMessage());
+            Log::warning("CreativeIntelligenceAgent: Cross-platform winner Gemini call failed for campaign {$campaign->id}: ".$e->getMessage());
         }
 
-        $briefContent = "Google RSA headlines are outperforming by >20% CTR. Adapt winning themes for Facebook: " . implode('; ', $winnerTexts);
+        $briefContent = 'Google RSA headlines are outperforming by >20% CTR. Adapt winning themes for Facebook: '.implode('; ', $winnerTexts);
 
         $this->createBrief($campaign, 'facebook', 'cross_platform_winner', $briefContent, [
-            'source_platform'   => 'google',
+            'source_platform' => 'google',
             'winning_headlines' => $winnerTexts,
-            'winner_ctr_delta'  => '>20% above median',
+            'winner_ctr_delta' => '>20% above median',
             'facebook_variants' => $facebookVariants,
         ]);
 
@@ -313,17 +317,17 @@ PROMPT;
     {
         try {
             CreativeBrief::create([
-                'campaign_id'     => $campaign->id,
-                'customer_id'     => $campaign->customer_id,
-                'platform'        => $platform,
-                'brief_type'      => $type,
-                'status'          => 'pending',
+                'campaign_id' => $campaign->id,
+                'customer_id' => $campaign->customer_id,
+                'platform' => $platform,
+                'brief_type' => $type,
+                'status' => 'pending',
                 'created_by_agent' => 'CreativeIntelligenceAgent',
-                'ai_brief'        => $briefContent,
-                'context'         => $context,
+                'ai_brief' => $briefContent,
+                'context' => $context,
             ]);
         } catch (\Exception $e) {
-            Log::warning("CreativeIntelligenceAgent: Failed to create creative brief for campaign {$campaign->id}: " . $e->getMessage());
+            Log::warning("CreativeIntelligenceAgent: Failed to create creative brief for campaign {$campaign->id}: ".$e->getMessage());
         }
     }
 
@@ -350,7 +354,7 @@ PROMPT;
                 $this->generateRecommendations($results, 'google_ads')
             );
 
-            if (!empty($results['headlines']['winners'])) {
+            if (! empty($results['headlines']['winners'])) {
                 $results['new_variations']['headlines'] = $this->generateHeadlineVariations(
                     $results['headlines']['winners'],
                     $customer,
@@ -358,7 +362,7 @@ PROMPT;
                 );
             }
 
-            if (!empty($results['descriptions']['winners'])) {
+            if (! empty($results['descriptions']['winners'])) {
                 $results['new_variations']['descriptions'] = $this->generateDescriptionVariations(
                     $results['descriptions']['winners'],
                     $customer,
@@ -376,7 +380,7 @@ PROMPT;
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
-            $results['errors'][] = 'Google Ads: ' . $e->getMessage();
+            $results['errors'][] = 'Google Ads: '.$e->getMessage();
         }
     }
 
@@ -461,7 +465,7 @@ PROMPT;
             $results['recommendations'] = array_merge($results['recommendations'], $fbRecommendations);
 
             // Generate new ad copy variations based on winning ads
-            if (!empty($results['ads']['winners'])) {
+            if (! empty($results['ads']['winners'])) {
                 $results['new_variations']['facebook_headlines'] = $this->generateHeadlineVariations(
                     $results['ads']['winners'],
                     $customer,
@@ -482,7 +486,7 @@ PROMPT;
                     ($loser['impressions'] ?? 0) >= $this->thresholds['auto_pause_min_impressions'] &&
                     ($loser['conversions'] ?? 0) === 0 &&
                     ($loser['ctr'] ?? 0) < $this->thresholds['auto_pause_max_ctr'] &&
-                    !empty($loser['ad_id'])
+                    ! empty($loser['ad_id'])
                 ) {
                     try {
                         $adService->pauseAd($loser['ad_id']);
@@ -492,7 +496,7 @@ PROMPT;
                             'ad_id' => $loser['ad_id'],
                             'ad_name' => $loser['text'],
                             'impressions' => $loser['impressions'],
-                            'ctr' => round($loser['ctr'] * 100, 2) . '%',
+                            'ctr' => round($loser['ctr'] * 100, 2).'%',
                             'reason' => 'Auto-paused: 2000+ impressions with 0 conversions and CTR below 0.5%',
                         ];
                     } catch (\Exception $e) {
@@ -504,7 +508,7 @@ PROMPT;
                 }
             }
 
-            if (!empty($autoPaused)) {
+            if (! empty($autoPaused)) {
                 $results['auto_actions'] = array_merge($results['auto_actions'], $autoPaused);
                 Log::info('CreativeIntelligenceAgent: Auto-paused Facebook ads', [
                     'campaign_id' => $campaign->id,
@@ -522,7 +526,7 @@ PROMPT;
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
-            $results['errors'][] = 'Facebook Ads: ' . $e->getMessage();
+            $results['errors'][] = 'Facebook Ads: '.$e->getMessage();
         }
     }
 
@@ -542,20 +546,20 @@ PROMPT;
         }
 
         // Filter assets with enough impressions
-        $qualifiedAssets = array_filter($assets, fn($a) => 
-            $a['impressions'] >= $this->thresholds['min_impressions_for_decision']
+        $qualifiedAssets = array_filter($assets, fn ($a) => $a['impressions'] >= $this->thresholds['min_impressions_for_decision']
         );
 
         if (empty($qualifiedAssets)) {
             // All assets still learning
             $categorized['learning'] = $assets;
+
             return $categorized;
         }
 
         // Calculate percentile thresholds
         $ctrs = array_column($qualifiedAssets, 'ctr');
         sort($ctrs);
-        
+
         $winnerThreshold = $this->getPercentile($ctrs, $this->thresholds['winner_ctr_percentile']);
         $loserThreshold = $this->getPercentile($ctrs, $this->thresholds['loser_ctr_percentile']);
 
@@ -563,11 +567,12 @@ PROMPT;
             // Not enough data yet
             if ($asset['impressions'] < $this->thresholds['min_impressions_for_decision']) {
                 $categorized['learning'][] = $asset;
+
                 continue;
             }
 
             // Winners: High CTR or good conversions
-            if ($asset['ctr'] >= $winnerThreshold || 
+            if ($asset['ctr'] >= $winnerThreshold ||
                 $asset['conversions'] >= $this->thresholds['min_conversions_for_winner']) {
                 $asset['status'] = 'winner';
                 $categorized['winners'][] = $asset;
@@ -593,9 +598,12 @@ PROMPT;
     protected function getPercentile(array $sorted, float $percentile): float
     {
         $count = count($sorted);
-        if ($count === 0) return 0;
-        
+        if ($count === 0) {
+            return 0;
+        }
+
         $index = (int) floor($percentile * ($count - 1));
+
         return $sorted[$index];
     }
 
@@ -671,8 +679,8 @@ PROMPT;
 
         $brandContext = '';
         if ($customer->brandGuideline) {
-            $brandContext = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
-            $brandContext .= "USPs: " . implode(', ', $customer->brandGuideline->unique_selling_propositions ?? []);
+            $brandContext = 'Brand Voice: '.($customer->brandGuideline->brand_voice ?? 'professional')."\n";
+            $brandContext .= 'USPs: '.implode(', ', $customer->brandGuideline->unique_selling_propositions ?? []);
         }
 
         $maxChars = $platform === 'facebook' ? 40 : 30;
@@ -727,7 +735,7 @@ PROMPT;
 
         $brandContext = '';
         if ($customer->brandGuideline) {
-            $brandContext = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
+            $brandContext = 'Brand Voice: '.($customer->brandGuideline->brand_voice ?? 'professional')."\n";
         }
 
         $maxChars = $platform === 'facebook' ? 125 : 90;
@@ -780,7 +788,9 @@ PROMPT;
                 ->orderBy('date')
                 ->get();
 
-            if ($data->isEmpty()) return;
+            if ($data->isEmpty()) {
+                return;
+            }
 
             $totalImpressions = $data->sum('impressions');
             $totalClicks = $data->sum('clicks');
@@ -812,7 +822,7 @@ PROMPT;
                     $customer = $campaign->customer;
                     $brandContext = '';
                     if ($customer->brandGuideline) {
-                        $brandContext = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
+                        $brandContext = 'Brand Voice: '.($customer->brandGuideline->brand_voice ?? 'professional')."\n";
                     }
 
                     $headlinePrompt = <<<PROMPT
@@ -886,7 +896,9 @@ PROMPT;
                 ->orderBy('date')
                 ->get();
 
-            if ($data->isEmpty()) return;
+            if ($data->isEmpty()) {
+                return;
+            }
 
             $totalImpressions = $data->sum('impressions');
             $totalClicks = $data->sum('clicks');
@@ -930,7 +942,7 @@ PROMPT;
                     $customer = $campaign->customer;
                     $brandContext = '';
                     if ($customer->brandGuideline) {
-                        $brandContext = "Brand Voice: " . ($customer->brandGuideline->brand_voice ?? 'professional') . "\n";
+                        $brandContext = 'Brand Voice: '.($customer->brandGuideline->brand_voice ?? 'professional')."\n";
                     }
 
                     $headlinePrompt = <<<PROMPT

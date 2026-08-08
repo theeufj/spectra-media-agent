@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Customer;
 use App\Models\Campaign;
+use App\Models\Customer;
 use App\Models\Persona;
 use Illuminate\Support\Facades\Log;
 
@@ -27,17 +27,17 @@ class PersonaGeneratorService
 
         if ($brandGuidelines) {
             $prompt .= "Brand Information:\n";
-            $prompt .= "- Voice/Tone: " . ($brandGuidelines->brand_voice ?? 'Professional') . "\n";
-            $prompt .= "- Target Audience: " . ($brandGuidelines->target_audience ?? 'General') . "\n";
-            $prompt .= "- USPs: " . implode(', ', $brandGuidelines->unique_selling_propositions ?? []) . "\n";
-            $prompt .= "- Messaging Themes: " . implode(', ', $brandGuidelines->messaging_themes ?? []) . "\n";
+            $prompt .= '- Voice/Tone: '.($brandGuidelines->brand_voice ?? 'Professional')."\n";
+            $prompt .= '- Target Audience: '.($brandGuidelines->target_audience ?? 'General')."\n";
+            $prompt .= '- USPs: '.implode(', ', $brandGuidelines->unique_selling_propositions ?? [])."\n";
+            $prompt .= '- Messaging Themes: '.implode(', ', $brandGuidelines->messaging_themes ?? [])."\n";
         }
 
         if ($campaign) {
             $prompt .= "\nCampaign Context:\n";
             $prompt .= "- Name: {$campaign->name}\n";
-            $prompt .= "- Goal: " . ($campaign->business_goal ?? 'Conversions') . "\n";
-            $prompt .= "- Industry: " . ($customer->industry ?? 'Not specified') . "\n";
+            $prompt .= '- Goal: '.($campaign->business_goal ?? 'Conversions')."\n";
+            $prompt .= '- Industry: '.($customer->industry ?? 'Not specified')."\n";
 
             // Include product context if pages are selected
             $pages = $campaign->pages;
@@ -51,7 +51,7 @@ class PersonaGeneratorService
 
         // Include competitor insights if available
         if ($customer->competitor_domains) {
-            $prompt .= "\nKnown Competitors: " . implode(', ', $customer->competitor_domains) . "\n";
+            $prompt .= "\nKnown Competitors: ".implode(', ', $customer->competitor_domains)."\n";
         }
 
         $prompt .= "\nFor each persona, respond with a JSON array of objects. Each object must have:\n";
@@ -62,7 +62,7 @@ class PersonaGeneratorService
         $prompt .= "- \"pain_points\": array of 3-4 specific pain points\n";
         $prompt .= "- \"messaging_angle\": A specific messaging approach that would resonate with this persona\n";
         $prompt .= "- \"tone_adjustments\": object with keys: formality (casual/balanced/formal), urgency (low/medium/high), emotion (rational/balanced/emotional)\n\n";
-        $prompt .= "Make each persona distinctly different to cover different audience segments. Return ONLY the JSON array.";
+        $prompt .= 'Make each persona distinctly different to cover different audience segments. Return ONLY the JSON array.';
 
         try {
             $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
@@ -70,15 +70,16 @@ class PersonaGeneratorService
             $cleaned = preg_replace('/^```json\s*|\s*```$/', '', trim($text));
             $personas = json_decode($cleaned, true);
 
-            if (!is_array($personas) || empty($personas)) {
+            if (! is_array($personas) || empty($personas)) {
                 // Try extracting JSON array from response
                 if (preg_match('/\[[\s\S]*\]/', $cleaned, $matches)) {
                     $personas = json_decode($matches[0], true);
                 }
             }
 
-            if (!is_array($personas) || empty($personas)) {
+            if (! is_array($personas) || empty($personas)) {
                 Log::warning('PersonaGeneratorService: Failed to parse Gemini response', ['response' => $text]);
+
                 return [];
             }
 
@@ -99,7 +100,7 @@ class PersonaGeneratorService
                 $created[] = $persona;
             }
 
-            Log::info('PersonaGeneratorService: Generated ' . count($created) . ' personas', [
+            Log::info('PersonaGeneratorService: Generated '.count($created).' personas', [
                 'customer_id' => $customer->id,
                 'campaign_id' => $campaign?->id,
             ]);
@@ -107,6 +108,7 @@ class PersonaGeneratorService
             return $created;
         } catch (\Exception $e) {
             Log::error('PersonaGeneratorService: Generation failed', ['error' => $e->getMessage()]);
+
             return [];
         }
     }

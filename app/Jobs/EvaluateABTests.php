@@ -15,9 +15,10 @@ use Illuminate\Support\Facades\Log;
 
 class EvaluateABTests implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 300;
 
     public function handle(ABTestingAgent $agent, NotificationService $notifications): void
@@ -53,7 +54,7 @@ class EvaluateABTests implements ShouldQueue
                             $user,
                             Notification::TYPE_AB_TEST_COMPLETE,
                             'A/B Test Winner Found',
-                            "Your {$test->test_type} test reached {$confidence}% confidence. " .
+                            "Your {$test->test_type} test reached {$confidence}% confidence. ".
                             "\"{$winner['label']}\" won with a {$lift}% lift in CTR.",
                             route('campaigns.show', $test->campaign_id),
                             'View Results',
@@ -93,7 +94,7 @@ class EvaluateABTests implements ShouldQueue
             }
         }
 
-        $this->finishRun($runStart, actions: $applied, errors: $errors, scope: $tests->count() . ' tests');
+        $this->finishRun($runStart, actions: $applied, errors: $errors, scope: $tests->count().' tests');
     }
 
     /**
@@ -103,7 +104,7 @@ class EvaluateABTests implements ShouldQueue
     protected function campaignOwner(ABTest $test): ?\App\Models\User
     {
         $customer = $test->campaign?->customer;
-        if (!$customer) {
+        if (! $customer) {
             return null;
         }
 
@@ -114,6 +115,7 @@ class EvaluateABTests implements ShouldQueue
     protected function maxTestDurationLabel(ABTest $test): string
     {
         $days = $test->started_at->diffInDays(now());
+
         return "{$days} days";
     }
 
@@ -122,7 +124,7 @@ class EvaluateABTests implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('EvaluateABTests failed: ' . $exception->getMessage(), [
+        Log::error('EvaluateABTests failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
         $this->recordRunFailure($exception);

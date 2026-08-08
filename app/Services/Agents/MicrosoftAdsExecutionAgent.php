@@ -3,13 +3,10 @@
 namespace App\Services\Agents;
 
 use App\Models\Campaign;
-use App\Models\Customer;
-use App\Services\GeminiService;
-use App\Services\MicrosoftAds\CampaignService;
 use App\Services\MicrosoftAds\AdGroupService;
-use App\Services\MicrosoftAds\PerformanceService;
-use App\Services\MicrosoftAds\ImportService;
+use App\Services\MicrosoftAds\CampaignService;
 use App\Services\MicrosoftAds\ConversionTrackingService;
+use App\Services\MicrosoftAds\ImportService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -35,10 +32,10 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
         try {
             // Validate prerequisites
             $validation = $this->validatePrerequisites($context);
-            if (!$validation->passed) {
+            if (! $validation->passed) {
                 return new ExecutionResult(
                     success: false,
-                    message: 'Prerequisites not met: ' . implode(', ', $validation->errors),
+                    message: 'Prerequisites not met: '.implode(', ', $validation->errors),
                     data: ['validation' => $validation],
                 );
             }
@@ -54,7 +51,7 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
 
             return new ExecutionResult(
                 success: false,
-                message: 'Execution failed: ' . $e->getMessage(),
+                message: 'Execution failed: '.$e->getMessage(),
                 data: ['recovery_plan' => $recovery],
             );
         }
@@ -78,7 +75,7 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
                 systemInstruction: $systemInstruction
             );
 
-            if (!$response || !isset($response['text'])) {
+            if (! $response || ! isset($response['text'])) {
                 throw new \Exception('Empty response from AI model');
             }
 
@@ -140,16 +137,16 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
     {
         $errors = [];
 
-        if (!$this->customer->microsoft_ads_customer_id) {
+        if (! $this->customer->microsoft_ads_customer_id) {
             $errors[] = 'Microsoft Ads customer ID not configured';
         }
-        if (!$this->customer->microsoft_ads_account_id) {
+        if (! $this->customer->microsoft_ads_account_id) {
             $errors[] = 'Microsoft Ads account ID not configured';
         }
-        if (!config('microsoftads.developer_token')) {
+        if (! config('microsoftads.developer_token')) {
             $errors[] = 'Microsoft Ads developer token not configured';
         }
-        if (!config('microsoftads.client_id')) {
+        if (! config('microsoftads.client_id')) {
             $errors[] = 'Microsoft Ads OAuth client ID not configured';
         }
 
@@ -248,8 +245,8 @@ PROMPT;
 
     protected function executePlan(ExecutionPlan $plan, ExecutionContext $context): ExecutionResult
     {
-        $results    = [];
-        $startTime  = microtime(true);
+        $results = [];
+        $startTime = microtime(true);
         $platformIds = [];
 
         foreach ($plan->steps as $step) {
@@ -263,14 +260,14 @@ PROMPT;
 
             try {
                 $stepResult = match ($action) {
-                    'import_from_google'  => $this->executeGoogleImport($params),
-                    'create_campaign'     => $this->executeCreateCampaign($params, $context),
+                    'import_from_google' => $this->executeGoogleImport($params),
+                    'create_campaign' => $this->executeCreateCampaign($params, $context),
                     'create_ad_groups',
-                    'create_ads'          => $this->executeCreateAdGroups($context),
+                    'create_ads' => $this->executeCreateAdGroups($context),
                     'configure_tracking',
-                    'setup_tracking'      => $this->executeConfigureTracking(),
-                    'create_extensions'   => ['status' => 'skipped', 'reason' => 'Extensions added during ad group creation'],
-                    default               => throw new \RuntimeException("Unhandled plan action: {$action}"),
+                    'setup_tracking' => $this->executeConfigureTracking(),
+                    'create_extensions' => ['status' => 'skipped', 'reason' => 'Extensions added during ad group creation'],
+                    default => throw new \RuntimeException("Unhandled plan action: {$action}"),
                 };
 
                 // Collect any platform IDs returned by the step
@@ -289,8 +286,8 @@ PROMPT;
         }
 
         $executionTime = microtime(true) - $startTime;
-        $anyRealWork   = !empty($results);
-        $allSucceeded  = $anyRealWork && collect($results)->every(fn ($r) => $r['success']);
+        $anyRealWork = ! empty($results);
+        $allSucceeded = $anyRealWork && collect($results)->every(fn ($r) => $r['success']);
 
         return new ExecutionResult(
             success: $allSucceeded,
@@ -312,6 +309,7 @@ PROMPT;
     {
         $importService = new ImportService($this->customer);
         $result = $importService->importFromGoogleAds($params['google_campaign_id']);
+
         return $result ?? ['status' => 'import_submitted'];
     }
 
@@ -320,20 +318,21 @@ PROMPT;
         // Idempotency: skip if this campaign was already deployed to Microsoft Ads
         if ($context->campaign && $context->campaign->microsoft_ads_campaign_id) {
             Log::info('[MicrosoftAdsExecutionAgent] Campaign already deployed to Microsoft Ads, skipping creation', [
-                'campaign_id'              => $context->campaign->id,
+                'campaign_id' => $context->campaign->id,
                 'microsoft_ads_campaign_id' => $context->campaign->microsoft_ads_campaign_id,
             ]);
+
             return ['status' => 'already_deployed', 'microsoft_ads_campaign_id' => $context->campaign->microsoft_ads_campaign_id];
         }
 
         $campaignService = new CampaignService($this->customer);
-        $name        = $params['name'] ?? $params['campaign_name'] ?? $context->campaign?->name ?? 'Sitetospend Campaign';
+        $name = $params['name'] ?? $params['campaign_name'] ?? $context->campaign?->name ?? 'Sitetospend Campaign';
         $dailyBudget = $params['daily_budget'] ?? $params['budget'] ?? $context->strategy?->daily_budget ?? 10.00;
 
         $result = $campaignService->createSearchCampaign([
-            'name'         => $name,
+            'name' => $name,
             'daily_budget' => (float) $dailyBudget,
-            'status'       => 'Paused',
+            'status' => 'Paused',
         ]);
 
         if ($result && isset($result['CampaignIds'])) {
@@ -349,7 +348,7 @@ PROMPT;
     protected function executeCreateAdGroups(ExecutionContext $context): array
     {
         $campaign = $context->campaign;
-        if (!$campaign || !$campaign->microsoft_ads_campaign_id) {
+        if (! $campaign || ! $campaign->microsoft_ads_campaign_id) {
             return ['skipped' => 'No Microsoft campaign ID available'];
         }
 
@@ -360,9 +359,9 @@ PROMPT;
         $strategyKeywords = $biddingStrategy['keywords'] ?? [];
 
         $result = $adGroupService->createAdGroup($campaign->microsoft_ads_campaign_id, [
-            'name'    => $campaign->name . ' - Search',
+            'name' => $campaign->name.' - Search',
             'cpc_bid' => 1.50,
-            'status'  => 'Active',
+            'status' => 'Active',
         ]);
 
         $adGroupId = null;
@@ -370,21 +369,21 @@ PROMPT;
             $adGroupId = $result['AdGroupIds']['long'][0] ?? $result['AdGroupIds'][0] ?? null;
         }
 
-        if (!$adGroupId) {
+        if (! $adGroupId) {
             return ['error' => 'Ad group creation returned null', 'raw' => $result];
         }
 
         // Add keywords with proper match types
         $kwPayload = [];
-        if (!empty($strategyKeywords)) {
+        if (! empty($strategyKeywords)) {
             foreach (array_slice($strategyKeywords, 0, 30) as $kw) {
                 $text = is_string($kw) ? $kw : ($kw['text'] ?? '');
                 $matchType = $kw['match_type'] ?? 'Broad';
                 // Microsoft uses Exact/Phrase/Broad (capitalised)
                 $msMatch = match (strtoupper($matchType)) {
-                    'EXACT'  => 'Exact',
+                    'EXACT' => 'Exact',
                     'PHRASE' => 'Phrase',
-                    default  => 'Broad',
+                    default => 'Broad',
                 };
                 if ($text) {
                     $kwPayload[] = ['text' => $text, 'match_type' => $msMatch, 'bid' => 1.50];
@@ -392,7 +391,7 @@ PROMPT;
             }
         }
 
-        $kwResult = !empty($kwPayload)
+        $kwResult = ! empty($kwPayload)
             ? $adGroupService->addKeywords($adGroupId, $kwPayload)
             : ['skipped' => 'No keywords in strategy'];
 
@@ -402,13 +401,14 @@ PROMPT;
             ->first()
             ?? $context->strategy->adCopies()->first();
 
-        $headlines    = $adCopy?->headlines    ?? [];
+        $headlines = $adCopy?->headlines ?? [];
         $descriptions = $adCopy?->descriptions ?? [];
 
         if (empty($headlines)) {
             Log::warning('[MicrosoftAdsExecutionAgent] No ad copy found in strategy, skipping ad creation', [
                 'strategy_id' => $context->strategy->id,
             ]);
+
             return ['ad_group_id' => $adGroupId, 'keywords_added' => $kwResult, 'ad_created' => 'skipped_no_copy'];
         }
 
@@ -416,25 +416,26 @@ PROMPT;
             ?? $this->customer->website
             ?? null;
 
-        if (!$finalUrl) {
+        if (! $finalUrl) {
             Log::warning('[MicrosoftAdsExecutionAgent] No landing page URL for ad, skipping ad creation', [
                 'strategy_id' => $context->strategy->id,
             ]);
+
             return ['ad_group_id' => $adGroupId, 'keywords_added' => $kwResult, 'ad_created' => 'skipped_no_url'];
         }
 
         $adResult = $adGroupService->addExpandedTextAds($adGroupId, [[
-            'headlines'    => array_slice($headlines, 0, 15),
+            'headlines' => array_slice($headlines, 0, 15),
             'descriptions' => array_slice($descriptions, 0, 4),
-            'path1'        => 'AI-Ads',
-            'path2'        => 'Managed',
-            'final_url'    => $finalUrl,
+            'path1' => 'AI-Ads',
+            'path2' => 'Managed',
+            'final_url' => $finalUrl,
         ]]);
 
         return [
-            'ad_group_id'    => $adGroupId,
+            'ad_group_id' => $adGroupId,
             'keywords_added' => $kwResult,
-            'ad_created'     => $adResult ? 'yes' : 'failed',
+            'ad_created' => $adResult ? 'yes' : 'failed',
         ];
     }
 
@@ -446,11 +447,11 @@ PROMPT;
             $tags = $trackingService->getUetTags();
             $tagId = null;
 
-            if (!empty($tags)) {
+            if (! empty($tags)) {
                 $tagId = $tags[0]['Id'] ?? null;
             } else {
                 $newTag = $trackingService->createUetTag(
-                    $this->customer->name . ' UET',
+                    $this->customer->name.' UET',
                     'Auto-provisioned by Sitetospend'
                 );
                 $tagId = $newTag['UetTagId'] ?? null;
@@ -460,9 +461,9 @@ PROMPT;
                 $goals = $trackingService->getConversionGoals();
                 if (empty($goals)) {
                     $trackingService->createUrlConversionGoal([
-                        'name'              => 'Website Conversion',
-                        'uet_tag_id'        => $tagId,
-                        'url_expression'    => '/thank-you',
+                        'name' => 'Website Conversion',
+                        'uet_tag_id' => $tagId,
+                        'url_expression' => '/thank-you',
                         'conversion_window' => 30,
                     ]);
                 }

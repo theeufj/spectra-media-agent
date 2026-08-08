@@ -26,13 +26,13 @@ return [
 
     'auth_rules' => [
         // Credentials are stored at the platform level, never on the Customer model
-        'credential_storage'       => 'platform_level',
+        'credential_storage' => 'platform_level',
 
         // Token source priority: database table (encrypted) → .env fallback
-        'token_source_priority'    => ['database_encrypted', 'env_fallback'],
+        'token_source_priority' => ['database_encrypted', 'env_fallback'],
 
         // Per-customer OAuth is explicitly prohibited
-        'per_customer_oauth'       => false,
+        'per_customer_oauth' => false,
 
         // No customer-facing "Connect Account" UI flows
         'customer_facing_oauth_ui' => false,
@@ -115,14 +115,14 @@ return [
     |
     */
     'config_template' => [
-        'client_id'          => 'env({PLATFORM}_CLIENT_ID)',
-        'client_secret'      => 'env({PLATFORM}_CLIENT_SECRET)',
-        'refresh_token'      => 'env({PLATFORM}_REFRESH_TOKEN)',
+        'client_id' => 'env({PLATFORM}_CLIENT_ID)',
+        'client_secret' => 'env({PLATFORM}_CLIENT_SECRET)',
+        'refresh_token' => 'env({PLATFORM}_REFRESH_TOKEN)',
         'manager_account_id' => 'env({PLATFORM}_MANAGER_ACCOUNT_ID)',
-        'environment'        => 'env({PLATFORM}_ENVIRONMENT, production)',
-        'rate_limit'         => [
+        'environment' => 'env({PLATFORM}_ENVIRONMENT, production)',
+        'rate_limit' => [
             'requests_per_minute' => 100,
-            'retry_attempts'      => 3,
+            'retry_attempts' => 3,
         ],
     ],
 
@@ -136,39 +136,39 @@ return [
     */
     'platforms' => [
         'google' => [
-            'auth_type'           => 'mcc_oauth',
-            'credential_storage'  => 'mcc_accounts_table',
-            'management_entity'   => 'MCC (Manager Customer Center)',
-            'sdk'                 => 'googleads/google-ads-php',
-            'config'              => 'config/googleads.php',
-            'services_namespace'  => 'App\\Services\\GoogleAds',
+            'auth_type' => 'mcc_oauth',
+            'credential_storage' => 'mcc_accounts_table',
+            'management_entity' => 'MCC (Manager Customer Center)',
+            'sdk' => 'googleads/google-ads-php',
+            'config' => 'config/googleads.php',
+            'services_namespace' => 'App\\Services\\GoogleAds',
         ],
 
         'facebook' => [
-            'auth_type'           => 'system_user_token',
-            'credential_storage'  => 'env_only',
-            'management_entity'   => 'Business Manager + System User',
-            'sdk'                 => 'http_graph_api',
-            'config'              => 'config/services.php (facebook key)',
-            'services_namespace'  => 'App\\Services\\FacebookAds',
+            'auth_type' => 'system_user_token',
+            'credential_storage' => 'env_only',
+            'management_entity' => 'Business Manager + System User',
+            'sdk' => 'http_graph_api',
+            'config' => 'config/services.php (facebook key)',
+            'services_namespace' => 'App\\Services\\FacebookAds',
         ],
 
         'microsoft' => [
-            'auth_type'           => 'management_oauth',
-            'credential_storage'  => 'env',
-            'management_entity'   => 'Manager Account',
-            'sdk'                 => 'rest_json_v13',
-            'config'              => 'config/microsoftads.php',
-            'services_namespace'  => 'App\\Services\\MicrosoftAds',
+            'auth_type' => 'management_oauth',
+            'credential_storage' => 'env',
+            'management_entity' => 'Manager Account',
+            'sdk' => 'rest_json_v13',
+            'config' => 'config/microsoftads.php',
+            'services_namespace' => 'App\\Services\\MicrosoftAds',
         ],
 
         'linkedin' => [
-            'auth_type'           => 'management_oauth',
-            'credential_storage'  => 'env',
-            'management_entity'   => 'Organization Ad Account',
-            'sdk'                 => 'rest_versioned',
-            'config'              => 'config/linkedinads.php',
-            'services_namespace'  => 'App\\Services\\LinkedInAds',
+            'auth_type' => 'management_oauth',
+            'credential_storage' => 'env',
+            'management_entity' => 'Organization Ad Account',
+            'sdk' => 'rest_versioned',
+            'config' => 'config/linkedinads.php',
+            'services_namespace' => 'App\\Services\\LinkedInAds',
         ],
     ],
 ];

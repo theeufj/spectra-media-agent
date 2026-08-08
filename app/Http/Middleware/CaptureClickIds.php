@@ -17,12 +17,13 @@ use Illuminate\Http\Request;
  */
 class CaptureClickIds
 {
-    private const PARAMS      = ['gclid', 'fbclid', 'msclid', 'ttclid'];
+    private const PARAMS = ['gclid', 'fbclid', 'msclid', 'ttclid'];
+
     private const SESSION_KEY = 'click_ids';
 
     public function handle(Request $request, Closure $next): mixed
     {
-        $stored  = session(self::SESSION_KEY, []);
+        $stored = session(self::SESSION_KEY, []);
         $changed = false;
 
         foreach (self::PARAMS as $param) {
@@ -44,7 +45,7 @@ class CaptureClickIds
      */
     public static function get(string $param): ?string
     {
-        return session(self::SESSION_KEY . '.' . $param);
+        return session(self::SESSION_KEY.'.'.$param);
     }
 
     /**

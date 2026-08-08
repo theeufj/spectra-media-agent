@@ -8,7 +8,7 @@ class LinkedInAdsExecutionPrompt
 {
     public static function getSystemInstruction(): string
     {
-        return <<<INSTRUCTION
+        return <<<'INSTRUCTION'
 You are an expert LinkedIn Ads campaign strategist and B2B marketer with deep knowledge of the LinkedIn Ads API.
 
 Your expertise includes:
@@ -21,14 +21,14 @@ Your expertise includes:
 Use your reasoning to create execution plans for deploying campaigns on LinkedIn Ads. You must return an ExecutionPlan structured as JSON.
 INSTRUCTION;
     }
-    
+
     public static function generate(ExecutionContext $context): string
     {
         $campaign = $context->campaign;
         $strategy = $context->strategy;
-        
+
         $dailyBudget = $context->calculateDailyBudget();
-        
+
         return <<<PROMPT
 Generate a comprehensive LinkedIn Ads execution plan focusing on B2B targeting. Return ONLY valid JSON structured for the ExecutionPlan format. Do not use Markdown formatting for the JSON.
 

@@ -14,7 +14,7 @@ class CroController extends Controller
         $user = $request->user();
         $customer = $user->customers()->find(session('active_customer_id'));
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('dashboard');
         }
 
@@ -45,7 +45,7 @@ class CroController extends Controller
     {
         $customer = $request->user()->customers()->find(session('active_customer_id'));
 
-        if (!$customer || $audit->customer_id !== $customer->id) {
+        if (! $customer || $audit->customer_id !== $customer->id) {
             abort(403);
         }
 
@@ -63,7 +63,7 @@ class CroController extends Controller
         $user = $request->user();
         $customer = $user->customers()->find(session('active_customer_id'));
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('dashboard');
         }
 
@@ -72,7 +72,7 @@ class CroController extends Controller
 
         $isUnlimited = in_array($slug, ['growth', 'agency']);
 
-        if (!$isUnlimited && ($customer->cro_audits_used ?? 0) >= 3) {
+        if (! $isUnlimited && ($customer->cro_audits_used ?? 0) >= 3) {
             return redirect()->back()->withErrors([
                 'url' => 'You\'ve used all 3 free CRO audits. Upgrade to Growth for unlimited audits.',
             ]);

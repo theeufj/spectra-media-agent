@@ -16,7 +16,7 @@ class AdSpendReconciliationAlert extends Notification
     use Queueable;
 
     /**
-     * @param array<int,array{customer_id:int,customer:string,currency:string,platform_spend:float,deductions:float,discrepancy:float,relative:float}> $discrepancies
+     * @param  array<int,array{customer_id:int,customer:string,currency:string,platform_spend:float,deductions:float,discrepancy:float,relative:float}>  $discrepancies
      */
     public function __construct(
         protected array $discrepancies,
@@ -31,7 +31,7 @@ class AdSpendReconciliationAlert extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         $mail = (new MailMessage)
-            ->subject('[Site to Spend] Ad spend reconciliation discrepancies (' . count($this->discrepancies) . ')')
+            ->subject('[Site to Spend] Ad spend reconciliation discrepancies ('.count($this->discrepancies).')')
             ->error()
             ->greeting('Ad Spend Reconciliation Alert')
             ->line("The following accounts' platform spend and ledger deductions diverged over {$this->window}:");

@@ -61,7 +61,7 @@ class LandingPageAudit extends Model
      */
     public function criticalIssues(): array
     {
-        if (!$this->issues) {
+        if (! $this->issues) {
             return [];
         }
 
@@ -75,7 +75,7 @@ class LandingPageAudit extends Model
      */
     public function priorityRecommendations(): array
     {
-        if (!$this->recommendations) {
+        if (! $this->recommendations) {
             return [];
         }
 

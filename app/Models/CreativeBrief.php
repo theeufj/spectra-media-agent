@@ -20,7 +20,7 @@ class CreativeBrief extends Model
     ];
 
     protected $casts = [
-        'context'     => 'array',
+        'context' => 'array',
         'actioned_at' => 'datetime',
     ];
 

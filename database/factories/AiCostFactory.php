@@ -16,24 +16,24 @@ class AiCostFactory extends Factory
             'gemini-3.1-pro-preview', 'gemini-3.1-flash-image-preview',
         ];
         $operations = ['generateContent', 'generateImage', 'embedContent', 'startVideoGeneration'];
-        $taskTypes  = ['creative', 'analytical', 'extraction', 'classification', 'strategy', null];
+        $taskTypes = ['creative', 'analytical', 'extraction', 'classification', 'strategy', null];
 
-        $inputTokens  = $this->faker->numberBetween(100, 50000);
+        $inputTokens = $this->faker->numberBetween(100, 50000);
         $outputTokens = $this->faker->numberBetween(50, 8192);
 
         return [
-            'campaign_id'   => null,
-            'customer_id'   => null,
-            'service'       => 'Gemini',
-            'operation'     => $this->faker->randomElement($operations),
-            'model'         => $this->faker->randomElement($models),
-            'input_tokens'  => $inputTokens,
+            'campaign_id' => null,
+            'customer_id' => null,
+            'service' => 'Gemini',
+            'operation' => $this->faker->randomElement($operations),
+            'model' => $this->faker->randomElement($models),
+            'input_tokens' => $inputTokens,
             'output_tokens' => $outputTokens,
             'cached_tokens' => 0,
-            'cost'          => round(($inputTokens * 0.075 + $outputTokens * 0.30) / 1_000_000, 6),
-            'duration_ms'   => $this->faker->numberBetween(200, 15000),
-            'task_type'     => $this->faker->randomElement($taskTypes),
-            'metadata'      => null,
+            'cost' => round(($inputTokens * 0.075 + $outputTokens * 0.30) / 1_000_000, 6),
+            'duration_ms' => $this->faker->numberBetween(200, 15000),
+            'task_type' => $this->faker->randomElement($taskTypes),
+            'metadata' => null,
         ];
     }
 }

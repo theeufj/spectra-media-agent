@@ -2,8 +2,8 @@
 
 namespace Tests\Unit\Ecommerce;
 
-use App\Services\GoogleAds\MerchantCenterService;
 use App\Models\Customer;
+use App\Services\GoogleAds\MerchantCenterService;
 use Tests\TestCase;
 
 class MerchantCenterServiceTest extends TestCase

@@ -2,18 +2,17 @@
 
 namespace App\Services\Agents;
 
-use App\Models\Customer;
 use App\Models\Campaign;
 use App\Models\Competitor;
+use App\Models\Customer;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAuctionInsights;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 
 /**
  * CompetitorIntelligenceAgent
- * 
+ *
  * The main orchestrator for competitive intelligence. This agent:
  * 1. Discovers competitors via Google Search
  * 2. Analyzes competitor websites
@@ -25,7 +24,9 @@ class CompetitorIntelligenceAgent
     use \App\Services\Agents\Concerns\ParsesLlmJson;
 
     protected GeminiService $gemini;
+
     protected CompetitorDiscoveryAgent $discoveryAgent;
+
     protected CompetitorAnalysisAgent $analysisAgent;
 
     public function __construct(
@@ -60,14 +61,14 @@ class CompetitorIntelligenceAgent
         try {
             $results['discovery'] = $this->discoveryAgent->discover($customer);
         } catch (\Exception $e) {
-            $results['errors'][] = 'Discovery failed: ' . $e->getMessage();
+            $results['errors'][] = 'Discovery failed: '.$e->getMessage();
         }
 
         // Step 2: Analyze all competitors
         try {
             $results['analysis'] = $this->analysisAgent->analyzeAll($customer);
         } catch (\Exception $e) {
-            $results['errors'][] = 'Analysis failed: ' . $e->getMessage();
+            $results['errors'][] = 'Analysis failed: '.$e->getMessage();
         }
 
         // Step 3: Fetch Auction Insights (if Google Ads connected)
@@ -76,7 +77,7 @@ class CompetitorIntelligenceAgent
                 $results['auction_insights'] = $this->fetchAuctionInsights($customer);
                 $results['auction_trend_actions'] = $this->analyzeAuctionTrends($customer, $results['auction_insights']);
             } catch (\Exception $e) {
-                $results['errors'][] = 'Auction insights failed: ' . $e->getMessage();
+                $results['errors'][] = 'Auction insights failed: '.$e->getMessage();
             }
         }
 
@@ -84,7 +85,7 @@ class CompetitorIntelligenceAgent
         try {
             $results['counter_strategy'] = $this->generateCounterStrategy($customer);
         } catch (\Exception $e) {
-            $results['errors'][] = 'Counter-strategy failed: ' . $e->getMessage();
+            $results['errors'][] = 'Counter-strategy failed: '.$e->getMessage();
         }
 
         Log::info('CompetitorIntelligenceAgent: Full analysis complete', [
@@ -109,14 +110,14 @@ class CompetitorIntelligenceAgent
             $auctionInsightsService = new GetAuctionInsights($customer, true);
             $allInsights = $auctionInsightsService->getAllCampaigns($customer->google_ads_customer_id);
 
-            $ownIsSum   = 0;
+            $ownIsSum = 0;
             $ownIsCount = 0;
 
             foreach ($allInsights as $campaignInsights) {
                 $results['campaigns_analyzed']++;
 
                 // Track own impression share for trend analysis
-                if (!empty($campaignInsights['our_metrics']['impression_share'])) {
+                if (! empty($campaignInsights['our_metrics']['impression_share'])) {
                     $ownIsSum += $campaignInsights['our_metrics']['impression_share'];
                     $ownIsCount++;
                 }
@@ -124,7 +125,7 @@ class CompetitorIntelligenceAgent
                 // Extract competitor domains and match with our database
                 foreach ($campaignInsights['competitors'] ?? [] as $competitorData) {
                     $domain = $competitorData['domain'];
-                    
+
                     // Update or create competitor record with auction data
                     $competitor = $customer->competitors()
                         ->where('domain', 'LIKE', "%{$domain}%")
@@ -132,13 +133,13 @@ class CompetitorIntelligenceAgent
 
                     if ($competitor) {
                         // Record WoW impression_share delta before overwriting
-                        $prevIs  = (float) ($competitor->impression_share ?? 0);
-                        $newIs   = (float) ($competitorData['impression_share'] ?? 0);
-                        $trends  = $competitor->auction_trends ?? [];
+                        $prevIs = (float) ($competitor->impression_share ?? 0);
+                        $newIs = (float) ($competitorData['impression_share'] ?? 0);
+                        $trends = $competitor->auction_trends ?? [];
                         $trends[] = [
-                            'date'             => now()->toDateString(),
+                            'date' => now()->toDateString(),
                             'impression_share' => $newIs,
-                            'delta'            => round($newIs - $prevIs, 2),
+                            'delta' => round($newIs - $prevIs, 2),
                         ];
                         // Keep only last 8 snapshots
                         if (count($trends) > 8) {
@@ -147,7 +148,7 @@ class CompetitorIntelligenceAgent
 
                         $competitor->update([
                             'auction_insights' => $competitorData,
-                            'auction_trends'   => $trends,
+                            'auction_trends' => $trends,
                             'impression_share' => $competitorData['impression_share'] ?? null,
                             'overlap_rate' => $competitorData['overlap_rate'] ?? null,
                             'position_above_rate' => $competitorData['position_above_rate'] ?? null,
@@ -210,16 +211,16 @@ class CompetitorIntelligenceAgent
             }
 
             $latest = end($trends);
-            $prior  = $trends[count($trends) - 2];
+            $prior = $trends[count($trends) - 2];
 
             $delta = ($latest['impression_share'] ?? 0) - ($prior['impression_share'] ?? 0);
 
             if ($delta >= 15.0) {
                 $this->pushBidRecommendation($customer, $competitor, $delta);
                 $actions[] = [
-                    'type'       => 'competitor_is_surge',
+                    'type' => 'competitor_is_surge',
                     'competitor' => $competitor->domain,
-                    'delta'      => $delta,
+                    'delta' => $delta,
                 ];
             }
         }
@@ -247,13 +248,13 @@ class CompetitorIntelligenceAgent
         foreach ($campaigns as $campaign) {
             $existing = Cache::get("optimization:campaign:{$campaign->id}", []);
             $existing['competitor_bid_alerts'][] = [
-                'priority'        => 'HIGH',
-                'category'        => 'BIDDING',
-                'recommendation'  => "Competitor {$competitor->domain} grew impression share by {$delta}% WoW. Review bids on overlapping keywords and consider raising target IS or tCPA to defend position.",
-                'source'          => 'CompetitorIntelligenceAgent',
-                'competitor'      => $competitor->domain,
-                'is_delta'        => $delta,
-                'recorded_at'     => now()->toIso8601String(),
+                'priority' => 'HIGH',
+                'category' => 'BIDDING',
+                'recommendation' => "Competitor {$competitor->domain} grew impression share by {$delta}% WoW. Review bids on overlapping keywords and consider raising target IS or tCPA to defend position.",
+                'source' => 'CompetitorIntelligenceAgent',
+                'competitor' => $competitor->domain,
+                'is_delta' => $delta,
+                'recorded_at' => now()->toIso8601String(),
             ];
             Cache::put("optimization:campaign:{$campaign->id}", $existing, now()->addHours(12));
         }
@@ -274,10 +275,10 @@ class CompetitorIntelligenceAgent
         }
 
         $latest = end($ownIsHistory);
-        $prior  = $ownIsHistory[count($ownIsHistory) - 2];
+        $prior = $ownIsHistory[count($ownIsHistory) - 2];
 
         $latestIs = $latest['impression_share'] ?? 0;
-        $priorIs  = $prior['impression_share']  ?? 0;
+        $priorIs = $prior['impression_share'] ?? 0;
 
         if ($priorIs <= 0) {
             return;
@@ -303,7 +304,7 @@ class CompetitorIntelligenceAgent
         }
 
         $actions[] = [
-            'type'     => 'own_is_drop',
+            'type' => 'own_is_drop',
             'drop_pct' => round($dropPct, 1),
             'prior_is' => $priorIs,
             'latest_is' => $latestIs,
@@ -317,20 +318,20 @@ class CompetitorIntelligenceAgent
         foreach ($campaigns as $campaign) {
             $existing = Cache::get("optimization:campaign:{$campaign->id}", []);
             $existing['competitor_bid_alerts'][] = [
-                'priority'       => 'HIGH',
-                'category'       => 'BIDDING',
+                'priority' => 'HIGH',
+                'category' => 'BIDDING',
                 'recommendation' => "Own impression share dropped {$dropPct}% WoW (from {$priorIs}% to {$latestIs}%) with budget not limiting. Review bid strategy and consider increasing target IS or tCPA.",
-                'source'         => 'CompetitorIntelligenceAgent',
-                'own_is_drop'    => $dropPct,
-                'recorded_at'    => now()->toIso8601String(),
+                'source' => 'CompetitorIntelligenceAgent',
+                'own_is_drop' => $dropPct,
+                'recorded_at' => now()->toIso8601String(),
             ];
             Cache::put("optimization:campaign:{$campaign->id}", $existing, now()->addHours(12));
         }
 
         Log::warning("CompetitorIntelligenceAgent: Own IS dropped {$dropPct}% WoW (budget not limiting)", [
             'customer_id' => $customer->id,
-            'prior_is'    => $priorIs,
-            'latest_is'   => $latestIs,
+            'prior_is' => $priorIs,
+            'latest_is' => $latestIs,
         ]);
     }
 
@@ -340,7 +341,7 @@ class CompetitorIntelligenceAgent
      */
     public function recordOwnImpressionShare(Customer $customer, float $impressionShare): void
     {
-        $history   = Cache::get("own_impression_share:{$customer->id}", []);
+        $history = Cache::get("own_impression_share:{$customer->id}", []);
         $history[] = ['date' => now()->toDateString(), 'impression_share' => $impressionShare];
         if (count($history) > 8) {
             $history = array_slice($history, -8);
@@ -389,7 +390,7 @@ class CompetitorIntelligenceAgent
             true  // Enable thinking
         );
 
-        if (!$response || !isset($response['text'])) {
+        if (! $response || ! isset($response['text'])) {
             return [
                 'status' => 'error',
                 'message' => 'Failed to generate counter-strategy',

@@ -17,17 +17,18 @@ class DashboardControllerTest extends TestCase
     use DatabaseTransactions;
 
     protected User $user;
+
     protected Customer $customer;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->user     = User::factory()->create();
+        $this->user = User::factory()->create();
         $this->customer = Customer::factory()->create();
         $this->customer->users()->attach($this->user->id, ['role' => 'owner']);
     }

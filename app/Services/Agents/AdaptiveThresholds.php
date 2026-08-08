@@ -66,7 +66,7 @@ class AdaptiveThresholds
             ')
             ->first();
 
-        if (!$stats || $stats->data_points < 100) {
+        if (! $stats || $stats->data_points < 100) {
             return []; // Not enough data — use defaults
         }
 
@@ -108,6 +108,7 @@ class AdaptiveThresholds
     public static function get(Customer $customer, string $key, $default = null)
     {
         $thresholds = static::forCustomer($customer);
+
         return $thresholds[$key] ?? $default ?? static::$defaults[$key] ?? null;
     }
 
@@ -132,8 +133,8 @@ class AdaptiveThresholds
     public static function forCampaign(Campaign $campaign): array
     {
         $overrides = $campaign->customer?->agent_thresholds ?? [];
-        $computed  = static::computeCampaignBaselines($campaign);
-        $defaults  = static::anomalyConfigDefaults();
+        $computed = static::computeCampaignBaselines($campaign);
+        $defaults = static::anomalyConfigDefaults();
 
         return array_merge($defaults, $computed, $overrides);
     }
@@ -146,16 +147,16 @@ class AdaptiveThresholds
         $cfg = config('optimization.anomaly_detection', []);
 
         return [
-            'ctr_drop_threshold'      => $cfg['ctr_drop_default']        ?? 0.25,
-            'cpc_spike_threshold'     => $cfg['cpc_spike_default']        ?? 0.50,
-            'cvr_drop_threshold'      => $cfg['cvr_drop_default']         ?? 0.30,
-            'min_impressions_anomaly' => $cfg['min_impressions']          ?? 100,
-            'min_clicks_cpc'          => $cfg['min_clicks_cpc']           ?? 10,
-            'min_clicks_cvr'          => $cfg['min_clicks_cvr']           ?? 20,
-            'cpa_regression_tolerance'  => $cfg['regression_tolerance_min'] ?? 0.20,
+            'ctr_drop_threshold' => $cfg['ctr_drop_default'] ?? 0.25,
+            'cpc_spike_threshold' => $cfg['cpc_spike_default'] ?? 0.50,
+            'cvr_drop_threshold' => $cfg['cvr_drop_default'] ?? 0.30,
+            'min_impressions_anomaly' => $cfg['min_impressions'] ?? 100,
+            'min_clicks_cpc' => $cfg['min_clicks_cpc'] ?? 10,
+            'min_clicks_cvr' => $cfg['min_clicks_cvr'] ?? 20,
+            'cpa_regression_tolerance' => $cfg['regression_tolerance_min'] ?? 0.20,
             'roas_regression_tolerance' => $cfg['regression_tolerance_min'] ?? 0.20,
-            'budget_cut_cpc'          => $cfg['budget_cut_cpc']           ?? 0.20,
-            'budget_cut_cvr'          => $cfg['budget_cut_cvr']           ?? 0.25,
+            'budget_cut_cpc' => $cfg['budget_cut_cpc'] ?? 0.20,
+            'budget_cut_cvr' => $cfg['budget_cut_cvr'] ?? 0.25,
         ];
     }
 
@@ -173,12 +174,12 @@ class AdaptiveThresholds
             ? GoogleAdsPerformanceData::class
             : ($campaign->facebook_ads_campaign_id ? FacebookAdsPerformanceData::class : null);
 
-        if (!$model) {
+        if (! $model) {
             return [];
         }
 
-        $cfg      = config('optimization.anomaly_detection', []);
-        $minDays  = $cfg['min_history_days'] ?? 7;
+        $cfg = config('optimization.anomaly_detection', []);
+        $minDays = $cfg['min_history_days'] ?? 7;
 
         // Aggregate to one row per day so multi-row campaigns don't skew stddev
         $rows = $model::where('campaign_id', $campaign->id)
@@ -191,26 +192,34 @@ class AdaptiveThresholds
             return [];
         }
 
-        $ctrs  = [];
-        $cpcs  = [];
-        $cvrs  = [];
-        $cpas  = [];
-        $imps  = [];
-        $clks  = [];
+        $ctrs = [];
+        $cpcs = [];
+        $cvrs = [];
+        $cpas = [];
+        $imps = [];
+        $clks = [];
 
         foreach ($rows as $row) {
-            $imp  = (float) $row->imp;
-            $clk  = (float) $row->clk;
-            $cst  = (float) $row->cst;
+            $imp = (float) $row->imp;
+            $clk = (float) $row->clk;
+            $cst = (float) $row->cst;
             $conv = (float) $row->conv;
 
             $imps[] = $imp;
-            $clks[]  = $clk;
+            $clks[] = $clk;
 
-            if ($imp > 0) $ctrs[] = $clk / $imp;
-            if ($clk > 0) $cpcs[] = $cst / $clk;
-            if ($clk > 0) $cvrs[] = $conv / $clk;
-            if ($conv > 0) $cpas[] = $cst / $conv;
+            if ($imp > 0) {
+                $ctrs[] = $clk / $imp;
+            }
+            if ($clk > 0) {
+                $cpcs[] = $cst / $clk;
+            }
+            if ($clk > 0) {
+                $cvrs[] = $conv / $clk;
+            }
+            if ($conv > 0) {
+                $cpas[] = $cst / $conv;
+            }
         }
 
         $computed = [];
@@ -247,7 +256,7 @@ class AdaptiveThresholds
         // --- volume-based minimum sample sizes ---
 
         $avgDailyImpressions = count($imps) > 0 ? array_sum($imps) / count($imps) : 0;
-        $avgDailyClicks      = count($clks) > 0 ? array_sum($clks) / count($clks)  : 0;
+        $avgDailyClicks = count($clks) > 0 ? array_sum($clks) / count($clks) : 0;
 
         if ($avgDailyImpressions > 0) {
             $computed['min_impressions_anomaly'] = (int) max(
@@ -278,7 +287,7 @@ class AdaptiveThresholds
                 $cfg['regression_tolerance_min'] ?? 0.15,
                 $cfg['regression_tolerance_max'] ?? 0.40
             );
-            $computed['cpa_regression_tolerance']  = $tolerance;
+            $computed['cpa_regression_tolerance'] = $tolerance;
             $computed['roas_regression_tolerance'] = $tolerance;
         }
 
@@ -294,6 +303,7 @@ class AdaptiveThresholds
         if ($mean == 0) {
             return 0.0;
         }
+
         return static::stddev($values) / $mean;
     }
 
@@ -306,8 +316,9 @@ class AdaptiveThresholds
         if ($n < 2) {
             return 0.0;
         }
-        $mean     = array_sum($values) / $n;
-        $variance = array_sum(array_map(fn($v) => ($v - $mean) ** 2, $values)) / ($n - 1);
+        $mean = array_sum($values) / $n;
+        $variance = array_sum(array_map(fn ($v) => ($v - $mean) ** 2, $values)) / ($n - 1);
+
         return sqrt($variance);
     }
 

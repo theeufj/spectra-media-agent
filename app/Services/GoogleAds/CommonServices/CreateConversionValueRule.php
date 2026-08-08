@@ -3,14 +3,14 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\ConversionValueRule;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleAction;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleAudienceCondition;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleDeviceCondition;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleGeoLocationCondition;
-use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleOperation;
 use Google\Ads\GoogleAds\V22\Enums\ValueRuleDeviceTypeEnum\ValueRuleDeviceType;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\ConversionValueRule;
+use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleOperation;
 use Google\ApiCore\ApiException;
 use Illuminate\Support\Facades\Log;
 
@@ -29,9 +29,7 @@ use Illuminate\Support\Facades\Log;
 class CreateConversionValueRule extends BaseGoogleAdsService
 {
     /**
-     * @param  string $customerId
-     * @param  array  $ruleConfig
-     * @return string|null  Resource name of the created rule, or null on failure
+     * @return string|null Resource name of the created rule, or null on failure
      */
     public function __invoke(string $customerId, array $ruleConfig): ?string
     {
@@ -39,26 +37,26 @@ class CreateConversionValueRule extends BaseGoogleAdsService
 
         try {
             // Build the action (required)
-            $actionConfig    = $ruleConfig['action'] ?? [];
-            $operationValue  = $actionConfig['operation'] ?? 'ADD';
+            $actionConfig = $ruleConfig['action'] ?? [];
+            $operationValue = $actionConfig['operation'] ?? 'ADD';
             $multiplierValue = (float) ($actionConfig['value'] ?? 1.0);
 
             $action = new ValueRuleAction([
                 'operation' => $this->resolveValueRuleOperation($operationValue),
-                'value'     => $multiplierValue,
+                'value' => $multiplierValue,
             ]);
 
             $ruleArgs = ['action' => $action];
 
             // Optional: audience condition
-            if (!empty($ruleConfig['audience']['user_list'])) {
+            if (! empty($ruleConfig['audience']['user_list'])) {
                 $ruleArgs['audience_condition'] = new ValueRuleAudienceCondition([
                     'user_lists' => [$ruleConfig['audience']['user_list']],
                 ]);
             }
 
             // Optional: device condition
-            if (!empty($ruleConfig['device'])) {
+            if (! empty($ruleConfig['device'])) {
                 $deviceType = $this->resolveDeviceType($ruleConfig['device']);
                 $ruleArgs['device_condition'] = new ValueRuleDeviceCondition([
                     'device_types' => [$deviceType],
@@ -66,7 +64,7 @@ class CreateConversionValueRule extends BaseGoogleAdsService
             }
 
             // Optional: geo location condition
-            if (!empty($ruleConfig['geo_location']['geo_target_constant'])) {
+            if (! empty($ruleConfig['geo_location']['geo_target_constant'])) {
                 $ruleArgs['geo_location_condition'] = new ValueRuleGeoLocationCondition([
                     'geo_target_constants' => [$ruleConfig['geo_location']['geo_target_constant']],
                 ]);
@@ -74,7 +72,7 @@ class CreateConversionValueRule extends BaseGoogleAdsService
 
             $rule = new ConversionValueRule($ruleArgs);
 
-            $operation = new ConversionValueRuleOperation();
+            $operation = new ConversionValueRuleOperation;
             $operation->setCreate($rule);
 
             $serviceClient = $this->client->getConversionValueRuleServiceClient();
@@ -87,8 +85,9 @@ class CreateConversionValueRule extends BaseGoogleAdsService
         } catch (GoogleAdsException|ApiException $e) {
             Log::error('CreateConversionValueRule: Failed to create rule', [
                 'customer_id' => $customerId,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -97,20 +96,20 @@ class CreateConversionValueRule extends BaseGoogleAdsService
     {
         // ValueRuleOperation enum: 0=UNSPECIFIED, 1=UNKNOWN, 2=ADD, 3=MULTIPLY, 4=SET
         return match (strtoupper($operation)) {
-            'ADD'      => 2,
+            'ADD' => 2,
             'MULTIPLY' => 3,
-            'SET'      => 4,
-            default    => 2,
+            'SET' => 4,
+            default => 2,
         };
     }
 
     private function resolveDeviceType(string $device): int
     {
         return match (strtoupper($device)) {
-            'MOBILE'  => ValueRuleDeviceType::MOBILE,
+            'MOBILE' => ValueRuleDeviceType::MOBILE,
             'DESKTOP' => ValueRuleDeviceType::DESKTOP,
-            'TABLET'  => ValueRuleDeviceType::TABLET,
-            default   => ValueRuleDeviceType::MOBILE,
+            'TABLET' => ValueRuleDeviceType::TABLET,
+            default => ValueRuleDeviceType::MOBILE,
         };
     }
 }

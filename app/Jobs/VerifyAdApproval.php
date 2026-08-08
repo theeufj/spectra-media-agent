@@ -20,6 +20,7 @@ class VerifyAdApproval implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
+
     public $backoff = [300];
 
     public function __construct(
@@ -37,13 +38,13 @@ class VerifyAdApproval implements ShouldQueue
             $approved = $status && in_array(strtolower($status), ['enabled', 'paused', 'approved'], true);
 
             Log::info('VerifyAdApproval: Healing outcome', [
-                'ad'          => $this->adResourceName,
-                'status'      => $status,
-                'approved'    => $approved,
+                'ad' => $this->adResourceName,
+                'status' => $status,
+                'approved' => $approved,
                 'campaign_id' => $this->campaignId,
             ]);
 
-            if (!$approved) {
+            if (! $approved) {
                 // Still disapproved — notify so a human can intervene
                 $this->customer->users()->each(fn ($user) => $user->notify(
                     new \App\Notifications\CriticalAgentAlert(
@@ -55,7 +56,7 @@ class VerifyAdApproval implements ShouldQueue
             }
         } catch (\Throwable $e) {
             // GetAdStatus may not exist yet — log and exit gracefully
-            Log::warning('VerifyAdApproval: Could not check ad status: ' . $e->getMessage(), [
+            Log::warning('VerifyAdApproval: Could not check ad status: '.$e->getMessage(), [
                 'ad' => $this->adResourceName,
             ]);
         }

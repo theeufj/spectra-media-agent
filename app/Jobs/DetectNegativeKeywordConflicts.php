@@ -21,21 +21,22 @@ use Illuminate\Support\Facades\Log;
  */
 class DetectNegativeKeywordConflicts implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 600;
 
     public function handle(): void
     {
-        Log::info("DetectNegativeKeywordConflicts: Starting weekly conflict scan");
+        Log::info('DetectNegativeKeywordConflicts: Starting weekly conflict scan');
         $runStart = $this->startRun();
 
         $found = 0;
         $errors = 0;
 
         $googleCustomers = Customer::whereNotNull('google_ads_customer_id')
-            ->whereHas('campaigns', fn($q) => $q->whereNotNull('google_ads_campaign_id')->where('status', 'active'))
+            ->whereHas('campaigns', fn ($q) => $q->whereNotNull('google_ads_campaign_id')->where('status', 'active'))
             ->get();
 
         foreach ($googleCustomers as $customer) {
@@ -43,12 +44,12 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
                 $found += $this->scanCustomer($customer);
             } catch (\Exception $e) {
                 $errors++;
-                Log::error("DetectNegativeKeywordConflicts: Failed for customer {$customer->id}: " . $e->getMessage());
+                Log::error("DetectNegativeKeywordConflicts: Failed for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
         $microsoftCustomers = Customer::whereNotNull('microsoft_ads_customer_id')
-            ->whereHas('campaigns', fn($q) => $q->whereNotNull('microsoft_ads_campaign_id')->where('status', 'active'))
+            ->whereHas('campaigns', fn ($q) => $q->whereNotNull('microsoft_ads_campaign_id')->where('status', 'active'))
             ->whereNotIn('id', $googleCustomers->pluck('id'))
             ->get();
 
@@ -57,57 +58,60 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
                 $found += $this->scanMicrosoftCustomer($customer);
             } catch (\Exception $e) {
                 $errors++;
-                Log::error("DetectNegativeKeywordConflicts: Failed (Microsoft) for customer {$customer->id}: " . $e->getMessage());
+                Log::error("DetectNegativeKeywordConflicts: Failed (Microsoft) for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
-        Log::info("DetectNegativeKeywordConflicts: Scan complete");
+        Log::info('DetectNegativeKeywordConflicts: Scan complete');
 
-        $this->finishRun($runStart, actions: $found, errors: $errors, scope: ($googleCustomers->count() + $microsoftCustomers->count()) . ' customers');
+        $this->finishRun($runStart, actions: $found, errors: $errors, scope: ($googleCustomers->count() + $microsoftCustomers->count()).' customers');
     }
 
     private function scanCustomer(Customer $customer): int
     {
         $customerId = $customer->cleanGoogleCustomerId();
 
-        $service = new class($customer) extends BaseGoogleAdsService {
+        $service = new class($customer) extends BaseGoogleAdsService
+        {
             public function fetchPositiveKeywords(string $customerId): array
             {
                 $this->ensureClient();
-                $query = "SELECT campaign.resource_name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type "
-                       . "FROM ad_group_criterion "
-                       . "WHERE ad_group_criterion.type = 'KEYWORD' "
-                       . "AND ad_group_criterion.status = 'ENABLED' "
-                       . "AND campaign.status = 'ENABLED'";
+                $query = 'SELECT campaign.resource_name, ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type '
+                       .'FROM ad_group_criterion '
+                       ."WHERE ad_group_criterion.type = 'KEYWORD' "
+                       ."AND ad_group_criterion.status = 'ENABLED' "
+                       ."AND campaign.status = 'ENABLED'";
 
                 $results = [];
                 foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
                     $criterion = $row->getAdGroupCriterion();
                     $results[] = [
-                        'campaign'   => $row->getCampaign()->getResourceName(),
-                        'text'       => strtolower(trim($criterion->getKeyword()->getText())),
+                        'campaign' => $row->getCampaign()->getResourceName(),
+                        'text' => strtolower(trim($criterion->getKeyword()->getText())),
                         'match_type' => $criterion->getKeyword()->getMatchType(),
                     ];
                 }
+
                 return $results;
             }
 
             public function fetchNegativeKeywords(string $customerId): array
             {
                 $this->ensureClient();
-                $query = "SELECT campaign.resource_name, campaign_criterion.keyword.text "
-                       . "FROM campaign_criterion "
-                       . "WHERE campaign_criterion.type = 'KEYWORD' "
-                       . "AND campaign_criterion.negative = true "
-                       . "AND campaign.status = 'ENABLED'";
+                $query = 'SELECT campaign.resource_name, campaign_criterion.keyword.text '
+                       .'FROM campaign_criterion '
+                       ."WHERE campaign_criterion.type = 'KEYWORD' "
+                       .'AND campaign_criterion.negative = true '
+                       ."AND campaign.status = 'ENABLED'";
 
                 $results = [];
                 foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
                     $results[] = [
                         'campaign' => $row->getCampaign()->getResourceName(),
-                        'text'     => strtolower(trim($row->getCampaignCriterion()->getKeyword()->getText())),
+                        'text' => strtolower(trim($row->getCampaignCriterion()->getKeyword()->getText())),
                     ];
                 }
+
                 return $results;
             }
         };
@@ -132,7 +136,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
                 // Exact match: negative blocks positive if the negative text is contained in keyword text
                 if ($pos['text'] === $negText || str_contains($pos['text'], $negText)) {
                     $conflicts[] = [
-                        'campaign'        => $pos['campaign'],
+                        'campaign' => $pos['campaign'],
                         'positive_keyword' => $pos['text'],
                         'negative_keyword' => $negText,
                     ];
@@ -167,8 +171,8 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
             'Negative Keyword Conflicts Detected',
             "{$conflictCount} negative keyword(s) are blocking active positive keywords in your campaigns.",
             [
-                'issues'          => array_map(
-                    fn($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
+                'issues' => array_map(
+                    fn ($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
                     array_slice($conflicts, 0, 5)
                 ),
                 'action_required' => 'Review your negative keyword lists in Google Ads to remove conflicting terms.',
@@ -182,7 +186,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
 
     private function scanMicrosoftCustomer(Customer $customer): int
     {
-        $service   = new MicrosoftAdGroupService($customer);
+        $service = new MicrosoftAdGroupService($customer);
         $positives = [];
         $negsByCampaign = [];
 
@@ -193,17 +197,21 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
 
         foreach ($activeCampaigns as $campaign) {
             $campaignId = (string) $campaign->microsoft_ads_campaign_id;
-            $adGroups   = $service->getAdGroupsByCampaignId($campaignId);
+            $adGroups = $service->getAdGroupsByCampaignId($campaignId);
 
             foreach ($adGroups as $adGroup) {
                 $adGroupId = (string) ($adGroup['Id'] ?? '');
-                if (!$adGroupId) continue;
+                if (! $adGroupId) {
+                    continue;
+                }
 
                 foreach ($service->getKeywordsByAdGroupId($adGroupId) as $kw) {
-                    if (($kw['Status'] ?? '') !== 'Active') continue;
+                    if (($kw['Status'] ?? '') !== 'Active') {
+                        continue;
+                    }
                     $positives[] = [
                         'campaign' => $campaignId,
-                        'text'     => strtolower(trim($kw['Text'] ?? '')),
+                        'text' => strtolower(trim($kw['Text'] ?? '')),
                     ];
                 }
             }
@@ -221,14 +229,16 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
             }
         }
 
-        if (empty($positives) || empty($negsByCampaign)) return 0;
+        if (empty($positives) || empty($negsByCampaign)) {
+            return 0;
+        }
 
         $conflicts = [];
         foreach ($positives as $pos) {
             foreach ($negsByCampaign[$pos['campaign']] ?? [] as $negText) {
                 if ($pos['text'] === $negText || str_contains($pos['text'], $negText)) {
                     $conflicts[] = [
-                        'campaign'         => $pos['campaign'],
+                        'campaign' => $pos['campaign'],
                         'positive_keyword' => $pos['text'],
                         'negative_keyword' => $negText,
                     ];
@@ -236,7 +246,9 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
             }
         }
 
-        if (empty($conflicts)) return 0;
+        if (empty($conflicts)) {
+            return 0;
+        }
 
         $conflictCount = count($conflicts);
         Log::warning("DetectNegativeKeywordConflicts (Microsoft): Found {$conflictCount} conflicts for customer {$customer->id}");
@@ -251,7 +263,9 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         );
 
         $cacheKey = "neg_conflict_alert_microsoft:{$customer->id}";
-        if (Cache::has($cacheKey)) return $conflictCount;
+        if (Cache::has($cacheKey)) {
+            return $conflictCount;
+        }
         Cache::put($cacheKey, true, now()->addHours(4));
 
         CriticalAgentAlert::deliver(
@@ -259,8 +273,8 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
             'Negative Keyword Conflicts Detected (Microsoft Ads)',
             "{$conflictCount} negative keyword(s) are blocking active positive keywords in your Microsoft Ads campaigns.",
             [
-                'issues'          => array_map(
-                    fn($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
+                'issues' => array_map(
+                    fn ($c) => "Negative \"{$c['negative_keyword']}\" blocks \"{$c['positive_keyword']}\"",
                     array_slice($conflicts, 0, 5)
                 ),
                 'action_required' => 'Review your negative keyword lists in Microsoft Ads to remove conflicting terms.',
@@ -274,7 +288,7 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('DetectNegativeKeywordConflicts failed: ' . $exception->getMessage());
+        Log::error('DetectNegativeKeywordConflicts failed: '.$exception->getMessage());
         $this->recordRunFailure($exception);
     }
 }

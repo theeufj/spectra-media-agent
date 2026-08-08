@@ -28,6 +28,6 @@ class MccAccountCreationEligible extends Notification
             ->line("Manager account **{$this->mccId}** has passed Google's eligibility checks and can now create client accounts programmatically (CreateCustomerClient).")
             ->line('The linked account has crossed the ~US$1,000 lifetime spend threshold with a clean policy history.')
             ->line('You can now enable automated sub-account provisioning.')
-            ->line('Detected: ' . now()->toDateTimeString() . ' UTC');
+            ->line('Detected: '.now()->toDateTimeString().' UTC');
     }
 }

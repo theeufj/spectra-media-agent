@@ -19,7 +19,7 @@ class AdminMonitorService
     /**
      * Returns the validation rules for a specific platform.
      *
-     * @param string $platform The platform name.
+     * @param  string  $platform  The platform name.
      * @return array|null The rules array or null if not found.
      */
     public static function getRulesForPlatform(string $platform): ?array
@@ -35,7 +35,7 @@ class AdminMonitorService
         $platformRules = Config::get('platform_rules');
 
         // Ensure platformRules is an array before proceeding.
-        if (!is_array($platformRules)) {
+        if (! is_array($platformRules)) {
             return null;
         }
 
@@ -57,7 +57,7 @@ class AdminMonitorService
     /**
      * Reviews generated ad copy against platform-specific requirements.
      *
-     * @param AdCopy $adCopy The AdCopy model instance to review.
+     * @param  AdCopy  $adCopy  The AdCopy model instance to review.
      * @return array An array containing programmatic validation and Gemini's qualitative feedback.
      */
     public function reviewAdCopy(AdCopy $adCopy): array
@@ -90,29 +90,29 @@ class AdminMonitorService
                 try {
                     $generatedReview = $generatedResponse['text'] ?? null;
                     if (is_null($generatedReview)) {
-                        throw new \Exception("No text field in Gemini response.");
+                        throw new \Exception('No text field in Gemini response.');
                     }
-                    
+
                     // Clean the JSON string by removing markdown fences and trimming whitespace
                     $cleanedJson = preg_replace('/^```json\s*|\s*```$/', '', trim($generatedReview));
                     $geminiFeedback = json_decode($cleanedJson, true);
 
                     if (json_last_error() !== JSON_ERROR_NONE) {
-                        throw new \Exception("JSON decode error: " . json_last_error_msg());
+                        throw new \Exception('JSON decode error: '.json_last_error_msg());
                     }
 
-                    if (!is_array($geminiFeedback) || !isset($geminiFeedback['overall_score']) || !isset($geminiFeedback['feedback'])) {
-                        throw new \Exception("Gemini did not return a valid JSON object with overall_score and feedback.");
+                    if (! is_array($geminiFeedback) || ! isset($geminiFeedback['overall_score']) || ! isset($geminiFeedback['feedback'])) {
+                        throw new \Exception('Gemini did not return a valid JSON object with overall_score and feedback.');
                     }
                 } catch (\Exception $e) {
-                    Log::error("AdminMonitorService: Failed to parse Gemini's ad copy review response for AdCopy ID {$adCopy->id}: " . $e->getMessage(), [
+                    Log::error("AdminMonitorService: Failed to parse Gemini's ad copy review response for AdCopy ID {$adCopy->id}: ".$e->getMessage(), [
                         'generated_review' => $generatedReview,
                     ]);
                     $geminiFeedback = ['overall_score' => 0, 'feedback' => ['general' => ['Failed to parse Gemini\'s response.']]];
                 }
             }
         } catch (\Exception $e) {
-            Log::error("AdminMonitorService: Exception during Gemini ad copy review for AdCopy ID {$adCopy->id}: " . $e->getMessage(), [
+            Log::error("AdminMonitorService: Exception during Gemini ad copy review for AdCopy ID {$adCopy->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
             $geminiFeedback = ['overall_score' => 0, 'feedback' => ['general' => ['An unexpected error occurred during Gemini review.']]];
@@ -132,7 +132,7 @@ class AdminMonitorService
     /**
      * Reviews an image generation prompt for quality and safety.
      *
-     * @param string $prompt The image prompt to review.
+     * @param  string  $prompt  The image prompt to review.
      * @return array An array containing the validation results.
      */
     public function reviewImagePrompt(string $prompt): array
@@ -157,7 +157,7 @@ class AdminMonitorService
                 }
 
                 $isValid = false;
-                $feedback[] = "The imagery strategy ('" . substr($trimmedPrompt, 0, 50) . "...') is not a valid image prompt as it contains instructional or negative keywords like '{$word}'. Please provide a descriptive prompt of the desired image.";
+                $feedback[] = "The imagery strategy ('".substr($trimmedPrompt, 0, 50)."...') is not a valid image prompt as it contains instructional or negative keywords like '{$word}'. Please provide a descriptive prompt of the desired image.";
             }
         }
 
@@ -187,9 +187,9 @@ class AdminMonitorService
     /**
      * Performs programmatic validation of ad copy against platform-specific rules.
      *
-     * @param string $platform The platform for which the ad copy is intended.
-     * @param array $headlines An array of headlines.
-     * @param array $descriptions An array of descriptions.
+     * @param  string  $platform  The platform for which the ad copy is intended.
+     * @param  array  $headlines  An array of headlines.
+     * @param  array  $descriptions  An array of descriptions.
      * @return array An array containing validation results.
      */
     private function validateAdCopy(string $platform, ?array $headlines, ?array $descriptions): array
@@ -211,32 +211,33 @@ class AdminMonitorService
             $isValid = false;
             $feedback['general'][] = "No specific rules defined for platform: {$platform}.";
             Log::warning("AdminMonitorService: No programmatic rules found for platform {$platform}.");
+
             return ['is_valid' => $isValid, 'feedback' => $feedback];
         }
 
         // Validate Headlines
         if (count($headlines) !== $platformRules['headline_count']) {
             $isValid = false;
-            $feedback['headlines'][] = "Expected {$platformRules['headline_count']} headlines, but got " . count($headlines) . ".";
+            $feedback['headlines'][] = "Expected {$platformRules['headline_count']} headlines, but got ".count($headlines).'.';
         }
         foreach ($headlines as $index => $headline) {
             $length = mb_strlen($headline);
             if ($length < $platformRules['headline_min_length'] || $length > $platformRules['headline_max_length']) {
                 $isValid = false;
-                $feedback['headlines'][] = "Headline " . ($index + 1) . " (\"{$headline}\") is {$length} characters long. Expected between {$platformRules['headline_min_length']} and {$platformRules['headline_max_length']} characters.";
+                $feedback['headlines'][] = 'Headline '.($index + 1)." (\"{$headline}\") is {$length} characters long. Expected between {$platformRules['headline_min_length']} and {$platformRules['headline_max_length']} characters.";
             }
             // Check for excessive exclamation marks
             if (isset($platformRules['max_exclamations_per_element'])) {
                 $exclamationCount = substr_count($headline, '!');
                 if ($exclamationCount > $platformRules['max_exclamations_per_element']) {
                     $isValid = false;
-                    $feedback['headlines'][] = "Headline " . ($index + 1) . " (\"{$headline}\") has {$exclamationCount} exclamation marks. Max allowed: {$platformRules['max_exclamations_per_element']}.";
+                    $feedback['headlines'][] = 'Headline '.($index + 1)." (\"{$headline}\") has {$exclamationCount} exclamation marks. Max allowed: {$platformRules['max_exclamations_per_element']}.";
                 }
             }
-            if (isset($platformRules['allow_consecutive_exclamations']) && !$platformRules['allow_consecutive_exclamations']) {
+            if (isset($platformRules['allow_consecutive_exclamations']) && ! $platformRules['allow_consecutive_exclamations']) {
                 if (strpos($headline, '!!') !== false) {
                     $isValid = false;
-                    $feedback['headlines'][] = "Headline " . ($index + 1) . " (\"{$headline}\") contains consecutive exclamation marks, which is not allowed.";
+                    $feedback['headlines'][] = 'Headline '.($index + 1)." (\"{$headline}\") contains consecutive exclamation marks, which is not allowed.";
                 }
             }
             // Add more formatting checks here (e.g., no special characters, capitalization rules)
@@ -245,26 +246,26 @@ class AdminMonitorService
         // Validate Descriptions
         if (count($descriptions) !== $platformRules['description_count']) {
             $isValid = false;
-            $feedback['descriptions'][] = "Expected {$platformRules['description_count']} descriptions, but got " . count($descriptions) . ".";
+            $feedback['descriptions'][] = "Expected {$platformRules['description_count']} descriptions, but got ".count($descriptions).'.';
         }
         foreach ($descriptions as $index => $description) {
             $length = mb_strlen($description);
             if ($length < $platformRules['description_min_length'] || $length > $platformRules['description_max_length']) {
                 $isValid = false;
-                $feedback['descriptions'][] = "Description " . ($index + 1) . " (\"{$description}\") is {$length} characters long. Expected between {$platformRules['description_min_length']} and {$platformRules['description_max_length']} characters.";
+                $feedback['descriptions'][] = 'Description '.($index + 1)." (\"{$description}\") is {$length} characters long. Expected between {$platformRules['description_min_length']} and {$platformRules['description_max_length']} characters.";
             }
             // Check for excessive exclamation marks
             if (isset($platformRules['max_exclamations_per_element'])) {
                 $exclamationCount = substr_count($description, '!');
                 if ($exclamationCount > $platformRules['max_exclamations_per_element']) {
                     $isValid = false;
-                    $feedback['descriptions'][] = "Description " . ($index + 1) . " (\"{$description}\") has {$exclamationCount} exclamation marks. Max allowed: {$platformRules['max_exclamations_per_element']}.";
+                    $feedback['descriptions'][] = 'Description '.($index + 1)." (\"{$description}\") has {$exclamationCount} exclamation marks. Max allowed: {$platformRules['max_exclamations_per_element']}.";
                 }
             }
-            if (isset($platformRules['allow_consecutive_exclamations']) && !$platformRules['allow_consecutive_exclamations']) {
+            if (isset($platformRules['allow_consecutive_exclamations']) && ! $platformRules['allow_consecutive_exclamations']) {
                 if (strpos($description, '!!') !== false) {
                     $isValid = false;
-                    $feedback['descriptions'][] = "Description " . ($index + 1) . " (\"{$description}\") contains consecutive exclamation marks, which is not allowed.";
+                    $feedback['descriptions'][] = 'Description '.($index + 1)." (\"{$description}\") contains consecutive exclamation marks, which is not allowed.";
                 }
             }
         }
@@ -272,4 +273,3 @@ class AdminMonitorService
         return ['is_valid' => $isValid, 'feedback' => $feedback];
     }
 }
-

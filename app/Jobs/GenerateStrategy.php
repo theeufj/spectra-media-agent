@@ -5,17 +5,17 @@ namespace App\Jobs;
 use App\Models\ABTest;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
+use App\Models\CustomerPage;
 use App\Models\EnabledPlatform;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
-use App\Models\CustomerPage;
 use App\Models\KnowledgeBase;
 use App\Models\LandingPageAudit;
-use App\Services\KnowledgeBaseSearchService;
 use App\Models\Recommendation;
 use App\Notifications\StrategyGenerationFailed;
 use App\Prompts\StrategyPrompt;
 use App\Services\GeminiService;
+use App\Services\KnowledgeBaseSearchService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -36,8 +36,6 @@ class GenerateStrategy implements ShouldQueue
 
     /**
      * Create a new job instance.
-     *
-     * @param Campaign $campaign
      */
     public function __construct(Campaign $campaign)
     {
@@ -50,34 +48,35 @@ class GenerateStrategy implements ShouldQueue
     public function handle(): void
     {
         Log::info("Starting strategy generation for campaign {$this->campaign->id} (customer: {$this->campaign->customer_id})");
-        
+
         // Mark strategy generation as started
         $this->campaign->update([
             'strategy_generation_started_at' => now(),
             'strategy_generation_completed_at' => null,
             'strategy_generation_error' => null,
         ]);
-        
+
         try {
             // Step 1: Resolve customer user IDs for knowledge base search
             Log::info("Resolving user IDs for customer {$this->campaign->customer_id}");
             $customerUserIds = $this->campaign->customer->users()->pluck('users.id')->toArray();
-            Log::info("Found " . count($customerUserIds) . " users for customer {$this->campaign->customer_id}");
+            Log::info('Found '.count($customerUserIds)." users for customer {$this->campaign->customer_id}");
 
             // Verify that knowledge base / customer pages exist so we can give a useful error early
             $hasKb = KnowledgeBase::whereIn('user_id', $customerUserIds)->exists();
             $hasPages = CustomerPage::where('customer_id', $this->campaign->customer_id)->exists();
-            if (!$hasKb && !$hasPages) {
+            if (! $hasKb && ! $hasPages) {
                 Log::warning("No knowledge base or customer pages found for customer {$this->campaign->customer_id}");
                 $this->failWithError('No knowledge base content found. Please add content to your knowledge base before generating strategies.');
+
                 return;
             }
-            Log::info("Knowledge base exists: " . ($hasKb ? 'yes' : 'no') . ", customer pages: " . ($hasPages ? 'yes' : 'no'));
+            Log::info('Knowledge base exists: '.($hasKb ? 'yes' : 'no').', customer pages: '.($hasPages ? 'yes' : 'no'));
 
             // Step 1.25: Fetch brand guidelines if available
             Log::info("Checking for brand guidelines for customer ID: {$this->campaign->customer_id}");
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
-            if (!$brandGuidelines) {
+            if (! $brandGuidelines) {
                 Log::warning("No brand guidelines found for customer ID: {$this->campaign->customer_id}");
             } else {
                 Log::info("Brand guidelines found with quality score: {$brandGuidelines->extraction_quality_score}");
@@ -105,28 +104,30 @@ class GenerateStrategy implements ShouldQueue
 
                 $gaps = [];
                 foreach ([['google', $gData], ['facebook', $fData]] as [$platform, $data]) {
-                    if (!$data || !$data->total_cost) continue;
+                    if (! $data || ! $data->total_cost) {
+                        continue;
+                    }
                     $ctr = round(($data->avg_ctr ?? 0) * 100, 2);
                     $conversions = round($data->total_conversions ?? 0, 1);
                     $spend = round($data->total_cost ?? 0, 2);
                     $cpa = $conversions > 0 ? round($spend / $conversions, 2) : null;
-                    $gaps[] = ucfirst($platform) . ": CTR {$ctr}%, " . ($cpa ? "CPA \${$cpa}" : "{$conversions} conversions") . " over last 7 days";
+                    $gaps[] = ucfirst($platform).": CTR {$ctr}%, ".($cpa ? "CPA \${$cpa}" : "{$conversions} conversions").' over last 7 days';
                 }
-                $performanceGap = !empty($gaps) ? implode('; ', $gaps) : null;
+                $performanceGap = ! empty($gaps) ? implode('; ', $gaps) : null;
             }
 
             // Step 1.75: Get enabled platforms
             Log::info("Fetching enabled platforms for campaign {$this->campaign->id}");
             $enabledPlatforms = EnabledPlatform::getEnabledPlatformNames();
-            Log::info("Found " . count($enabledPlatforms) . " enabled platforms: " . implode(', ', $enabledPlatforms));
+            Log::info('Found '.count($enabledPlatforms).' enabled platforms: '.implode(', ', $enabledPlatforms));
 
             // Step 1.8: Use campaign's user-selected platforms if available, otherwise fall back to plan-allowed filter
-            if (!empty($this->campaign->platforms)) {
+            if (! empty($this->campaign->platforms)) {
                 // Filter user selection to only include system-enabled platforms (safety check)
                 $enabledPlatforms = array_values(array_filter($this->campaign->platforms, function ($p) use ($enabledPlatforms) {
                     return in_array(strtolower($p), array_map('strtolower', $enabledPlatforms), true);
                 }));
-                Log::info("Using campaign-selected platforms for campaign {$this->campaign->id}: " . implode(', ', $enabledPlatforms));
+                Log::info("Using campaign-selected platforms for campaign {$this->campaign->id}: ".implode(', ', $enabledPlatforms));
             } else {
                 // Legacy fallback: filter by user's plan-allowed platforms
                 $user = $this->campaign->customer->users()->first();
@@ -135,13 +136,14 @@ class GenerateStrategy implements ShouldQueue
                     $enabledPlatforms = array_values(array_filter($enabledPlatforms, function ($p) use ($allowed) {
                         return in_array(strtolower($p), $allowed, true);
                     }));
-                    Log::info("Plan-filtered platforms for campaign {$this->campaign->id}: " . implode(', ', $enabledPlatforms));
+                    Log::info("Plan-filtered platforms for campaign {$this->campaign->id}: ".implode(', ', $enabledPlatforms));
                 }
             }
 
             if (empty($enabledPlatforms)) {
                 Log::error("No enabled platforms found for campaign {$this->campaign->id}. Cannot generate strategy.");
                 $this->failWithError('No advertising platforms are currently enabled. Please contact support.');
+
                 return;
             }
 
@@ -182,25 +184,25 @@ class GenerateStrategy implements ShouldQueue
                 $abTestWinners,
                 $performanceGap
             );
-            Log::info("Prompt length (no KB dump): " . strlen($prompt) . " characters");
+            Log::info('Prompt length (no KB dump): '.strlen($prompt).' characters');
 
             // Step 3: Agentic KB traversal — model calls search_knowledge_base iteratively.
             Log::info("Starting agentic function-calling strategy generation for campaign {$this->campaign->id}");
 
-            $gemini          = app(GeminiService::class);
-            $searchService   = app(KnowledgeBaseSearchService::class);
+            $gemini = app(GeminiService::class);
+            $searchService = app(KnowledgeBaseSearchService::class);
             $campaignCustomerId = $this->campaign->customer_id;
-            $userIds         = $customerUserIds;
+            $userIds = $customerUserIds;
 
             $toolDeclarations = [
                 [
-                    'name'        => 'search_knowledge_base',
+                    'name' => 'search_knowledge_base',
                     'description' => 'Search the client\'s website content and knowledge base for specific business information. Use this to find pricing, products, services, service areas, target audience, testimonials, brand voice, or any other details needed to craft compelling, specific ad copy.',
-                    'parameters'  => [
-                        'type'       => 'object',
+                    'parameters' => [
+                        'type' => 'object',
                         'properties' => [
                             'query' => [
-                                'type'        => 'string',
+                                'type' => 'string',
                                 'description' => 'What to search for (e.g. "pricing packages", "service areas", "target audience", "testimonials", "products")',
                             ],
                         ],
@@ -218,67 +220,73 @@ class GenerateStrategy implements ShouldQueue
                     if ($name === 'search_knowledge_base') {
                         $query = trim($args['query'] ?? '');
                         Log::info("GenerateStrategy: KB search: \"{$query}\" for customer {$campaignCustomerId}");
+
                         return $searchService->search($campaignCustomerId, $userIds, $query);
                     }
+
                     return "Unknown tool: {$name}";
                 },
                 [
-                    'temperature'     => 1,
-                    'topP'            => 0.95,
-                    'topK'            => 40,
+                    'temperature' => 1,
+                    'topP' => 0.95,
+                    'topK' => 40,
                     'maxOutputTokens' => 65535,
                 ],
                 [
                     'campaign_id' => $this->campaign->id,
                     'customer_id' => $this->campaign->customer_id,
-                    'task_type'   => 'strategy',
+                    'task_type' => 'strategy',
                 ]
             );
-            
+
             Log::info("Agentic generation completed for campaign {$this->campaign->id}");
-            
-            if (!$result) {
+
+            if (! $result) {
                 Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No response from Vertex AI");
                 $this->failWithError('AI service did not return a response. Please try again.');
+
                 return;
             }
 
             $jsonText = $result['text'] ?? null;
-            
-            if (!$jsonText) {
+
+            if (! $jsonText) {
                 Log::error("Failed to generate strategy for campaign {$this->campaign->id}: No text content in response");
                 $this->failWithError('AI service returned an empty response. Please try again.');
+
                 return;
             }
 
-            Log::info("Found JSON text content for campaign {$this->campaign->id}, length: " . strlen($jsonText));
+            Log::info("Found JSON text content for campaign {$this->campaign->id}, length: ".strlen($jsonText));
 
             $strategyData = $this->extractStrategyJson($jsonText);
 
-            if (!$strategyData) {
+            if (! $strategyData) {
                 Log::error("Failed to parse JSON response for campaign {$this->campaign->id}", [
                     'raw_preview' => substr($jsonText, 0, 500),
                 ]);
                 $this->failWithError('The AI returned a response that could not be parsed. Please try regenerating.');
+
                 return;
             }
 
-            if (!isset($strategyData['strategies'])) {
+            if (! isset($strategyData['strategies'])) {
                 Log::error("AI response parsed but missing 'strategies' key for campaign {$this->campaign->id}", [
                     'keys_present' => array_keys($strategyData),
                     'raw_preview' => substr($jsonText, 0, 500),
                 ]);
                 $this->failWithError('The AI response was missing expected strategy data. Please try regenerating.');
+
                 return;
             }
-            
-            Log::info("Successfully parsed strategy data for campaign {$this->campaign->id}, found " . count($strategyData['strategies']) . " strategies");
+
+            Log::info("Successfully parsed strategy data for campaign {$this->campaign->id}, found ".count($strategyData['strategies']).' strategies');
 
             // Step 4: Parse the response and save the platform-specific strategies.
             Log::info("Creating strategy records for campaign {$this->campaign->id}");
             foreach ($strategyData['strategies'] as $index => $strategy) {
                 Log::info("Creating strategy #{$index} for platform '{$strategy['platform']}' on campaign {$this->campaign->id}");
-                
+
                 // Inject landing_page_url into bidding_strategy to avoid schema changes
                 if (isset($strategy['landing_page_url'])) {
                     $strategy['bidding_strategy']['landing_page_url'] = $strategy['landing_page_url'];
@@ -313,13 +321,13 @@ class GenerateStrategy implements ShouldQueue
 
                     Log::info("Successfully created strategy #{$index} for campaign {$this->campaign->id}");
                 } catch (\Exception $e) {
-                    Log::error("Failed to create strategy #{$index} for campaign {$this->campaign->id}: " . $e->getMessage());
+                    Log::error("Failed to create strategy #{$index} for campaign {$this->campaign->id}: ".$e->getMessage());
                     throw $e;
                 }
             }
 
             Log::info("Successfully generated and saved strategies for campaign {$this->campaign->id}");
-            
+
             // Mark strategy generation as completed
             $this->campaign->update([
                 'strategy_generation_completed_at' => now(),
@@ -329,28 +337,28 @@ class GenerateStrategy implements ShouldQueue
             AgentActivity::record(
                 'strategy',
                 'generated_strategies',
-                "Generated {$strategyCount} " . ($strategyCount === 1 ? 'strategy' : 'strategies') . " for \"{$this->campaign->name}\"",
+                "Generated {$strategyCount} ".($strategyCount === 1 ? 'strategy' : 'strategies')." for \"{$this->campaign->name}\"",
                 $this->campaign->customer_id,
                 $this->campaign->id,
                 ['strategy_count' => $strategyCount]
             );
 
         } catch (\Exception $e) {
-            Log::error("Error generating strategy for campaign {$this->campaign->id}: " . $e->getMessage(), [
+            Log::error("Error generating strategy for campaign {$this->campaign->id}: ".$e->getMessage(), [
                 'campaign_id' => $this->campaign->id,
                 'customer_id' => $this->campaign->customer_id,
                 'exception' => get_class($e),
                 'file' => $e->getFile(),
                 'line' => $e->getLine(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
-            
+
             // Mark strategy generation as failed
             $this->campaign->update([
                 'strategy_generation_completed_at' => now(),
                 'strategy_generation_error' => $e->getMessage(),
             ]);
-            
+
             throw $e;
         }
     }
@@ -388,12 +396,16 @@ class GenerateStrategy implements ShouldQueue
         $start = strpos($text, '{');
         if ($start !== false) {
             $depth = 0;
-            $end   = null;
+            $end = null;
             for ($i = $start; $i < strlen($text); $i++) {
-                if ($text[$i] === '{') $depth++;
-                elseif ($text[$i] === '}') {
+                if ($text[$i] === '{') {
+                    $depth++;
+                } elseif ($text[$i] === '}') {
                     $depth--;
-                    if ($depth === 0) { $end = $i; break; }
+                    if ($depth === 0) {
+                        $end = $i;
+                        break;
+                    }
                 }
             }
 
@@ -402,6 +414,7 @@ class GenerateStrategy implements ShouldQueue
                 $data = json_decode($candidate, true);
                 if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
                     Log::info("GenerateStrategy: JSON extracted via brace-counting fallback for campaign {$this->campaign->id}");
+
                     return $data;
                 }
             }
@@ -441,7 +454,7 @@ class GenerateStrategy implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateStrategy failed: ' . $exception->getMessage(), [
+        Log::error('GenerateStrategy failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

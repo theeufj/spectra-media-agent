@@ -21,7 +21,7 @@ class BillingSetupService extends BaseGoogleAdsService
     /**
      * Set up billing on a sub-account by linking it to the MCC's payments account.
      *
-     * @param string $subAccountId The sub-account to enable billing on
+     * @param  string  $subAccountId  The sub-account to enable billing on
      * @return bool True if billing was set up successfully
      */
     public function setupBillingForSubAccount(string $subAccountId): bool
@@ -34,15 +34,17 @@ class BillingSetupService extends BaseGoogleAdsService
                 Log::info('Billing already configured for sub-account', [
                     'sub_account_id' => $subAccountId,
                 ]);
+
                 return true;
             }
 
             // Find the MCC's payments account by querying from the sub-account
             $paymentsAccount = $this->findPaymentsAccount($subAccountId);
-            if (!$paymentsAccount) {
+            if (! $paymentsAccount) {
                 Log::warning('No payments account found - billing setup requires a payments profile on the MCC', [
                     'sub_account_id' => $subAccountId,
                 ]);
+
                 return false;
             }
 
@@ -68,10 +70,11 @@ class BillingSetupService extends BaseGoogleAdsService
 
             return true;
         } catch (\Exception $e) {
-            Log::error('Failed to set up billing for sub-account: ' . $e->getMessage(), [
+            Log::error('Failed to set up billing for sub-account: '.$e->getMessage(), [
                 'sub_account_id' => $subAccountId,
                 'exception' => $e,
             ]);
+
             return false;
         }
     }
@@ -99,6 +102,7 @@ class BillingSetupService extends BaseGoogleAdsService
                 'account_id' => $accountId,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -122,6 +126,7 @@ class BillingSetupService extends BaseGoogleAdsService
                     'resource_name' => $account->getResourceName(),
                     'display_name' => $account->getDisplayName(),
                 ]);
+
                 return $account->getResourceName();
             }
 
@@ -131,6 +136,7 @@ class BillingSetupService extends BaseGoogleAdsService
                 'sub_account_id' => $subAccountId,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

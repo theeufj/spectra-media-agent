@@ -41,6 +41,7 @@ class FindUnderperformingKeywords implements ShouldQueue
                 ->exists();
             if ($isPMax) {
                 Log::info("FindUnderperformingKeywords: skipping PMax campaign {$this->campaignId}");
+
                 return;
             }
 
@@ -60,7 +61,7 @@ class FindUnderperformingKeywords implements ShouldQueue
                 ($addNegativeKeywordService)($this->campaignId, $keyword);
             }
         } catch (\Exception $e) {
-            Log::error("Error finding underperforming keywords for campaign {$this->campaignId}: " . $e->getMessage(), [
+            Log::error("Error finding underperforming keywords for campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
         }
@@ -71,7 +72,7 @@ class FindUnderperformingKeywords implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('FindUnderperformingKeywords failed: ' . $exception->getMessage(), [
+        Log::error('FindUnderperformingKeywords failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

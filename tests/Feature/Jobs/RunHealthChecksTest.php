@@ -19,14 +19,14 @@ class RunHealthChecksTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
     }
 
     public function test_job_has_correct_configuration(): void
     {
-        $job = new RunHealthChecks();
+        $job = new RunHealthChecks;
 
         $this->assertSame(3, $job->tries);
         $this->assertSame(1800, $job->timeout);
@@ -35,7 +35,7 @@ class RunHealthChecksTest extends TestCase
 
     public function test_job_handle_runs_without_exception(): void
     {
-        $job = new RunHealthChecks();
+        $job = new RunHealthChecks;
         $job->handle(app(HealthCheckAgent::class));
 
         $this->assertTrue(true);

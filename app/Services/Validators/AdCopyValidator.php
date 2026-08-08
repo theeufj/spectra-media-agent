@@ -33,8 +33,8 @@ class AdCopyValidator
     /**
      * Validate Google Responsive Search Ad copy.
      *
-     * @param array $headlines Array of headline strings
-     * @param array $descriptions Array of description strings
+     * @param  array  $headlines  Array of headline strings
+     * @param  array  $descriptions  Array of description strings
      * @return array Validation errors (empty if valid)
      */
     public function validateGoogleRSA(array $headlines, array $descriptions): array
@@ -44,30 +44,30 @@ class AdCopyValidator
 
         // Check headline count
         if (count($headlines) < $limits['min_headlines']) {
-            $errors[] = "Google RSA requires at least {$limits['min_headlines']} headlines (provided: " . count($headlines) . ")";
+            $errors[] = "Google RSA requires at least {$limits['min_headlines']} headlines (provided: ".count($headlines).')';
         }
 
         if (count($headlines) > $limits['max_headlines']) {
-            $errors[] = "Google RSA allows maximum {$limits['max_headlines']} headlines (provided: " . count($headlines) . ")";
+            $errors[] = "Google RSA allows maximum {$limits['max_headlines']} headlines (provided: ".count($headlines).')';
         }
 
         // Check description count
         if (count($descriptions) < $limits['min_descriptions']) {
-            $errors[] = "Google RSA requires at least {$limits['min_descriptions']} descriptions (provided: " . count($descriptions) . ")";
+            $errors[] = "Google RSA requires at least {$limits['min_descriptions']} descriptions (provided: ".count($descriptions).')';
         }
 
         if (count($descriptions) > $limits['max_descriptions']) {
-            $errors[] = "Google RSA allows maximum {$limits['max_descriptions']} descriptions (provided: " . count($descriptions) . ")";
+            $errors[] = "Google RSA allows maximum {$limits['max_descriptions']} descriptions (provided: ".count($descriptions).')';
         }
 
         // Validate headline lengths
         foreach ($headlines as $index => $headline) {
             $length = mb_strlen($headline);
             if ($length > $limits['headline']) {
-                $errors[] = "Headline " . ($index + 1) . " exceeds {$limits['headline']} characters (length: {$length})";
+                $errors[] = 'Headline '.($index + 1)." exceeds {$limits['headline']} characters (length: {$length})";
             }
             if (empty(trim($headline))) {
-                $errors[] = "Headline " . ($index + 1) . " cannot be empty";
+                $errors[] = 'Headline '.($index + 1).' cannot be empty';
             }
         }
 
@@ -75,10 +75,10 @@ class AdCopyValidator
         foreach ($descriptions as $index => $description) {
             $length = mb_strlen($description);
             if ($length > $limits['description']) {
-                $errors[] = "Description " . ($index + 1) . " exceeds {$limits['description']} characters (length: {$length})";
+                $errors[] = 'Description '.($index + 1)." exceeds {$limits['description']} characters (length: {$length})";
             }
             if (empty(trim($description))) {
-                $errors[] = "Description " . ($index + 1) . " cannot be empty";
+                $errors[] = 'Description '.($index + 1).' cannot be empty';
             }
         }
 
@@ -88,9 +88,9 @@ class AdCopyValidator
     /**
      * Validate Google Display Ad copy.
      *
-     * @param string $headline Short headline
-     * @param string|null $longHeadline Long headline (optional)
-     * @param string $description Description text
+     * @param  string  $headline  Short headline
+     * @param  string|null  $longHeadline  Long headline (optional)
+     * @param  string  $description  Description text
      * @return array Validation errors (empty if valid)
      */
     public function validateGoogleDisplay(
@@ -107,7 +107,7 @@ class AdCopyValidator
             $errors[] = "Headline exceeds {$limits['headline']} characters (length: {$headlineLength})";
         }
         if (empty(trim($headline))) {
-            $errors[] = "Headline cannot be empty";
+            $errors[] = 'Headline cannot be empty';
         }
 
         // Validate long headline if provided
@@ -124,7 +124,7 @@ class AdCopyValidator
             $errors[] = "Description exceeds {$limits['description']} characters (length: {$descriptionLength})";
         }
         if (empty(trim($description))) {
-            $errors[] = "Description cannot be empty";
+            $errors[] = 'Description cannot be empty';
         }
 
         return $errors;
@@ -133,9 +133,9 @@ class AdCopyValidator
     /**
      * Validate Facebook Ad copy.
      *
-     * @param string $headline Primary text/headline
-     * @param string $body Ad body text
-     * @param string|null $description Link description (optional)
+     * @param  string  $headline  Primary text/headline
+     * @param  string  $body  Ad body text
+     * @param  string|null  $description  Link description (optional)
      * @return array Validation errors (empty if valid)
      */
     public function validateFacebook(
@@ -152,7 +152,7 @@ class AdCopyValidator
             $errors[] = "Headline exceeds {$limits['headline']} characters (length: {$headlineLength})";
         }
         if (empty(trim($headline))) {
-            $errors[] = "Headline cannot be empty";
+            $errors[] = 'Headline cannot be empty';
         }
 
         // Validate body
@@ -161,7 +161,7 @@ class AdCopyValidator
             $errors[] = "Body text exceeds {$limits['body']} characters (length: {$bodyLength})";
         }
         if (empty(trim($body))) {
-            $errors[] = "Body text cannot be empty";
+            $errors[] = 'Body text cannot be empty';
         }
 
         // Validate description if provided
@@ -178,9 +178,9 @@ class AdCopyValidator
     /**
      * Auto-truncate text to fit character limit while preserving words.
      *
-     * @param string $text Text to truncate
-     * @param int $limit Character limit
-     * @param string $suffix Suffix to append (default: "...")
+     * @param  string  $text  Text to truncate
+     * @param  int  $limit  Character limit
+     * @param  string  $suffix  Suffix to append (default: "...")
      * @return string Truncated text
      */
     public function truncate(string $text, int $limit, string $suffix = '...'): string
@@ -191,23 +191,23 @@ class AdCopyValidator
 
         // Account for suffix length
         $maxLength = $limit - mb_strlen($suffix);
-        
+
         // Truncate at word boundary
         $truncated = Str::substr($text, 0, $maxLength);
         $lastSpace = mb_strrpos($truncated, ' ');
-        
+
         if ($lastSpace !== false) {
             $truncated = Str::substr($truncated, 0, $lastSpace);
         }
 
-        return $truncated . $suffix;
+        return $truncated.$suffix;
     }
 
     /**
      * Get character limits for a specific platform and field.
      *
-     * @param string $platform 'google_rsa', 'google_display', or 'facebook'
-     * @param string $field Field name (e.g., 'headline', 'description')
+     * @param  string  $platform  'google_rsa', 'google_display', or 'facebook'
+     * @param  string  $field  Field name (e.g., 'headline', 'description')
      * @return int|null Character limit or null if not found
      */
     public function getLimit(string $platform, string $field): ?int
@@ -218,7 +218,7 @@ class AdCopyValidator
     /**
      * Get all limits for a platform.
      *
-     * @param string $platform 'google_rsa', 'google_display', or 'facebook'
+     * @param  string  $platform  'google_rsa', 'google_display', or 'facebook'
      * @return array|null Limits array or null if platform not found
      */
     public function getLimits(string $platform): ?array

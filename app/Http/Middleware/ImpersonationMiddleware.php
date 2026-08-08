@@ -16,7 +16,7 @@ class ImpersonationMiddleware
     {
         if (session()->has('impersonate_user_id')) {
             $impersonatedUser = \App\Models\User::find(session('impersonate_user_id'));
-            
+
             if ($impersonatedUser) {
                 auth()->setUser($impersonatedUser);
             }

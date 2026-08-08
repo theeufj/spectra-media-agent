@@ -15,6 +15,7 @@ class DailyPerformanceReport extends Mailable
     use Queueable, SerializesModels;
 
     public User $user;
+
     public array $summary;
 
     public function __construct(User $user, array $summary)

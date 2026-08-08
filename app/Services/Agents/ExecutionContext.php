@@ -12,18 +12,24 @@ use App\Models\Strategy;
 
 /**
  * Represents the execution context for deployment.
- * 
+ *
  * Contains all necessary information about the campaign, strategy, customer,
  * available assets, and platform status needed for AI-powered execution planning.
  */
 class ExecutionContext
 {
     public Strategy $strategy;
+
     public Campaign $campaign;
+
     public Customer $customer;
+
     public ?BrandGuideline $brandGuideline;
+
     public array $availableAssets;
+
     public array $platformStatus;
+
     public array $metadata;
 
     public function __construct(
@@ -46,12 +52,11 @@ class ExecutionContext
 
     /**
      * Create an ExecutionContext from models with asset analysis.
-     * 
-     * @param Strategy $strategy The strategy to execute
-     * @param Campaign $campaign The parent campaign
-     * @param Customer $customer The customer
-     * @param array $platformStatus Platform-specific status information
-     * @return self
+     *
+     * @param  Strategy  $strategy  The strategy to execute
+     * @param  Campaign  $campaign  The parent campaign
+     * @param  Customer  $customer  The customer
+     * @param  array  $platformStatus  Platform-specific status information
      */
     public static function create(
         Strategy $strategy,
@@ -74,7 +79,7 @@ class ExecutionContext
             $availableAssets['image_details'] = $strategy->imageCollaterals()
                 ->where('is_active', true)
                 ->get()
-                ->map(fn($img) => [
+                ->map(fn ($img) => [
                     'id' => $img->id,
                     's3_path' => $img->s3_path,
                     'dimensions' => $img->dimensions ?? null,
@@ -85,7 +90,7 @@ class ExecutionContext
             $availableAssets['video_details'] = $strategy->videoCollaterals()
                 ->where('is_active', true)
                 ->get()
-                ->map(fn($vid) => [
+                ->map(fn ($vid) => [
                     'id' => $vid->id,
                     's3_path' => $vid->s3_path,
                     'duration' => $vid->duration ?? null,
@@ -111,9 +116,9 @@ class ExecutionContext
             availableAssets: $availableAssets,
             platformStatus: $platformStatus,
             metadata: [
-                'prior_performance'   => $priorPerformance,
+                'prior_performance' => $priorPerformance,
                 'fb_learning_outcome' => $fbLearningOutcome,
-                'quality_score'       => $qualityScoreContext,
+                'quality_score' => $qualityScoreContext,
             ]
         );
     }
@@ -129,12 +134,12 @@ class ExecutionContext
 
         if ($google && $google->days > 0) {
             $prior['google'] = [
-                'avg_ctr'           => round(($google->avg_ctr ?? 0) * 100, 2),
-                'avg_cpc'           => round($google->avg_cpc ?? 0, 2),
-                'avg_cpa'           => round($google->avg_cpa ?? 0, 2),
+                'avg_ctr' => round(($google->avg_ctr ?? 0) * 100, 2),
+                'avg_cpc' => round($google->avg_cpc ?? 0, 2),
+                'avg_cpa' => round($google->avg_cpa ?? 0, 2),
                 'total_conversions' => round($google->total_conversions ?? 0, 1),
-                'total_spend'       => round($google->total_cost ?? 0, 2),
-                'days_of_data'      => $google->days,
+                'total_spend' => round($google->total_cost ?? 0, 2),
+                'days_of_data' => $google->days,
             ];
         }
 
@@ -145,12 +150,12 @@ class ExecutionContext
 
         if ($facebook && $facebook->days > 0) {
             $prior['facebook'] = [
-                'avg_ctr'           => round(($facebook->avg_ctr ?? 0) * 100, 2),
-                'avg_cpc'           => round($facebook->avg_cpc ?? 0, 2),
-                'avg_cpa'           => round($facebook->avg_cpa ?? 0, 2),
+                'avg_ctr' => round(($facebook->avg_ctr ?? 0) * 100, 2),
+                'avg_cpc' => round($facebook->avg_cpc ?? 0, 2),
+                'avg_cpa' => round($facebook->avg_cpa ?? 0, 2),
                 'total_conversions' => round($facebook->total_conversions ?? 0, 1),
-                'total_spend'       => round($facebook->total_cost ?? 0, 2),
-                'days_of_data'      => $facebook->days,
+                'total_spend' => round($facebook->total_cost ?? 0, 2),
+                'days_of_data' => $facebook->days,
             ];
         }
 
@@ -169,13 +174,13 @@ class ExecutionContext
             ->latest()
             ->first();
 
-        if (!$record || empty($record->details)) {
+        if (! $record || empty($record->details)) {
             return null;
         }
 
         return [
-            'actions'     => $record->details['actions'] ?? [],
-            'flagged'     => $record->details['flagged'] ?? [],
+            'actions' => $record->details['actions'] ?? [],
+            'flagged' => $record->details['flagged'] ?? [],
             'recorded_at' => $record->created_at?->toDateString(),
         ];
     }
@@ -191,21 +196,21 @@ class ExecutionContext
             ->latest()
             ->first();
 
-        if (!$record) {
+        if (! $record) {
             return null;
         }
 
         return [
-            'action'      => $record->action,
+            'action' => $record->action,
             'description' => $record->description,
-            'details'     => $record->details ?? [],
+            'details' => $record->details ?? [],
             'recorded_at' => $record->created_at?->toDateString(),
         ];
     }
 
     /**
      * Convert context to array for passing to AI prompts.
-     * 
+     *
      * @return array Context as array suitable for prompt generation
      */
     public function toArray(): array
@@ -245,20 +250,21 @@ class ExecutionContext
 
     /**
      * Get campaign duration in days.
-     * 
+     *
      * @return int Number of days
      */
     public function getCampaignDurationDays(): int
     {
         $start = \Carbon\Carbon::parse($this->campaign->start_date);
         $end = \Carbon\Carbon::parse($this->campaign->end_date);
+
         return $start->diffInDays($end);
     }
 
     /**
      * Calculate daily budget for this strategy.
      * Uses the strategy-level budget if set, otherwise falls back to campaign budget split.
-     * 
+     *
      * @return float Daily budget
      */
     public function calculateDailyBudget(): float
@@ -273,13 +279,14 @@ class ExecutionContext
         if ($duration <= 0) {
             return 0;
         }
+
         return $this->campaign->total_budget / $duration;
     }
 
     /**
      * Check if specific asset type is available.
-     * 
-     * @param string $assetType Asset type (images, videos, ad_copies)
+     *
+     * @param  string  $assetType  Asset type (images, videos, ad_copies)
      * @return bool True if assets are available
      */
     public function hasAssetType(string $assetType): bool

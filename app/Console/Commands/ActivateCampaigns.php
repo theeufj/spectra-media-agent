@@ -22,6 +22,7 @@ class ActivateCampaigns extends Command
         if (CampaignStatusHelper::isTestingMode()) {
             $this->warn('Campaign testing mode is ON — campaigns are deployed as PAUSED.');
             $this->warn('Disable testing mode in Settings before activating.');
+
             return self::FAILURE;
         }
 
@@ -38,6 +39,7 @@ class ActivateCampaigns extends Command
 
         if ($strategies->isEmpty()) {
             $this->info('No deployed strategies found to activate.');
+
             return self::SUCCESS;
         }
 
@@ -50,8 +52,9 @@ class ActivateCampaigns extends Command
             $campaign = $strategy->campaign;
             $customer = $campaign?->customer;
 
-            if (!$customer) {
+            if (! $customer) {
                 $this->warn("Strategy {$strategy->id}: No customer found, skipping.");
+
                 continue;
             }
 
@@ -60,6 +63,7 @@ class ActivateCampaigns extends Command
 
             if ($this->option('dry-run')) {
                 $this->line("  [DRY RUN] Would activate: {$label}");
+
                 continue;
             }
 
@@ -73,15 +77,16 @@ class ActivateCampaigns extends Command
                 $activated = $this->activateFacebook($strategy, $campaign, $customer);
             } else {
                 $this->warn("    Unknown platform '{$strategy->platform}', skipping.");
+
                 continue;
             }
 
             if ($activated) {
                 $strategy->update(['deployment_status' => 'active']);
-                $this->info("    Activated successfully.");
+                $this->info('    Activated successfully.');
                 $successCount++;
             } else {
-                $this->error("    Activation failed.");
+                $this->error('    Activation failed.');
                 $failCount++;
             }
         }
@@ -101,8 +106,9 @@ class ActivateCampaigns extends Command
             ?? $campaign->google_ads_campaign_id
             ?? null;
 
-        if (!$googleCampaignId || !$customer->google_ads_customer_id) {
-            $this->warn("    Missing Google Ads campaign ID or customer ID.");
+        if (! $googleCampaignId || ! $customer->google_ads_customer_id) {
+            $this->warn('    Missing Google Ads campaign ID or customer ID.');
+
             return false;
         }
 
@@ -120,8 +126,9 @@ class ActivateCampaigns extends Command
         $fbCampaignId = $strategy->execution_result['platform_ids']['campaign_id']
             ?? null;
 
-        if (!$fbCampaignId || !$customer->facebook_ads_account_id) {
-            $this->warn("    Missing Facebook campaign ID or ad account ID.");
+        if (! $fbCampaignId || ! $customer->facebook_ads_account_id) {
+            $this->warn('    Missing Facebook campaign ID or ad account ID.');
+
             return false;
         }
 

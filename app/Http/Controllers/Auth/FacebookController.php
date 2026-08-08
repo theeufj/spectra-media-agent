@@ -3,13 +3,10 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
-use App\Models\Customer;
 use App\Mail\WelcomeEmail;
-use Illuminate\Http\Request;
+use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Laravel\Socialite\Facades\Socialite;
@@ -33,7 +30,7 @@ class FacebookController extends Controller
 
             // Facebook might not provide an email if the user hasn't granted permission
             $email = $facebookUser->getEmail();
-            if (!$email) {
+            if (! $email) {
                 return redirect()->route('login')->with('error', 'Unable to retrieve email from Facebook. Please use a different login method.');
             }
 
@@ -45,7 +42,7 @@ class FacebookController extends Controller
             ]);
 
             // Always mark email as verified when signing in via Facebook (Facebook has verified it)
-            if (!$user->email_verified_at) {
+            if (! $user->email_verified_at) {
                 $user->email_verified_at = now();
                 $user->save();
             }
@@ -62,7 +59,8 @@ class FacebookController extends Controller
 
             return redirect()->route('dashboard');
         } catch (\Exception $e) {
-            \Log::error('Facebook OAuth error: ' . $e->getMessage());
+            \Log::error('Facebook OAuth error: '.$e->getMessage());
+
             return redirect()->route('login')->with('error', 'Facebook authentication failed. Please try again.');
         }
     }

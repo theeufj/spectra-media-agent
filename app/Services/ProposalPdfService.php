@@ -29,13 +29,14 @@ class ProposalPdfService
                 ->showBackground()
                 ->pdf();
 
-            $filename = 'proposals/' . $proposal->id . '_' . time() . '.pdf';
+            $filename = 'proposals/'.$proposal->id.'_'.time().'.pdf';
             Storage::disk('local')->put($filename, $pdf);
 
             return $filename;
 
         } catch (\Throwable $e) {
             Log::error("ProposalPdfService: Failed to generate PDF for proposal #{$proposal->id}: {$e->getMessage()}");
+
             return null;
         }
     }
@@ -45,7 +46,7 @@ class ProposalPdfService
      */
     public function getPdfContent(Proposal $proposal): ?string
     {
-        if (!$proposal->pdf_path || !Storage::disk('local')->exists($proposal->pdf_path)) {
+        if (! $proposal->pdf_path || ! Storage::disk('local')->exists($proposal->pdf_path)) {
             // Regenerate from stored data
             if ($proposal->proposal_data) {
                 $html = view('proposal-pdf', [

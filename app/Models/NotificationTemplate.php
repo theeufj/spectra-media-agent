@@ -15,9 +15,11 @@ use Illuminate\Support\Facades\Cache;
  */
 class NotificationTemplate extends Model
 {
-    public const RECIPIENTS_ADMINS    = 'admins';
+    public const RECIPIENTS_ADMINS = 'admins';
+
     public const RECIPIENTS_CUSTOMERS = 'customers';
-    public const RECIPIENTS_BOTH      = 'both';
+
+    public const RECIPIENTS_BOTH = 'both';
 
     protected $fillable = [
         'key', 'category', 'label', 'description', 'channel',
@@ -25,7 +27,7 @@ class NotificationTemplate extends Model
     ];
 
     protected $casts = [
-        'enabled'   => 'boolean',
+        'enabled' => 'boolean',
         'variables' => 'array',
     ];
 

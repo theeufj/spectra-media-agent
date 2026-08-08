@@ -4,10 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Models\Customer;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
-use App\Models\MicrosoftAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\LinkedInAdsPerformanceData;
+use App\Models\MicrosoftAdsPerformanceData;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Inertia\Inertia;
@@ -18,7 +18,7 @@ class RoiDashboardController extends Controller
     {
         $customer = $this->getActiveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('dashboard');
         }
 
@@ -129,7 +129,7 @@ class RoiDashboardController extends Controller
         }
 
         // Sort by cost descending
-        usort($breakdown, fn($a, $b) => $b['cost'] <=> $a['cost']);
+        usort($breakdown, fn ($a, $b) => $b['cost'] <=> $a['cost']);
 
         return $breakdown;
     }
@@ -155,7 +155,7 @@ class RoiDashboardController extends Controller
 
             foreach ($rows as $row) {
                 $date = $row->date;
-                if (!isset($dailyMap[$date])) {
+                if (! isset($dailyMap[$date])) {
                     $dailyMap[$date] = ['date' => $date, 'cost' => 0, 'revenue' => 0, 'conversions' => 0];
                 }
                 $dailyMap[$date]['cost'] += (float) $row->cost;
@@ -166,7 +166,7 @@ class RoiDashboardController extends Controller
 
         ksort($dailyMap);
 
-        return array_map(fn($d) => [
+        return array_map(fn ($d) => [
             'date' => $d['date'],
             'cost' => round($d['cost'], 2),
             'revenue' => round($d['revenue'], 2),

@@ -45,7 +45,7 @@ class CleanupTemporaryFiles implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('CleanupTemporaryFiles failed: ' . $exception->getMessage(), [
+        Log::error('CleanupTemporaryFiles failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

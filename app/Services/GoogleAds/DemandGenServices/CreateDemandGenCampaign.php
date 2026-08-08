@@ -2,23 +2,21 @@
 
 namespace App\Services\GoogleAds\DemandGenServices;
 
-use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest;
-use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V22\Common\MaximizeConversionValue;
-use Google\Ads\GoogleAds\V22\Common\TargetCpa;
-use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use Google\ApiCore\ApiException;
 use App\Models\Customer;
 use App\Services\CampaignStatusHelper;
+use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Campaign;
+use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
+use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
+use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
+use Google\ApiCore\ApiException;
 
 class CreateDemandGenCampaign extends BaseGoogleAdsService
 {
@@ -33,8 +31,8 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
      * Demand Gen campaigns serve across YouTube, Gmail, and Google Discover feeds
      * using image and video assets for awareness and mid-funnel engagement.
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param array $campaignData Campaign details including businessName, budget, startDate, endDate, etc.
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  array  $campaignData  Campaign details including businessName, budget, startDate, endDate, etc.
      * @return string|null The resource name of the created campaign, or null on failure.
      */
     public function __invoke(string $customerId, array $campaignData): ?string
@@ -45,12 +43,13 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
         $campaignBudgetResourceName = $this->createCampaignBudget($customerId, $campaignData['budget']);
         if (is_null($campaignBudgetResourceName)) {
             $this->logError("Failed to create campaign budget for Demand Gen campaign, customer $customerId.");
+
             return null;
         }
 
         // 2. Create Campaign
         $campaign = new Campaign([
-            'name' => $campaignData['businessName'] . ' Demand Gen Campaign - ' . uniqid(),
+            'name' => $campaignData['businessName'].' Demand Gen Campaign - '.uniqid(),
             'advertising_channel_type' => AdvertisingChannelType::DEMAND_GEN,
             'campaign_budget' => $campaignBudgetResourceName,
             'status' => CampaignStatusHelper::getGoogleAdsStatus(),
@@ -65,10 +64,10 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
                 'target_cpa_micros' => $campaignData['targetCpaMicros'],
             ]));
         } else {
-            $campaign->setMaximizeConversions(new MaximizeConversions());
+            $campaign->setMaximizeConversions(new MaximizeConversions);
         }
 
-        $campaignOperation = new CampaignOperation();
+        $campaignOperation = new CampaignOperation;
         $campaignOperation->setCreate($campaign);
 
         try {
@@ -79,10 +78,12 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
             ]);
             $response = $campaignServiceClient->mutateCampaigns($request);
             $newCampaignResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Demand Gen campaign: " . $newCampaignResourceName);
+            $this->logInfo('Successfully created Demand Gen campaign: '.$newCampaignResourceName);
+
             return $newCampaignResourceName;
         } catch (GoogleAdsException|ApiException $e) {
-            $this->logError("Error creating Demand Gen campaign for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Demand Gen campaign for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }
@@ -90,13 +91,13 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
     private function createCampaignBudget(string $customerId, float $budgetAmount): ?string
     {
         $campaignBudget = new CampaignBudget([
-            'name' => 'Daily Budget - ' . uniqid(),
+            'name' => 'Daily Budget - '.uniqid(),
             'amount_micros' => (int) ($budgetAmount * 1_000_000),
             'delivery_method' => BudgetType::STANDARD,
             'explicitly_shared' => false,
         ]);
 
-        $campaignBudgetOperation = new CampaignBudgetOperation();
+        $campaignBudgetOperation = new CampaignBudgetOperation;
         $campaignBudgetOperation->setCreate($campaignBudget);
 
         try {
@@ -107,10 +108,12 @@ class CreateDemandGenCampaign extends BaseGoogleAdsService
             ]);
             $response = $campaignBudgetServiceClient->mutateCampaignBudgets($request);
             $newBudgetResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Demand Gen campaign budget: " . $newBudgetResourceName);
+            $this->logInfo('Successfully created Demand Gen campaign budget: '.$newBudgetResourceName);
+
             return $newBudgetResourceName;
         } catch (GoogleAdsException|ApiException $e) {
-            $this->logError("Error creating Demand Gen campaign budget for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Demand Gen campaign budget for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

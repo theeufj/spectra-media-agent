@@ -9,45 +9,47 @@ use Illuminate\Support\Facades\Log;
 class YouTubeAuthController extends Controller
 {
     private const SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
+
     private const AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
+
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
     public function redirect()
     {
-        $clientId    = config('services.youtube.client_id');
+        $clientId = config('services.youtube.client_id');
         $redirectUri = 'https://sitetospend.com/youtube/auth/callback';
 
-        if (!$clientId) {
+        if (! $clientId) {
             abort(500, 'GOOGLE_YOUTUBE_CLIENT_ID is not set in .env');
         }
 
         Log::info('YouTubeAuthController: Redirecting to Google', ['redirect_uri' => $redirectUri]);
 
         $params = http_build_query([
-            'client_id'     => $clientId,
-            'redirect_uri'  => $redirectUri,
+            'client_id' => $clientId,
+            'redirect_uri' => $redirectUri,
             'response_type' => 'code',
-            'scope'         => self::SCOPE,
-            'access_type'   => 'offline',
-            'prompt'        => 'consent', // Force consent so we always get a refresh_token
+            'scope' => self::SCOPE,
+            'access_type' => 'offline',
+            'prompt' => 'consent', // Force consent so we always get a refresh_token
         ]);
 
-        return redirect(self::AUTH_URL . '?' . $params);
+        return redirect(self::AUTH_URL.'?'.$params);
     }
 
     public function callback(Request $request)
     {
         Log::info('YouTubeAuthController: Callback received', [
-            'full_url'    => $request->fullUrl(),
-            'query'       => $request->all(),
+            'full_url' => $request->fullUrl(),
+            'query' => $request->all(),
             'query_string' => $request->server('QUERY_STRING'),
         ]);
 
         if ($request->has('error')) {
-            $error       = $request->get('error');
+            $error = $request->get('error');
             $description = $request->get('error_description', '');
             Log::error('YouTubeAuthController: Google returned error', [
-                'error'       => $error,
+                'error' => $error,
                 'description' => $description,
             ]);
             $hint = $error === 'redirect_uri_mismatch'
@@ -58,37 +60,37 @@ class YouTubeAuthController extends Controller
 
         $code = $request->get('code');
 
-        if (!$code) {
+        if (! $code) {
             Log::error('YouTubeAuthController: No code in callback', $request->all());
             abort(400, 'No authorization code received. Visit /youtube/auth to start the flow.');
         }
 
         Log::info('YouTubeAuthController: Got authorization code, exchanging for tokens');
 
-        $clientId     = config('services.youtube.client_id');
+        $clientId = config('services.youtube.client_id');
         $clientSecret = config('services.youtube.client_secret');
-        $redirectUri  = 'https://sitetospend.com/youtube/auth/callback';
+        $redirectUri = 'https://sitetospend.com/youtube/auth/callback';
 
         $response = Http::asForm()->post(self::TOKEN_URL, [
-            'code'          => $code,
-            'client_id'     => $clientId,
+            'code' => $code,
+            'client_id' => $clientId,
             'client_secret' => $clientSecret,
-            'redirect_uri'  => $redirectUri,
-            'grant_type'    => 'authorization_code',
+            'redirect_uri' => $redirectUri,
+            'grant_type' => 'authorization_code',
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             Log::error('YouTubeAuthController: Token exchange failed', [
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
             ]);
-            abort(500, 'Token exchange failed: ' . $response->body());
+            abort(500, 'Token exchange failed: '.$response->body());
         }
 
-        $data         = $response->json();
+        $data = $response->json();
         $refreshToken = $data['refresh_token'] ?? null;
 
-        if (!$refreshToken) {
+        if (! $refreshToken) {
             abort(500, 'No refresh_token in response — try visiting /youtube/auth again to force re-consent.');
         }
 
@@ -104,7 +106,7 @@ class YouTubeAuthController extends Controller
 
     private function writeToEnv(string $key, string $value): void
     {
-        $envPath    = base_path('.env');
+        $envPath = base_path('.env');
         $envContent = file_get_contents($envPath);
 
         if (str_contains($envContent, "{$key}=")) {

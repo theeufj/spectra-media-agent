@@ -21,14 +21,14 @@ class GenerateStrategyCollateral implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $timeout = 1800; // 30 minutes timeout
 
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
         protected int $userId
-    ) {
-    }
+    ) {}
 
     public function handle(): void
     {
@@ -38,6 +38,7 @@ class GenerateStrategyCollateral implements ShouldQueue
             // Verify strategy is signed off
             if (is_null($this->strategy->signed_off_at)) {
                 Log::warning("Strategy ID {$this->strategy->id} is not signed off, skipping collateral generation");
+
                 return;
             }
 
@@ -51,6 +52,7 @@ class GenerateStrategyCollateral implements ShouldQueue
 
             if ($recentlyGenerated) {
                 Log::info("Strategy ID {$this->strategy->id} collateral was just generated, skipping duplicate dispatch");
+
                 return;
             }
 
@@ -59,7 +61,7 @@ class GenerateStrategyCollateral implements ShouldQueue
             Log::info("Collateral generation dispatched for Strategy ID: {$this->strategy->id}");
 
         } catch (\Exception $e) {
-            Log::error("Error in GenerateStrategyCollateral job for Strategy ID {$this->strategy->id}: " . $e->getMessage());
+            Log::error("Error in GenerateStrategyCollateral job for Strategy ID {$this->strategy->id}: ".$e->getMessage());
             $this->fail($e);
         }
     }
@@ -75,7 +77,7 @@ class GenerateStrategyCollateral implements ShouldQueue
 
         // Generate 3 images per strategy (respecting free-tier limit)
         for ($i = 0; $i < 3; $i++) {
-            if (!ImageCollateral::canGenerateForCampaign($this->campaign)) {
+            if (! ImageCollateral::canGenerateForCampaign($this->campaign)) {
                 Log::info("Image limit reached for Campaign ID: {$this->campaign->id}, skipping remaining image generation");
                 break;
             }
@@ -118,23 +120,23 @@ class GenerateStrategyCollateral implements ShouldQueue
     private function hasActionableVideoContent(string $videoStrategy): bool
     {
         $content = trim($videoStrategy);
-        
+
         if (empty($content)) {
             return false;
         }
-        
+
         // Check if it's purely "N/A" or "Not Applicable"
         if (preg_match('/^(n\/a|not applicable|none)\.?$/i', $content)) {
             return false;
         }
-        
+
         // If content is short and just says "N/A for [reason]" without alternatives
-        if (strlen($content) < 100 && 
-            stripos($content, 'n/a') !== false && 
-            !preg_match('/\b(however|but|if|when|use|create|generate|show|feature|include)\b/i', $content)) {
+        if (strlen($content) < 100 &&
+            stripos($content, 'n/a') !== false &&
+            ! preg_match('/\b(however|but|if|when|use|create|generate|show|feature|include)\b/i', $content)) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -143,7 +145,7 @@ class GenerateStrategyCollateral implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateStrategyCollateral failed: ' . $exception->getMessage(), [
+        Log::error('GenerateStrategyCollateral failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

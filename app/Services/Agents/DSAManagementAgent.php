@@ -8,11 +8,11 @@ use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
+use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\DSAServices\AddDSATarget;
 use App\Services\GoogleAds\DSAServices\CreateDSAAdGroup;
 use App\Services\GoogleAds\DSAServices\CreateDSACampaign;
 use App\Services\GoogleAds\DSAServices\CreateExpandedDynamicSearchAd;
-use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -32,15 +32,15 @@ class DSAManagementAgent
 
     public function manage(Customer $customer): array
     {
-        if (!$customer->google_ads_customer_id || !$customer->website) {
+        if (! $customer->google_ads_customer_id || ! $customer->website) {
             return ['skipped' => true, 'reason' => 'No Google Ads account or website'];
         }
 
         $customerId = $customer->cleanGoogleCustomerId();
-        $domain     = parse_url($customer->website, PHP_URL_HOST) ?? $customer->website;
-        $language   = 'en';
+        $domain = parse_url($customer->website, PHP_URL_HOST) ?? $customer->website;
+        $language = 'en';
 
-        $pages     = KnowledgeBase::where('user_id', $customer->users()->value('id'))
+        $pages = KnowledgeBase::where('user_id', $customer->users()->value('id'))
             ->whereNotNull('url')
             ->get();
 
@@ -49,8 +49,8 @@ class DSAManagementAgent
         }
 
         // Check if DSA campaign already exists
-        $dsaCampaignName = $customer->name . ' — DSA';
-        $createCampaign  = new CreateDSACampaign($customer);
+        $dsaCampaignName = $customer->name.' — DSA';
+        $createCampaign = new CreateDSACampaign($customer);
 
         // Budget: 20% of primary campaign average daily budget or $20 floor
         $primaryBudget = $customer->campaigns()
@@ -66,7 +66,7 @@ class DSAManagementAgent
             $dsaBudget
         );
 
-        if (!$campaignResource) {
+        if (! $campaignResource) {
             return ['success' => false, 'error' => 'Failed to create DSA campaign'];
         }
 
@@ -74,22 +74,25 @@ class DSAManagementAgent
         $sections = $this->groupPagesBySection($pages);
 
         $created = [];
-        $errors  = [];
+        $errors = [];
 
         foreach ($sections as $sectionName => $sectionPages) {
-            $adGroupName    = $dsaCampaignName . ' — ' . ucfirst($sectionName);
-            $createAdGroup  = new CreateDSAAdGroup($customer);
+            $adGroupName = $dsaCampaignName.' — '.ucfirst($sectionName);
+            $createAdGroup = new CreateDSAAdGroup($customer);
             $adGroupResource = ($createAdGroup)($customerId, $campaignResource, $adGroupName);
 
-            if (!$adGroupResource) {
+            if (! $adGroupResource) {
                 $errors[] = "Failed to create ad group: {$adGroupName}";
+
                 continue;
             }
 
             // Add URL targets for each page in this section
             $addTarget = new AddDSATarget($customer);
             foreach ($sectionPages as $page) {
-                if (!$page->url) continue;
+                if (! $page->url) {
+                    continue;
+                }
                 ($addTarget)(
                     $customerId,
                     $adGroupResource,
@@ -102,38 +105,38 @@ class DSAManagementAgent
             // Generate AI descriptions for this section
             $descriptions = $this->generateDescriptions($customer, $sectionName, $sectionPages->pluck('content')->filter()->implode("\n\n"));
 
-            if (!empty($descriptions)) {
+            if (! empty($descriptions)) {
                 $createAd = new CreateExpandedDynamicSearchAd($customer);
                 ($createAd)($customerId, $adGroupResource, $descriptions);
             }
 
             $created[] = [
-                'ad_group'  => $adGroupName,
-                'pages'     => $sectionPages->count(),
+                'ad_group' => $adGroupName,
+                'pages' => $sectionPages->count(),
             ];
         }
 
         AgentActivity::record(
             'dsa',
             'dsa_campaign_setup',
-            "Created DSA campaign with " . count($created) . " ad group(s) for \"{$customer->name}\"",
+            'Created DSA campaign with '.count($created)." ad group(s) for \"{$customer->name}\"",
             $customer->id,
             null,
             ['campaign' => $dsaCampaignName, 'dsa_campaign_resource' => $campaignResource, 'ad_groups' => $created, 'errors' => $errors]
         );
 
         Log::info('DSAManagementAgent: Setup complete', [
-            'customer_id'      => $customer->id,
-            'campaign'         => $dsaCampaignName,
+            'customer_id' => $customer->id,
+            'campaign' => $dsaCampaignName,
             'ad_groups_created' => count($created),
         ]);
 
         return [
-            'success'               => true,
-            'campaign'              => $dsaCampaignName,
+            'success' => true,
+            'campaign' => $dsaCampaignName,
             'dsa_campaign_resource' => $campaignResource,
-            'created'               => $created,
-            'errors'                => $errors,
+            'created' => $created,
+            'errors' => $errors,
         ];
     }
 
@@ -143,7 +146,7 @@ class DSAManagementAgent
      */
     public function promoteHighPerformingTerms(Customer $customer): array
     {
-        if (!$customer->google_ads_customer_id) {
+        if (! $customer->google_ads_customer_id) {
             return ['skipped' => true, 'reason' => 'No Google Ads account'];
         }
 
@@ -154,15 +157,15 @@ class DSAManagementAgent
 
         $dsaResource = $dsaActivity?->details['dsa_campaign_resource'] ?? null;
 
-        if (!$dsaResource) {
+        if (! $dsaResource) {
             return ['skipped' => true, 'reason' => 'No DSA campaign resource found'];
         }
 
-        $customerId   = $customer->cleanGoogleCustomerId();
+        $customerId = $customer->cleanGoogleCustomerId();
         $searchReport = new GetSearchTermsReport($customer);
-        $terms        = ($searchReport)($customerId, $dsaResource, 'LAST_30_DAYS');
+        $terms = ($searchReport)($customerId, $dsaResource, 'LAST_30_DAYS');
 
-        $candidates = array_filter($terms, fn($t) => ($t['clicks'] ?? 0) >= 5 || ($t['conversions'] ?? 0) >= 1);
+        $candidates = array_filter($terms, fn ($t) => ($t['clicks'] ?? 0) >= 5 || ($t['conversions'] ?? 0) >= 1);
 
         if (empty($candidates)) {
             return ['promoted' => 0, 'reason' => 'No high-performing terms found'];
@@ -173,11 +176,11 @@ class DSAManagementAgent
             ->whereNotNull('google_ads_campaign_id')
             ->get();
 
-        $addKeyword   = new AddKeyword($customer);
-        $promotedKey  = "dsa_promoted:{$customer->id}";
+        $addKeyword = new AddKeyword($customer);
+        $promotedKey = "dsa_promoted:{$customer->id}";
         $alreadyAdded = Cache::get($promotedKey, []);
-        $promoted     = [];
-        $skipped      = 0;
+        $promoted = [];
+        $skipped = 0;
 
         foreach ($campaigns as $campaign) {
             $adGroupResource = $campaign->strategies()
@@ -185,14 +188,15 @@ class DSAManagementAgent
                 ->whereNotNull('google_ads_ad_group_id')
                 ->value('google_ads_ad_group_id');
 
-            if (!$adGroupResource) {
+            if (! $adGroupResource) {
                 continue;
             }
 
             foreach ($candidates as $term) {
                 $text = $term['search_term'] ?? '';
-                if (!$text || in_array($text, $alreadyAdded, true)) {
+                if (! $text || in_array($text, $alreadyAdded, true)) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -200,18 +204,18 @@ class DSAManagementAgent
 
                 if ($result) {
                     $alreadyAdded[] = $text;
-                    $promoted[]     = ['keyword' => $text, 'campaign_id' => $campaign->id];
+                    $promoted[] = ['keyword' => $text, 'campaign_id' => $campaign->id];
                 }
             }
         }
 
         Cache::put($promotedKey, $alreadyAdded, now()->addDays(30));
 
-        if (!empty($promoted)) {
+        if (! empty($promoted)) {
             AgentActivity::record(
                 'dsa',
                 'dsa_terms_promoted',
-                "Promoted " . count($promoted) . " DSA search term(s) to regular campaign(s) for \"{$customer->name}\"",
+                'Promoted '.count($promoted)." DSA search term(s) to regular campaign(s) for \"{$customer->name}\"",
                 $customer->id,
                 null,
                 ['promoted' => $promoted, 'skipped' => $skipped]
@@ -219,7 +223,7 @@ class DSAManagementAgent
 
             Log::info('DSAManagementAgent: Promoted high-performing terms', [
                 'customer_id' => $customer->id,
-                'promoted'    => count($promoted),
+                'promoted' => count($promoted),
             ]);
         }
 
@@ -240,8 +244,8 @@ class DSAManagementAgent
 
             foreach ([
                 'service' => ['service', 'offering', 'solution', 'product'],
-                'blog'    => ['blog', 'article', 'news', 'post', 'insight'],
-                'about'   => ['about', 'team', 'story', 'mission'],
+                'blog' => ['blog', 'article', 'news', 'post', 'insight'],
+                'about' => ['about', 'team', 'story', 'mission'],
                 'contact' => ['contact', 'location', 'address'],
                 'pricing' => ['pricing', 'price', 'plan', 'cost'],
             ] as $name => $keywords) {
@@ -256,7 +260,7 @@ class DSAManagementAgent
             $sections[$section][] = $page;
         }
 
-        return array_map(fn($items) => collect($items), $sections);
+        return array_map(fn ($items) => collect($items), $sections);
     }
 
     private function generateDescriptions(Customer $customer, string $section, string $content): array
@@ -291,12 +295,12 @@ PROMPT;
                 return array_slice($data, 0, 2);
             }
         } catch (\Exception $e) {
-            Log::error('DSAManagementAgent: Description generation failed: ' . $e->getMessage());
+            Log::error('DSAManagementAgent: Description generation failed: '.$e->getMessage());
         }
 
         return [
-            'Discover our ' . $section . ' — Get in touch today.',
-            'Quality ' . $section . ' solutions. Contact us now.',
+            'Discover our '.$section.' — Get in touch today.',
+            'Quality '.$section.' solutions. Contact us now.',
         ];
     }
 }

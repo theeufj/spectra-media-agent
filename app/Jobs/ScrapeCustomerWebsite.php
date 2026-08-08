@@ -15,14 +15,14 @@ use Spatie\Browsershot\Browsershot;
 
 /**
  * ScrapeCustomerWebsite Job
- * 
+ *
  * Scrapes a customer's website and detects GTM installation.
- * 
+ *
  * This job is typically dispatched when:
  * 1. A new customer is created with a website URL
  * 2. A customer's website URL is updated
  * 3. Manual re-scan is requested via GTMSetupController::rescan()
- * 
+ *
  * @example
  * // Dispatch from CustomerController when customer is created/updated
  * if ($customer->website) {
@@ -45,8 +45,6 @@ class ScrapeCustomerWebsite implements ShouldQueue
 
     /**
      * Create a new job instance.
-     *
-     * @param Customer $customer
      */
     public function __construct(Customer $customer)
     {
@@ -64,21 +62,23 @@ class ScrapeCustomerWebsite implements ShouldQueue
                 'website' => $this->customer->website,
             ]);
 
-            if (!$this->customer->website) {
+            if (! $this->customer->website) {
                 Log::warning('Customer has no website URL', [
                     'customer_id' => $this->customer->id,
                 ]);
+
                 return;
             }
 
             // Fetch the HTML content of the customer's website
             $htmlContent = $this->fetchWebsiteContent($this->customer->website);
 
-            if (!$htmlContent) {
+            if (! $htmlContent) {
                 Log::warning('Failed to fetch website content', [
                     'customer_id' => $this->customer->id,
                     'website' => $this->customer->website,
                 ]);
+
                 return;
             }
 
@@ -111,11 +111,11 @@ class ScrapeCustomerWebsite implements ShouldQueue
                     'customer_id' => $this->customer->id,
                 ]);
             }
-            
+
             // Note: Brand guideline extraction will be triggered automatically
             // after CrawlSitemap batch completes and populates the knowledge base.
             // See CrawlSitemap job for batch completion callback.
-            
+
         } catch (\Exception $e) {
             Log::error('Error during website scrape and GTM detection', [
                 'customer_id' => $this->customer->id,
@@ -128,7 +128,7 @@ class ScrapeCustomerWebsite implements ShouldQueue
     /**
      * Fetch HTML content from the customer's website.
      *
-     * @param string $url The website URL to scrape
+     * @param  string  $url  The website URL to scrape
      * @return string|null The HTML content or null if fetch fails
      */
     protected function fetchWebsiteContent(string $url): ?string
@@ -176,13 +176,13 @@ class ScrapeCustomerWebsite implements ShouldQueue
     /**
      * Ensure URL has a protocol.
      *
-     * @param string $url The URL to check
+     * @param  string  $url  The URL to check
      * @return string URL with protocol
      */
     private function ensureProtocol(string $url): string
     {
-        if (!preg_match('~^(?:f|ht)tps?://~i', $url)) {
-            return 'https://' . $url;
+        if (! preg_match('~^(?:f|ht)tps?://~i', $url)) {
+            return 'https://'.$url;
         }
 
         return $url;
@@ -193,7 +193,7 @@ class ScrapeCustomerWebsite implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('ScrapeCustomerWebsite failed: ' . $exception->getMessage(), [
+        Log::error('ScrapeCustomerWebsite failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

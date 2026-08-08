@@ -17,17 +17,18 @@ class NotificationControllerTest extends TestCase
     use DatabaseTransactions;
 
     protected User $user;
+
     protected Customer $customer;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->user     = User::factory()->create();
+        $this->user = User::factory()->create();
         $this->customer = Customer::factory()->create();
         $this->customer->users()->attach($this->user->id, ['role' => 'owner']);
     }
@@ -45,14 +46,14 @@ class NotificationControllerTest extends TestCase
             ->getJson('/notifications');
 
         $response->assertStatus(200)
-                 ->assertJsonStructure(['data', 'links', 'meta']);
+            ->assertJsonStructure(['data', 'links', 'meta']);
     }
 
     public function test_mark_as_read_updates_notification(): void
     {
         $notification = Notification::factory()->create([
-            'user_id'   => $this->user->id,
-            'read_at'   => null,
+            'user_id' => $this->user->id,
+            'read_at' => null,
         ]);
 
         $response = $this->actingAs($this->user)

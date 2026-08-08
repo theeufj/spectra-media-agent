@@ -3,8 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Customer;
-use App\Models\User;
 use App\Models\KnowledgeBase;
+use App\Models\User;
 use App\Services\BrandGuidelineExtractorService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +18,7 @@ class BrandGuidelineExtractorTest extends TestCase
     public function it_extracts_brand_guidelines_from_cloudflare_homepage()
     {
         echo "\n🔍 Starting Brand Guideline Extraction Test\n";
-        
+
         // Skip if we don't have Gemini API key configured
         if (empty(config('services.gemini.api_key'))) {
             $this->markTestSkipped('Gemini API key not configured');
@@ -56,7 +56,7 @@ class BrandGuidelineExtractorTest extends TestCase
         echo "📸 Taking screenshot of Cloudflare homepage...\n";
         echo "⏳ This may take 30-60 seconds...\n";
         $service = app(BrandGuidelineExtractorService::class);
-        
+
         echo "🤖 Calling Gemini Vision AI for brand analysis...\n";
         $result = $service->extractGuidelines($customer);
         echo "✓ Brand guidelines extracted!\n";
@@ -67,26 +67,26 @@ class BrandGuidelineExtractorTest extends TestCase
         $this->assertNotNull($result, 'Brand guidelines should be extracted');
         $this->assertEquals($customer->id, $result->customer_id);
         echo "✓ Basic assertions passed\n";
-        
+
         // Check that we got visual analysis data
         echo "🎨 Checking visual analysis data...\n";
         $this->assertNotEmpty($result->color_palette, 'Color palette should be extracted');
         $this->assertNotEmpty($result->typography, 'Typography should be extracted');
         $this->assertNotEmpty($result->visual_style, 'Visual style should be extracted');
         echo "✓ Visual analysis data present\n";
-        
+
         // Check brand voice
         echo "📢 Checking brand voice data...\n";
         $this->assertNotEmpty($result->brand_voice, 'Brand voice should be extracted');
         $this->assertNotEmpty($result->tone_attributes, 'Tone attributes should be extracted');
         echo "✓ Brand voice data present\n";
-        
+
         // Check quality score
         echo "📊 Checking quality score...\n";
         $this->assertGreaterThan(0, $result->extraction_quality_score ?? 0, 'Should have quality score');
         echo "✓ Quality score: {$result->extraction_quality_score}\n";
         echo "✓ Quality score: {$result->extraction_quality_score}\n";
-        
+
         // Log the results for review
         Log::info('Extracted Brand Guidelines for Cloudflare:', [
             'brand_voice' => $result->brand_voice,
@@ -94,7 +94,7 @@ class BrandGuidelineExtractorTest extends TestCase
             'typography' => $result->typography,
             'quality_score' => $result->extraction_quality_score,
         ]);
-        
+
         // Output for manual inspection
         echo "\n📋 EXTRACTED BRAND GUIDELINES:\n";
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n";

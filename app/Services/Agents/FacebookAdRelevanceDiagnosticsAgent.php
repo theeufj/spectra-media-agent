@@ -2,14 +2,13 @@
 
 namespace App\Services\Agents;
 
-use App\Models\AgentActivity;
 use App\Models\AdCopy;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\FacebookAds\AdService;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\GeminiService;
-use App\Services\Agents\FacebookLearningPhaseAgent;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
@@ -35,7 +34,7 @@ class FacebookAdRelevanceDiagnosticsAgent
     {
         $customer = $campaign->customer;
 
-        if (!$campaign->facebook_ads_campaign_id || !$customer?->facebook_ads_account_id) {
+        if (! $campaign->facebook_ads_campaign_id || ! $customer?->facebook_ads_account_id) {
             return ['skipped' => true];
         }
 
@@ -45,13 +44,13 @@ class FacebookAdRelevanceDiagnosticsAgent
         }
 
         $adSetService = new AdSetService($customer);
-        $adService    = new AdService($customer);
+        $adService = new AdService($customer);
 
         $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
-        $actions  = [];
-        $paused   = [];
-        $flagged  = [];
-        $errors   = [];
+        $actions = [];
+        $paused = [];
+        $flagged = [];
+        $errors = [];
 
         foreach ($adSets as $adSet) {
             $ads = $adService->listAdsWithDiagnostics($adSet['id'] ?? '') ?? [];
@@ -60,47 +59,47 @@ class FacebookAdRelevanceDiagnosticsAgent
                 try {
                     $this->diagnoseAd($campaign, $customer, $ad, $actions, $paused, $flagged, $errors);
                 } catch (\Exception $e) {
-                    $errors[] = "Error processing ad '{$ad['name']}': " . $e->getMessage();
-                    Log::warning("FacebookAdRelevanceDiagnosticsAgent: " . $e->getMessage());
+                    $errors[] = "Error processing ad '{$ad['name']}': ".$e->getMessage();
+                    Log::warning('FacebookAdRelevanceDiagnosticsAgent: '.$e->getMessage());
                 }
             }
         }
 
-        if (!empty($actions) || !empty($paused)) {
+        if (! empty($actions) || ! empty($paused)) {
             AgentActivity::record(
                 'facebook_relevance',
                 'relevance_diagnostics_applied',
-                "Applied " . (count($actions) + count($paused)) . " relevance action(s) for \"{$campaign->name}\"",
+                'Applied '.(count($actions) + count($paused))." relevance action(s) for \"{$campaign->name}\"",
                 $campaign->customer_id,
                 $campaign->id,
                 ['actions' => $actions, 'paused' => $paused, 'flagged' => $flagged, 'errors' => $errors]
             );
         }
 
-        if (!empty($paused)) {
+        if (! empty($paused)) {
             $this->notifyPaused($campaign, $paused);
         }
 
         return [
             'actions' => $actions,
-            'paused'  => $paused,
+            'paused' => $paused,
             'flagged' => $flagged,
-            'errors'  => $errors,
+            'errors' => $errors,
         ];
     }
 
     private function diagnoseAd(Campaign $campaign, object $customer, array $ad, array &$actions, array &$paused, array &$flagged, array &$errors): void
     {
-        $adId         = $ad['id'] ?? null;
-        $adName       = $ad['name'] ?? $adId;
-        $impressions  = (int) ($ad['impressions'] ?? 0);
-        $qualityRank  = $ad['quality_ranking']          ?? 'UNKNOWN';
-        $engageRank   = $ad['engagement_rate_ranking']  ?? 'UNKNOWN';
-        $cvRank       = $ad['conversion_rate_ranking']  ?? 'UNKNOWN';
+        $adId = $ad['id'] ?? null;
+        $adName = $ad['name'] ?? $adId;
+        $impressions = (int) ($ad['impressions'] ?? 0);
+        $qualityRank = $ad['quality_ranking'] ?? 'UNKNOWN';
+        $engageRank = $ad['engagement_rate_ranking'] ?? 'UNKNOWN';
+        $cvRank = $ad['conversion_rate_ranking'] ?? 'UNKNOWN';
 
         $belowAvgCount = (int) ($qualityRank === 'BELOW_AVERAGE')
-                       + (int) ($engageRank  === 'BELOW_AVERAGE')
-                       + (int) ($cvRank      === 'BELOW_AVERAGE');
+                       + (int) ($engageRank === 'BELOW_AVERAGE')
+                       + (int) ($cvRank === 'BELOW_AVERAGE');
 
         // Auto-pause: all three below average with sufficient data
         if ($belowAvgCount >= 3 && $impressions >= 2000 && $adId) {
@@ -112,6 +111,7 @@ class FacebookAdRelevanceDiagnosticsAgent
             } else {
                 $errors[] = "Failed to pause ad '{$adName}'";
             }
+
             return;
         }
 
@@ -122,9 +122,9 @@ class FacebookAdRelevanceDiagnosticsAgent
                 $variations = $this->generateAdCopyVariations($campaign, $customer);
                 foreach ($variations as $variant) {
                     AdCopy::create([
-                        'strategy_id'  => $strategy->id,
-                        'platform'     => 'Facebook',
-                        'headlines'    => $variant['headlines'] ?? [],
+                        'strategy_id' => $strategy->id,
+                        'platform' => 'Facebook',
+                        'headlines' => $variant['headlines'] ?? [],
                         'descriptions' => $variant['descriptions'] ?? [],
                     ]);
                 }
@@ -137,8 +137,8 @@ class FacebookAdRelevanceDiagnosticsAgent
         // Root cause 2: Low engagement ranking → flag for creative refresh
         if ($engageRank === 'BELOW_AVERAGE') {
             $flagged[] = [
-                'ad'             => $adName,
-                'issue'          => 'engagement_rate_ranking: BELOW_AVERAGE',
+                'ad' => $adName,
+                'issue' => 'engagement_rate_ranking: BELOW_AVERAGE',
                 'recommendation' => "Refresh visual creative for '{$adName}' — try video over static image, stronger hook in first 3 seconds.",
             ];
         }
@@ -151,9 +151,9 @@ class FacebookAdRelevanceDiagnosticsAgent
                     ->delay(now()->addMinutes(5));
             }
             $flagged[] = [
-                'ad'             => $adName,
-                'issue'          => 'conversion_rate_ranking: BELOW_AVERAGE',
-                'recommendation' => "CRO audit dispatched for landing page. Check form length, page speed, and message match with ad.",
+                'ad' => $adName,
+                'issue' => 'conversion_rate_ranking: BELOW_AVERAGE',
+                'recommendation' => 'CRO audit dispatched for landing page. Check form length, page speed, and message match with ad.',
             ];
         }
     }
@@ -165,8 +165,8 @@ class FacebookAdRelevanceDiagnosticsAgent
             return;
         }
 
-        $adList  = implode(', ', array_column($paused, 'ad_name'));
-        $count   = count($paused);
+        $adList = implode(', ', array_column($paused, 'ad_name'));
+        $count = count($paused);
         $message = "{$count} Facebook ad(s) were paused in \"{$campaign->name}\" — all three Ad Relevance Diagnostics ranked BELOW_AVERAGE with 2000+ impressions: {$adList}.";
 
         CriticalAgentAlert::deliver(
@@ -214,9 +214,11 @@ PROMPT;
             $response = $this->gemini->generateContent(config('ai.models.default'), $prompt);
             $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
             $data = json_decode(trim($text), true);
+
             return (json_last_error() === JSON_ERROR_NONE && is_array($data)) ? $data : [];
         } catch (\Exception $e) {
-            Log::error('FacebookAdRelevanceDiagnosticsAgent: Copy generation failed: ' . $e->getMessage());
+            Log::error('FacebookAdRelevanceDiagnosticsAgent: Copy generation failed: '.$e->getMessage());
+
             return [];
         }
     }

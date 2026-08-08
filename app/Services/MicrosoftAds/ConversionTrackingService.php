@@ -13,7 +13,7 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
     {
         $goals = $this->getConversionGoals();
 
-        return !empty($goals);
+        return ! empty($goals);
     }
 
     /**
@@ -68,6 +68,7 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
                 'name' => $params['name'],
                 'ids' => $result['ConversionGoalIds'],
             ]);
+
             return $result;
         }
 
@@ -111,6 +112,7 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
                 'name' => $params['name'],
                 'ids' => $result['ConversionGoalIds'],
             ]);
+
             return $result;
         }
 
@@ -128,6 +130,7 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
 
         if ($result && isset($result['UetTags']['UetTag'])) {
             $tags = $result['UetTags']['UetTag'];
+
             return isset($tags['Id']) ? [$tags] : $tags;
         }
 
@@ -146,24 +149,24 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
 
         $tags = $this->getUetTags();
 
-        if (!empty($tags)) {
+        if (! empty($tags)) {
             $tagId = (string) $tags[0]['Id'];
             $this->customer->update(['microsoft_uet_tag_id' => $tagId]);
 
             Log::info('Microsoft Ads: Resolved UET tag ID from account', [
                 'customer_id' => $this->customer->id,
-                'tag_id'      => $tagId,
+                'tag_id' => $tagId,
             ]);
 
             return $tagId;
         }
 
-        $result = $this->createUetTag('Spectra — ' . $this->customer->name);
-        if (!$result) {
+        $result = $this->createUetTag('Spectra — '.$this->customer->name);
+        if (! $result) {
             return null;
         }
 
-        $tag   = $result['UetTags']['UetTag'][0] ?? $result['UetTags']['UetTag'] ?? null;
+        $tag = $result['UetTags']['UetTag'][0] ?? $result['UetTags']['UetTag'] ?? null;
         $tagId = $tag ? (string) $tag['Id'] : null;
 
         if ($tagId) {
@@ -190,6 +193,7 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
                 'name' => $name,
                 'result' => $result['UetTags'],
             ]);
+
             return $result;
         }
 
@@ -246,10 +250,10 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
             'OfflineConversions' => [
                 'OfflineConversion' => [[
                     'ConversionCurrencyCode' => $currencyCode,
-                    'ConversionName'         => $goalName,
-                    'ConversionTime'         => $conversionTime->format('Y-m-d\TH:i:s'),
-                    'ConversionValue'        => $value,
-                    'MicrosoftClickId'       => $msclid,
+                    'ConversionName' => $goalName,
+                    'ConversionTime' => $conversionTime->format('Y-m-d\TH:i:s'),
+                    'ConversionValue' => $value,
+                    'MicrosoftClickId' => $msclid,
                 ]],
             ],
         ]);
@@ -262,10 +266,11 @@ class ConversionTrackingService extends BaseMicrosoftAdsService
         $errors = $result['PartialErrors']['BatchError'] ?? null;
         if ($errors) {
             Log::warning('Microsoft Ads: ApplyOfflineConversions partial error', [
-                'goal'   => $goalName,
+                'goal' => $goalName,
                 'msclid' => $msclid,
                 'errors' => $errors,
             ]);
+
             return false;
         }
 

@@ -14,10 +14,15 @@ class CampaignAuthorizationTest extends TestCase
     use RefreshDatabase;
 
     protected User $owner;
+
     protected User $otherUser;
+
     protected Customer $customer;
+
     protected Customer $otherCustomer;
+
     protected Campaign $campaign;
+
     protected Strategy $strategy;
 
     protected function setUp(): void

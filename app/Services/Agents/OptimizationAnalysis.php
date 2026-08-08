@@ -4,13 +4,14 @@ namespace App\Services\Agents;
 
 /**
  * Represents available optimization opportunities for a platform.
- * 
+ *
  * Tracks platform-specific features and optimizations that can be leveraged
  * based on available assets, budget, and account configuration.
  */
 class OptimizationAnalysis
 {
     protected array $opportunities = [];
+
     public string $recommendedStrategy = '';
 
     public function __construct(array $opportunities = [], string $recommendedStrategy = '')
@@ -21,12 +22,11 @@ class OptimizationAnalysis
 
     /**
      * Add an optimization opportunity.
-     * 
-     * @param string $type Type of optimization (e.g., 'performance_max', 'dynamic_creative')
-     * @param string $description Description of the opportunity
-     * @param string $confidence Confidence level: 'high', 'medium', 'low'
-     * @param array $requirements Requirements or conditions for this opportunity
-     * @return self
+     *
+     * @param  string  $type  Type of optimization (e.g., 'performance_max', 'dynamic_creative')
+     * @param  string  $description  Description of the opportunity
+     * @param  string  $confidence  Confidence level: 'high', 'medium', 'low'
+     * @param  array  $requirements  Requirements or conditions for this opportunity
      */
     public function addOpportunity(
         string $type,
@@ -40,22 +40,23 @@ class OptimizationAnalysis
             'confidence' => $confidence,
             'requirements' => $requirements,
         ];
+
         return $this;
     }
 
     /**
      * Check if any opportunities are available.
-     * 
+     *
      * @return bool True if opportunities exist
      */
     public function hasOpportunities(): bool
     {
-        return !empty($this->opportunities);
+        return ! empty($this->opportunities);
     }
 
     /**
      * Get all opportunities.
-     * 
+     *
      * @return array All opportunities
      */
     public function getOpportunities(): array
@@ -65,21 +66,21 @@ class OptimizationAnalysis
 
     /**
      * Get opportunities by confidence level.
-     * 
-     * @param string $confidence Confidence level to filter by
+     *
+     * @param  string  $confidence  Confidence level to filter by
      * @return array Filtered opportunities
      */
     public function getByConfidence(string $confidence): array
     {
         return array_filter(
             $this->opportunities,
-            fn($opp) => $opp['confidence'] === $confidence
+            fn ($opp) => $opp['confidence'] === $confidence
         );
     }
 
     /**
      * Get high-confidence opportunities only.
-     * 
+     *
      * @return array High-confidence opportunities
      */
     public function getHighConfidenceOpportunities(): array
@@ -89,8 +90,8 @@ class OptimizationAnalysis
 
     /**
      * Check if a specific opportunity type exists.
-     * 
-     * @param string $type Opportunity type
+     *
+     * @param  string  $type  Opportunity type
      * @return bool True if opportunity exists
      */
     public function hasOpportunityType(string $type): bool
@@ -100,12 +101,13 @@ class OptimizationAnalysis
                 return true;
             }
         }
+
         return false;
     }
 
     /**
      * Get count of opportunities.
-     * 
+     *
      * @return int Number of opportunities
      */
     public function count(): int
@@ -115,7 +117,7 @@ class OptimizationAnalysis
 
     /**
      * Convert to array for storage or passing to AI.
-     * 
+     *
      * @return array Analysis as array
      */
     public function toArray(): array
@@ -129,12 +131,12 @@ class OptimizationAnalysis
 
     /**
      * Get a summary string of opportunities.
-     * 
+     *
      * @return string Summary of opportunities
      */
     public function getSummary(): string
     {
-        if (!$this->hasOpportunities()) {
+        if (! $this->hasOpportunities()) {
             return 'No optimization opportunities identified';
         }
 
@@ -145,7 +147,7 @@ class OptimizationAnalysis
             $this->count() === 1 ? 'y' : 'ies'
         );
 
-        if (!empty($highConfidence)) {
+        if (! empty($highConfidence)) {
             $summary .= sprintf(
                 ' (%d high-confidence)',
                 count($highConfidence)

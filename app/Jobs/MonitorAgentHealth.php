@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\AgentRun;
-use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -24,22 +23,22 @@ class MonitorAgentHealth implements ShouldQueue
 
     /** Max hours between runs before a job is considered stale (≈ 2× its cadence). */
     public const EXPECTED_MAX_GAP_HOURS = [
-        'RunSelfHealingChecks'          => 9,   // every 4h
-        'RunPerformanceAnomalyCheck'    => 9,   // every 4h
-        'RunHealthChecks'               => 14,  // every 6h
-        'RunStrategicDiagnosis'         => 30,  // daily
-        'OptimizeCampaigns'             => 30,  // daily
-        'AutomatedCampaignMaintenance'  => 30,  // daily
-        'MonitorCampaignStatus'         => 3,   // hourly
-        'HourlyBudgetOptimization'      => 3,   // hourly
-        'AutoStartABTests'              => 30,  // daily
-        'EvaluateABTests'               => 30,  // daily
+        'RunSelfHealingChecks' => 9,   // every 4h
+        'RunPerformanceAnomalyCheck' => 9,   // every 4h
+        'RunHealthChecks' => 14,  // every 6h
+        'RunStrategicDiagnosis' => 30,  // daily
+        'OptimizeCampaigns' => 30,  // daily
+        'AutomatedCampaignMaintenance' => 30,  // daily
+        'MonitorCampaignStatus' => 3,   // hourly
+        'HourlyBudgetOptimization' => 3,   // hourly
+        'AutoStartABTests' => 30,  // daily
+        'EvaluateABTests' => 30,  // daily
         'ReviewGoogleAdsRecommendations' => 30, // daily
-        'RunAudienceIntelligence'       => 190, // weekly
+        'RunAudienceIntelligence' => 190, // weekly
         'DetectNegativeKeywordConflicts' => 190, // weekly
-        'DetectKeywordCannibalization'  => 190, // weekly
-        'WeeklyBudgetRebalance'         => 190, // weekly
-        'VerifyConversionTracking'      => 190, // weekly
+        'DetectKeywordCannibalization' => 190, // weekly
+        'WeeklyBudgetRebalance' => 190, // weekly
+        'VerifyConversionTracking' => 190, // weekly
     ];
 
     public function handle(): void
@@ -49,8 +48,9 @@ class MonitorAgentHealth implements ShouldQueue
         foreach (self::EXPECTED_MAX_GAP_HOURS as $job => $maxGapHours) {
             $last = AgentRun::where('job', $job)->latest('id')->first();
 
-            if (!$last) {
+            if (! $last) {
                 $problems[] = "{$job}: no run has ever been recorded (expected roughly every {$maxGapHours}h).";
+
                 continue;
             }
 
@@ -62,12 +62,13 @@ class MonitorAgentHealth implements ShouldQueue
             // Failure streak: the last 3 runs all failed = the job is crashing.
             $recent = AgentRun::where('job', $job)->latest('id')->take(3)->get();
             if ($recent->count() >= 3 && $recent->every(fn ($r) => $r->status === AgentRun::STATUS_FAILED)) {
-                $problems[] = "{$job}: last 3 runs all FAILED — the job is crashing (latest error: " . ($last->note ?: 'n/a') . ').';
+                $problems[] = "{$job}: last 3 runs all FAILED — the job is crashing (latest error: ".($last->note ?: 'n/a').').';
             }
         }
 
         if (empty($problems)) {
             Log::info('MonitorAgentHealth: all tracked optimization jobs healthy');
+
             return;
         }
 
@@ -75,8 +76,8 @@ class MonitorAgentHealth implements ShouldQueue
 
         CriticalAgentAlert::deliver(
             'agent_health',
-            'Automation health: ' . count($problems) . ' issue(s) detected',
-            "One or more optimization jobs are stale or failing:\n\n• " . implode("\n• ", $problems),
+            'Automation health: '.count($problems).' issue(s) detected',
+            "One or more optimization jobs are stale or failing:\n\n• ".implode("\n• ", $problems),
             ['problems' => $problems],
             CriticalAgentAlert::RECIPIENTS_ADMINS
         );
@@ -84,6 +85,6 @@ class MonitorAgentHealth implements ShouldQueue
 
     public function failed(\Throwable $e): void
     {
-        Log::error('MonitorAgentHealth failed: ' . $e->getMessage());
+        Log::error('MonitorAgentHealth failed: '.$e->getMessage());
     }
 }

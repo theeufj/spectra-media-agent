@@ -2,10 +2,9 @@
 
 namespace App\Services\Agents;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
-use App\Models\AgentActivity;
-use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -54,32 +53,41 @@ class CampaignAlertService
         $currentHour = (int) now()->format('H');
 
         // Only meaningful before 2 PM — after that, running low is expected
-        if ($currentHour >= 14) return [];
+        if ($currentHour >= 14) {
+            return [];
+        }
 
         $dailyBudget = $campaign->daily_budget ?? 0;
-        if ($dailyBudget <= 0) return [];
+        if ($dailyBudget <= 0) {
+            return [];
+        }
 
         // Each hourly row holds the cumulative daily total at snapshot time.
         // MAX gives the most recent (highest) cumulative total = actual spend so far.
         $todaySpend = $this->getTodaySpend($campaign);
 
         $spendRatio = $todaySpend / $dailyBudget;
-        if ($spendRatio < 0.8) return [];
+        if ($spendRatio < 0.8) {
+            return [];
+        }
 
         $alertType = 'budget_exhaustion';
-        if ($this->isOnCooldown($campaign, $alertType)) return [];
+        if ($this->isOnCooldown($campaign, $alertType)) {
+            return [];
+        }
 
         $percentSpent = round($spendRatio * 100);
+
         return [[
-            'type'            => $alertType,
-            'severity'        => 'critical',
-            'title'           => "Budget {$percentSpent}% spent by {$currentHour}:00",
-            'message'         => "Campaign \"{$campaign->name}\" has spent \$" . round($todaySpend, 2) . " ({$percentSpent}%) of its \${$dailyBudget} daily budget by {$currentHour}:00. It may run out before the evening peak.",
+            'type' => $alertType,
+            'severity' => 'critical',
+            'title' => "Budget {$percentSpent}% spent by {$currentHour}:00",
+            'message' => "Campaign \"{$campaign->name}\" has spent \$".round($todaySpend, 2)." ({$percentSpent}%) of its \${$dailyBudget} daily budget by {$currentHour}:00. It may run out before the evening peak.",
             'action_required' => 'Consider increasing the daily budget or adjusting bid strategy to spread spend more evenly.',
-            'campaign_id'     => $campaign->id,
-            'campaign_name'   => $campaign->name,
-            'spend'           => round($todaySpend, 2),
-            'budget'          => $dailyBudget,
+            'campaign_id' => $campaign->id,
+            'campaign_name' => $campaign->name,
+            'spend' => round($todaySpend, 2),
+            'budget' => $dailyBudget,
         ]];
     }
 
@@ -99,25 +107,31 @@ class CampaignAlertService
             ->whereBetween('date', [now()->subDays(6)->toDateString(), now()->subDays(3)->toDateString()])
             ->sum('conversions');
 
-        if ($previousConversions < 3) return [];
+        if ($previousConversions < 3) {
+            return [];
+        }
 
         $dropPercent = (($previousConversions - $recentConversions) / $previousConversions) * 100;
-        if ($dropPercent < 50) return [];
+        if ($dropPercent < 50) {
+            return [];
+        }
 
         $alertType = 'conversion_drop';
-        if ($this->isOnCooldown($campaign, $alertType)) return [];
+        if ($this->isOnCooldown($campaign, $alertType)) {
+            return [];
+        }
 
         return [[
-            'type'                 => $alertType,
-            'severity'             => $dropPercent >= 80 ? 'critical' : 'warning',
-            'title'                => "Conversions dropped " . round($dropPercent) . "% for \"{$campaign->name}\"",
-            'message'              => "Campaign \"{$campaign->name}\" had {$recentConversions} conversions in the last 3 days vs {$previousConversions} in the prior 3 days — a " . round($dropPercent) . "% drop.",
-            'action_required'      => 'Check for tracking issues, landing page changes, or market shifts. Review search terms and ad statuses.',
-            'campaign_id'          => $campaign->id,
-            'campaign_name'        => $campaign->name,
-            'recent_conversions'   => $recentConversions,
+            'type' => $alertType,
+            'severity' => $dropPercent >= 80 ? 'critical' : 'warning',
+            'title' => 'Conversions dropped '.round($dropPercent)."% for \"{$campaign->name}\"",
+            'message' => "Campaign \"{$campaign->name}\" had {$recentConversions} conversions in the last 3 days vs {$previousConversions} in the prior 3 days — a ".round($dropPercent).'% drop.',
+            'action_required' => 'Check for tracking issues, landing page changes, or market shifts. Review search terms and ad statuses.',
+            'campaign_id' => $campaign->id,
+            'campaign_name' => $campaign->name,
+            'recent_conversions' => $recentConversions,
             'previous_conversions' => $previousConversions,
-            'drop_percent'         => round($dropPercent),
+            'drop_percent' => round($dropPercent),
         ]];
     }
 
@@ -138,11 +152,15 @@ class CampaignAlertService
 
         // Require at least 5 days of history — new campaigns have a near-zero baseline
         // that makes any real spend look like an anomaly.
-        if ($history->count() < 5) return [];
+        if ($history->count() < 5) {
+            return [];
+        }
 
         $avgDailySpend = $history->avg('daily_spend') ?? 0;
 
-        if ($avgDailySpend <= 0) return [];
+        if ($avgDailySpend <= 0) {
+            return [];
+        }
 
         // Today's spend: MAX cumulative snapshot so far (not the sum of all snapshots)
         $todaySpend = $this->getTodaySpend($campaign);
@@ -152,8 +170,12 @@ class CampaignAlertService
         $projectedSpend = ($todaySpend / $currentHour) * 24;
 
         // Alert only if both the projection AND actual spend so far are meaningfully elevated
-        if ($projectedSpend <= $avgDailySpend * 2) return [];
-        if ($todaySpend <= 20) return [];
+        if ($projectedSpend <= $avgDailySpend * 2) {
+            return [];
+        }
+        if ($todaySpend <= 20) {
+            return [];
+        }
 
         // Gate against the daily budget cap. Google allows a campaign to spend up to ~2x its
         // daily budget on any single day (trued up over the month), so a projection anywhere
@@ -162,27 +184,31 @@ class CampaignAlertService
         // this, a campaign simply pacing up to its budget (e.g. $63 projected against a $40
         // cap, well within Google's $80 daily ceiling) triggered false "unusual spend" alerts.
         $dailyBudget = (float) ($campaign->daily_budget ?? 0);
-        if ($dailyBudget > 0 && $projectedSpend <= $dailyBudget * 2) return [];
+        if ($dailyBudget > 0 && $projectedSpend <= $dailyBudget * 2) {
+            return [];
+        }
 
         $alertType = 'spend_anomaly';
-        if ($this->isOnCooldown($campaign, $alertType)) return [];
+        if ($this->isOnCooldown($campaign, $alertType)) {
+            return [];
+        }
 
         $budgetNote = $dailyBudget > 0
-            ? " and exceeds its \$" . round($dailyBudget, 2) . " daily budget cap"
-            : "";
+            ? ' and exceeds its $'.round($dailyBudget, 2).' daily budget cap'
+            : '';
 
         return [[
-            'type'            => $alertType,
-            'severity'        => 'warning',
-            'title'           => "Unusual spend detected for \"{$campaign->name}\"",
-            'message'         => "Campaign \"{$campaign->name}\" has spent \$" . round($todaySpend, 2) . " so far today and is projected to reach \$" . round($projectedSpend, 2) . " — " . round(($projectedSpend / $avgDailySpend) * 100) . "% of its \$" . round($avgDailySpend, 2) . " daily average{$budgetNote}.",
+            'type' => $alertType,
+            'severity' => 'warning',
+            'title' => "Unusual spend detected for \"{$campaign->name}\"",
+            'message' => "Campaign \"{$campaign->name}\" has spent \$".round($todaySpend, 2).' so far today and is projected to reach $'.round($projectedSpend, 2).' — '.round(($projectedSpend / $avgDailySpend) * 100).'% of its $'.round($avgDailySpend, 2)." daily average{$budgetNote}.",
             'action_required' => 'Review bid strategy and check for competitive pressure driving up costs.',
-            'campaign_id'     => $campaign->id,
-            'campaign_name'   => $campaign->name,
+            'campaign_id' => $campaign->id,
+            'campaign_name' => $campaign->name,
             'projected_spend' => round($projectedSpend, 2),
             'avg_daily_spend' => round($avgDailySpend, 2),
-            'today_spend'     => round($todaySpend, 2),
-            'daily_budget'    => round($dailyBudget, 2),
+            'today_spend' => round($todaySpend, 2),
+            'daily_budget' => round($dailyBudget, 2),
         ]];
     }
 
@@ -210,10 +236,12 @@ class CampaignAlertService
 
         if (Cache::has($key)) {
             Log::debug("CampaignAlertService: Suppressed duplicate {$alertType} for campaign {$campaign->id} (cooldown active)");
+
             return true;
         }
 
         Cache::put($key, true, self::ALERT_COOLDOWN_SECONDS);
+
         return false;
     }
 
@@ -224,7 +252,9 @@ class CampaignAlertService
     {
         try {
             $customer = $campaign->customer;
-            if (!$customer) return;
+            if (! $customer) {
+                return;
+            }
 
             AgentActivity::record(
                 'alert',
@@ -252,15 +282,15 @@ class CampaignAlertService
             );
 
             Log::info('CampaignAlertService: Alert sent', [
-                'type'        => $alert['type'],
+                'type' => $alert['type'],
                 'campaign_id' => $campaign->id,
-                'severity'    => $alert['severity'],
+                'severity' => $alert['severity'],
             ]);
         } catch (\Exception $e) {
             Log::error('CampaignAlertService: Failed to send alert', [
-                'type'        => $alert['type'],
+                'type' => $alert['type'],
                 'campaign_id' => $campaign->id,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
     }

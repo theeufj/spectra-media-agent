@@ -34,13 +34,19 @@ class ABTest extends Model
     ];
 
     const STATUS_RUNNING = 'running';
+
     const STATUS_SIGNIFICANT = 'significant';
+
     const STATUS_APPLIED = 'applied';
+
     const STATUS_STOPPED = 'stopped';
 
     const TYPE_HEADLINE = 'headline';
+
     const TYPE_DESCRIPTION = 'description';
+
     const TYPE_IMAGE = 'image';
+
     const TYPE_AUDIENCE = 'audience';
 
     public function strategy(): BelongsTo

@@ -41,8 +41,8 @@ class AssetValidator
     /**
      * Validate an image file.
      *
-     * @param string $filePath Path to the image file (local or S3 URL)
-     * @param bool $downloadIfRemote Whether to download remote files for validation
+     * @param  string  $filePath  Path to the image file (local or S3 URL)
+     * @param  bool  $downloadIfRemote  Whether to download remote files for validation
      * @return array Validation errors (empty if valid)
      */
     public function validateImage(string $filePath, bool $downloadIfRemote = false): array
@@ -53,22 +53,25 @@ class AssetValidator
         try {
             // Handle remote files
             if ($this->isRemoteFile($filePath)) {
-                if (!$downloadIfRemote) {
-                    $errors[] = "Cannot validate remote image without downloading. Set downloadIfRemote=true.";
+                if (! $downloadIfRemote) {
+                    $errors[] = 'Cannot validate remote image without downloading. Set downloadIfRemote=true.';
+
                     return $errors;
                 }
-                
+
                 $tempFile = $this->downloadTemporaryFile($filePath);
-                if (!$tempFile) {
+                if (! $tempFile) {
                     $errors[] = "Failed to download image from: {$filePath}";
+
                     return $errors;
                 }
                 $filePath = $tempFile;
             }
 
             // Check if file exists
-            if (!file_exists($filePath)) {
+            if (! file_exists($filePath)) {
                 $errors[] = "Image file does not exist: {$filePath}";
+
                 return $errors;
             }
 
@@ -82,45 +85,45 @@ class AssetValidator
 
             // Check MIME type
             $mimeType = mime_content_type($filePath);
-            if (!in_array($mimeType, self::IMAGE_RULES['allowed_formats'])) {
-                $errors[] = "Unsupported image format: {$mimeType}. Allowed: " . implode(', ', self::IMAGE_RULES['allowed_formats']);
+            if (! in_array($mimeType, self::IMAGE_RULES['allowed_formats'])) {
+                $errors[] = "Unsupported image format: {$mimeType}. Allowed: ".implode(', ', self::IMAGE_RULES['allowed_formats']);
             }
 
             // Check file extension
             $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-            if (!in_array($extension, self::IMAGE_RULES['allowed_extensions'])) {
-                $errors[] = "Unsupported image extension: {$extension}. Allowed: " . implode(', ', self::IMAGE_RULES['allowed_extensions']);
+            if (! in_array($extension, self::IMAGE_RULES['allowed_extensions'])) {
+                $errors[] = "Unsupported image extension: {$extension}. Allowed: ".implode(', ', self::IMAGE_RULES['allowed_extensions']);
             }
 
             // Check dimensions
             $imageInfo = @getimagesize($filePath);
             if ($imageInfo === false) {
-                $errors[] = "Unable to read image dimensions. File may be corrupted.";
+                $errors[] = 'Unable to read image dimensions. File may be corrupted.';
             } else {
                 [$width, $height] = $imageInfo;
 
                 if ($width < self::IMAGE_RULES['min_width']) {
-                    $errors[] = "Image width {$width}px is below minimum " . self::IMAGE_RULES['min_width'] . "px";
+                    $errors[] = "Image width {$width}px is below minimum ".self::IMAGE_RULES['min_width'].'px';
                 }
 
                 if ($height < self::IMAGE_RULES['min_height']) {
-                    $errors[] = "Image height {$height}px is below minimum " . self::IMAGE_RULES['min_height'] . "px";
+                    $errors[] = "Image height {$height}px is below minimum ".self::IMAGE_RULES['min_height'].'px';
                 }
 
                 // Add aspect ratio info (not an error, just a warning)
                 $ratio = $this->calculateAspectRatio($width, $height);
                 $isRecommended = $this->isRecommendedRatio($ratio, 'image');
-                
-                if (!$isRecommended) {
-                    $errors[] = "Image aspect ratio {$ratio} is not recommended. Consider: " . 
+
+                if (! $isRecommended) {
+                    $errors[] = "Image aspect ratio {$ratio} is not recommended. Consider: ".
                                 implode(', ', array_keys(self::IMAGE_RULES['recommended_ratios']));
                 }
             }
 
         } finally {
             // Clean up temp file if created
-            if ($tempFile && file_exists($tempFile) && !unlink($tempFile)) {
-                \Illuminate\Support\Facades\Log::warning("AssetValidator: failed to delete temp file", ['path' => $tempFile]);
+            if ($tempFile && file_exists($tempFile) && ! unlink($tempFile)) {
+                \Illuminate\Support\Facades\Log::warning('AssetValidator: failed to delete temp file', ['path' => $tempFile]);
             }
         }
 
@@ -130,8 +133,8 @@ class AssetValidator
     /**
      * Validate a video file.
      *
-     * @param string $filePath Path to the video file (local or S3 URL)
-     * @param bool $downloadIfRemote Whether to download remote files for validation
+     * @param  string  $filePath  Path to the video file (local or S3 URL)
+     * @param  bool  $downloadIfRemote  Whether to download remote files for validation
      * @return array Validation errors (empty if valid)
      */
     public function validateVideo(string $filePath, bool $downloadIfRemote = false): array
@@ -142,22 +145,25 @@ class AssetValidator
         try {
             // Handle remote files
             if ($this->isRemoteFile($filePath)) {
-                if (!$downloadIfRemote) {
-                    $errors[] = "Cannot validate remote video without downloading. Set downloadIfRemote=true.";
+                if (! $downloadIfRemote) {
+                    $errors[] = 'Cannot validate remote video without downloading. Set downloadIfRemote=true.';
+
                     return $errors;
                 }
-                
+
                 $tempFile = $this->downloadTemporaryFile($filePath);
-                if (!$tempFile) {
+                if (! $tempFile) {
                     $errors[] = "Failed to download video from: {$filePath}";
+
                     return $errors;
                 }
                 $filePath = $tempFile;
             }
 
             // Check if file exists
-            if (!file_exists($filePath)) {
+            if (! file_exists($filePath)) {
                 $errors[] = "Video file does not exist: {$filePath}";
+
                 return $errors;
             }
 
@@ -171,14 +177,14 @@ class AssetValidator
 
             // Check MIME type
             $mimeType = mime_content_type($filePath);
-            if (!in_array($mimeType, self::VIDEO_RULES['allowed_formats'])) {
-                $errors[] = "Unsupported video format: {$mimeType}. Allowed: " . implode(', ', self::VIDEO_RULES['allowed_formats']);
+            if (! in_array($mimeType, self::VIDEO_RULES['allowed_formats'])) {
+                $errors[] = "Unsupported video format: {$mimeType}. Allowed: ".implode(', ', self::VIDEO_RULES['allowed_formats']);
             }
 
             // Check file extension
             $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-            if (!in_array($extension, self::VIDEO_RULES['allowed_extensions'])) {
-                $errors[] = "Unsupported video extension: {$extension}. Allowed: " . implode(', ', self::VIDEO_RULES['allowed_extensions']);
+            if (! in_array($extension, self::VIDEO_RULES['allowed_extensions'])) {
+                $errors[] = "Unsupported video extension: {$extension}. Allowed: ".implode(', ', self::VIDEO_RULES['allowed_extensions']);
             }
 
             // Attempt full validation with FFmpeg if available
@@ -192,8 +198,8 @@ class AssetValidator
 
         } finally {
             // Clean up temp file if created
-            if ($tempFile && file_exists($tempFile) && !unlink($tempFile)) {
-                \Illuminate\Support\Facades\Log::warning("AssetValidator: failed to delete temp file", ['path' => $tempFile]);
+            if ($tempFile && file_exists($tempFile) && ! unlink($tempFile)) {
+                \Illuminate\Support\Facades\Log::warning('AssetValidator: failed to delete temp file', ['path' => $tempFile]);
             }
         }
 
@@ -203,31 +209,31 @@ class AssetValidator
     /**
      * Validate video with FFmpeg (if available).
      *
-     * @param string $filePath Path to video file
+     * @param  string  $filePath  Path to video file
      * @return array Video metadata and validation errors
      */
     public function validateVideoWithFFmpeg(string $filePath): array
     {
         $errors = [];
-        
+
         // Check if FFmpeg is available
         $ffmpegPath = $this->findFFmpeg();
-        if (!$ffmpegPath) {
+        if (! $ffmpegPath) {
             return ['errors' => ['FFmpeg not found. Install FFmpeg for full video validation.']];
         }
 
         // Use FFprobe to get video metadata
-        $ffprobePath = $ffmpegPath . 'probe';
-        exec(escapeshellarg($ffprobePath) . ' -v quiet -print_format json -show_format -show_streams ' . escapeshellarg($filePath), $lines, $exitCode);
+        $ffprobePath = $ffmpegPath.'probe';
+        exec(escapeshellarg($ffprobePath).' -v quiet -print_format json -show_format -show_streams '.escapeshellarg($filePath), $lines, $exitCode);
         $output = $exitCode === 0 ? implode('', $lines) : null;
 
-        if (!$output) {
+        if (! $output) {
             return ['errors' => ['Failed to read video metadata with FFmpeg']];
         }
 
         $metadata = json_decode($output, true);
-        
-        if (!$metadata) {
+
+        if (! $metadata) {
             return ['errors' => ['Failed to parse FFmpeg output']];
         }
 
@@ -240,29 +246,29 @@ class AssetValidator
             }
         }
 
-        if (!$videoStream) {
+        if (! $videoStream) {
             return ['errors' => ['No video stream found in file']];
         }
 
         // Validate duration
-        $duration = (float)($metadata['format']['duration'] ?? 0);
+        $duration = (float) ($metadata['format']['duration'] ?? 0);
         if ($duration < self::VIDEO_RULES['min_duration']) {
-            $errors[] = "Video duration {$duration}s is below minimum " . self::VIDEO_RULES['min_duration'] . "s";
+            $errors[] = "Video duration {$duration}s is below minimum ".self::VIDEO_RULES['min_duration'].'s';
         }
         if ($duration > self::VIDEO_RULES['max_duration']) {
-            $errors[] = "Video duration {$duration}s exceeds maximum " . self::VIDEO_RULES['max_duration'] . "s";
+            $errors[] = "Video duration {$duration}s exceeds maximum ".self::VIDEO_RULES['max_duration'].'s';
         }
 
         // Check resolution and aspect ratio
         $width = $videoStream['width'] ?? 0;
         $height = $videoStream['height'] ?? 0;
-        
+
         if ($width && $height) {
             $ratio = $this->calculateAspectRatio($width, $height);
             $isRecommended = $this->isRecommendedRatio($ratio, 'video');
-            
-            if (!$isRecommended) {
-                $errors[] = "Video aspect ratio {$ratio} is not recommended. Consider: " . 
+
+            if (! $isRecommended) {
+                $errors[] = "Video aspect ratio {$ratio} is not recommended. Consider: ".
                             implode(', ', array_keys(self::VIDEO_RULES['recommended_ratios']));
             }
         }
@@ -274,7 +280,7 @@ class AssetValidator
                 'width' => $width,
                 'height' => $height,
                 'codec' => $videoStream['codec_name'] ?? 'unknown',
-                'bitrate' => (int)($metadata['format']['bit_rate'] ?? 0),
+                'bitrate' => (int) ($metadata['format']['bit_rate'] ?? 0),
             ],
         ];
     }
@@ -287,7 +293,7 @@ class AssetValidator
         $gcd = $this->gcd($width, $height);
         $ratioWidth = $width / $gcd;
         $ratioHeight = $height / $gcd;
-        
+
         return "{$ratioWidth}:{$ratioHeight}";
     }
 
@@ -301,6 +307,7 @@ class AssetValidator
             $b = $a % $b;
             $a = $temp;
         }
+
         return $a;
     }
 
@@ -310,6 +317,7 @@ class AssetValidator
     private function isRecommendedRatio(string $ratio, string $type): bool
     {
         $rules = $type === 'image' ? self::IMAGE_RULES : self::VIDEO_RULES;
+
         return isset($rules['recommended_ratios'][$ratio]);
     }
 
@@ -326,8 +334,8 @@ class AssetValidator
      */
     private function downloadTemporaryFile(string $url): ?string
     {
-        $tempFile = sys_get_temp_dir() . '/' . uniqid('asset_') . '_' . basename(parse_url($url, PHP_URL_PATH));
-        
+        $tempFile = sys_get_temp_dir().'/'.uniqid('asset_').'_'.basename(parse_url($url, PHP_URL_PATH));
+
         $content = @file_get_contents($url);
         if ($content === false) {
             return null;

@@ -13,7 +13,9 @@ class MicrosoftAdsAdminTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private User $regularUser;
+
     private Customer $customer;
 
     protected function setUp(): void

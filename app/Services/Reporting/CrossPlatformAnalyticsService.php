@@ -8,7 +8,6 @@ use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Cross-Platform Analytics Service.
@@ -204,7 +203,7 @@ class CrossPlatformAnalyticsService
             default => null,
         };
 
-        if (!$model) {
+        if (! $model) {
             return $this->emptyMetrics();
         }
 
@@ -242,7 +241,9 @@ class CrossPlatformAnalyticsService
 
     protected function extractMetrics($row): array
     {
-        if (!$row) return $this->emptyMetrics();
+        if (! $row) {
+            return $this->emptyMetrics();
+        }
 
         return [
             'impressions' => $row->impressions ?? 0,

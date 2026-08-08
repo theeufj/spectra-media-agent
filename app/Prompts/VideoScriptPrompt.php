@@ -8,8 +8,11 @@ use Illuminate\Support\Facades\Log;
 class VideoScriptPrompt
 {
     private string $strategy;
+
     private ?BrandGuideline $brandGuidelines;
+
     private ?array $productContext;
+
     private int $variationIndex;
 
     public function __construct(string $strategy, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null, int $variationIndex = 0)
@@ -22,7 +25,7 @@ class VideoScriptPrompt
 
     private function formatBrandContext(): string
     {
-        if (!$this->brandGuidelines) {
+        if (! $this->brandGuidelines) {
             return '';
         }
 
@@ -30,49 +33,49 @@ class VideoScriptPrompt
         $personality = $this->brandGuidelines->brand_personality;
         $usps = $this->brandGuidelines->getFormattedUSPs();
         $themes = $this->brandGuidelines->messaging_themes ?? [];
-        
-        $context = "**BRAND VOICE & PERSONALITY:**\n" . $brandVoice . "\n";
-        
+
+        $context = "**BRAND VOICE & PERSONALITY:**\n".$brandVoice."\n";
+
         // Add personality archetype and characteristics
         if (isset($personality['archetype'])) {
             $context .= "**Brand Archetype:** {$personality['archetype']}\n";
         }
         if (isset($personality['characteristics'])) {
-            $context .= "**Personality Traits:** " . implode(', ', $personality['characteristics']) . "\n";
+            $context .= '**Personality Traits:** '.implode(', ', $personality['characteristics'])."\n";
         }
         if (isset($personality['if_brand_were_person'])) {
             $context .= "**Brand Essence:** {$personality['if_brand_were_person']}\n";
         }
-        
-        $context .= "\n" . $usps . "\n\n";
-        
+
+        $context .= "\n".$usps."\n\n";
+
         // Add messaging themes if available (simple array)
-        if (!empty($themes)) {
-            $context .= "**Key Messaging Themes:** " . implode(', ', $themes) . "\n\n";
+        if (! empty($themes)) {
+            $context .= '**Key Messaging Themes:** '.implode(', ', $themes)."\n\n";
         }
-        
+
         // Add do-not-use list
-        if (!empty($this->brandGuidelines->do_not_use)) {
-            $context .= "**DO NOT USE:** " . implode(', ', $this->brandGuidelines->do_not_use) . "\n\n";
+        if (! empty($this->brandGuidelines->do_not_use)) {
+            $context .= '**DO NOT USE:** '.implode(', ', $this->brandGuidelines->do_not_use)."\n\n";
         }
-        
+
         return $context;
     }
 
     public function getPrompt(): string
     {
         $brandContext = $this->formatBrandContext();
-        
+
         if ($brandContext) {
             Log::info("VideoScriptPrompt: Using brand guidelines for customer ID: {$this->brandGuidelines->customer_id}");
         } else {
-            Log::info("VideoScriptPrompt: No brand guidelines available - using generic approach");
+            Log::info('VideoScriptPrompt: No brand guidelines available - using generic approach');
         }
 
         $productContextString = '';
-        if (!empty($this->productContext)) {
-            $productContextString = "\n\n**PRODUCT DETAILS:**\n" .
-                "The video script MUST feature or relate to the following product(s):\n" .
+        if (! empty($this->productContext)) {
+            $productContextString = "\n\n**PRODUCT DETAILS:**\n".
+                "The video script MUST feature or relate to the following product(s):\n".
                 json_encode($this->productContext, JSON_PRETTY_PRINT);
         }
 
@@ -121,18 +124,17 @@ PROMPT;
 
     private function getBrandTone(): string
     {
-        if (!$this->brandGuidelines) {
-            return "Engaging and professional";
+        if (! $this->brandGuidelines) {
+            return 'Engaging and professional';
         }
 
         // tone_attributes is a simple array of strings, not nested
         $tones = $this->brandGuidelines->tone_attributes ?? [];
-        
+
         if (empty($tones)) {
-            return "Engaging and professional";
+            return 'Engaging and professional';
         }
-        
+
         return implode(', ', array_slice($tones, 0, 3));
     }
 }
-

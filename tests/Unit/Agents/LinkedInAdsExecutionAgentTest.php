@@ -28,7 +28,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
             'name' => 'B2B Corp',
             'linkedin_ads_account_id' => '508123456',
         ], $overrides));
-        if (!$customer->id) {
+        if (! $customer->id) {
             $customer->id = 1;
         }
 
@@ -302,7 +302,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
 
     public function test_performance_data_model_has_correct_casts(): void
     {
-        $model = new \App\Models\LinkedInAdsPerformanceData();
+        $model = new \App\Models\LinkedInAdsPerformanceData;
 
         $this->assertTrue(in_array('campaign_id', $model->getFillable()));
         $this->assertTrue(in_array('impressions', $model->getFillable()));

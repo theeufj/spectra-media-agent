@@ -12,6 +12,7 @@ use Tests\TestCase;
 class AudienceIntelligenceAgentTest extends TestCase
 {
     protected AudienceIntelligenceAgent $agent;
+
     protected GeminiService $geminiMock;
 
     protected function setUp(): void

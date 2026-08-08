@@ -4,17 +4,17 @@ namespace App\Jobs;
 
 use App\Mail\DailyPerformanceReport;
 use App\Models\Customer;
-use App\Models\Recommendation;
-use App\Services\Reporting\YesterdayPerformanceSummary;
-use App\Services\GeminiService;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
-use Illuminate\Support\Carbon;
+use App\Models\GoogleAdsPerformanceData;
+use App\Models\Recommendation;
+use App\Services\GeminiService;
+use App\Services\Reporting\YesterdayPerformanceSummary;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
@@ -23,6 +23,7 @@ class SendDailyPerformanceReports implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 300;
 
     public function handle(YesterdayPerformanceSummary $summaryService, GeminiService $gemini): void
@@ -51,6 +52,7 @@ class SendDailyPerformanceReports implements ShouldQueue
                     && (float) ($c['spend'] ?? 0) == 0
                     && (float) ($c['conversions'] ?? 0) == 0) {
                     Log::info("Skipping daily report for customer {$customer->id} — no activity for {$summary['date']}");
+
                     continue;
                 }
 
@@ -68,7 +70,7 @@ class SendDailyPerformanceReports implements ShouldQueue
                 $users = $customer->users;
 
                 foreach ($users as $user) {
-                    if (!$user->email) {
+                    if (! $user->email) {
                         continue;
                     }
 
@@ -90,7 +92,7 @@ class SendDailyPerformanceReports implements ShouldQueue
                     'combined_spend' => $summary['combined']['spend'],
                 ]);
             } catch (\Exception $e) {
-                Log::error("Failed to send daily report for customer {$customer->id}: " . $e->getMessage());
+                Log::error("Failed to send daily report for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
@@ -122,9 +124,9 @@ class SendDailyPerformanceReports implements ShouldQueue
             ->limit(10)
             ->get()
             ->map(fn (Recommendation $r) => [
-                'label'     => $this->optimizationLabel($r->type),
+                'label' => $this->optimizationLabel($r->type),
                 'rationale' => $r->rationale,
-                'campaign'  => $campaigns[$r->campaign_id] ?? null,
+                'campaign' => $campaigns[$r->campaign_id] ?? null,
             ])
             ->all();
 
@@ -142,19 +144,19 @@ class SendDailyPerformanceReports implements ShouldQueue
     private function optimizationLabel(?string $type): string
     {
         return match ($type) {
-            'BUDGET'           => 'Adjusted daily budget',
-            'KEYWORDS'         => 'Updated keywords',
+            'BUDGET' => 'Adjusted daily budget',
+            'KEYWORDS' => 'Updated keywords',
             'NEGATIVE_KEYWORDS', 'NEGATIVE_KEYWORD_ADDITION', 'SEARCH_TERM_REVIEW' => 'Added negative keywords',
-            'BIDDING'       => 'Tuned bidding strategy',
-            'TARGETING'     => 'Refined targeting',
-            'AD_EXTENSIONS'    => 'Added ad extensions',
-            'SCHEDULE'         => 'Optimised ad schedule',
-            'AUDIENCE'         => 'Updated audiences',
+            'BIDDING' => 'Tuned bidding strategy',
+            'TARGETING' => 'Refined targeting',
+            'AD_EXTENSIONS' => 'Added ad extensions',
+            'SCHEDULE' => 'Optimised ad schedule',
+            'AUDIENCE' => 'Updated audiences',
             'NETWORK_SETTINGS' => 'Disabled out-of-network placements',
-            'AD_GROUP_PAUSE'   => 'Paused underperforming ad group',
-            'SITELINKS'        => 'Added sitelinks',
-            'AD_STRENGTH'      => 'Strengthened ad assets',
-            default            => 'Optimisation applied',
+            'AD_GROUP_PAUSE' => 'Paused underperforming ad group',
+            'SITELINKS' => 'Added sitelinks',
+            'AD_STRENGTH' => 'Strengthened ad assets',
+            default => 'Optimisation applied',
         };
     }
 
@@ -164,53 +166,53 @@ class SendDailyPerformanceReports implements ShouldQueue
      */
     private function buildWeeklyRollup(Customer $customer, GeminiService $gemini): array
     {
-        $campaignIds  = $customer->campaigns()->pluck('id');
+        $campaignIds = $customer->campaigns()->pluck('id');
         $thisWeekStart = now()->subDays(7)->toDateString();
         $lastWeekStart = now()->subDays(14)->toDateString();
-        $lastWeekEnd   = now()->subDays(7)->toDateString();
+        $lastWeekEnd = now()->subDays(7)->toDateString();
 
         $rollup = [];
 
         $platforms = [
-            'google'   => GoogleAdsPerformanceData::class,
+            'google' => GoogleAdsPerformanceData::class,
             'facebook' => FacebookAdsPerformanceData::class,
         ];
 
         foreach ($platforms as $name => $model) {
             $current = $model::whereIn('campaign_id', $campaignIds)->where('date', '>=', $thisWeekStart)->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')->first();
-            $prior   = $model::whereIn('campaign_id', $campaignIds)->whereBetween('date', [$lastWeekStart, $lastWeekEnd])->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')->first();
+            $prior = $model::whereIn('campaign_id', $campaignIds)->whereBetween('date', [$lastWeekStart, $lastWeekEnd])->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions')->first();
 
-            if (!$current || ($current->impressions ?? 0) == 0) {
+            if (! $current || ($current->impressions ?? 0) == 0) {
                 continue;
             }
 
-            $spend    = round($current->cost        ?? 0, 2);
-            $convs    = round($current->conversions ?? 0, 1);
-            $cpa      = $convs > 0 ? round($spend / $convs, 2) : null;
+            $spend = round($current->cost ?? 0, 2);
+            $convs = round($current->conversions ?? 0, 1);
+            $cpa = $convs > 0 ? round($spend / $convs, 2) : null;
             $priorCpa = ($prior && ($prior->conversions ?? 0) > 0) ? round(($prior->cost ?? 0) / $prior->conversions, 2) : null;
-            $trend    = ($cpa && $priorCpa) ? ($cpa < $priorCpa ? '↓' : '↑') : '→';
+            $trend = ($cpa && $priorCpa) ? ($cpa < $priorCpa ? '↓' : '↑') : '→';
 
             $rollup[$name] = [
-                'spend'       => $spend,
+                'spend' => $spend,
                 'conversions' => $convs,
-                'cpa'         => $cpa,
-                'prior_cpa'   => $priorCpa,
-                'trend'       => $trend,
-                'summary'     => null,
+                'cpa' => $cpa,
+                'prior_cpa' => $priorCpa,
+                'trend' => $trend,
+                'summary' => null,
             ];
 
             // One Gemini sentence per platform
             try {
                 $priorCpaStr = $priorCpa ? "\${$priorCpa}" : 'N/A';
-                $cpaStr      = $cpa      ? "\${$cpa}"      : 'N/A';
+                $cpaStr = $cpa ? "\${$cpa}" : 'N/A';
                 $response = $gemini->generateContent(
                     config('ai.models.default'),
-                    "Write one sentence (≤20 words) summarising this week's " . ucfirst($name) . " Ads performance for {$customer->name}: spend \${$spend}, {$convs} conversions, CPA {$cpaStr} vs last week {$priorCpaStr}.",
+                    "Write one sentence (≤20 words) summarising this week's ".ucfirst($name)." Ads performance for {$customer->name}: spend \${$spend}, {$convs} conversions, CPA {$cpaStr} vs last week {$priorCpaStr}.",
                     ['temperature' => 0.3, 'maxOutputTokens' => 60]
                 );
                 $rollup[$name]['summary'] = trim($response['text'] ?? '');
             } catch (\Exception $e) {
-                Log::debug("SendDailyPerformanceReports: weekly rollup Gemini failed: " . $e->getMessage());
+                Log::debug('SendDailyPerformanceReports: weekly rollup Gemini failed: '.$e->getMessage());
             }
         }
 
@@ -222,7 +224,7 @@ class SendDailyPerformanceReports implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('SendDailyPerformanceReports failed: ' . $exception->getMessage(), [
+        Log::error('SendDailyPerformanceReports failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

@@ -5,12 +5,12 @@ namespace App\Services\Agents;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\FacebookAdsPerformanceData;
-use App\Services\GoogleAds\CommonServices\GetPerformanceBySegment;
-use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
-use App\Services\GoogleAds\CommonServices\SetAdSchedule;
 use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
-use Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device;
+use App\Services\GoogleAds\CommonServices\GetPerformanceBySegment;
+use App\Services\GoogleAds\CommonServices\SetAdSchedule;
+use App\Services\GoogleAds\CommonServices\SetDeviceBidAdjustment;
 use Google\Ads\GoogleAds\V22\Enums\DayOfWeekEnum\DayOfWeek;
+use Google\Ads\GoogleAds\V22\Enums\DeviceEnum\Device;
 use Google\Ads\GoogleAds\V22\Enums\MinuteOfHourEnum\MinuteOfHour;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -30,13 +30,20 @@ use Illuminate\Support\Facades\Log;
 class BidAdjustmentAgent
 {
     private const DEVICE_MIN_CONVERSIONS = 50;
-    private const DEVICE_MIN_CLICKS      = 200;
-    private const DEVICE_DIVERGENCE      = 0.20;   // 20% from average CPA triggers modifier
-    private const HOUR_MIN_CLICKS        = 30;
-    private const HOUR_HIGH_THRESHOLD    = 0.70;   // CPA < 70% of avg → boost
-    private const HOUR_LOW_THRESHOLD     = 1.50;   // CPA > 150% of avg → reduce
-    private const MODIFIER_CLAMP_MIN     = 0.10;
-    private const MODIFIER_CLAMP_MAX     = 10.0;
+
+    private const DEVICE_MIN_CLICKS = 200;
+
+    private const DEVICE_DIVERGENCE = 0.20;   // 20% from average CPA triggers modifier
+
+    private const HOUR_MIN_CLICKS = 30;
+
+    private const HOUR_HIGH_THRESHOLD = 0.70;   // CPA < 70% of avg → boost
+
+    private const HOUR_LOW_THRESHOLD = 1.50;   // CPA > 150% of avg → reduce
+
+    private const MODIFIER_CLAMP_MIN = 0.10;
+
+    private const MODIFIER_CLAMP_MAX = 10.0;
 
     // MinuteOfHour enum: ZERO=2
     private const MINUTE_ZERO = 2;
@@ -44,13 +51,13 @@ class BidAdjustmentAgent
     public function optimize(Campaign $campaign): array
     {
         $customer = $campaign->customer;
-        $results  = ['adjustments' => [], 'errors' => []];
+        $results = ['adjustments' => [], 'errors' => []];
 
         // Google Ads: device + daypart bid modifiers
         if ($customer?->google_ads_customer_id && $campaign->google_ads_campaign_id) {
             $googleResults = $this->optimizeGoogle($campaign, $customer);
             $results['adjustments'] = array_merge($results['adjustments'], $googleResults['adjustments']);
-            $results['errors']      = array_merge($results['errors'],      $googleResults['errors']);
+            $results['errors'] = array_merge($results['errors'], $googleResults['errors']);
         }
 
         // Facebook Ads: ad-set schedule exclusions for poor-performing hours
@@ -58,14 +65,14 @@ class BidAdjustmentAgent
             && config('optimization.bid_adjustment.facebook_daypart_enabled', false)) {
             $fbResults = $this->optimizeFacebook($campaign, $customer);
             $results['adjustments'] = array_merge($results['adjustments'], $fbResults['adjustments']);
-            $results['errors']      = array_merge($results['errors'],      $fbResults['errors']);
+            $results['errors'] = array_merge($results['errors'], $fbResults['errors']);
         }
 
-        if (!empty($results['adjustments'])) {
+        if (! empty($results['adjustments'])) {
             AgentActivity::record(
                 'bidding',
                 'bid_adjustments_applied',
-                'Applied ' . count($results['adjustments']) . ' bid modifier(s) for "' . $campaign->name . '"',
+                'Applied '.count($results['adjustments']).' bid modifier(s) for "'.$campaign->name.'"',
                 $campaign->customer_id,
                 $campaign->id,
                 $results
@@ -77,15 +84,15 @@ class BidAdjustmentAgent
 
     private function optimizeGoogle(Campaign $campaign, object $customer): array
     {
-        if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
+        if (! $customer?->google_ads_customer_id || ! $campaign->google_ads_campaign_id) {
             return ['skipped' => true];
         }
 
-        $customerId       = $customer->cleanGoogleCustomerId();
+        $customerId = $customer->cleanGoogleCustomerId();
         $campaignResource = $campaign->google_ads_campaign_id;
 
         $adjustments = [];
-        $errors      = [];
+        $errors = [];
 
         $segmentService = new GetPerformanceBySegment($customer);
 
@@ -108,7 +115,7 @@ class BidAdjustmentAgent
     private function optimizeFacebook(Campaign $campaign, object $customer): array
     {
         $adjustments = [];
-        $errors      = [];
+        $errors = [];
 
         // Need at least 14 days of hourly data — use stored performance data grouped by hour
         $data = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
@@ -125,15 +132,15 @@ class BidAdjustmentAgent
         $hourlyStats = [];
         foreach ($data as $row) {
             $hour = (int) $row->created_at->format('G');
-            if (!isset($hourlyStats[$hour])) {
+            if (! isset($hourlyStats[$hour])) {
                 $hourlyStats[$hour] = ['cost' => 0, 'conversions' => 0, 'impressions' => 0];
             }
-            $hourlyStats[$hour]['cost']        += $row->cost;
-            $hourlyStats[$hour]['conversions']  += $row->conversions;
-            $hourlyStats[$hour]['impressions']  += $row->impressions;
+            $hourlyStats[$hour]['cost'] += $row->cost;
+            $hourlyStats[$hour]['conversions'] += $row->conversions;
+            $hourlyStats[$hour]['impressions'] += $row->impressions;
         }
 
-        $totalCost        = array_sum(array_column($hourlyStats, 'cost'));
+        $totalCost = array_sum(array_column($hourlyStats, 'cost'));
         $totalConversions = array_sum(array_column($hourlyStats, 'conversions'));
 
         if ($totalConversions < 5 || $totalCost <= 0) {
@@ -168,12 +175,12 @@ class BidAdjustmentAgent
 
         try {
             $adSetService = new FacebookAdSetService($customer);
-            $adSets       = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+            $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
 
             foreach ($adSets as $adSet) {
                 // Build 24-hour schedule excluding poor-performing hours
                 $schedule = [];
-                $days = ['MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY','SUNDAY'];
+                $days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY'];
                 for ($h = 0; $h < 24; $h++) {
                     if (in_array($h, $exclusionHours, true)) {
                         continue; // exclude this hour
@@ -181,13 +188,13 @@ class BidAdjustmentAgent
                     foreach ($days as $day) {
                         $schedule[] = [
                             'start_minute' => $h * 60,
-                            'end_minute'   => ($h + 1) * 60,
-                            'days'         => [$day],
+                            'end_minute' => ($h + 1) * 60,
+                            'days' => [$day],
                         ];
                     }
                 }
 
-                if (!empty($schedule)) {
+                if (! empty($schedule)) {
                     $adSetService->updateAdSet($adSet['id'], ['adset_schedule' => $schedule]);
                 }
             }
@@ -195,18 +202,18 @@ class BidAdjustmentAgent
             Cache::put($cacheKey, $exclusionHours, now()->addDays(7));
 
             $adjustments[] = [
-                'type'            => 'facebook_daypart',
+                'type' => 'facebook_daypart',
                 'exclusion_hours' => $exclusionHours,
-                'adsets_updated'  => count($adSets),
-                'avg_cpa'         => round($avgCpa, 2),
+                'adsets_updated' => count($adSets),
+                'avg_cpa' => round($avgCpa, 2),
             ];
 
             Log::info("BidAdjustmentAgent: Facebook daypart schedule applied for campaign {$campaign->id}", [
                 'exclusion_hours' => $exclusionHours,
             ]);
         } catch (\Exception $e) {
-            $errors[] = "Facebook daypart failed: " . $e->getMessage();
-            Log::warning("BidAdjustmentAgent: Facebook daypart error for campaign {$campaign->id}: " . $e->getMessage());
+            $errors[] = 'Facebook daypart failed: '.$e->getMessage();
+            Log::warning("BidAdjustmentAgent: Facebook daypart error for campaign {$campaign->id}: ".$e->getMessage());
         }
 
         return ['adjustments' => $adjustments, 'errors' => $errors];
@@ -218,7 +225,7 @@ class BidAdjustmentAgent
             return [];
         }
 
-        $totalCost        = array_sum(array_column($deviceData, 'cost_micros'));
+        $totalCost = array_sum(array_column($deviceData, 'cost_micros'));
         $totalConversions = array_sum(array_column($deviceData, 'conversions'));
 
         if ($totalConversions < 1) {
@@ -226,8 +233,8 @@ class BidAdjustmentAgent
         }
 
         $avgCpaMicros = $totalCost / $totalConversions;
-        $service      = new SetDeviceBidAdjustment($customer);
-        $adjustments  = [];
+        $service = new SetDeviceBidAdjustment($customer);
+        $adjustments = [];
 
         // Device enum values: MOBILE=2, DESKTOP=4, TABLET=6
         $deviceMap = [Device::MOBILE => 'Mobile', Device::DESKTOP => 'Desktop', Device::TABLET => 'Tablet'];
@@ -236,12 +243,12 @@ class BidAdjustmentAgent
             $qualifies = ($data['conversions'] >= self::DEVICE_MIN_CONVERSIONS)
                 || ($data['clicks'] >= self::DEVICE_MIN_CLICKS && $data['conversions'] >= 5);
 
-            if (!$qualifies || $data['conversions'] < 1) {
+            if (! $qualifies || $data['conversions'] < 1) {
                 continue;
             }
 
             $deviceCpa = $data['cost_micros'] / $data['conversions'];
-            $ratio     = $deviceCpa / $avgCpaMicros;
+            $ratio = $deviceCpa / $avgCpaMicros;
 
             // Only adjust if diverges >20%
             if (abs(1 - $ratio) <= self::DEVICE_DIVERGENCE) {
@@ -257,8 +264,8 @@ class BidAdjustmentAgent
             if ($result) {
                 $label = $deviceMap[$deviceEnum] ?? $deviceEnum;
                 $adjustments[] = [
-                    'type'     => 'device',
-                    'device'   => $label,
+                    'type' => 'device',
+                    'device' => $label,
                     'modifier' => $modifier,
                     'cpa_vs_avg' => round($ratio, 2),
                 ];
@@ -280,7 +287,7 @@ class BidAdjustmentAgent
             return [];
         }
 
-        $totalCost        = array_sum(array_column($hourData, 'cost_micros'));
+        $totalCost = array_sum(array_column($hourData, 'cost_micros'));
         $totalConversions = array_sum(array_column($hourData, 'conversions'));
 
         if ($totalConversions < 1) {
@@ -288,8 +295,8 @@ class BidAdjustmentAgent
         }
 
         $avgCpaMicros = $totalCost / $totalConversions;
-        $service      = new SetAdSchedule($customer);
-        $adjustments  = [];
+        $service = new SetAdSchedule($customer);
+        $adjustments = [];
 
         // Group hours into "high", "low", "normal" performance blocks.
         // Apply to all 7 days (Sunday=8 … Saturday=7, Monday=2 … Sunday=8 in enum).
@@ -305,7 +312,7 @@ class BidAdjustmentAgent
             }
 
             $hourCpa = $data['cost_micros'] / $data['conversions'];
-            $ratio   = $hourCpa / $avgCpaMicros;
+            $ratio = $hourCpa / $avgCpaMicros;
 
             if ($ratio < self::HOUR_HIGH_THRESHOLD) {
                 $modifier = min(self::MODIFIER_CLAMP_MAX, round(1 / $ratio, 2)); // boost
@@ -331,9 +338,9 @@ class BidAdjustmentAgent
             }
 
             $adjustments[] = [
-                'type'       => 'daypart',
-                'hour'       => $hour,
-                'modifier'   => $modifier,
+                'type' => 'daypart',
+                'hour' => $hour,
+                'modifier' => $modifier,
                 'cpa_vs_avg' => round($ratio, 2),
             ];
         }

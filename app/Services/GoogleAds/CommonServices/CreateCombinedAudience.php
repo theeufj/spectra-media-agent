@@ -6,10 +6,10 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Common\LogicalUserListInfo;
 use Google\Ads\GoogleAds\V22\Common\LogicalUserListOperandInfo;
 use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\UserList;
 use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
 use Google\Ads\GoogleAds\V22\Services\UserListOperation;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\ApiCore\ApiException;
 
 class CreateCombinedAudience extends BaseGoogleAdsService
@@ -21,10 +21,7 @@ class CreateCombinedAudience extends BaseGoogleAdsService
      * Useful for targeting e.g. "all site visitors" AND "customer match list" intersections,
      * or "converters" OR "high-value visitors" unions.
      *
-     * @param string $customerId
-     * @param string $listName
-     * @param array $userListResourceNames Array of existing UserList resource names to combine
-     * @param string $description
+     * @param  array  $userListResourceNames  Array of existing UserList resource names to combine
      * @return string|null Resource name of the created combined UserList
      */
     public function __invoke(
@@ -36,7 +33,8 @@ class CreateCombinedAudience extends BaseGoogleAdsService
         $this->ensureClient();
 
         if (count($userListResourceNames) < 2) {
-            $this->logError("CreateCombinedAudience requires at least 2 user lists to combine");
+            $this->logError('CreateCombinedAudience requires at least 2 user lists to combine');
+
             return null;
         }
 
@@ -58,13 +56,13 @@ class CreateCombinedAudience extends BaseGoogleAdsService
         ]);
 
         $userList = new UserList([
-            'name' => $listName . ' - ' . now()->format('Y-m-d'),
-            'description' => $description ?: "Combined audience of " . count($userListResourceNames) . " segments",
+            'name' => $listName.' - '.now()->format('Y-m-d'),
+            'description' => $description ?: 'Combined audience of '.count($userListResourceNames).' segments',
             'membership_status' => UserListMembershipStatus::OPEN,
             'logical_user_list' => $logicalUserList,
         ]);
 
-        $operation = new UserListOperation();
+        $operation = new UserListOperation;
         $operation->setCreate($userList);
 
         try {
@@ -75,9 +73,11 @@ class CreateCombinedAudience extends BaseGoogleAdsService
 
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Created Combined Audience '{$listName}': {$resourceName}");
+
             return $resourceName;
         } catch (GoogleAdsException|ApiException $e) {
-            $this->logError("Failed to create Combined Audience: " . $e->getMessage());
+            $this->logError('Failed to create Combined Audience: '.$e->getMessage());
+
             return null;
         }
     }

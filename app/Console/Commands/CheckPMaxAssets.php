@@ -47,19 +47,22 @@ class CheckPMaxAssets extends Command
     {
         $campaign = Campaign::with('customer')->find($campaignId);
 
-        if (!$campaign) {
+        if (! $campaign) {
             $this->error("Campaign {$campaignId} not found.");
+
             return self::FAILURE;
         }
 
         $customer = $campaign->customer;
-        if (!$customer) {
+        if (! $customer) {
             $this->error("No customer found for campaign {$campaignId}.");
+
             return self::FAILURE;
         }
 
-        if (!$campaign->google_ads_campaign_id) {
+        if (! $campaign->google_ads_campaign_id) {
             $this->warn("Campaign {$campaignId} has no google_ads_campaign_id — skipping.");
+
             return self::SUCCESS;
         }
 
@@ -78,8 +81,9 @@ class CheckPMaxAssets extends Command
     {
         $customer = Customer::find($customerId);
 
-        if (!$customer) {
+        if (! $customer) {
             $this->error("Customer {$customerId} not found.");
+
             return self::FAILURE;
         }
 
@@ -92,6 +96,7 @@ class CheckPMaxAssets extends Command
 
         if ($campaigns->isEmpty()) {
             $this->warn("No active PMax campaigns found for customer {$customerId}.");
+
             return self::SUCCESS;
         }
 
@@ -109,15 +114,16 @@ class CheckPMaxAssets extends Command
      */
     private function runForAllCustomers(): int
     {
-        $this->info("Checking PMax assets for all customers with active campaigns...");
+        $this->info('Checking PMax assets for all customers with active campaigns...');
 
         $customers = Customer::whereHas('campaigns', function ($q) {
             $q->whereNotNull('google_ads_campaign_id')
-              ->where('status', 'active');
+                ->where('status', 'active');
         })->get();
 
         if ($customers->isEmpty()) {
-            $this->warn("No customers with active PMax campaigns found.");
+            $this->warn('No customers with active PMax campaigns found.');
+
             return self::SUCCESS;
         }
 
@@ -148,14 +154,16 @@ class CheckPMaxAssets extends Command
     {
         try {
             $agent = new PMaxAssetOptimizationAgent($customer);
+
             return $agent->run($campaign);
         } catch (\Exception $e) {
-            Log::error("CheckPMaxAssets: Agent failed for campaign {$campaign->id}: " . $e->getMessage());
+            Log::error("CheckPMaxAssets: Agent failed for campaign {$campaign->id}: ".$e->getMessage());
+
             return [
-                'low_detected'  => 0,
+                'low_detected' => 0,
                 'text_replaced' => 0,
                 'image_flagged' => 0,
-                'errors'        => [$e->getMessage()],
+                'errors' => [$e->getMessage()],
             ];
         }
     }

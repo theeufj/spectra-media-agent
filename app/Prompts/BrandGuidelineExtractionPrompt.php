@@ -5,12 +5,14 @@ namespace App\Prompts;
 class BrandGuidelineExtractionPrompt
 {
     private string $websiteContent;
+
     private array $visualAnalysis;
+
     private string $industry;
 
     public function __construct(
-        string $websiteContent, 
-        array $visualAnalysis, 
+        string $websiteContent,
+        array $visualAnalysis,
         string $industry
     ) {
         $this->websiteContent = $websiteContent;
@@ -21,7 +23,7 @@ class BrandGuidelineExtractionPrompt
     public function getPrompt(): string
     {
         $visualContext = json_encode($this->visualAnalysis, JSON_PRETTY_PRINT);
-        
+
         return <<<PROMPT
 You are an expert brand strategist and copywriting analyst with deep expertise in marketing psychology and brand positioning. Your task is to analyze a company's website content and extract comprehensive, actionable brand guidelines.
 

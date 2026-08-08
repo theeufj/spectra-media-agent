@@ -22,7 +22,9 @@ class SyncProductFeed implements ShouldQueue
     public function handle(): void
     {
         $feed = ProductFeed::find($this->productFeedId);
-        if (!$feed) return;
+        if (! $feed) {
+            return;
+        }
 
         try {
             $feed->update(['status' => 'processing']);
@@ -47,7 +49,7 @@ class SyncProductFeed implements ShouldQueue
             $errorMsg = $e->getMessage();
             $feed->update([
                 'status' => 'error',
-                'last_error' => strlen($errorMsg) > 500 ? substr($errorMsg, 0, 500) . '...' : $errorMsg,
+                'last_error' => strlen($errorMsg) > 500 ? substr($errorMsg, 0, 500).'...' : $errorMsg,
             ]);
             Log::error('SyncProductFeed: Failed', [
                 'feed_id' => $feed->id,
@@ -61,7 +63,7 @@ class SyncProductFeed implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('SyncProductFeed failed: ' . $exception->getMessage(), [
+        Log::error('SyncProductFeed failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

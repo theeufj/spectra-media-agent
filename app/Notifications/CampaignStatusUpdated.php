@@ -4,7 +4,6 @@ namespace App\Notifications;
 
 use App\Models\Campaign;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -38,12 +37,12 @@ class CampaignStatusUpdated extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-                    ->subject('Campaign Status Update: ' . $this->campaign->name)
-                    ->greeting('Hi ' . $notifiable->name . ',')
-                    ->line('The status of your campaign "' . $this->campaign->name . '" has changed.')
-                    ->line('New Status: ' . $this->campaign->primary_status)
-                    ->action('View Campaign', url('/campaigns/' . $this->campaign->id))
-                    ->salutation('— Site to Spend');
+            ->subject('Campaign Status Update: '.$this->campaign->name)
+            ->greeting('Hi '.$notifiable->name.',')
+            ->line('The status of your campaign "'.$this->campaign->name.'" has changed.')
+            ->line('New Status: '.$this->campaign->primary_status)
+            ->action('View Campaign', url('/campaigns/'.$this->campaign->id))
+            ->salutation('— Site to Spend');
     }
 
     /**
@@ -56,7 +55,7 @@ class CampaignStatusUpdated extends Notification
         return [
             'campaign_id' => $this->campaign->id,
             'status' => $this->campaign->primary_status,
-            'message' => 'Campaign "' . $this->campaign->name . '" is now ' . $this->campaign->primary_status,
+            'message' => 'Campaign "'.$this->campaign->name.'" is now '.$this->campaign->primary_status,
         ];
     }
 }

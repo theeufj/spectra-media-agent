@@ -2,8 +2,8 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class AdAccountService extends BaseFacebookAdsService
 {
@@ -28,20 +28,23 @@ class AdAccountService extends BaseFacebookAdsService
                 Log::info("Retrieved ad accounts for customer {$this->customer->id}", [
                     'account_count' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
             Log::warning("No ad accounts found for customer {$this->customer->id}");
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error listing ad accounts: " . $e->getMessage(), [
+            Log::error('Error listing ad accounts: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -49,8 +52,7 @@ class AdAccountService extends BaseFacebookAdsService
     /**
      * Get details of a specific ad account.
      *
-     * @param string $accountId The Facebook ad account ID (without 'act_' prefix)
-     * @return ?array
+     * @param  string  $accountId  The Facebook ad account ID (without 'act_' prefix)
      */
     public function getAdAccount(string $accountId): ?array
     {
@@ -63,16 +65,18 @@ class AdAccountService extends BaseFacebookAdsService
                 Log::info("Retrieved details for ad account {$accountId}", [
                     'customer_id' => $this->customer->id,
                 ]);
+
                 return $response;
             }
 
             return null;
         } catch (\Exception $e) {
-            Log::error("Error getting ad account details: " . $e->getMessage(), [
+            Log::error('Error getting ad account details: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -80,9 +84,9 @@ class AdAccountService extends BaseFacebookAdsService
     /**
      * Create a new ad account.
      *
-     * @param string $accountName The name of the new ad account
-     * @param string $currency The currency code (e.g., 'USD')
-     * @param string $timezone The timezone (e.g., 'America/New_York')
+     * @param  string  $accountName  The name of the new ad account
+     * @param  string  $currency  The currency code (e.g., 'USD')
+     * @param  string  $timezone  The timezone (e.g., 'America/New_York')
      * @return ?array Array with account ID or null on failure
      */
     public function createAdAccount(string $accountName, string $currency = 'USD', string $timezone = 'America/New_York'): ?array
@@ -99,20 +103,23 @@ class AdAccountService extends BaseFacebookAdsService
                     'account_id' => $response['id'],
                     'account_name' => $accountName,
                 ]);
+
                 return $response;
             }
 
-            Log::error("Failed to create ad account", [
+            Log::error('Failed to create ad account', [
                 'customer_id' => $this->customer->id,
                 'response' => $response,
             ]);
+
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating ad account: " . $e->getMessage(), [
+            Log::error('Error creating ad account: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_name' => $accountName,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -120,10 +127,9 @@ class AdAccountService extends BaseFacebookAdsService
     /**
      * Get spending insights for an ad account.
      *
-     * @param string $accountId The Facebook ad account ID (without 'act_' prefix)
-     * @param string $dateStart Start date (YYYY-MM-DD)
-     * @param string $dateEnd End date (YYYY-MM-DD)
-     * @return ?array
+     * @param  string  $accountId  The Facebook ad account ID (without 'act_' prefix)
+     * @param  string  $dateStart  Start date (YYYY-MM-DD)
+     * @param  string  $dateEnd  End date (YYYY-MM-DD)
      */
     public function getSpendInsights(string $accountId, string $dateStart, string $dateEnd): ?array
     {
@@ -139,20 +145,23 @@ class AdAccountService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting spend insights: " . $e->getMessage(), [
+            Log::error('Error getting spend insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -160,8 +169,7 @@ class AdAccountService extends BaseFacebookAdsService
     /**
      * Get pixels for an ad account.
      *
-     * @param string $accountId Account ID (with act_ prefix)
-     * @return array
+     * @param  string  $accountId  Account ID (with act_ prefix)
      */
     public function getPixels(string $accountId): array
     {
@@ -172,9 +180,10 @@ class AdAccountService extends BaseFacebookAdsService
 
             return $response['data'] ?? [];
         } catch (\Exception $e) {
-            Log::error("Error getting pixels: " . $e->getMessage(), [
+            Log::error('Error getting pixels: '.$e->getMessage(), [
                 'account_id' => $accountId,
             ]);
+
             return [];
         }
     }
@@ -182,8 +191,7 @@ class AdAccountService extends BaseFacebookAdsService
     /**
      * Get event stats for a pixel.
      *
-     * @param string $pixelId Pixel ID
-     * @return array
+     * @param  string  $pixelId  Pixel ID
      */
     public function getPixelStats(string $pixelId): array
     {
@@ -192,9 +200,10 @@ class AdAccountService extends BaseFacebookAdsService
 
             return $response['data'] ?? [];
         } catch (\Exception $e) {
-            Log::error("Error getting pixel stats: " . $e->getMessage(), [
+            Log::error('Error getting pixel stats: '.$e->getMessage(), [
                 'pixel_id' => $pixelId,
             ]);
+
             return [];
         }
     }

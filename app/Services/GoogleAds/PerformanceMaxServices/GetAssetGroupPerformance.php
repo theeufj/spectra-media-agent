@@ -17,9 +17,8 @@ class GetAssetGroupPerformance extends BaseGoogleAdsService
     /**
      * Get performance data for all assets in a PMax campaign's asset groups.
      *
-     * @param  string $customerId
-     * @param  string $campaignResourceName  e.g. "customers/123/campaigns/456"
-     * @param  string $dateRange             GAQL date range constant (unused in filter but kept for API consistency)
+     * @param  string  $campaignResourceName  e.g. "customers/123/campaigns/456"
+     * @param  string  $dateRange  GAQL date range constant (unused in filter but kept for API consistency)
      * @return array{best: array, good: array, low: array, pending: array, learning: array}
      */
     public function __invoke(
@@ -45,10 +44,10 @@ WHERE asset_group.campaign = '{$campaignResourceName}'
   AND asset_group_asset.status = 'ENABLED'";
 
         $buckets = [
-            'best'     => [],
-            'good'     => [],
-            'low'      => [],
-            'pending'  => [],
+            'best' => [],
+            'good' => [],
+            'low' => [],
+            'pending' => [],
             'learning' => [],
         ];
 
@@ -57,46 +56,46 @@ WHERE asset_group.campaign = '{$campaignResourceName}'
 
             foreach ($response->getIterator() as $row) {
                 $assetGroupAsset = $row->getAssetGroupAsset();
-                $asset           = $row->getAsset();
+                $asset = $row->getAsset();
 
-                $fieldTypeInt       = $assetGroupAsset->getFieldType();
+                $fieldTypeInt = $assetGroupAsset->getFieldType();
                 $performanceLabelInt = $assetGroupAsset->getPerformanceLabel();
 
                 $performanceLabelStr = $this->formatPerformanceLabel($performanceLabelInt);
-                $fieldTypeStr        = $this->formatFieldType($fieldTypeInt);
+                $fieldTypeStr = $this->formatFieldType($fieldTypeInt);
 
                 $entry = [
-                    'asset_resource'    => $assetGroupAsset->getAsset(),
-                    'asset_group'       => $assetGroupAsset->getAssetGroup(),
-                    'field_type'        => $fieldTypeStr,
+                    'asset_resource' => $assetGroupAsset->getAsset(),
+                    'asset_group' => $assetGroupAsset->getAssetGroup(),
+                    'field_type' => $fieldTypeStr,
                     'performance_label' => $performanceLabelStr,
-                    'text'              => $asset->getTextAsset()?->getText() ?? null,
-                    'image_url'         => $asset->getImageAsset()?->getFullSize()?->getUrl() ?? null,
-                    'youtube_video_id'  => $asset->getYoutubeVideoAsset()?->getYoutubeVideoId() ?? null,
+                    'text' => $asset->getTextAsset()?->getText() ?? null,
+                    'image_url' => $asset->getImageAsset()?->getFullSize()?->getUrl() ?? null,
+                    'youtube_video_id' => $asset->getYoutubeVideoAsset()?->getYoutubeVideoId() ?? null,
                 ];
 
                 $bucket = match ($performanceLabelStr) {
-                    'BEST'     => 'best',
-                    'GOOD'     => 'good',
-                    'LOW'      => 'low',
-                    'PENDING'  => 'pending',
+                    'BEST' => 'best',
+                    'GOOD' => 'good',
+                    'LOW' => 'low',
+                    'PENDING' => 'pending',
                     'LEARNING' => 'learning',
-                    default    => 'pending',
+                    default => 'pending',
                 };
 
                 $buckets[$bucket][] = $entry;
             }
         } catch (GoogleAdsException $e) {
             Log::error('GetAssetGroupPerformance: Query failed', [
-                'customer_id'   => $customerId,
-                'campaign'      => $campaignResourceName,
-                'error'         => $e->getMessage(),
+                'customer_id' => $customerId,
+                'campaign' => $campaignResourceName,
+                'error' => $e->getMessage(),
             ]);
         } catch (\Exception $e) {
             Log::error('GetAssetGroupPerformance: Unexpected error', [
                 'customer_id' => $customerId,
-                'campaign'    => $campaignResourceName,
-                'error'       => $e->getMessage(),
+                'campaign' => $campaignResourceName,
+                'error' => $e->getMessage(),
             ]);
         }
 
@@ -109,6 +108,7 @@ WHERE asset_group.campaign = '{$campaignResourceName}'
     public function getLowPerformingAssets(string $customerId, string $campaignResourceName): array
     {
         $all = $this($customerId, $campaignResourceName);
+
         return $all['low'] ?? [];
     }
 
@@ -118,16 +118,16 @@ WHERE asset_group.campaign = '{$campaignResourceName}'
     protected function formatFieldType(int $fieldType): string
     {
         return match ($fieldType) {
-            0  => 'UNSPECIFIED',
-            1  => 'UNKNOWN',
-            2  => 'HEADLINE',
-            3  => 'DESCRIPTION',
-            4  => 'MANDATORY_AD_TEXT',
-            5  => 'MARKETING_IMAGE',
-            6  => 'MEDIA_BUNDLE',
-            7  => 'YOUTUBE_VIDEO',
-            8  => 'BOOK_ON_GOOGLE',
-            9  => 'LEAD_FORM',
+            0 => 'UNSPECIFIED',
+            1 => 'UNKNOWN',
+            2 => 'HEADLINE',
+            3 => 'DESCRIPTION',
+            4 => 'MANDATORY_AD_TEXT',
+            5 => 'MARKETING_IMAGE',
+            6 => 'MEDIA_BUNDLE',
+            7 => 'YOUTUBE_VIDEO',
+            8 => 'BOOK_ON_GOOGLE',
+            9 => 'LEAD_FORM',
             10 => 'PROMOTION',
             11 => 'CALLOUT',
             12 => 'STRUCTURED_SNIPPET',

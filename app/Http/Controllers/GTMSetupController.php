@@ -41,8 +41,8 @@ class GTMSetupController extends Controller
         }
 
         return Inertia::render('Customers/GTM/Setup', [
-            'customer'     => $customer,
-            'snippet'      => $snippet,
+            'customer' => $customer,
+            'snippet' => $snippet,
             'existingTags' => $existingTags,
         ]);
     }
@@ -57,24 +57,25 @@ class GTMSetupController extends Controller
         $this->authorizeCustomer($request, $customer);
         if ($customer->gtm_container_id) {
             $snippet = $gtmService->getSnippetHtml($customer->gtm_container_id);
+
             return back()->with([
-                'success'  => 'GTM container already provisioned.',
-                'snippet'  => $snippet,
+                'success' => 'GTM container already provisioned.',
+                'snippet' => $snippet,
                 'customer' => $customer->fresh(),
             ]);
         }
 
         $result = $gtmService->provisionContainerForCustomer($customer);
 
-        if (!$result['success']) {
-            return back()->with('error', 'Failed to provision GTM container: ' . $result['error']);
+        if (! $result['success']) {
+            return back()->with('error', 'Failed to provision GTM container: '.$result['error']);
         }
 
         $snippet = $gtmService->getSnippetHtml($result['container_id']);
 
         return back()->with([
-            'success'  => 'GTM container created! Add the snippet below to your website.',
-            'snippet'  => $snippet,
+            'success' => 'GTM container created! Add the snippet below to your website.',
+            'snippet' => $snippet,
             'customer' => $customer->fresh(),
         ]);
     }
@@ -85,29 +86,29 @@ class GTMSetupController extends Controller
     public function verifyInstalled(Request $request, Customer $customer, GTMContainerService $gtmService)
     {
         $this->authorizeCustomer($request, $customer);
-        if (!$customer->gtm_container_id) {
+        if (! $customer->gtm_container_id) {
             return back()->with('error', 'No GTM container has been provisioned yet.');
         }
 
-        if (!$customer->website) {
+        if (! $customer->website) {
             return back()->with('error', 'No website URL is configured for this customer.');
         }
 
         $result = $gtmService->verifySnippetInstalled($customer);
 
-        if (!$result['success']) {
-            return back()->with('error', 'Could not verify installation: ' . $result['error']);
+        if (! $result['success']) {
+            return back()->with('error', 'Could not verify installation: '.$result['error']);
         }
 
         if ($result['installed']) {
             return back()->with([
-                'success'  => 'Snippet verified! Conversion tracking is active.',
+                'success' => 'Snippet verified! Conversion tracking is active.',
                 'customer' => $customer->fresh(),
             ]);
         }
 
         return back()->with([
-            'error'    => 'Snippet not detected yet. Make sure you\'ve added both the <head> and <body> snippets, then try again.',
+            'error' => 'Snippet not detected yet. Make sure you\'ve added both the <head> and <body> snippets, then try again.',
             'customer' => $customer->fresh(),
         ]);
     }
@@ -118,7 +119,7 @@ class GTMSetupController extends Controller
     public function rescan(Request $request, Customer $customer, GTMDetectionService $gtmDetectionService)
     {
         $this->authorizeCustomer($request, $customer);
-        if (!$customer->website) {
+        if (! $customer->website) {
             return back()->with('error', 'Customer does not have a website URL configured');
         }
 
@@ -136,20 +137,20 @@ class GTMSetupController extends Controller
             $htmlContent = @file_get_contents($customer->website);
         }
 
-        if (!$htmlContent) {
+        if (! $htmlContent) {
             return back()->with('error', 'Could not fetch website content. Please check the website URL.');
         }
 
         $metadata = $gtmDetectionService->getDetectionMetadata($htmlContent);
 
         $customer->update([
-            'gtm_detected'    => $metadata['detected'],
+            'gtm_detected' => $metadata['detected'],
             'gtm_detected_at' => $metadata['detected_at'],
         ]);
 
         // If they already have a provisioned container this is just a detection scan
         $message = $metadata['detected']
-            ? 'GTM detected on your website (container: ' . $metadata['container_id'] . ')'
+            ? 'GTM detected on your website (container: '.$metadata['container_id'].')'
             : 'No GTM container detected on your website.';
 
         return back()->with(['success' => $message, 'customer' => $customer->fresh()]);
@@ -161,14 +162,15 @@ class GTMSetupController extends Controller
     public function getStatus(Request $request, Customer $customer, GTMContainerService $gtmService)
     {
         $this->authorizeCustomer($request, $customer);
+
         return response()->json([
             'success' => true,
-            'status'  => [
-                'provisioned'    => (bool) $customer->gtm_container_id,
-                'container_id'   => $customer->gtm_container_id,
-                'gtm_installed'  => $customer->gtm_installed,
-                'last_verified'  => $customer->gtm_last_verified,
-                'gtm_detected'   => $customer->gtm_detected,
+            'status' => [
+                'provisioned' => (bool) $customer->gtm_container_id,
+                'container_id' => $customer->gtm_container_id,
+                'gtm_installed' => $customer->gtm_installed,
+                'last_verified' => $customer->gtm_last_verified,
+                'gtm_detected' => $customer->gtm_detected,
             ],
         ]);
     }

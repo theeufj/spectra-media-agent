@@ -3,28 +3,26 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
+use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class AddKeyword extends BaseGoogleAdsService
 {
     /**
      * Add a keyword to an ad group.
      *
-     * @param string $customerId
-     * @param string $adGroupResourceName
-     * @param string $keyword The keyword text
-     * @param int $matchType KeywordMatchType enum value (default: EXACT)
+     * @param  string  $keyword  The keyword text
+     * @param  int  $matchType  KeywordMatchType enum value (default: EXACT)
      * @return string|null Resource name of the created criterion
      */
     public function __invoke(
-        string $customerId, 
-        string $adGroupResourceName, 
+        string $customerId,
+        string $adGroupResourceName,
         string $keyword,
         int $matchType = KeywordMatchType::EXACT
     ): ?string {
@@ -41,7 +39,7 @@ class AddKeyword extends BaseGoogleAdsService
             'status' => AdGroupCriterionStatus::ENABLED,
         ]);
 
-        $operation = new AdGroupCriterionOperation();
+        $operation = new AdGroupCriterionOperation;
         $operation->setCreate($adGroupCriterion);
 
         try {
@@ -54,10 +52,12 @@ class AddKeyword extends BaseGoogleAdsService
             );
 
             $result = $response->getResults()[0];
+
             return $result->getResourceName();
 
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to add keyword: " . $e->getMessage());
+            $this->logError('Failed to add keyword: '.$e->getMessage());
+
             return null;
         }
     }

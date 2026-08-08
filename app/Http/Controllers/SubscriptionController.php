@@ -5,9 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\Plan;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Laravel\Cashier\Exceptions\InvalidCustomer;
-use Illuminate\Support\Facades\Log;
 
 class SubscriptionController extends Controller
 {
@@ -15,7 +15,7 @@ class SubscriptionController extends Controller
      * pricing is a method on our controller struct.
      * It's responsible for rendering the pricing page view.
      *
-     * @param Request $request The incoming HTTP request, similar to http.Request in Go.
+     * @param  Request  $request  The incoming HTTP request, similar to http.Request in Go.
      * @return \Inertia\Response Returns a rendered Inertia.js view.
      */
     public function pricing(Request $request)
@@ -31,7 +31,7 @@ class SubscriptionController extends Controller
      * checkout is our handler for initiating a subscription.
      * It creates a Stripe Checkout session and redirects the user to Stripe's hosted payment page.
      *
-     * @param Request $request The incoming HTTP request.
+     * @param  Request  $request  The incoming HTTP request.
      * @return \Inertia\Response A response that instructs Inertia to redirect to Stripe.
      */
     public function checkout(Request $request)
@@ -44,7 +44,7 @@ class SubscriptionController extends Controller
             ->where('stripe_price_id', $request->input('price_id'))
             ->first();
 
-        if (!$plan || !$plan->stripe_price_id) {
+        if (! $plan || ! $plan->stripe_price_id) {
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'error',
                 'message' => 'Invalid plan selected. Please choose a valid plan.',
@@ -60,7 +60,7 @@ class SubscriptionController extends Controller
         $deploymentEnabled = \App\Models\Setting::get('deployment_enabled', true);
 
         // Ensure user is a Stripe customer
-        if (!$user->hasStripeId()) {
+        if (! $user->hasStripeId()) {
             $user->createAsStripeCustomer();
         }
 
@@ -90,7 +90,7 @@ class SubscriptionController extends Controller
                 'customer' => $user->stripe_id,
                 'mode' => 'setup',
                 'payment_method_types' => ['card'],
-                'success_url' => route('dashboard') . '?setup=success',
+                'success_url' => route('dashboard').'?setup=success',
                 'cancel_url' => route('subscription.pricing'),
                 'customer_update' => [
                     'name' => 'auto',
@@ -110,7 +110,7 @@ class SubscriptionController extends Controller
      * This is a secure, Stripe-hosted page where users can manage their subscription,
      * update payment methods, and view invoice history.
      *
-     * @param Request $request The incoming HTTP request.
+     * @param  Request  $request  The incoming HTTP request.
      * @return \Illuminate\Http\RedirectResponse A redirect to the Stripe Billing Portal.
      */
     public function portal(Request $request)
@@ -119,27 +119,29 @@ class SubscriptionController extends Controller
             $user = Auth::user();
 
             // Check if the user has an active subscription.
-            if (!$user->subscribed('default')) {
+            if (! $user->subscribed('default')) {
                 return redirect()->route('subscription.pricing')->with('flash', [
                     'type' => 'info',
-                    'message' => 'You do not have an active subscription. Please select a plan to continue.'
+                    'message' => 'You do not have an active subscription. Please select a plan to continue.',
                 ]);
             }
 
             // Generate the billing portal URL and redirect.
             $billingPortalUrl = $user->billingPortalUrl(route('dashboard'));
+
             return Inertia::location($billingPortalUrl);
         } catch (InvalidCustomer $e) {
             // This user is not a Stripe customer yet. Redirect them to the pricing page.
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'info',
-                'message' => 'You do not have an active subscription. Please select a plan to continue.'
+                'message' => 'You do not have an active subscription. Please select a plan to continue.',
             ]);
         } catch (\Stripe\Exception\InvalidRequestException $e) {
-            Log::warning('Invalid Stripe customer ID for user ' . Auth::id() . ': ' . $e->getMessage());
+            Log::warning('Invalid Stripe customer ID for user '.Auth::id().': '.$e->getMessage());
+
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'info',
-                'message' => 'Your billing account needs to be set up. Please select a plan to continue.'
+                'message' => 'Your billing account needs to be set up. Please select a plan to continue.',
             ]);
         }
     }

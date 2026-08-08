@@ -3,9 +3,9 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
-use App\Services\Agents\CompetitorIntelligenceAgent;
-use App\Services\Agents\CompetitorDiscoveryAgent;
 use App\Services\Agents\CompetitorAnalysisAgent;
+use App\Services\Agents\CompetitorDiscoveryAgent;
+use App\Services\Agents\CompetitorIntelligenceAgent;
 use App\Services\GeminiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * RunCompetitorIntelligence Job
- * 
+ *
  * Runs the full competitive intelligence pipeline for a customer:
  * 1. Discover competitors via Google Search
  * 2. Scrape and analyze competitor websites
@@ -28,6 +28,7 @@ class RunCompetitorIntelligence implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected Customer $customer;
+
     protected bool $fullRefresh;
 
     /**
@@ -43,8 +44,8 @@ class RunCompetitorIntelligence implements ShouldQueue
     /**
      * Create a new job instance.
      *
-     * @param Customer $customer The customer to analyze
-     * @param bool $fullRefresh Whether to re-analyze all competitors
+     * @param  Customer  $customer  The customer to analyze
+     * @param  bool  $fullRefresh  Whether to re-analyze all competitors
      */
     public function __construct(Customer $customer, bool $fullRefresh = false)
     {
@@ -64,7 +65,7 @@ class RunCompetitorIntelligence implements ShouldQueue
 
         try {
             // Initialize services
-            $gemini = new GeminiService();
+            $gemini = new GeminiService;
             $discoveryAgent = new CompetitorDiscoveryAgent($gemini);
             $analysisAgent = new CompetitorAnalysisAgent($gemini);
             $intelligenceAgent = new CompetitorIntelligenceAgent(
@@ -101,7 +102,7 @@ class RunCompetitorIntelligence implements ShouldQueue
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
-            
+
             throw $e;
         }
     }
@@ -137,27 +138,27 @@ class RunCompetitorIntelligence implements ShouldQueue
     {
         // Get the primary user for this customer
         $user = $this->customer->users()->first();
-        
-        if (!$user) {
+
+        if (! $user) {
             return;
         }
 
         // Build notification summary
         $summary = [];
-        
+
         if ($results['discovery']['competitors_saved'] ?? 0 > 0) {
             $summary[] = "{$results['discovery']['competitors_saved']} new competitors discovered";
         }
-        
+
         if ($results['analysis']['analyzed'] ?? 0 > 0) {
             $summary[] = "{$results['analysis']['analyzed']} competitors analyzed";
         }
-        
+
         if (isset($results['counter_strategy']['strategy'])) {
-            $summary[] = "New counter-strategy generated";
+            $summary[] = 'New counter-strategy generated';
         }
 
-        if (!empty($summary)) {
+        if (! empty($summary)) {
             try {
                 // Notify all users on the account, not just the first.
                 foreach ($this->customer->users as $u) {
@@ -170,7 +171,7 @@ class RunCompetitorIntelligence implements ShouldQueue
                 ]);
             }
         }
-        
+
         Log::info('RunCompetitorIntelligence: Notified user', [
             'user_id' => $user->id,
             'summary' => $summary,
@@ -182,7 +183,7 @@ class RunCompetitorIntelligence implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('RunCompetitorIntelligence failed: ' . $exception->getMessage(), [
+        Log::error('RunCompetitorIntelligence failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

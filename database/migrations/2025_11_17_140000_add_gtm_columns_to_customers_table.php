@@ -16,12 +16,12 @@ return new class extends Migration
             $table->string('gtm_container_id')->nullable()->after('facebook_ads_access_token');
             $table->string('gtm_account_id')->nullable()->after('gtm_container_id');
             $table->string('gtm_workspace_id')->nullable()->after('gtm_account_id');
-            
+
             // GTM configuration and status
             $table->json('gtm_config')->nullable()->after('gtm_workspace_id');
             $table->boolean('gtm_installed')->default(false)->after('gtm_config');
             $table->timestamp('gtm_last_verified')->nullable()->after('gtm_installed');
-            
+
             // GTM detection tracking
             $table->boolean('gtm_detected')->default(false)->after('gtm_last_verified');
             $table->timestamp('gtm_detected_at')->nullable()->after('gtm_detected');

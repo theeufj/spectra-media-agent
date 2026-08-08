@@ -2,12 +2,10 @@
 
 namespace App\Jobs;
 
-use App\Models\Customer;
 use App\Models\Competitor;
-use App\Jobs\CrawlCompetitorWebsite;
+use App\Models\Customer;
 use App\Services\Agents\CompetitorAnalysisAgent;
 use App\Services\CompetitorGapAnalysisService;
-use App\Services\GeminiService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,6 +22,7 @@ class AnalyzeWarRoomCompetitor implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
+
     public $timeout = 300;
 
     public function __construct(
@@ -42,11 +41,12 @@ class AnalyzeWarRoomCompetitor implements ShouldQueue
         // Step 1: Analyze the competitor
         $result = $analysisAgent->analyze($this->competitor, $this->customer);
 
-        if (!$result['success']) {
+        if (! $result['success']) {
             Log::warning('AnalyzeWarRoomCompetitor: Analysis failed', [
                 'competitor_id' => $this->competitor->id,
                 'error' => $result['error'],
             ]);
+
             return;
         }
 
@@ -61,7 +61,7 @@ class AnalyzeWarRoomCompetitor implements ShouldQueue
         // Step 3: Regenerate gap analysis for all pinned War Room competitors
         $pinnedIds = $this->customer->war_room_competitors ?? [];
 
-        if (!empty($pinnedIds)) {
+        if (! empty($pinnedIds)) {
             $competitors = Competitor::whereIn('id', $pinnedIds)
                 ->where('customer_id', $this->customer->id)
                 ->whereNotNull('messaging_analysis')

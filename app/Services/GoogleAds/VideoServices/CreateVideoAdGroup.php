@@ -2,15 +2,14 @@
 
 namespace App\Services\GoogleAds\VideoServices;
 
+use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\AdGroup;
-use Google\Ads\GoogleAds\V22\Services\AdGroupService;
-use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Resources\AdGroup;
+use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest;
 
 class CreateVideoAdGroup extends BaseGoogleAdsService
 {
@@ -22,9 +21,9 @@ class CreateVideoAdGroup extends BaseGoogleAdsService
     /**
      * Creates an ad group within an existing Video campaign.
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param string $campaignResourceName The resource name of the parent Video campaign.
-     * @param string $adGroupName The name of the ad group to create.
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  string  $campaignResourceName  The resource name of the parent Video campaign.
+     * @param  string  $adGroupName  The name of the ad group to create.
      * @return string|null The resource name of the created ad group, or null on failure.
      */
     public function __invoke(string $customerId, string $campaignResourceName, string $adGroupName): ?string
@@ -36,7 +35,7 @@ class CreateVideoAdGroup extends BaseGoogleAdsService
             'type' => AdGroupType::VIDEO_RESPONSIVE_AD_GROUP, // Specific type for video campaigns
         ]);
 
-        $adGroupOperation = new AdGroupOperation();
+        $adGroupOperation = new AdGroupOperation;
         $adGroupOperation->setCreate($adGroup);
 
         try {
@@ -47,10 +46,12 @@ class CreateVideoAdGroup extends BaseGoogleAdsService
             ]);
             $response = $adGroupServiceClient->mutateAdGroups($request);
             $newAdGroupResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Video ad group: " . $newAdGroupResourceName);
+            $this->logInfo('Successfully created Video ad group: '.$newAdGroupResourceName);
+
             return $newAdGroupResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Video ad group for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Video ad group for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

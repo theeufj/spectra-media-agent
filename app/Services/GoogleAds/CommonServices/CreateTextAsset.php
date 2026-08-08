@@ -3,19 +3,17 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\Asset;
 use Google\Ads\GoogleAds\V22\Common\TextAsset;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Asset;
 use Google\Ads\GoogleAds\V22\Services\AssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class CreateTextAsset extends BaseGoogleAdsService
 {
     /**
      * Create a text asset (Headline, Description, etc.)
      *
-     * @param string $customerId
-     * @param string $text
      * @return string|null Resource name of the created asset
      */
     public function __invoke(string $customerId, string $text): ?string
@@ -32,7 +30,7 @@ class CreateTextAsset extends BaseGoogleAdsService
             // Let's try creating.
         ]);
 
-        $operation = new AssetOperation();
+        $operation = new AssetOperation;
         $operation->setCreate($asset);
 
         try {
@@ -43,11 +41,12 @@ class CreateTextAsset extends BaseGoogleAdsService
             ]));
 
             $resourceName = $response->getResults()[0]->getResourceName();
-            //$this->logInfo("Created Text Asset: $resourceName ('$text')");
+            // $this->logInfo("Created Text Asset: $resourceName ('$text')");
 
             return $resourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to create text asset: " . $e->getMessage());
+            $this->logError('Failed to create text asset: '.$e->getMessage());
+
             return null;
         }
     }

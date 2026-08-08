@@ -29,18 +29,20 @@ class PerformanceMaxIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected string $customerId;
+
     protected array $createdCampaignResources = [];
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_GOOGLE_ADS_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->customer   = Customer::whereNotNull('google_ads_customer_id')->firstOrFail();
+        $this->customer = Customer::whereNotNull('google_ads_customer_id')->firstOrFail();
         $this->customerId = $this->customer->cleanGoogleCustomerId();
     }
 
@@ -52,16 +54,16 @@ class PerformanceMaxIntegrationTest extends TestCase
 
     public function test_creates_pmax_campaign_and_returns_resource_name(): void
     {
-        $service  = new CreatePerformanceMaxCampaign($this->customer);
+        $service = new CreatePerformanceMaxCampaign($this->customer);
         $campaign = Campaign::factory()->make([
-            'name'         => 'PHPUnit PMax Test ' . now()->timestamp,
+            'name' => 'PHPUnit PMax Test '.now()->timestamp,
             'daily_budget' => 5.00,
         ]);
 
         $resource = $service->create($this->customerId, $campaign);
 
         $this->assertNotNull($resource);
-        $this->assertStringContainsString('customers/' . $this->customerId, $resource);
+        $this->assertStringContainsString('customers/'.$this->customerId, $resource);
         $this->assertStringContainsString('/campaigns/', $resource);
 
         $this->createdCampaignResources[] = $resource;
@@ -71,12 +73,12 @@ class PerformanceMaxIntegrationTest extends TestCase
     {
         $campaignResource = $this->createTestPMaxCampaign();
 
-        $service  = new CreateAssetGroup($this->customer);
+        $service = new CreateAssetGroup($this->customer);
         $resource = $service->create(
-            customerId:        $this->customerId,
-            campaignResource:  $campaignResource,
-            name:              'PHPUnit Asset Group',
-            finalUrl:          'https://sitetospend.com',
+            customerId: $this->customerId,
+            campaignResource: $campaignResource,
+            name: 'PHPUnit Asset Group',
+            finalUrl: 'https://sitetospend.com',
         );
 
         $this->assertNotNull($resource);
@@ -85,7 +87,7 @@ class PerformanceMaxIntegrationTest extends TestCase
 
     public function test_creates_text_asset_headline(): void
     {
-        $service  = new CreateTextAsset($this->customer);
+        $service = new CreateTextAsset($this->customer);
         $resource = $service->create($this->customerId, 'Grow Your Business');
 
         $this->assertNotNull($resource);
@@ -94,7 +96,7 @@ class PerformanceMaxIntegrationTest extends TestCase
 
     public function test_creates_text_asset_description(): void
     {
-        $service  = new CreateTextAsset($this->customer);
+        $service = new CreateTextAsset($this->customer);
         $resource = $service->create($this->customerId, 'Reach more customers with AI-powered advertising.');
 
         $this->assertNotNull($resource);
@@ -103,7 +105,7 @@ class PerformanceMaxIntegrationTest extends TestCase
 
     public function test_adds_search_theme_signals_to_asset_group(): void
     {
-        $campaignResource  = $this->createTestPMaxCampaign();
+        $campaignResource = $this->createTestPMaxCampaign();
         $assetGroupService = new CreateAssetGroup($this->customer);
         $assetGroupResource = $assetGroupService->create(
             $this->customerId,
@@ -113,7 +115,7 @@ class PerformanceMaxIntegrationTest extends TestCase
         );
 
         $service = new AddAudienceSignals($this->customer);
-        $count   = $service->addSearchThemes($this->customerId, $assetGroupResource, [
+        $count = $service->addSearchThemes($this->customerId, $assetGroupResource, [
             'google ads management',
             'ppc agency',
             'digital marketing software',
@@ -124,8 +126,8 @@ class PerformanceMaxIntegrationTest extends TestCase
 
     public function test_links_text_asset_to_asset_group(): void
     {
-        $campaignResource   = $this->createTestPMaxCampaign();
-        $assetGroupService  = new CreateAssetGroup($this->customer);
+        $campaignResource = $this->createTestPMaxCampaign();
+        $assetGroupService = new CreateAssetGroup($this->customer);
         $assetGroupResource = $assetGroupService->create(
             $this->customerId,
             $campaignResource,
@@ -133,11 +135,11 @@ class PerformanceMaxIntegrationTest extends TestCase
             'https://sitetospend.com',
         );
 
-        $textService  = new CreateTextAsset($this->customer);
+        $textService = new CreateTextAsset($this->customer);
         $assetResource = $textService->create($this->customerId, 'PHPUnit Headline');
 
         $linkService = new LinkAssetGroupAsset($this->customer);
-        $result      = $linkService->link(
+        $result = $linkService->link(
             $this->customerId,
             $assetGroupResource,
             $assetResource,
@@ -151,9 +153,9 @@ class PerformanceMaxIntegrationTest extends TestCase
 
     private function createTestPMaxCampaign(): string
     {
-        $service  = new CreatePerformanceMaxCampaign($this->customer);
+        $service = new CreatePerformanceMaxCampaign($this->customer);
         $campaign = Campaign::factory()->make([
-            'name'         => 'PHPUnit PMax ' . now()->timestamp . '-' . rand(100, 999),
+            'name' => 'PHPUnit PMax '.now()->timestamp.'-'.rand(100, 999),
             'daily_budget' => 5.00,
         ]);
 
@@ -171,10 +173,10 @@ class PerformanceMaxIntegrationTest extends TestCase
 
         try {
             $configPath = storage_path('app/google_ads_php.ini');
-            $mccId      = env('GOOGLE_ADS_MCC_CUSTOMER_ID', '8701023448');
+            $mccId = env('GOOGLE_ADS_MCC_CUSTOMER_ID', '8701023448');
 
-            $oAuth2 = (new OAuth2TokenBuilder())->fromFile($configPath)->build();
-            $client = (new GoogleAdsClientBuilder())
+            $oAuth2 = (new OAuth2TokenBuilder)->fromFile($configPath)->build();
+            $client = (new GoogleAdsClientBuilder)
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2)
                 ->withLoginCustomerId($mccId)
@@ -182,9 +184,10 @@ class PerformanceMaxIntegrationTest extends TestCase
 
             $ops = array_map(function (string $resource) {
                 $c = new GoogleCampaign(['resource_name' => $resource, 'status' => CampaignStatus::REMOVED]);
-                $op = new CampaignOperation();
+                $op = new CampaignOperation;
                 $op->setUpdate($c);
                 $op->setUpdateMask(new FieldMask(['paths' => ['status']]));
+
                 return $op;
             }, $this->createdCampaignResources);
 

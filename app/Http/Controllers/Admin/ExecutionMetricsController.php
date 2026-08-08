@@ -29,8 +29,8 @@ class ExecutionMetricsController extends Controller
             ->where('execution_result->success', true)
             ->count();
         $failedExecutions = $totalExecutions - $successfulExecutions;
-        $successRate = $totalExecutions > 0 
-            ? round(($successfulExecutions / $totalExecutions) * 100, 2) 
+        $successRate = $totalExecutions > 0
+            ? round(($successfulExecutions / $totalExecutions) * 100, 2)
             : 0;
 
         // Average execution time
@@ -56,8 +56,8 @@ class ExecutionMetricsController extends Controller
                     'total' => $stat->total,
                     'successful' => $stat->successful,
                     'failed' => $stat->total - $stat->successful,
-                    'success_rate' => $stat->total > 0 
-                        ? round(($stat->successful / $stat->total) * 100, 2) 
+                    'success_rate' => $stat->total > 0
+                        ? round(($stat->successful / $stat->total) * 100, 2)
                         : 0,
                     'avg_execution_time' => round($stat->avg_time, 2),
                 ];
@@ -70,22 +70,22 @@ class ExecutionMetricsController extends Controller
             ->map(function ($strategy) {
                 $campaign = $strategy->campaign;
                 $executionResult = $strategy->execution_result;
-                
+
                 // Calculate budget accuracy if data available
                 $plannedBudget = $campaign->total_budget ?? 0;
                 $allocatedBudget = collect($executionResult['campaigns'] ?? [])->sum('budget') ?? 0;
-                
+
                 return [
                     'planned' => $plannedBudget,
                     'allocated' => $allocatedBudget,
-                    'accuracy' => $plannedBudget > 0 
+                    'accuracy' => $plannedBudget > 0
                         ? round((1 - abs($plannedBudget - $allocatedBudget) / $plannedBudget) * 100, 2)
                         : 0,
                 ];
             })
-            ->filter(fn($m) => $m['planned'] > 0);
+            ->filter(fn ($m) => $m['planned'] > 0);
 
-        $avgBudgetAccuracy = $budgetMetrics->isNotEmpty() 
+        $avgBudgetAccuracy = $budgetMetrics->isNotEmpty()
             ? round($budgetMetrics->avg('accuracy'), 2)
             : 0;
 
@@ -104,8 +104,8 @@ class ExecutionMetricsController extends Controller
                     'total' => $day->total,
                     'successful' => $day->successful,
                     'failed' => $day->total - $day->successful,
-                    'success_rate' => $day->total > 0 
-                        ? round(($day->successful / $day->total) * 100, 2) 
+                    'success_rate' => $day->total > 0
+                        ? round(($day->successful / $day->total) * 100, 2)
                         : 0,
                     'avg_execution_time' => round($day->avg_time, 2),
                 ];
@@ -139,20 +139,20 @@ class ExecutionMetricsController extends Controller
             ->map(function ($strategy) {
                 $executionPlan = $strategy->execution_plan;
                 $executionResult = $strategy->execution_result;
-                
+
                 // Count optimization recommendations vs implementations
                 $recommendations = count($executionPlan['optimization_recommendations'] ?? []);
                 $implemented = count($executionResult['optimizations_applied'] ?? []);
-                
+
                 return [
                     'recommendations' => $recommendations,
                     'implemented' => $implemented,
-                    'implementation_rate' => $recommendations > 0 
+                    'implementation_rate' => $recommendations > 0
                         ? round(($implemented / $recommendations) * 100, 2)
                         : 0,
                 ];
             })
-            ->filter(fn($m) => $m['recommendations'] > 0);
+            ->filter(fn ($m) => $m['recommendations'] > 0);
 
         $avgImplementationRate = $aiQualityMetrics->isNotEmpty()
             ? round($aiQualityMetrics->avg('implementation_rate'), 2)

@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
 
 class KeywordClusteringService
@@ -11,7 +10,7 @@ class KeywordClusteringService
 
     public function __construct()
     {
-        $this->gemini = new GeminiService();
+        $this->gemini = new GeminiService;
     }
 
     public function cluster(array $keywords): array
@@ -20,7 +19,7 @@ class KeywordClusteringService
             return ['clusters' => [], 'unclustered' => []];
         }
 
-        $keywordTexts = array_map(fn($k) => is_string($k) ? $k : ($k['text'] ?? $k['keyword_text'] ?? ''), $keywords);
+        $keywordTexts = array_map(fn ($k) => is_string($k) ? $k : ($k['text'] ?? $k['keyword_text'] ?? ''), $keywords);
         $keywordTexts = array_filter($keywordTexts);
 
         if (count($keywordTexts) > 100) {
@@ -63,19 +62,20 @@ PROMPT;
                 ['temperature' => 0.3, 'maxOutputTokens' => 4096],
             );
 
-            if (!$result || empty($result['text'])) {
+            if (! $result || empty($result['text'])) {
                 return $this->fallbackClusters($keywordTexts);
             }
 
             $parsed = $this->parseJson($result['text']);
 
-            if (isset($parsed['clusters']) && !empty($parsed['clusters'])) {
+            if (isset($parsed['clusters']) && ! empty($parsed['clusters'])) {
                 return $parsed;
             }
 
             return $this->fallbackClusters($keywordTexts);
         } catch (\Exception $e) {
             Log::warning('KeywordClusteringService: AI clustering failed', ['error' => $e->getMessage()]);
+
             return $this->fallbackClusters($keywordTexts);
         }
     }
@@ -101,6 +101,7 @@ PROMPT;
         $text = preg_replace('/```\s*$/m', '', $text);
         $text = trim($text);
         $decoded = json_decode($text, true);
+
         return is_array($decoded) ? $decoded : [];
     }
 }

@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Log;
 class CircuitBreakerService
 {
     private $serviceName;
+
     private $maxFailures;
+
     private $retryTimeout; // in seconds
 
     public function __construct(string $serviceName, int $maxFailures = 3, int $retryTimeout = 60)
@@ -23,10 +25,13 @@ class CircuitBreakerService
         if ($this->isTripped()) {
             if ($this->isRetryTimeoutExpired()) {
                 $this->reset();
+
                 return true;
             }
+
             return false;
         }
+
         return true;
     }
 
@@ -53,6 +58,7 @@ class CircuitBreakerService
     private function isRetryTimeoutExpired(): bool
     {
         $trippedTime = Cache::get($this->getTrippedCacheKey());
+
         return (time() - $trippedTime) >= $this->retryTimeout;
     }
 

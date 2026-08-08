@@ -1,42 +1,42 @@
 <?php
 
+use App\Jobs\AutomatedCampaignMaintenance;
+use App\Jobs\AutoStartABTests;
+use App\Jobs\CheckCampaignPolicyViolations;
+use App\Jobs\DetectKeywordCannibalization;
+use App\Jobs\DetectNegativeKeywordConflicts;
+use App\Jobs\ExpandBroadMatchKeywords;
+use App\Jobs\FetchFacebookAdsPerformanceData;
+use App\Jobs\FetchGoogleAdsPerformanceData;
+use App\Jobs\FetchLinkedInAdsPerformanceData;
+use App\Jobs\FetchMicrosoftAdsPerformanceData;
+use App\Jobs\GenerateExecutiveReport;
+use App\Jobs\GenerateMonthlyReport;
+use App\Jobs\GetKeywordQualityScore;
+use App\Jobs\HourlyBudgetOptimization;
+use App\Jobs\MonitorCampaignStatus;
+use App\Jobs\OptimizeCampaigns;
+use App\Jobs\ProcessDailyAdSpendBilling;
+use App\Jobs\RecordSiteConversion;
+use App\Jobs\ReviewGoogleAdsRecommendations;
+use App\Jobs\RunCompetitorIntelligence;
+use App\Jobs\RunHealthChecks;
+use App\Jobs\RunPerformanceAnomalyCheck;
+use App\Jobs\RunSelfHealingChecks;
+use App\Jobs\RunStrategicDiagnosis;
+use App\Jobs\SendDailyPerformanceReports;
+use App\Models\Campaign;
+use App\Models\Customer;
+use App\Models\User;
+use App\Notifications\ScheduledJobFailed;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
-use App\Jobs\MonitorCampaignStatus;
-use App\Jobs\OptimizeCampaigns;
-use App\Jobs\AutomatedCampaignMaintenance;
-use App\Jobs\RunSelfHealingChecks;
-use App\Jobs\RunStrategicDiagnosis;
-use App\Jobs\AutoStartABTests;
-use App\Jobs\RunCompetitorIntelligence;
-use App\Jobs\ProcessDailyAdSpendBilling;
-use App\Jobs\RunHealthChecks;
-use App\Jobs\CheckCampaignPolicyViolations;
-use App\Jobs\HourlyBudgetOptimization;
-use App\Jobs\GetKeywordQualityScore;
-use App\Jobs\ReviewGoogleAdsRecommendations;
-use App\Jobs\RunPerformanceAnomalyCheck;
-use App\Jobs\DetectNegativeKeywordConflicts;
-use App\Jobs\DetectKeywordCannibalization;
-use App\Jobs\ExpandBroadMatchKeywords;
-use App\Jobs\GenerateExecutiveReport;
-use App\Jobs\GenerateMonthlyReport;
-use App\Jobs\SendDailyPerformanceReports;
-use App\Jobs\FetchGoogleAdsPerformanceData;
-use App\Jobs\FetchFacebookAdsPerformanceData;
-use App\Jobs\FetchMicrosoftAdsPerformanceData;
-use App\Jobs\FetchLinkedInAdsPerformanceData;
-use App\Models\Customer;
-use App\Models\Campaign;
-use App\Models\User;
-use App\Jobs\RecordSiteConversion;
-use App\Notifications\ScheduledJobFailed;
 
 /**
  * Notify admin users when a critical scheduled job fails.
  */
-if (!function_exists('notifyAdminOnFailure')) {
+if (! function_exists('notifyAdminOnFailure')) {
     function notifyAdminOnFailure(string $jobName): \Closure
     {
         return function () use ($jobName) {
@@ -61,9 +61,8 @@ Schedule::command('billing:report-ad-spend')->daily()->withoutOverlapping();
 
 // Fire seven_day_return conversion for users who signed up via Google Ad exactly 7 days ago
 Schedule::call(function () {
-    Customer::whereHas('users', fn ($q) =>
-        $q->whereNotNull('gclid')
-          ->whereBetween('created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
+    Customer::whereHas('users', fn ($q) => $q->whereNotNull('gclid')
+        ->whereBetween('created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
     )->each(fn (Customer $c) => RecordSiteConversion::dispatch($c, 'seven_day_return'));
 })->name('record-seven-day-return-conversions')->dailyAt('10:00')->withoutOverlapping();
 
@@ -177,7 +176,6 @@ Schedule::call(function () {
         });
 })->name('get-keyword-quality-scores')->daily()->withoutOverlapping();
 
-
 // ============================================================
 // WEEKLY OPERATIONS
 // ============================================================
@@ -245,10 +243,10 @@ Schedule::call(function () {
 Schedule::call(function () {
     $month = now()->month;
     $season = match (true) {
-        in_array($month, [3, 4, 5])   => 'spring',
-        in_array($month, [6, 7, 8])   => 'summer',
+        in_array($month, [3, 4, 5]) => 'spring',
+        in_array($month, [6, 7, 8]) => 'summer',
         in_array($month, [9, 10, 11]) => 'autumn',
-        default                        => 'winter',
+        default => 'winter',
     };
 
     \App\Models\Campaign::withDeployedPlatforms()->each(function ($campaign) use ($season) {
@@ -263,10 +261,10 @@ Schedule::call(function () {
     \App\Models\CrmIntegration::query()
         ->where(function ($q) {
             $q->whereIn('status', ['connected', 'error'])
-              ->orWhere(function ($q) {
-                  $q->where('status', 'syncing')
-                    ->where('updated_at', '<', now()->subHours(2));
-              });
+                ->orWhere(function ($q) {
+                    $q->where('status', 'syncing')
+                        ->where('updated_at', '<', now()->subHours(2));
+                });
         })
         ->each(function ($integration) {
             \App\Jobs\SyncCrmConversions::dispatch($integration->id);
@@ -279,10 +277,10 @@ Schedule::call(function () {
     \App\Models\OfflineConversion::query()
         ->where(function ($q) {
             $q->where('upload_status', 'pending')
-              ->orWhere(function ($q) {
-                  $q->where('upload_status', 'failed')
-                    ->where('upload_attempts', '<', \App\Jobs\UploadOfflineConversions::MAX_ATTEMPTS);
-              });
+                ->orWhere(function ($q) {
+                    $q->where('upload_status', 'failed')
+                        ->where('upload_attempts', '<', \App\Jobs\UploadOfflineConversions::MAX_ATTEMPTS);
+                });
         })
         ->distinct()
         ->pluck('customer_id')
@@ -296,13 +294,13 @@ Schedule::call(function () {
     \App\Models\ProductFeed::where('status', 'active')
         ->where(function ($q) {
             $q->where('sync_frequency', 'hourly')
-              ->orWhere(function ($q2) {
-                  $q2->where('sync_frequency', 'daily')
-                     ->where(function ($q3) {
-                         $q3->whereNull('last_synced_at')
-                            ->orWhere('last_synced_at', '<', now()->subHours(20));
-                     });
-              });
+                ->orWhere(function ($q2) {
+                    $q2->where('sync_frequency', 'daily')
+                        ->where(function ($q3) {
+                            $q3->whereNull('last_synced_at')
+                                ->orWhere('last_synced_at', '<', now()->subHours(20));
+                        });
+                });
         })
         ->each(function ($feed) {
             \App\Jobs\SyncProductFeed::dispatch($feed->id);
@@ -371,4 +369,3 @@ Schedule::command('googleads:check-mcc-eligibility')
     ->dailyAt('09:00')
     ->withoutOverlapping()
     ->onFailure(notifyAdminOnFailure('googleads:check-mcc-eligibility'));
-

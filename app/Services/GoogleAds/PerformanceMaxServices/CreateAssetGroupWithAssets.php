@@ -4,24 +4,20 @@ namespace App\Services\GoogleAds\PerformanceMaxServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Enums\AssetGroupStatusEnum\AssetGroupStatus;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\AssetGroup;
 use Google\Ads\GoogleAds\V22\Resources\AssetGroupAsset;
-use Google\Ads\GoogleAds\V22\Services\AssetGroupOperation;
 use Google\Ads\GoogleAds\V22\Services\AssetGroupAssetOperation;
+use Google\Ads\GoogleAds\V22\Services\AssetGroupOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateGoogleAdsRequest;
 use Google\Ads\GoogleAds\V22\Services\MutateOperation;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class CreateAssetGroupWithAssets extends BaseGoogleAdsService
 {
     /**
      * Create an Asset Group and link initial assets in a single transaction.
      *
-     * @param string $customerId
-     * @param string $campaignResourceName
-     * @param string $name
-     * @param array $finalUrls
-     * @param array $assets Array of ['asset' => string, 'field_type' => int]
+     * @param  array  $assets  Array of ['asset' => string, 'field_type' => int]
      * @return string|null Resource name of the created Asset Group
      */
     public function __invoke(string $customerId, string $campaignResourceName, string $name, array $finalUrls, array $assets): ?string
@@ -40,10 +36,10 @@ class CreateAssetGroupWithAssets extends BaseGoogleAdsService
             'status' => AssetGroupStatus::ENABLED,
         ]);
 
-        $assetGroupOperation = new AssetGroupOperation();
+        $assetGroupOperation = new AssetGroupOperation;
         $assetGroupOperation->setCreate($assetGroup);
 
-        $mutateOperation = new MutateOperation();
+        $mutateOperation = new MutateOperation;
         $mutateOperation->setAssetGroupOperation($assetGroupOperation);
         $operations[] = $mutateOperation;
 
@@ -55,10 +51,10 @@ class CreateAssetGroupWithAssets extends BaseGoogleAdsService
                 'field_type' => $assetData['field_type'],
             ]);
 
-            $assetGroupAssetOperation = new AssetGroupAssetOperation();
+            $assetGroupAssetOperation = new AssetGroupAssetOperation;
             $assetGroupAssetOperation->setCreate($assetGroupAsset);
 
-            $mutateOperation = new MutateOperation();
+            $mutateOperation = new MutateOperation;
             $mutateOperation->setAssetGroupAssetOperation($assetGroupAssetOperation);
             $operations[] = $mutateOperation;
         }
@@ -76,7 +72,8 @@ class CreateAssetGroupWithAssets extends BaseGoogleAdsService
 
             return $assetGroupResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to create Asset Group with Assets: " . $e->getMessage());
+            $this->logError('Failed to create Asset Group with Assets: '.$e->getMessage());
+
             return null;
         }
     }

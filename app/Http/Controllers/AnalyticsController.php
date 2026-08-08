@@ -6,7 +6,6 @@ use App\Models\AttributionConversion;
 use App\Models\AttributionTouchpoint;
 use App\Services\Attribution\AttributionService;
 use App\Services\Reporting\CrossPlatformAnalyticsService;
-use App\Services\Reporting\ExecutiveReportService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -20,7 +19,9 @@ class AnalyticsController extends Controller
     public function index(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $days = (int) $request->get('days', 30);
 
         $summary = $this->analytics->getSummary($customer, $days);
@@ -38,7 +39,9 @@ class AnalyticsController extends Controller
     public function crossPlatform(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $days = (int) $request->get('days', 30);
 
         $comparison = $this->analytics->getPlatformComparison($customer, $days);
@@ -54,7 +57,9 @@ class AnalyticsController extends Controller
     public function attribution(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         $conversions = AttributionConversion::forCustomer($customer->id)
             ->orderBy('created_at', 'desc')
@@ -80,7 +85,7 @@ class AnalyticsController extends Controller
         $totalConversions = count($conversions);
         $totalValue = array_sum(array_column($conversions, 'conversion_value'));
         $avgTouchpoints = $totalConversions > 0
-            ? array_sum(array_map(fn($c) => count($c['touchpoints'] ?? []), $conversions)) / $totalConversions
+            ? array_sum(array_map(fn ($c) => count($c['touchpoints'] ?? []), $conversions)) / $totalConversions
             : 0;
 
         return Inertia::render('Analytics/Attribution', [

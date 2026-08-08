@@ -6,8 +6,8 @@ use App\Models\Campaign;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Models\Recommendation;
 use App\Services\CircuitBreaker\CircuitBreakerService;
-use App\Services\MicrosoftAds\PerformanceService;
 use App\Services\GoogleAds\RecommendationGenerationService;
+use App\Services\MicrosoftAds\PerformanceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,6 +21,7 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 5;
+
     public $backoff = [10, 20, 30, 40, 50];
 
     protected Campaign $campaign;
@@ -34,6 +35,7 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
     {
         if (empty($this->campaign->microsoft_ads_campaign_id)) {
             Log::warning("Campaign {$this->campaign->id} does not have a Microsoft Ads Campaign ID. Skipping.");
+
             return;
         }
 
@@ -41,8 +43,9 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
         $circuitBreaker = new CircuitBreakerService('MicrosoftAdsAPI');
         $customer = $this->campaign->customer;
 
-        if (!$customer || !config('microsoftads.refresh_token')) {
+        if (! $customer || ! config('microsoftads.refresh_token')) {
             Log::warning("Campaign {$this->campaign->id}: No Microsoft Ads management credentials configured. Skipping.");
+
             return;
         }
 
@@ -55,11 +58,12 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
 
                 if (is_array($result) && isset($result['error'])) {
                     $circuitBreaker->recordFailure();
-                    Log::warning("Microsoft Ads performance sync returned error", [
+                    Log::warning('Microsoft Ads performance sync returned error', [
                         'campaign_id' => $this->campaign->id,
                         'error' => $result['error'],
                     ]);
                     $this->release(60);
+
                     return;
                 }
 
@@ -74,8 +78,8 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
                         ->get()
                         ->toArray();
 
-                    if (!empty($performanceData)) {
-                        $recommendationService = new RecommendationGenerationService();
+                    if (! empty($performanceData)) {
+                        $recommendationService = new RecommendationGenerationService;
                         $recommendations = ($recommendationService)($performanceData, [
                             'campaignId' => $this->campaign->microsoft_ads_campaign_id,
                             'dailyBudget' => $strategy->budget,
@@ -97,7 +101,7 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
                 }
             } catch (\Exception $e) {
                 $circuitBreaker->recordFailure();
-                Log::error("Error in FetchMicrosoftAdsPerformanceData for campaign {$this->campaign->id}: " . $e->getMessage());
+                Log::error("Error in FetchMicrosoftAdsPerformanceData for campaign {$this->campaign->id}: ".$e->getMessage());
                 $this->release(60);
             } finally {
                 $lock->release();
@@ -113,7 +117,7 @@ class FetchMicrosoftAdsPerformanceData implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('FetchMicrosoftAdsPerformanceData failed: ' . $exception->getMessage(), [
+        Log::error('FetchMicrosoftAdsPerformanceData failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

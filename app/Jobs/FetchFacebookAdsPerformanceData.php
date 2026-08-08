@@ -22,6 +22,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 5;
+
     public $backoff = [10, 20, 30, 40, 50];
 
     protected Campaign $campaign;
@@ -35,6 +36,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
     {
         if (empty($this->campaign->facebook_ads_campaign_id)) {
             Log::warning("Campaign {$this->campaign->id} does not have a Facebook Ads Campaign ID. Skipping performance fetch.");
+
             return;
         }
 
@@ -42,8 +44,9 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
         $circuitBreaker = new CircuitBreakerService('FacebookAdsAPI');
         $customer = $this->campaign->customer;
 
-        if (!$customer) {
+        if (! $customer) {
             Log::warning("Campaign {$this->campaign->id} does not have an associated customer. Skipping performance fetch.");
+
             return;
         }
 
@@ -70,7 +73,8 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
 
                 if ($insights === null) {
                     $circuitBreaker->recordFailure();
-                    $this->fail(new \Exception("Failed to fetch Facebook Ads insights"));
+                    $this->fail(new \Exception('Failed to fetch Facebook Ads insights'));
+
                     return;
                 }
 
@@ -79,8 +83,8 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 $performanceData = [];
                 foreach ($insights as $insight) {
                     $date = $insight['date_start'] ?? $insight['date_stop'] ?? null;
-                    
-                    if (!$date) {
+
+                    if (! $date) {
                         continue;
                     }
 
@@ -121,8 +125,8 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
 
                 // Generate recommendations based on performance
                 $strategy = $this->campaign->strategies()->latest()->first();
-                if ($strategy && !empty($performanceData)) {
-                    $recommendationService = new RecommendationGenerationService();
+                if ($strategy && ! empty($performanceData)) {
+                    $recommendationService = new RecommendationGenerationService;
                     $campaignConfig = [
                         'campaignId' => $this->campaign->facebook_ads_campaign_id,
                         'dailyBudget' => $strategy->daily_budget ?? $this->campaign->daily_budget,
@@ -143,12 +147,12 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                         ]);
                     }
 
-                    Log::info("Generated " . count($recommendations) . " recommendations for campaign {$this->campaign->id}");
+                    Log::info('Generated '.count($recommendations)." recommendations for campaign {$this->campaign->id}");
                 }
 
                 $lock->release();
             } catch (\Exception $e) {
-                Log::error("Error in FetchFacebookAdsPerformanceData job for campaign {$this->campaign->id}: " . $e->getMessage(), [
+                Log::error("Error in FetchFacebookAdsPerformanceData job for campaign {$this->campaign->id}: ".$e->getMessage(), [
                     'exception' => $e,
                 ]);
                 $circuitBreaker->recordFailure();
@@ -164,7 +168,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('FetchFacebookAdsPerformanceData failed: ' . $exception->getMessage(), [
+        Log::error('FetchFacebookAdsPerformanceData failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }
@@ -188,11 +192,11 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
 
             foreach ($adSetInsights as $insight) {
                 $date = $insight['date_start'] ?? $insight['date_stop'] ?? null;
-                if (!$date) {
+                if (! $date) {
                     continue;
                 }
 
-                if (!isset($aggregated[$date])) {
+                if (! isset($aggregated[$date])) {
                     $aggregated[$date] = [
                         'date_start' => $date,
                         'date_stop' => $date,
@@ -209,10 +213,10 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 }
 
                 $aggregated[$date]['impressions'] += (int) ($insight['impressions'] ?? 0);
-                $aggregated[$date]['clicks']      += (int) ($insight['clicks'] ?? 0);
-                $aggregated[$date]['spend']       += (float) ($insight['spend'] ?? 0);
-                $aggregated[$date]['reach']       += (int) ($insight['reach'] ?? 0);
-                $aggregated[$date]['actions']      = array_merge($aggregated[$date]['actions'], $insight['actions'] ?? []);
+                $aggregated[$date]['clicks'] += (int) ($insight['clicks'] ?? 0);
+                $aggregated[$date]['spend'] += (float) ($insight['spend'] ?? 0);
+                $aggregated[$date]['reach'] += (int) ($insight['reach'] ?? 0);
+                $aggregated[$date]['actions'] = array_merge($aggregated[$date]['actions'], $insight['actions'] ?? []);
             }
         }
 
@@ -221,7 +225,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
         foreach ($aggregated as &$row) {
             $row['cpc'] = $row['clicks'] > 0 ? round($row['spend'] / $row['clicks'], 4) : 0.0;
             $row['cpm'] = $row['impressions'] > 0 ? round($row['spend'] / $row['impressions'] * 1000, 4) : 0.0;
-            $purchases  = collect($row['actions'])->where('action_type', 'purchase')->sum('value');
+            $purchases = collect($row['actions'])->where('action_type', 'purchase')->sum('value');
             $row['cpa'] = $purchases > 0 ? round($row['spend'] / $purchases, 2) : 0.0;
             $row['frequency'] = $row['reach'] > 0 ? round($row['impressions'] / $row['reach'], 4) : 0.0;
         }

@@ -48,11 +48,12 @@ class MccAccount extends Model
         $envRefreshToken = config('googleads.mcc_refresh_token');
 
         if ($envCustomerId && $envRefreshToken) {
-            $account = new static();
+            $account = new static;
             $account->name = 'Environment Default';
             $account->google_customer_id = $envCustomerId;
             $account->refresh_token = $envRefreshToken;
             $account->is_active = true;
+
             return $account;
         }
 
@@ -73,7 +74,7 @@ class MccAccount extends Model
     {
         $token = $this->refresh_token;
 
-        if (empty($token) || !$this->exists) {
+        if (empty($token) || ! $this->exists) {
             return $token ?: null;
         }
 

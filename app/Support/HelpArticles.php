@@ -37,12 +37,13 @@ class HelpArticles
                 return $article;
             }
         }
+
         return null;
     }
 
     public static function index(): array
     {
-        return array_map(fn($a) => array_diff_key($a, ['content' => '']), self::all());
+        return array_map(fn ($a) => array_diff_key($a, ['content' => '']), self::all());
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -50,13 +51,13 @@ class HelpArticles
     private static function conversionTracking(): array
     {
         return [
-            'slug'        => 'how-conversion-tracking-works',
-            'title'       => 'Google Ads Conversion Tracking Explained',
+            'slug' => 'how-conversion-tracking-works',
+            'title' => 'Google Ads Conversion Tracking Explained',
             'description' => 'Learn how sitetospend.com tracks conversions after someone clicks your Google Ad — and how we set it all up automatically with no developer needed.',
-            'category'    => 'Platform',
-            'read_time'   => '8 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '8 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>What is a conversion?</h2>
 <p>A conversion is any action a visitor takes that you consider valuable — filling out a contact form, making a purchase, booking a call, or signing up. When someone clicks your Google Ad and then completes one of these actions, that's a conversion.</p>
 <p>Google Ads uses conversions to understand which clicks are worth paying for. Without this data, Google shows your ads to everyone equally. With it, Google learns <em>who actually converts</em> and bids more aggressively to reach people who look like your best customers. This is the foundation of Smart Bidding.</p>
@@ -116,13 +117,13 @@ HTML,
     private static function aiAgents(): array
     {
         return [
-            'slug'        => 'how-ai-agents-work',
-            'title'       => 'How Our AI Agents Optimise Your Campaigns 24/7',
+            'slug' => 'how-ai-agents-work',
+            'title' => 'How Our AI Agents Optimise Your Campaigns 24/7',
             'description' => 'sitetospend.com runs six autonomous AI agents that continuously monitor, fix, and improve your ad campaigns — without you lifting a finger.',
-            'category'    => 'Platform',
-            'read_time'   => '6 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '6 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>Why autonomous agents instead of dashboards?</h2>
 <p>Most ad platforms give you a dashboard and leave the work to you. The problem: Google Ads has hundreds of levers, changes constantly, and rewards speed. A competitor can launch a new offer at 2am and steal your position before you wake up.</p>
 <p>sitetospend.com runs six AI agents that work continuously — analysing performance, making improvements, and responding to changes in real time. You get agency-level management without hiring an agency.</p>
@@ -197,13 +198,13 @@ HTML,
     private static function smartBidding(): array
     {
         return [
-            'slug'        => 'what-is-smart-bidding',
-            'title'       => 'What is Smart Bidding and Why Your Conversion Data Matters',
+            'slug' => 'what-is-smart-bidding',
+            'title' => 'What is Smart Bidding and Why Your Conversion Data Matters',
             'description' => 'Smart Bidding is Google\'s machine learning bidding system. Here\'s how it works, why it needs conversion data, and how sitetospend.com makes it work harder for you.',
-            'category'    => 'Google Ads',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>What is Smart Bidding?</h2>
 <p>Smart Bidding is Google's machine learning system for setting bids at auction time. Instead of you setting a fixed bid for a keyword, Google's algorithm analyses dozens of signals in real time — the user's device, location, time of day, search history, browser — and sets the optimal bid for <em>that specific person, in that specific moment</em>.</p>
 <p>The goal is to show your ad to people who are most likely to convert, and not waste money on people who aren't.</p>
@@ -248,13 +249,13 @@ HTML,
     private static function competitorAnalysis(): array
     {
         return [
-            'slug'        => 'how-competitor-analysis-works',
-            'title'       => 'How Competitor Analysis Gives You an Unfair Advantage',
+            'slug' => 'how-competitor-analysis-works',
+            'title' => 'How Competitor Analysis Gives You an Unfair Advantage',
             'description' => 'Every week, sitetospend.com discovers your real competitors, scrapes their messaging, and generates specific counter-strategies to help your ads win.',
-            'category'    => 'Platform',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>Why most businesses don't do competitor analysis</h2>
 <p>Competitor analysis is genuinely valuable — knowing what your competitors are saying, what they're offering, and where they're weak lets you write ads that win on differentiation rather than just bidding more. But it's also time-consuming and requires constant upkeep. Most businesses do it once and then forget it as the market changes.</p>
 <p>sitetospend.com runs competitor analysis automatically every week so it's always current.</p>
@@ -299,13 +300,13 @@ HTML,
     private static function gettingStarted(): array
     {
         return [
-            'slug'        => 'getting-started',
-            'title'       => 'Getting Started with sitetospend.com',
+            'slug' => 'getting-started',
+            'title' => 'Getting Started with sitetospend.com',
             'description' => 'A step-by-step guide to launching your first AI-managed Google Ads campaign — from signup to live ads in under 30 minutes, no prior experience needed.',
-            'category'    => 'Getting Started',
-            'read_time'   => '4 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Getting Started',
+            'read_time' => '4 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>What happens when you sign up</h2>
 <p>sitetospend.com is designed to get you from zero to a live, AI-managed campaign as quickly as possible. Here's exactly what the process looks like.</p>
 
@@ -367,13 +368,13 @@ HTML,
     private static function whyGoogleAdsIsHard(): array
     {
         return [
-            'slug'        => 'why-google-ads-is-so-hard-to-manage',
-            'title'       => 'Why Google Ads Is So Hard to Manage',
+            'slug' => 'why-google-ads-is-so-hard-to-manage',
+            'title' => 'Why Google Ads Is So Hard to Manage',
             'description' => 'Google Ads looks simple to set up but is notoriously difficult to manage profitably. Here\'s why — and what a properly managed campaign actually requires.',
-            'category'    => 'Google Ads',
-            'read_time'   => '7 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '7 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>The illusion of simplicity</h2>
 <p>Google makes it remarkably easy to spend money on Google Ads. You can have an account set up and ads running in under an hour. The interface is clean, the setup wizard is friendly, and Google's onboarding actively encourages you to get started quickly. This is by design — and it's the first trap.</p>
 <p>Creating a campaign is easy. Creating a <em>profitable</em> campaign is genuinely hard. The gap between the two is where most businesses quietly lose thousands of pounds every year without understanding why.</p>
@@ -423,13 +424,13 @@ HTML,
     private static function whyAdsStopWorking(): array
     {
         return [
-            'slug'        => 'why-your-google-ads-stop-working',
-            'title'       => 'Why Your Google Ads Stop Working',
+            'slug' => 'why-your-google-ads-stop-working',
+            'title' => 'Why Your Google Ads Stop Working',
             'description' => 'Google Ads that worked brilliantly at launch often decline over months. Here\'s the real reasons campaign performance drops — and how to reverse it.',
-            'category'    => 'Google Ads',
-            'read_time'   => '6 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '6 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>The honeymoon period</h2>
 <p>Many Google Ads campaigns have a honeymoon period. In the first few weeks, before competitors notice you, before Google has fully calibrated your Quality Scores, before ad fatigue sets in, clicks can be cheap and conversions can be plentiful. Then, gradually or suddenly, performance drops. Cost-per-lead climbs. ROAS falls. The campaign that was working stops working.</p>
 <p>This is so common it has a name among PPC professionals: campaign decay. Understanding why it happens is the first step to preventing it.</p>
@@ -466,13 +467,13 @@ HTML,
     private static function hiddenCostOfManaging(): array
     {
         return [
-            'slug'        => 'true-cost-of-managing-google-ads-yourself',
-            'title'       => 'The True Cost of Managing Google Ads Yourself',
+            'slug' => 'true-cost-of-managing-google-ads-yourself',
+            'title' => 'The True Cost of Managing Google Ads Yourself',
             'description' => 'The monthly fee is the visible cost. The real cost of DIY Google Ads management is hidden in wasted spend, missed optimisations, and your own time. Here\'s the full picture.',
-            'category'    => 'Platform',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>The maths most businesses don't do</h2>
 <p>When businesses consider whether to manage Google Ads themselves, they typically think about two numbers: the ad budget and the agency fee. "I'm spending £2,000/month on ads. An agency wants 15%, that's £300. I'll manage it myself and save £300." This calculation is almost always wrong.</p>
 <p>It ignores the three real costs: wasted ad spend, the opportunity cost of your time, and the revenue lost from suboptimal performance.</p>
@@ -515,13 +516,13 @@ HTML,
     private static function whySmallBusinessLoses(): array
     {
         return [
-            'slug'        => 'why-small-businesses-lose-on-google-ads',
-            'title'       => 'Why Small Businesses Lose on Google Ads',
+            'slug' => 'why-small-businesses-lose-on-google-ads',
+            'title' => 'Why Small Businesses Lose on Google Ads',
             'description' => 'Large advertisers have dedicated teams, proprietary tools, and years of data. Here\'s how small businesses can compete — and where the real advantages lie.',
-            'category'    => 'Google Ads',
-            'read_time'   => '6 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '6 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>The unfair fight</h2>
 <p>A national insurance company competing on Google Ads has a team of PPC specialists, a data science team, proprietary bidding software, years of conversion data, and a seven-figure monthly budget. A small insurance broker has a business owner who checks their Google Ads account every couple of weeks and a £1,500 monthly budget.</p>
 <p>On paper, this looks like an unwinnable fight. In practice, small businesses can and do compete effectively with large advertisers on Google — but only if they understand where the real advantages lie and how to exploit them.</p>
@@ -556,13 +557,13 @@ HTML,
     private static function campaignStructureMistakes(): array
     {
         return [
-            'slug'        => 'google-ads-campaign-structure-mistakes',
-            'title'       => 'The Google Ads Campaign Structure Mistakes That Kill Performance',
+            'slug' => 'google-ads-campaign-structure-mistakes',
+            'title' => 'The Google Ads Campaign Structure Mistakes That Kill Performance',
             'description' => 'Poor campaign structure is the root cause of most Google Ads underperformance. Here are the most common structural mistakes — and how to fix them.',
-            'category'    => 'Google Ads',
-            'read_time'   => '6 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '6 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>Why structure matters more than budget</h2>
 <p>Two Google Ads accounts with identical budgets and identical keywords can produce dramatically different results depending purely on how they're structured. Campaign structure determines ad relevance, Quality Score, conversion tracking accuracy, and budget distribution. Get it wrong and every other optimisation you do is working against a structural handicap.</p>
 
@@ -607,13 +608,13 @@ HTML,
     private static function landingPageConversions(): array
     {
         return [
-            'slug'        => 'landing-page-conversion-rate-optimisation',
-            'title'       => 'Landing Page CRO: Why Your Ads Click But Don\'t Convert',
+            'slug' => 'landing-page-conversion-rate-optimisation',
+            'title' => 'Landing Page CRO: Why Your Ads Click But Don\'t Convert',
             'description' => 'Getting clicks is only half the battle. If your landing page doesn\'t convert, every click is wasted money. Here\'s how to diagnose and fix landing page conversion problems.',
-            'category'    => 'Platform',
-            'read_time'   => '6 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '6 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>The click is not the win</h2>
 <p>A common misconception in paid advertising is that the goal is to get as many clicks as possible. Clicks are a cost, not a result. The result is a conversion — an enquiry, a purchase, a booked call. A campaign that generates 200 clicks at 2% conversion rate produces 4 conversions. A campaign that generates 100 clicks at 8% conversion rate produces 8 conversions at half the spend.</p>
 <p>Landing page conversion rate is often the highest-leverage variable in a Google Ads account — higher than any bid adjustment, keyword change, or ad copy test. Yet it's the variable most businesses neglect.</p>
@@ -663,13 +664,13 @@ HTML,
     private static function facebookAdsExplained(): array
     {
         return [
-            'slug'        => 'facebook-ads-for-small-business',
-            'title'       => 'Facebook Ads for Small Business: What Actually Works',
+            'slug' => 'facebook-ads-for-small-business',
+            'title' => 'Facebook Ads for Small Business: What Actually Works',
             'description' => 'Facebook Ads can be transformative for small businesses — but most campaigns fail due to the same avoidable mistakes. Here\'s what actually works.',
-            'category'    => 'Platform',
-            'read_time'   => '7 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '7 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>Why Facebook Ads is different from Google Ads</h2>
 <p>Google Ads captures people who are already looking for something. Facebook Ads reaches people who aren't looking for anything — they're scrolling, watching videos, seeing what friends are up to. This fundamental difference shapes everything about how Facebook advertising must be approached.</p>
 <p>On Google, you match your ad to intent that already exists. On Facebook, you must create intent — interrupt someone's scroll, make them care about something they weren't thinking about, and move them toward a decision. This is harder creatively, requires different targeting logic, and demands a different relationship between your ads and your landing pages.</p>
@@ -713,13 +714,13 @@ HTML,
     private static function negativeKeywords(): array
     {
         return [
-            'slug'        => 'negative-keywords-explained',
-            'title'       => 'Google Ads Negative Keywords Explained',
+            'slug' => 'negative-keywords-explained',
+            'title' => 'Google Ads Negative Keywords Explained',
             'description' => 'Negative keywords are the fastest way to cut wasted spend on Google Ads. Here\'s how they work, why most accounts have too few, and how sitetospend.com manages them automatically.',
-            'category'    => 'Google Ads',
-            'read_time'   => '6 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '6 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>What is a negative keyword?</h2>
 <p>A negative keyword tells Google: <em>do not show my ad when someone includes this word in their search</em>. Where regular keywords attract clicks, negative keywords repel irrelevant ones. They're a filter that stops your budget being consumed by searches that will never lead to a customer.</p>
 <p>Example: a plumber running Google Ads for "emergency plumber London" without a negative keyword for "job" or "course" will have their ad shown to people searching "plumber London job" or "plumbing course London." These people aren't going to hire a plumber — they're looking for employment or training. Every click from them is pure waste.</p>
@@ -767,13 +768,13 @@ HTML,
     private static function adRankExplained(): array
     {
         return [
-            'slug'        => 'what-is-ad-rank',
-            'title'       => 'What is Ad Rank? How Google Decides Your Ad Position',
+            'slug' => 'what-is-ad-rank',
+            'title' => 'What is Ad Rank? How Google Decides Your Ad Position',
             'description' => 'Ad Rank determines your ad\'s position on Google\'s search results page — and it\'s not just about bid. Here\'s the full picture and how to improve it.',
-            'category'    => 'Google Ads',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>The Google Ads auction isn't just about money</h2>
 <p>Many people assume the advertiser who bids the most wins the top spot in Google search results. This is wrong — and understanding why is one of the most important things you can learn about Google Ads.</p>
 <p>Google uses a formula called <strong>Ad Rank</strong> to decide who shows where. A business bidding £0.50 can outrank one bidding £2.00 if their ad quality is high enough. This is intentional: Google earns more from high-quality, relevant ads because people actually click them.</p>
@@ -823,13 +824,13 @@ HTML,
     private static function responsiveSearchAds(): array
     {
         return [
-            'slug'        => 'how-responsive-search-ads-work',
-            'title'       => 'How Responsive Search Ads Work',
+            'slug' => 'how-responsive-search-ads-work',
+            'title' => 'How Responsive Search Ads Work',
             'description' => 'Responsive Search Ads let you write up to 15 headlines and 4 descriptions. Google tests combinations to find what performs. Here\'s how to make RSAs work and how sitetospend.com optimises them continuously.',
-            'category'    => 'Google Ads',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>What is a Responsive Search Ad?</h2>
 <p>A Responsive Search Ad (RSA) is Google's standard ad format for Search campaigns. Instead of writing one fixed ad, you provide up to <strong>15 headlines</strong> and <strong>4 descriptions</strong>. Google automatically tests different combinations of these assets to discover which perform best for different searches and users.</p>
 <p>When your ad shows, Google picks 3 headlines and 2 descriptions from your pool, assembles them in an order it believes will perform best, and displays them. Over time, Google learns which combinations drive the most clicks and conversions — and shows those combinations more often.</p>
@@ -871,13 +872,13 @@ HTML,
     private static function aiAdCopywriting(): array
     {
         return [
-            'slug'        => 'how-ai-writes-your-ad-copy',
-            'title'       => 'How AI Writes and Improves Your Google Ad Copy',
+            'slug' => 'how-ai-writes-your-ad-copy',
+            'title' => 'How AI Writes and Improves Your Google Ad Copy',
             'description' => 'sitetospend.com uses AI to generate, test, and improve your Google Ad copy automatically — informed by your brand, your competitors, and real conversion data.',
-            'category'    => 'Platform',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>Why ad copy matters more than most advertisers realise</h2>
 <p>Two businesses targeting identical keywords with identical bids can get dramatically different results based purely on their ad copy. Copy that closely matches search intent gets clicked more — and a higher click-through rate improves Quality Score, which in turn lowers your cost-per-click and improves your position. The compounding effect of better ad copy is substantial.</p>
 <p>Despite this, most businesses write their initial ads at launch and rarely revisit them. Stale copy that was written 18 months ago, before the market shifted and before competitors changed their messaging, is quietly underperforming every day.</p>
@@ -920,13 +921,13 @@ HTML,
     private static function audienceTargeting(): array
     {
         return [
-            'slug'        => 'google-ads-audience-targeting',
-            'title'       => 'Google Ads Audience Targeting Explained',
+            'slug' => 'google-ads-audience-targeting',
+            'title' => 'Google Ads Audience Targeting Explained',
             'description' => 'Audience targeting lets you bid based on who is searching, not just what they\'re searching. Here\'s how Google\'s remarketing, RLSA and Customer Match tools work — and how we use them.',
-            'category'    => 'Google Ads',
-            'read_time'   => '6 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '6 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>Why keywords alone aren't enough</h2>
 <p>Keyword targeting tells Google what topic to show your ad for. Audience targeting tells Google <em>who</em> to show your ad to. The combination is far more powerful than either alone. Two people can search the same keyword with very different purchase intent: someone who visited your pricing page yesterday is much more likely to convert than a first-time visitor who found you while comparing options.</p>
 <p>Audience targeting lets you recognise the difference — and bid accordingly.</p>
@@ -973,13 +974,13 @@ HTML,
     private static function budgetPacing(): array
     {
         return [
-            'slug'        => 'how-budget-pacing-works',
-            'title'       => 'How Google Ads Budget Pacing Works',
+            'slug' => 'how-budget-pacing-works',
+            'title' => 'How Google Ads Budget Pacing Works',
             'description' => 'Spending your Google Ads budget at the right times of day — not just as fast as possible — is critical to performance. Here\'s how intelligent budget pacing and dayparting works.',
-            'category'    => 'Platform',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>The problem with "standard" budget delivery</h2>
 <p>By default, Google tries to spread your daily budget evenly throughout the day. This sounds sensible but ignores a critical reality: not all hours are equal. For most businesses, 8am–6pm on weekdays dramatically outperforms midnight on Sunday. Spreading spend evenly means wasting budget in low-value windows.</p>
 <p>Conversely, if your budget runs out by 2pm because mornings are busy, you're invisible to everyone searching in the afternoon and evening. Pacing matters in both directions.</p>
@@ -1021,13 +1022,13 @@ HTML,
     private static function multiPlatformAdvertising(): array
     {
         return [
-            'slug'        => 'multi-platform-advertising',
-            'title'       => 'Why Multi-Platform Advertising Works',
+            'slug' => 'multi-platform-advertising',
+            'title' => 'Why Multi-Platform Advertising Works',
             'description' => 'Running ads on Google, Facebook, Microsoft, and LinkedIn reaches customers at every stage of the buying journey. Here\'s how each platform differs and how to manage them together.',
-            'category'    => 'Platform',
-            'read_time'   => '7 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Platform',
+            'read_time' => '7 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>Why one platform is never enough</h2>
 <p>Google Ads reaches people who are actively searching for what you sell. That's powerful — but it only captures demand that already exists. What about the potential customers who don't yet know they need you, or who know they need a solution but haven't started searching for providers?</p>
 <p>A multi-platform strategy lets you capture existing demand (Google, Microsoft) <em>and</em> create new demand (Facebook, LinkedIn). Together, these platforms cover the full customer journey — from initial awareness to active purchase intent.</p>
@@ -1072,13 +1073,13 @@ HTML,
     private static function understandingRoas(): array
     {
         return [
-            'slug'        => 'understanding-roas',
-            'title'       => 'What is ROAS and How Do You Improve It?',
+            'slug' => 'understanding-roas',
+            'title' => 'What is ROAS and How Do You Improve It?',
             'description' => 'Return on Ad Spend (ROAS) measures how much revenue you get for every pound spent on ads. Here\'s what it means, how to set a target for your margins, and how to improve it.',
-            'category'    => 'Google Ads',
-            'read_time'   => '5 min read',
-            'published'   => '2026-05-03',
-            'content'     => <<<HTML
+            'category' => 'Google Ads',
+            'read_time' => '5 min read',
+            'published' => '2026-05-03',
+            'content' => <<<'HTML'
 <h2>What is ROAS?</h2>
 <p>Return on Ad Spend (ROAS) measures how much revenue you generate for every pound spent on advertising. It's the fundamental metric for determining whether your campaigns are profitable.</p>
 <p>The formula is simple:</p>

@@ -14,7 +14,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('offline_conversions', function (Blueprint $table) {
-            if (!Schema::hasColumn('offline_conversions', 'upload_attempts')) {
+            if (! Schema::hasColumn('offline_conversions', 'upload_attempts')) {
                 $table->unsignedInteger('upload_attempts')->default(0)->after('upload_results');
             }
         });

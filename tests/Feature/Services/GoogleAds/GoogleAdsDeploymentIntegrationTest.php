@@ -7,15 +7,15 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
+use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
-use App\Services\GoogleAds\CommonServices\AddKeyword;
-use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
-use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
+use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
+use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Foundation\Testing\WithFaker;
 use Tests\TestCase;
@@ -30,13 +30,14 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
     use WithFaker;
 
     protected ?string $testSubAccountId = null;
+
     protected ?Customer $testCustomer = null;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Skipping Google Ads integration tests. Set RUN_GOOGLE_ADS_INTEGRATION_TESTS=true to run.');
         }
 
@@ -59,19 +60,19 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         $mccRefreshToken = config('googleads.mcc_refresh_token');
         $this->assertNotEmpty($mccRefreshToken, 'GOOGLE_ADS_MCC_REFRESH_TOKEN must be set');
 
-        $oAuth2 = (new OAuth2TokenBuilder())
+        $oAuth2 = (new OAuth2TokenBuilder)
             ->fromFile($configPath)
             ->withRefreshToken($mccRefreshToken)
             ->build();
 
-        $client = (new GoogleAdsClientBuilder())
+        $client = (new GoogleAdsClientBuilder)
             ->fromFile($configPath)
             ->withOAuth2Credential($oAuth2)
             ->withLoginCustomerId($mccCustomerId)
             ->build();
 
         $newCustomer = new \Google\Ads\GoogleAds\V22\Resources\Customer([
-            'descriptive_name' => 'PHPUnit Test ' . date('Y-m-d H:i:s'),
+            'descriptive_name' => 'PHPUnit Test '.date('Y-m-d H:i:s'),
             'currency_code' => 'AUD',
             'time_zone' => 'Australia/Sydney',
         ]);
@@ -96,7 +97,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
     {
         $campaign = Campaign::create([
             'customer_id' => $this->testCustomer->id,
-            'name' => 'Integration Test Campaign ' . time(),
+            'name' => 'Integration Test Campaign '.time(),
             'daily_budget' => 10.00,
             'total_budget' => 300.00,
             'landing_page_url' => 'https://example.com',
@@ -146,7 +147,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         $service = new CreateSearchCampaign($this->testCustomer);
 
         $campaignResourceName = $service($this->testSubAccountId, [
-            'businessName' => 'Unit Test Biz ' . time(),
+            'businessName' => 'Unit Test Biz '.time(),
             'budget' => 5.00,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
@@ -162,7 +163,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         // First create a campaign
         $campaignService = new CreateSearchCampaign($this->testCustomer);
         $campaignResourceName = $campaignService($this->testSubAccountId, [
-            'businessName' => 'AdGroup Test ' . time(),
+            'businessName' => 'AdGroup Test '.time(),
             'budget' => 5.00,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
@@ -182,7 +183,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         // Create campaign + ad group
         $campaignService = new CreateSearchCampaign($this->testCustomer);
         $campaignResourceName = $campaignService($this->testSubAccountId, [
-            'businessName' => 'RSA Test ' . time(),
+            'businessName' => 'RSA Test '.time(),
             'budget' => 5.00,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
@@ -208,7 +209,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         // Create campaign + ad group
         $campaignService = new CreateSearchCampaign($this->testCustomer);
         $campaignResourceName = $campaignService($this->testSubAccountId, [
-            'businessName' => 'Keyword Test ' . time(),
+            'businessName' => 'Keyword Test '.time(),
             'budget' => 5.00,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
@@ -230,7 +231,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         // Create a campaign first
         $campaignService = new CreateSearchCampaign($this->testCustomer);
         $campaignResourceName = $campaignService($this->testSubAccountId, [
-            'businessName' => 'Status Test ' . time(),
+            'businessName' => 'Status Test '.time(),
             'budget' => 5.00,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
@@ -251,7 +252,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         // Create a campaign
         $campaignService = new CreateSearchCampaign($this->testCustomer);
         $campaignResourceName = $campaignService($this->testSubAccountId, [
-            'businessName' => 'Budget Test ' . time(),
+            'businessName' => 'Budget Test '.time(),
             'budget' => 5.00,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
@@ -270,7 +271,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
         // Create a fresh campaign (no impressions yet)
         $campaignService = new CreateSearchCampaign($this->testCustomer);
         $campaignResourceName = $campaignService($this->testSubAccountId, [
-            'businessName' => 'Perf Test ' . time(),
+            'businessName' => 'Perf Test '.time(),
             'budget' => 5.00,
             'startDate' => now()->format('Y-m-d'),
             'endDate' => now()->addMonth()->format('Y-m-d'),
@@ -285,7 +286,7 @@ class GoogleAdsDeploymentIntegrationTest extends TestCase
 
     public function test_idempotent_campaign_creation()
     {
-        $name = 'Idempotent Test ' . time();
+        $name = 'Idempotent Test '.time();
 
         $service = new CreateSearchCampaign($this->testCustomer);
 

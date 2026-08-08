@@ -20,15 +20,14 @@ class CheckVideoStatus implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 60; // Poll for up to 60 minutes (60 × 60s releases)
+
     public $timeout = 900;
 
-    public function __construct(protected VideoCollateral $videoCollateral)
-    {
-    }
+    public function __construct(protected VideoCollateral $videoCollateral) {}
 
     public function handle(GeminiService $geminiService, ViduService $viduService): void
     {
-        Log::info("--- CheckVideoStatus Job Started ---");
+        Log::info('--- CheckVideoStatus Job Started ---');
         Log::info("Attempt #{$this->attempts()} for VideoCollateral ID: {$this->videoCollateral->id}", [
             'provider' => $this->videoCollateral->provider ?? 'veo',
         ]);
@@ -42,7 +41,7 @@ class CheckVideoStatus implements ShouldQueue
                 $this->handleVeo($geminiService);
             }
         } catch (\Throwable $e) {
-            Log::error("CheckVideoStatus error for VideoCollateral ID {$this->videoCollateral->id}: " . $e->getMessage());
+            Log::error("CheckVideoStatus error for VideoCollateral ID {$this->videoCollateral->id}: ".$e->getMessage());
             $this->videoCollateral->update(['status' => 'failed']);
             $this->fail($e);
         }
@@ -56,17 +55,18 @@ class CheckVideoStatus implements ShouldQueue
 
         $operation = $geminiService->checkVideoGenerationStatus($this->videoCollateral->operation_name);
 
-        if (!$operation) {
-            Log::info("CheckVideoStatus: Veo not ready yet — releasing with 60s delay.");
+        if (! $operation) {
+            Log::info('CheckVideoStatus: Veo not ready yet — releasing with 60s delay.');
             $this->release(60);
+
             return;
         }
 
-        Log::info("CheckVideoStatus: Veo response received.", ['operation' => $operation]);
+        Log::info('CheckVideoStatus: Veo response received.', ['operation' => $operation]);
 
         if (isset($operation['error'])) {
             $this->videoCollateral->update(['status' => 'failed']);
-            throw new \Exception("Veo generation failed: " . json_encode($operation['error']));
+            throw new \Exception('Veo generation failed: '.json_encode($operation['error']));
         }
 
         $response = $operation['response'] ?? [];
@@ -85,13 +85,14 @@ class CheckVideoStatus implements ShouldQueue
             }
             Log::info('CheckVideoStatus: Veo video ready (inline bytes).');
             $this->storeAndComplete($videoData, ['gemini_video_inline' => true]);
+
             return;
         }
 
         $videoUri = $response['generateVideoResponse']['generatedSamples'][0]['video']['uri']
             ?? $response['videos'][0]['uri']
             ?? null;
-        if (!$videoUri) {
+        if (! $videoUri) {
             $this->videoCollateral->update(['status' => 'failed']);
             throw new \Exception('Veo response is missing both inline bytes and a video URI.');
         }
@@ -116,8 +117,9 @@ class CheckVideoStatus implements ShouldQueue
         $result = $viduService->getTaskStatus($this->videoCollateral->operation_name);
 
         if ($result === null) {
-            Log::info("CheckVideoStatus: Vidu not ready yet — releasing with 60s delay.");
+            Log::info('CheckVideoStatus: Vidu not ready yet — releasing with 60s delay.');
             $this->release(60);
+
             return;
         }
 
@@ -139,16 +141,16 @@ class CheckVideoStatus implements ShouldQueue
 
     private function storeAndComplete(string $videoData, array $extraFields): void
     {
-        $filename    = uniqid('vid_', true) . '.mp4';
+        $filename = uniqid('vid_', true).'.mp4';
         $storagePath = "collateral/videos/{$this->videoCollateral->campaign_id}/{$filename}";
 
         [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $videoData, 'video/mp4');
 
-        Log::info("CheckVideoStatus: Video uploaded.", ['s3_path' => $s3Path, 'url' => $cloudFrontUrl]);
+        Log::info('CheckVideoStatus: Video uploaded.', ['s3_path' => $s3Path, 'url' => $cloudFrontUrl]);
 
         $this->videoCollateral->update(array_merge([
-            'status'         => 'completed',
-            's3_path'        => $s3Path,
+            'status' => 'completed',
+            's3_path' => $s3Path,
             'cloudfront_url' => $cloudFrontUrl,
         ], $extraFields));
 
@@ -183,7 +185,7 @@ class CheckVideoStatus implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('CheckVideoStatus failed: ' . $exception->getMessage(), [
+        Log::error('CheckVideoStatus failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

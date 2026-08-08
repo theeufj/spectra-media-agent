@@ -3,10 +3,10 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\ConversionValueRuleSet;
-use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleSetOperation;
 use Google\Ads\GoogleAds\V22\Enums\ConversionValueRulePrimaryDimensionEnum\ConversionValueRulePrimaryDimension;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\ConversionValueRuleSet;
+use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleSetOperation;
 use Google\ApiCore\ApiException;
 use Illuminate\Support\Facades\Log;
 
@@ -19,10 +19,9 @@ use Illuminate\Support\Facades\Log;
 class CreateConversionValueRuleSet extends BaseGoogleAdsService
 {
     /**
-     * @param  string   $customerId
-     * @param  string   $campaignResourceName   e.g. "customers/123/campaigns/456"
-     * @param  string[] $ruleResourceNames       Array of ConversionValueRule resource names
-     * @return string|null  Resource name of the created rule set, or null on failure
+     * @param  string  $campaignResourceName  e.g. "customers/123/campaigns/456"
+     * @param  string[]  $ruleResourceNames  Array of ConversionValueRule resource names
+     * @return string|null Resource name of the created rule set, or null on failure
      */
     public function __invoke(
         string $customerId,
@@ -34,11 +33,11 @@ class CreateConversionValueRuleSet extends BaseGoogleAdsService
         try {
             $ruleSet = new ConversionValueRuleSet([
                 'conversion_value_rules' => $ruleResourceNames,
-                'campaign'               => $campaignResourceName,
-                'dimensions'             => [ConversionValueRulePrimaryDimension::NO_CONDITION],
+                'campaign' => $campaignResourceName,
+                'dimensions' => [ConversionValueRulePrimaryDimension::NO_CONDITION],
             ]);
 
-            $operation = new ConversionValueRuleSetOperation();
+            $operation = new ConversionValueRuleSetOperation;
             $operation->setCreate($ruleSet);
 
             $serviceClient = $this->client->getConversionValueRuleSetServiceClient();
@@ -51,9 +50,10 @@ class CreateConversionValueRuleSet extends BaseGoogleAdsService
         } catch (GoogleAdsException|ApiException $e) {
             Log::error('CreateConversionValueRuleSet: Failed to create rule set', [
                 'customer_id' => $customerId,
-                'campaign'    => $campaignResourceName,
-                'error'       => $e->getMessage(),
+                'campaign' => $campaignResourceName,
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

@@ -4,8 +4,6 @@ namespace App\Services;
 
 use App\Models\Customer;
 use App\Models\CustomerPage;
-use App\Models\HarvestedAsset;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Spatie\Browsershot\Browsershot;
@@ -46,6 +44,7 @@ class AssetHarvestingService
 
         if ($pages->isEmpty()) {
             Log::info('AssetHarvestingService: No crawled pages found', ['customer_id' => $customer->id]);
+
             return [];
         }
 
@@ -57,7 +56,7 @@ class AssetHarvestingService
 
             foreach ($urls as $url) {
                 $normalized = $this->normalizeUrl($url, $page->url);
-                if (!$normalized || isset($seenUrls[$normalized])) {
+                if (! $normalized || isset($seenUrls[$normalized])) {
                     continue;
                 }
 
@@ -112,11 +111,12 @@ class AssetHarvestingService
                     'url' => $page->url,
                     'error' => $e2->getMessage(),
                 ]);
+
                 return [];
             }
         }
 
-        if (!$html) {
+        if (! $html) {
             return [];
         }
 
@@ -163,7 +163,7 @@ class AssetHarvestingService
         $crawler->filter('script[type="application/ld+json"]')->each(function (Crawler $node) use (&$urls) {
             try {
                 $data = json_decode($node->text(), true);
-                if (!$data) {
+                if (! $data) {
                     return;
                 }
                 $this->extractSchemaImages($data, $urls);
@@ -240,7 +240,7 @@ class AssetHarvestingService
                 ->withHeaders(['User-Agent' => 'Mozilla/5.0 (compatible; SiteToSpend/1.0)'])
                 ->get($url);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return null;
             }
 
@@ -248,7 +248,7 @@ class AssetHarvestingService
             $contentType = $response->header('Content-Type');
 
             // Must be an image
-            if (!$contentType || !str_starts_with($contentType, 'image/')) {
+            if (! $contentType || ! str_starts_with($contentType, 'image/')) {
                 return null;
             }
 
@@ -259,7 +259,7 @@ class AssetHarvestingService
 
             // Check dimensions using GD
             $imageInfo = @getimagesizefromstring($body);
-            if (!$imageInfo) {
+            if (! $imageInfo) {
                 return null;
             }
 
@@ -287,6 +287,7 @@ class AssetHarvestingService
                 'url' => $url,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -296,7 +297,7 @@ class AssetHarvestingService
      */
     public function classifyImage(string $imageBase64, string $mimeType): ?array
     {
-        $prompt = <<<PROMPT
+        $prompt = <<<'PROMPT'
 Classify this image for use in digital advertising. Respond in JSON only.
 
 {
@@ -336,7 +337,7 @@ PROMPT;
             $mimeType
         );
 
-        if (!$response || !isset($response['text'])) {
+        if (! $response || ! isset($response['text'])) {
             return null;
         }
 
@@ -367,13 +368,13 @@ PROMPT;
         ];
 
         $dim = $dimensions[$targetFormat] ?? $dimensions['landscape'];
-        $colorContext = !empty($brandColors) ? 'Use these brand colors for any generated background: ' . implode(', ', $brandColors) . '.' : '';
+        $colorContext = ! empty($brandColors) ? 'Use these brand colors for any generated background: '.implode(', ', $brandColors).'.' : '';
 
         $prompt = "Resize this image to {$dim['ratio']} aspect ratio ({$dim['width']}x{$dim['height']} pixels) for a digital ad. "
-            . "Extend the canvas using generative fill to create a natural-looking background. "
-            . "Keep the main subject centered and fully visible. Do not crop the subject. "
-            . "{$colorContext} "
-            . "The result should look professional and suitable for paid advertising.";
+            .'Extend the canvas using generative fill to create a natural-looking background. '
+            .'Keep the main subject centered and fully visible. Do not crop the subject. '
+            ."{$colorContext} "
+            .'The result should look professional and suitable for paid advertising.';
 
         return $this->gemini->refineImage($prompt, [
             ['mime_type' => $mimeType, 'data' => $imageBase64],
@@ -390,18 +391,18 @@ PROMPT;
 
         // Handle protocol-relative URLs
         if (str_starts_with($url, '//')) {
-            $url = 'https:' . $url;
+            $url = 'https:'.$url;
         }
 
         // Handle relative URLs
-        if (!str_starts_with($url, 'http')) {
+        if (! str_starts_with($url, 'http')) {
             $parsed = parse_url($pageUrl);
-            $base = ($parsed['scheme'] ?? 'https') . '://' . ($parsed['host'] ?? '');
-            $url = str_starts_with($url, '/') ? $base . $url : $base . '/' . $url;
+            $base = ($parsed['scheme'] ?? 'https').'://'.($parsed['host'] ?? '');
+            $url = str_starts_with($url, '/') ? $base.$url : $base.'/'.$url;
         }
 
         // Validate URL format
-        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+        if (! filter_var($url, FILTER_VALIDATE_URL)) {
             return null;
         }
 
@@ -415,6 +416,7 @@ PROMPT;
                 return true;
             }
         }
+
         return false;
     }
 
@@ -430,6 +432,7 @@ PROMPT;
         if (str_ends_with($cleaned, '```')) {
             $cleaned = substr($cleaned, 0, -3);
         }
+
         return json_decode(trim($cleaned), true) ?? [];
     }
 }

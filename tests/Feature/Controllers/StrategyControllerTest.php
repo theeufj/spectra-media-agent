@@ -18,18 +18,20 @@ class StrategyControllerTest extends TestCase
     use DatabaseTransactions;
 
     protected User $user;
+
     protected Customer $customer;
+
     protected Campaign $campaign;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->user     = User::factory()->create();
+        $this->user = User::factory()->create();
         $this->customer = Customer::factory()->create();
         $this->customer->users()->attach($this->user->id, ['role' => 'owner']);
         $this->campaign = Campaign::factory()->create(['customer_id' => $this->customer->id]);
@@ -57,7 +59,7 @@ class StrategyControllerTest extends TestCase
     {
         $strategy = Strategy::factory()->create([
             'campaign_id' => $this->campaign->id,
-            'status'      => 'draft',
+            'status' => 'draft',
         ]);
 
         $response = $this->actingAs($this->user)
@@ -65,7 +67,7 @@ class StrategyControllerTest extends TestCase
 
         $response->assertRedirect();
         $this->assertDatabaseHas('strategies', [
-            'id'     => $strategy->id,
+            'id' => $strategy->id,
             'status' => 'approved',
         ]);
     }

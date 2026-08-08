@@ -2,13 +2,13 @@
 
 namespace App\Services\GoogleAds;
 
+use App\Models\Customer;
+use App\Services\CampaignStatusHelper;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V22\Services\CampaignServiceClient;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
 use Illuminate\Support\Facades\Log;
-use App\Models\Customer;
-use App\Services\CampaignStatusHelper;
 
 class CreateCampaign extends BaseGoogleAdsService
 {
@@ -25,12 +25,13 @@ class CreateCampaign extends BaseGoogleAdsService
         // 1. Create the Campaign Budget
         $budgetResourceName = ($this->createCampaignBudget)(
             $customerId,
-            $campaignData['businessName'] . ' Budget',
+            $campaignData['businessName'].' Budget',
             $campaignData['budget'] * 1000000 // Convert to micros
         );
 
-        if (!$budgetResourceName) {
+        if (! $budgetResourceName) {
             Log::error('Google Ads API Error: Failed to create budget, cannot proceed with campaign creation.');
+
             return null;
         }
 
@@ -42,7 +43,7 @@ class CreateCampaign extends BaseGoogleAdsService
             'campaign_budget' => $budgetResourceName,
         ]);
 
-        $campaignOperation = new CampaignOperation();
+        $campaignOperation = new CampaignOperation;
         $campaignOperation->setCreate($campaign);
 
         /** @var CampaignServiceClient $campaignServiceClient */

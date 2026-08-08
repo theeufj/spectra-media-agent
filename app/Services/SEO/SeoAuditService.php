@@ -5,10 +5,9 @@ namespace App\Services\SEO;
 use App\Models\Customer;
 use App\Models\SeoAudit;
 use App\Services\GeminiService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
-use Spatie\Browsershot\Browsershot;
 
 /**
  * Comprehensive technical SEO audit service.
@@ -26,6 +25,7 @@ use Spatie\Browsershot\Browsershot;
 class SeoAuditService
 {
     protected Customer $customer;
+
     protected GeminiService $gemini;
 
     public function __construct(Customer $customer)
@@ -42,7 +42,7 @@ class SeoAuditService
         Log::info('SEO Audit: Starting', ['customer_id' => $this->customer->id, 'url' => $url]);
 
         $html = $this->fetchPage($url);
-        if (!$html) {
+        if (! $html) {
             return $this->createAudit($url, 0, ['critical' => ['Page could not be fetched']], []);
         }
 
@@ -62,9 +62,9 @@ class SeoAuditService
         if (empty($meta['title'])) {
             $issues[] = ['severity' => 'critical', 'category' => 'meta', 'message' => 'Missing page title tag'];
         } elseif (strlen($meta['title']) > 60) {
-            $issues[] = ['severity' => 'warning', 'category' => 'meta', 'message' => 'Title tag exceeds 60 characters (' . strlen($meta['title']) . ')'];
+            $issues[] = ['severity' => 'warning', 'category' => 'meta', 'message' => 'Title tag exceeds 60 characters ('.strlen($meta['title']).')'];
         } elseif (strlen($meta['title']) < 30) {
-            $issues[] = ['severity' => 'warning', 'category' => 'meta', 'message' => 'Title tag is too short (' . strlen($meta['title']) . ' characters)'];
+            $issues[] = ['severity' => 'warning', 'category' => 'meta', 'message' => 'Title tag is too short ('.strlen($meta['title']).' characters)'];
         }
 
         if (empty($meta['description'])) {
@@ -73,11 +73,11 @@ class SeoAuditService
             $issues[] = ['severity' => 'warning', 'category' => 'meta', 'message' => 'Meta description exceeds 160 characters'];
         }
 
-        if (!$meta['has_canonical']) {
+        if (! $meta['has_canonical']) {
             $issues[] = ['severity' => 'warning', 'category' => 'meta', 'message' => 'Missing canonical tag'];
         }
 
-        if (!$meta['has_viewport']) {
+        if (! $meta['has_viewport']) {
             $issues[] = ['severity' => 'critical', 'category' => 'mobile', 'message' => 'Missing viewport meta tag (not mobile-friendly)'];
         }
 
@@ -88,7 +88,7 @@ class SeoAuditService
             $issues[] = ['severity' => 'warning', 'category' => 'headings', 'message' => "Multiple H1 tags found ({$headings['h1_count']})"];
         }
 
-        if (!$headings['proper_hierarchy']) {
+        if (! $headings['proper_hierarchy']) {
             $issues[] = ['severity' => 'warning', 'category' => 'headings', 'message' => 'Heading hierarchy is not sequential (e.g., H1 → H3 skip)'];
         }
 
@@ -116,7 +116,7 @@ class SeoAuditService
         }
 
         // Security
-        if (!$security['is_https']) {
+        if (! $security['is_https']) {
             $issues[] = ['severity' => 'critical', 'category' => 'security', 'message' => 'Page is not served over HTTPS'];
         }
 
@@ -132,7 +132,7 @@ class SeoAuditService
         if (empty($content['detected_keywords'])) {
             $issues[] = ['severity' => 'warning', 'category' => 'content', 'message' => 'No strong keyword themes detected in page content'];
         }
-        if (!$meta['has_og']) {
+        if (! $meta['has_og']) {
             $issues[] = ['severity' => 'info', 'category' => 'social', 'message' => 'Missing Open Graph tags for social media sharing'];
         }
 
@@ -166,7 +166,7 @@ class SeoAuditService
 
     protected function fetchPage(string $url): ?string
     {
-        return Cache::remember('seo_page:' . md5($url), now()->addHour(), function () use ($url) {
+        return Cache::remember('seo_page:'.md5($url), now()->addHour(), function () use ($url) {
             try {
                 $response = Http::timeout(30)
                     ->withHeaders(['User-Agent' => 'SpectraMediaBot/1.0 (SEO Audit)'])
@@ -175,6 +175,7 @@ class SeoAuditService
                 return $response->successful() ? $response->body() : null;
             } catch (\Exception $e) {
                 Log::warning('SEO Audit: Failed to fetch page', ['url' => $url, 'error' => $e->getMessage()]);
+
                 return null;
             }
         });
@@ -182,7 +183,7 @@ class SeoAuditService
 
     protected function analyzeMeta(string $html, string $url): array
     {
-        $dom = new \DOMDocument();
+        $dom = new \DOMDocument;
         @$dom->loadHTML($html, LIBXML_NOERROR);
         $xpath = new \DOMXPath($dom);
 
@@ -221,13 +222,13 @@ class SeoAuditService
             'has_viewport' => $hasViewport,
             'robots' => $robotsMeta,
             'og_tags' => $ogTags,
-            'has_og' => !empty($ogTags),
+            'has_og' => ! empty($ogTags),
         ];
     }
 
     protected function analyzeHeadings(string $html): array
     {
-        $dom = new \DOMDocument();
+        $dom = new \DOMDocument;
         @$dom->loadHTML($html, LIBXML_NOERROR);
 
         $headings = [];
@@ -241,7 +242,9 @@ class SeoAuditService
                 $level = $i;
                 $text = trim($node->textContent);
                 $headings[] = ['level' => $level, 'text' => $text];
-                if ($level === 1) $h1Count++;
+                if ($level === 1) {
+                    $h1Count++;
+                }
                 if ($level > $lastLevel + 1 && $lastLevel > 0) {
                     $properHierarchy = false;
                 }
@@ -259,7 +262,7 @@ class SeoAuditService
 
     protected function analyzeImages(string $html): array
     {
-        $dom = new \DOMDocument();
+        $dom = new \DOMDocument;
         @$dom->loadHTML($html, LIBXML_NOERROR);
         $images = $dom->getElementsByTagName('img');
 
@@ -270,11 +273,13 @@ class SeoAuditService
         foreach ($images as $img) {
             $alt = $img->getAttribute('alt');
             $src = $img->getAttribute('src');
-            if (empty($alt)) $missingAlt++;
+            if (empty($alt)) {
+                $missingAlt++;
+            }
             $imageDetails[] = [
                 'src' => substr($src, 0, 200),
                 'alt' => $alt ?: null,
-                'has_alt' => !empty($alt),
+                'has_alt' => ! empty($alt),
             ];
         }
 
@@ -287,7 +292,7 @@ class SeoAuditService
 
     protected function analyzeLinks(string $html, string $url): array
     {
-        $dom = new \DOMDocument();
+        $dom = new \DOMDocument;
         @$dom->loadHTML($html, LIBXML_NOERROR);
         $links = $dom->getElementsByTagName('a');
 
@@ -300,7 +305,9 @@ class SeoAuditService
 
         foreach ($links as $link) {
             $href = $link->getAttribute('href');
-            if (empty($href) || str_starts_with($href, '#') || str_starts_with($href, 'javascript:')) continue;
+            if (empty($href) || str_starts_with($href, '#') || str_starts_with($href, 'javascript:')) {
+                continue;
+            }
 
             $parsedHref = parse_url($href);
             $linkDomain = $parsedHref['host'] ?? $baseDomain;
@@ -338,7 +345,7 @@ class SeoAuditService
         }
 
         return [
-            'has_schema' => !empty($types),
+            'has_schema' => ! empty($types),
             'types' => $types,
             'schemas' => $schemas,
         ];
@@ -436,6 +443,7 @@ PROMPT;
             return json_decode(trim($text), true) ?? [];
         } catch (\Exception $e) {
             Log::debug('SEO Audit: AI recommendations failed', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
@@ -445,7 +453,7 @@ PROMPT;
      */
     protected function analyzeContent(string $html, array $meta, array $headings): array
     {
-        $dom = new \DOMDocument();
+        $dom = new \DOMDocument;
         @$dom->loadHTML($html, LIBXML_NOERROR);
 
         // Remove script and style tags
@@ -474,7 +482,7 @@ PROMPT;
             'some', 'just', 'its', 'over', 'such', 'only', 'very', 'when', 'where', 'does', 'did', 'get', 'who'];
 
         $wordFreq = array_count_values($words);
-        $wordFreq = array_filter($wordFreq, fn ($count, $word) => !in_array($word, $stopWords) && $count >= 2, ARRAY_FILTER_USE_BOTH);
+        $wordFreq = array_filter($wordFreq, fn ($count, $word) => ! in_array($word, $stopWords) && $count >= 2, ARRAY_FILTER_USE_BOTH);
         arsort($wordFreq);
 
         $topKeywords = array_slice(array_keys($wordFreq), 0, 20);
@@ -483,8 +491,10 @@ PROMPT;
         $wordList = array_values($words);
         $bigrams = [];
         for ($i = 0; $i < count($wordList) - 1; $i++) {
-            if (in_array($wordList[$i], $stopWords) || in_array($wordList[$i + 1], $stopWords)) continue;
-            $phrase = $wordList[$i] . ' ' . $wordList[$i + 1];
+            if (in_array($wordList[$i], $stopWords) || in_array($wordList[$i + 1], $stopWords)) {
+                continue;
+            }
+            $phrase = $wordList[$i].' '.$wordList[$i + 1];
             $bigrams[$phrase] = ($bigrams[$phrase] ?? 0) + 1;
         }
         $bigrams = array_filter($bigrams, fn ($count) => $count >= 2);
@@ -512,7 +522,7 @@ PROMPT;
             'keywords_missing_from_title' => array_values($keywordsMissingFromTitle),
             'keywords_missing_from_description' => array_values($keywordsMissingFromDesc),
             'heading_texts' => $headingTexts,
-            'has_schema' => !empty($this->analyzeSchema($html)['types']),
+            'has_schema' => ! empty($this->analyzeSchema($html)['types']),
         ];
     }
 

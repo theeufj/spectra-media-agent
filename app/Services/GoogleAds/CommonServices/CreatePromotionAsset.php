@@ -6,10 +6,10 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Common\Money;
 use Google\Ads\GoogleAds\V22\Common\PromotionAsset;
 use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Asset;
 use Google\Ads\GoogleAds\V22\Services\AssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\ApiCore\ApiException;
 
 class CreatePromotionAsset extends BaseGoogleAdsService
@@ -17,19 +17,18 @@ class CreatePromotionAsset extends BaseGoogleAdsService
     /**
      * Create a Promotion Asset.
      *
-     * @param string $customerId
-     * @param string $promotionTarget e.g. "Summer Sale", "20% Off All Services"
-     * @param array $promotionData [
-     *   'percent_off' => 200_000 (int, 1,000,000 = 100%, so 200_000 = 20%),
-     *   OR 'money_amount_off' => ['amount_micros' => 10_000_000, 'currency_code' => 'AUD'],
-     *   'occasion' => int (PromotionExtensionOccasionEnum, optional),
-     *   'discount_modifier' => int (PromotionExtensionDiscountModifierEnum, optional),
-     *   'start_date' => 'yyyy-MM-dd' (optional),
-     *   'end_date' => 'yyyy-MM-dd' (optional),
-     *   'language_code' => 'en' (optional),
-     *   'final_url' => 'https://...' (optional),
-     *   'promotion_code' => 'SAVE20' (optional),
-     * ]
+     * @param  string  $promotionTarget  e.g. "Summer Sale", "20% Off All Services"
+     * @param  array  $promotionData  [
+     *                                'percent_off' => 200_000 (int, 1,000,000 = 100%, so 200_000 = 20%),
+     *                                OR 'money_amount_off' => ['amount_micros' => 10_000_000, 'currency_code' => 'AUD'],
+     *                                'occasion' => int (PromotionExtensionOccasionEnum, optional),
+     *                                'discount_modifier' => int (PromotionExtensionDiscountModifierEnum, optional),
+     *                                'start_date' => 'yyyy-MM-dd' (optional),
+     *                                'end_date' => 'yyyy-MM-dd' (optional),
+     *                                'language_code' => 'en' (optional),
+     *                                'final_url' => 'https://...' (optional),
+     *                                'promotion_code' => 'SAVE20' (optional),
+     *                                ]
      * @return string|null Resource name of the created Asset
      */
     public function __invoke(string $customerId, string $promotionTarget, array $promotionData): ?string
@@ -69,7 +68,7 @@ class CreatePromotionAsset extends BaseGoogleAdsService
         $promotionAsset = new PromotionAsset($assetData);
 
         $assetFields = [
-            'name' => 'Promotion: ' . $promotionTarget . ' - ' . uniqid(),
+            'name' => 'Promotion: '.$promotionTarget.' - '.uniqid(),
             'type' => AssetType::PROMOTION,
             'promotion_asset' => $promotionAsset,
         ];
@@ -79,7 +78,7 @@ class CreatePromotionAsset extends BaseGoogleAdsService
         }
 
         $asset = new Asset($assetFields);
-        $operation = new AssetOperation();
+        $operation = new AssetOperation;
         $operation->setCreate($asset);
 
         try {
@@ -90,9 +89,11 @@ class CreatePromotionAsset extends BaseGoogleAdsService
 
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Created Promotion Asset ({$promotionTarget}): {$resourceName}");
+
             return $resourceName;
         } catch (GoogleAdsException|ApiException $e) {
-            $this->logError("Failed to create Promotion Asset: " . $e->getMessage());
+            $this->logError('Failed to create Promotion Asset: '.$e->getMessage());
+
             return null;
         }
     }

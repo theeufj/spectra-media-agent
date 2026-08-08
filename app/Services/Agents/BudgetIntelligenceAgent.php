@@ -3,15 +3,14 @@
 namespace App\Services\Agents;
 
 use App\Models\Campaign;
-use App\Models\Customer;
 use App\Models\CampaignHourlyPerformance;
-use App\Models\GoogleAdsPerformanceData;
+use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
-use App\Services\Agents\AdaptiveThresholds;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
+use App\Models\GoogleAdsPerformanceData;
 use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
+use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
+use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +18,9 @@ use Illuminate\Support\Facades\Log;
 class BudgetIntelligenceAgent
 {
     protected array $config;
+
     protected ?array $learnedHourlyMultipliers = null;
+
     protected ?array $learnedDayMultipliers = null;
 
     public function __construct()
@@ -31,7 +32,6 @@ class BudgetIntelligenceAgent
      * Apply intelligent budget adjustments to a campaign.
      * Supports Google Ads and Facebook Ads platforms.
      *
-     * @param Campaign $campaign
      * @return array Results of budget actions
      */
     public function optimize(Campaign $campaign): array
@@ -44,16 +44,16 @@ class BudgetIntelligenceAgent
             'errors' => [],
         ];
 
-        if (!$campaign->customer) {
+        if (! $campaign->customer) {
             return $results;
         }
 
-        $hasGoogle    = $campaign->google_ads_campaign_id    && $campaign->customer->google_ads_customer_id;
-        $hasFacebook  = $campaign->facebook_ads_campaign_id  && $campaign->customer->facebook_ads_account_id;
+        $hasGoogle = $campaign->google_ads_campaign_id && $campaign->customer->google_ads_customer_id;
+        $hasFacebook = $campaign->facebook_ads_campaign_id && $campaign->customer->facebook_ads_account_id;
         $hasMicrosoft = $campaign->microsoft_ads_campaign_id && $campaign->customer->microsoft_ads_account_id;
-        $hasLinkedIn  = $campaign->linkedin_campaign_id       && $campaign->customer->linkedin_ads_account_id;
+        $hasLinkedIn = $campaign->linkedin_campaign_id && $campaign->customer->linkedin_ads_account_id;
 
-        if (!$hasGoogle && !$hasFacebook && !$hasMicrosoft && !$hasLinkedIn) {
+        if (! $hasGoogle && ! $hasFacebook && ! $hasMicrosoft && ! $hasLinkedIn) {
             return $results;
         }
 
@@ -128,15 +128,15 @@ class BudgetIntelligenceAgent
 
             if ($ok) {
                 $results['adjustments'][] = [
-                    'type'           => 'budget_updated',
-                    'platform'       => 'microsoft_ads',
-                    'base_budget'    => $baseDailyBudget,
+                    'type' => 'budget_updated',
+                    'platform' => 'microsoft_ads',
+                    'base_budget' => $baseDailyBudget,
                     'adjusted_budget' => $adjustedBudget,
-                    'multiplier'     => $combinedMultiplier,
+                    'multiplier' => $combinedMultiplier,
                 ];
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Microsoft Ads budget update failed: " . $e->getMessage();
+            $results['errors'][] = 'Microsoft Ads budget update failed: '.$e->getMessage();
         }
     }
 
@@ -156,15 +156,15 @@ class BudgetIntelligenceAgent
 
             if ($ok) {
                 $results['adjustments'][] = [
-                    'type'           => 'budget_updated',
-                    'platform'       => 'linkedin_ads',
-                    'base_budget'    => $baseDailyBudget,
+                    'type' => 'budget_updated',
+                    'platform' => 'linkedin_ads',
+                    'base_budget' => $baseDailyBudget,
                     'adjusted_budget' => $adjustedBudget,
-                    'multiplier'     => $combinedMultiplier,
+                    'multiplier' => $combinedMultiplier,
                 ];
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "LinkedIn Ads budget update failed: " . $e->getMessage();
+            $results['errors'][] = 'LinkedIn Ads budget update failed: '.$e->getMessage();
         }
     }
 
@@ -201,7 +201,7 @@ class BudgetIntelligenceAgent
                     'reason' => $this->getAdjustmentReason($timeMultiplier, $effectiveDayMultiplier, $seasonalMultiplier),
                 ];
 
-                Log::info("BudgetIntelligenceAgent: Google Ads budget adjusted", [
+                Log::info('BudgetIntelligenceAgent: Google Ads budget adjusted', [
                     'campaign_id' => $campaign->id,
                     'base' => $baseDailyBudget,
                     'adjusted' => $adjustedBudget,
@@ -209,8 +209,8 @@ class BudgetIntelligenceAgent
                 ]);
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Google Ads: Failed to update budget: " . $e->getMessage();
-            Log::error("BudgetIntelligenceAgent: Failed to update Google Ads budget", [
+            $results['errors'][] = 'Google Ads: Failed to update budget: '.$e->getMessage();
+            Log::error('BudgetIntelligenceAgent: Failed to update Google Ads budget', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -241,6 +241,7 @@ class BudgetIntelligenceAgent
                     'platform' => 'facebook_ads',
                     'message' => 'No ad sets found for Facebook campaign (may be using CBO)',
                 ];
+
                 return;
             }
 
@@ -275,7 +276,7 @@ class BudgetIntelligenceAgent
                         'reason' => $this->getAdjustmentReason($timeMultiplier, $effectiveDayMultiplier, $seasonalMultiplier),
                     ];
 
-                    Log::info("BudgetIntelligenceAgent: Facebook ad set budget adjusted", [
+                    Log::info('BudgetIntelligenceAgent: Facebook ad set budget adjusted', [
                         'campaign_id' => $campaign->id,
                         'adset_id' => $adSetId,
                         'base' => $baseDailyBudget,
@@ -285,8 +286,8 @@ class BudgetIntelligenceAgent
                 }
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Facebook Ads: Failed to update budget: " . $e->getMessage();
-            Log::error("BudgetIntelligenceAgent: Failed to update Facebook Ads budget", [
+            $results['errors'][] = 'Facebook Ads: Failed to update budget: '.$e->getMessage();
+            Log::error('BudgetIntelligenceAgent: Failed to update Facebook Ads budget', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -312,7 +313,7 @@ class BudgetIntelligenceAgent
 
         foreach ($multipliers as $range => $multiplier) {
             [$start, $end] = explode('-', $range);
-            
+
             if ($this->isTimeInRange($currentTime, $start, $end)) {
                 return $multiplier;
             }
@@ -413,8 +414,7 @@ class BudgetIntelligenceAgent
      * Analyze cross-campaign budget reallocation opportunities.
      * Supports both Google Ads and Facebook Ads campaigns.
      *
-     * @param Customer $customer
-     * @param array $campaigns Array of Campaign models
+     * @param  array  $campaigns  Array of Campaign models
      * @return array Reallocation recommendations
      */
     public function analyzeReallocation(Customer $customer, array $campaigns): array
@@ -423,9 +423,9 @@ class BudgetIntelligenceAgent
 
         // Use adaptive ROAS threshold if available, otherwise config default
         $adaptiveThresholds = AdaptiveThresholds::forCustomer($customer);
-        $minRoas        = $adaptiveThresholds['min_roas_threshold'] ?? $reallocationRules['min_roas_threshold'] ?? config('optimization.budget_intelligence.reallocation_roas_ratio', 2.0);
-        $maxShift       = $reallocationRules['max_shift_percentage'] ?? 20;
-        $minDays        = $reallocationRules['min_data_days'] ?? 7;
+        $minRoas = $adaptiveThresholds['min_roas_threshold'] ?? $reallocationRules['min_roas_threshold'] ?? config('optimization.budget_intelligence.reallocation_roas_ratio', 2.0);
+        $maxShift = $reallocationRules['max_shift_percentage'] ?? 20;
+        $minDays = $reallocationRules['min_data_days'] ?? 7;
         $minConversions = $reallocationRules['min_conversions'] ?? config('optimization.budget_intelligence.reallocation_min_conversions', 15);
 
         $recommendations = [];
@@ -445,7 +445,7 @@ class BudgetIntelligenceAgent
                     $getPerformance = new GetCampaignPerformance($customer, true);
                     $metrics = ($getPerformance)($customerId, $resourceName, 'LAST_30_DAYS');
                 } catch (\Exception $e) {
-                    Log::warning("BudgetIntelligenceAgent: Could not analyze Google campaign", [
+                    Log::warning('BudgetIntelligenceAgent: Could not analyze Google campaign', [
                         'campaign_id' => $campaign->id,
                         'error' => $e->getMessage(),
                     ]);
@@ -453,7 +453,7 @@ class BudgetIntelligenceAgent
             }
 
             // Try Facebook Ads if no Google metrics
-            if (!$metrics && $campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
+            if (! $metrics && $campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
                 $platform = 'facebook_ads';
 
                 try {
@@ -467,7 +467,7 @@ class BudgetIntelligenceAgent
                         $dateEnd
                     );
 
-                    if (!empty($insights)) {
+                    if (! empty($insights)) {
                         // Aggregate Facebook insights into a metrics structure
                         $totalSpend = 0;
                         $totalConversions = 0;
@@ -489,14 +489,14 @@ class BudgetIntelligenceAgent
                         ];
                     }
                 } catch (\Exception $e) {
-                    Log::warning("BudgetIntelligenceAgent: Could not analyze Facebook campaign", [
+                    Log::warning('BudgetIntelligenceAgent: Could not analyze Facebook campaign', [
                         'campaign_id' => $campaign->id,
                         'error' => $e->getMessage(),
                     ]);
                 }
             }
 
-            if (!$metrics) {
+            if (! $metrics) {
                 continue;
             }
 
@@ -507,11 +507,12 @@ class BudgetIntelligenceAgent
             // Use actual conversion value from API if available, then customer AOV.
             // Without AOV the ROAS calculation is meaningless — skip reallocation for this campaign.
             $aov = $customer->average_order_value;
-            if (!$aov && $conversionValue <= 0) {
+            if (! $aov && $conversionValue <= 0) {
                 Log::info('BudgetIntelligenceAgent: Skipping campaign for reallocation — average_order_value not set and no conversion value from API', [
                     'campaign_id' => $campaign->id,
                     'customer_id' => $customer->id,
                 ]);
+
                 continue;
             }
             $revenue = $conversionValue > 0 ? $conversionValue : ($conversions * ($aov ?? 0));
@@ -536,7 +537,7 @@ class BudgetIntelligenceAgent
 
         // Generate recommendations and auto-execute small shifts
         $autoExecuteThreshold = 10; // Auto-execute shifts ≤10% of budget
-        if (!empty($performers['winners']) && !empty($performers['losers'])) {
+        if (! empty($performers['winners']) && ! empty($performers['losers'])) {
             foreach ($performers['losers'] as $loser) {
                 $shiftPercent = min($maxShift, 10); // Start conservative
                 $shiftAmount = $loser['campaign']->daily_budget * ($shiftPercent / 100);
@@ -555,7 +556,7 @@ class BudgetIntelligenceAgent
                     'shift_amount' => $shiftAmount,
                     'shift_percent' => $shiftPercent,
                     'auto_executed' => false,
-                    'reason' => "Shift budget from underperforming campaign (ROAS: " . round($loser['roas'], 2) . ") to top performer",
+                    'reason' => 'Shift budget from underperforming campaign (ROAS: '.round($loser['roas'], 2).') to top performer',
                 ];
 
                 // Auto-execute small reallocation (≤10%) when confidence is high
@@ -595,10 +596,10 @@ class BudgetIntelligenceAgent
     ): bool {
         try {
             $fromBudget = $fromCampaign->daily_budget ?? 0;
-            $toBudget   = $toCampaign->daily_budget ?? 0;
+            $toBudget = $toCampaign->daily_budget ?? 0;
 
             $newFromBudget = max(5.0, $fromBudget - $shiftAmount);
-            $newToBudget   = $toBudget + $shiftAmount;
+            $newToBudget = $toBudget + $shiftAmount;
 
             // Wrap DB writes in a transaction so both campaigns update atomically.
             // API calls happen after so a DB failure rolls back local state.
@@ -607,9 +608,9 @@ class BudgetIntelligenceAgent
                 $toCampaign->update(['daily_budget' => $newToBudget]);
 
                 $fromSuccess = $this->updateCampaignBudget($fromCampaign, $customer, $newFromBudget);
-                $toSuccess   = $this->updateCampaignBudget($toCampaign, $customer, $newToBudget);
+                $toSuccess = $this->updateCampaignBudget($toCampaign, $customer, $newToBudget);
 
-                if (!$fromSuccess || !$toSuccess) {
+                if (! $fromSuccess || ! $toSuccess) {
                     throw new \RuntimeException('API budget update failed during reallocation');
                 }
 
@@ -617,10 +618,11 @@ class BudgetIntelligenceAgent
             });
         } catch (\Exception $e) {
             Log::error('BudgetIntelligenceAgent: Failed to execute reallocation', [
-                'from'  => $fromCampaign->id,
-                'to'    => $toCampaign->id,
+                'from' => $fromCampaign->id,
+                'to' => $toCampaign->id,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }
@@ -656,23 +658,23 @@ class BudgetIntelligenceAgent
             ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value')
             ->first();
 
-        $gCost  = (float) ($google->cost  ?? 0);
-        $fCost  = (float) ($facebook->cost ?? 0);
+        $gCost = (float) ($google->cost ?? 0);
+        $fCost = (float) ($facebook->cost ?? 0);
         $totalSpend = $gCost + $fCost;
 
         if ($totalSpend < 100) {
             return null;
         }
 
-        $gConv = (float) ($google->conversions  ?? 0);
+        $gConv = (float) ($google->conversions ?? 0);
         $fConv = (float) ($facebook->conversions ?? 0);
 
         if ($gConv < 15 || $fConv < 15) {
             return null;
         }
 
-        $aov    = (float) ($customer->average_order_value ?? 0);
-        $gValue = (float) ($google->conversion_value   ?? 0) ?: ($gConv * $aov);
+        $aov = (float) ($customer->average_order_value ?? 0);
+        $gValue = (float) ($google->conversion_value ?? 0) ?: ($gConv * $aov);
         $fValue = (float) ($facebook->conversion_value ?? 0) ?: ($fConv * $aov);
 
         if ($gValue <= 0 || $fValue <= 0) {
@@ -686,58 +688,59 @@ class BudgetIntelligenceAgent
             return null;
         }
 
-        $ratio         = $gRoas / $fRoas;
+        $ratio = $gRoas / $fRoas;
         $strongPlatform = null;
-        $weakPlatform   = null;
-        $strongRoas     = 0;
-        $weakRoas       = 0;
+        $weakPlatform = null;
+        $strongRoas = 0;
+        $weakRoas = 0;
         $weakDailySpend = 0;
 
         if ($ratio >= 2.0) {
-            $strongPlatform  = 'google_ads';
-            $weakPlatform    = 'facebook_ads';
-            $strongRoas      = $gRoas;
-            $weakRoas        = $fRoas;
-            $weakDailySpend  = $fCost / 3;
+            $strongPlatform = 'google_ads';
+            $weakPlatform = 'facebook_ads';
+            $strongRoas = $gRoas;
+            $weakRoas = $fRoas;
+            $weakDailySpend = $fCost / 3;
         } elseif ((1 / $ratio) >= 2.0) {
-            $strongPlatform  = 'facebook_ads';
-            $weakPlatform    = 'google_ads';
-            $strongRoas      = $fRoas;
-            $weakRoas        = $gRoas;
-            $weakDailySpend  = $gCost / 3;
+            $strongPlatform = 'facebook_ads';
+            $weakPlatform = 'google_ads';
+            $strongRoas = $fRoas;
+            $weakRoas = $gRoas;
+            $weakDailySpend = $gCost / 3;
         }
 
-        if (!$strongPlatform) {
+        if (! $strongPlatform) {
             Cache::forget($cacheKey);
+
             return null;
         }
 
         $shiftAmount = round($weakDailySpend * 0.10, 2);
         $recommendation = [
-            'type'            => 'cross_platform_reallocation',
+            'type' => 'cross_platform_reallocation',
             'strong_platform' => $strongPlatform,
-            'weak_platform'   => $weakPlatform,
-            'strong_roas'     => round($strongRoas, 2),
-            'weak_roas'       => round($weakRoas, 2),
-            'ratio'           => round(max($ratio, 1 / $ratio), 2),
+            'weak_platform' => $weakPlatform,
+            'strong_roas' => round($strongRoas, 2),
+            'weak_roas' => round($weakRoas, 2),
+            'ratio' => round(max($ratio, 1 / $ratio), 2),
             'suggested_shift' => $shiftAmount,
             'shift_direction' => "Move \${$shiftAmount}/day from {$weakPlatform} → {$strongPlatform}",
-            'reason'          => ucfirst(str_replace('_', ' ', $strongPlatform)) . " ROAS is " . round(max($ratio, 1 / $ratio), 1) . "x higher than " . ucfirst(str_replace('_', ' ', $weakPlatform)) . " over the last 3 days",
-            'google_roas'     => round($gRoas, 2),
-            'facebook_roas'   => round($fRoas, 2),
+            'reason' => ucfirst(str_replace('_', ' ', $strongPlatform)).' ROAS is '.round(max($ratio, 1 / $ratio), 1).'x higher than '.ucfirst(str_replace('_', ' ', $weakPlatform)).' over the last 3 days',
+            'google_roas' => round($gRoas, 2),
+            'facebook_roas' => round($fRoas, 2),
             'google_spend_3d' => round($gCost, 2),
             'facebook_spend_3d' => round($fCost, 2),
-            'recorded_at'     => now()->toIso8601String(),
-            'auto_applied'    => false,
+            'recorded_at' => now()->toIso8601String(),
+            'auto_applied' => false,
         ];
 
         Cache::put($cacheKey, $recommendation, now()->addHours(24));
 
-        Log::info("BudgetIntelligenceAgent: Cross-platform reallocation opportunity detected", [
-            'customer_id'     => $customer->id,
+        Log::info('BudgetIntelligenceAgent: Cross-platform reallocation opportunity detected', [
+            'customer_id' => $customer->id,
             'strong_platform' => $strongPlatform,
-            'strong_roas'     => round($strongRoas, 2),
-            'weak_roas'       => round($weakRoas, 2),
+            'strong_roas' => round($strongRoas, 2),
+            'weak_roas' => round($weakRoas, 2),
             'suggested_shift' => $shiftAmount,
         ]);
 
@@ -758,22 +761,26 @@ class BudgetIntelligenceAgent
             $customerId = $customer->google_ads_customer_id;
             $resourceName = $campaign->googleAdsResourceName();
             $updateBudget = new UpdateCampaignBudget($customer, true);
+
             return (bool) ($updateBudget)($customerId, $resourceName, $newDailyBudget * 1000000);
         }
 
         if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
             $adSetService = new FacebookAdSetService($customer);
             $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id);
-            if (!empty($adSets)) {
+            if (! empty($adSets)) {
                 // Apply proportionally across ad sets
-                $totalAdSetBudget = collect($adSets)->sum(fn($as) => ($as['daily_budget'] ?? 0) / 100);
+                $totalAdSetBudget = collect($adSets)->sum(fn ($as) => ($as['daily_budget'] ?? 0) / 100);
                 foreach ($adSets as $adSet) {
                     $currentBudget = ($adSet['daily_budget'] ?? 0) / 100;
-                    if ($currentBudget <= 0 || $totalAdSetBudget <= 0) continue;
+                    if ($currentBudget <= 0 || $totalAdSetBudget <= 0) {
+                        continue;
+                    }
                     $proportion = $currentBudget / $totalAdSetBudget;
                     $newAdSetBudget = max(500, (int) round($newDailyBudget * $proportion * 100)); // min $5 in cents
                     $adSetService->updateAdSet($adSet['id'], ['daily_budget' => $newAdSetBudget]);
                 }
+
                 return true;
             }
         }

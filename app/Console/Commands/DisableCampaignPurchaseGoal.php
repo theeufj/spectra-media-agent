@@ -28,28 +28,31 @@ class DisableCampaignPurchaseGoal extends Command
     public function handle(): int
     {
         $campaign = Campaign::find($this->argument('campaign'));
-        if (!$campaign || !$campaign->google_ads_campaign_id) {
+        if (! $campaign || ! $campaign->google_ads_campaign_id) {
             $this->error('Campaign not found or not on Google Ads.');
+
             return 1;
         }
 
         $categoryName = strtoupper($this->option('category'));
-        $categoryVal  = ConversionActionCategory::value($categoryName);
-        $customer     = $campaign->customer;
-        $customerId   = $customer->cleanGoogleCustomerId();
-        $campaignId   = $campaign->googleCampaignNumericId();
+        $categoryVal = ConversionActionCategory::value($categoryName);
+        $customer = $campaign->customer;
+        $customerId = $customer->cleanGoogleCustomerId();
+        $campaignId = $campaign->googleCampaignNumericId();
 
-        $svc = new class($customer) extends BaseGoogleAdsService {
+        $svc = new class($customer) extends BaseGoogleAdsService
+        {
             public function goals(string $cid, string $campId): array
             {
                 $this->ensureClient();
                 $rows = [];
-                $q = "SELECT campaign_conversion_goal.resource_name, campaign_conversion_goal.category, "
-                    . "campaign_conversion_goal.biddable FROM campaign_conversion_goal WHERE campaign.id = {$campId}";
+                $q = 'SELECT campaign_conversion_goal.resource_name, campaign_conversion_goal.category, '
+                    ."campaign_conversion_goal.biddable FROM campaign_conversion_goal WHERE campaign.id = {$campId}";
                 foreach ($this->searchQuery($cid, $q)->iterateAllElements() as $row) {
                     $g = $row->getCampaignConversionGoal();
                     $rows[] = ['resource' => $g->getResourceName(), 'category' => $g->getCategory(), 'biddable' => $g->getBiddable()];
                 }
+
                 return $rows;
             }
 
@@ -58,7 +61,7 @@ class DisableCampaignPurchaseGoal extends Command
                 return count($this->client->getCampaignConversionGoalServiceClient()
                     ->mutateCampaignConversionGoals(new MutateCampaignConversionGoalsRequest([
                         'customer_id' => $cid,
-                        'operations'  => $ops,
+                        'operations' => $ops,
                     ]))->getResults());
             }
         };
@@ -72,27 +75,31 @@ class DisableCampaignPurchaseGoal extends Command
             }
         }
 
-        if (!$target) {
+        if (! $target) {
             $this->info("Campaign does not target the {$categoryName} goal — nothing to do.");
+
             return 0;
         }
-        if (!$target['biddable']) {
+        if (! $target['biddable']) {
             $this->info("{$categoryName} goal is already non-biddable.");
+
             return 0;
         }
 
-        if (!$this->option('apply')) {
+        if (! $this->option('apply')) {
             $this->warn("Would set {$categoryName} to non-biddable. Re-run with --apply.");
+
             return 0;
         }
 
         $goal = new CampaignConversionGoal(['resource_name' => $target['resource'], 'biddable' => false]);
-        $op = new CampaignConversionGoalOperation();
+        $op = new CampaignConversionGoalOperation;
         $op->setUpdate($goal);
         $op->setUpdateMask(new FieldMask(['paths' => ['biddable']]));
 
         $n = $svc->mutate($customerId, [$op]);
         $this->info("Set {$categoryName} goal to non-biddable ({$n} change).");
+
         return 0;
     }
 }

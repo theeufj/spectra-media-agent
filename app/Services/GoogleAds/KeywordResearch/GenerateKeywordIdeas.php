@@ -2,14 +2,14 @@
 
 namespace App\Services\GoogleAds\KeywordResearch;
 
-use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Services\GenerateKeywordIdeasRequest;
-use Google\Ads\GoogleAds\V22\Services\KeywordSeed;
-use Google\Ads\GoogleAds\V22\Services\KeywordAndUrlSeed;
-use Google\Ads\GoogleAds\V22\Services\UrlSeed;
-use Google\Ads\GoogleAds\V22\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
-use Google\ApiCore\ApiException;
 use App\Models\Customer;
+use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V22\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
+use Google\Ads\GoogleAds\V22\Services\GenerateKeywordIdeasRequest;
+use Google\Ads\GoogleAds\V22\Services\KeywordAndUrlSeed;
+use Google\Ads\GoogleAds\V22\Services\KeywordSeed;
+use Google\Ads\GoogleAds\V22\Services\UrlSeed;
+use Google\ApiCore\ApiException;
 use Illuminate\Support\Facades\Cache;
 
 class GenerateKeywordIdeas extends BaseGoogleAdsService
@@ -22,12 +22,12 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
     /**
      * Generate keyword ideas from seed keywords and/or a URL.
      *
-     * @param string $customerId Google Ads customer ID
-     * @param array $seedKeywords Array of seed keyword strings (1-20)
-     * @param string|null $url Optional URL to extract keyword ideas from
-     * @param string|null $language Language resource name (e.g. 'languageConstants/1000' for English)
-     * @param array $geoTargets Geo target constant resource names (e.g. ['geoTargetConstants/2036' for AU])
-     * @param int $pageSize Max results to return (default 50)
+     * @param  string  $customerId  Google Ads customer ID
+     * @param  array  $seedKeywords  Array of seed keyword strings (1-20)
+     * @param  string|null  $url  Optional URL to extract keyword ideas from
+     * @param  string|null  $language  Language resource name (e.g. 'languageConstants/1000' for English)
+     * @param  array  $geoTargets  Geo target constant resource names (e.g. ['geoTargetConstants/2036' for AU])
+     * @param  int  $pageSize  Max results to return (default 50)
      * @return array Array of keyword ideas with metrics
      */
     public function __invoke(
@@ -39,8 +39,8 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
         int $pageSize = 50
     ): array {
         // Cache keyword ideas for 24 hours to avoid redundant API calls
-        $cacheKey = 'keyword_ideas:' . $customerId . ':' . md5(json_encode($seedKeywords) . $url . $language . json_encode($geoTargets) . $pageSize);
-        
+        $cacheKey = 'keyword_ideas:'.$customerId.':'.md5(json_encode($seedKeywords).$url.$language.json_encode($geoTargets).$pageSize);
+
         return Cache::remember($cacheKey, now()->addHours(24), function () use ($customerId, $seedKeywords, $url, $language, $geoTargets, $pageSize) {
             return $this->fetchKeywordIdeas($customerId, $seedKeywords, $url, $language, $geoTargets, $pageSize);
         });
@@ -66,17 +66,17 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
             $request->setLanguage($language);
         }
 
-        if (!empty($geoTargets)) {
+        if (! empty($geoTargets)) {
             $request->setGeoTargetConstants($geoTargets);
         }
 
         // Set seed type based on inputs
-        if (!empty($seedKeywords) && $url) {
+        if (! empty($seedKeywords) && $url) {
             $request->setKeywordAndUrlSeed(new KeywordAndUrlSeed([
                 'keywords' => array_slice($seedKeywords, 0, 20),
                 'url' => $url,
             ]));
-        } elseif (!empty($seedKeywords)) {
+        } elseif (! empty($seedKeywords)) {
             $request->setKeywordSeed(new KeywordSeed([
                 'keywords' => array_slice($seedKeywords, 0, 20),
             ]));
@@ -86,6 +86,7 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
             ]));
         } else {
             $this->logError('GenerateKeywordIdeas: No seed keywords or URL provided');
+
             return [];
         }
 
@@ -114,11 +115,13 @@ class GenerateKeywordIdeas extends BaseGoogleAdsService
                 }
             }
 
-            $this->logInfo("GenerateKeywordIdeas: Got " . count($results) . " ideas for customer $customerId");
+            $this->logInfo('GenerateKeywordIdeas: Got '.count($results)." ideas for customer $customerId");
+
             return $results;
 
         } catch (ApiException $e) {
-            $this->logError("GenerateKeywordIdeas failed for customer $customerId: " . $e->getMessage());
+            $this->logError("GenerateKeywordIdeas failed for customer $customerId: ".$e->getMessage());
+
             return [];
         }
     }

@@ -11,6 +11,7 @@ use Tests\TestCase;
 class CampaignServiceTest extends TestCase
 {
     private Customer $customer;
+
     private CampaignService $service;
 
     protected function setUp(): void
@@ -81,16 +82,16 @@ class CampaignServiceTest extends TestCase
     public static function objectiveNormalisationProvider(): array
     {
         return [
-            'LINK_CLICKS → OUTCOME_TRAFFIC'      => ['LINK_CLICKS', 'OUTCOME_TRAFFIC'],
-            'TRAFFIC → OUTCOME_TRAFFIC'           => ['TRAFFIC', 'OUTCOME_TRAFFIC'],
-            'CONVERSIONS → OUTCOME_SALES'         => ['CONVERSIONS', 'OUTCOME_SALES'],
-            'SALES → OUTCOME_SALES'               => ['SALES', 'OUTCOME_SALES'],
-            'LEAD_GENERATION → OUTCOME_LEADS'     => ['LEAD_GENERATION', 'OUTCOME_LEADS'],
+            'LINK_CLICKS → OUTCOME_TRAFFIC' => ['LINK_CLICKS', 'OUTCOME_TRAFFIC'],
+            'TRAFFIC → OUTCOME_TRAFFIC' => ['TRAFFIC', 'OUTCOME_TRAFFIC'],
+            'CONVERSIONS → OUTCOME_SALES' => ['CONVERSIONS', 'OUTCOME_SALES'],
+            'SALES → OUTCOME_SALES' => ['SALES', 'OUTCOME_SALES'],
+            'LEAD_GENERATION → OUTCOME_LEADS' => ['LEAD_GENERATION', 'OUTCOME_LEADS'],
             'BRAND_AWARENESS → OUTCOME_AWARENESS' => ['BRAND_AWARENESS', 'OUTCOME_AWARENESS'],
-            'REACH → OUTCOME_AWARENESS'           => ['REACH', 'OUTCOME_AWARENESS'],
-            'ENGAGEMENT → OUTCOME_ENGAGEMENT'     => ['ENGAGEMENT', 'OUTCOME_ENGAGEMENT'],
-            'OUTCOME_TRAFFIC passthrough'         => ['OUTCOME_TRAFFIC', 'OUTCOME_TRAFFIC'],
-            'OUTCOME_SALES passthrough'           => ['OUTCOME_SALES', 'OUTCOME_SALES'],
+            'REACH → OUTCOME_AWARENESS' => ['REACH', 'OUTCOME_AWARENESS'],
+            'ENGAGEMENT → OUTCOME_ENGAGEMENT' => ['ENGAGEMENT', 'OUTCOME_ENGAGEMENT'],
+            'OUTCOME_TRAFFIC passthrough' => ['OUTCOME_TRAFFIC', 'OUTCOME_TRAFFIC'],
+            'OUTCOME_SALES passthrough' => ['OUTCOME_SALES', 'OUTCOME_SALES'],
         ];
     }
 

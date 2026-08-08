@@ -4,20 +4,17 @@ namespace App\Services\GoogleAds\PerformanceMaxServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\AssetGroupAsset;
 use Google\Ads\GoogleAds\V22\Services\AssetGroupAssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupAssetsRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class LinkAssetGroupAsset extends BaseGoogleAdsService
 {
     /**
      * Link an asset to an Asset Group.
      *
-     * @param string $customerId
-     * @param string $assetGroupResourceName
-     * @param string $assetResourceName
-     * @param int $fieldType AssetFieldType enum value (e.g., HEADLINE, DESCRIPTION, MARKETING_IMAGE)
+     * @param  int  $fieldType  AssetFieldType enum value (e.g., HEADLINE, DESCRIPTION, MARKETING_IMAGE)
      * @return string|null Resource name of the created link
      */
     public function __invoke(string $customerId, string $assetGroupResourceName, string $assetResourceName, int $fieldType): ?string
@@ -30,7 +27,7 @@ class LinkAssetGroupAsset extends BaseGoogleAdsService
             'field_type' => $fieldType,
         ]);
 
-        $operation = new AssetGroupAssetOperation();
+        $operation = new AssetGroupAssetOperation;
         $operation->setCreate($assetGroupAsset);
 
         try {
@@ -45,7 +42,8 @@ class LinkAssetGroupAsset extends BaseGoogleAdsService
 
             return $resourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to link asset to asset group: " . $e->getMessage());
+            $this->logError('Failed to link asset to asset group: '.$e->getMessage());
+
             return null;
         }
     }

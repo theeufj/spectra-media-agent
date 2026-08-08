@@ -22,6 +22,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 5;
+
     public $backoff = [10, 20, 30, 40, 50];
 
     protected Campaign $campaign;
@@ -35,6 +36,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
     {
         if (empty($this->campaign->google_ads_campaign_id)) {
             Log::warning("Campaign {$this->campaign->id} does not have a Google Ads Campaign ID. Skipping performance fetch.");
+
             return;
         }
 
@@ -55,15 +57,15 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                 $daysBack = $hasData ? 7 : 30;
 
                 $resourceName = $this->campaign->google_ads_campaign_id;
-                $dateFrom     = now()->subDays($daysBack)->format('Y-m-d');
-                $dateTo       = now()->format('Y-m-d');
-                $query = "SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, "
-                       . "metrics.cost_micros, metrics.conversions, metrics.conversions_value, "
-                       . "metrics.search_impression_share, metrics.search_top_impression_share, "
-                       . "metrics.view_through_conversions, metrics.all_conversions, metrics.interaction_rate, "
-                       . "segments.date FROM campaign "
-                       . "WHERE campaign.resource_name = '" . addslashes($resourceName) . "' "
-                       . "AND segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}'";
+                $dateFrom = now()->subDays($daysBack)->format('Y-m-d');
+                $dateTo = now()->format('Y-m-d');
+                $query = 'SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, '
+                       .'metrics.cost_micros, metrics.conversions, metrics.conversions_value, '
+                       .'metrics.search_impression_share, metrics.search_top_impression_share, '
+                       .'metrics.view_through_conversions, metrics.all_conversions, metrics.interaction_rate, '
+                       .'segments.date FROM campaign '
+                       ."WHERE campaign.resource_name = '".addslashes($resourceName)."' "
+                       ."AND segments.date BETWEEN '{$dateFrom}' AND '{$dateTo}'";
 
                 $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
                     'customer_id' => $customer->google_ads_customer_id,
@@ -116,7 +118,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
 
                 $strategy = $this->campaign->strategies()->latest()->first();
                 if ($strategy) {
-                    $recommendationService = new RecommendationGenerationService();
+                    $recommendationService = new RecommendationGenerationService;
                     $campaignConfig = [
                         'campaignId' => $this->campaign->google_ads_campaign_id,
                         'dailyBudget' => $strategy->daily_budget ?? $this->campaign->daily_budget,
@@ -138,7 +140,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
 
             } catch (\Exception $e) {
                 $circuitBreaker->recordFailure();
-                Log::error("Error in FetchGoogleAdsPerformanceData job for campaign {$this->campaign->id}: " . $e->getMessage());
+                Log::error("Error in FetchGoogleAdsPerformanceData job for campaign {$this->campaign->id}: ".$e->getMessage());
                 $this->release(60);
             } finally {
                 $lock->release();
@@ -155,7 +157,7 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('FetchGoogleAdsPerformanceData failed: ' . $exception->getMessage(), [
+        Log::error('FetchGoogleAdsPerformanceData failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

@@ -67,7 +67,7 @@ return [
     // Requires a refresh token with scope: https://www.googleapis.com/auth/youtube.upload
     // Generate once via the Google OAuth playground and set in .env.
     'youtube' => [
-        'client_id'     => env('GOOGLE_YOUTUBE_CLIENT_ID'),
+        'client_id' => env('GOOGLE_YOUTUBE_CLIENT_ID'),
         'client_secret' => env('GOOGLE_YOUTUBE_CLIENT_SECRET'),
         'refresh_token' => env('GOOGLE_YOUTUBE_REFRESH_TOKEN'),
     ],
@@ -82,10 +82,10 @@ return [
     ],
 
     'facebook' => [
-        'client_id'     => env('FACEBOOK_APP_ID'),
+        'client_id' => env('FACEBOOK_APP_ID'),
         'client_secret' => env('FACEBOOK_APP_SECRET'),
-        'redirect'      => env('FACEBOOK_REDIRECT_URI', '/auth/facebook/callback'),
-        'config_id'     => env('FACEBOOK_CONFIG_ID'),
+        'redirect' => env('FACEBOOK_REDIRECT_URI', '/auth/facebook/callback'),
+        'config_id' => env('FACEBOOK_CONFIG_ID'),
         // Single source of truth for the Graph API version. Meta retires versions on a
         // ~2-year cycle; keep every FacebookAds service aligned here (v18.0 is retired).
         'graph_version' => env('FACEBOOK_GRAPH_VERSION', 'v22.0'),
@@ -93,13 +93,13 @@ return [
         // Platform Business Manager (Path A — zero OAuth for new clients)
         // Create at business.facebook.com → System Users → Generate Token
         'business_manager_id' => env('FACEBOOK_BUSINESS_MANAGER_ID'),
-        'system_user_token'   => env('FACEBOOK_SYSTEM_USER_TOKEN'),
+        'system_user_token' => env('FACEBOOK_SYSTEM_USER_TOKEN'),
         // Platform Facebook Page used as the ad publisher for all customer campaigns.
         // Customers do NOT need their own Facebook Page.
-        'page_id'             => env('FACEBOOK_PAGE_ID'),
+        'page_id' => env('FACEBOOK_PAGE_ID'),
         // Spectra's own Meta Pixel ID for tracking own-site conversions (sitetospend.com).
         // Set this to the pixel ID from Spectra's BM that fires on sitetospend.com.
-        'spectra_pixel_id'    => env('FACEBOOK_SPECTRA_PIXEL_ID'),
+        'spectra_pixel_id' => env('FACEBOOK_SPECTRA_PIXEL_ID'),
     ],
 
     'stripe' => [

@@ -7,21 +7,21 @@ class AdCompliancePrompt
     /**
      * Generate a prompt to rewrite ad copy for policy compliance.
      *
-     * @param array $originalAd The original ad data (headlines, descriptions, or primary_text, headline for FB)
-     * @param string $policyViolation The policy topic/reason for disapproval
+     * @param  array  $originalAd  The original ad data (headlines, descriptions, or primary_text, headline for FB)
+     * @param  string  $policyViolation  The policy topic/reason for disapproval
      * @return string The prompt for the AI
      */
     public static function generate(array $originalAd, string $policyViolation): string
     {
         $platform = $originalAd['platform'] ?? 'google_ads';
-        
+
         if ($platform === 'facebook_ads') {
             return self::generateFacebookPrompt($originalAd, $policyViolation);
         }
-        
+
         return self::generateGooglePrompt($originalAd, $policyViolation);
     }
-    
+
     /**
      * Generate prompt for Google Ads compliance.
      */
@@ -73,7 +73,7 @@ Important:
 - Make the minimum changes necessary for compliance
 PROMPT;
     }
-    
+
     /**
      * Generate prompt for Facebook/Meta Ads compliance.
      */
@@ -82,7 +82,7 @@ PROMPT;
         $headline = $originalAd['headline'] ?? '';
         $primaryText = $originalAd['primary_text'] ?? '';
         $description = $originalAd['description'] ?? '';
-        
+
         return <<<PROMPT
 You are an expert Facebook/Meta Ads policy compliance specialist.
 An ad was disapproved for the following policy violation: **{$policyViolation}**

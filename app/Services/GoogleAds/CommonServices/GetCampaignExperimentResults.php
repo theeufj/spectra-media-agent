@@ -14,9 +14,7 @@ use Illuminate\Support\Facades\Log;
 class GetCampaignExperimentResults extends BaseGoogleAdsService
 {
     /**
-     * @param  string $customerId
-     * @param  string $experimentResourceName  e.g. "customers/123/experiments/456"
-     * @return array
+     * @param  string  $experimentResourceName  e.g. "customers/123/experiments/456"
      */
     public function __invoke(string $customerId, string $experimentResourceName): array
     {
@@ -39,11 +37,11 @@ WHERE experiment.resource_name = '{$experimentResourceName}'";
 
         $result = [
             'experiment_resource' => $experimentResourceName,
-            'experiment_status'   => 'UNKNOWN',
-            'start_date'          => null,
-            'end_date'            => null,
-            'traffic_split'       => 50,
-            'arms'                => [],
+            'experiment_status' => 'UNKNOWN',
+            'start_date' => null,
+            'end_date' => null,
+            'traffic_split' => 50,
+            'arms' => [],
         ];
 
         try {
@@ -51,33 +49,33 @@ WHERE experiment.resource_name = '{$experimentResourceName}'";
 
             foreach ($response->getIterator() as $row) {
                 $experiment = $row->getExperiment();
-                $metrics    = $row->getMetrics();
+                $metrics = $row->getMetrics();
 
                 $result['experiment_status'] = $this->formatExperimentStatus($experiment->getStatus());
-                $result['start_date']        = $experiment->getStartDate();
-                $result['end_date']          = $experiment->getEndDate();
-                $result['traffic_split']     = $experiment->getTrafficSplitPercent();
-                $result['name']              = $experiment->getName();
+                $result['start_date'] = $experiment->getStartDate();
+                $result['end_date'] = $experiment->getEndDate();
+                $result['traffic_split'] = $experiment->getTrafficSplitPercent();
+                $result['name'] = $experiment->getName();
 
                 $result['arms'][] = [
-                    'impressions'       => $metrics->getImpressions(),
-                    'clicks'            => $metrics->getClicks(),
-                    'conversions'       => $metrics->getConversions(),
-                    'cost'              => $metrics->getCostMicros() / 1_000_000,
+                    'impressions' => $metrics->getImpressions(),
+                    'clicks' => $metrics->getClicks(),
+                    'conversions' => $metrics->getConversions(),
+                    'cost' => $metrics->getCostMicros() / 1_000_000,
                     'conversions_value' => $metrics->getConversionsValue(),
                 ];
             }
         } catch (GoogleAdsException $e) {
             Log::error('GetCampaignExperimentResults: Query failed', [
                 'customer_id' => $customerId,
-                'experiment'  => $experimentResourceName,
-                'error'       => $e->getMessage(),
+                'experiment' => $experimentResourceName,
+                'error' => $e->getMessage(),
             ]);
         } catch (\Exception $e) {
             Log::error('GetCampaignExperimentResults: Unexpected error', [
                 'customer_id' => $customerId,
-                'experiment'  => $experimentResourceName,
-                'error'       => $e->getMessage(),
+                'experiment' => $experimentResourceName,
+                'error' => $e->getMessage(),
             ]);
         }
 
@@ -88,15 +86,15 @@ WHERE experiment.resource_name = '{$experimentResourceName}'";
     {
         // ExperimentStatus enum values
         return match ($status) {
-            0  => 'UNSPECIFIED',
-            1  => 'UNKNOWN',
-            2  => 'ENABLED',
-            3  => 'REMOVED',
-            4  => 'HALTED',
-            5  => 'PROMOTED',
-            6  => 'SETUP',
-            7  => 'INITIATED',
-            8  => 'GRADUATED',
+            0 => 'UNSPECIFIED',
+            1 => 'UNKNOWN',
+            2 => 'ENABLED',
+            3 => 'REMOVED',
+            4 => 'HALTED',
+            5 => 'PROMOTED',
+            6 => 'SETUP',
+            7 => 'INITIATED',
+            8 => 'GRADUATED',
             default => 'UNKNOWN',
         };
     }

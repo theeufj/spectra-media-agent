@@ -2,8 +2,8 @@
 
 namespace App\Prompts;
 
-use App\Models\Campaign;
 use App\Models\BrandGuideline;
+use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
 
@@ -33,11 +33,11 @@ class StrategyPrompt
     /**
      * build constructs the final prompt string.
      *
-     * @param Campaign $campaign The campaign containing the marketing brief.
-     * @param string $knowledgeBaseContent The compiled content from the user's website.
-     * @param array $recommendations Array of optimization recommendations.
-     * @param BrandGuideline|null $brandGuidelines The brand guidelines if available.
-     * @param array $enabledPlatforms Array of enabled platform names.
+     * @param  Campaign  $campaign  The campaign containing the marketing brief.
+     * @param  string  $knowledgeBaseContent  The compiled content from the user's website.
+     * @param  array  $recommendations  Array of optimization recommendations.
+     * @param  BrandGuideline|null  $brandGuidelines  The brand guidelines if available.
+     * @param  array  $enabledPlatforms  Array of enabled platform names.
      * @return string The fully constructed prompt.
      */
     public static function build(Campaign $campaign, ?string $knowledgeBaseContent = null, array $recommendations = [], ?BrandGuideline $brandGuidelines = null, array $enabledPlatforms = [], $competitors = null, $croAudit = null, $abTestWinners = null, ?string $performanceGap = null): string
@@ -54,22 +54,22 @@ class StrategyPrompt
         $revenueContext = $aov
             ? "**Known Customer Revenue Data:** Average order/conversion value = \${$aov}. Use this to anchor `revenue_cpa_multiple` — set it so that (target CPA × revenue_cpa_multiple) ≈ \${$aov}."
             : '';
-        
+
         if ($brandGuidelines) {
             Log::info("StrategyPrompt: Using brand guidelines for customer ID: {$brandGuidelines->customer_id}");
         } else {
-            Log::info("StrategyPrompt: No brand guidelines available - using generic approach");
+            Log::info('StrategyPrompt: No brand guidelines available - using generic approach');
         }
 
         // Format enabled platforms for the prompt
-        $platformsList = !empty($enabledPlatforms) 
-            ? implode(', ', $enabledPlatforms) 
+        $platformsList = ! empty($enabledPlatforms)
+            ? implode(', ', $enabledPlatforms)
             : 'No platforms enabled';
-        
+
         Log::info("StrategyPrompt: Building prompt for platforms: {$platformsList}");
 
-        $recommendationsPrompt = "";
-        if (!empty($recommendations)) {
+        $recommendationsPrompt = '';
+        if (! empty($recommendations)) {
             $recommendationsJson = json_encode($recommendations, JSON_PRETTY_PRINT);
             $gapNote = $performanceGap
                 ? "\n**WHY THE PREVIOUS STRATEGY UNDERPERFORMED:** {$performanceGap}\nYour new strategy must directly address these gaps.\n"
@@ -86,7 +86,7 @@ Based on recent performance data, the following recommendations have been genera
 PROMPT;
         }
 
-        $selectedPagesPrompt = "";
+        $selectedPagesPrompt = '';
         if ($campaign->pages->isNotEmpty()) {
             $pagesList = $campaign->pages->map(function ($page) {
                 return "- URL: {$page->url} (Title: {$page->title}, Type: {$page->page_type})";
@@ -279,12 +279,12 @@ PROMPT;
     private static function formatVerticalContext(Campaign $campaign): string
     {
         $industry = $campaign->customer->industry ?? null;
-        if (!$industry) {
+        if (! $industry) {
             return '';
         }
 
         $vertical = config("verticals.{$industry}");
-        if (!$vertical) {
+        if (! $vertical) {
             return '';
         }
 
@@ -301,7 +301,7 @@ PROMPT;
             return '';
         }
 
-        $guidanceLines = !empty($guidance)
+        $guidanceLines = ! empty($guidance)
             ? implode("\n- ", $guidance)
             : 'Follow general best practices.';
 
@@ -310,15 +310,15 @@ PROMPT;
             $sitelinkLines .= "\n  - \"{$sl['text']}\" | {$sl['description1']} | {$sl['description2']}";
         }
 
-        $calloutLines = !empty($callouts)
-            ? '"' . implode('", "', $callouts) . '"'
+        $calloutLines = ! empty($callouts)
+            ? '"'.implode('", "', $callouts).'"'
             : '';
 
-        $negativeLines = !empty($negativeKeywords)
+        $negativeLines = ! empty($negativeKeywords)
             ? implode(', ', $negativeKeywords)
             : '';
 
-        $keywordThemeLines = !empty($keywordThemes)
+        $keywordThemeLines = ! empty($keywordThemes)
             ? implode("\n- ", $keywordThemes)
             : '';
 
@@ -363,13 +363,10 @@ VERTICAL;
 
     /**
      * Format brand guidelines into a context string for the prompt.
-     *
-     * @param BrandGuideline|null $brandGuidelines
-     * @return string
      */
     private static function formatBrandContext(?BrandGuideline $brandGuidelines): string
     {
-        if (!$brandGuidelines) {
+        if (! $brandGuidelines) {
             return '';
         }
 
@@ -377,24 +374,24 @@ VERTICAL;
         $usps = $brandGuidelines->getFormattedUSPs();
         $targetAudience = $brandGuidelines->getFormattedTargetAudience();
         $colorPalette = $brandGuidelines->getFormattedColorPalette();
-        
+
         // competitor_differentiation is a simple array of strings
         $competitorDiff = $brandGuidelines->competitor_differentiation ?? [];
-        $diffPoints = !empty($competitorDiff) 
-            ? implode("\n- ", $competitorDiff) 
+        $diffPoints = ! empty($competitorDiff)
+            ? implode("\n- ", $competitorDiff)
             : 'Not specified';
-        
+
         // messaging_themes is an array of strings
         $themes = $brandGuidelines->messaging_themes ?? [];
-        $primaryThemes = !empty($themes) 
-            ? implode(', ', $themes) 
+        $primaryThemes = ! empty($themes)
+            ? implode(', ', $themes)
             : 'Not specified';
-        
+
         // Extract quality score - note the actual column name
         $qualityScore = $brandGuidelines->extraction_quality_score ?? 'unknown';
-        
+
         $doNotUse = $brandGuidelines->do_not_use ? implode(', ', $brandGuidelines->do_not_use) : 'None specified';
-        
+
         return <<<BRAND
 **BRAND GUIDELINES - CRITICAL CONTEXT:**
 (Extraction Quality Score: {$qualityScore}/100)
@@ -424,7 +421,7 @@ BRAND;
      */
     private static function formatCompetitorContext($competitors): string
     {
-        if (!$competitors || $competitors->isEmpty()) {
+        if (! $competitors || $competitors->isEmpty()) {
             return '';
         }
 
@@ -435,20 +432,20 @@ BRAND;
             $type = $c->messaging_analysis['competition_type'] ?? null;
             $size = $c->messaging_analysis['estimated_size'] ?? null;
             if ($type) {
-                $entry .= " — {$type} competitor" . ($size ? " ({$size})" : '');
+                $entry .= " — {$type} competitor".($size ? " ({$size})" : '');
             }
 
-            if (!empty($c->value_propositions)) {
+            if (! empty($c->value_propositions)) {
                 $vps = is_array($c->value_propositions) ? implode('; ', array_slice($c->value_propositions, 0, 3)) : $c->value_propositions;
                 $entry .= "\n  Value Props: {$vps}";
             }
 
-            if (!empty($c->keywords_detected)) {
+            if (! empty($c->keywords_detected)) {
                 $kws = is_array($c->keywords_detected) ? implode(', ', array_slice($c->keywords_detected, 0, 8)) : $c->keywords_detected;
                 $entry .= "\n  Keywords: {$kws}";
             }
 
-            if (!empty($c->pricing_info)) {
+            if (! empty($c->pricing_info)) {
                 $pricing = is_array($c->pricing_info)
                     ? ($c->pricing_info['summary'] ?? $c->pricing_info['positioning'] ?? json_encode($c->pricing_info))
                     : $c->pricing_info;
@@ -473,13 +470,13 @@ COMPETITORS;
 
     private static function formatCroContext($croAudit): string
     {
-        if (!$croAudit || empty($croAudit->issues)) {
+        if (! $croAudit || empty($croAudit->issues)) {
             return '';
         }
 
         $top = array_slice($croAudit->issues, 0, 3);
         $lines = implode("\n", array_map(
-            fn ($issue) => '- ' . ($issue['description'] ?? $issue['title'] ?? json_encode($issue)),
+            fn ($issue) => '- '.($issue['description'] ?? $issue['title'] ?? json_encode($issue)),
             $top
         ));
 
@@ -507,7 +504,7 @@ CRO;
             return "This is the context about the business extracted from their website.\n---\n{$content}\n---";
         }
 
-        return <<<KB
+        return <<<'KB'
 You have access to a `search_knowledge_base` tool that lets you look up specific information about the client's business from their website and knowledge base.
 
 **Before generating the strategy JSON, use the tool to research:**
@@ -526,13 +523,14 @@ KB;
 
     private static function formatAbTestContext($abTestWinners): string
     {
-        if (!$abTestWinners || $abTestWinners->isEmpty()) {
+        if (! $abTestWinners || $abTestWinners->isEmpty()) {
             return '';
         }
 
         $lines = $abTestWinners->map(function ($test) {
             $results = $test->results ?? [];
             $summary = $results['summary'] ?? $results['winning_reason'] ?? 'Higher conversion rate';
+
             return "- Test on campaign #{$test->campaign_id}: winning variant → {$summary}";
         })->implode("\n");
 

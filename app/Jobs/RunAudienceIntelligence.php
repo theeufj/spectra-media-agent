@@ -13,14 +13,15 @@ use Illuminate\Support\Facades\Log;
 
 class RunAudienceIntelligence implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
+
     public $timeout = 600;
 
     public function handle(AudienceIntelligenceAgent $audienceAgent): void
     {
-        Log::info("RunAudienceIntelligence: Starting agent execution");
+        Log::info('RunAudienceIntelligence: Starting agent execution');
         $runStart = $this->startRun();
 
         $customers = Customer::whereHas('campaigns', function ($q) {
@@ -38,18 +39,18 @@ class RunAudienceIntelligence implements ShouldQueue
                 $processed++;
             } catch (\Exception $e) {
                 $errors++;
-                Log::error("RunAudienceIntelligence error on customer {$customer->id}: " . $e->getMessage());
+                Log::error("RunAudienceIntelligence error on customer {$customer->id}: ".$e->getMessage());
             }
         }
 
-        Log::info("RunAudienceIntelligence: Completed");
+        Log::info('RunAudienceIntelligence: Completed');
 
-        $this->finishRun($runStart, actions: $processed, errors: $errors, scope: $customers->count() . ' customers');
+        $this->finishRun($runStart, actions: $processed, errors: $errors, scope: $customers->count().' customers');
     }
 
     public function failed(\Throwable $e): void
     {
-        Log::error(class_basename($this) . ' failed: ' . $e->getMessage());
+        Log::error(class_basename($this).' failed: '.$e->getMessage());
         $this->recordRunFailure($e);
     }
 }

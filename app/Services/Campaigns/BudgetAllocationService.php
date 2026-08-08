@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 class BudgetAllocationService
 {
     private const DEFAULT_ROAS = 0.5; // Return on Ad Spend
+
     private const MIN_BUDGET_PERCENTAGE = 0.05; // Minimum 5% of total budget
 
     public function __invoke(Customer $customer, float $totalBudget): bool
@@ -20,6 +21,7 @@ class BudgetAllocationService
 
             if ($campaigns->isEmpty()) {
                 Log::warning("No active campaigns found for customer {$customer->id} to allocate budget to.");
+
                 return false;
             }
 
@@ -35,9 +37,10 @@ class BudgetAllocationService
 
             return true;
         } catch (\Exception $e) {
-            Log::error("Error allocating budget for customer {$customer->id}: " . $e->getMessage(), [
+            Log::error("Error allocating budget for customer {$customer->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return false;
         }
     }
@@ -64,6 +67,7 @@ class BudgetAllocationService
                 $campaignPerformance[$campaign->id] = self::DEFAULT_ROAS;
             }
         }
+
         return $campaignPerformance;
     }
 
@@ -103,6 +107,7 @@ class BudgetAllocationService
                 'budget' => $budgetPerCampaign,
             ]);
         }
+
         return true;
     }
 }

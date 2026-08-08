@@ -4,7 +4,7 @@ namespace App\Prompts;
 
 /**
  * CompetitorAnalysisPrompt
- * 
+ *
  * Generates prompts for deep analysis of competitor websites,
  * extracting messaging, value propositions, and counter-strategy recommendations.
  */
@@ -15,7 +15,7 @@ class CompetitorAnalysisPrompt
      */
     public static function getSystemInstruction(): string
     {
-        return <<<INSTRUCTION
+        return <<<'INSTRUCTION'
 You are an expert competitive intelligence analyst specializing in digital marketing and advertising strategy.
 
 Your task is to analyze competitor websites and extract actionable intelligence that can be used to create superior advertising campaigns.
@@ -34,9 +34,9 @@ INSTRUCTION;
     /**
      * Build the competitor analysis prompt.
      *
-     * @param string $competitorUrl The competitor's URL
-     * @param string $competitorContent The scraped content from competitor website
-     * @param string $ourBusinessContext Brief context about our business
+     * @param  string  $competitorUrl  The competitor's URL
+     * @param  string  $competitorContent  The scraped content from competitor website
+     * @param  string  $ourBusinessContext  Brief context about our business
      * @return string The formatted prompt
      */
     public static function build(

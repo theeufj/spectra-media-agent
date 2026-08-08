@@ -15,8 +15,11 @@ use Tests\TestCase;
 class CompetitorIntelligenceAgentTest extends TestCase
 {
     protected CompetitorIntelligenceAgent $agent;
+
     protected GeminiService $geminiMock;
+
     protected CompetitorDiscoveryAgent $discoveryMock;
+
     protected CompetitorAnalysisAgent $analysisMock;
 
     protected function setUp(): void
@@ -180,6 +183,6 @@ class CompetitorIntelligenceAgentTest extends TestCase
 
         $this->assertNull($results['discovery']);
         $this->assertNull($results['analysis']);
-        $this->assertCount(2, array_filter($results['errors'], fn($e) => str_contains($e, 'failed')));
+        $this->assertCount(2, array_filter($results['errors'], fn ($e) => str_contains($e, 'failed')));
     }
 }

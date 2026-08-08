@@ -34,7 +34,7 @@ class CreativeQuotaService
     /**
      * Check if the user can perform a generation of the given type.
      *
-     * @param string $type 'image', 'video', or 'refinement'
+     * @param  string  $type  'image', 'video', or 'refinement'
      */
     public function canGenerate(User $user, string $type): bool
     {
@@ -52,7 +52,7 @@ class CreativeQuotaService
             default => null,
         };
 
-        if ($limitKey === null || !isset($limits[$limitKey])) {
+        if ($limitKey === null || ! isset($limits[$limitKey])) {
             return false;
         }
 
@@ -81,7 +81,7 @@ class CreativeQuotaService
     /**
      * Record a generation usage.
      *
-     * @param string $type 'image', 'video', or 'refinement'
+     * @param  string  $type  'image', 'video', or 'refinement'
      */
     public function recordUsage(User $user, string $type, int $count = 1): void
     {

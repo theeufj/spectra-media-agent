@@ -1,0 +1,19 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    - phpstan-baseline.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - app
+        - config
+        - database
+        - routes
+        - tests
+
+    # Console commands prefixed Test* are manual integration harnesses, not code
+    # under analysis; they intentionally poke live platform APIs.
+    excludePaths:
+        analyse:
+            - app/Console/Commands/Test*.php

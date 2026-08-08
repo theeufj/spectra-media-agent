@@ -15,10 +15,10 @@ return new class extends Migration
             // Deployment status tracking
             $table->timestamp('deployed_at')->nullable()->after('execution_errors')
                 ->comment('When the strategy was deployed to ad platforms');
-            
+
             $table->string('deployment_status', 50)->nullable()->after('deployed_at')
                 ->comment('pending, deploying, deployed, failed');
-            
+
             $table->text('deployment_error')->nullable()->after('deployment_status')
                 ->comment('Error message if deployment failed');
         });

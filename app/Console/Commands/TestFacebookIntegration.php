@@ -36,8 +36,9 @@ class TestFacebookIntegration extends Command
                 ->whereNotNull('facebook_page_id')
                 ->first();
 
-        if (!$customer) {
+        if (! $customer) {
             $this->error('No suitable customer found. Pass a customer ID or ensure a BM-owned customer exists.');
+
             return self::FAILURE;
         }
 
@@ -56,16 +57,18 @@ class TestFacebookIntegration extends Command
 
         // ── Step 1: Verify BM access ─────────────────────────────────────
         $this->info('Step 1: Verify Business Manager access...');
-        $bm = new BusinessManagerService();
+        $bm = new BusinessManagerService;
 
-        if (!$bm->isConfigured()) {
+        if (! $bm->isConfigured()) {
             $this->error('FACEBOOK_SYSTEM_USER_TOKEN or FACEBOOK_BUSINESS_MANAGER_ID not set.');
+
             return self::FAILURE;
         }
 
         $verify = $bm->verifyAdAccountAccess($accountId);
-        if (!$verify['success']) {
+        if (! $verify['success']) {
             $this->error("  Access check failed: {$verify['error']}");
+
             return self::FAILURE;
         }
         $this->line("  <fg=green>OK</> — \"{$verify['name']}\" ({$verify['currency']})");
@@ -77,14 +80,15 @@ class TestFacebookIntegration extends Command
 
         $fbCampaign = $campaignService->createCampaign(
             accountId: $accountId,
-            campaignName: '[SPECTRA TEST] ' . now()->format('Y-m-d H:i:s'),
+            campaignName: '[SPECTRA TEST] '.now()->format('Y-m-d H:i:s'),
             objective: 'OUTCOME_TRAFFIC',
             dailyBudget: 500,     // $5.00 minimum
             status: 'PAUSED',
         );
 
-        if (!$fbCampaign || !isset($fbCampaign['id'])) {
+        if (! $fbCampaign || ! isset($fbCampaign['id'])) {
             $this->error('  Campaign creation failed. Check logs for details.');
+
             return self::FAILURE;
         }
         $this->created['campaign'] = $fbCampaign['id'];
@@ -108,21 +112,23 @@ class TestFacebookIntegration extends Command
             status: 'PAUSED',
         );
 
-        if (!$fbAdSet || !isset($fbAdSet['id'])) {
+        if (! $fbAdSet || ! isset($fbAdSet['id'])) {
             $this->error('  Ad set creation failed. Check logs for details.');
             $this->cleanup($bm);
+
             return self::FAILURE;
         }
         $this->created['adset'] = $fbAdSet['id'];
         $this->line("  <fg=green>OK</> — adset_id: {$fbAdSet['id']}");
         $this->newLine();
 
-        if ($this->option('skip-creative') || !$pageId) {
-            if (!$pageId) {
+        if ($this->option('skip-creative') || ! $pageId) {
+            if (! $pageId) {
                 $this->warn('  Skipping creative/ad — no facebook_page_id on customer.');
             }
             $this->printResult();
             $this->cleanup($bm);
+
             return self::SUCCESS;
         }
 
@@ -133,10 +139,11 @@ class TestFacebookIntegration extends Command
         // Generate a simple test image URL (1200x628 blue rectangle)
         $testImageUrl = $this->generateTestImage();
 
-        if (!$testImageUrl) {
+        if (! $testImageUrl) {
             $this->warn('  Could not generate test image, skipping creative/ad.');
             $this->printResult();
             $this->cleanup($bm);
+
             return self::SUCCESS;
         }
 
@@ -155,10 +162,11 @@ class TestFacebookIntegration extends Command
             @unlink($testImageUrl);
         }
 
-        if (!$fbCreative || !isset($fbCreative['id'])) {
+        if (! $fbCreative || ! isset($fbCreative['id'])) {
             $this->error('  Creative creation failed. Check logs for details.');
             $this->printResult();
             $this->cleanup($bm);
+
             return self::SUCCESS; // Campaign + ad set still passed
         }
         $this->created['creative'] = $fbCreative['id'];
@@ -177,10 +185,11 @@ class TestFacebookIntegration extends Command
             status: 'PAUSED',
         );
 
-        if (!$fbAd || !isset($fbAd['id'])) {
+        if (! $fbAd || ! isset($fbAd['id'])) {
             $this->error('  Ad creation failed. Check logs for details.');
             $this->printResult();
             $this->cleanup($bm);
+
             return self::SUCCESS; // Campaign + ad set + creative still passed
         }
         $this->created['ad'] = $fbAd['id'];
@@ -195,8 +204,9 @@ class TestFacebookIntegration extends Command
 
     private function generateTestImage(): ?string
     {
-        if (!function_exists('imagecreatetruecolor')) {
+        if (! function_exists('imagecreatetruecolor')) {
             $this->warn('  GD extension not available.');
+
             return null;
         }
 
@@ -207,7 +217,7 @@ class TestFacebookIntegration extends Command
         imagestring($img, 5, 400, 280, 'SPECTRA TEST AD', $white);
         imagestring($img, 3, 400, 310, now()->format('Y-m-d H:i:s'), $white);
 
-        $path = sys_get_temp_dir() . '/spectra_test_' . uniqid() . '.jpg';
+        $path = sys_get_temp_dir().'/spectra_test_'.uniqid().'.jpg';
         imagejpeg($img, $path, 85);
         imagedestroy($img);
 
@@ -250,6 +260,7 @@ class TestFacebookIntegration extends Command
         if ($this->option('keep')) {
             $this->newLine();
             $this->warn('Cleanup skipped (--keep). Delete these manually from Ads Manager when done.');
+
             return;
         }
 
@@ -267,7 +278,7 @@ class TestFacebookIntegration extends Command
         foreach (array_reverse($this->created) as $type => $id) {
             $response = Http::delete("{$base}/{$id}", ['access_token' => $token]);
             $ok = $response->successful() && ($response->json('success') ?? false);
-            $this->line("  {$type} {$id}: " . ($ok ? '<fg=green>deleted</>' : '<fg=red>could not delete — remove manually</>'));
+            $this->line("  {$type} {$id}: ".($ok ? '<fg=green>deleted</>' : '<fg=red>could not delete — remove manually</>'));
         }
     }
 }

@@ -20,8 +20,8 @@ class AttributionService
     /**
      * Run all attribution models on a conversion journey.
      *
-     * @param array $touchpoints Ordered touchpoint records
-     * @param float $conversionValue The total conversion value to attribute
+     * @param  array  $touchpoints  Ordered touchpoint records
+     * @param  float  $conversionValue  The total conversion value to attribute
      * @return array Keyed by model name, each containing per-touchpoint attributions
      */
     public function attributeAll(array $touchpoints, float $conversionValue = 1.0): array
@@ -48,6 +48,7 @@ class AttributionService
         $lastIdx = count($touchpoints) - 1;
         $result[$lastIdx]['credit'] = 1.0;
         $result[$lastIdx]['value'] = $value;
+
         return $result;
     }
 
@@ -59,6 +60,7 @@ class AttributionService
         $result = $this->initResult($touchpoints);
         $result[0]['credit'] = 1.0;
         $result[0]['value'] = $value;
+
         return $result;
     }
 
@@ -92,6 +94,7 @@ class AttributionService
         if ($count === 1) {
             $result[0]['credit'] = 1.0;
             $result[0]['value'] = $value;
+
             return $result;
         }
 
@@ -128,6 +131,7 @@ class AttributionService
         if ($count === 1) {
             $result[0]['credit'] = 1.0;
             $result[0]['value'] = $value;
+
             return $result;
         }
 
@@ -136,6 +140,7 @@ class AttributionService
             $result[0]['value'] = round($value * 0.5, 2);
             $result[1]['credit'] = 0.5;
             $result[1]['value'] = round($value * 0.5, 2);
+
             return $result;
         }
 
@@ -161,8 +166,8 @@ class AttributionService
     /**
      * Aggregate attribution data by channel for a collection of conversions.
      *
-     * @param array $conversions Array of AttributionConversion records (as arrays)
-     * @param string $model Attribution model to use
+     * @param  array  $conversions  Array of AttributionConversion records (as arrays)
+     * @param  string  $model  Attribution model to use
      * @return array Keyed by channel string with total credit and value
      */
     public function aggregateByChannel(array $conversions, string $model = 'linear'): array
@@ -173,7 +178,7 @@ class AttributionService
             $attribution = $conversion['attributed_to'][$model] ?? [];
             foreach ($attribution as $tp) {
                 $channel = $this->getChannel($tp);
-                if (!isset($channels[$channel])) {
+                if (! isset($channels[$channel])) {
                     $channels[$channel] = ['channel' => $channel, 'conversions' => 0, 'value' => 0, 'credit' => 0];
                 }
                 $channels[$channel]['credit'] += $tp['credit'] ?? 0;
@@ -184,7 +189,7 @@ class AttributionService
         }
 
         // Sort by value descending
-        usort($channels, fn($a, $b) => $b['value'] <=> $a['value']);
+        usort($channels, fn ($a, $b) => $b['value'] <=> $a['value']);
 
         return array_values($channels);
     }
@@ -214,7 +219,10 @@ class AttributionService
     protected function getTimestamp(array $tp): int
     {
         $ts = $tp['touched_at'] ?? $tp['timestamp'] ?? null;
-        if (!$ts) return time();
+        if (! $ts) {
+            return time();
+        }
+
         return is_numeric($ts) ? (int) $ts : (strtotime($ts) ?: time());
     }
 
@@ -225,6 +233,7 @@ class AttributionService
     {
         $source = $tp['utm_source'] ?? 'direct';
         $medium = $tp['utm_medium'] ?? 'none';
-        return ucfirst($source) . ' / ' . ucfirst($medium);
+
+        return ucfirst($source).' / '.ucfirst($medium);
     }
 }

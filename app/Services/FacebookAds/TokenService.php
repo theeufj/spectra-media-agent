@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 class TokenService
 {
     protected string $apiVersion;
+
     protected string $graphApiUrl = 'https://graph.facebook.com';
 
     public function __construct()
@@ -33,7 +34,7 @@ class TokenService
     {
         $token = config('services.facebook.system_user_token');
 
-        if (!$token) {
+        if (! $token) {
             return null;
         }
 
@@ -47,7 +48,7 @@ class TokenService
     {
         $token = config('services.facebook.system_user_token');
 
-        if (!$token) {
+        if (! $token) {
             return [
                 'valid' => false,
                 'error' => 'No System User token configured. Set FACEBOOK_SYSTEM_USER_TOKEN in .env',
@@ -56,7 +57,7 @@ class TokenService
 
         $debugInfo = $this->debugToken($token);
 
-        if (!$debugInfo) {
+        if (! $debugInfo) {
             return [
                 'valid' => false,
                 'error' => 'Could not inspect token',
@@ -78,7 +79,7 @@ class TokenService
     protected function debugToken(string $accessToken): ?array
     {
         try {
-            $appAccessToken = config('services.facebook.client_id') . '|' . config('services.facebook.client_secret');
+            $appAccessToken = config('services.facebook.client_id').'|'.config('services.facebook.client_secret');
 
             $response = Http::get("{$this->graphApiUrl}/{$this->apiVersion}/debug_token", [
                 'input_token' => $accessToken,
@@ -95,7 +96,8 @@ class TokenService
 
             return null;
         } catch (\Exception $e) {
-            Log::error('Exception debugging Facebook token: ' . $e->getMessage());
+            Log::error('Exception debugging Facebook token: '.$e->getMessage());
+
             return null;
         }
     }

@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customer;
 use App\Models\Keyword;
-use App\Models\NegativeKeywordList;
 use App\Models\KeywordQualityScore;
+use App\Models\NegativeKeywordList;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use App\Services\KeywordClusteringService;
 use Illuminate\Http\Request;
@@ -17,7 +16,9 @@ class KeywordController extends Controller
     public function index(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         $keywords = Keyword::where('customer_id', $customer->id)
             ->with('campaign:id,name')
@@ -47,7 +48,9 @@ class KeywordController extends Controller
     public function research(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         return Inertia::render('Keywords/Research', [
             'customer' => $customer->only('id', 'name', 'industry', 'website_url'),
@@ -57,7 +60,9 @@ class KeywordController extends Controller
     public function doResearch(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return back()->with('flash', ['type' => 'error', 'message' => 'No active customer.']);
+        if (! $customer) {
+            return back()->with('flash', ['type' => 'error', 'message' => 'No active customer.']);
+        }
 
         $validated = $request->validate([
             'seed_keywords' => 'nullable|string|max:500',
@@ -67,7 +72,7 @@ class KeywordController extends Controller
         ]);
 
         $customerId = $customer->google_ads_customer_id;
-        if (!$customerId) {
+        if (! $customerId) {
             return back()->with('flash', ['type' => 'error', 'message' => 'Google Ads account required for keyword research.']);
         }
 
@@ -84,27 +89,30 @@ class KeywordController extends Controller
             );
 
             // AI clustering
-            if (!empty($results['keywords'])) {
-                $clusterService = new KeywordClusteringService();
+            if (! empty($results['keywords'])) {
+                $clusterService = new KeywordClusteringService;
                 $clusters = $clusterService->cluster($results['keywords']);
                 $results['clusters'] = $clusters['clusters'] ?? [];
             }
 
             return back()->with('flash', [
                 'type' => 'success',
-                'message' => 'Found ' . count($results['keywords'] ?? []) . ' keywords.',
+                'message' => 'Found '.count($results['keywords'] ?? []).' keywords.',
             ])->with('research_results', $results);
 
         } catch (\Exception $e) {
             Log::error('KeywordController: Research failed', ['error' => $e->getMessage()]);
-            return back()->with('flash', ['type' => 'error', 'message' => 'Keyword research failed: ' . $e->getMessage()]);
+
+            return back()->with('flash', ['type' => 'error', 'message' => 'Keyword research failed: '.$e->getMessage()]);
         }
     }
 
     public function addToCampaign(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return back();
+        if (! $customer) {
+            return back();
+        }
 
         $validated = $request->validate([
             'keywords' => 'required|array|min:1',
@@ -146,7 +154,9 @@ class KeywordController extends Controller
     public function bulkAction(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return back();
+        if (! $customer) {
+            return back();
+        }
 
         $validated = $request->validate([
             'keyword_ids' => 'required|array|min:1',
@@ -168,7 +178,7 @@ class KeywordController extends Controller
                 $query->update(['status' => 'removed']);
                 break;
             case 'change_match_type':
-                if (!empty($validated['match_type'])) {
+                if (! empty($validated['match_type'])) {
                     $query->update(['match_type' => $validated['match_type']]);
                 }
                 break;
@@ -180,11 +190,13 @@ class KeywordController extends Controller
     public function competitorGap(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         $canAccess = $request->user()->hasFeature('competitor_analysis');
 
-        if (!$canAccess) {
+        if (! $canAccess) {
             return Inertia::render('Keywords/CompetitorGap', [
                 'gaps' => [],
                 'competitors' => [],
@@ -196,7 +208,7 @@ class KeywordController extends Controller
         $competitors = $customer->competitors()
             ->where(function ($q) {
                 $q->whereNotNull('keywords_detected')
-                  ->orWhereNotNull('messaging_analysis');
+                    ->orWhereNotNull('messaging_analysis');
             })
             ->whereNotNull('last_analyzed_at')
             ->latest('last_analyzed_at')
@@ -206,7 +218,7 @@ class KeywordController extends Controller
         $ourKeywords = Keyword::where('customer_id', $customer->id)
             ->where('status', 'active')
             ->pluck('keyword_text')
-            ->map(fn($k) => strtolower($k))
+            ->map(fn ($k) => strtolower($k))
             ->toArray();
 
         $gaps = [];
@@ -223,7 +235,7 @@ class KeywordController extends Controller
 
             foreach ($detected as $kw) {
                 $kwLower = strtolower($kw);
-                if (!in_array($kwLower, $ourKeywords)) {
+                if (! in_array($kwLower, $ourKeywords)) {
                     $gaps[$kwLower] = [
                         'keyword' => $kw,
                         'found_on' => $gaps[$kwLower]['found_on'] ?? [],
@@ -234,7 +246,7 @@ class KeywordController extends Controller
         }
 
         $gaps = array_values($gaps);
-        usort($gaps, fn($a, $b) => count($b['found_on']) <=> count($a['found_on']));
+        usort($gaps, fn ($a, $b) => count($b['found_on']) <=> count($a['found_on']));
 
         return Inertia::render('Keywords/CompetitorGap', [
             'gaps' => array_slice($gaps, 0, 100),
@@ -247,7 +259,9 @@ class KeywordController extends Controller
     public function negativeLists(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         $lists = NegativeKeywordList::where('customer_id', $customer->id)
             ->orderByDesc('updated_at')
@@ -261,7 +275,9 @@ class KeywordController extends Controller
     public function storeNegativeList(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return back();
+        if (! $customer) {
+            return back();
+        }
 
         $validated = $request->validate([
             'name' => 'required|string|max:100',
@@ -283,7 +299,9 @@ class KeywordController extends Controller
     public function updateNegativeList(Request $request, NegativeKeywordList $list)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $list->customer_id !== $customer->id) return back();
+        if (! $customer || $list->customer_id !== $customer->id) {
+            return back();
+        }
 
         $validated = $request->validate([
             'name' => 'sometimes|string|max:100',
@@ -301,7 +319,9 @@ class KeywordController extends Controller
     public function destroyNegativeList(Request $request, NegativeKeywordList $list)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $list->customer_id !== $customer->id) return back();
+        if (! $customer || $list->customer_id !== $customer->id) {
+            return back();
+        }
 
         $list->delete();
 
@@ -315,7 +335,7 @@ class KeywordController extends Controller
     public function inlineResearch(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return response()->json(['error' => 'No active customer.'], 403);
         }
 
@@ -326,13 +346,13 @@ class KeywordController extends Controller
         ]);
 
         $customerId = $customer->google_ads_customer_id;
-        if (!$customerId) {
+        if (! $customerId) {
             return response()->json(['error' => 'Google Ads account required for keyword research.'], 422);
         }
 
         // Parse comma/newline-separated seed keywords entered by the user
         $userSeeds = [];
-        if (!empty($validated['seed_keywords'])) {
+        if (! empty($validated['seed_keywords'])) {
             $userSeeds = array_values(array_filter(
                 array_map('trim', preg_split('/[\r\n,]+/', $validated['seed_keywords']))
             ));
@@ -351,8 +371,8 @@ class KeywordController extends Controller
                 $userSeeds
             );
 
-            if (!empty($results['keywords'])) {
-                $clusterService = new KeywordClusteringService();
+            if (! empty($results['keywords'])) {
+                $clusterService = new KeywordClusteringService;
                 $clusters = $clusterService->cluster($results['keywords']);
                 $results['clusters'] = $clusters['clusters'] ?? [];
             }
@@ -360,7 +380,8 @@ class KeywordController extends Controller
             return response()->json($results);
         } catch (\Exception $e) {
             Log::error('KeywordController: Inline research failed', ['error' => $e->getMessage()]);
-            return response()->json(['error' => 'Keyword research failed: ' . $e->getMessage()], 500);
+
+            return response()->json(['error' => 'Keyword research failed: '.$e->getMessage()], 500);
         }
     }
 }

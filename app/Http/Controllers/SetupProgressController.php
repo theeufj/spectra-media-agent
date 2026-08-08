@@ -3,22 +3,20 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
 class SetupProgressController extends Controller
 {
     /**
      * Get the setup progress for the current customer.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function index(Request $request)
     {
         try {
             $user = $request->user();
-            
-            if (!$user) {
+
+            if (! $user) {
                 return response()->json([
                     'progress' => 0,
                     'steps' => [],
@@ -30,8 +28,8 @@ class SetupProgressController extends Controller
             }
 
             $customer = $user->customers()->find(session('active_customer_id'));
-            
-            if (!$customer) {
+
+            if (! $customer) {
                 return response()->json([
                     'progress' => 0,
                     'steps' => [],
@@ -47,7 +45,7 @@ class SetupProgressController extends Controller
             $hasKnowledgeBase = \App\Models\KnowledgeBase::where('user_id', $user->id)->count() > 0;
             $hasBrandGuidelines = $customer->brandGuideline?->user_verified ?? false;
             $hasCampaign = $customer->campaigns()->count() > 0;
-            $hasConversionTracking = !empty($customer->conversion_action_id);
+            $hasConversionTracking = ! empty($customer->conversion_action_id);
 
             $steps = [
                 [
@@ -84,23 +82,24 @@ class SetupProgressController extends Controller
                 ],
             ];
 
-        $completedSteps = collect($steps)->where('completed', true)->count();
-        $totalSteps = count($steps);
-        $progress = $totalSteps > 0 ? round(($completedSteps / $totalSteps) * 100) : 0;
+            $completedSteps = collect($steps)->where('completed', true)->count();
+            $totalSteps = count($steps);
+            $progress = $totalSteps > 0 ? round(($completedSteps / $totalSteps) * 100) : 0;
 
-        // Determine if user is "new" (hasn't completed setup)
-        $isNewUser = $progress < 100;
+            // Determine if user is "new" (hasn't completed setup)
+            $isNewUser = $progress < 100;
 
-        return response()->json([
-            'progress' => $progress,
-            'completed_steps' => $completedSteps,
-            'total_steps' => $totalSteps,
-            'steps' => $steps,
-            'is_new_user' => $isNewUser,
-            'current_step' => collect($steps)->firstWhere('completed', false),
-        ]);
+            return response()->json([
+                'progress' => $progress,
+                'completed_steps' => $completedSteps,
+                'total_steps' => $totalSteps,
+                'steps' => $steps,
+                'is_new_user' => $isNewUser,
+                'current_step' => collect($steps)->firstWhere('completed', false),
+            ]);
         } catch (\Exception $e) {
-            \Log::error('SetupProgressController error: ' . $e->getMessage());
+            \Log::error('SetupProgressController error: '.$e->getMessage());
+
             return response()->json([
                 'progress' => 0,
                 'steps' => [],

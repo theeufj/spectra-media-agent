@@ -2,8 +2,8 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class InsightService extends BaseFacebookAdsService
 {
@@ -15,17 +15,16 @@ class InsightService extends BaseFacebookAdsService
     /**
      * Get insights for a campaign.
      *
-     * @param string $campaignId The Facebook campaign ID
-     * @param string $dateStart Start date in format YYYY-MM-DD
-     * @param string $dateEnd End date in format YYYY-MM-DD
-     * @param array $fields Fields to retrieve (default: standard metrics)
-     * @return ?array
+     * @param  string  $campaignId  The Facebook campaign ID
+     * @param  string  $dateStart  Start date in format YYYY-MM-DD
+     * @param  string  $dateEnd  End date in format YYYY-MM-DD
+     * @param  array  $fields  Fields to retrieve (default: standard metrics)
      */
     public function getCampaignInsights(
         string $campaignId,
         string $dateStart,
         string $dateEnd,
-        array $fields = null
+        ?array $fields = null
     ): ?array {
         try {
             if ($fields === null) {
@@ -61,20 +60,23 @@ class InsightService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting campaign insights: " . $e->getMessage(), [
+            Log::error('Error getting campaign insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -82,17 +84,16 @@ class InsightService extends BaseFacebookAdsService
     /**
      * Get insights for an ad set.
      *
-     * @param string $adSetId The Facebook ad set ID
-     * @param string $dateStart Start date in format YYYY-MM-DD
-     * @param string $dateEnd End date in format YYYY-MM-DD
-     * @param array $fields Fields to retrieve
-     * @return ?array
+     * @param  string  $adSetId  The Facebook ad set ID
+     * @param  string  $dateStart  Start date in format YYYY-MM-DD
+     * @param  string  $dateEnd  End date in format YYYY-MM-DD
+     * @param  array  $fields  Fields to retrieve
      */
     public function getAdSetInsights(
         string $adSetId,
         string $dateStart,
         string $dateEnd,
-        array $fields = null
+        ?array $fields = null
     ): ?array {
         try {
             if ($fields === null) {
@@ -124,20 +125,23 @@ class InsightService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting ad set insights: " . $e->getMessage(), [
+            Log::error('Error getting ad set insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_set_id' => $adSetId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -145,17 +149,16 @@ class InsightService extends BaseFacebookAdsService
     /**
      * Get insights for an individual ad.
      *
-     * @param string $adId The Facebook ad ID
-     * @param string $dateStart Start date in format YYYY-MM-DD
-     * @param string $dateEnd End date in format YYYY-MM-DD
-     * @param array $fields Fields to retrieve
-     * @return ?array
+     * @param  string  $adId  The Facebook ad ID
+     * @param  string  $dateStart  Start date in format YYYY-MM-DD
+     * @param  string  $dateEnd  End date in format YYYY-MM-DD
+     * @param  array  $fields  Fields to retrieve
      */
     public function getAdInsights(
         string $adId,
         string $dateStart,
         string $dateEnd,
-        array $fields = null
+        ?array $fields = null
     ): ?array {
         try {
             if ($fields === null) {
@@ -187,20 +190,23 @@ class InsightService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting ad insights: " . $e->getMessage(), [
+            Log::error('Error getting ad insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_id' => $adId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -208,17 +214,16 @@ class InsightService extends BaseFacebookAdsService
     /**
      * Get account-level insights.
      *
-     * @param string $accountId The Facebook ad account ID (without 'act_' prefix)
-     * @param string $dateStart Start date in format YYYY-MM-DD
-     * @param string $dateEnd End date in format YYYY-MM-DD
-     * @param array $fields Fields to retrieve
-     * @return ?array
+     * @param  string  $accountId  The Facebook ad account ID (without 'act_' prefix)
+     * @param  string  $dateStart  Start date in format YYYY-MM-DD
+     * @param  string  $dateEnd  End date in format YYYY-MM-DD
+     * @param  array  $fields  Fields to retrieve
      */
     public function getAccountInsights(
         string $accountId,
         string $dateStart,
         string $dateEnd,
-        array $fields = null
+        ?array $fields = null
     ): ?array {
         try {
             if ($fields === null) {
@@ -250,20 +255,23 @@ class InsightService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting account insights: " . $e->getMessage(), [
+            Log::error('Error getting account insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -272,13 +280,12 @@ class InsightService extends BaseFacebookAdsService
      * Parse an action object from Facebook insights response.
      * Actions are returned as arrays like: [['action_type' => 'purchase', 'value' => '100']...]
      *
-     * @param array|null $actions The actions array from Facebook response
-     * @param string $actionType The action type to extract (e.g., 'purchase', 'add_to_cart')
-     * @return float
+     * @param  array|null  $actions  The actions array from Facebook response
+     * @param  string  $actionType  The action type to extract (e.g., 'purchase', 'add_to_cart')
      */
     public function parseAction(?array $actions, string $actionType = 'purchase'): float
     {
-        if (!$actions || !is_array($actions)) {
+        if (! $actions || ! is_array($actions)) {
             return 0;
         }
 
@@ -294,13 +301,12 @@ class InsightService extends BaseFacebookAdsService
     /**
      * Get account-level insights with a specific level (campaign, adset, ad).
      *
-     * @param string $accountId Account ID (with act_ prefix)
-     * @param string $dateStart Start date YYYY-MM-DD
-     * @param string $dateEnd End date YYYY-MM-DD
-     * @param string $level Breakdown level: 'account', 'campaign', 'adset', 'ad'
-     * @param array|null $fields Fields to retrieve
-     * @param int $limit Max rows
-     * @return array
+     * @param  string  $accountId  Account ID (with act_ prefix)
+     * @param  string  $dateStart  Start date YYYY-MM-DD
+     * @param  string  $dateEnd  End date YYYY-MM-DD
+     * @param  string  $level  Breakdown level: 'account', 'campaign', 'adset', 'ad'
+     * @param  array|null  $fields  Fields to retrieve
+     * @param  int  $limit  Max rows
      */
     public function getAccountInsightsByLevel(
         string $accountId,
@@ -325,10 +331,11 @@ class InsightService extends BaseFacebookAdsService
 
             return $response['data'] ?? [];
         } catch (\Exception $e) {
-            Log::error("Error getting account insights by level: " . $e->getMessage(), [
+            Log::error('Error getting account insights by level: '.$e->getMessage(), [
                 'account_id' => $accountId,
                 'level' => $level,
             ]);
+
             return [];
         }
     }

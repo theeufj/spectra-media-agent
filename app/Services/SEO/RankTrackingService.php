@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Log;
 class RankTrackingService
 {
     protected Customer $customer;
+
     protected FirecrawlService $firecrawl;
 
     public function __construct(Customer $customer)
@@ -100,15 +101,16 @@ class RankTrackingService
     protected function searchForPosition(string $keyword, string $domain): array
     {
         try {
-            if (!$this->firecrawl->isConfigured()) {
+            if (! $this->firecrawl->isConfigured()) {
                 Log::debug('RankTracking: Firecrawl not configured');
+
                 return ['position' => null, 'url' => null];
             }
 
             // Fetch up to 100 results to find position
             $response = $this->firecrawl->search($keyword, 100);
 
-            if (!$response['success']) {
+            if (! $response['success']) {
                 return ['position' => null, 'url' => null];
             }
 
@@ -125,6 +127,7 @@ class RankTrackingService
             return ['position' => null, 'url' => null]; // Not found in results
         } catch (\Exception $e) {
             Log::debug('RankTracking: Search failed', ['keyword' => $keyword, 'error' => $e->getMessage()]);
+
             return ['position' => null, 'url' => null];
         }
     }

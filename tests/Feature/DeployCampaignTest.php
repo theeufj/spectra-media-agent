@@ -21,7 +21,9 @@ class DeployCampaignTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected Customer $customer;
+
     protected Campaign $campaign;
 
     protected function setUp(): void

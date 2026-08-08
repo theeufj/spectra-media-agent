@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\HarvestedAsset;
 use App\Services\AssetHarvestingService;
-use App\Services\GeminiService;
 use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -22,6 +21,7 @@ class ClassifyHarvestedAsset implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
+
     public $timeout = 120;
 
     public function __construct(
@@ -34,18 +34,20 @@ class ClassifyHarvestedAsset implements ShouldQueue
 
         // Read the stored image
         $imageData = StorageHelper::get($this->asset->s3_path);
-        if (!$imageData) {
+        if (! $imageData) {
             Log::warning('ClassifyHarvestedAsset: Could not read stored image', ['asset_id' => $this->asset->id]);
             $this->asset->update(['status' => 'failed']);
+
             return;
         }
 
         $base64 = base64_encode($imageData);
         $result = $service->classifyImage($base64, $this->asset->mime_type);
 
-        if (!$result || !isset($result['classification'])) {
+        if (! $result || ! isset($result['classification'])) {
             Log::warning('ClassifyHarvestedAsset: Classification failed', ['asset_id' => $this->asset->id]);
             $this->asset->update(['status' => 'failed']);
+
             return;
         }
 

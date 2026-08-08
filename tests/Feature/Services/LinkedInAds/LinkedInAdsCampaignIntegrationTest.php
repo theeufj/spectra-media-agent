@@ -16,13 +16,14 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected array $createdCampaignIds = [];
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_LINKEDIN_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_LINKEDIN_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_LINKEDIN_ADS_INTEGRATION_TESTS=true to run.');
         }
 
@@ -38,11 +39,11 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     public function test_creates_sponsored_content_campaign(): void
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->createSponsoredContentCampaign([
-            'name'         => 'PHPUnit Sponsored Content ' . now()->timestamp,
+        $result = $service->createSponsoredContentCampaign([
+            'name' => 'PHPUnit Sponsored Content '.now()->timestamp,
             'daily_budget' => 50,
-            'objective'    => 'WEBSITE_VISITS',
-            'status'       => 'PAUSED',
+            'objective' => 'WEBSITE_VISITS',
+            'status' => 'PAUSED',
         ]);
 
         $this->assertNotNull($result);
@@ -60,11 +61,11 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     public function test_creates_message_ads_campaign(): void
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->createMessageAdsCampaign([
-            'name'         => 'PHPUnit Message Ads ' . now()->timestamp,
+        $result = $service->createMessageAdsCampaign([
+            'name' => 'PHPUnit Message Ads '.now()->timestamp,
             'daily_budget' => 50,
-            'objective'    => 'LEAD_GENERATION',
-            'status'       => 'PAUSED',
+            'objective' => 'LEAD_GENERATION',
+            'status' => 'PAUSED',
         ]);
 
         $this->assertNotNull($result);
@@ -76,8 +77,8 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
 
     public function test_lists_campaigns_for_account(): void
     {
-        $service    = new CampaignService($this->customer);
-        $campaigns  = $service->listCampaigns();
+        $service = new CampaignService($this->customer);
+        $campaigns = $service->listCampaigns();
 
         $this->assertIsArray($campaigns);
     }
@@ -85,12 +86,12 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     public function test_gets_campaign_by_id(): void
     {
         $campaignId = $this->createTestCampaign();
-        if (!$campaignId) {
+        if (! $campaignId) {
             $this->markTestSkipped('Could not create test campaign.');
         }
 
         $service = new CampaignService($this->customer);
-        $result  = $service->getCampaign($campaignId);
+        $result = $service->getCampaign($campaignId);
 
         $this->assertNotNull($result);
     }
@@ -98,12 +99,12 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     public function test_pauses_campaign(): void
     {
         $campaignId = $this->createTestCampaign();
-        if (!$campaignId) {
+        if (! $campaignId) {
             $this->markTestSkipped('Could not create test campaign.');
         }
 
         $service = new CampaignService($this->customer);
-        $result  = $service->updateStatus($campaignId, 'PAUSED');
+        $result = $service->updateStatus($campaignId, 'PAUSED');
 
         $this->assertNotNull($result);
     }
@@ -111,7 +112,7 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     public function test_gets_ad_account_info(): void
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->getAdAccount($this->customer->linkedin_ads_account_id);
+        $result = $service->getAdAccount($this->customer->linkedin_ads_account_id);
 
         // If no ads account is configured this returns null; both are valid
         $this->assertTrue($result === null || is_array($result));
@@ -120,7 +121,7 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     public function test_gets_insight_tag(): void
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->getInsightTag();
+        $result = $service->getInsightTag();
 
         $this->assertTrue($result === null || is_array($result));
     }
@@ -130,17 +131,18 @@ class LinkedInAdsCampaignIntegrationTest extends TestCase
     private function createTestCampaign(): ?string
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->createSponsoredContentCampaign([
-            'name'         => 'PHPUnit Test ' . now()->timestamp . '-' . rand(100, 999),
+        $result = $service->createSponsoredContentCampaign([
+            'name' => 'PHPUnit Test '.now()->timestamp.'-'.rand(100, 999),
             'daily_budget' => 50,
-            'status'       => 'PAUSED',
+            'status' => 'PAUSED',
         ]);
 
-        if (!$result || !isset($result['id'])) {
+        if (! $result || ! isset($result['id'])) {
             return null;
         }
 
         $this->createdCampaignIds[] = $result['id'];
+
         return (string) $result['id'];
     }
 

@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\EmailAttachment;
 use App\Models\EmailInbox;
 use App\Models\EmailMessage;
-use App\Models\EmailAttachment;
 use App\Services\EmailInboxService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,31 +32,31 @@ class EmailInboxController extends Controller
                 ->orderBy('created_at')
                 ->get();
 
-            $latest   = $messages->last();
-            $unread   = $messages->where('direction', 'inbound')->whereNull('read_at')->count();
-            $dirs     = $messages->pluck('direction')->unique()->values();
+            $latest = $messages->last();
+            $unread = $messages->where('direction', 'inbound')->whereNull('read_at')->count();
+            $dirs = $messages->pluck('direction')->unique()->values();
 
             return [
-                'thread_id'     => $threadId,
-                'subject'       => $latest->subject,
-                'snippet'       => $this->snippet($latest),
-                'from'          => $latest->from_address,
-                'date'          => $latest->created_at->toISOString(),
-                'unread'        => $unread,
+                'thread_id' => $threadId,
+                'subject' => $latest->subject,
+                'snippet' => $this->snippet($latest),
+                'from' => $latest->from_address,
+                'date' => $latest->created_at->toISOString(),
+                'unread' => $unread,
                 'message_count' => $messages->count(),
-                'has_inbound'   => $dirs->contains('inbound'),
-                'has_outbound'  => $dirs->contains('outbound'),
-                'messages'      => $messages->map(fn($m) => $this->formatMessage($m))->values(),
+                'has_inbound' => $dirs->contains('inbound'),
+                'has_outbound' => $dirs->contains('outbound'),
+                'messages' => $messages->map(fn ($m) => $this->formatMessage($m))->values(),
             ];
         })->sortByDesc('date')->values();
 
         return Inertia::render('Inbox/Index', [
             'inbox' => [
-                'id'            => $inbox->id,
+                'id' => $inbox->id,
                 'email_address' => $inbox->email_address,
-                'display_name'  => $inbox->display_name,
-                'unread_count'  => $inbox->unreadCount(),
-                'forward_to'    => $inbox->forward_to,
+                'display_name' => $inbox->display_name,
+                'unread_count' => $inbox->unreadCount(),
+                'forward_to' => $inbox->forward_to,
             ],
             'threads' => $threads,
         ]);
@@ -126,7 +126,7 @@ class EmailInboxController extends Controller
     public function attachment(int $id)
     {
         $attachment = EmailAttachment::whereHas('message', function ($q) {
-            $q->whereHas('inbox', fn($q2) => $q2->where('user_id', Auth::id()));
+            $q->whereHas('inbox', fn ($q2) => $q2->where('user_id', Auth::id()));
         })->findOrFail($id);
 
         if (! $attachment->storage_path) {
@@ -152,7 +152,7 @@ class EmailInboxController extends Controller
             'read_at' => $message->read_at?->toISOString(),
             'sent_at' => $message->sent_at?->toISOString(),
             'created_at' => $message->created_at->toISOString(),
-            'attachments' => $message->attachments->map(fn($a) => [
+            'attachments' => $message->attachments->map(fn ($a) => [
                 'id' => $a->id,
                 'filename' => $a->filename,
                 'content_type' => $a->content_type,

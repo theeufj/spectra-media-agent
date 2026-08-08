@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Models\Campaign;
 use App\Models\AgentActivity;
+use App\Models\Campaign;
 use App\Services\Agents\CampaignDiagnosticsAgent;
 use App\Services\Agents\CampaignRemediationAgent;
 use Illuminate\Bus\Queueable;
@@ -29,9 +29,10 @@ use Illuminate\Support\Facades\Log;
  */
 class RunStrategicDiagnosis implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries   = 1;
+    public int $tries = 1;
+
     public int $timeout = 900; // 15 minutes
 
     public function handle(
@@ -46,14 +47,14 @@ class RunStrategicDiagnosis implements ShouldQueue
             ->whereNotIn('status', ['paused', 'draft', 'ended'])
             ->get();
 
-        $totalFindings  = 0;
-        $totalFixed     = 0;
-        $totalAlerts    = 0;
-        $errors         = 0;
+        $totalFindings = 0;
+        $totalFixed = 0;
+        $totalAlerts = 0;
+        $errors = 0;
 
         foreach ($campaigns as $campaign) {
             $lock = Cache::lock("strategic_diagnosis:campaign:{$campaign->id}", 3600);
-            if (!$lock->get()) {
+            if (! $lock->get()) {
                 continue;
             }
 
@@ -66,34 +67,34 @@ class RunStrategicDiagnosis implements ShouldQueue
 
                 $totalFindings += count($findings);
 
-                Log::info('RunStrategicDiagnosis: Findings for campaign ' . $campaign->id, [
+                Log::info('RunStrategicDiagnosis: Findings for campaign '.$campaign->id, [
                     'campaign' => $campaign->name,
-                    'count'    => count($findings),
-                    'types'    => array_column($findings, 'type'),
+                    'count' => count($findings),
+                    'types' => array_column($findings, 'type'),
                 ]);
 
                 $result = $remediationAgent->remediate($campaign, $findings);
 
-                $totalFixed  += count($result['actions_taken'] ?? []);
+                $totalFixed += count($result['actions_taken'] ?? []);
                 $totalAlerts += count($result['alerts_sent'] ?? []);
-                $errors      += count($result['errors'] ?? []);
+                $errors += count($result['errors'] ?? []);
 
-                if (!empty($findings)) {
+                if (! empty($findings)) {
                     AgentActivity::record(
                         'strategic_diagnosis',
                         'diagnosed',
-                        count($findings) . ' strategic issue(s) found in "' . $campaign->name . '"',
+                        count($findings).' strategic issue(s) found in "'.$campaign->name.'"',
                         $campaign->customer_id,
                         $campaign->id,
                         [
-                            'findings'       => array_map(fn($f) => ['type' => $f['type'], 'severity' => $f['severity']], $findings),
-                            'actions_taken'  => $result['actions_taken'] ?? [],
-                            'alerts_sent'    => $result['alerts_sent'] ?? [],
+                            'findings' => array_map(fn ($f) => ['type' => $f['type'], 'severity' => $f['severity']], $findings),
+                            'actions_taken' => $result['actions_taken'] ?? [],
+                            'alerts_sent' => $result['alerts_sent'] ?? [],
                         ]
                     );
                 }
             } catch (\Exception $e) {
-                Log::error('RunStrategicDiagnosis: Error on campaign ' . $campaign->id . ': ' . $e->getMessage());
+                Log::error('RunStrategicDiagnosis: Error on campaign '.$campaign->id.': '.$e->getMessage());
                 $errors++;
             } finally {
                 $lock->release();
@@ -102,19 +103,19 @@ class RunStrategicDiagnosis implements ShouldQueue
 
         Log::info('RunStrategicDiagnosis: Completed', [
             'campaigns_checked' => $campaigns->count(),
-            'total_findings'    => $totalFindings,
-            'auto_fixed'        => $totalFixed,
-            'alerts_sent'       => $totalAlerts,
-            'errors'            => $errors,
+            'total_findings' => $totalFindings,
+            'auto_fixed' => $totalFixed,
+            'alerts_sent' => $totalAlerts,
+            'errors' => $errors,
         ]);
 
         $this->finishRun($runStart, actions: $totalFixed, errors: $errors, warnings: $totalAlerts,
-            scope: $campaigns->count() . ' campaigns', details: ['findings' => $totalFindings]);
+            scope: $campaigns->count().' campaigns', details: ['findings' => $totalFindings]);
     }
 
     public function failed(\Throwable $e): void
     {
-        Log::error('RunStrategicDiagnosis: Job failed — ' . $e->getMessage());
+        Log::error('RunStrategicDiagnosis: Job failed — '.$e->getMessage());
         $this->recordRunFailure($e);
     }
 }

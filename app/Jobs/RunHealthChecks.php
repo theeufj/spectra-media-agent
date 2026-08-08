@@ -5,24 +5,24 @@ namespace App\Jobs;
 use App\Models\Customer;
 use App\Models\Notification;
 use App\Models\User;
-use App\Services\Agents\HealthCheckAgent;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\Agents\HealthCheckAgent;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 
 /**
  * RunHealthChecks Job
- * 
+ *
  * Scheduled job that performs proactive health monitoring on all customer
  * ad accounts and campaigns. Detects issues early and sends alerts.
- * 
+ *
  * Run Schedule: Every 6 hours (recommended)
- * 
+ *
  * Checks Performed:
  * - API connectivity (Google Ads, Facebook Ads)
  * - Token validity and expiration
@@ -33,7 +33,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class RunHealthChecks implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * The number of times the job may be attempted.
@@ -55,7 +55,7 @@ class RunHealthChecks implements ShouldQueue
      */
     public function handle(HealthCheckAgent $healthCheckAgent): void
     {
-        Log::info("RunHealthChecks: Starting health check run");
+        Log::info('RunHealthChecks: Starting health check run');
         $runStart = $this->startRun();
 
         // Only check customers who have at least one active + deployed campaign.
@@ -79,7 +79,7 @@ class RunHealthChecks implements ShouldQueue
 
         foreach ($customers as $customer) {
             try {
-                Log::info("RunHealthChecks: Checking customer health", [
+                Log::info('RunHealthChecks: Checking customer health', [
                     'customer_id' => $customer->id,
                 ]);
 
@@ -108,7 +108,7 @@ class RunHealthChecks implements ShouldQueue
                 Log::error("RunHealthChecks: Error checking customer {$customer->id}", [
                     'error' => $e->getMessage(),
                 ]);
-                $summary['errors'][] = "Customer {$customer->id}: " . $e->getMessage();
+                $summary['errors'][] = "Customer {$customer->id}: ".$e->getMessage();
             }
         }
 
@@ -118,12 +118,12 @@ class RunHealthChecks implements ShouldQueue
             'summary' => $summary,
         ], now()->addDay());
 
-        Log::info("RunHealthChecks: Completed health check run", $summary);
+        Log::info('RunHealthChecks: Completed health check run', $summary);
 
         $this->finishRun($runStart,
             actions: ($summary['critical'] ?? 0) + ($summary['unhealthy'] ?? 0),
             errors: count($summary['errors'] ?? []),
-            scope: $customers->count() . ' customers',
+            scope: $customers->count().' customers',
             details: ['critical' => $summary['critical'] ?? 0, 'unhealthy' => $summary['unhealthy'] ?? 0]
         );
 
@@ -142,6 +142,7 @@ class RunHealthChecks implements ShouldQueue
         $dedupeKey = "health_alert_sent:{$customer->id}:{$results['overall_health']}";
         if (Cache::has($dedupeKey)) {
             Log::info("RunHealthChecks: Suppressing duplicate health alert for customer {$customer->id} (already sent within 24h)");
+
             return;
         }
         Cache::put($dedupeKey, true, now()->addHours(24));
@@ -182,14 +183,14 @@ class RunHealthChecks implements ShouldQueue
                 );
             }
 
-            Log::info("RunHealthChecks: Health alert queued", [
+            Log::info('RunHealthChecks: Health alert queued', [
                 'customer_id' => $customer->id,
                 'overall_health' => $results['overall_health'],
                 'recipients' => $customer->users->pluck('email')->filter()->values()->all(),
                 'issues_count' => count($results['issues'] ?? []),
             ]);
         } catch (\Exception $e) {
-            Log::error("RunHealthChecks: Failed to send health alert", [
+            Log::error('RunHealthChecks: Failed to send health alert', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
             ]);
@@ -211,7 +212,7 @@ class RunHealthChecks implements ShouldQueue
         // Store health history for trending
         $historyKey = "health_check:customer:{$customer->id}:history";
         $history = Cache::get($historyKey, []);
-        
+
         // Keep last 30 days of history
         $history[] = [
             'timestamp' => now()->toIso8601String(),
@@ -219,12 +220,12 @@ class RunHealthChecks implements ShouldQueue
             'issues_count' => count($results['issues'] ?? []),
             'warnings_count' => count($results['warnings'] ?? []),
         ];
-        
+
         // Trim to last 30 entries
         if (count($history) > 30) {
             $history = array_slice($history, -30);
         }
-        
+
         Cache::put($historyKey, $history, now()->addDays(31));
     }
 
@@ -237,6 +238,7 @@ class RunHealthChecks implements ShouldQueue
 
         if ($admins->isEmpty()) {
             Log::warning('RunHealthChecks: No admin users found for health summary notification');
+
             return;
         }
 
@@ -262,7 +264,7 @@ class RunHealthChecks implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error("RunHealthChecks: Job failed", [
+        Log::error('RunHealthChecks: Job failed', [
             'error' => $exception->getMessage(),
             'trace' => $exception->getTraceAsString(),
         ]);

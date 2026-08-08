@@ -28,8 +28,9 @@ class SetConversionPrimaries extends Command
     public function handle(): int
     {
         $customer = Customer::find($this->argument('customer'));
-        if (!$customer || !$customer->google_ads_customer_id) {
+        if (! $customer || ! $customer->google_ads_customer_id) {
             $this->error('Customer not found or has no Google Ads account.');
+
             return 1;
         }
 
@@ -37,17 +38,19 @@ class SetConversionPrimaries extends Command
         $apply = (bool) $this->option('apply');
         $customerId = $customer->cleanGoogleCustomerId();
 
-        $svc = new class($customer) extends BaseGoogleAdsService {
+        $svc = new class($customer) extends BaseGoogleAdsService
+        {
             public function actions(string $cid): array
             {
                 $this->ensureClient();
                 $rows = [];
-                $q = "SELECT conversion_action.resource_name, conversion_action.name, conversion_action.primary_for_goal "
-                    . "FROM conversion_action WHERE conversion_action.status = 'ENABLED'";
+                $q = 'SELECT conversion_action.resource_name, conversion_action.name, conversion_action.primary_for_goal '
+                    ."FROM conversion_action WHERE conversion_action.status = 'ENABLED'";
                 foreach ($this->searchQuery($cid, $q)->iterateAllElements() as $row) {
                     $ca = $row->getConversionAction();
                     $rows[] = ['resource' => $ca->getResourceName(), 'name' => $ca->getName(), 'primary' => $ca->getPrimaryForGoal()];
                 }
+
                 return $rows;
             }
 
@@ -56,7 +59,7 @@ class SetConversionPrimaries extends Command
                 return count($this->client->getConversionActionServiceClient()
                     ->mutateConversionActions(new MutateConversionActionsRequest([
                         'customer_id' => $cid,
-                        'operations'  => $ops,
+                        'operations' => $ops,
                     ]))->getResults());
             }
         };
@@ -79,7 +82,7 @@ class SetConversionPrimaries extends Command
 
             if ($changing) {
                 $ca = new ConversionAction(['resource_name' => $a['resource'], 'primary_for_goal' => $shouldBePrimary]);
-                $op = new ConversionActionOperation();
+                $op = new ConversionActionOperation;
                 $op->setUpdate($ca);
                 $op->setUpdateMask(new FieldMask(['paths' => ['primary_for_goal']]));
                 $ops[] = $op;
@@ -88,16 +91,19 @@ class SetConversionPrimaries extends Command
 
         if (empty($ops)) {
             $this->info('Nothing to change.');
+
             return 0;
         }
 
-        if (!$apply) {
-            $this->warn(count($ops) . ' change(s) pending. Re-run with --apply to mutate.');
+        if (! $apply) {
+            $this->warn(count($ops).' change(s) pending. Re-run with --apply to mutate.');
+
             return 0;
         }
 
         $n = $svc->mutate($customerId, $ops);
         $this->info("Applied {$n} conversion-action change(s).");
+
         return 0;
     }
 }

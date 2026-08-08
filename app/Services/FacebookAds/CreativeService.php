@@ -2,8 +2,8 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class CreativeService extends BaseFacebookAdsService
 {
@@ -15,13 +15,12 @@ class CreativeService extends BaseFacebookAdsService
     /**
      * Create a new creative with image.
      *
-     * @param string $accountId Ad account ID (without 'act_' prefix)
-     * @param string $creativeName Name for the creative
-     * @param string $imageUrl URL of the image
-     * @param string $headline Ad headline
-     * @param string $description Ad description
-     * @param string $callToAction Call to action text
-     * @return ?array
+     * @param  string  $accountId  Ad account ID (without 'act_' prefix)
+     * @param  string  $creativeName  Name for the creative
+     * @param  string  $imageUrl  URL of the image
+     * @param  string  $headline  Ad headline
+     * @param  string  $description  Ad description
+     * @param  string  $callToAction  Call to action text
      */
     public function createImageCreative(
         string $accountId,
@@ -33,13 +32,14 @@ class CreativeService extends BaseFacebookAdsService
         ?string $linkUrl = null
     ): ?array {
         $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
-        if (!$pageId) {
-            Log::error("No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env", ['customer_id' => $this->customer->id]);
+        if (! $pageId) {
+            Log::error('No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env', ['customer_id' => $this->customer->id]);
+
             return null;
         }
 
         $imageHash = $this->uploadImage($accountId, $imageUrl);
-        if (!$imageHash) {
+        if (! $imageHash) {
             return null;
         }
 
@@ -51,11 +51,11 @@ class CreativeService extends BaseFacebookAdsService
                 'object_story_spec' => json_encode([
                     'page_id' => $pageId,
                     'link_data' => [
-                        'image_hash'          => $imageHash,
-                        'link'                => $destination,
-                        'message'             => $description,
-                        'name'                => $headline,
-                        'call_to_action'      => ['type' => $callToAction],
+                        'image_hash' => $imageHash,
+                        'link' => $destination,
+                        'message' => $description,
+                        'name' => $headline,
+                        'call_to_action' => ['type' => $callToAction],
                     ],
                 ]),
             ]);
@@ -65,21 +65,24 @@ class CreativeService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'creative_id' => $response['id'],
                 ]);
+
                 return $response;
             }
 
-            Log::error("Failed to create image creative", [
+            Log::error('Failed to create image creative', [
                 'customer_id' => $this->customer->id,
                 'account_id' => $accountId,
                 'response' => $response,
             ]);
+
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating image creative: " . $e->getMessage(), [
+            Log::error('Error creating image creative: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -87,12 +90,11 @@ class CreativeService extends BaseFacebookAdsService
     /**
      * Create a new creative with video.
      *
-     * @param string $accountId Ad account ID (without 'act_' prefix)
-     * @param string $creativeName Name for the creative
-     * @param string $videoUrl URL of the video
-     * @param string $headline Ad headline
-     * @param string $description Ad description
-     * @return ?array
+     * @param  string  $accountId  Ad account ID (without 'act_' prefix)
+     * @param  string  $creativeName  Name for the creative
+     * @param  string  $videoUrl  URL of the video
+     * @param  string  $headline  Ad headline
+     * @param  string  $description  Ad description
      */
     public function createVideoCreative(
         string $accountId,
@@ -104,13 +106,14 @@ class CreativeService extends BaseFacebookAdsService
         ?string $linkUrl = null
     ): ?array {
         $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
-        if (!$pageId) {
-            Log::error("No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env", ['customer_id' => $this->customer->id]);
+        if (! $pageId) {
+            Log::error('No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env', ['customer_id' => $this->customer->id]);
+
             return null;
         }
 
         $videoId = $this->uploadVideo($accountId, $videoUrl);
-        if (!$videoId) {
+        if (! $videoId) {
             return null;
         }
 
@@ -122,12 +125,12 @@ class CreativeService extends BaseFacebookAdsService
 
         try {
             $videoData = [
-                'video_id'         => $videoId,
-                'title'            => $headline,
-                'message'          => $description,
+                'video_id' => $videoId,
+                'title' => $headline,
+                'message' => $description,
                 'link_description' => $description,
-                'call_to_action'   => [
-                    'type'  => $callToAction,
+                'call_to_action' => [
+                    'type' => $callToAction,
                     'value' => ['link' => $destination],
                 ],
             ];
@@ -139,7 +142,7 @@ class CreativeService extends BaseFacebookAdsService
             $response = $this->post("/act_{$accountId}/adcreatives", [
                 'name' => $creativeName,
                 'object_story_spec' => json_encode([
-                    'page_id'    => $pageId,
+                    'page_id' => $pageId,
                     'video_data' => $videoData,
                 ]),
             ]);
@@ -149,21 +152,24 @@ class CreativeService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'creative_id' => $response['id'],
                 ]);
+
                 return $response;
             }
 
-            Log::error("Failed to create video creative", [
+            Log::error('Failed to create video creative', [
                 'customer_id' => $this->customer->id,
                 'account_id' => $accountId,
                 'response' => $response,
             ]);
+
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating video creative: " . $e->getMessage(), [
+            Log::error('Error creating video creative: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -206,7 +212,7 @@ class CreativeService extends BaseFacebookAdsService
             }
 
             foreach ($thumbnails as $thumb) {
-                if (!empty($thumb['is_preferred'])) {
+                if (! empty($thumb['is_preferred'])) {
                     return $thumb['uri'];
                 }
             }
@@ -215,14 +221,15 @@ class CreativeService extends BaseFacebookAdsService
         }
 
         Log::warning("FacebookCreativeService: Could not fetch video thumbnail for video {$videoId}");
+
         return null;
     }
 
     /**
      * Upload an image to the ad account.
      *
-     * @param string $accountId Ad account ID (without 'act_' prefix)
-     * @param string $imageUrl URL of the image (S3 URL or public URL)
+     * @param  string  $accountId  Ad account ID (without 'act_' prefix)
+     * @param  string  $imageUrl  URL of the image (S3 URL or public URL)
      * @return ?string Image hash
      */
     protected function uploadImage(string $accountId, string $imageUrl): ?string
@@ -231,14 +238,16 @@ class CreativeService extends BaseFacebookAdsService
             // Download the image from S3 or public URL
             $imageContent = @file_get_contents($imageUrl);
             if ($imageContent === false) {
-                Log::error("Failed to download image from URL", ['url' => $imageUrl]);
+                Log::error('Failed to download image from URL', ['url' => $imageUrl]);
+
                 return null;
             }
 
             // Create temporary file
-            $tempPath = sys_get_temp_dir() . '/' . uniqid('fb_image_') . '.jpg';
+            $tempPath = sys_get_temp_dir().'/'.uniqid('fb_image_').'.jpg';
             if (file_put_contents($tempPath, $imageContent) === false) {
-                Log::error("Failed to write image to temp file", ['temp_path' => $tempPath]);
+                Log::error('Failed to write image to temp file', ['temp_path' => $tempPath]);
+
                 return null;
             }
 
@@ -246,7 +255,7 @@ class CreativeService extends BaseFacebookAdsService
                 // Upload to Facebook using multipart form
                 $response = \Http::asMultipart()
                     ->attach('source', fopen($tempPath, 'r'), basename($tempPath))
-                    ->post($this->getBaseUrl() . "/act_{$accountId}/adimages", [
+                    ->post($this->getBaseUrl()."/act_{$accountId}/adimages", [
                         'access_token' => $this->accessToken,
                     ]);
 
@@ -255,23 +264,24 @@ class CreativeService extends BaseFacebookAdsService
 
                 if ($response->successful()) {
                     $data = $response->json();
-                    
+
                     if (isset($data['images'])) {
                         // Facebook returns images as associative array with filename as key
                         $firstImage = reset($data['images']);
                         $imageHash = $firstImage['hash'] ?? null;
-                        
+
                         if ($imageHash) {
-                            Log::info("Successfully uploaded image to Facebook", [
+                            Log::info('Successfully uploaded image to Facebook', [
                                 'account_id' => $accountId,
                                 'image_hash' => $imageHash,
                             ]);
+
                             return $imageHash;
                         }
                     }
                 }
 
-                Log::error("Failed to upload image to Facebook", [
+                Log::error('Failed to upload image to Facebook', [
                     'account_id' => $accountId,
                     'status' => $response->status(),
                     'response' => $response->json(),
@@ -285,11 +295,12 @@ class CreativeService extends BaseFacebookAdsService
             }
 
         } catch (\Exception $e) {
-            Log::error("Error uploading image to Facebook: " . $e->getMessage(), [
+            Log::error('Error uploading image to Facebook: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'image_url' => $imageUrl,
             ]);
+
             return null;
         }
     }
@@ -297,8 +308,8 @@ class CreativeService extends BaseFacebookAdsService
     /**
      * Upload a video to the ad account.
      *
-     * @param string $accountId Ad account ID (without 'act_' prefix)
-     * @param string $videoUrl URL of the video (S3 URL or public URL)
+     * @param  string  $accountId  Ad account ID (without 'act_' prefix)
+     * @param  string  $videoUrl  URL of the video (S3 URL or public URL)
      * @return ?string Video ID
      */
     protected function uploadVideo(string $accountId, string $videoUrl): ?string
@@ -307,14 +318,16 @@ class CreativeService extends BaseFacebookAdsService
             // Download the video from S3 or public URL
             $videoContent = @file_get_contents($videoUrl);
             if ($videoContent === false) {
-                Log::error("Failed to download video from URL", ['url' => $videoUrl]);
+                Log::error('Failed to download video from URL', ['url' => $videoUrl]);
+
                 return null;
             }
 
             // Create temporary file
-            $tempPath = sys_get_temp_dir() . '/' . uniqid('fb_video_') . '.mp4';
+            $tempPath = sys_get_temp_dir().'/'.uniqid('fb_video_').'.mp4';
             if (file_put_contents($tempPath, $videoContent) === false) {
-                Log::error("Failed to write video to temp file", ['temp_path' => $tempPath]);
+                Log::error('Failed to write video to temp file', ['temp_path' => $tempPath]);
+
                 return null;
             }
 
@@ -322,19 +335,20 @@ class CreativeService extends BaseFacebookAdsService
                 // For videos, we need to use the resumable upload API for files > 10MB
                 // For simplicity, using direct upload for smaller files
                 $fileSize = filesize($tempPath);
-                
+
                 if ($fileSize > 10 * 1024 * 1024) { // 10MB
-                    Log::info("Using resumable upload for large video", [
+                    Log::info('Using resumable upload for large video', [
                         'account_id' => $accountId,
                         'file_size' => $fileSize,
                     ]);
+
                     return $this->uploadLargeVideo($accountId, $tempPath);
                 }
 
                 // Upload small video directly
                 $response = \Http::asMultipart()
                     ->attach('source', fopen($tempPath, 'r'), basename($tempPath))
-                    ->post($this->getBaseUrl() . "/act_{$accountId}/advideos", [
+                    ->post($this->getBaseUrl()."/act_{$accountId}/advideos", [
                         'access_token' => $this->accessToken,
                     ]);
 
@@ -344,17 +358,18 @@ class CreativeService extends BaseFacebookAdsService
                 if ($response->successful()) {
                     $data = $response->json();
                     $videoId = $data['id'] ?? null;
-                    
+
                     if ($videoId) {
-                        Log::info("Successfully uploaded video to Facebook", [
+                        Log::info('Successfully uploaded video to Facebook', [
                             'account_id' => $accountId,
                             'video_id' => $videoId,
                         ]);
+
                         return $videoId;
                     }
                 }
 
-                Log::error("Failed to upload video to Facebook", [
+                Log::error('Failed to upload video to Facebook', [
                     'account_id' => $accountId,
                     'status' => $response->status(),
                     'response' => $response->json(),
@@ -368,11 +383,12 @@ class CreativeService extends BaseFacebookAdsService
             }
 
         } catch (\Exception $e) {
-            Log::error("Error uploading video to Facebook: " . $e->getMessage(), [
+            Log::error('Error uploading video to Facebook: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'video_url' => $videoUrl,
             ]);
+
             return null;
         }
     }
@@ -380,23 +396,24 @@ class CreativeService extends BaseFacebookAdsService
     /**
      * Upload large video using resumable upload.
      *
-     * @param string $accountId Ad account ID
-     * @param string $filePath Path to video file
+     * @param  string  $accountId  Ad account ID
+     * @param  string  $filePath  Path to video file
      * @return ?string Video ID
      */
     private function uploadLargeVideo(string $accountId, string $filePath): ?string
     {
         try {
             $fileSize = filesize($filePath);
-            
+
             // Step 1: Initialize upload session
             $initResponse = $this->post("/act_{$accountId}/advideos", [
                 'upload_phase' => 'start',
                 'file_size' => $fileSize,
             ]);
 
-            if (!$initResponse || !isset($initResponse['upload_session_id'])) {
-                Log::error("Failed to initialize video upload session");
+            if (! $initResponse || ! isset($initResponse['upload_session_id'])) {
+                Log::error('Failed to initialize video upload session');
+
                 return null;
             }
 
@@ -412,18 +429,19 @@ class CreativeService extends BaseFacebookAdsService
 
             $transferResponse = \Http::asMultipart()
                 ->attach('video_file_chunk', $videoChunk, basename($filePath))
-                ->post($this->getBaseUrl() . "/act_{$accountId}/advideos", [
+                ->post($this->getBaseUrl()."/act_{$accountId}/advideos", [
                     'access_token' => $this->accessToken,
                     'upload_phase' => 'transfer',
                     'upload_session_id' => $uploadSessionId,
                     'start_offset' => $startOffset,
                 ]);
 
-            if (!$transferResponse->successful()) {
-                Log::error("Failed to transfer video chunk", [
+            if (! $transferResponse->successful()) {
+                Log::error('Failed to transfer video chunk', [
                     'status' => $transferResponse->status(),
                     'response' => $transferResponse->json(),
                 ]);
+
                 return null;
             }
 
@@ -434,18 +452,20 @@ class CreativeService extends BaseFacebookAdsService
             ]);
 
             if ($finalizeResponse && isset($finalizeResponse['id'])) {
-                Log::info("Successfully uploaded large video", [
+                Log::info('Successfully uploaded large video', [
                     'account_id' => $accountId,
                     'video_id' => $finalizeResponse['id'],
                     'file_size' => $fileSize,
                 ]);
+
                 return $finalizeResponse['id'];
             }
 
             return null;
 
         } catch (\Exception $e) {
-            Log::error("Error in resumable video upload: " . $e->getMessage());
+            Log::error('Error in resumable video upload: '.$e->getMessage());
+
             return null;
         }
     }
@@ -453,8 +473,7 @@ class CreativeService extends BaseFacebookAdsService
     /**
      * Get pages associated with the account.
      *
-     * @param string $accountId Ad account ID
-     * @return array
+     * @param  string  $accountId  Ad account ID
      */
     protected function getPagesForAccount(string $accountId): array
     {
@@ -465,13 +484,15 @@ class CreativeService extends BaseFacebookAdsService
                 return array_column($response['data'], 'id');
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting pages: " . $e->getMessage());
+            Log::error('Error getting pages: '.$e->getMessage());
+
             return [];
         }
     }
@@ -479,11 +500,9 @@ class CreativeService extends BaseFacebookAdsService
     /**
      * Create a carousel creative with multiple images.
      *
-     * @param string $accountId  Ad account ID (without 'act_' prefix)
-     * @param string $creativeName
-     * @param array  $cards  Each card: ['picture'=>url, 'name'=>headline, 'description'=>body, 'link'=>url]
-     * @param string $linkUrl  Fallback link used on child cards without their own link
-     * @return ?array
+     * @param  string  $accountId  Ad account ID (without 'act_' prefix)
+     * @param  array  $cards  Each card: ['picture'=>url, 'name'=>headline, 'description'=>body, 'link'=>url]
+     * @param  string  $linkUrl  Fallback link used on child cards without their own link
      */
     public function createCarouselCreative(
         string $accountId,
@@ -493,19 +512,20 @@ class CreativeService extends BaseFacebookAdsService
         string $message = ''
     ): ?array {
         $pageId = config('services.facebook.page_id') ?: $this->customer->facebook_page_id;
-        if (!$pageId) {
-            Log::error("No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env", ['customer_id' => $this->customer->id]);
+        if (! $pageId) {
+            Log::error('No Facebook Page ID configured — set FACEBOOK_PAGE_ID in .env', ['customer_id' => $this->customer->id]);
+
             return null;
         }
 
         $childAttachments = [];
         foreach ($cards as $card) {
             $attachment = [
-                'link'        => $card['link'] ?? $linkUrl,
-                'name'        => $card['name'] ?? '',
+                'link' => $card['link'] ?? $linkUrl,
+                'name' => $card['name'] ?? '',
                 'description' => $card['description'] ?? '',
             ];
-            if (!empty($card['picture'])) {
+            if (! empty($card['picture'])) {
                 $imageHash = $this->uploadImage($accountId, $card['picture']);
                 if ($imageHash) {
                     $attachment['image_hash'] = $imageHash;
@@ -515,10 +535,10 @@ class CreativeService extends BaseFacebookAdsService
         }
 
         $linkData = [
-            'link'                  => $linkUrl,
-            'child_attachments'     => $childAttachments,
+            'link' => $linkUrl,
+            'child_attachments' => $childAttachments,
             'multi_share_optimized' => true,
-            'call_to_action'        => ['type' => 'LEARN_MORE'],
+            'call_to_action' => ['type' => 'LEARN_MORE'],
         ];
 
         if ($message !== '') {
@@ -529,7 +549,7 @@ class CreativeService extends BaseFacebookAdsService
             $response = $this->post("/act_{$accountId}/adcreatives", [
                 'name' => $creativeName,
                 'object_story_spec' => json_encode([
-                    'page_id'   => $pageId,
+                    'page_id' => $pageId,
                     'link_data' => $linkData,
                 ]),
             ]);
@@ -538,27 +558,28 @@ class CreativeService extends BaseFacebookAdsService
                 Log::info("Created carousel creative for account {$accountId}", [
                     'customer_id' => $this->customer->id,
                     'creative_id' => $response['id'],
-                    'card_count'  => count($cards),
+                    'card_count' => count($cards),
                 ]);
+
                 return $response;
             }
 
-            Log::error("Failed to create carousel creative", ['customer_id' => $this->customer->id, 'response' => $response]);
+            Log::error('Failed to create carousel creative', ['customer_id' => $this->customer->id, 'response' => $response]);
+
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating carousel creative: " . $e->getMessage(), [
-                'exception'  => $e,
+            Log::error('Error creating carousel creative: '.$e->getMessage(), [
+                'exception' => $e,
                 'account_id' => $accountId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
 
     /**
      * Get the website from the customer record.
-     *
-     * @return ?string
      */
     protected function getPageWebsite(): ?string
     {

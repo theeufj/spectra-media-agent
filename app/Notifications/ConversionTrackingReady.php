@@ -27,7 +27,7 @@ class ConversionTrackingReady extends Notification implements ShouldQueue
 
         return (new MailMessage)
             ->subject('Action required: install your conversion tracking snippet')
-            ->greeting('Hi ' . $notifiable->name . ',')
+            ->greeting('Hi '.$notifiable->name.',')
             ->line("We've set up conversion tracking for **{$this->customer->name}**. Your Google Tag Manager container is provisioned and all ad conversion tags are configured.")
             ->line('The final step is adding a small snippet to your website — it takes about two minutes.')
             ->action('Install snippet →', $setupUrl)
@@ -38,7 +38,7 @@ class ConversionTrackingReady extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
-            'type'        => 'conversion_tracking_ready',
+            'type' => 'conversion_tracking_ready',
             'customer_id' => $this->customer->id,
         ];
     }

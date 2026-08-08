@@ -9,12 +9,7 @@ use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\ExecutionResult;
 use App\Services\Agents\FacebookAdsExecutionAgent;
 use App\Services\Agents\ValidationResult;
-use App\Services\FacebookAds\AdService;
-use App\Services\FacebookAds\AdSetService;
-use App\Services\FacebookAds\CampaignService;
-use App\Services\FacebookAds\CreativeService;
 use App\Services\GeminiService;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
@@ -38,7 +33,7 @@ class FacebookAdsExecutionAgentTest extends TestCase
             'facebook_ads_account_id' => 'act_123456789',
             'facebook_page_id' => '999888777',
         ]);
-        if (!$customer->id) {
+        if (! $customer->id) {
             $customer->id = 1;
         }
 

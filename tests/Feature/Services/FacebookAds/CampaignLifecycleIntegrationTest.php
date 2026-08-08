@@ -20,25 +20,29 @@ class CampaignLifecycleIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected string $accountId;
 
     protected array $createdCampaignIds = [];
-    protected array $createdAdSetIds    = [];
-    protected array $createdAdIds       = [];
+
+    protected array $createdAdSetIds = [];
+
+    protected array $createdAdIds = [];
+
     protected array $createdCreativeIds = [];
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
+        if (! env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_FACEBOOK_INTEGRATION_TESTS=true to run.');
         }
 
         config(['services.facebook.system_user_token' => env('FACEBOOK_SYSTEM_USER_TOKEN')]);
-        config(['services.facebook.page_id'           => env('FACEBOOK_PAGE_ID')]);
+        config(['services.facebook.page_id' => env('FACEBOOK_PAGE_ID')]);
 
-        $this->customer  = Customer::whereNotNull('facebook_ads_account_id')->firstOrFail();
+        $this->customer = Customer::whereNotNull('facebook_ads_account_id')->firstOrFail();
         $this->accountId = $this->customer->facebook_ads_account_id;
     }
 
@@ -50,13 +54,13 @@ class CampaignLifecycleIntegrationTest extends TestCase
 
     public function test_creates_traffic_campaign_and_returns_id(): void
     {
-        $service    = new CampaignService($this->customer);
-        $result     = $service->createCampaign(
-            accountId:    $this->accountId,
-            campaignName: 'PHPUnit Traffic Test ' . now()->timestamp,
-            objective:    'OUTCOME_TRAFFIC',
-            dailyBudget:  500,
-            status:       'PAUSED',
+        $service = new CampaignService($this->customer);
+        $result = $service->createCampaign(
+            accountId: $this->accountId,
+            campaignName: 'PHPUnit Traffic Test '.now()->timestamp,
+            objective: 'OUTCOME_TRAFFIC',
+            dailyBudget: 500,
+            status: 'PAUSED',
         );
 
         $this->assertNotNull($result);
@@ -69,12 +73,12 @@ class CampaignLifecycleIntegrationTest extends TestCase
     public function test_creates_leads_campaign(): void
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->createCampaign(
-            accountId:    $this->accountId,
-            campaignName: 'PHPUnit Leads Test ' . now()->timestamp,
-            objective:    'OUTCOME_LEADS',
-            dailyBudget:  500,
-            status:       'PAUSED',
+        $result = $service->createCampaign(
+            accountId: $this->accountId,
+            campaignName: 'PHPUnit Leads Test '.now()->timestamp,
+            objective: 'OUTCOME_LEADS',
+            dailyBudget: 500,
+            status: 'PAUSED',
         );
 
         $this->assertNotNull($result);
@@ -88,12 +92,12 @@ class CampaignLifecycleIntegrationTest extends TestCase
         $campaignId = $this->createTestCampaign();
 
         $service = new AdSetService($this->customer);
-        $result  = $service->createAdSet(
-            accountId:   $this->accountId,
-            campaignId:  $campaignId,
-            adSetName:   'PHPUnit Ad Set ' . now()->timestamp,
-            targeting:   ['geo_locations' => ['countries' => ['US', 'AU']]],
-            status:      'PAUSED',
+        $result = $service->createAdSet(
+            accountId: $this->accountId,
+            campaignId: $campaignId,
+            adSetName: 'PHPUnit Ad Set '.now()->timestamp,
+            targeting: ['geo_locations' => ['countries' => ['US', 'AU']]],
+            status: 'PAUSED',
         );
 
         $this->assertNotNull($result);
@@ -105,14 +109,14 @@ class CampaignLifecycleIntegrationTest extends TestCase
     public function test_creates_image_creative(): void
     {
         $service = new CreativeService($this->customer);
-        $result  = $service->createImageCreative(
-            accountId:    $this->accountId,
-            creativeName: 'PHPUnit Creative ' . now()->timestamp,
-            imageUrl:     'https://picsum.photos/1200/628',
-            headline:     'Grow Your Business Fast',
-            description:  'AI-powered Google Ads management that actually converts.',
+        $result = $service->createImageCreative(
+            accountId: $this->accountId,
+            creativeName: 'PHPUnit Creative '.now()->timestamp,
+            imageUrl: 'https://picsum.photos/1200/628',
+            headline: 'Grow Your Business Fast',
+            description: 'AI-powered Google Ads management that actually converts.',
             callToAction: 'LEARN_MORE',
-            linkUrl:      $this->customer->website ?? 'https://sitetospend.com',
+            linkUrl: $this->customer->website ?? 'https://sitetospend.com',
         );
 
         $this->assertNotNull($result);
@@ -126,31 +130,31 @@ class CampaignLifecycleIntegrationTest extends TestCase
         $campaignId = $this->createTestCampaign();
 
         $adSetService = new AdSetService($this->customer);
-        $adSetResult  = $adSetService->createAdSet(
-            accountId:  $this->accountId,
+        $adSetResult = $adSetService->createAdSet(
+            accountId: $this->accountId,
             campaignId: $campaignId,
-            adSetName:  'PHPUnit Ad Set ' . now()->timestamp,
-            status:     'PAUSED',
+            adSetName: 'PHPUnit Ad Set '.now()->timestamp,
+            status: 'PAUSED',
         );
         $this->createdAdSetIds[] = $adSetResult['id'];
 
         $creativeService = new CreativeService($this->customer);
-        $creativeResult  = $creativeService->createImageCreative(
-            accountId:    $this->accountId,
-            creativeName: 'PHPUnit Creative ' . now()->timestamp,
-            imageUrl:     'https://picsum.photos/1200/628',
-            headline:     'Test Headline',
-            description:  'Test description for integration test.',
+        $creativeResult = $creativeService->createImageCreative(
+            accountId: $this->accountId,
+            creativeName: 'PHPUnit Creative '.now()->timestamp,
+            imageUrl: 'https://picsum.photos/1200/628',
+            headline: 'Test Headline',
+            description: 'Test description for integration test.',
         );
         $this->createdCreativeIds[] = $creativeResult['id'];
 
         $adService = new AdService($this->customer);
-        $adResult  = $adService->createAd(
-            accountId:  $this->accountId,
-            adSetId:    $adSetResult['id'],
-            adName:     'PHPUnit Ad ' . now()->timestamp,
+        $adResult = $adService->createAd(
+            accountId: $this->accountId,
+            adSetId: $adSetResult['id'],
+            adName: 'PHPUnit Ad '.now()->timestamp,
             creativeId: $creativeResult['id'],
-            status:     'PAUSED',
+            status: 'PAUSED',
         );
 
         $this->assertNotNull($adResult);
@@ -164,22 +168,22 @@ class CampaignLifecycleIntegrationTest extends TestCase
         $campaignId = $this->createTestCampaign();
 
         $adSetService = new AdSetService($this->customer);
-        $adSetResult  = $adSetService->createAdSet(
-            accountId:  $this->accountId,
+        $adSetResult = $adSetService->createAdSet(
+            accountId: $this->accountId,
             campaignId: $campaignId,
-            adSetName:  'PHPUnit Ad Set',
-            status:     'ACTIVE',
+            adSetName: 'PHPUnit Ad Set',
+            status: 'ACTIVE',
         );
         $this->createdAdSetIds[] = $adSetResult['id'];
 
         $creativeService = new CreativeService($this->customer);
-        $creativeResult  = $creativeService->createImageCreative(
+        $creativeResult = $creativeService->createImageCreative(
             $this->accountId, 'PHPUnit Creative', 'https://picsum.photos/1200/628', 'Headline', 'Description',
         );
         $this->createdCreativeIds[] = $creativeResult['id'];
 
         $adService = new AdService($this->customer);
-        $adResult  = $adService->createAd($this->accountId, $adSetResult['id'], 'PHPUnit Ad', $creativeResult['id'], 'ACTIVE');
+        $adResult = $adService->createAd($this->accountId, $adSetResult['id'], 'PHPUnit Ad', $creativeResult['id'], 'ACTIVE');
         $this->createdAdIds[] = $adResult['id'];
 
         $this->assertTrue($adService->pauseAd($adResult['id']));
@@ -189,7 +193,7 @@ class CampaignLifecycleIntegrationTest extends TestCase
     public function test_lists_campaigns_for_account(): void
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->listCampaigns($this->accountId);
+        $result = $service->listCampaigns($this->accountId);
 
         $this->assertIsArray($result);
         $this->assertNotEmpty($result);
@@ -201,12 +205,12 @@ class CampaignLifecycleIntegrationTest extends TestCase
     private function createTestCampaign(): string
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->createCampaign(
-            accountId:    $this->accountId,
-            campaignName: 'PHPUnit Test ' . now()->timestamp . '-' . rand(100, 999),
-            objective:    'OUTCOME_TRAFFIC',
-            dailyBudget:  500,
-            status:       'PAUSED',
+        $result = $service->createCampaign(
+            accountId: $this->accountId,
+            campaignName: 'PHPUnit Test '.now()->timestamp.'-'.rand(100, 999),
+            objective: 'OUTCOME_TRAFFIC',
+            dailyBudget: 500,
+            status: 'PAUSED',
         );
 
         $this->createdCampaignIds[] = $result['id'];
@@ -216,7 +220,7 @@ class CampaignLifecycleIntegrationTest extends TestCase
 
     private function deleteCreatedResources(): void
     {
-        $token   = config('services.facebook.system_user_token');
+        $token = config('services.facebook.system_user_token');
         $baseUrl = 'https://graph.facebook.com/v22.0';
 
         // Delete in reverse order: ads → ad sets → campaigns (creatives auto-deleted or orphaned)

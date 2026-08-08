@@ -20,8 +20,9 @@ class MicrosoftAdsListUetTags extends Command
             ? Customer::find($customerId)
             : Customer::whereNotNull('microsoft_ads_account_id')->first();
 
-        if (!$customer) {
+        if (! $customer) {
             $this->error('No customer found. Pass --customer-id=N or link an account first.');
+
             return 1;
         }
 
@@ -32,28 +33,29 @@ class MicrosoftAdsListUetTags extends Command
 
         if (empty($tags)) {
             $this->warn('No UET tags found. Run a Microsoft Ads campaign deployment first to auto-create one.');
+
             return 0;
         }
 
         $this->line('');
-        $this->line(str_pad('Tag ID', 15) . str_pad('Name', 40) . 'Status');
+        $this->line(str_pad('Tag ID', 15).str_pad('Name', 40).'Status');
         $this->line(str_repeat('-', 70));
 
         foreach ($tags as $tag) {
-            $id     = $tag['Id'] ?? 'N/A';
-            $name   = $tag['Name'] ?? 'N/A';
+            $id = $tag['Id'] ?? 'N/A';
+            $name = $tag['Name'] ?? 'N/A';
             $status = $tag['TrackingStatus'] ?? 'Unverified';
-            $this->line(str_pad($id, 15) . str_pad($name, 40) . $status);
+            $this->line(str_pad($id, 15).str_pad($name, 40).$status);
         }
 
         $this->line('');
 
         $firstId = $tags[0]['Id'] ?? null;
         if ($firstId) {
-            $this->info("Add to your .env / Forge environment variables:");
+            $this->info('Add to your .env / Forge environment variables:');
             $this->line("  MICROSOFT_ADS_UET_TAG_ID={$firstId}");
             $this->line('');
-            $this->info("Then redeploy — the UET snippet will appear on every page of sitetospend.com automatically.");
+            $this->info('Then redeploy — the UET snippet will appear on every page of sitetospend.com automatically.');
         }
 
         return 0;

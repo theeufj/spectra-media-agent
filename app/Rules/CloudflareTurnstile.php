@@ -18,14 +18,16 @@ class CloudflareTurnstile implements ValidationRule
     {
         // Skip validation if Turnstile is not configured
         $secretKey = config('services.cloudflare.turnstile_secret_key');
-        
+
         if (empty($secretKey)) {
             Log::warning('Cloudflare Turnstile secret key not configured, skipping validation');
+
             return;
         }
 
         if (empty($value)) {
             $fail('Please complete the security verification.');
+
             return;
         }
 
@@ -38,7 +40,7 @@ class CloudflareTurnstile implements ValidationRule
 
             $result = $response->json();
 
-            if (!($result['success'] ?? false)) {
+            if (! ($result['success'] ?? false)) {
                 Log::warning('Cloudflare Turnstile validation failed', [
                     'error_codes' => $result['error-codes'] ?? [],
                     'ip' => request()->ip(),

@@ -9,7 +9,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('customers', function (Blueprint $table) {
-            if (!Schema::hasColumn('customers', 'linkedin_ads_account_id')) {
+            if (! Schema::hasColumn('customers', 'linkedin_ads_account_id')) {
                 $table->string('linkedin_ads_account_id')->nullable()->after('microsoft_ads_account_id');
             }
             // Per-customer OAuth tokens are prohibited by the management account pattern.
@@ -17,7 +17,7 @@ return new class extends Migration
         });
 
         Schema::table('campaigns', function (Blueprint $table) {
-            if (!Schema::hasColumn('campaigns', 'linkedin_campaign_id')) {
+            if (! Schema::hasColumn('campaigns', 'linkedin_campaign_id')) {
                 $table->string('linkedin_campaign_id')->nullable()->after('microsoft_ads_campaign_id');
             }
         });

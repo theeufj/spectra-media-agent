@@ -23,12 +23,12 @@ class SupportTicketController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('subject', 'ilike', "%{$search}%")
-                  ->orWhere('description', 'ilike', "%{$search}%")
-                  ->orWhere('id', '=', is_numeric($search) ? (int) $search : 0)
-                  ->orWhereHas('user', function ($uq) use ($search) {
-                      $uq->where('name', 'ilike', "%{$search}%")
-                         ->orWhere('email', 'ilike', "%{$search}%");
-                  });
+                    ->orWhere('description', 'ilike', "%{$search}%")
+                    ->orWhere('id', '=', is_numeric($search) ? (int) $search : 0)
+                    ->orWhereHas('user', function ($uq) use ($search) {
+                        $uq->where('name', 'ilike', "%{$search}%")
+                            ->orWhere('email', 'ilike', "%{$search}%");
+                    });
             });
         }
 
@@ -84,7 +84,7 @@ class SupportTicketController extends Controller
             'assigned_to' => 'sometimes|nullable|exists:users,id',
         ]);
 
-        if (isset($validated['status']) && in_array($validated['status'], ['resolved', 'closed']) && !$supportTicket->resolved_at) {
+        if (isset($validated['status']) && in_array($validated['status'], ['resolved', 'closed']) && ! $supportTicket->resolved_at) {
             $validated['resolved_at'] = now();
         }
 

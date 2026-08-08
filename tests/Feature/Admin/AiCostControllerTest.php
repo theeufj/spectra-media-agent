@@ -14,6 +14,7 @@ class AiCostControllerTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private User $regularUser;
 
     protected function setUp(): void
@@ -186,8 +187,8 @@ class AiCostControllerTest extends TestCase
     public function test_surfaces_fallback_events(): void
     {
         AiCost::factory()->create([
-            'model'    => 'gemini-2.5-flash',
-            'cost'     => 0.50,
+            'model' => 'gemini-2.5-flash',
+            'cost' => 0.50,
             'metadata' => ['fallback_from' => 'gemini-3.1-pro-preview'],
         ]);
         AiCost::factory()->create(['metadata' => null, 'cost' => 1.00]); // normal call

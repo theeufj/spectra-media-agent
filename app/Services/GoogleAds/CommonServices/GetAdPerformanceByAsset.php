@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * GetAdPerformanceByAsset Service
- * 
+ *
  * Fetches performance metrics broken down by ad asset (headline, description, image).
  * Used for A/B test analysis and creative optimization.
  */
@@ -17,40 +17,37 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
     /**
      * Get performance metrics for Responsive Search Ad assets.
      *
-     * @param string $customerId
-     * @param string $campaignResourceName
-     * @param string $dateRange
      * @return array Performance data by asset
      */
     public function getResponsiveSearchAdAssets(
-        string $customerId, 
+        string $customerId,
         string $campaignResourceName,
         string $dateRange = 'LAST_30_DAYS'
     ): array {
         $this->ensureClient();
 
         // Query for headline performance
-        $query = "SELECT " .
-                 "ad_group_ad.ad.responsive_search_ad.headlines, " .
-                 "ad_group_ad.ad.responsive_search_ad.descriptions, " .
-                 "ad_group_ad.ad.id, " .
-                 "ad_group_ad.ad.final_urls, " .
-                 "ad_group_ad.status, " .
-                 "ad_group_ad.policy_summary.approval_status, " .
-                 "ad_group_ad_asset_view.field_type, " .
-                 "ad_group_ad_asset_view.performance_label, " .
-                 "asset.text_asset.text, " .
-                 "asset.type, " .
-                 "metrics.impressions, " .
-                 "metrics.clicks, " .
-                 "metrics.conversions, " .
-                 "metrics.cost_micros, " .
-                 "metrics.ctr, " .
-                 "metrics.conversions_value, " .
-                 "campaign.resource_name " .
-                 "FROM ad_group_ad_asset_view " .
-                 "WHERE campaign.resource_name = '$campaignResourceName' " .
-                 "AND segments.date DURING $dateRange " .
+        $query = 'SELECT '.
+                 'ad_group_ad.ad.responsive_search_ad.headlines, '.
+                 'ad_group_ad.ad.responsive_search_ad.descriptions, '.
+                 'ad_group_ad.ad.id, '.
+                 'ad_group_ad.ad.final_urls, '.
+                 'ad_group_ad.status, '.
+                 'ad_group_ad.policy_summary.approval_status, '.
+                 'ad_group_ad_asset_view.field_type, '.
+                 'ad_group_ad_asset_view.performance_label, '.
+                 'asset.text_asset.text, '.
+                 'asset.type, '.
+                 'metrics.impressions, '.
+                 'metrics.clicks, '.
+                 'metrics.conversions, '.
+                 'metrics.cost_micros, '.
+                 'metrics.ctr, '.
+                 'metrics.conversions_value, '.
+                 'campaign.resource_name '.
+                 'FROM ad_group_ad_asset_view '.
+                 "WHERE campaign.resource_name = '$campaignResourceName' ".
+                 "AND segments.date DURING $dateRange ".
                  "AND ad_group_ad_asset_view.field_type IN ('HEADLINE', 'DESCRIPTION')";
 
         try {
@@ -81,7 +78,7 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
                 ];
 
                 // Calculate conversion rate
-                $assetData['conversion_rate'] = $assetData['clicks'] > 0 
+                $assetData['conversion_rate'] = $assetData['clicks'] > 0
                     ? round(($assetData['conversions'] / $assetData['clicks']) * 100, 2)
                     : 0;
 
@@ -94,11 +91,9 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
             }
 
             // Sort by performance (conversions then CTR)
-            usort($assets['headlines'], fn($a, $b) => 
-                $b['conversions'] <=> $a['conversions'] ?: $b['ctr'] <=> $a['ctr']
+            usort($assets['headlines'], fn ($a, $b) => $b['conversions'] <=> $a['conversions'] ?: $b['ctr'] <=> $a['ctr']
             );
-            usort($assets['descriptions'], fn($a, $b) => 
-                $b['conversions'] <=> $a['conversions'] ?: $b['ctr'] <=> $a['ctr']
+            usort($assets['descriptions'], fn ($a, $b) => $b['conversions'] <=> $a['conversions'] ?: $b['ctr'] <=> $a['ctr']
             );
 
             return $assets;
@@ -108,6 +103,7 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
             ]);
+
             return ['headlines' => [], 'descriptions' => []];
         }
     }
@@ -122,18 +118,18 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
     ): array {
         $this->ensureClient();
 
-        $query = "SELECT " .
-                 "asset.image_asset.full_size.url, " .
-                 "asset.name, " .
-                 "asset.type, " .
-                 "campaign_asset.performance_label, " .
-                 "metrics.impressions, " .
-                 "metrics.clicks, " .
-                 "metrics.conversions, " .
-                 "metrics.cost_micros " .
-                 "FROM campaign_asset " .
-                 "WHERE campaign.resource_name = '$campaignResourceName' " .
-                 "AND segments.date DURING $dateRange " .
+        $query = 'SELECT '.
+                 'asset.image_asset.full_size.url, '.
+                 'asset.name, '.
+                 'asset.type, '.
+                 'campaign_asset.performance_label, '.
+                 'metrics.impressions, '.
+                 'metrics.clicks, '.
+                 'metrics.conversions, '.
+                 'metrics.cost_micros '.
+                 'FROM campaign_asset '.
+                 "WHERE campaign.resource_name = '$campaignResourceName' ".
+                 "AND segments.date DURING $dateRange ".
                  "AND asset.type = 'IMAGE'";
 
         try {
@@ -152,8 +148,8 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
                     'performance_label' => $this->formatPerformanceLabel($campaignAsset->getPerformanceLabel()),
                     'impressions' => $metrics->getImpressions(),
                     'clicks' => $metrics->getClicks(),
-                    'ctr' => $metrics->getClicks() > 0 
-                        ? round(($metrics->getClicks() / $metrics->getImpressions()) * 100, 2) 
+                    'ctr' => $metrics->getClicks() > 0
+                        ? round(($metrics->getClicks() / $metrics->getImpressions()) * 100, 2)
                         : 0,
                     'conversions' => $metrics->getConversions(),
                     'cost' => $metrics->getCostMicros() / 1000000,
@@ -161,7 +157,7 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
             }
 
             // Sort by conversions
-            usort($images, fn($a, $b) => $b['conversions'] <=> $a['conversions']);
+            usort($images, fn ($a, $b) => $b['conversions'] <=> $a['conversions']);
 
             return $images;
 
@@ -170,6 +166,7 @@ class GetAdPerformanceByAsset extends BaseGoogleAdsService
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
             ]);
+
             return [];
         }
     }

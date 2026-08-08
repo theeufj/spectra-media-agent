@@ -36,30 +36,23 @@ class GenerateAdCopy implements ShouldQueue
 
     /**
      * Create a new job instance.
-     *
-     * @param Campaign $campaign
-     * @param Strategy $strategy
-     * @param string $platform
      */
     public function __construct(
         protected Campaign $campaign,
         protected Strategy $strategy,
         protected string $platform,
         protected ?int $personaId = null
-    ) {
-    }
+    ) {}
 
     /**
      * Execute the job.
-     *
-     * @return void
      */
     public function handle(): void
     {
         try {
             Log::info("GenerateAdCopy job started for Campaign {$this->campaign->id}.");
             // Initialize services
-            $geminiService = new GeminiService();
+            $geminiService = new GeminiService;
             $adminMonitorService = new AdminMonitorService($geminiService);
 
             // Load persona if specified
@@ -68,7 +61,7 @@ class GenerateAdCopy implements ShouldQueue
             // Get brand guidelines for this customer
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
 
-            if (!$brandGuidelines) {
+            if (! $brandGuidelines) {
                 Log::warning("No brand guidelines found for customer {$this->campaign->customer_id}. Content may lack brand consistency.");
             }
 
@@ -90,7 +83,7 @@ class GenerateAdCopy implements ShouldQueue
                         'features' => $page->metadata['features'] ?? [], // Assuming features might be in metadata
                     ];
                 })->toArray();
-                Log::info("Found " . count($productContext) . " selected product pages for ad copy generation.");
+                Log::info('Found '.count($productContext).' selected product pages for ad copy generation.');
             }
 
             $strategyContent = $this->strategy->ad_copy_strategy;
@@ -121,12 +114,14 @@ class GenerateAdCopy implements ShouldQueue
 
                 if (is_null($generatedResponse)) {
                     Log::error("Failed to get ad copy from Gemini on attempt {$attempt}.");
+
                     continue;
                 }
 
                 $generatedText = $generatedResponse['text'] ?? null;
                 if (is_null($generatedText)) {
                     Log::error("Failed to get ad copy text from Gemini response on attempt {$attempt}.");
+
                     continue;
                 }
 
@@ -136,17 +131,18 @@ class GenerateAdCopy implements ShouldQueue
                     $adCopyData = json_decode($cleanedJson, true);
 
                     if (json_last_error() !== JSON_ERROR_NONE) {
-                        throw new \Exception("JSON decode error: " . json_last_error_msg());
+                        throw new \Exception('JSON decode error: '.json_last_error_msg());
                     }
 
-                    Log::info("Parsed ad copy data from Gemini.", ['ad_copy_data' => $adCopyData]);
+                    Log::info('Parsed ad copy data from Gemini.', ['ad_copy_data' => $adCopyData]);
 
                     // Ensure headlines and descriptions are arrays.
-                    if (!is_array($adCopyData['headlines'] ?? null) || !is_array($adCopyData['descriptions'] ?? null)) {
-                        throw new \Exception("Gemini did not return a valid JSON object with headlines and descriptions arrays.");
+                    if (! is_array($adCopyData['headlines'] ?? null) || ! is_array($adCopyData['descriptions'] ?? null)) {
+                        throw new \Exception('Gemini did not return a valid JSON object with headlines and descriptions arrays.');
                     }
                 } catch (\Exception $e) {
-                    Log::error("Failed to parse Gemini's ad copy response on attempt {$attempt}: " . $e->getMessage(), ['generated_text' => $generatedText]);
+                    Log::error("Failed to parse Gemini's ad copy response on attempt {$attempt}: ".$e->getMessage(), ['generated_text' => $generatedText]);
+
                     continue;
                 }
 
@@ -155,6 +151,7 @@ class GenerateAdCopy implements ShouldQueue
 
                 if (is_null($reviewResults)) {
                     Log::warning("Ad copy review failed on attempt {$attempt}. No review results.");
+
                     continue;
                 }
 
@@ -166,7 +163,7 @@ class GenerateAdCopy implements ShouldQueue
                     Log::warning("Ad copy not approved on attempt {$attempt}.", [
                         'overall_status' => $reviewResults['overall_status'] ?? 'unknown',
                         'feedback' => $reviewResults['programmatic_validation']['feedback'] ?? [],
-                        'violations' => $reviewResults['programmatic_validation']['violations'] ?? []
+                        'violations' => $reviewResults['programmatic_validation']['violations'] ?? [],
                     ]);
                     // Store the feedback for the next attempt.
                     $lastFeedback = $reviewResults['programmatic_validation']['feedback'] ?? [];
@@ -175,7 +172,7 @@ class GenerateAdCopy implements ShouldQueue
 
             if (is_null($approvedAdCopyData)) {
                 Log::error("Failed to generate approved ad copy after {$maxAttempts} attempts for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}. Last feedback: ", ['feedback' => $lastFeedback]);
-                throw new \Exception("Failed to generate approved ad copy after {$maxAttempts} attempts. Last violations: " . json_encode($lastFeedback));
+                throw new \Exception("Failed to generate approved ad copy after {$maxAttempts} attempts. Last violations: ".json_encode($lastFeedback));
             }
 
             $uniqueKeys = ['strategy_id' => $this->strategy->id, 'platform' => $this->platform];
@@ -196,7 +193,7 @@ class GenerateAdCopy implements ShouldQueue
             $this->strategy->update(['collateral_errors' => empty($existing) ? null : $existing]);
 
         } catch (\Exception $e) {
-            Log::error("Error in GenerateAdCopy job for Campaign {$this->campaign->id}: " . $e->getMessage());
+            Log::error("Error in GenerateAdCopy job for Campaign {$this->campaign->id}: ".$e->getMessage());
             $this->fail($e);
         }
     }
@@ -206,7 +203,7 @@ class GenerateAdCopy implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateAdCopy failed: ' . $exception->getMessage(), [
+        Log::error('GenerateAdCopy failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
 

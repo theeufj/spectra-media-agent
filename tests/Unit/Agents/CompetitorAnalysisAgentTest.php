@@ -6,7 +6,6 @@ use App\Models\Competitor;
 use App\Models\Customer;
 use App\Services\Agents\CompetitorAnalysisAgent;
 use App\Services\GeminiService;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
@@ -14,6 +13,7 @@ use Tests\TestCase;
 class CompetitorAnalysisAgentTest extends TestCase
 {
     protected CompetitorAnalysisAgent $agent;
+
     protected GeminiService $geminiMock;
 
     protected function setUp(): void

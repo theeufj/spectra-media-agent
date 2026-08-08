@@ -24,7 +24,7 @@ return new class extends Migration
             $table->json('data')->nullable(); // Additional contextual data
             $table->timestamp('read_at')->nullable();
             $table->timestamps();
-            
+
             // Indexes for common queries
             $table->index(['user_id', 'read_at']);
             $table->index(['user_id', 'created_at']);

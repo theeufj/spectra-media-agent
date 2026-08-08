@@ -9,7 +9,6 @@ use App\Models\Customer;
 use App\Models\HarvestedAsset;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
-use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -21,7 +20,7 @@ class HarvestedAssetController extends Controller
     public function index(Request $request)
     {
         $customer = $this->resolveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return response()->json(['assets' => []]);
         }
 
@@ -53,7 +52,7 @@ class HarvestedAssetController extends Controller
     public function harvest(Request $request)
     {
         $customer = $this->resolveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -90,7 +89,7 @@ class HarvestedAssetController extends Controller
         ]);
 
         $customer = $this->resolveCustomer($request);
-        if (!$customer || $asset->customer_id !== $customer->id) {
+        if (! $customer || $asset->customer_id !== $customer->id) {
             abort(403);
         }
 
@@ -122,9 +121,9 @@ class HarvestedAssetController extends Controller
 
         // If variant was requested but doesn't exist yet, process the asset first
         $needsProcessing = false;
-        if ($variant === 'bg_removed' && !$asset->bg_removed_s3_path) {
+        if ($variant === 'bg_removed' && ! $asset->bg_removed_s3_path) {
             $needsProcessing = true;
-        } elseif (in_array($variant, ['landscape', 'square', 'vertical']) && !isset(($asset->variants ?? [])[$variant])) {
+        } elseif (in_array($variant, ['landscape', 'square', 'vertical']) && ! isset(($asset->variants ?? [])[$variant])) {
             $needsProcessing = true;
         }
 
@@ -157,6 +156,7 @@ class HarvestedAssetController extends Controller
     private function resolveCustomer(Request $request): ?Customer
     {
         $user = Auth::user();
+
         return $user->customer ?? $user->customers()->first();
     }
 }

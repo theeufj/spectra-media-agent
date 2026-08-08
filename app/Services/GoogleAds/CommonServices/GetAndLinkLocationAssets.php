@@ -3,11 +3,11 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\CampaignAsset;
 use Google\Ads\GoogleAds\V22\Services\CampaignAssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignAssetsRequest;
 use Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Illuminate\Support\Facades\Log;
 
 class GetAndLinkLocationAssets extends BaseGoogleAdsService
@@ -34,7 +34,7 @@ class GetAndLinkLocationAssets extends BaseGoogleAdsService
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
             $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
                 'customer_id' => $customerId,
-                'query'       => $query,
+                'query' => $query,
             ]));
 
             $linked = 0;
@@ -44,29 +44,29 @@ class GetAndLinkLocationAssets extends BaseGoogleAdsService
 
                 try {
                     $campaignAsset = new CampaignAsset([
-                        'campaign'   => $campaignResourceName,
-                        'asset'      => $assetResourceName,
+                        'campaign' => $campaignResourceName,
+                        'asset' => $assetResourceName,
                         'field_type' => 29, // AssetFieldType::LOCATION (proto value, not in V22 PHP enum)
                     ]);
 
-                    $operation = new CampaignAssetOperation();
+                    $operation = new CampaignAssetOperation;
                     $operation->setCreate($campaignAsset);
 
                     $this->client->getCampaignAssetServiceClient()->mutateCampaignAssets(
                         new MutateCampaignAssetsRequest([
                             'customer_id' => $customerId,
-                            'operations'  => [$operation],
+                            'operations' => [$operation],
                         ])
                     );
 
                     $linked++;
                 } catch (GoogleAdsException $e) {
                     // Skip duplicate links (asset already linked to this campaign)
-                    if (!str_contains($e->getMessage(), 'already exists')) {
+                    if (! str_contains($e->getMessage(), 'already exists')) {
                         Log::warning('GetAndLinkLocationAssets: Failed to link location asset', [
-                            'asset'    => $assetResourceName,
+                            'asset' => $assetResourceName,
                             'campaign' => $campaignResourceName,
-                            'error'    => $e->getMessage(),
+                            'error' => $e->getMessage(),
                         ]);
                     }
                 }
@@ -76,8 +76,9 @@ class GetAndLinkLocationAssets extends BaseGoogleAdsService
         } catch (\Exception $e) {
             Log::warning('GetAndLinkLocationAssets: Query failed', [
                 'customer_id' => $customerId,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
+
             return 0;
         }
     }

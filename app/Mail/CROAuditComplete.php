@@ -2,10 +2,9 @@
 
 namespace App\Mail;
 
-use App\Models\User;
 use App\Models\LandingPageAudit;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -22,8 +21,7 @@ class CROAuditComplete extends Mailable
         public User $user,
         public LandingPageAudit $audit,
         public int $issuesFound
-    )
-    {
+    ) {
         //
     }
 

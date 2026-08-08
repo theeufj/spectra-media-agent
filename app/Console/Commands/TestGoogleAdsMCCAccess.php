@@ -2,11 +2,11 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
-use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
+use Illuminate\Console\Command;
 
 class TestGoogleAdsMCCAccess extends Command
 {
@@ -42,7 +42,7 @@ class TestGoogleAdsMCCAccess extends Command
             // Step 4: List accessible customers
             $this->info('Step 4: Listing accessible customers...');
             $accessibleCustomers = $customerServiceClient->listAccessibleCustomers(
-                new ListAccessibleCustomersRequest()
+                new ListAccessibleCustomersRequest
             );
 
             $customerIds = [];
@@ -51,7 +51,7 @@ class TestGoogleAdsMCCAccess extends Command
                 $customerIds[] = $customerId;
             }
 
-            $this->info('✅ Found ' . count($customerIds) . ' accessible customer(s):');
+            $this->info('✅ Found '.count($customerIds).' accessible customer(s):');
             foreach ($customerIds as $customerId) {
                 $this->line("  • {$customerId}");
             }
@@ -75,7 +75,7 @@ class TestGoogleAdsMCCAccess extends Command
             $this->info('📊 Summary:');
             $this->line('  • Configuration: Valid');
             $this->line('  • Authentication: Working');
-            $this->line('  • Accessible Accounts: ' . count($customerIds));
+            $this->line('  • Accessible Accounts: '.count($customerIds));
             $this->line('  • API Status: Ready');
             $this->newLine();
 
@@ -88,13 +88,13 @@ class TestGoogleAdsMCCAccess extends Command
 
         } catch (GoogleAdsException $e) {
             $this->error('❌ Google Ads API Error');
-            $this->error('Status: ' . $e->getStatus());
-            $this->error('Request ID: ' . $e->getRequestId());
+            $this->error('Status: '.$e->getStatus());
+            $this->error('Request ID: '.$e->getRequestId());
             $this->newLine();
             $this->error('Errors:');
             foreach ($e->getGoogleAdsFailure()->getErrors() as $error) {
                 $this->error(sprintf(
-                    "  • %s: %s",
+                    '  • %s: %s',
                     $error->getErrorCode()->getErrorCode(),
                     $error->getMessage()
                 ));
@@ -104,11 +104,13 @@ class TestGoogleAdsMCCAccess extends Command
             $this->line('  1. Developer token not approved - Apply for Basic Access');
             $this->line('  2. Service account not linked to MCC - Check Google Ads UI');
             $this->line('  3. Incorrect MCC ID - Verify customer ID');
+
             return 1;
 
         } catch (\Exception $e) {
-            $this->error('❌ Error: ' . $e->getMessage());
-            $this->error('Stack: ' . $e->getTraceAsString());
+            $this->error('❌ Error: '.$e->getMessage());
+            $this->error('Stack: '.$e->getTraceAsString());
+
             return 1;
         }
     }
@@ -119,25 +121,25 @@ class TestGoogleAdsMCCAccess extends Command
         $credentialsPath = storage_path('app/secrets/google-ads-api-credentials.json');
 
         // Check INI file
-        if (!file_exists($iniPath)) {
+        if (! file_exists($iniPath)) {
             throw new \Exception("Configuration file not found: {$iniPath}");
         }
-        $this->line("  ✅ Found: google_ads_php.ini");
+        $this->line('  ✅ Found: google_ads_php.ini');
 
         // Check credentials file
-        if (!file_exists($credentialsPath)) {
+        if (! file_exists($credentialsPath)) {
             throw new \Exception("Credentials file not found: {$credentialsPath}");
         }
-        $this->line("  ✅ Found: google-ads-api-credentials.json");
+        $this->line('  ✅ Found: google-ads-api-credentials.json');
 
         // Parse and display INI contents
         $ini = parse_ini_file($iniPath, true);
-        
+
         $this->newLine();
         $this->table(
             ['Setting', 'Value'],
             [
-                ['Developer Token', substr($ini['GOOGLE_ADS']['developerToken'] ?? 'NOT SET', 0, 10) . '...'],
+                ['Developer Token', substr($ini['GOOGLE_ADS']['developerToken'] ?? 'NOT SET', 0, 10).'...'],
                 ['JSON Key Path', basename($ini['OAUTH2']['jsonKeyFilePath'] ?? 'NOT SET')],
                 ['Impersonated Email', $ini['OAUTH2']['impersonatedEmail'] ?? 'NOT SET'],
                 ['Scopes', $ini['OAUTH2']['scopes'] ?? 'NOT SET'],
@@ -147,11 +149,11 @@ class TestGoogleAdsMCCAccess extends Command
 
     private function initializeClient(): void
     {
-        $oAuth2Credential = (new OAuth2TokenBuilder())
+        $oAuth2Credential = (new OAuth2TokenBuilder)
             ->fromFile(storage_path('app/google_ads_php.ini'))
             ->build();
 
-        $this->googleAdsClient = (new GoogleAdsClientBuilder())
+        $this->googleAdsClient = (new GoogleAdsClientBuilder)
             ->fromFile(storage_path('app/google_ads_php.ini'))
             ->withOAuth2Credential($oAuth2Credential)
             ->build();
@@ -162,7 +164,7 @@ class TestGoogleAdsMCCAccess extends Command
         try {
             $googleAdsServiceClient = $this->googleAdsClient->getGoogleAdsServiceClient();
 
-            $query = "SELECT 
+            $query = 'SELECT 
                         customer.id,
                         customer.descriptive_name,
                         customer.currency_code,
@@ -172,7 +174,7 @@ class TestGoogleAdsMCCAccess extends Command
                         customer.auto_tagging_enabled,
                         customer.has_partners_badge
                       FROM customer 
-                      LIMIT 1";
+                      LIMIT 1';
 
             // Use SearchGoogleAdsRequest for V22
             $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -206,7 +208,7 @@ class TestGoogleAdsMCCAccess extends Command
             }
 
         } catch (\Exception $e) {
-            $this->warn("  ⚠️  Could not fetch details for {$customerId}: " . $e->getMessage());
+            $this->warn("  ⚠️  Could not fetch details for {$customerId}: ".$e->getMessage());
         }
     }
 
@@ -215,14 +217,14 @@ class TestGoogleAdsMCCAccess extends Command
         try {
             $googleAdsServiceClient = $this->googleAdsClient->getGoogleAdsServiceClient();
 
-            $query = "SELECT 
+            $query = 'SELECT 
                         customer_client.id,
                         customer_client.descriptive_name,
                         customer_client.manager,
                         customer_client.test_account,
                         customer_client.status
                       FROM customer_client 
-                      WHERE customer_client.level <= 1";
+                      WHERE customer_client.level <= 1';
 
             $request = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
                 'customer_id' => $mccCustomerId,
@@ -252,7 +254,7 @@ class TestGoogleAdsMCCAccess extends Command
             }
 
         } catch (\Exception $e) {
-            $this->warn("  ⚠️  Could not fetch child accounts: " . $e->getMessage());
+            $this->warn('  ⚠️  Could not fetch child accounts: '.$e->getMessage());
         }
     }
 

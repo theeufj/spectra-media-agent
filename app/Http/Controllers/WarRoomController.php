@@ -28,13 +28,13 @@ class WarRoomController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
         $canAccess = $request->user()->hasFeature('war_room');
 
-        if (!$canAccess) {
+        if (! $canAccess) {
             return Inertia::render('Strategy/WarRoom', [
                 'canAccessWarRoom' => false,
                 'health' => null,
@@ -127,7 +127,7 @@ class WarRoomController extends Controller
 
         // 8. War Room pinned competitors
         $pinnedIds = $customer->war_room_competitors ?? [];
-        $warRoomCompetitors = !empty($pinnedIds)
+        $warRoomCompetitors = ! empty($pinnedIds)
             ? Competitor::whereIn('id', $pinnedIds)
                 ->where('customer_id', $customer->id)
                 ->get()
@@ -196,7 +196,7 @@ class WarRoomController extends Controller
         ]);
 
         $customer = $this->resolveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -254,7 +254,7 @@ class WarRoomController extends Controller
     public function removeCompetitor(Request $request, Competitor $competitor)
     {
         $customer = $this->resolveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -308,7 +308,7 @@ class WarRoomController extends Controller
                 $totals['conversion_value'] += $row->conversion_value ?? 0;
 
                 $dateKey = $row->date->format('Y-m-d');
-                if (!isset($daily[$dateKey])) {
+                if (! isset($daily[$dateKey])) {
                     $daily[$dateKey] = ['date' => $dateKey, 'impressions' => 0, 'clicks' => 0, 'cost' => 0, 'conversions' => 0];
                 }
                 $daily[$dateKey]['impressions'] += $row->impressions ?? 0;

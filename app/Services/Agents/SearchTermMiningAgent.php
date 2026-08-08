@@ -5,11 +5,11 @@ namespace App\Services\Agents;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Keyword;
-use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
-use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
-use Illuminate\Support\Facades\Log;
+use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
+use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Illuminate\Support\Facades\Log;
 
 class SearchTermMiningAgent
 {
@@ -27,7 +27,6 @@ class SearchTermMiningAgent
     /**
      * Mine search terms for a campaign and make keyword changes.
      *
-     * @param Campaign $campaign
      * @return array Results of mining actions
      */
     public function mine(Campaign $campaign): array
@@ -40,7 +39,7 @@ class SearchTermMiningAgent
             'errors' => [],
         ];
 
-        if (!$campaign->customer) {
+        if (! $campaign->customer) {
             return $results;
         }
 
@@ -75,8 +74,8 @@ class SearchTermMiningAgent
             }
 
         } catch (\Exception $e) {
-            $results['errors'][] = "Failed to get google search terms: " . $e->getMessage();
-            Log::error("SearchTermMiningAgent: Failed to mine google search terms", [
+            $results['errors'][] = 'Failed to get google search terms: '.$e->getMessage();
+            Log::error('SearchTermMiningAgent: Failed to mine google search terms', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -89,7 +88,7 @@ class SearchTermMiningAgent
     protected function mineMicrosoft(Campaign $campaign, array &$results): void
     {
         $customer = $campaign->customer;
-        if (!$customer->microsoft_ads_account_id) {
+        if (! $customer->microsoft_ads_account_id) {
             return;
         }
 
@@ -105,8 +104,8 @@ class SearchTermMiningAgent
             }
 
         } catch (\Exception $e) {
-            $results['errors'][] = "Failed to get microsoft search terms: " . $e->getMessage();
-            Log::error("SearchTermMiningAgent: Failed to mine microsoft search terms", [
+            $results['errors'][] = 'Failed to get microsoft search terms: '.$e->getMessage();
+            Log::error('SearchTermMiningAgent: Failed to mine microsoft search terms', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -124,13 +123,13 @@ class SearchTermMiningAgent
         array &$results,
         string $platform = 'google'
     ): void {
-        $minImpressions        = $this->config['min_impressions']          ?? 300;
-        $minClicks             = $this->config['min_clicks']               ?? 5;
-        $promoteCtrThreshold   = $this->config['promote_ctr_threshold']    ?? 0.05;
-        $negativeCostThreshold = $this->config['negative_cost_threshold']  ?? 50.00;
-        $negativeCtrThreshold  = $this->config['negative_ctr_threshold']   ?? 0.002;
+        $minImpressions = $this->config['min_impressions'] ?? 300;
+        $minClicks = $this->config['min_clicks'] ?? 5;
+        $promoteCtrThreshold = $this->config['promote_ctr_threshold'] ?? 0.05;
+        $negativeCostThreshold = $this->config['negative_cost_threshold'] ?? 50.00;
+        $negativeCtrThreshold = $this->config['negative_ctr_threshold'] ?? 0.002;
         $negativeMinImpressions = $this->config['negative_min_impressions'] ?? 500;
-        $negativeMatchType     = $this->config['negative_match_type']      ?? 'PHRASE';
+        $negativeMatchType = $this->config['negative_match_type'] ?? 'PHRASE';
 
         $searchTerm = $term['search_term'];
         $impressions = $term['impressions'];
@@ -152,6 +151,7 @@ class SearchTermMiningAgent
             } else {
                 $this->addAsMicrosoftKeyword($customer, $term['ad_group_resource_name'], $searchTerm, $matchType, $results);
             }
+
             return;
         }
 
@@ -163,6 +163,7 @@ class SearchTermMiningAgent
             } else {
                 $this->addAsMicrosoftNegative($customer, $campaignResourceName, $searchTerm, 'High cost, no conversions', $results);
             }
+
             return;
         }
 
@@ -173,6 +174,7 @@ class SearchTermMiningAgent
             } else {
                 $this->addAsMicrosoftNegative($customer, $campaignResourceName, $searchTerm, 'Low CTR, no conversions', $results);
             }
+
             return;
         }
     }
@@ -192,6 +194,7 @@ class SearchTermMiningAgent
             if ($conversions >= 5) {
                 return KeywordMatchType::PHRASE;
             }
+
             return KeywordMatchType::BROAD;
         } else {
             // Microsoft uses strings instead of enums
@@ -201,6 +204,7 @@ class SearchTermMiningAgent
             if ($conversions >= 5) {
                 return 'Phrase';
             }
+
             return 'Broad';
         }
     }
@@ -228,7 +232,7 @@ class SearchTermMiningAgent
                     'resource_name' => $resourceName,
                 ];
 
-                Log::info("SearchTermMiningAgent: Added keyword", [
+                Log::info('SearchTermMiningAgent: Added keyword', [
                     'keyword' => $keyword,
                     'match_type' => $matchTypeName,
                     'ad_group' => $adGroupResourceName,
@@ -246,7 +250,7 @@ class SearchTermMiningAgent
             }
         } catch (\Exception $e) {
             // Might fail if keyword already exists, which is fine
-            Log::debug("SearchTermMiningAgent: Could not add keyword (may already exist)", [
+            Log::debug('SearchTermMiningAgent: Could not add keyword (may already exist)', [
                 'keyword' => $keyword,
                 'error' => $e->getMessage(),
             ]);
@@ -269,7 +273,7 @@ class SearchTermMiningAgent
                     'resource_name' => $resourceName,
                 ];
 
-                Log::info("SearchTermMiningAgent: Added keyword to Microsoft Ads", [
+                Log::info('SearchTermMiningAgent: Added keyword to Microsoft Ads', [
                     'keyword' => $keyword,
                     'match_type' => strtoupper($matchType),
                     'ad_group' => $adGroupId,
@@ -281,7 +285,7 @@ class SearchTermMiningAgent
                 );
             }
         } catch (\Exception $e) {
-            Log::debug("SearchTermMiningAgent: Could not add Microsoft keyword (may already exist)", [
+            Log::debug('SearchTermMiningAgent: Could not add Microsoft keyword (may already exist)', [
                 'keyword' => $keyword,
                 'error' => $e->getMessage(),
             ]);
@@ -305,13 +309,13 @@ class SearchTermMiningAgent
                     'resource_name' => $resourceName,
                 ];
 
-                Log::info("SearchTermMiningAgent: Added Microsoft negative keyword", [
+                Log::info('SearchTermMiningAgent: Added Microsoft negative keyword', [
                     'keyword' => $keyword,
                     'reason' => $reason,
                 ]);
             }
         } catch (\Exception $e) {
-            Log::debug("SearchTermMiningAgent: Could not add Microsoft negative keyword (may already exist)", [
+            Log::debug('SearchTermMiningAgent: Could not add Microsoft negative keyword (may already exist)', [
                 'keyword' => $keyword,
                 'error' => $e->getMessage(),
             ]);
@@ -340,7 +344,7 @@ class SearchTermMiningAgent
                     'resource_name' => $resourceName,
                 ];
 
-                Log::info("SearchTermMiningAgent: Added negative keyword", [
+                Log::info('SearchTermMiningAgent: Added negative keyword', [
                     'keyword' => $keyword,
                     'reason' => $reason,
                     'campaign' => $campaignResourceName,
@@ -348,7 +352,7 @@ class SearchTermMiningAgent
             }
         } catch (\Exception $e) {
             // Might fail if negative already exists
-            Log::debug("SearchTermMiningAgent: Could not add negative (may already exist)", [
+            Log::debug('SearchTermMiningAgent: Could not add negative (may already exist)', [
                 'keyword' => $keyword,
                 'error' => $e->getMessage(),
             ]);

@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Mail\SitemapCrawlCompleted;
 use App\Models\Customer;
 use App\Models\CustomerPage;
-use Illuminate\Support\Facades\Mail;
 use App\Services\BrandGuidelineExtractorService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -13,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class ExtractBrandGuidelines implements ShouldQueue
 {
@@ -46,7 +46,7 @@ class ExtractBrandGuidelines implements ShouldQueue
             $brandGuideline = $extractor->extractGuidelines($this->customer);
 
             if ($brandGuideline) {
-                Log::info("Brand guidelines extracted successfully", [
+                Log::info('Brand guidelines extracted successfully', [
                     'customer_id' => $this->customer->id,
                     'guideline_id' => $brandGuideline->id,
                     'quality_score' => $brandGuideline->extraction_quality_score,
@@ -63,17 +63,17 @@ class ExtractBrandGuidelines implements ShouldQueue
                     ));
                 }
             } else {
-                Log::warning("Brand guideline extraction returned null", [
+                Log::warning('Brand guideline extraction returned null', [
                     'customer_id' => $this->customer->id,
                 ]);
             }
 
         } catch (\Exception $e) {
-            Log::error("ExtractBrandGuidelines job failed", [
+            Log::error('ExtractBrandGuidelines job failed', [
                 'customer_id' => $this->customer->id,
                 'error' => $e->getMessage(),
             ]);
-            
+
             // Re-throw to trigger retry mechanism
             throw $e;
         }
@@ -84,7 +84,7 @@ class ExtractBrandGuidelines implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error("ExtractBrandGuidelines job failed permanently", [
+        Log::error('ExtractBrandGuidelines job failed permanently', [
             'customer_id' => $this->customer->id,
             'error' => $exception->getMessage(),
         ]);

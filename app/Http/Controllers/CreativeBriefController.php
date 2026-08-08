@@ -13,26 +13,26 @@ class CreativeBriefController extends Controller
 {
     public function index(Request $request): Response
     {
-        $user     = Auth::user();
+        $user = Auth::user();
         $customer = $user->customers()->findOrFail(session('active_customer_id'));
 
         $status = $request->get('status', 'pending');
 
         $briefs = CreativeBrief::where('customer_id', $customer->id)
-            ->when($status !== 'all', fn($q) => $q->where('status', $status))
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
             ->with('campaign:id,name')
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString();
 
         $counts = CreativeBrief::where('customer_id', $customer->id)
-            ->selectRaw("status, COUNT(*) as total")
+            ->selectRaw('status, COUNT(*) as total')
             ->groupBy('status')
             ->pluck('total', 'status');
 
         return Inertia::render('CreativeBriefs/Index', [
-            'briefs'       => $briefs,
-            'counts'       => $counts,
+            'briefs' => $briefs,
+            'counts' => $counts,
             'activeStatus' => $status,
         ]);
     }
@@ -55,7 +55,7 @@ class CreativeBriefController extends Controller
 
     private function authorizeBrief(CreativeBrief $brief): void
     {
-        $user     = Auth::user();
+        $user = Auth::user();
         $customer = $user->customers()->findOrFail(session('active_customer_id'));
 
         abort_if($brief->customer_id !== $customer->id, 403);

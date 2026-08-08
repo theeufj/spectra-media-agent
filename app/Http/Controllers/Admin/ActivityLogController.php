@@ -39,8 +39,8 @@ class ActivityLogController extends Controller
         if ($request->search) {
             $query->where(function ($q) use ($request) {
                 $q->where('description', 'like', "%{$request->search}%")
-                  ->orWhere('user_email', 'like', "%{$request->search}%")
-                  ->orWhere('user_name', 'like', "%{$request->search}%");
+                    ->orWhere('user_email', 'like', "%{$request->search}%")
+                    ->orWhere('user_name', 'like', "%{$request->search}%");
             });
         }
 
@@ -108,7 +108,7 @@ class ActivityLogController extends Controller
     {
         $todayCount = ActivityLog::whereDate('created_at', today())->count();
         $weekCount = ActivityLog::where('created_at', '>=', now()->subWeek())->count();
-        
+
         $recentLogins = ActivityLog::where('action', 'login')
             ->where('created_at', '>=', now()->subDay())
             ->count();
@@ -148,8 +148,8 @@ class ActivityLogController extends Controller
 
         $logs = $query->limit(10000)->get();
 
-        $filename = 'activity_logs_' . now()->format('Y-m-d_His') . '.csv';
-        
+        $filename = 'activity_logs_'.now()->format('Y-m-d_His').'.csv';
+
         $headers = [
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"{$filename}\"",
@@ -157,7 +157,7 @@ class ActivityLogController extends Controller
 
         $callback = function () use ($logs) {
             $file = fopen('php://output', 'w');
-            
+
             // Header row
             fputcsv($file, [
                 'Date',

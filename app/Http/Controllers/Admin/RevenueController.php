@@ -45,11 +45,12 @@ class RevenueController extends Controller
             $mrr = collect($subscriptions->data)->sum(function ($sub) {
                 $amount = $sub->items->data[0]->price->unit_amount ?? 0;
                 $interval = $sub->items->data[0]->price->recurring->interval ?? 'month';
-                
+
                 // Normalize to monthly
                 if ($interval === 'year') {
                     return ($amount / 12) / 100;
                 }
+
                 return $amount / 100;
             });
 
@@ -73,8 +74,8 @@ class RevenueController extends Controller
                 'limit' => 100,
             ]);
             $churnCount = $cancelledSubs->data ? count($cancelledSubs->data) : 0;
-            $churnRate = $activeSubscribers > 0 
-                ? round(($churnCount / ($activeSubscribers + $churnCount)) * 100, 1) 
+            $churnRate = $activeSubscribers > 0
+                ? round(($churnCount / ($activeSubscribers + $churnCount)) * 100, 1)
                 : 0;
 
             // Get free vs paid users from database
@@ -95,13 +96,13 @@ class RevenueController extends Controller
                 'totalUsers' => $totalUsers,
                 'paidUsers' => $paidUsers,
                 'freeUsers' => $freeUsers,
-                'conversionRate' => $totalUsers > 0 
-                    ? round(($paidUsers / $totalUsers) * 100, 1) 
+                'conversionRate' => $totalUsers > 0
+                    ? round(($paidUsers / $totalUsers) * 100, 1)
                     : 0,
             ];
         } catch (\Exception $e) {
-            Log::error('Revenue metrics error: ' . $e->getMessage());
-            
+            Log::error('Revenue metrics error: '.$e->getMessage());
+
             // Return fallback data from database
             $totalUsers = User::count();
             $paidUsers = DB::table('subscriptions')
@@ -119,8 +120,8 @@ class RevenueController extends Controller
                 'totalUsers' => $totalUsers,
                 'paidUsers' => $paidUsers,
                 'freeUsers' => $totalUsers - $paidUsers,
-                'conversionRate' => $totalUsers > 0 
-                    ? round(($paidUsers / $totalUsers) * 100, 1) 
+                'conversionRate' => $totalUsers > 0
+                    ? round(($paidUsers / $totalUsers) * 100, 1)
                     : 0,
                 'error' => 'Could not fetch Stripe data',
             ];
@@ -156,7 +157,8 @@ class RevenueController extends Controller
                 ];
             })->toArray();
         } catch (\Exception $e) {
-            Log::error('Recent transactions error: ' . $e->getMessage());
+            Log::error('Recent transactions error: '.$e->getMessage());
+
             return [];
         }
     }
@@ -179,8 +181,8 @@ class RevenueController extends Controller
                 $priceId = $sub->items->data[0]->price->id ?? 'unknown';
                 $productName = $sub->items->data[0]->price->nickname ?? 'Site to Spend Pro';
                 $amount = ($sub->items->data[0]->price->unit_amount ?? 0) / 100;
-                
-                if (!isset($breakdown[$priceId])) {
+
+                if (! isset($breakdown[$priceId])) {
                     $breakdown[$priceId] = [
                         'name' => $productName,
                         'price' => $amount,
@@ -188,14 +190,15 @@ class RevenueController extends Controller
                         'revenue' => 0,
                     ];
                 }
-                
+
                 $breakdown[$priceId]['count']++;
                 $breakdown[$priceId]['revenue'] += $amount;
             }
 
             return array_values($breakdown);
         } catch (\Exception $e) {
-            Log::error('Subscription breakdown error: ' . $e->getMessage());
+            Log::error('Subscription breakdown error: '.$e->getMessage());
+
             return [];
         }
     }
@@ -209,7 +212,7 @@ class RevenueController extends Controller
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
             $monthlyData = [];
-            
+
             for ($i = 11; $i >= 0; $i--) {
                 $date = now()->subMonths($i);
                 $startOfMonth = $date->copy()->startOfMonth()->timestamp;
@@ -235,8 +238,8 @@ class RevenueController extends Controller
 
             return $monthlyData;
         } catch (\Exception $e) {
-            Log::error('Monthly revenue error: ' . $e->getMessage());
-            
+            Log::error('Monthly revenue error: '.$e->getMessage());
+
             // Return empty data for 12 months
             $monthlyData = [];
             for ($i = 11; $i >= 0; $i--) {
@@ -245,6 +248,7 @@ class RevenueController extends Controller
                     'revenue' => 0,
                 ];
             }
+
             return $monthlyData;
         }
     }
@@ -263,11 +267,11 @@ class RevenueController extends Controller
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
             $refundParams = ['charge' => $chargeId];
-            
+
             if ($request->amount) {
                 $refundParams['amount'] = $request->amount * 100; // Convert to cents
             }
-            
+
             if ($request->reason) {
                 $refundParams['reason'] = $request->reason;
             }
@@ -291,11 +295,11 @@ class RevenueController extends Controller
                 'message' => 'Refund processed successfully.',
             ]);
         } catch (\Exception $e) {
-            Log::error('Refund error: ' . $e->getMessage());
-            
+            Log::error('Refund error: '.$e->getMessage());
+
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Refund failed: ' . $e->getMessage(),
+                'message' => 'Refund failed: '.$e->getMessage(),
             ]);
         }
     }

@@ -14,7 +14,9 @@ class SitemapCrawlCompleted extends Mailable implements ShouldQueue
     use Queueable, SerializesModels;
 
     public $sitemapUrl;
+
     public $totalPages;
+
     public $userName;
 
     /**

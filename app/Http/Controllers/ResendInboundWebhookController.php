@@ -6,8 +6,8 @@ use App\Services\EmailInboxService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
-use Resend\WebhookSignature;
 use Resend\Exceptions\WebhookSignatureVerificationException;
+use Resend\WebhookSignature;
 
 class ResendInboundWebhookController extends Controller
 {
@@ -30,7 +30,8 @@ class ResendInboundWebhookController extends Controller
                     $secret
                 );
             } catch (WebhookSignatureVerificationException $e) {
-                Log::warning('Resend inbound webhook signature failed: ' . $e->getMessage());
+                Log::warning('Resend inbound webhook signature failed: '.$e->getMessage());
+
                 return response('Unauthorized', 401);
             }
         }

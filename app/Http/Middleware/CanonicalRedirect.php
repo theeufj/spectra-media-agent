@@ -35,7 +35,7 @@ class CanonicalRedirect
 
             // Strip junk query strings on GET requests (e.g. ?$, ?random=)
             // Skip signed URL routes (email verification) and OAuth callbacks
-            if ($request->isMethod('GET') && $request->getQueryString() !== null && !$request->is('auth/*/callback') && !$request->is('settings/*/callback') && !isset($request->query()['signature'])) {
+            if ($request->isMethod('GET') && $request->getQueryString() !== null && ! $request->is('auth/*/callback') && ! $request->is('settings/*/callback') && ! isset($request->query()['signature'])) {
                 // Ad-click and campaign attribution params MUST survive: Google Ads
                 // auto-tagging (gclid/gbraid/wbraid), Meta (fbclid), Microsoft (msclid),
                 // TikTok (ttclid) and UTMs. Stripping them here breaks conversion
@@ -64,11 +64,11 @@ class CanonicalRedirect
                 // Rebuild clean query string
                 $qs = $request->query->all();
                 $cleanPath = $request->getPathInfo();
-                if (!empty($qs)) {
-                    $cleanPath .= '?' . http_build_query($qs);
+                if (! empty($qs)) {
+                    $cleanPath .= '?'.http_build_query($qs);
                 }
 
-                $canonicalUrl = $scheme . '://' . $host . $cleanPath;
+                $canonicalUrl = $scheme.'://'.$host.$cleanPath;
 
                 return redirect()->away($canonicalUrl, 301);
             }

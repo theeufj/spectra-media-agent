@@ -6,24 +6,21 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Prompts\FacebookAdsExecutionPrompt;
-use App\Services\GeminiService;
-use App\Services\FacebookAds\CampaignService;
-use App\Services\FacebookAds\AdSetService;
-use App\Services\FacebookAds\CreativeService;
-use App\Services\FacebookAds\AdService;
-use App\Services\Agents\CampaignReviewAgent;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\CampaignStatusHelper;
+use App\Services\FacebookAds\AdService;
+use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\CampaignService;
+use App\Services\FacebookAds\CreativeService;
 use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 /**
  * Facebook Ads Execution Agent
- * 
+ *
  * AI-powered execution agent for Facebook/Meta Ads platform that dynamically generates
  * and executes deployment plans based on available assets, budget, and platform capabilities.
- * 
+ *
  * Features:
  * - Dynamic campaign objective selection (LINK_CLICKS, CONVERSIONS, REACH, etc.)
  * - AI-driven execution planning with Google Search grounding
@@ -36,14 +33,17 @@ use Illuminate\Support\Facades\Storage;
 class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 {
     use RetryableApiOperation;
-    
+
     protected string $platform = 'facebook';
-    
+
     protected CampaignService $campaignService;
+
     protected AdSetService $adSetService;
+
     protected CreativeService $creativeService;
+
     protected AdService $adService;
-    
+
     /**
      * Initialize Facebook Ads API services
      */
@@ -54,22 +54,22 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $this->creativeService = new CreativeService($this->customer);
         $this->adService = new AdService($this->customer);
     }
-    
+
     /**
      * Execute the deployment with ExecutionContext
      */
     public function execute(ExecutionContext $context): ExecutionResult
     {
-        Log::info("FacebookAdsExecutionAgent: Starting execution", [
+        Log::info('FacebookAdsExecutionAgent: Starting execution', [
             'campaign_id' => $context->campaign->id,
             'strategy_id' => $context->strategy->id,
         ]);
 
         $this->initializeServices();
-        
+
         // Validate prerequisites
         $validation = $this->validatePrerequisites($context);
-        if (!$validation->isValid()) {
+        if (! $validation->isValid()) {
             return ExecutionResult::failure(
                 $validation->getErrors(),
                 $validation->getWarnings()
@@ -81,14 +81,14 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
         // Generate execution plan
         $plan = $this->generateExecutionPlan($context);
-        
+
         // Execute the plan
         return $this->executePlan($plan, $context);
     }
-    
+
     /**
      * Validate prerequisites before deployment
-     * 
+     *
      * Checks:
      * - Facebook Ads account connection
      * - Facebook Page connection
@@ -105,53 +105,55 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         // Facebook deployment requires an account assigned by a platform admin
         // via the Business Manager (Path A). Accounts must be BM-managed —
         // deployment is blocked until an admin links one from the customer edit page.
-        if (!$this->customer->facebook_bm_owned || !$this->customer->facebook_ads_account_id) {
+        if (! $this->customer->facebook_bm_owned || ! $this->customer->facebook_ads_account_id) {
             $result->addError(
                 'facebook_bm_not_configured',
                 'Facebook ad account not set up. A platform admin must link a Business Manager-managed ad account before campaigns can be deployed.'
             );
+
             return $result;
         }
-        
+
         // Check Facebook Page connection
-        if (!$this->customer->facebook_page_id) {
+        if (! $this->customer->facebook_page_id) {
             $result->addError('facebook_page_not_connected', 'Facebook Page not connected - required for ads');
+
             return $result;
         }
-        
+
         // Check Pixel installation (warning only - campaigns can run without it)
-        if (!$this->hasPixelInstalled($context)) {
+        if (! $this->hasPixelInstalled($context)) {
             $result->addWarning('no_pixel', 'No Facebook Pixel configured - conversion tracking and Advantage+ campaigns will be limited');
         }
-        
+
         // Validate creative assets
         $strategy = $context->strategy;
         $hasImages = $strategy->imageCollaterals()->where('is_active', true)->exists();
         $hasVideos = $strategy->videoCollaterals()->where('is_active', true)->exists();
         $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->exists();
-        
-        if (!$hasAdCopy) {
+
+        if (! $hasAdCopy) {
             $result->addError('no_ad_copy', 'No ad copy available for Facebook Ads');
         }
-        
-        if (!$hasImages && !$hasVideos) {
+
+        if (! $hasImages && ! $hasVideos) {
             $result->addError('no_creatives', 'No images or videos available - Facebook Ads require visual creatives');
         }
-        
+
         // Validate budget meets Facebook Ads minimums
         $budgetValidation = $this->validateBudget($context);
-        if (!$budgetValidation->passes()) {
+        if (! $budgetValidation->passes()) {
             foreach ($budgetValidation->errors as $error) {
-                $result->addError('budget_' . $error['code'], $error['message']);
+                $result->addError('budget_'.$error['code'], $error['message']);
             }
         }
-        
+
         return $result;
     }
-    
+
     /**
      * Analyze optimization opportunities for Facebook Ads
-     * 
+     *
      * Evaluates:
      * - Dynamic Creative eligibility (3+ images, multiple headlines/descriptions)
      * - Advantage+ Campaign eligibility (pixel + conversions + $50/day minimum)
@@ -162,16 +164,16 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function analyzeOptimizationOpportunities(ExecutionContext $context): OptimizationAnalysis
     {
-        $analysis = new OptimizationAnalysis();
+        $analysis = new OptimizationAnalysis;
         $strategy = $context->strategy;
         $campaign = $context->campaign;
-        
+
         // Check Dynamic Creative eligibility
         $imageCount = $strategy->imageCollaterals()->where('is_active', true)->count();
         $adCopy = $strategy->adCopies()->where('platform', 'facebook')->first();
         $headlineCount = $adCopy && isset($adCopy->headlines) ? count($adCopy->headlines) : 0;
         $descriptionCount = $adCopy && isset($adCopy->descriptions) ? count($adCopy->descriptions) : 0;
-        
+
         if ($imageCount >= 3 && $headlineCount >= 3 && $descriptionCount >= 2) {
             $analysis->addOpportunity(
                 'dynamic_creative_eligible',
@@ -180,11 +182,11 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 ['images' => $imageCount, 'headlines' => $headlineCount, 'descriptions' => $descriptionCount]
             );
         }
-        
+
         // Check Advantage+ Campaign eligibility
         $hasPixelWithConversions = $this->hasPixelWithConversions($context);
         $meetsAdvantagePlusBudget = $context->calculateDailyBudget() >= 50.0; // $50/day minimum
-        
+
         if ($hasPixelWithConversions && $meetsAdvantagePlusBudget) {
             $analysis->addOpportunity(
                 'advantage_plus_eligible',
@@ -192,7 +194,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 'high',
                 ['pixel_with_conversions' => true, 'budget_meets_minimum' => true]
             );
-        } elseif ($meetsAdvantagePlusBudget && !$hasPixelWithConversions) {
+        } elseif ($meetsAdvantagePlusBudget && ! $hasPixelWithConversions) {
             $analysis->addOpportunity(
                 'advantage_plus_potential',
                 'Budget supports Advantage+ but requires Pixel with conversion data',
@@ -200,10 +202,10 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 ['budget_meets_minimum' => true, 'needs_pixel_conversions' => true]
             );
         }
-        
+
         // Check creative format opportunities
         $videoCount = $strategy->videoCollaterals()->where('is_active', true)->count();
-        
+
         if ($imageCount >= 3) {
             $analysis->addOpportunity(
                 'carousel_ads',
@@ -212,7 +214,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 ['image_count' => $imageCount]
             );
         }
-        
+
         if ($videoCount >= 1) {
             $analysis->addOpportunity(
                 'video_ads',
@@ -221,7 +223,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 ['video_count' => $videoCount]
             );
         }
-        
+
         // Check placement optimization
         $analysis->addOpportunity(
             'automatic_placements',
@@ -229,7 +231,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             'medium',
             ['platforms' => ['facebook', 'instagram', 'messenger', 'audience_network']]
         );
-        
+
         // Check retargeting opportunities
         if ($this->hasPixelInstalled($context)) {
             $analysis->addOpportunity(
@@ -239,17 +241,17 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 ['pixel_installed' => true]
             );
         }
-        
+
         return $analysis;
     }
-    
+
     /**
      * Validate budget meets Facebook Ads requirements
      */
     protected function validateBudget(ExecutionContext $context): BudgetValidation
     {
         $dailyBudget = $context->calculateDailyBudget();
-        
+
         // Facebook Ads minimum daily budget is $5.00 per ad set
         if ($dailyBudget < 5.0) {
             return BudgetValidation::invalid(
@@ -258,19 +260,19 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 [['code' => 'below_minimum', 'message' => 'Daily budget must be at least $5.00 per ad set for Facebook Ads']]
             );
         }
-        
+
         // Warn if budget is low for Advantage+
         $warnings = [];
         if ($dailyBudget < 50.0) {
             $warnings[] = [
                 'code' => 'advantage_plus_budget',
-                'message' => 'Daily budget below $50.00 - Advantage+ campaigns not recommended'
+                'message' => 'Daily budget below $50.00 - Advantage+ campaigns not recommended',
             ];
         }
-        
+
         return BudgetValidation::valid($dailyBudget, ['minimum_daily_budget' => 5.0], $warnings);
     }
-    
+
     /**
      * Generate AI-powered execution plan for Facebook Ads
      */
@@ -278,9 +280,9 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     {
         $prompt = FacebookAdsExecutionPrompt::generate($context);
         $systemInstruction = FacebookAdsExecutionPrompt::getSystemInstruction();
-        
+
         Log::info("FacebookAdsExecutionAgent: Generating execution plan for Campaign {$context->campaign->id}");
-        
+
         try {
             $response = $this->gemini->generateContent(
                 model: config('ai.models.default'),
@@ -293,44 +295,44 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 enableThinking: true,
                 enableGoogleSearch: true // Enable real-time grounding for current API best practices
             );
-            
-            if (!$response || !isset($response['text'])) {
+
+            if (! $response || ! isset($response['text'])) {
                 throw new \Exception('Empty response from AI model');
             }
-            
+
             $plan = ExecutionPlan::fromJson($response['text']);
 
             $plan = (new CampaignReviewAgent($this->customer))->review($plan, 'facebook');
 
-            Log::info("FacebookAdsExecutionAgent: Generated execution plan", [
+            Log::info('FacebookAdsExecutionAgent: Generated execution plan', [
                 'campaign_id' => $context->campaign->id,
                 'steps_count' => count($plan->steps),
-                'objective' => $plan->getCampaignStructure()['objective'] ?? 'unknown'
+                'objective' => $plan->getCampaignStructure()['objective'] ?? 'unknown',
             ]);
 
             return $plan;
-            
+
         } catch (\Exception $e) {
-            Log::error("FacebookAdsExecutionAgent: Failed to generate execution plan: " . $e->getMessage());
+            Log::error('FacebookAdsExecutionAgent: Failed to generate execution plan: '.$e->getMessage());
             throw $e;
         }
     }
-    
+
     /**
      * Execute the AI-generated deployment plan
      */
     protected function executePlan(ExecutionPlan $plan, ExecutionContext $context): ExecutionResult
     {
         $this->initializeServices();
-        
+
         $startTime = microtime(true);
         $result = ExecutionResult::success(platformIds: [], executionTime: 0.0, plan: $plan);
         $accountId = str_replace('act_', '', $this->customer->facebook_ads_account_id);
         $strategy = $context->strategy;
         $campaign = $context->campaign;
-        
+
         Log::info("FacebookAdsExecutionAgent: Starting plan execution for Campaign {$campaign->id}");
-        
+
         try {
             // 1. Create Facebook Campaign
             $fbCampaign = $this->createCampaign($accountId, $campaign, $strategy, $plan, $result);
@@ -361,25 +363,26 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                     $imageUrl = StorageHelper::url($image->s3_path);
                     $creative = $this->creativeService->createImageCreative(
                         $accountId,
-                        $campaign->name . ' - Image Creative ' . ($index + 1),
+                        $campaign->name.' - Image Creative '.($index + 1),
                         $imageUrl,
                         $headline,
                         $primaryText,
                         'LEARN_MORE',
                         $destinationUrl
                     );
-                    if (!$creative || !isset($creative['id'])) {
+                    if (! $creative || ! isset($creative['id'])) {
                         Log::warning("FacebookAdsExecutionAgent: Failed to create image creative for image {$image->id}");
+
                         continue;
                     }
                     $ad = $this->adService->createAd(
                         $accountId,
                         $fbAdSet['id'],
-                        $campaign->name . ' - Image Ad ' . ($index + 1),
+                        $campaign->name.' - Image Ad '.($index + 1),
                         $creative['id']
                     );
                     if ($ad && isset($ad['id'])) {
-                        $result->addPlatformId('image_ad_' . $image->id, $ad['id']);
+                        $result->addPlatformId('image_ad_'.$image->id, $ad['id']);
                         if ($adsCreated === 0) {
                             // Store the first ad ID on the strategy for reference
                             $strategy->facebook_creative_id = $creative['id'];
@@ -390,7 +393,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                         Log::info("FacebookAdsExecutionAgent: Created image ad {$ad['id']} for image {$image->id}");
                     }
                 } catch (\Exception $e) {
-                    Log::warning("FacebookAdsExecutionAgent: Image ad creation failed for image {$image->id}: " . $e->getMessage());
+                    Log::warning("FacebookAdsExecutionAgent: Image ad creation failed for image {$image->id}: ".$e->getMessage());
                 }
             }
 
@@ -405,25 +408,26 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                     $videoUrl = StorageHelper::url($video->s3_path);
                     $creative = $this->creativeService->createVideoCreative(
                         $accountId,
-                        $campaign->name . ' - Video Creative ' . ($index + 1),
+                        $campaign->name.' - Video Creative '.($index + 1),
                         $videoUrl,
                         $headline,
                         $adCopy->descriptions[0] ?? 'Discover our story',
                         'LEARN_MORE',
                         $destinationUrl
                     );
-                    if (!$creative || !isset($creative['id'])) {
+                    if (! $creative || ! isset($creative['id'])) {
                         Log::warning("FacebookAdsExecutionAgent: Failed to create video creative for video {$video->id}");
+
                         continue;
                     }
                     $ad = $this->adService->createAd(
                         $accountId,
                         $fbAdSet['id'],
-                        $campaign->name . ' - Video Ad ' . ($index + 1),
+                        $campaign->name.' - Video Ad '.($index + 1),
                         $creative['id']
                     );
                     if ($ad && isset($ad['id'])) {
-                        $result->addPlatformId('video_ad_' . $video->id, $ad['id']);
+                        $result->addPlatformId('video_ad_'.$video->id, $ad['id']);
                         if ($adsCreated === 0) {
                             $strategy->facebook_creative_id = $creative['id'];
                             $strategy->facebook_ad_id = $ad['id'];
@@ -433,7 +437,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                         Log::info("FacebookAdsExecutionAgent: Created video ad {$ad['id']} for video {$video->id}");
                     }
                 } catch (\Exception $e) {
-                    Log::warning("FacebookAdsExecutionAgent: Video ad creation failed for video {$video->id}: " . $e->getMessage());
+                    Log::warning("FacebookAdsExecutionAgent: Video ad creation failed for video {$video->id}: ".$e->getMessage());
                 }
             }
 
@@ -452,7 +456,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             return $result;
 
         } catch (\Exception $e) {
-            Log::error("FacebookAdsExecutionAgent: Plan execution failed: " . $e->getMessage());
+            Log::error('FacebookAdsExecutionAgent: Plan execution failed: '.$e->getMessage());
 
             $result = ExecutionResult::failure($plan, [$e->getMessage()]);
             $result->executionTime = microtime(true) - $startTime;
@@ -460,7 +464,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             return $result;
         }
     }
-    
+
     /**
      * Create Facebook campaign
      */
@@ -472,17 +476,18 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): array {
         // Idempotency guard — reuse existing campaign on retry
-        if (!empty($campaign->facebook_ads_campaign_id)) {
-            Log::info("FacebookAdsExecutionAgent: Reusing existing Facebook campaign from prior attempt", [
-                'campaign_id'              => $campaign->id,
+        if (! empty($campaign->facebook_ads_campaign_id)) {
+            Log::info('FacebookAdsExecutionAgent: Reusing existing Facebook campaign from prior attempt', [
+                'campaign_id' => $campaign->id,
                 'facebook_ads_campaign_id' => $campaign->facebook_ads_campaign_id,
             ]);
             $result->addPlatformId('campaign', $campaign->facebook_ads_campaign_id);
+
             return ['id' => $campaign->facebook_ads_campaign_id];
         }
 
         $campaignStructure = $plan->getCampaignStructure();
-        $dailyBudgetCents = (int)(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
+        $dailyBudgetCents = (int) (($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
 
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
@@ -492,7 +497,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             CampaignStatusHelper::getFacebookAdsStatus()
         );
 
-        if (!$fbCampaign || !isset($fbCampaign['id'])) {
+        if (! $fbCampaign || ! isset($fbCampaign['id'])) {
             throw new \Exception('Failed to create Facebook campaign');
         }
 
@@ -505,7 +510,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
         return $fbCampaign;
     }
-    
+
     /**
      * Create Facebook ad set with targeting
      */
@@ -518,18 +523,19 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionResult $result
     ): array {
         // Idempotency guard — reuse existing ad set on retry
-        if (!empty($strategy->facebook_adset_id)) {
-            Log::info("FacebookAdsExecutionAgent: Reusing existing Facebook ad set from prior attempt", [
-                'campaign_id'         => $campaign->id,
-                'facebook_adset_id'   => $strategy->facebook_adset_id,
+        if (! empty($strategy->facebook_adset_id)) {
+            Log::info('FacebookAdsExecutionAgent: Reusing existing Facebook ad set from prior attempt', [
+                'campaign_id' => $campaign->id,
+                'facebook_adset_id' => $strategy->facebook_adset_id,
             ]);
             $result->addPlatformId('ad_set', $strategy->facebook_adset_id);
+
             return ['id' => $strategy->facebook_adset_id];
         }
 
         $campaignStructure = $plan->getCampaignStructure();
-        $dailyBudgetCents = (int)(($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
-        
+        $dailyBudgetCents = (int) (($strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30)) * 100);
+
         // Build targeting from plan
         $targeting = $this->buildTargeting($plan);
 
@@ -538,12 +544,12 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         if ($this->customer->facebook_pixel_id) {
             $objective = $campaignStructure['objective'] ?? '';
             $eventType = match (true) {
-                str_contains($objective, 'LEADS')  => 'LEAD',
-                str_contains($objective, 'SALES')  => 'PURCHASE',
-                default                            => 'LEAD',
+                str_contains($objective, 'LEADS') => 'LEAD',
+                str_contains($objective, 'SALES') => 'PURCHASE',
+                default => 'LEAD',
             };
             $promotedObject = [
-                'pixel_id'          => $this->customer->facebook_pixel_id,
+                'pixel_id' => $this->customer->facebook_pixel_id,
                 'custom_event_type' => $eventType,
             ];
         }
@@ -554,24 +560,24 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $fbAdSet = $this->adSetService->createAdSet(
             $accountId,
             $campaignId,
-            $campaign->name . ' - Ad Set',
+            $campaign->name.' - Ad Set',
             $targeting,
             $campaignStructure['optimization_goal'] ?? 'LANDING_PAGE_VIEWS',
             CampaignStatusHelper::getFacebookAdsStatus(),
             $promotedObject
         );
-        
-        if (!$fbAdSet || !isset($fbAdSet['id'])) {
+
+        if (! $fbAdSet || ! isset($fbAdSet['id'])) {
             throw new \Exception('Failed to create Facebook ad set');
         }
-        
+
         $result->addPlatformId('ad_set', $fbAdSet['id']);
         $strategy->facebook_adset_id = $fbAdSet['id'];
         $strategy->save();
-        
+
         return $fbAdSet;
     }
-    
+
     /**
      * Create single image ad
      */
@@ -585,11 +591,11 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     ): void {
         $imageCollateral = $strategy->imageCollaterals()->where('is_active', true)->first();
         $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
-        
-        if (!$imageCollateral || !$adCopy) {
+
+        if (! $imageCollateral || ! $adCopy) {
             throw new \Exception('No image or ad copy available for Facebook ad');
         }
-        
+
         $imageUrl = StorageHelper::url($imageCollateral->s3_path);
 
         $destinationUrl = $this->getDestinationUrl($campaign, $strategy);
@@ -600,39 +606,39 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
         $fbCreative = $this->creativeService->createImageCreative(
             $accountId,
-            $campaign->name . ' - Creative',
+            $campaign->name.' - Creative',
             $imageUrl,
             $adCopy->headlines[0] ?? 'Learn More',
             $primaryText,
             'LEARN_MORE',
             $destinationUrl
         );
-        
-        if (!$fbCreative || !isset($fbCreative['id'])) {
+
+        if (! $fbCreative || ! isset($fbCreative['id'])) {
             throw new \Exception('Failed to create Facebook ad creative');
         }
-        
+
         $result->addPlatformId('creative', $fbCreative['id']);
         $strategy->facebook_creative_id = $fbCreative['id'];
         $strategy->save();
-        
+
         // Create ad
         $fbAd = $this->adService->createAd(
             $accountId,
             $adSetId,
-            $campaign->name . ' - Ad',
+            $campaign->name.' - Ad',
             $fbCreative['id']
         );
-        
-        if (!$fbAd || !isset($fbAd['id'])) {
+
+        if (! $fbAd || ! isset($fbAd['id'])) {
             throw new \Exception('Failed to create Facebook ad');
         }
-        
+
         $result->addPlatformId('ad', $fbAd['id']);
         $strategy->facebook_ad_id = $fbAd['id'];
         $strategy->save();
     }
-    
+
     /**
      * Create carousel ad with multiple images
      */
@@ -646,11 +652,11 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     ): void {
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->take(10)->get();
         $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
-        
-        if ($imageCollaterals->count() < 2 || !$adCopy) {
+
+        if ($imageCollaterals->count() < 2 || ! $adCopy) {
             throw new \Exception('Need at least 2 images and ad copy for carousel ad');
         }
-        
+
         // Build carousel cards
         $carouselCards = [];
         foreach ($imageCollaterals as $index => $image) {
@@ -661,44 +667,44 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 'link' => $this->getDestinationUrl($campaign, $strategy),
             ];
         }
-        
+
         $primaryText = $plan->getCreativeStrategy()['primary_text']
             ?? ($adCopy->descriptions[0] ?? '')
             ?: 'Discover our products and services';
 
         $fbCreative = $this->creativeService->createCarouselCreative(
             $accountId,
-            $campaign->name . ' - Carousel Creative',
+            $campaign->name.' - Carousel Creative',
             $carouselCards,
             $this->getDestinationUrl($campaign, $strategy),
             $primaryText
         );
-        
-        if (!$fbCreative || !isset($fbCreative['id'])) {
+
+        if (! $fbCreative || ! isset($fbCreative['id'])) {
             throw new \Exception('Failed to create Facebook carousel creative');
         }
-        
+
         $result->addPlatformId('creative', $fbCreative['id']);
         $strategy->facebook_creative_id = $fbCreative['id'];
         $strategy->save();
-        
+
         // Create ad
         $fbAd = $this->adService->createAd(
             $accountId,
             $adSetId,
-            $campaign->name . ' - Carousel Ad',
+            $campaign->name.' - Carousel Ad',
             $fbCreative['id']
         );
-        
-        if (!$fbAd || !isset($fbAd['id'])) {
+
+        if (! $fbAd || ! isset($fbAd['id'])) {
             throw new \Exception('Failed to create Facebook ad');
         }
-        
+
         $result->addPlatformId('ad', $fbAd['id']);
         $strategy->facebook_ad_id = $fbAd['id'];
         $strategy->save();
     }
-    
+
     /**
      * Create video ad
      */
@@ -712,48 +718,48 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     ): void {
         $videoCollateral = $strategy->videoCollaterals()->where('is_active', true)->first();
         $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
-        
-        if (!$videoCollateral || !$adCopy) {
+
+        if (! $videoCollateral || ! $adCopy) {
             throw new \Exception('No video or ad copy available for Facebook video ad');
         }
-        
+
         $videoUrl = StorageHelper::url($videoCollateral->s3_path);
-        
+
         $fbCreative = $this->creativeService->createVideoCreative(
             $accountId,
-            $campaign->name . ' - Video Creative',
+            $campaign->name.' - Video Creative',
             $videoUrl,
             $adCopy->headlines[0] ?? 'Watch Now',
             $adCopy->descriptions[0] ?? 'Discover our story',
             'LEARN_MORE',
             $this->getDestinationUrl($campaign, $strategy)
         );
-        
-        if (!$fbCreative || !isset($fbCreative['id'])) {
+
+        if (! $fbCreative || ! isset($fbCreative['id'])) {
             throw new \Exception('Failed to create Facebook video creative');
         }
-        
+
         $result->addPlatformId('creative', $fbCreative['id']);
         $strategy->facebook_creative_id = $fbCreative['id'];
         $strategy->save();
-        
+
         // Create ad
         $fbAd = $this->adService->createAd(
             $accountId,
             $adSetId,
-            $campaign->name . ' - Video Ad',
+            $campaign->name.' - Video Ad',
             $fbCreative['id']
         );
-        
-        if (!$fbAd || !isset($fbAd['id'])) {
+
+        if (! $fbAd || ! isset($fbAd['id'])) {
             throw new \Exception('Failed to create Facebook ad');
         }
-        
+
         $result->addPlatformId('ad', $fbAd['id']);
         $strategy->facebook_ad_id = $fbAd['id'];
         $strategy->save();
     }
-    
+
     /**
      * Build targeting configuration from execution plan
      */
@@ -779,37 +785,33 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             'behaviors' => $targeting['behaviors'] ?? [],
             'custom_audiences' => $targeting['custom_audiences'] ?? [],
         ];
-        
+
         // Add placement targeting based on AI strategy
         $placementStrategy = $this->determinePlacementStrategy($plan, $creativeStrategy);
-        if (!empty($placementStrategy)) {
+        if (! empty($placementStrategy)) {
             $targetingConfig['publisher_platforms'] = $placementStrategy['platforms'];
-            if (!empty($placementStrategy['positions'])) {
+            if (! empty($placementStrategy['positions'])) {
                 $targetingConfig['facebook_positions'] = $placementStrategy['positions']['facebook'] ?? [];
                 $targetingConfig['instagram_positions'] = $placementStrategy['positions']['instagram'] ?? [];
             }
         }
-        
+
         return $targetingConfig;
     }
-    
+
     /**
      * Determine optimal placement strategy based on creative format and campaign objective.
      * AI-driven placement optimization for Facebook, Instagram, Messenger, and Audience Network.
-     *
-     * @param ExecutionPlan $plan
-     * @param array $creativeStrategy
-     * @return array
      */
     protected function determinePlacementStrategy(ExecutionPlan $plan, array $creativeStrategy): array
     {
         $adFormat = $creativeStrategy['ad_format'] ?? 'single_image';
         $objective = $plan->getCampaignStructure()['objective'] ?? 'LINK_CLICKS';
-        
+
         // Default: Advantage+ Placements (let Meta optimize)
         // This is recommended for most campaigns as Meta's algorithm can optimize delivery
         $useAutomaticPlacements = $creativeStrategy['use_automatic_placements'] ?? true;
-        
+
         if ($useAutomaticPlacements) {
             return [
                 'platforms' => ['facebook', 'instagram', 'audience_network', 'messenger'],
@@ -817,7 +819,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 'positions' => [], // Let Meta optimize
             ];
         }
-        
+
         // Manual placement selection based on creative format
         $placements = [
             'platforms' => [],
@@ -827,7 +829,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 'instagram' => [],
             ],
         ];
-        
+
         switch ($adFormat) {
             case 'video':
                 // Video ads perform best on:
@@ -839,7 +841,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                     'instagram' => ['stream', 'story', 'reels', 'explore'],
                 ];
                 break;
-                
+
             case 'carousel':
                 // Carousel ads work well on:
                 // - Facebook Feed
@@ -851,7 +853,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                     'instagram' => ['stream', 'explore'],
                 ];
                 break;
-                
+
             case 'stories':
                 // Stories-specific creative
                 $placements['platforms'] = ['facebook', 'instagram'];
@@ -860,7 +862,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                     'instagram' => ['story', 'reels'],
                 ];
                 break;
-                
+
             case 'reels':
                 // Reels-specific creative
                 $placements['platforms'] = ['facebook', 'instagram'];
@@ -869,13 +871,13 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                     'instagram' => ['reels'],
                 ];
                 break;
-                
+
             case 'single_image':
             default:
                 // Single image works across all placements
                 // Optimize based on objective
                 $placements['platforms'] = ['facebook', 'instagram'];
-                
+
                 if (in_array($objective, ['CONVERSIONS', 'SALES'])) {
                     // Conversions: Focus on Feed for higher intent
                     $placements['positions'] = [
@@ -898,30 +900,30 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 }
                 break;
         }
-        
+
         Log::info('FacebookAdsExecutionAgent: Determined placement strategy', [
             'ad_format' => $adFormat,
             'objective' => $objective,
             'platforms' => $placements['platforms'],
             'automatic' => $placements['automatic'],
         ]);
-        
+
         return $placements;
     }
-    
+
     /**
      * Handle execution errors with AI-powered recovery
      */
     protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
     {
-        Log::error("FacebookAdsExecutionAgent: Execution error - " . $error->getMessage(), [
+        Log::error('FacebookAdsExecutionAgent: Execution error - '.$error->getMessage(), [
             'campaign_id' => $context->campaign->id,
-            'customer_id' => $this->customer->id
+            'customer_id' => $this->customer->id,
         ]);
-        
+
         // Generate AI-powered recovery plan
         $recoveryPrompt = $this->buildRecoveryPrompt($error, $context);
-        
+
         try {
             $response = $this->geminiService->generateContent(
                 model: config('ai.models.default'),
@@ -929,14 +931,14 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                 config: ['temperature' => 0.3, 'maxOutputTokens' => 2048],
                 systemInstruction: 'You are an expert at diagnosing and recovering from Facebook/Meta Ads API errors. Provide specific, actionable recovery steps.'
             );
-            
+
             if ($response && isset($response['text'])) {
                 return RecoveryPlan::fromJson($response['text']);
             }
         } catch (\Exception $e) {
-            Log::error("FacebookAdsExecutionAgent: Failed to generate recovery plan: " . $e->getMessage());
+            Log::error('FacebookAdsExecutionAgent: Failed to generate recovery plan: '.$e->getMessage());
         }
-        
+
         // Fallback to simple recovery plan
         return RecoveryPlan::simple($error->getMessage(), [
             'Check Facebook Ads account connection',
@@ -944,10 +946,10 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             'Ensure access token has required permissions',
             'Check payment method is valid',
             'Review creative assets and ad copy',
-            'Verify targeting settings are valid'
+            'Verify targeting settings are valid',
         ]);
     }
-    
+
     /**
      * Build recovery prompt for AI
      */
@@ -987,7 +989,7 @@ Provide a JSON response with:
 }
 PROMPT;
     }
-    
+
     /**
      * Check if Facebook Pixel is installed
      */
@@ -995,20 +997,21 @@ PROMPT;
     {
         try {
             $adAccountId = $context->customer->facebook_ads_account_id;
-            if (!$adAccountId) {
+            if (! $adAccountId) {
                 return false;
             }
 
             $adAccountService = new \App\Services\FacebookAds\AdAccountService($context->customer);
-            $pixels = $adAccountService->getPixels('act_' . $adAccountId);
+            $pixels = $adAccountService->getPixels('act_'.$adAccountId);
 
-            return !empty($pixels);
+            return ! empty($pixels);
         } catch (\Exception $e) {
-            Log::warning('Failed to check Pixel installation: ' . $e->getMessage());
+            Log::warning('Failed to check Pixel installation: '.$e->getMessage());
+
             return false;
         }
     }
-    
+
     /**
      * Check if Pixel has conversion data
      */
@@ -1016,32 +1019,33 @@ PROMPT;
     {
         try {
             $adAccountId = $context->customer->facebook_ads_account_id;
-            if (!$adAccountId) {
+            if (! $adAccountId) {
                 return false;
             }
 
             $adAccountService = new \App\Services\FacebookAds\AdAccountService($context->customer);
-            $pixels = $adAccountService->getPixels('act_' . $adAccountId);
+            $pixels = $adAccountService->getPixels('act_'.$adAccountId);
 
             foreach ($pixels as $pixel) {
                 $pixelId = $pixel['id'] ?? null;
-                if (!$pixelId) {
+                if (! $pixelId) {
                     continue;
                 }
 
                 $stats = $adAccountService->getPixelStats($pixelId);
-                if (!empty($stats)) {
+                if (! empty($stats)) {
                     return true;
                 }
             }
 
             return false;
         } catch (\Exception $e) {
-            Log::warning('Failed to check Pixel conversions: ' . $e->getMessage());
+            Log::warning('Failed to check Pixel conversions: '.$e->getMessage());
+
             return false;
         }
     }
-    
+
     /**
      * Get the platform name for this agent
      */
@@ -1058,12 +1062,13 @@ PROMPT;
         $params = [
             'utm_source' => 'facebook',
             'utm_medium' => $strategy->campaign_type ?? 'social',
-            'utm_campaign' => 'spectra_' . $campaign->id,
-            'utm_content' => 'strategy_' . $strategy->id,
+            'utm_campaign' => 'spectra_'.$campaign->id,
+            'utm_content' => 'strategy_'.$strategy->id,
         ];
 
         $separator = str_contains($url, '?') ? '&' : '?';
-        return $url . $separator . http_build_query($params);
+
+        return $url.$separator.http_build_query($params);
     }
 
     /**
@@ -1075,6 +1080,7 @@ PROMPT;
         if (empty($url)) {
             return '';
         }
+
         return $this->appendUtmParameters($url, $campaign, $strategy);
     }
 }

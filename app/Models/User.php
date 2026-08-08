@@ -2,18 +2,17 @@
 
 namespace App\Models;
 
+use App\Mail\InvoiceCreated;
 use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Cashier\Billable;
-use App\Mail\InvoiceCreated;
-use App\Models\Plan;
 
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, Billable;
+    use Billable, HasFactory, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -117,6 +116,7 @@ class User extends Authenticatable implements MustVerifyEmail
                     return $plan->name;
                 }
             }
+
             return 'Subscribed';
         }
 
@@ -170,9 +170,9 @@ class User extends Authenticatable implements MustVerifyEmail
         $slug = $plan?->slug ?? 'free';
 
         return match ($slug) {
-            'free'    => ['google'],
+            'free' => ['google'],
             'starter' => [$this->starter_platform ?? 'google'],
-            default   => ['google', 'facebook', 'microsoft', 'linkedin'],
+            default => ['google', 'facebook', 'microsoft', 'linkedin'],
         };
     }
 
@@ -226,9 +226,6 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Check if the user has a specific role.
-     *
-     * @param string $roleName
-     * @return bool
      */
     public function hasRole(string $roleName): bool
     {
@@ -237,13 +234,9 @@ class User extends Authenticatable implements MustVerifyEmail
 
     /**
      * Check if the user is an owner of a specific customer.
-     *
-     * @param Customer $customer
-     * @return bool
      */
     public function isOwnerOf(Customer $customer): bool
     {
         return $this->customers()->where('customer_id', $customer->id)->wherePivot('role', 'owner')->exists();
     }
 }
-

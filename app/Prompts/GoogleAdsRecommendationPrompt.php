@@ -5,6 +5,7 @@ namespace App\Prompts;
 class GoogleAdsRecommendationPrompt
 {
     private array $performanceData;
+
     private array $campaignConfig;
 
     public function __construct(array $performanceData, array $campaignConfig)
@@ -16,8 +17,8 @@ class GoogleAdsRecommendationPrompt
     public function getPrompt(): string
     {
         $prompt = "You are an expert Google Ads analyst. Based on the following performance data and campaign configuration, provide actionable recommendations to optimize the campaign. \n\n";
-        $prompt .= "Current Campaign Configuration:\n" . json_encode($this->campaignConfig, JSON_PRETTY_PRINT) . "\n\n";
-        $prompt .= "Recent Performance Data (last " . count($this->performanceData) . " days):\n" . json_encode($this->performanceData, JSON_PRETTY_PRINT) . "\n\n";
+        $prompt .= "Current Campaign Configuration:\n".json_encode($this->campaignConfig, JSON_PRETTY_PRINT)."\n\n";
+        $prompt .= 'Recent Performance Data (last '.count($this->performanceData)." days):\n".json_encode($this->performanceData, JSON_PRETTY_PRINT)."\n\n";
         $prompt .= "Analyze this data and provide recommendations in a JSON array format. Each recommendation should have 'type', 'target_entity' (e.g., campaignId, adGroupId), 'parameters' (e.g., new_budget_amount, new_bidding_strategy), and 'rationale'. Focus on areas like budget adjustments, bidding strategy changes, ad copy optimization ideas, or targeting refinements. If no specific recommendation is identified, return an empty array.\n\n";
         $prompt .= "Example of desired JSON output:\n";
         $prompt .= "```json\n";

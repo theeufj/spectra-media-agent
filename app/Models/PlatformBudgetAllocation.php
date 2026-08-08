@@ -51,6 +51,7 @@ class PlatformBudgetAllocation extends Model
     {
         $pctField = "{$platform}_pct";
         $pct = (float) ($this->$pctField ?? 0);
+
         return round(($this->total_monthly_budget / 30.4) * ($pct / 100), 2);
     }
 }

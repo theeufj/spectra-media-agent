@@ -14,6 +14,7 @@ abstract class AppMailable extends Mailable
     public function withTenant(?string $tenantKey): static
     {
         $this->tenantKey = $tenantKey;
+
         return $this;
     }
 

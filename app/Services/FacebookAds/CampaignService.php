@@ -2,9 +2,9 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
 use App\Services\CampaignStatusHelper;
+use Illuminate\Support\Facades\Log;
 
 class CampaignService extends BaseFacebookAdsService
 {
@@ -16,8 +16,7 @@ class CampaignService extends BaseFacebookAdsService
     /**
      * List all campaigns for an ad account.
      *
-     * @param string $accountId The Facebook ad account ID (without 'act_' prefix)
-     * @return ?array
+     * @param  string  $accountId  The Facebook ad account ID (without 'act_' prefix)
      */
     public function listCampaigns(string $accountId): ?array
     {
@@ -31,20 +30,23 @@ class CampaignService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'campaign_count' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error listing campaigns: " . $e->getMessage(), [
+            Log::error('Error listing campaigns: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -52,11 +54,11 @@ class CampaignService extends BaseFacebookAdsService
     /**
      * Create a new campaign.
      *
-     * @param string $accountId The Facebook ad account ID (without 'act_' prefix)
-     * @param string $campaignName Campaign name
-     * @param string $objective Campaign objective (e.g., 'LINK_CLICKS', 'CONVERSIONS', 'REACH')
-     * @param int $dailyBudget Daily budget in cents (e.g., 50000 for $500)
-     * @param string|null $status Campaign status ('ACTIVE', 'PAUSED'). If null, uses config.
+     * @param  string  $accountId  The Facebook ad account ID (without 'act_' prefix)
+     * @param  string  $campaignName  Campaign name
+     * @param  string  $objective  Campaign objective (e.g., 'LINK_CLICKS', 'CONVERSIONS', 'REACH')
+     * @param  int  $dailyBudget  Daily budget in cents (e.g., 50000 for $500)
+     * @param  string|null  $status  Campaign status ('ACTIVE', 'PAUSED'). If null, uses config.
      * @return ?array
      */
     /**
@@ -66,14 +68,14 @@ class CampaignService extends BaseFacebookAdsService
     private function normaliseObjective(string $objective): string
     {
         return match (strtoupper($objective)) {
-            'LINK_CLICKS', 'TRAFFIC'             => 'OUTCOME_TRAFFIC',
-            'CONVERSIONS', 'PURCHASE', 'SALES'   => 'OUTCOME_SALES',
-            'LEAD_GENERATION', 'LEADS'           => 'OUTCOME_LEADS',
+            'LINK_CLICKS', 'TRAFFIC' => 'OUTCOME_TRAFFIC',
+            'CONVERSIONS', 'PURCHASE', 'SALES' => 'OUTCOME_SALES',
+            'LEAD_GENERATION', 'LEADS' => 'OUTCOME_LEADS',
             'BRAND_AWARENESS', 'REACH',
-            'AWARENESS'                          => 'OUTCOME_AWARENESS',
-            'ENGAGEMENT', 'POST_ENGAGEMENT'      => 'OUTCOME_ENGAGEMENT',
-            'APP_INSTALLS', 'APP_PROMOTION'      => 'OUTCOME_APP_PROMOTION',
-            default                              => $objective, // pass through OUTCOME_* as-is
+            'AWARENESS' => 'OUTCOME_AWARENESS',
+            'ENGAGEMENT', 'POST_ENGAGEMENT' => 'OUTCOME_ENGAGEMENT',
+            'APP_INSTALLS', 'APP_PROMOTION' => 'OUTCOME_APP_PROMOTION',
+            default => $objective, // pass through OUTCOME_* as-is
         };
     }
 
@@ -90,15 +92,15 @@ class CampaignService extends BaseFacebookAdsService
 
         try {
             $response = $this->post("/act_{$accountId}/campaigns", [
-                'name'                            => $campaignName,
-                'objective'                       => $normalisedObjective,
-                'daily_budget'                    => $dailyBudget,
+                'name' => $campaignName,
+                'objective' => $normalisedObjective,
+                'daily_budget' => $dailyBudget,
                 // CBO (campaign-level budget) — ad sets must NOT have their own budgets.
                 // is_adset_budget_sharing_enabled: false tells Facebook this is CBO mode.
                 'is_adset_budget_sharing_enabled' => false,
-                'bid_strategy'                    => 'LOWEST_COST_WITHOUT_CAP',
-                'special_ad_categories'           => [],
-                'status'                          => $finalStatus,
+                'bid_strategy' => 'LOWEST_COST_WITHOUT_CAP',
+                'special_ad_categories' => [],
+                'status' => $finalStatus,
             ]);
 
             if ($response && isset($response['id'])) {
@@ -107,22 +109,25 @@ class CampaignService extends BaseFacebookAdsService
                     'campaign_id' => $response['id'],
                     'campaign_name' => $campaignName,
                 ]);
+
                 return $response;
             }
 
-            Log::error("Failed to create campaign", [
+            Log::error('Failed to create campaign', [
                 'customer_id' => $this->customer->id,
                 'account_id' => $accountId,
                 'response' => $response,
             ]);
+
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating campaign: " . $e->getMessage(), [
+            Log::error('Error creating campaign: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
                 'campaign_name' => $campaignName,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -130,8 +135,7 @@ class CampaignService extends BaseFacebookAdsService
     /**
      * Get a single campaign's details including effective status.
      *
-     * @param string $campaignId Campaign ID
-     * @return ?array
+     * @param  string  $campaignId  Campaign ID
      */
     public function getCampaign(string $campaignId): ?array
     {
@@ -146,11 +150,12 @@ class CampaignService extends BaseFacebookAdsService
 
             return null;
         } catch (\Exception $e) {
-            Log::error("Error getting campaign {$campaignId}: " . $e->getMessage(), [
+            Log::error("Error getting campaign {$campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -158,9 +163,8 @@ class CampaignService extends BaseFacebookAdsService
     /**
      * Update a campaign.
      *
-     * @param string $campaignId Campaign ID
-     * @param array $updateData Data to update
-     * @return bool
+     * @param  string  $campaignId  Campaign ID
+     * @param  array  $updateData  Data to update
      */
     public function updateCampaign(string $campaignId, array $updateData): bool
     {
@@ -171,21 +175,24 @@ class CampaignService extends BaseFacebookAdsService
                 Log::info("Updated campaign {$campaignId}", [
                     'customer_id' => $this->customer->id,
                 ]);
+
                 return true;
             }
 
-            Log::error("Failed to update campaign", [
+            Log::error('Failed to update campaign', [
                 'customer_id' => $this->customer->id,
                 'campaign_id' => $campaignId,
                 'response' => $response,
             ]);
+
             return false;
         } catch (\Exception $e) {
-            Log::error("Error updating campaign: " . $e->getMessage(), [
+            Log::error('Error updating campaign: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return false;
         }
     }
@@ -193,10 +200,9 @@ class CampaignService extends BaseFacebookAdsService
     /**
      * Get campaign performance insights.
      *
-     * @param string $campaignId Campaign ID
-     * @param string $dateStart Start date (YYYY-MM-DD)
-     * @param string $dateEnd End date (YYYY-MM-DD)
-     * @return ?array
+     * @param  string  $campaignId  Campaign ID
+     * @param  string  $dateStart  Start date (YYYY-MM-DD)
+     * @param  string  $dateEnd  End date (YYYY-MM-DD)
      */
     public function getCampaignInsights(string $campaignId, string $dateStart, string $dateEnd): ?array
     {
@@ -212,20 +218,23 @@ class CampaignService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
-            Log::warning("Empty or invalid data returned.", [
+            Log::warning('Empty or invalid data returned.', [
                 'customer_id' => $this->customer->id,
-                'response' => $response ?? null
+                'response' => $response ?? null,
             ]);
+
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting campaign insights: " . $e->getMessage(), [
+            Log::error('Error getting campaign insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }

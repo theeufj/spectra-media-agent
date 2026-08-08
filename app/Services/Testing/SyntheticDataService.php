@@ -9,12 +9,12 @@ use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\Competitor;
 use App\Models\Customer;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
-use App\Models\MicrosoftAdsPerformanceData;
-use App\Models\LinkedInAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\Keyword;
 use App\Models\KeywordQualityScore;
+use App\Models\LinkedInAdsPerformanceData;
+use App\Models\MicrosoftAdsPerformanceData;
 use App\Models\User;
 use Illuminate\Support\Str;
 
@@ -84,7 +84,7 @@ class SyntheticDataService
         $this->cleanupUserSandbox($user);
 
         $customer = Customer::create([
-            'name' => 'Sandbox Demo — ' . $user->name,
+            'name' => 'Sandbox Demo — '.$user->name,
             'business_type' => 'E-Commerce',
             'description' => 'Sandbox simulation customer for testing optimization agents',
             'industry' => 'Technology / SaaS',
@@ -92,11 +92,11 @@ class SyntheticDataService
             'timezone' => 'America/New_York',
             'currency_code' => 'USD',
             'website' => 'https://sandbox-demo.example.com',
-            'google_ads_customer_id' => 'sandbox-' . Str::random(10),
-            'facebook_ads_account_id' => 'sandbox-' . Str::random(10),
-            'microsoft_ads_customer_id' => 'sandbox-' . Str::random(10),
-            'microsoft_ads_account_id' => 'sandbox-' . Str::random(10),
-            'linkedin_ads_account_id' => 'sandbox-' . Str::random(10),
+            'google_ads_customer_id' => 'sandbox-'.Str::random(10),
+            'facebook_ads_account_id' => 'sandbox-'.Str::random(10),
+            'microsoft_ads_customer_id' => 'sandbox-'.Str::random(10),
+            'microsoft_ads_account_id' => 'sandbox-'.Str::random(10),
+            'linkedin_ads_account_id' => 'sandbox-'.Str::random(10),
             'average_order_value' => 95.00,
             'is_sandbox' => true,
             'sandbox_expires_at' => now()->addDays(7),
@@ -131,7 +131,7 @@ class SyntheticDataService
         $campaigns = [];
 
         foreach ($this->scenarios as $key => $config) {
-            $platformId = 'sandbox_' . Str::random(12);
+            $platformId = 'sandbox_'.Str::random(12);
 
             $campaignData = [
                 'customer_id' => $customer->id,
@@ -341,8 +341,8 @@ class SyntheticDataService
                 KeywordQualityScore::create([
                     'customer_id' => $campaign->customer_id,
                     'campaign_google_id' => $campaign->google_ads_campaign_id ?? $campaign->microsoft_ads_campaign_id,
-                    'ad_group_resource_name' => 'sandbox/adGroup/' . $campaign->id . '_' . $keyword->id,
-                    'criterion_resource_name' => 'sandbox/criterion/' . $campaign->id . '_' . $keyword->id,
+                    'ad_group_resource_name' => 'sandbox/adGroup/'.$campaign->id.'_'.$keyword->id,
+                    'criterion_resource_name' => 'sandbox/criterion/'.$campaign->id.'_'.$keyword->id,
                     'keyword_text' => $keyword->keyword_text,
                     'match_type' => $keyword->match_type,
                     'quality_score' => $qs,
@@ -373,7 +373,7 @@ class SyntheticDataService
         ];
 
         for ($j = 0; $j < 15; $j++) {
-            $visitorId = 'sandbox_visitor_' . Str::random(16);
+            $visitorId = 'sandbox_visitor_'.Str::random(16);
             $numTouchpoints = mt_rand(2, 5);
             $touchpointRecords = [];
 
@@ -386,8 +386,8 @@ class SyntheticDataService
                     'visitor_id' => $visitorId,
                     'utm_source' => $source['utm_source'],
                     'utm_medium' => $source['utm_medium'],
-                    'utm_campaign' => 'spectra_' . array_rand($campaigns),
-                    'page_url' => 'https://sandbox-demo.example.com/product?ref=' . Str::random(6),
+                    'utm_campaign' => 'spectra_'.array_rand($campaigns),
+                    'page_url' => 'https://sandbox-demo.example.com/product?ref='.Str::random(6),
                     'touched_at' => now()->subDays($daysAgo)->subHours(mt_rand(0, 23)),
                 ]);
 
@@ -401,7 +401,7 @@ class SyntheticDataService
             $attribution = [
                 'last_click' => [['source' => $lastTouchpoint['utm_source'] ?? 'direct', 'value' => $conversionValue]],
                 'first_click' => [['source' => $touchpointRecords[0]['utm_source'] ?? 'direct', 'value' => $conversionValue]],
-                'linear' => array_map(fn($tp) => [
+                'linear' => array_map(fn ($tp) => [
                     'source' => $tp['utm_source'] ?? 'direct',
                     'value' => round($conversionValue / count($touchpointRecords), 2),
                 ], $touchpointRecords),
@@ -456,7 +456,7 @@ class SyntheticDataService
         foreach ($competitors as $comp) {
             Competitor::create([
                 'customer_id' => $customer->id,
-                'url' => 'https://' . $comp['domain'],
+                'url' => 'https://'.$comp['domain'],
                 'domain' => $comp['domain'],
                 'name' => $comp['name'],
                 'messaging_analysis' => $comp['messaging_analysis'],
@@ -476,7 +476,7 @@ class SyntheticDataService
     public function cleanupUserSandbox(User $user): void
     {
         $sandboxCustomers = Customer::sandbox()
-            ->whereHas('users', fn($q) => $q->where('user_id', $user->id))
+            ->whereHas('users', fn ($q) => $q->where('user_id', $user->id))
             ->get();
 
         foreach ($sandboxCustomers as $customer) {
@@ -489,7 +489,9 @@ class SyntheticDataService
      */
     public function deleteSandboxCustomer(Customer $customer): void
     {
-        if (!$customer->is_sandbox) return;
+        if (! $customer->is_sandbox) {
+            return;
+        }
 
         $campaignIds = $customer->campaigns()->pluck('id');
 

@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Command to crawl a customer's sitemap and trigger brand extraction on completion.
- * 
+ *
  * This will:
  * 1. Parse the sitemap XML
  * 2. Dispatch CrawlPage jobs in a batch for each URL
@@ -39,45 +39,47 @@ class CrawlCustomerSitemap extends Command
     {
         $customerId = $this->argument('customer_id');
         $sitemapUrl = $this->argument('sitemap_url');
-        
+
         $customer = Customer::find($customerId);
-        
-        if (!$customer) {
+
+        if (! $customer) {
             $this->error("Customer with ID {$customerId} not found.");
+
             return 1;
         }
-        
-        if (!$customer->users()->exists()) {
+
+        if (! $customer->users()->exists()) {
             $this->error("Customer {$customerId} has no associated users.");
+
             return 1;
         }
-        
+
         $user = $customer->users()->first();
-        
+
         $this->info("Starting sitemap crawl for customer: {$customer->name}");
         $this->info("Sitemap URL: {$sitemapUrl}");
         $this->newLine();
-        
+
         // Dispatch the CrawlSitemap job
         CrawlSitemap::dispatch($user, $sitemapUrl, $customer->id);
-        
-        $this->info("✓ CrawlSitemap job dispatched successfully!");
+
+        $this->info('✓ CrawlSitemap job dispatched successfully!');
         $this->newLine();
-        $this->line("The job will:");
-        $this->line("  1. Parse the sitemap XML");
-        $this->line("  2. Create a batch of CrawlPage jobs for each URL");
-        $this->line("  3. Populate the knowledge base with page content");
-        $this->line("  4. Automatically trigger brand extraction when complete");
+        $this->line('The job will:');
+        $this->line('  1. Parse the sitemap XML');
+        $this->line('  2. Create a batch of CrawlPage jobs for each URL');
+        $this->line('  3. Populate the knowledge base with page content');
+        $this->line('  4. Automatically trigger brand extraction when complete');
         $this->newLine();
-        $this->comment("Monitor progress with: php artisan queue:work");
-        $this->comment("View batches with: php artisan queue:monitor");
-        
-        Log::info("CrawlCustomerSitemap command executed", [
+        $this->comment('Monitor progress with: php artisan queue:work');
+        $this->comment('View batches with: php artisan queue:monitor');
+
+        Log::info('CrawlCustomerSitemap command executed', [
             'customer_id' => $customer->id,
             'user_id' => $user->id,
             'sitemap_url' => $sitemapUrl,
         ]);
-        
+
         return 0;
     }
 }

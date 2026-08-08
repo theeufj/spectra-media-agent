@@ -7,10 +7,8 @@ use App\Models\Campaign;
 use App\Models\CreativeBrief;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Notifications\CriticalAgentAlert;
-use App\Services\MicrosoftAds\CampaignService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Notification;
 
 class MicrosoftAdsCampaignOptimizationAgent
 {
@@ -22,27 +20,29 @@ class MicrosoftAdsCampaignOptimizationAgent
 
     // CPL benchmarks by campaign objective (aligned with LinkedIn for comparison)
     private const CPL_BENCHMARKS = [
-        'conversions'   => ['low' => 20,  'high' => 100],
-        'leads'         => ['low' => 30,  'high' => 150],
-        'brand'         => ['low' => 2,   'high' => 15],
-        'traffic'       => ['low' => 1,   'high' => 10],
+        'conversions' => ['low' => 20,  'high' => 100],
+        'leads' => ['low' => 30,  'high' => 150],
+        'brand' => ['low' => 2,   'high' => 15],
+        'traffic' => ['low' => 1,   'high' => 10],
     ];
 
     private const CPL_OVERSPEND_MULTIPLIER = 3.0;
+
     private const MIN_IMPRESSIONS_FOR_ANALYSIS = 500;
+
     private const CTR_DECLINE_THRESHOLD = 0.25; // 25% WoW decline
 
     public function analyze(Campaign $campaign): array
     {
         $results = [
             'campaign_id' => $campaign->id,
-            'platform'    => 'microsoft',
-            'actions'     => [],
-            'issues'      => [],
-            'briefs'      => [],
+            'platform' => 'microsoft',
+            'actions' => [],
+            'issues' => [],
+            'briefs' => [],
         ];
 
-        if (!$campaign->microsoft_ads_campaign_id) {
+        if (! $campaign->microsoft_ads_campaign_id) {
             return $results;
         }
 
@@ -51,13 +51,13 @@ class MicrosoftAdsCampaignOptimizationAgent
         $this->checkCplVsBenchmark($campaign, $results);
         $this->checkImpressionShare($campaign, $results);
 
-        if (!empty($results['actions']) || !empty($results['issues'])) {
+        if (! empty($results['actions']) || ! empty($results['issues'])) {
             AgentActivity::create([
                 'campaign_id' => $campaign->id,
-                'agent'       => 'MicrosoftAdsCampaignOptimizationAgent',
-                'action'      => 'microsoft_optimization_analysis',
-                'details'     => $results,
-                'status'      => 'completed',
+                'agent' => 'MicrosoftAdsCampaignOptimizationAgent',
+                'action' => 'microsoft_optimization_analysis',
+                'details' => $results,
+                'status' => 'completed',
             ]);
         }
 
@@ -70,7 +70,7 @@ class MicrosoftAdsCampaignOptimizationAgent
     private function checkBudgetPacing(Campaign $campaign, array &$results): void
     {
         $strategy = $campaign->strategies()->latest()->first();
-        if (!$strategy || !$strategy->daily_budget) {
+        if (! $strategy || ! $strategy->daily_budget) {
             return;
         }
 
@@ -79,26 +79,26 @@ class MicrosoftAdsCampaignOptimizationAgent
             ->selectRaw('SUM(cost) as total_cost, COUNT(DISTINCT date) as days')
             ->first();
 
-        if (!$data || ($data->days ?? 0) < 3) {
+        if (! $data || ($data->days ?? 0) < 3) {
             return;
         }
 
         $avgDailySpend = $data->total_cost / $data->days;
-        $budgetUtil    = $avgDailySpend / $strategy->daily_budget;
+        $budgetUtil = $avgDailySpend / $strategy->daily_budget;
 
         if ($budgetUtil > 0.95) {
             // Spending at or above budget cap — may be limiting reach
             $results['issues'][] = [
-                'type'             => 'budget_limited',
-                'avg_daily_spend'  => round($avgDailySpend, 2),
-                'daily_budget'     => $strategy->daily_budget,
-                'utilisation_pct'  => round($budgetUtil * 100, 1),
+                'type' => 'budget_limited',
+                'avg_daily_spend' => round($avgDailySpend, 2),
+                'daily_budget' => $strategy->daily_budget,
+                'utilisation_pct' => round($budgetUtil * 100, 1),
             ];
 
             $results['actions'][] = [
-                'type'        => 'increase_budget_recommended',
-                'reason'      => 'Campaign spending at budget cap — potential missed impressions',
-                'suggestion'  => 'Consider increasing daily budget by 20-30%',
+                'type' => 'increase_budget_recommended',
+                'reason' => 'Campaign spending at budget cap — potential missed impressions',
+                'suggestion' => 'Consider increasing daily budget by 20-30%',
             ];
 
             $this->notify($campaign, 'microsoft_budget_limited',
@@ -108,15 +108,15 @@ class MicrosoftAdsCampaignOptimizationAgent
         } elseif ($budgetUtil < 0.30) {
             // Very low delivery — possible targeting, bid, or policy issue
             $results['issues'][] = [
-                'type'            => 'low_delivery',
+                'type' => 'low_delivery',
                 'avg_daily_spend' => round($avgDailySpend, 2),
-                'daily_budget'    => $strategy->daily_budget,
+                'daily_budget' => $strategy->daily_budget,
                 'utilisation_pct' => round($budgetUtil * 100, 1),
             ];
 
             $results['actions'][] = [
-                'type'       => 'investigate_delivery',
-                'reason'     => 'Campaign spending well below budget — check bids, targeting, and ad approval status',
+                'type' => 'investigate_delivery',
+                'reason' => 'Campaign spending well below budget — check bids, targeting, and ad approval status',
             ];
         }
     }
@@ -139,7 +139,7 @@ class MicrosoftAdsCampaignOptimizationAgent
             ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks')
             ->first();
 
-        if (!$thisWeek || !$lastWeek) {
+        if (! $thisWeek || ! $lastWeek) {
             return;
         }
 
@@ -150,8 +150,8 @@ class MicrosoftAdsCampaignOptimizationAgent
             return;
         }
 
-        $thisCtr = $thisWeek->clicks > 0  ? $thisWeek->clicks  / $thisImpressions : 0;
-        $lastCtr = $lastWeek->clicks > 0  ? $lastWeek->clicks  / $lastImpressions : 0;
+        $thisCtr = $thisWeek->clicks > 0 ? $thisWeek->clicks / $thisImpressions : 0;
+        $lastCtr = $lastWeek->clicks > 0 ? $lastWeek->clicks / $lastImpressions : 0;
 
         if ($lastCtr <= 0) {
             return;
@@ -163,17 +163,17 @@ class MicrosoftAdsCampaignOptimizationAgent
             $dropPct = round($ctrDrop * 100, 1);
 
             $results['issues'][] = [
-                'type'          => 'ctr_decline',
+                'type' => 'ctr_decline',
                 'this_week_ctr' => round($thisCtr * 100, 3),
                 'last_week_ctr' => round($lastCtr * 100, 3),
-                'drop_pct'      => $dropPct,
+                'drop_pct' => $dropPct,
             ];
 
             $this->createCreativeBrief($campaign, 'fatigue_refresh', [
-                'reason'        => 'Microsoft Ads CTR declined week-over-week',
+                'reason' => 'Microsoft Ads CTR declined week-over-week',
                 'this_week_ctr' => round($thisCtr * 100, 3),
                 'last_week_ctr' => round($lastCtr * 100, 3),
-                'drop_pct'      => $dropPct,
+                'drop_pct' => $dropPct,
             ]);
 
             $results['briefs'][] = 'fatigue_refresh';
@@ -195,14 +195,14 @@ class MicrosoftAdsCampaignOptimizationAgent
             ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions')
             ->first();
 
-        if (!$data || ($data->conversions ?? 0) < 5 || ($data->cost ?? 0) <= 0) {
+        if (! $data || ($data->conversions ?? 0) < 5 || ($data->cost ?? 0) <= 0) {
             return;
         }
 
         $cpl = $data->cost / $data->conversions;
 
         // Infer objective from strategy bidding_strategy or fall back to 'conversions'
-        $strategy  = $campaign->strategies()->latest()->first();
+        $strategy = $campaign->strategies()->latest()->first();
         $objective = $strategy?->bidding_strategy['objective'] ?? 'conversions';
         $benchmark = self::CPL_BENCHMARKS[$objective] ?? self::CPL_BENCHMARKS['conversions'];
 
@@ -215,16 +215,16 @@ class MicrosoftAdsCampaignOptimizationAgent
         $cplFmt = number_format($cpl, 2);
 
         $results['issues'][] = [
-            'type'           => 'cpl_above_benchmark',
-            'current_cpl'    => round($cpl, 2),
+            'type' => 'cpl_above_benchmark',
+            'current_cpl' => round($cpl, 2),
             'benchmark_high' => $benchmark['high'],
-            'threshold'      => $threshold,
-            'objective'      => $objective,
+            'threshold' => $threshold,
+            'objective' => $objective,
         ];
 
         $results['actions'][] = [
-            'type'    => 'review_bidding_strategy',
-            'reason'  => "CPL \${$cplFmt} exceeds 3x {$objective} benchmark — review bid strategy and landing page",
+            'type' => 'review_bidding_strategy',
+            'reason' => "CPL \${$cplFmt} exceeds 3x {$objective} benchmark — review bid strategy and landing page",
         ];
 
         $this->notify($campaign, 'microsoft_cpl_above_benchmark',
@@ -244,7 +244,7 @@ class MicrosoftAdsCampaignOptimizationAgent
             ->selectRaw('SUM(impressions) as impressions, COUNT(DISTINCT date) as days')
             ->first();
 
-        $days        = $data->days        ?? 0;
+        $days = $data->days ?? 0;
         $impressions = $data->impressions ?? 0;
 
         if ($days < 5 || $impressions > self::MIN_IMPRESSIONS_FOR_ANALYSIS) {
@@ -252,19 +252,19 @@ class MicrosoftAdsCampaignOptimizationAgent
         }
 
         $results['issues'][] = [
-            'type'            => 'low_impression_volume',
+            'type' => 'low_impression_volume',
             'total_impressions_7d' => $impressions,
-            'days_with_data'  => $days,
+            'days_with_data' => $days,
         ];
 
         $results['actions'][] = [
-            'type'   => 'check_ad_status_and_bids',
+            'type' => 'check_ad_status_and_bids',
             'reason' => "Only {$impressions} impressions over {$days} days — verify ad approval, bid competitiveness, and keyword match types",
         ];
 
         Log::info("MicrosoftAdsCampaignOptimizationAgent: Low impression volume for campaign {$campaign->id}", [
             'impressions' => $impressions,
-            'days'        => $days,
+            'days' => $days,
         ]);
     }
 
@@ -280,14 +280,14 @@ class MicrosoftAdsCampaignOptimizationAgent
         }
 
         CreativeBrief::create([
-            'campaign_id'      => $campaign->id,
-            'customer_id'      => $campaign->customer_id,
-            'platform'         => 'microsoft',
-            'brief_type'       => $briefType,
-            'status'           => 'pending',
+            'campaign_id' => $campaign->id,
+            'customer_id' => $campaign->customer_id,
+            'platform' => 'microsoft',
+            'brief_type' => $briefType,
+            'status' => 'pending',
             'created_by_agent' => 'MicrosoftAdsCampaignOptimizationAgent',
-            'ai_brief'         => "Microsoft Ads campaign requires creative refresh. Reason: {$context['reason']}.",
-            'context'          => $context,
+            'ai_brief' => "Microsoft Ads campaign requires creative refresh. Reason: {$context['reason']}.",
+            'context' => $context,
         ]);
     }
 

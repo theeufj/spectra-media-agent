@@ -20,7 +20,7 @@ class StorageHelperIntegrationTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
     }
@@ -41,8 +41,8 @@ class StorageHelperIntegrationTest extends TestCase
 
     public function test_puts_text_file_and_returns_path_and_url(): void
     {
-        $path     = 'integration-tests/test-' . now()->timestamp . '.txt';
-        $contents = 'Integration test file ' . now()->toIso8601String();
+        $path = 'integration-tests/test-'.now()->timestamp.'.txt';
+        $contents = 'Integration test file '.now()->toIso8601String();
 
         [$returnedPath, $url] = StorageHelper::put($path, $contents, 'text/plain');
 
@@ -55,7 +55,7 @@ class StorageHelperIntegrationTest extends TestCase
 
     public function test_puts_json_file(): void
     {
-        $path     = 'integration-tests/test-' . now()->timestamp . '.json';
+        $path = 'integration-tests/test-'.now()->timestamp.'.json';
         $contents = json_encode(['test' => true, 'timestamp' => now()->timestamp]);
 
         [$returnedPath, $url] = StorageHelper::put($path, $contents, 'application/json');
@@ -68,7 +68,7 @@ class StorageHelperIntegrationTest extends TestCase
 
     public function test_gets_file_after_put(): void
     {
-        $path     = 'integration-tests/get-test-' . now()->timestamp . '.txt';
+        $path = 'integration-tests/get-test-'.now()->timestamp.'.txt';
         $contents = 'Readable integration test content';
 
         StorageHelper::put($path, $contents, 'text/plain');
@@ -81,7 +81,7 @@ class StorageHelperIntegrationTest extends TestCase
 
     public function test_put_returns_public_url_with_http_scheme(): void
     {
-        $path = 'integration-tests/url-test-' . now()->timestamp . '.txt';
+        $path = 'integration-tests/url-test-'.now()->timestamp.'.txt';
 
         [$returnedPath, $url] = StorageHelper::put($path, 'url test', 'text/plain');
         $this->uploadedPaths[] = $returnedPath;
@@ -95,8 +95,8 @@ class StorageHelperIntegrationTest extends TestCase
     public function test_puts_binary_image_data(): void
     {
         // Minimal valid 1x1 white PNG
-        $png      = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==');
-        $path     = 'integration-tests/image-test-' . now()->timestamp . '.png';
+        $png = base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==');
+        $path = 'integration-tests/image-test-'.now()->timestamp.'.png';
 
         [$returnedPath, $url] = StorageHelper::put($path, $png, 'image/png');
         $this->uploadedPaths[] = $returnedPath;

@@ -2,9 +2,9 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
 use App\Services\CampaignStatusHelper;
+use Illuminate\Support\Facades\Log;
 
 class AdService extends BaseFacebookAdsService
 {
@@ -16,8 +16,7 @@ class AdService extends BaseFacebookAdsService
     /**
      * List all ads for an ad set.
      *
-     * @param string $adSetId Ad set ID
-     * @return ?array
+     * @param  string  $adSetId  Ad set ID
      */
     public function listAds(string $adSetId): ?array
     {
@@ -31,16 +30,18 @@ class AdService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'ad_count' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
             return [];
         } catch (\Exception $e) {
-            Log::error("Error listing ads: " . $e->getMessage(), [
+            Log::error('Error listing ads: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -48,10 +49,9 @@ class AdService extends BaseFacebookAdsService
     /**
      * List ads for an ad account (account-level).
      *
-     * @param string $accountId Account ID (with act_ prefix)
-     * @param array $filters Optional API filtering
-     * @param int $limit Max results
-     * @return array
+     * @param  string  $accountId  Account ID (with act_ prefix)
+     * @param  array  $filters  Optional API filtering
+     * @param  int  $limit  Max results
      */
     public function listAdsByAccount(string $accountId, array $filters = [], int $limit = 500): array
     {
@@ -61,7 +61,7 @@ class AdService extends BaseFacebookAdsService
                 'limit' => $limit,
             ];
 
-            if (!empty($filters)) {
+            if (! empty($filters)) {
                 $params['filtering'] = json_encode($filters);
             }
 
@@ -69,9 +69,10 @@ class AdService extends BaseFacebookAdsService
 
             return $response['data'] ?? [];
         } catch (\Exception $e) {
-            Log::error("Error listing ads by account: " . $e->getMessage(), [
+            Log::error('Error listing ads by account: '.$e->getMessage(), [
                 'account_id' => $accountId,
             ]);
+
             return [];
         }
     }
@@ -79,11 +80,10 @@ class AdService extends BaseFacebookAdsService
     /**
      * Create a new ad.
      *
-     * @param string $adSetId Ad set ID
-     * @param string $adName Ad name
-     * @param string $creativeId Creative ID
-     * @param string|null $status Ad status ('ACTIVE', 'PAUSED'). If null, uses config.
-     * @return ?array
+     * @param  string  $adSetId  Ad set ID
+     * @param  string  $adName  Ad name
+     * @param  string  $creativeId  Creative ID
+     * @param  string|null  $status  Ad status ('ACTIVE', 'PAUSED'). If null, uses config.
      */
     public function createAd(
         string $accountId,
@@ -94,7 +94,7 @@ class AdService extends BaseFacebookAdsService
     ): ?array {
         // Use CampaignStatusHelper to determine the appropriate status
         $finalStatus = CampaignStatusHelper::getFacebookAdsStatus($status);
-        
+
         try {
             $response = $this->post("/act_{$accountId}/ads", [
                 'name' => $adName,
@@ -109,22 +109,25 @@ class AdService extends BaseFacebookAdsService
                     'ad_id' => $response['id'],
                     'ad_name' => $adName,
                 ]);
+
                 return $response;
             }
 
-            Log::error("Failed to create ad", [
+            Log::error('Failed to create ad', [
                 'customer_id' => $this->customer->id,
                 'adset_id' => $adSetId,
                 'response' => $response,
             ]);
+
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating ad: " . $e->getMessage(), [
+            Log::error('Error creating ad: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,
                 'ad_name' => $adName,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -132,9 +135,8 @@ class AdService extends BaseFacebookAdsService
     /**
      * Update an ad.
      *
-     * @param string $adId Ad ID
-     * @param array $updateData Data to update
-     * @return bool
+     * @param  string  $adId  Ad ID
+     * @param  array  $updateData  Data to update
      */
     public function updateAd(string $adId, array $updateData): bool
     {
@@ -145,21 +147,24 @@ class AdService extends BaseFacebookAdsService
                 Log::info("Updated ad {$adId}", [
                     'customer_id' => $this->customer->id,
                 ]);
+
                 return true;
             }
 
-            Log::error("Failed to update ad", [
+            Log::error('Failed to update ad', [
                 'customer_id' => $this->customer->id,
                 'ad_id' => $adId,
                 'response' => $response,
             ]);
+
             return false;
         } catch (\Exception $e) {
-            Log::error("Error updating ad: " . $e->getMessage(), [
+            Log::error('Error updating ad: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_id' => $adId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return false;
         }
     }
@@ -167,10 +172,9 @@ class AdService extends BaseFacebookAdsService
     /**
      * Get ad performance insights.
      *
-     * @param string $adId Ad ID
-     * @param string $dateStart Start date (YYYY-MM-DD)
-     * @param string $dateEnd End date (YYYY-MM-DD)
-     * @return ?array
+     * @param  string  $adId  Ad ID
+     * @param  string  $dateStart  Start date (YYYY-MM-DD)
+     * @param  string  $dateEnd  End date (YYYY-MM-DD)
      */
     public function getAdInsights(string $adId, string $dateStart, string $dateEnd): ?array
     {
@@ -186,16 +190,18 @@ class AdService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting ad insights: " . $e->getMessage(), [
+            Log::error('Error getting ad insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_id' => $adId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -203,8 +209,7 @@ class AdService extends BaseFacebookAdsService
     /**
      * Pause an ad.
      *
-     * @param string $adId Ad ID
-     * @return bool
+     * @param  string  $adId  Ad ID
      */
     public function pauseAd(string $adId): bool
     {
@@ -214,8 +219,7 @@ class AdService extends BaseFacebookAdsService
     /**
      * Resume an ad.
      *
-     * @param string $adId Ad ID
-     * @return bool
+     * @param  string  $adId  Ad ID
      */
     public function resumeAd(string $adId): bool
     {
@@ -234,26 +238,28 @@ class AdService extends BaseFacebookAdsService
                 'effective_status' => json_encode(['ACTIVE']),
             ]);
 
-            if (!$response || !isset($response['data'])) {
+            if (! $response || ! isset($response['data'])) {
                 return [];
             }
 
             return array_map(function (array $ad) {
                 $insights = $ad['insights']['data'][0] ?? [];
+
                 return [
-                    'id'                        => $ad['id'],
-                    'name'                      => $ad['name'] ?? $ad['id'],
-                    'status'                    => $ad['status'] ?? 'UNKNOWN',
-                    'impressions'               => (int) ($insights['impressions'] ?? 0),
-                    'quality_ranking'           => $insights['quality_ranking']          ?? 'UNKNOWN',
-                    'engagement_rate_ranking'   => $insights['engagement_rate_ranking']  ?? 'UNKNOWN',
-                    'conversion_rate_ranking'   => $insights['conversion_rate_ranking']  ?? 'UNKNOWN',
+                    'id' => $ad['id'],
+                    'name' => $ad['name'] ?? $ad['id'],
+                    'status' => $ad['status'] ?? 'UNKNOWN',
+                    'impressions' => (int) ($insights['impressions'] ?? 0),
+                    'quality_ranking' => $insights['quality_ranking'] ?? 'UNKNOWN',
+                    'engagement_rate_ranking' => $insights['engagement_rate_ranking'] ?? 'UNKNOWN',
+                    'conversion_rate_ranking' => $insights['conversion_rate_ranking'] ?? 'UNKNOWN',
                 ];
             }, $response['data']);
         } catch (\Exception $e) {
-            Log::error("AdService: Error fetching ads with diagnostics for ad set {$adSetId}: " . $e->getMessage(), [
+            Log::error("AdService: Error fetching ads with diagnostics for ad set {$adSetId}: ".$e->getMessage(), [
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }

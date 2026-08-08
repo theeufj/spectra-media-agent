@@ -5,9 +5,9 @@ namespace App\Services\SEO;
 use App\Models\Customer;
 use App\Services\FirecrawlService;
 use App\Services\GeminiService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * Backlink analysis service.
@@ -18,7 +18,9 @@ use Illuminate\Support\Facades\Cache;
 class BacklinkAnalysisService
 {
     protected Customer $customer;
+
     protected GeminiService $gemini;
+
     protected FirecrawlService $firecrawl;
 
     public function __construct(Customer $customer)
@@ -33,7 +35,7 @@ class BacklinkAnalysisService
      */
     public function analyze(string $domain): array
     {
-        return Cache::remember('backlink_analysis:' . md5($domain), now()->addHours(24), function () use ($domain) {
+        return Cache::remember('backlink_analysis:'.md5($domain), now()->addHours(24), function () use ($domain) {
             return $this->performAnalysis($domain);
         });
     }
@@ -103,17 +105,19 @@ class BacklinkAnalysisService
 
     protected function fetchFromMoz(string $domain, string $apiKey): array
     {
-        return Cache::remember('moz_backlinks:' . md5($domain), now()->addHours(24), function () use ($domain, $apiKey) {
+        return Cache::remember('moz_backlinks:'.md5($domain), now()->addHours(24), function () use ($domain, $apiKey) {
             try {
                 $response = Http::withHeaders([
-                    'Authorization' => 'Bearer ' . $apiKey,
+                    'Authorization' => 'Bearer '.$apiKey,
                 ])->post('https://lsapi.seomoz.com/v2/links', [
                     'target' => $domain,
                     'scope' => 'page',
                     'limit' => 100,
                 ]);
 
-                if (!$response->successful()) return [];
+                if (! $response->successful()) {
+                    return [];
+                }
 
                 return collect($response->json('results', []))->map(fn ($link) => [
                     'source_url' => $link['source_page'] ?? '',
@@ -126,6 +130,7 @@ class BacklinkAnalysisService
                 ])->toArray();
             } catch (\Exception $e) {
                 Log::debug('BacklinkAnalysis: Moz API failed', ['error' => $e->getMessage()]);
+
                 return [];
             }
         });
@@ -139,8 +144,9 @@ class BacklinkAnalysisService
      */
     protected function estimateBacklinks(string $domain): array
     {
-        if (!$this->firecrawl->isConfigured()) {
+        if (! $this->firecrawl->isConfigured()) {
             Log::debug('BacklinkAnalysis: Firecrawl not configured, cannot estimate backlinks');
+
             return [];
         }
 
@@ -154,14 +160,18 @@ class BacklinkAnalysisService
             foreach ($queries as $query) {
                 $response = $this->firecrawl->search($query, 50);
 
-                if (!$response['success']) continue;
+                if (! $response['success']) {
+                    continue;
+                }
 
                 foreach ($response['results'] as $item) {
                     $sourceUrl = $item['url'] ?? '';
                     $sourceHost = parse_url($sourceUrl, PHP_URL_HOST) ?: '';
 
                     // Skip self-referencing results
-                    if (str_contains($sourceHost, $domain)) continue;
+                    if (str_contains($sourceHost, $domain)) {
+                        continue;
+                    }
 
                     $backlinks[] = [
                         'source_url' => $sourceUrl,
@@ -182,6 +192,7 @@ class BacklinkAnalysisService
                 ->toArray();
         } catch (\Exception $e) {
             Log::debug('BacklinkAnalysis: Firecrawl fallback failed', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
@@ -270,6 +281,7 @@ PROMPT;
             return json_decode(trim($text), true) ?? [];
         } catch (\Exception $e) {
             Log::debug('BacklinkAnalysis: AI opportunities failed', ['error' => $e->getMessage()]);
+
             return [];
         }
     }

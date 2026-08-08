@@ -36,16 +36,17 @@ class ReconcileAdSpend implements ShouldQueue
 
     /** Alert only when the gap exceeds BOTH an absolute floor and a relative share. */
     private const ABS_THRESHOLD = 5.0;
+
     private const REL_THRESHOLD = 0.10;
 
     public function handle(): void
     {
         // Spend days that are finalised and already billed: [now-8, now-2].
         $spendStart = now()->subDays(self::WINDOW_DAYS + 1)->toDateString();
-        $spendEnd   = now()->subDays(2)->toDateString();
+        $spendEnd = now()->subDays(2)->toDateString();
         // Deductions lag spend by ~1 day (bill-yesterday cadence): [now-7, now-1].
         $dedStart = now()->subDays(self::WINDOW_DAYS)->startOfDay();
-        $dedEnd   = now()->subDay()->endOfDay();
+        $dedEnd = now()->subDay()->endOfDay();
         $windowLabel = "{$spendStart} to {$spendEnd}";
 
         $discrepancies = [];
@@ -73,13 +74,13 @@ class ReconcileAdSpend implements ShouldQueue
 
                     if ($discrepancy > self::ABS_THRESHOLD && $relative > self::REL_THRESHOLD) {
                         $entry = [
-                            'customer_id'    => $customer->id,
-                            'customer'       => $customer->name,
-                            'currency'       => $customer->adSpendCredit->currency ?? $customer->billingCurrency(),
+                            'customer_id' => $customer->id,
+                            'customer' => $customer->name,
+                            'currency' => $customer->adSpendCredit->currency ?? $customer->billingCurrency(),
                             'platform_spend' => round($platformSpend, 2),
-                            'deductions'     => round($deductions, 2),
-                            'discrepancy'    => round($discrepancy, 2),
-                            'relative'       => round($relative, 4),
+                            'deductions' => round($deductions, 2),
+                            'discrepancy' => round($discrepancy, 2),
+                            'relative' => round($relative, 4),
                         ];
                         $discrepancies[] = $entry;
 
@@ -93,7 +94,7 @@ class ReconcileAdSpend implements ShouldQueue
             'discrepancies' => count($discrepancies),
         ]);
 
-        if (!empty($discrepancies)) {
+        if (! empty($discrepancies)) {
             $admins = User::whereHas('roles', fn ($q) => $q->where('name', 'admin'))->get();
             foreach ($admins as $admin) {
                 $admin->notify(new AdSpendReconciliationAlert($discrepancies, $windowLabel));
@@ -115,15 +116,17 @@ class ReconcileAdSpend implements ShouldQueue
                 ->whereBetween('date', [$start, $end])
                 ->sum('cost');
         }
+
         return $total;
     }
 
     /** Sum absolute deductions from the credit ledger over the window. */
     private function deductions(?AdSpendCredit $credit, $start, $end): float
     {
-        if (!$credit) {
+        if (! $credit) {
             return 0.0;
         }
+
         return (float) abs(
             AdSpendTransaction::where('ad_spend_credit_id', $credit->id)
                 ->where('type', 'deduction')
@@ -134,7 +137,7 @@ class ReconcileAdSpend implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('ReconcileAdSpend failed: ' . $exception->getMessage(), [
+        Log::error('ReconcileAdSpend failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

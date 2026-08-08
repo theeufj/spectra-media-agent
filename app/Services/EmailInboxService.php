@@ -20,6 +20,7 @@ class EmailInboxService
 
         if (! $resendEmailId) {
             Log::warning('Resend inbound webhook missing email_id', $payload);
+
             return;
         }
 
@@ -28,6 +29,7 @@ class EmailInboxService
 
         if (! $inbox) {
             Log::info('No inbox found for inbound addresses', ['to' => $toAddresses]);
+
             return;
         }
 
@@ -38,6 +40,7 @@ class EmailInboxService
                 'email_id' => $resendEmailId,
                 'error' => $e->getMessage(),
             ]);
+
             return;
         }
 
@@ -77,20 +80,20 @@ class EmailInboxService
             $subject = "Fwd: {$message->subject}";
 
             $fwdHeader = "<div style='border-left:3px solid #ccc;padding:8px 12px;margin:16px 0;color:#555;font-size:13px;'>"
-                . "<strong>---------- Forwarded message ----------</strong><br>"
-                . "From: {$originalFrom}<br>"
-                . "To: {$inbox->email_address}<br>"
-                . "Subject: {$message->subject}"
-                . "</div>";
+                .'<strong>---------- Forwarded message ----------</strong><br>'
+                ."From: {$originalFrom}<br>"
+                ."To: {$inbox->email_address}<br>"
+                ."Subject: {$message->subject}"
+                .'</div>';
 
             Resend::emails()->send([
                 'from' => "{$inbox->display_name} <{$inbox->email_address}>",
-                'to'   => [$inbox->forward_to],
+                'to' => [$inbox->forward_to],
                 'subject' => $subject,
-                'html' => $fwdHeader . ($message->html_body ?? nl2br(e($message->text_body ?? ''))),
+                'html' => $fwdHeader.($message->html_body ?? nl2br(e($message->text_body ?? ''))),
                 'text' => "---------- Forwarded message ----------\n"
-                    . "From: {$originalFrom}\nTo: {$inbox->email_address}\nSubject: {$message->subject}\n\n"
-                    . ($message->text_body ?? strip_tags($message->html_body ?? '')),
+                    ."From: {$originalFrom}\nTo: {$inbox->email_address}\nSubject: {$message->subject}\n\n"
+                    .($message->text_body ?? strip_tags($message->html_body ?? '')),
             ]);
         } catch (\Throwable $e) {
             Log::warning("EmailInboxService: Failed to forward message {$message->id} to {$inbox->forward_to}: {$e->getMessage()}");

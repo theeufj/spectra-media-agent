@@ -2,10 +2,9 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Customer;
 use App\Services\GoogleAds\MCCAccountManager;
-use App\Services\GoogleAds\CreateManagedAccount;
+use Illuminate\Console\Command;
 
 class TestMCCAutoCreation extends Command
 {
@@ -19,13 +18,14 @@ class TestMCCAutoCreation extends Command
         $accountId = $this->argument('account_id');
 
         $customer = Customer::find($customerId);
-        if (!$customer) {
+        if (! $customer) {
             $this->error("Customer {$customerId} not found");
+
             return 1;
         }
 
-        $this->info("Testing MCC Account Detection and Auto-Creation");
-        $this->line("=".str_repeat("=", 50));
+        $this->info('Testing MCC Account Detection and Auto-Creation');
+        $this->line('='.str_repeat('=', 50));
         $this->newLine();
 
         try {
@@ -35,12 +35,13 @@ class TestMCCAutoCreation extends Command
             $this->info("Step 1: Getting account info for {$accountId}...");
             $accountInfo = $mccManager->getAccountInfo($accountId);
 
-            if (!$accountInfo) {
-                $this->error("Failed to fetch account info. Check logs for details.");
+            if (! $accountInfo) {
+                $this->error('Failed to fetch account info. Check logs for details.');
+
                 return 1;
             }
 
-            $this->line("✅ Account Info Retrieved:");
+            $this->line('✅ Account Info Retrieved:');
             $this->table(
                 ['Property', 'Value'],
                 [
@@ -54,27 +55,29 @@ class TestMCCAutoCreation extends Command
 
             $this->newLine();
 
-            if (!$accountInfo['is_manager']) {
-                $this->warn("Account is NOT an MCC. Storing directly.");
+            if (! $accountInfo['is_manager']) {
+                $this->warn('Account is NOT an MCC. Storing directly.');
                 $result = $mccManager->handleAccountSelection($accountId);
                 if ($result) {
-                    $this->info("✅ Standard account stored:");
-                    $this->line("   Account ID: " . $result['account_id']);
+                    $this->info('✅ Standard account stored:');
+                    $this->line('   Account ID: '.$result['account_id']);
                 }
+
                 return 0;
             }
 
-            $this->info("Step 2: Account is an MCC. Creating Standard account under it...");
+            $this->info('Step 2: Account is an MCC. Creating Standard account under it...');
 
             $result = $mccManager->handleAccountSelection($accountId);
 
-            if (!$result) {
-                $this->error("Failed to create Standard account. Check logs for details.");
+            if (! $result) {
+                $this->error('Failed to create Standard account. Check logs for details.');
+
                 return 1;
             }
 
             $this->newLine();
-            $this->line("✅ Standard Account Created Successfully!");
+            $this->line('✅ Standard Account Created Successfully!');
             $this->table(
                 ['Property', 'Value'],
                 [
@@ -85,22 +88,23 @@ class TestMCCAutoCreation extends Command
             );
 
             $this->newLine();
-            $this->info("Customer record updated:");
+            $this->info('Customer record updated:');
             $customer->refresh();
             $this->table(
                 ['Field', 'Value'],
                 [
                     ['google_ads_customer_id', $customer->google_ads_customer_id],
                     ['google_ads_manager_customer_id', $customer->google_ads_manager_customer_id ?? 'none'],
-                   ['google_ads_customer_is_manager', $customer->google_ads_customer_is_manager ? 'true' : 'false'],
+                    ['google_ads_customer_is_manager', $customer->google_ads_customer_is_manager ? 'true' : 'false'],
                 ]
             );
 
             return 0;
         } catch (\Exception $e) {
-            $this->error("Error: " . $e->getMessage());
+            $this->error('Error: '.$e->getMessage());
             $this->error("\nStack trace:");
             $this->error($e->getTraceAsString());
+
             return 1;
         }
     }

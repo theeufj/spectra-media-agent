@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\Customer;
 use App\Models\Competitor;
+use App\Models\Customer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 
@@ -40,8 +40,9 @@ class CompetitorGapAnalysisService
             true
         );
 
-        if (!$response || !isset($response['text'])) {
+        if (! $response || ! isset($response['text'])) {
             Log::error('CompetitorGapAnalysisService: No AI response');
+
             return ['status' => 'error', 'message' => 'Failed to generate gap analysis'];
         }
 

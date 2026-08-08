@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * AdSpendTransaction
- * 
+ *
  * Records all ad spend credit transactions (charges, credits, refunds).
  */
 class AdSpendTransaction extends Model
@@ -34,8 +34,11 @@ class AdSpendTransaction extends Model
 
     // Transaction types
     const TYPE_CREDIT = 'credit';           // Money added to account
+
     const TYPE_DEDUCTION = 'deduction';     // Daily ad spend charge
+
     const TYPE_REFUND = 'refund';           // Refund to customer
+
     const TYPE_ADJUSTMENT = 'adjustment';   // Manual adjustment
 
     /**

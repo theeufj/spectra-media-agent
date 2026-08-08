@@ -10,7 +10,6 @@ use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class KnowledgeBaseController extends Controller
@@ -46,7 +45,7 @@ class KnowledgeBaseController extends Controller
      * store is the handler for processing the sitemap submission or file upload.
      * It validates the request and dispatches the appropriate background job.
      *
-     * @param Request $request The incoming HTTP request.
+     * @param  Request  $request  The incoming HTTP request.
      * @return \Illuminate\Http\RedirectResponse
      */
     public function store(Request $request)
@@ -54,7 +53,7 @@ class KnowledgeBaseController extends Controller
         $user = Auth::user();
 
         // Check limits for free users
-        if (!$user->subscribed('default') && $user->subscription_status !== 'active') {
+        if (! $user->subscribed('default') && $user->subscription_status !== 'active') {
             // Limit to 3 Knowledge Base entries (URLs/Files)
             $count = $user->knowledgeBases()->count();
             if ($count >= 3) {
@@ -93,7 +92,7 @@ class KnowledgeBaseController extends Controller
         $sourceType = $extension === 'pdf' ? 'pdf' : 'text';
 
         // Generate a unique filename to avoid conflicts
-        $filename = uniqid('kb_', true) . '.' . $extension;
+        $filename = uniqid('kb_', true).'.'.$extension;
         $s3Path = "knowledge-base/{$user->id}/{$filename}";
 
         try {
@@ -110,10 +109,10 @@ class KnowledgeBaseController extends Controller
             $s3Config = config('filesystems.disks.s3');
             \Log::info('S3 Configuration', [
                 'driver' => $s3Config['driver'] ?? null,
-                'key' => substr($s3Config['key'] ?? '', 0, 10) . '***',
-                'secret' => substr($s3Config['secret'] ?? '', 0, 10) . '***',
-                'key_exists' => !empty($s3Config['key']),
-                'secret_exists' => !empty($s3Config['secret']),
+                'key' => substr($s3Config['key'] ?? '', 0, 10).'***',
+                'secret' => substr($s3Config['secret'] ?? '', 0, 10).'***',
+                'key_exists' => ! empty($s3Config['key']),
+                'secret_exists' => ! empty($s3Config['secret']),
                 'bucket' => $s3Config['bucket'] ?? null,
                 'region' => $s3Config['region'] ?? null,
                 'url' => $s3Config['url'] ?? null,
@@ -131,7 +130,7 @@ class KnowledgeBaseController extends Controller
                     'url' => $cloudFrontUrl,
                 ]);
             } catch (\Throwable $uploadError) {
-                \Log::error('S3 upload exception: ' . $uploadError->getMessage(), [
+                \Log::error('S3 upload exception: '.$uploadError->getMessage(), [
                     'user_id' => $user->id,
                     's3_path' => $s3Path,
                     'exception' => get_class($uploadError),
@@ -140,7 +139,8 @@ class KnowledgeBaseController extends Controller
                     'file' => $uploadError->getFile(),
                     'line' => $uploadError->getLine(),
                 ]);
-                return redirect()->back()->withErrors(['document' => 'Upload Error: ' . $uploadError->getMessage()]);
+
+                return redirect()->back()->withErrors(['document' => 'Upload Error: '.$uploadError->getMessage()]);
             }
 
             \Log::info('File URL constructed', [
@@ -174,7 +174,8 @@ class KnowledgeBaseController extends Controller
 
             return redirect()->route('dashboard')->with('success', 'File uploaded! We are processing your document and will extract the content shortly.');
         } catch (\Exception $e) {
-            \Illuminate\Support\Facades\Log::error('File upload error: ' . $e->getMessage());
+            \Illuminate\Support\Facades\Log::error('File upload error: '.$e->getMessage());
+
             return redirect()->back()->withErrors(['document' => 'Failed to upload file. Please try again.']);
         }
     }
@@ -182,7 +183,7 @@ class KnowledgeBaseController extends Controller
     /**
      * Delete a knowledge base entry and remove the associated file from S3.
      *
-     * @param KnowledgeBase $knowledgeBase The knowledge base entry to delete.
+     * @param  KnowledgeBase  $knowledgeBase  The knowledge base entry to delete.
      * @return \Illuminate\Http\RedirectResponse
      */
     public function destroy(KnowledgeBase $knowledgeBase)
@@ -199,11 +200,11 @@ class KnowledgeBaseController extends Controller
             if ($knowledgeBase->file_path) {
                 StorageHelper::delete($knowledgeBase->file_path);
 
-                    \Log::info('File deleted from storage', [
-                        'user_id' => $user->id,
-                        'kb_id' => $knowledgeBase->id,
-                        'path' => $knowledgeBase->file_path,
-                    ]);
+                \Log::info('File deleted from storage', [
+                    'user_id' => $user->id,
+                    'kb_id' => $knowledgeBase->id,
+                    'path' => $knowledgeBase->file_path,
+                ]);
             }
 
             // Delete the database record
@@ -216,7 +217,8 @@ class KnowledgeBaseController extends Controller
 
             return redirect()->route('knowledge-base.index')->with('success', 'Knowledge base entry deleted successfully.');
         } catch (\Exception $e) {
-            \Log::error('Failed to delete knowledge base entry: ' . $e->getMessage());
+            \Log::error('Failed to delete knowledge base entry: '.$e->getMessage());
+
             return redirect()->back()->withErrors(['error' => 'Failed to delete knowledge base entry.']);
         }
     }
@@ -225,7 +227,7 @@ class KnowledgeBaseController extends Controller
      * Search through the user's knowledge base content.
      * Uses simple text matching to find relevant chunks.
      *
-     * @param Request $request The incoming HTTP request with 'query' parameter.
+     * @param  Request  $request  The incoming HTTP request with 'query' parameter.
      * @return \Illuminate\Http\JsonResponse
      */
     public function search(Request $request)
@@ -239,13 +241,14 @@ class KnowledgeBaseController extends Controller
 
         try {
             // Initialize Gemini Service
-            $geminiService = new GeminiService();
+            $geminiService = new GeminiService;
 
             // Step 1: Generate embedding for the search query
             $queryEmbedding = $geminiService->embedContent(config('ai.models.embedding'), $query);
 
             if (is_null($queryEmbedding)) {
-                Log::error("Failed to get embedding for search query: Query embedding was null.");
+                Log::error('Failed to get embedding for search query: Query embedding was null.');
+
                 return response()->json(['error' => 'Failed to process query'], 500);
             }
 
@@ -262,8 +265,9 @@ class KnowledgeBaseController extends Controller
                 $chunks = json_decode($kb->content, true);
                 $embeddings = $kb->embedding->toArray();
 
-                if (!is_array($chunks) || !is_array($embeddings) || count($chunks) !== count($embeddings)) {
+                if (! is_array($chunks) || ! is_array($embeddings) || count($chunks) !== count($embeddings)) {
                     Log::warning("KnowledgeBase ID {$kb->id} has malformed chunks or embeddings.");
+
                     continue;
                 }
 
@@ -300,19 +304,16 @@ class KnowledgeBaseController extends Controller
 
             return response()->json(['results' => $results]);
         } catch (\Exception $e) {
-            Log::error('Knowledge base semantic search error: ' . $e->getMessage(), [
+            Log::error('Knowledge base semantic search error: '.$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return response()->json(['error' => 'Search failed'], 500);
         }
     }
 
     /**
      * Calculate cosine similarity between two vectors.
-     *
-     * @param array $vectorA
-     * @param array $vectorB
-     * @return float
      */
     private function cosineSimilarity(array $vectorA, array $vectorB): float
     {

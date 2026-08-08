@@ -4,9 +4,9 @@ namespace App\Services\Campaigns;
 
 use App\Models\Campaign;
 use App\Models\Strategy;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class RollbackCampaignService
 {
@@ -19,8 +19,9 @@ class RollbackCampaignService
                     ->where('campaign_id', $campaign->id)
                     ->max('versioned_at');
 
-                if (!$lastVersionTimestamp) {
+                if (! $lastVersionTimestamp) {
                     Log::warning("No previous strategy versions found to roll back for campaign {$campaign->id}.");
+
                     return false;
                 }
 
@@ -32,6 +33,7 @@ class RollbackCampaignService
 
                 if ($strategyVersionsToRestore->isEmpty()) {
                     Log->warning("Could not find any strategy versions to restore for campaign {$campaign->id} at timestamp {$lastVersionTimestamp}.");
+
                     return false;
                 }
 
@@ -58,9 +60,10 @@ class RollbackCampaignService
 
             return true;
         } catch (\Exception $e) {
-            Log::error("Error rolling back campaign {$campaign->id}: " . $e->getMessage(), [
+            Log::error("Error rolling back campaign {$campaign->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return false;
         }
     }

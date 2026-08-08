@@ -20,9 +20,9 @@ class VideoGenerationService
      * Returns ['provider' => 'veo'|'vidu', 'operation_name' => string]
      * or null if both providers fail.
      *
-     * @param array  $parameters Passed through to the provider (e.g. ['aspectRatio' => '9:16'])
-     * @param string|null $voiceoverScript When provided, Vidu will structure its prompt around
-     *                                     narrating this script rather than using the generic wrapper.
+     * @param  array  $parameters  Passed through to the provider (e.g. ['aspectRatio' => '9:16'])
+     * @param  string|null  $voiceoverScript  When provided, Vidu will structure its prompt around
+     *                                        narrating this script rather than using the generic wrapper.
      */
     public function startGeneration(string $topic, array $parameters = [], ?string $model = null, ?string $voiceoverScript = null): ?array
     {
@@ -37,16 +37,18 @@ class VideoGenerationService
 
         if ($operationName) {
             Log::info("VideoGenerationService: Started via Veo. Operation: {$operationName}");
+
             return ['provider' => 'veo', 'operation_name' => $operationName];
         }
 
         // ── Fallback: Vidu ──────────────────────────────────────────────────
-        if (!config('services.vidu.api_key')) {
-            Log::warning("VideoGenerationService: Veo failed and VIDU_API_KEY is not set — no fallback available.");
+        if (! config('services.vidu.api_key')) {
+            Log::warning('VideoGenerationService: Veo failed and VIDU_API_KEY is not set — no fallback available.');
+
             return null;
         }
 
-        Log::warning("VideoGenerationService: Veo failed, falling back to Vidu.");
+        Log::warning('VideoGenerationService: Veo failed, falling back to Vidu.');
 
         // Vidu's audio AI works best with a concise, narration-focused prompt rather than the
         // generic Veo wrapper. When a voiceover script is available, build a Vidu-specific prompt
@@ -60,10 +62,12 @@ class VideoGenerationService
 
         if ($taskId) {
             Log::info("VideoGenerationService: Started via Vidu. Task ID: {$taskId}");
+
             return ['provider' => 'vidu', 'operation_name' => $taskId];
         }
 
-        Log::error("VideoGenerationService: Both Veo and Vidu failed to start video generation.");
+        Log::error('VideoGenerationService: Both Veo and Vidu failed to start video generation.');
+
         return null;
     }
 
@@ -77,7 +81,7 @@ class VideoGenerationService
         // Extract a brief visual summary from the visual context (first 200 chars of strategy)
         $briefVisual = mb_substr(strip_tags(trim($visualContext)), 0, 200);
         if (strlen($visualContext) > 200) {
-            $briefVisual = rtrim($briefVisual, ' .,') . '.';
+            $briefVisual = rtrim($briefVisual, ' .,').'.';
         }
 
         return <<<PROMPT
@@ -102,19 +106,23 @@ PROMPT;
 
             if (is_null($status)) {
                 Log::info("VideoGenerationService: Operation {$operationName} still in progress.");
+
                 return null;
             }
 
             if (isset($status['error'])) {
                 Log::error("VideoGenerationService: Operation {$operationName} failed.", ['error' => $status['error']]);
+
                 return null;
             }
 
             Log::info("VideoGenerationService: Operation {$operationName} completed successfully.");
+
             return $status;
 
         } catch (\Exception $e) {
-            Log::error("VideoGenerationService: Error checking status for {$operationName}: " . $e->getMessage());
+            Log::error("VideoGenerationService: Error checking status for {$operationName}: ".$e->getMessage());
+
             return null;
         }
     }

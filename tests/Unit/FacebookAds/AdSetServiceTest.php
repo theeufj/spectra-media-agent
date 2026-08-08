@@ -11,6 +11,7 @@ use Tests\TestCase;
 class AdSetServiceTest extends TestCase
 {
     private Customer $customer;
+
     private AdSetService $service;
 
     protected function setUp(): void
@@ -54,6 +55,7 @@ class AdSetServiceTest extends TestCase
 
         Http::assertSent(function ($request) {
             $targeting = json_decode($request->data()['targeting'] ?? '{}', true);
+
             return isset($targeting['targeting_automation']['advantage_audience'])
                 && $targeting['targeting_automation']['advantage_audience'] === 1
                 && $targeting['geo_locations']['countries'] === ['US'];
@@ -78,6 +80,7 @@ class AdSetServiceTest extends TestCase
 
         Http::assertSent(function ($request) {
             $targeting = json_decode($request->data()['targeting'] ?? '{}', true);
+
             return isset($targeting['targeting_automation']['advantage_audience'])
                 && $targeting['targeting_automation']['advantage_audience'] === 1;
         });
@@ -103,6 +106,7 @@ class AdSetServiceTest extends TestCase
 
         Http::assertSent(function ($request) {
             $targeting = json_decode($request->data()['targeting'] ?? '{}', true);
+
             // Existing value should be preserved, not overwritten
             return $targeting['targeting_automation']['advantage_audience'] === 0;
         });

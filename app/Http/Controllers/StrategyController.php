@@ -69,7 +69,7 @@ class StrategyController extends Controller
     /**
      * approve marks a strategy as approved.
      *
-     * @param Strategy $strategy The strategy model instance (route-model binding).
+     * @param  Strategy  $strategy  The strategy model instance (route-model binding).
      * @return \Illuminate\Http\RedirectResponse
      */
     public function approve(Strategy $strategy)
@@ -84,8 +84,8 @@ class StrategyController extends Controller
     /**
      * update modifies the content of a strategy.
      *
-     * @param Request $request The incoming HTTP request.
-     * @param Strategy $strategy The strategy model instance.
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Strategy  $strategy  The strategy model instance.
      * @return \Illuminate\Http\RedirectResponse
      */
     public function update(Request $request, Strategy $strategy)

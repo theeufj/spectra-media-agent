@@ -2,14 +2,14 @@
 
 namespace App\Services\GoogleAds\ShoppingServices;
 
+use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\AdGroup;
-use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupStatusEnum\AdGroupStatus;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupTypeEnum\AdGroupType;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Resources\AdGroup;
+use Google\Ads\GoogleAds\V22\Services\AdGroupOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest;
 
 class CreateShoppingAdGroup extends BaseGoogleAdsService
 {
@@ -24,10 +24,10 @@ class CreateShoppingAdGroup extends BaseGoogleAdsService
      * Shopping ad groups use SHOPPING_PRODUCT_ADS type.
      * The ads within are auto-generated from the Merchant Center product feed.
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param string $campaignResourceName The resource name of the parent Shopping campaign.
-     * @param string $adGroupName The name of the ad group to create.
-     * @param int|null $cpcBidMicros Optional CPC bid in micros for the ad group.
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  string  $campaignResourceName  The resource name of the parent Shopping campaign.
+     * @param  string  $adGroupName  The name of the ad group to create.
+     * @param  int|null  $cpcBidMicros  Optional CPC bid in micros for the ad group.
      * @return string|null The resource name of the created ad group, or null on failure.
      */
     public function __invoke(string $customerId, string $campaignResourceName, string $adGroupName, ?int $cpcBidMicros = null): ?string
@@ -47,7 +47,7 @@ class CreateShoppingAdGroup extends BaseGoogleAdsService
 
         $adGroup = new AdGroup($adGroupData);
 
-        $adGroupOperation = new AdGroupOperation();
+        $adGroupOperation = new AdGroupOperation;
         $adGroupOperation->setCreate($adGroup);
 
         try {
@@ -58,10 +58,12 @@ class CreateShoppingAdGroup extends BaseGoogleAdsService
             ]);
             $response = $adGroupServiceClient->mutateAdGroups($request);
             $newAdGroupResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Shopping ad group: " . $newAdGroupResourceName);
+            $this->logInfo('Successfully created Shopping ad group: '.$newAdGroupResourceName);
+
             return $newAdGroupResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Shopping ad group for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Shopping ad group for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

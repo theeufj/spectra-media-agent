@@ -71,8 +71,8 @@ class EnabledPlatformController extends Controller
     public function update(Request $request, EnabledPlatform $platform)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255|unique:enabled_platforms,name,' . $platform->id,
-            'slug' => 'required|string|max:255|unique:enabled_platforms,slug,' . $platform->id,
+            'name' => 'required|string|max:255|unique:enabled_platforms,name,'.$platform->id,
+            'slug' => 'required|string|max:255|unique:enabled_platforms,slug,'.$platform->id,
             'description' => 'nullable|string',
             'is_enabled' => 'boolean',
             'sort_order' => 'integer',
@@ -98,7 +98,7 @@ class EnabledPlatformController extends Controller
      */
     public function toggle(EnabledPlatform $platform)
     {
-        $platform->update(['is_enabled' => !$platform->is_enabled]);
+        $platform->update(['is_enabled' => ! $platform->is_enabled]);
 
         return redirect()->back()->with('success', 'Platform status updated successfully.');
     }

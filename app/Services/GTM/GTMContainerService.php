@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Log;
 class GTMContainerService
 {
     private string $baseUrl = 'https://tagmanager.googleapis.com/tagmanager/v2';
+
     private int $maxRetries = 3;
+
     private int $retryDelayMs = 1000;
 
     /**
@@ -22,26 +24,28 @@ class GTMContainerService
     {
         try {
             $refreshToken = config('services.gtm.platform_refresh_token');
-            $clientId     = config('services.google.client_id');
+            $clientId = config('services.google.client_id');
             $clientSecret = config('services.google.client_secret');
 
-            if (!$refreshToken || !$clientId || !$clientSecret) {
+            if (! $refreshToken || ! $clientId || ! $clientSecret) {
                 Log::warning('GTMContainerService: Missing GTM platform credentials (GTM_PLATFORM_REFRESH_TOKEN, GOOGLE_OAUTH_CLIENT_ID, or GOOGLE_OAUTH_CLIENT_SECRET)');
+
                 return null;
             }
 
             $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
-                'client_id'     => $clientId,
+                'client_id' => $clientId,
                 'client_secret' => $clientSecret,
                 'refresh_token' => $refreshToken,
-                'grant_type'    => 'refresh_token',
+                'grant_type' => 'refresh_token',
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('GTMContainerService: Failed to exchange refresh token', [
                     'status' => $response->status(),
-                    'error'  => $response->json()['error'] ?? $response->body(),
+                    'error' => $response->json()['error'] ?? $response->body(),
                 ]);
+
                 return null;
             }
 
@@ -50,6 +54,7 @@ class GTMContainerService
             Log::error('GTMContainerService: Failed to get platform access token', [
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -65,29 +70,29 @@ class GTMContainerService
         try {
             $accountId = config('services.gtm.platform_account_id');
 
-            if (!$accountId) {
+            if (! $accountId) {
                 return ['success' => false, 'error' => 'GTM_PLATFORM_ACCOUNT_ID is not configured'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
-            $containerName = $customer->name . ' — Site to Spend';
+            $containerName = $customer->name.' — Site to Spend';
             $response = $this->makeApiCall('POST', "/accounts/{$accountId}/containers", $accessToken, [
                 'name' => $containerName,
                 'usageContext' => ['WEB'],
             ]);
 
-            if (!$response['success']) {
-                return ['success' => false, 'error' => 'Failed to create GTM container: ' . ($response['error'] ?? 'Unknown error')];
+            if (! $response['success']) {
+                return ['success' => false, 'error' => 'Failed to create GTM container: '.($response['error'] ?? 'Unknown error')];
             }
 
-            $containerId   = $response['data']['publicId'] ?? null;  // GTM-XXXXXXX
+            $containerId = $response['data']['publicId'] ?? null;  // GTM-XXXXXXX
             $containerPath = $response['data']['path'] ?? null;       // accounts/.../containers/...
 
-            if (!$containerId) {
+            if (! $containerId) {
                 return ['success' => false, 'error' => 'Container created but no publicId returned'];
             }
 
@@ -101,43 +106,44 @@ class GTMContainerService
                         break;
                     }
                 }
-                if (!$workspaceId && !empty($workspacesResponse['data']['workspace'])) {
+                if (! $workspaceId && ! empty($workspacesResponse['data']['workspace'])) {
                     $workspaceId = $workspacesResponse['data']['workspace'][0]['workspaceId'];
                 }
             }
 
             $customer->update([
-                'gtm_container_id'   => $containerId,
-                'gtm_account_id'     => $accountId,
-                'gtm_workspace_id'   => $workspaceId,
-                'gtm_installed'      => false,
-                'gtm_last_verified'  => null,
-                'gtm_config'         => [
-                    'container_id'   => $containerId,
+                'gtm_container_id' => $containerId,
+                'gtm_account_id' => $accountId,
+                'gtm_workspace_id' => $workspaceId,
+                'gtm_installed' => false,
+                'gtm_last_verified' => null,
+                'gtm_config' => [
+                    'container_id' => $containerId,
                     'container_path' => $containerPath,
                     'container_name' => $containerName,
-                    'account_id'     => $accountId,
-                    'workspace_id'   => $workspaceId,
+                    'account_id' => $accountId,
+                    'workspace_id' => $workspaceId,
                     'provisioned_at' => now()->toIso8601String(),
                 ],
             ]);
 
             Log::info('GTMContainerService: Container provisioned', [
-                'customer_id'  => $customer->id,
+                'customer_id' => $customer->id,
                 'container_id' => $containerId,
-                'account_id'   => $accountId,
+                'account_id' => $accountId,
             ]);
 
             return [
-                'success'      => true,
+                'success' => true,
                 'container_id' => $containerId,
                 'workspace_id' => $workspaceId,
             ];
         } catch (\Exception $e) {
             Log::error('GTMContainerService: Error provisioning container', [
                 'customer_id' => $customer->id,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -176,12 +182,12 @@ HTML;
     public function addConversionTag(Customer $customer, string $tagName, string $conversionId, array $config = []): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
@@ -206,7 +212,7 @@ HTML;
 
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
-            if (!$response['success']) {
+            if (! $response['success']) {
                 // Tag already exists — find it and patch in the trigger if it's missing
                 if (str_contains($response['error'] ?? '', 'duplicate name')) {
                     $existing = $this->findTagByName($workspacePath, $tagName, $accessToken);
@@ -216,16 +222,18 @@ HTML;
                             $existing['firingTriggerId'] = [$triggerId];
                             $this->makeApiCall('PUT', "/{$workspacePath}/tags/{$tagId}", $accessToken, $existing);
                         }
+
                         return ['success' => true, 'tag_id' => $tagId, 'tag_name' => $tagName, 'existing' => true];
                     }
                 }
-                return ['success' => false, 'error' => 'Failed to create tag: ' . ($response['error'] ?? 'Unknown error')];
+
+                return ['success' => false, 'error' => 'Failed to create tag: '.($response['error'] ?? 'Unknown error')];
             }
 
             return [
-                'success'    => true,
-                'tag_id'     => $response['data']['tagId'] ?? null,
-                'tag_name'   => $tagName,
+                'success' => true,
+                'tag_id' => $response['data']['tagId'] ?? null,
+                'tag_name' => $tagName,
                 'trigger_id' => $triggerId,
             ];
         } catch (\Exception $e) {
@@ -249,9 +257,9 @@ HTML;
         }
 
         $response = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, [
-            'name'            => 'Spectra — Form Submit',
-            'type'            => 'formSubmission',
-            'waitForTags'     => ['type' => 'boolean', 'key' => 'waitForTags',     'value' => 'true'],
+            'name' => 'Spectra — Form Submit',
+            'type' => 'formSubmission',
+            'waitForTags' => ['type' => 'boolean', 'key' => 'waitForTags',     'value' => 'true'],
             'checkValidation' => ['type' => 'boolean', 'key' => 'checkValidation', 'value' => 'false'],
         ]);
 
@@ -264,7 +272,7 @@ HTML;
     private function findTagByName(string $workspacePath, string $tagName, string $accessToken): ?array
     {
         $response = $this->makeApiCall('GET', "/{$workspacePath}/tags", $accessToken);
-        if (!$response['success']) {
+        if (! $response['success']) {
             return null;
         }
         foreach ($response['data']['tag'] ?? [] as $tag) {
@@ -272,6 +280,7 @@ HTML;
                 return $tag;
             }
         }
+
         return null;
     }
 
@@ -282,12 +291,12 @@ HTML;
     public function addFacebookPixelTag(Customer $customer, string $pixelId): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
@@ -319,8 +328,8 @@ JS;
 
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
-            if (!$response['success']) {
-                return ['success' => false, 'error' => 'Failed to create Meta Pixel tag: ' . ($response['error'] ?? 'Unknown error')];
+            if (! $response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Meta Pixel tag: '.($response['error'] ?? 'Unknown error')];
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
@@ -336,12 +345,12 @@ JS;
     public function addMicrosoftUetTag(Customer $customer, string $uetTagId): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
@@ -370,8 +379,8 @@ JS;
 
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
-            if (!$response['success']) {
-                return ['success' => false, 'error' => 'Failed to create Microsoft UET tag: ' . ($response['error'] ?? 'Unknown error')];
+            if (! $response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Microsoft UET tag: '.($response['error'] ?? 'Unknown error')];
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
@@ -386,26 +395,26 @@ JS;
     public function addTrigger(Customer $customer, string $triggerName, string $triggerType, array $config = []): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
             $workspacePath = $this->getWorkspacePath($customer);
-            $triggerData   = $this->buildTriggerConfiguration($triggerName, $triggerType, $config);
-            $response      = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, $triggerData);
+            $triggerData = $this->buildTriggerConfiguration($triggerName, $triggerType, $config);
+            $response = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, $triggerData);
 
-            if (!$response['success']) {
-                return ['success' => false, 'error' => 'Failed to create trigger: ' . ($response['error'] ?? 'Unknown error')];
+            if (! $response['success']) {
+                return ['success' => false, 'error' => 'Failed to create trigger: '.($response['error'] ?? 'Unknown error')];
             }
 
             return [
-                'success'      => true,
-                'trigger_id'   => $response['data']['triggerId'] ?? null,
+                'success' => true,
+                'trigger_id' => $response['data']['triggerId'] ?? null,
                 'trigger_type' => $triggerType,
             ];
         } catch (\Exception $e) {
@@ -420,12 +429,12 @@ JS;
     public function publishContainer(Customer $customer, string $notes = ''): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
@@ -435,23 +444,24 @@ JS;
 
             // GTM v2 API uses RPC-style action suffixes (e.g. :create_version, :publish)
             $createVersionResponse = $this->makeApiCall('POST', "/{$workspacePath}:create_version", $accessToken, [
-                'name'  => $notes ?: 'Published by Site to Spend — ' . now()->toDateTimeString(),
+                'name' => $notes ?: 'Published by Site to Spend — '.now()->toDateTimeString(),
                 'notes' => $notes,
             ]);
 
-            if (!$createVersionResponse['success']) {
+            if (! $createVersionResponse['success']) {
                 // Workspace was already submitted — a version was created but not yet published.
                 // Find the latest version and publish it directly.
                 if (str_contains($createVersionResponse['error'] ?? '', 'already submitted')) {
                     return $this->publishLatestVersion($containerPath, $accessToken);
                 }
-                return ['success' => false, 'error' => 'Failed to create version: ' . ($createVersionResponse['error'] ?? 'Unknown error')];
+
+                return ['success' => false, 'error' => 'Failed to create version: '.($createVersionResponse['error'] ?? 'Unknown error')];
             }
 
             $versionPath = $createVersionResponse['data']['containerVersion']['path']
                 ?? $createVersionResponse['data']['path']
                 ?? null;
-            $versionId   = $createVersionResponse['data']['containerVersion']['containerVersionId']
+            $versionId = $createVersionResponse['data']['containerVersion']['containerVersionId']
                 ?? $createVersionResponse['data']['containerVersionId']
                 ?? null;
 
@@ -472,26 +482,26 @@ JS;
     private function publishLatestVersion(string $containerPath, string $accessToken): array
     {
         $versionsResponse = $this->makeApiCall('GET', "/{$containerPath}/versions", $accessToken);
-        if (!$versionsResponse['success']) {
-            return ['success' => false, 'error' => 'Workspace already submitted and could not list versions: ' . ($versionsResponse['error'] ?? '')];
+        if (! $versionsResponse['success']) {
+            return ['success' => false, 'error' => 'Workspace already submitted and could not list versions: '.($versionsResponse['error'] ?? '')];
         }
 
         $headers = $versionsResponse['data']['containerVersionHeader'] ?? [];
         // Filter out deleted versions and sort descending by numeric version ID
-        $headers = array_filter($headers, fn($v) => empty($v['deleted']));
-        usort($headers, fn($a, $b) => (int)$b['containerVersionId'] - (int)$a['containerVersionId']);
+        $headers = array_filter($headers, fn ($v) => empty($v['deleted']));
+        usort($headers, fn ($a, $b) => (int) $b['containerVersionId'] - (int) $a['containerVersionId']);
         $latest = reset($headers);
 
-        if (!$latest) {
+        if (! $latest) {
             return ['success' => false, 'error' => 'Workspace already submitted but no publishable version found'];
         }
 
         $versionPath = $latest['path'];
-        $versionId   = $latest['containerVersionId'];
+        $versionId = $latest['containerVersionId'];
 
         $publishResponse = $this->makeApiCall('POST', "/{$versionPath}:publish", $accessToken);
-        if (!$publishResponse['success']) {
-            return ['success' => false, 'error' => 'Found submitted version but publish failed: ' . ($publishResponse['error'] ?? '')];
+        if (! $publishResponse['success']) {
+            return ['success' => false, 'error' => 'Found submitted version but publish failed: '.($publishResponse['error'] ?? '')];
         }
 
         return ['success' => true, 'version_id' => $versionId, 'published_at' => now()];
@@ -504,7 +514,7 @@ JS;
     public function verifySnippetInstalled(Customer $customer): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->website) {
+            if (! $customer->gtm_container_id || ! $customer->website) {
                 return ['success' => false, 'error' => 'Missing container ID or website URL'];
             }
 
@@ -525,11 +535,11 @@ JS;
                 $htmlContent = @file_get_contents($customer->website);
             }
 
-            if (!$htmlContent) {
+            if (! $htmlContent) {
                 return ['success' => false, 'error' => 'Could not fetch website content'];
             }
 
-            $detectionService = new GTMDetectionService();
+            $detectionService = new GTMDetectionService;
             // Check whether OUR container is among all containers on the page.
             // The site may run several GTM containers; a strict equality against
             // the first-detected one would fail even when ours is installed.
@@ -538,16 +548,16 @@ JS;
 
             if ($installed) {
                 $customer->update([
-                    'gtm_installed'     => true,
+                    'gtm_installed' => true,
                     'gtm_last_verified' => now(),
                 ]);
             }
 
             return [
-                'success'   => true,
+                'success' => true,
                 'installed' => $installed,
-                'detected'  => $allDetected,
-                'expected'  => $customer->gtm_container_id,
+                'detected' => $allDetected,
+                'expected' => $customer->gtm_container_id,
             ];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
@@ -561,12 +571,12 @@ JS;
     public function addFacebookLeadEventTag(Customer $customer, string $pixelId): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
@@ -598,8 +608,8 @@ JS;
 
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
-            if (!$response['success']) {
-                return ['success' => false, 'error' => 'Failed to create Meta Lead event tag: ' . ($response['error'] ?? 'Unknown')];
+            if (! $response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Meta Lead event tag: '.($response['error'] ?? 'Unknown')];
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
@@ -614,12 +624,12 @@ JS;
     public function addMicrosoftLeadEventTag(Customer $customer, string $uetTagId): array
     {
         try {
-            if (!$customer->gtm_container_id || !$customer->gtm_account_id || !$customer->gtm_workspace_id) {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
                 return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
             }
 
             $accessToken = $this->getPlatformAccessToken();
-            if (!$accessToken) {
+            if (! $accessToken) {
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
@@ -650,8 +660,8 @@ JS;
 
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
-            if (!$response['success']) {
-                return ['success' => false, 'error' => 'Failed to create Microsoft Lead event tag: ' . ($response['error'] ?? 'Unknown')];
+            if (! $response['success']) {
+                return ['success' => false, 'error' => 'Failed to create Microsoft Lead event tag: '.($response['error'] ?? 'Unknown')];
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
@@ -682,24 +692,24 @@ JS;
 
     private function makeApiCall(string $method, string $endpoint, string $accessToken, array $data = []): array
     {
-        $attempt   = 0;
+        $attempt = 0;
         $lastError = null;
 
         while ($attempt < $this->maxRetries) {
             try {
-                $url      = $this->baseUrl . $endpoint;
-                $request  = Http::withToken($accessToken)->timeout(30);
+                $url = $this->baseUrl.$endpoint;
+                $request = Http::withToken($accessToken)->timeout(30);
 
                 $response = match ($method) {
-                    'GET'    => $request->get($url),
-                    'POST'   => $request->post($url, $data),
-                    'PUT'    => $request->put($url, $data),
+                    'GET' => $request->get($url),
+                    'POST' => $request->post($url, $data),
+                    'PUT' => $request->put($url, $data),
                     'DELETE' => $request->delete($url),
-                    default  => null,
+                    default => null,
                 };
 
                 if ($response === null) {
-                    return ['success' => false, 'error' => 'Invalid HTTP method: ' . $method];
+                    return ['success' => false, 'error' => 'Invalid HTTP method: '.$method];
                 }
 
                 if ($response->successful()) {
@@ -710,11 +720,13 @@ JS;
                     $attempt++;
                     if ($attempt < $this->maxRetries) {
                         usleep($this->retryDelayMs * pow(2, $attempt - 1) * 1000);
+
                         continue;
                     }
                 }
 
                 $lastError = $response->json()['error']['message'] ?? $response->body();
+
                 return ['success' => false, 'error' => $lastError, 'status_code' => $response->status()];
 
             } catch (\Exception $e) {
@@ -767,7 +779,7 @@ JS;
             case 'scroll_depth':
                 $triggerData['type'] = 'scrollDepth';
                 $triggerData['percentageScroll'] = [
-                    'enabled'    => true,
+                    'enabled' => true,
                     'thresholds' => $config['thresholds'] ?? [25, 50, 75, 100],
                 ];
                 break;
@@ -789,4 +801,3 @@ JS;
         return $triggerData;
     }
 }
-

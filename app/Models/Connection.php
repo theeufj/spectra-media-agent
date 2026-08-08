@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Connection extends Model
 {
-    use HasFactory, HasEncryptedAttributes;
+    use HasEncryptedAttributes, HasFactory;
 
     protected $fillable = [
         'user_id',
@@ -24,7 +24,7 @@ class Connection extends Model
 
     protected $casts = [
         'expires_at' => 'datetime',
-        'scopes'     => 'array',
+        'scopes' => 'array',
     ];
 
     // OAuth tokens are encrypted at rest and never serialized.

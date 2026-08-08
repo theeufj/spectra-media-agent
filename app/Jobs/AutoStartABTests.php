@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\ABTest;
-use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\Agents\ABTestingAgent;
@@ -23,9 +22,10 @@ use Illuminate\Support\Facades\Log;
  */
 class AutoStartABTests implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 1;
+
     public $timeout = 300;
 
     public function handle(ABTestingAgent $agent): void
@@ -35,8 +35,8 @@ class AutoStartABTests implements ShouldQueue
 
         $campaigns = Campaign::with(['strategies.adCopies'])
             ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
-            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
-                                ->orWhereNotNull('facebook_ads_campaign_id'))
+            ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
+                ->orWhereNotNull('facebook_ads_campaign_id'))
             ->get();
 
         $started = 0;
@@ -46,8 +46,9 @@ class AutoStartABTests implements ShouldQueue
         foreach ($campaigns as $campaign) {
             foreach ($campaign->strategies as $strategy) {
                 // Only test deployed strategies
-                if (!in_array($strategy->deployment_status, ['deployed', 'live', 'active'])) {
+                if (! in_array($strategy->deployment_status, ['deployed', 'live', 'active'])) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -58,6 +59,7 @@ class AutoStartABTests implements ShouldQueue
 
                 if ($hasRunningTest) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -67,8 +69,9 @@ class AutoStartABTests implements ShouldQueue
                     ->first()
                     ?? $strategy->adCopies->first();
 
-                if (!$adCopy) {
+                if (! $adCopy) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -78,6 +81,7 @@ class AutoStartABTests implements ShouldQueue
                 // Need at least 4 headlines to create a meaningful split
                 if (count($headlines) < 4) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -89,50 +93,50 @@ class AutoStartABTests implements ShouldQueue
 
                     $agent->createTest($strategy, ABTest::TYPE_HEADLINE, [
                         [
-                            'label'   => 'Variant A',
+                            'label' => 'Variant A',
                             'content' => implode(' | ', $variantA),
-                            'meta'    => ['headlines' => $variantA, 'descriptions' => $descriptions],
+                            'meta' => ['headlines' => $variantA, 'descriptions' => $descriptions],
                         ],
                         [
-                            'label'   => 'Variant B',
+                            'label' => 'Variant B',
                             'content' => implode(' | ', $variantB),
-                            'meta'    => ['headlines' => $variantB, 'descriptions' => $descriptions],
+                            'meta' => ['headlines' => $variantB, 'descriptions' => $descriptions],
                         ],
                     ]);
 
                     AgentActivity::record(
                         'creative',
                         'ab_test_started',
-                        'Started headline A/B test for "' . $campaign->name . '" (' . $strategy->platform . ')',
+                        'Started headline A/B test for "'.$campaign->name.'" ('.$strategy->platform.')',
                         $campaign->customer_id,
                         $campaign->id,
                         ['strategy_id' => $strategy->id, 'headlines_a' => count($variantA), 'headlines_b' => count($variantB)]
                     );
 
                     Log::info('AutoStartABTests: Created headline test', [
-                        'campaign_id'  => $campaign->id,
-                        'strategy_id'  => $strategy->id,
-                        'platform'     => $strategy->platform,
-                        'variant_a'    => count($variantA),
-                        'variant_b'    => count($variantB),
+                        'campaign_id' => $campaign->id,
+                        'strategy_id' => $strategy->id,
+                        'platform' => $strategy->platform,
+                        'variant_a' => count($variantA),
+                        'variant_b' => count($variantB),
                     ]);
 
                     $started++;
                 } catch (\Exception $e) {
                     $errors++;
-                    Log::error('AutoStartABTests: Failed to create test for strategy ' . $strategy->id . ': ' . $e->getMessage());
+                    Log::error('AutoStartABTests: Failed to create test for strategy '.$strategy->id.': '.$e->getMessage());
                 }
             }
         }
 
         Log::info('AutoStartABTests: Completed', ['started' => $started, 'skipped' => $skipped]);
 
-        $this->finishRun($runStart, actions: $started, errors: $errors, scope: $campaigns->count() . ' campaigns');
+        $this->finishRun($runStart, actions: $started, errors: $errors, scope: $campaigns->count().' campaigns');
     }
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('AutoStartABTests failed: ' . $exception->getMessage());
+        Log::error('AutoStartABTests failed: '.$exception->getMessage());
         $this->recordRunFailure($exception);
     }
 }
