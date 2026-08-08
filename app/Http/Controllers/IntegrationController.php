@@ -7,6 +7,7 @@ use App\Jobs\UploadOfflineConversions;
 use App\Models\CrmIntegration;
 use App\Models\OfflineConversion;
 use App\Services\Crm\CrmConnectorFactory;
+use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -70,9 +71,9 @@ class IntegrationController extends Controller
                 return back()->with('error', 'Could not connect. Check your credentials.');
             }
         } catch (\Exception $e) {
-            $integration->update(['status' => 'error', 'last_error' => $e->getMessage()]);
+            $integration->update(['status' => 'error', 'last_error' => SafeError::capture($e, 'Integration connection failed')]);
 
-            return back()->with('error', 'Connection failed: '.$e->getMessage());
+            return back()->with('error', SafeError::message($e, "We couldn't connect that integration."));
         }
 
         return back()->with('success', ucfirst($validated['provider']).' connected successfully.');

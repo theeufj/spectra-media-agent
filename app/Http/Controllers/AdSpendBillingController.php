@@ -7,6 +7,7 @@ use App\Http\Requests\SetupAdSpendBillingRequest;
 use App\Models\ActivityLog;
 use App\Models\Customer;
 use App\Services\AdSpendBillingService;
+use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -290,7 +291,7 @@ class AdSpendBillingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to update payment method: '.$e->getMessage(),
+                'error' => SafeError::message($e, "We couldn't update your payment method."),
             ], 400);
         }
     }
@@ -407,7 +408,7 @@ class AdSpendBillingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to set up ad spend billing: '.$e->getMessage(),
+                'error' => SafeError::message($e, "We couldn't set up ad spend billing."),
             ], 400);
         }
     }

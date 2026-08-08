@@ -106,49 +106,143 @@ class CheckMccAccountCreationEligibility extends Command
         // Clear the notified flag so a future re-eligibility (e.g. after a suspension) re-alerts.
         Cache::forget(self::NOTIFIED_KEY);
 
-        $spent = $this->lifetimeSpend($client, $mccId);
-        $context = $spent !== null
-            ? sprintf('Lifetime spend across MCC: %s (threshold is ~US$1,000).', number_format($spent, 2).' AUD')
-            : 'Lifetime spend could not be read.';
+        $spend = $this->lifetimeSpend($client, $mccId);
 
-        $this->warn("❌ MCC {$mccId} is NOT YET eligible to create accounts. {$context}");
-        Log::info("[MccEligibility] MCC {$mccId} not yet eligible. {$context}");
+        if ($spend === null) {
+            $this->warn("❌ MCC {$mccId} is NOT YET eligible to create accounts. Lifetime spend could not be read.");
+            Log::info("[MccEligibility] MCC {$mccId} not yet eligible; spend unreadable.");
+
+            return self::SUCCESS;
+        }
+
+        $threshold = (float) config('googleads.account_creation_threshold_usd', 1000.0);
+        $remaining = max(0.0, $threshold - $spend['usd']);
+
+        $perCurrency = collect($spend['by_currency'])
+            ->map(fn ($amt, $cur) => $cur.' '.number_format($amt, 2))
+            ->implode(', ');
+
+        $context = sprintf(
+            'Lifetime spend: %s ≈ US$%s of US$%s (US$%s to go).',
+            $perCurrency ?: 'none',
+            number_format($spend['usd'], 2),
+            number_format($threshold, 2),
+            number_format($remaining, 2)
+        );
+
+        $this->warn("❌ MCC {$mccId} is NOT YET eligible to create accounts.");
+        $this->line("   {$context}");
+
+        // An account we cannot read may hold spend that counts toward the threshold,
+        // so the total above is a floor, not a certainty. Previously swallowed.
+        if ($spend['unreadable']) {
+            $this->warn(sprintf(
+                '   %d account(s) could not be read, so this total is a lower bound: %s',
+                count($spend['unreadable']),
+                implode(', ', $spend['unreadable'])
+            ));
+        }
+
+        if ($spend['unknown_currencies']) {
+            $this->warn('   No USD rate configured for: '.implode(', ', $spend['unknown_currencies'])
+                .' — excluded from the USD total (see config/googleads.php usd_rates).');
+        }
+
+        Log::info("[MccEligibility] MCC {$mccId} not yet eligible. {$context}", [
+            'unreadable_accounts' => $spend['unreadable'],
+            'unknown_currencies' => $spend['unknown_currencies'],
+        ]);
 
         return self::SUCCESS; // Not an error condition — this is the expected waiting state.
     }
 
-    /** Sum lifetime cost across all non-manager client accounts under the MCC (best-effort). */
-    private function lifetimeSpend($client, string $mccId): ?float
+    /**
+     * Lifetime cost across all non-manager client accounts under the MCC.
+     *
+     * Each account reports cost in its own currency, so totals are kept per
+     * currency and converted to USD only for comparison against the threshold.
+     * Accounts that cannot be read are reported rather than silently skipped —
+     * they may hold spend that counts, which would make the total an underestimate.
+     *
+     * @return array{usd: float, by_currency: array<string,float>, unreadable: list<string>, unknown_currencies: list<string>}|null
+     */
+    private function lifetimeSpend($client, string $mccId): ?array
     {
         try {
             $svc = $client->getGoogleAdsServiceClient();
             $tree = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
                 'customer_id' => $mccId,
-                'query' => 'SELECT customer_client.id, customer_client.manager FROM customer_client',
+                'query' => 'SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code, customer_client.manager, customer_client.status FROM customer_client',
             ]);
 
-            $total = 0.0;
+            $byCurrency = [];
+            $unreadable = [];
+
             foreach ($svc->search($tree)->iterateAllElements() as $row) {
                 $cc = $row->getCustomerClient();
                 if ($cc->getManager()) {
                     continue;
                 }
+
+                $id = (string) $cc->getId();
+                $currency = strtoupper($cc->getCurrencyCode() ?: '');
+
                 try {
                     $costReq = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
-                        'customer_id' => (string) $cc->getId(),
+                        'customer_id' => $id,
                         'query' => 'SELECT metrics.cost_micros FROM customer',
                     ]);
                     foreach ($svc->search($costReq)->iterateAllElements() as $costRow) {
-                        $total += $costRow->getMetrics()->getCostMicros() / 1_000_000;
+                        $amount = $costRow->getMetrics()->getCostMicros() / 1_000_000;
+                        $byCurrency[$currency] = ($byCurrency[$currency] ?? 0.0) + $amount;
                     }
                 } catch (\Throwable $e) {
-                    // Skip accounts we can't read (e.g. cancelled / no permission).
+                    // A non-ENABLED account (cancelled/suspended/closed) returns
+                    // CUSTOMER_NOT_ENABLED — that is expected and not a problem to
+                    // chase, so name the status rather than reporting it as a
+                    // mysterious permission failure.
+                    $unreadable[] = sprintf(
+                        '%s (%s, %s)',
+                        $id,
+                        $cc->getDescriptiveName() ?: 'unnamed',
+                        $this->statusName($cc->getStatus())
+                    );
                 }
             }
 
-            return $total;
+            $rates = config('googleads.usd_rates', []);
+            $usd = 0.0;
+            $unknownCurrencies = [];
+
+            foreach ($byCurrency as $currency => $amount) {
+                if (! isset($rates[$currency])) {
+                    $unknownCurrencies[] = $currency ?: '(none)';
+
+                    continue;
+                }
+                $usd += $amount * (float) $rates[$currency];
+            }
+
+            return [
+                'usd' => $usd,
+                'by_currency' => $byCurrency,
+                'unreadable' => $unreadable,
+                'unknown_currencies' => $unknownCurrencies,
+            ];
         } catch (\Throwable $e) {
+            Log::warning('[MccEligibility] Could not read lifetime spend: '.$e->getMessage());
+
             return null;
+        }
+    }
+
+    /** Human-readable CustomerStatus, falling back to the raw value. */
+    private function statusName(int $status): string
+    {
+        try {
+            return \Google\Ads\GoogleAds\V22\Enums\CustomerStatusEnum\CustomerStatus::name($status);
+        } catch (\Throwable $e) {
+            return "status {$status}";
         }
     }
 

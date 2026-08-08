@@ -90,6 +90,9 @@ class GenerateAdCopy implements ShouldQueue
             $maxAttempts = 10; // Increased to ensure compliance with rules
             $approvedAdCopyData = null;
             $lastFeedback = null;
+            // Why each attempt bailed. Without this, a total Gemini outage and a
+            // genuine compliance rejection produced the same final message.
+            $attemptFailures = [];
 
             for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
                 Log::info("Attempting to generate and review ad copy (Attempt {$attempt}/{$maxAttempts}) for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}");
@@ -114,6 +117,7 @@ class GenerateAdCopy implements ShouldQueue
 
                 if (is_null($generatedResponse)) {
                     Log::error("Failed to get ad copy from Gemini on attempt {$attempt}.");
+                    $attemptFailures[] = 'no_response_from_gemini';
 
                     continue;
                 }
@@ -121,6 +125,7 @@ class GenerateAdCopy implements ShouldQueue
                 $generatedText = $generatedResponse['text'] ?? null;
                 if (is_null($generatedText)) {
                     Log::error("Failed to get ad copy text from Gemini response on attempt {$attempt}.");
+                    $attemptFailures[] = 'empty_text_from_gemini';
 
                     continue;
                 }
@@ -142,6 +147,7 @@ class GenerateAdCopy implements ShouldQueue
                     }
                 } catch (\Exception $e) {
                     Log::error("Failed to parse Gemini's ad copy response on attempt {$attempt}: ".$e->getMessage(), ['generated_text' => $generatedText]);
+                    $attemptFailures[] = 'unparseable_response';
 
                     continue;
                 }
@@ -151,6 +157,7 @@ class GenerateAdCopy implements ShouldQueue
 
                 if (is_null($reviewResults)) {
                     Log::warning("Ad copy review failed on attempt {$attempt}. No review results.");
+                    $attemptFailures[] = 'review_returned_nothing';
 
                     continue;
                 }
@@ -167,12 +174,41 @@ class GenerateAdCopy implements ShouldQueue
                     ]);
                     // Store the feedback for the next attempt.
                     $lastFeedback = $reviewResults['programmatic_validation']['feedback'] ?? [];
+                    $attemptFailures[] = 'not_approved';
                 }
             }
 
             if (is_null($approvedAdCopyData)) {
-                Log::error("Failed to generate approved ad copy after {$maxAttempts} attempts for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}. Last feedback: ", ['feedback' => $lastFeedback]);
-                throw new \Exception("Failed to generate approved ad copy after {$maxAttempts} attempts. Last violations: ".json_encode($lastFeedback));
+                // Summarise *why* the attempts failed. "Last violations: null"
+                // previously implied the model produced non-compliant copy, when
+                // the real cause could be that it never produced anything at all
+                // — e.g. Vertex returning 403 on every call. Those need different
+                // people to fix, so the message has to tell them apart.
+                $tally = array_count_values($attemptFailures);
+                arsort($tally);
+                $reason = $tally ? array_key_first($tally) : 'unknown';
+
+                $breakdown = implode(', ', array_map(
+                    fn ($k, $n) => "{$k} x{$n}",
+                    array_keys($tally),
+                    $tally
+                ));
+
+                Log::error("Failed to generate approved ad copy after {$maxAttempts} attempts for Campaign {$this->campaign->id}, Strategy {$this->strategy->id}, Platform {$this->platform}.", [
+                    'dominant_reason' => $reason,
+                    'breakdown' => $tally,
+                    'last_feedback' => $lastFeedback,
+                ]);
+
+                // Only 'not_approved' means the copy itself was the problem;
+                // everything else is an upstream/model fault.
+                $summary = $reason === 'not_approved'
+                    ? 'copy repeatedly failed compliance review. Last feedback: '.json_encode($lastFeedback)
+                    : "no usable copy was produced ({$reason}) — this is an upstream failure, not a compliance one";
+
+                throw new \Exception(
+                    "Failed to generate ad copy after {$maxAttempts} attempts: {$summary}. Breakdown: {$breakdown}"
+                );
             }
 
             $uniqueKeys = ['strategy_id' => $this->strategy->id, 'platform' => $this->platform];

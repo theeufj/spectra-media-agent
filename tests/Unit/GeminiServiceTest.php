@@ -14,6 +14,11 @@ class GeminiServiceTest extends TestCase
 
     private const VERTEX_URL = 'https://aiplatform.googleapis.com/*';
 
+    // embedContent() calls the region-prefixed host
+    // (https://{location}-aiplatform.googleapis.com/...), which VERTEX_URL does
+    // not match — faking only VERTEX_URL left embedding requests unstubbed.
+    private const VERTEX_REGIONAL_URL = 'https://*-aiplatform.googleapis.com/*';
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -134,13 +139,18 @@ class GeminiServiceTest extends TestCase
 
     public function test_generate_content_falls_back_to_next_model_on_failure(): void
     {
-        // Match per-model URL so the pro model always fails and the fallback always succeeds.
+        // Read the fallback target from config instead of hardcoding it — this
+        // test previously stubbed gemini-2.5-flash while the chain actually falls
+        // back to gemini-3.5-flash, so the fallback request was never stubbed.
+        $primary = 'gemini-3.1-pro-preview';
+        $fallback = config('ai.fallback_chain')[$primary];
+
         Http::fake([
-            '*gemini-3.1-pro-preview*' => Http::response([], 500),
-            '*gemini-2.5-flash*' => Http::response($this->streamChunk('fallback response'), 200),
+            "*{$primary}*" => Http::response([], 500),
+            "*{$fallback}*" => Http::response($this->streamChunk('fallback response'), 200),
         ]);
 
-        $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt');
+        $result = $this->service->generateContent($primary, 'Test prompt');
 
         $this->assertIsArray($result);
         $this->assertEquals('fallback response', $result['text']);
@@ -182,15 +192,24 @@ class GeminiServiceTest extends TestCase
 
     public function test_calculate_cost_returns_correct_usd_amount(): void
     {
-        // gemini-3.5-flash: $0.075/1M input, $0.30/1M output
+        // Derived from config rather than hardcoded: these expectations were
+        // pinned to old prices and silently wrong once config/ai.php was repriced.
+        // This asserts the formula, which is what the method is responsible for.
+        $rates = config('ai.pricing')['gemini-3.5-flash'];
+
         $cost = $this->service->calculateCost('gemini-3.5-flash', 1_000_000, 1_000_000);
-        $this->assertEqualsWithDelta(0.375, $cost, 0.000001);
+
+        $this->assertEqualsWithDelta($rates['input'] + $rates['output'], $cost, 0.000001);
     }
 
     public function test_calculate_cost_includes_cached_token_discount(): void
     {
+        $rates = config('ai.pricing')['gemini-3.5-flash'];
+
         $cost = $this->service->calculateCost('gemini-3.5-flash', 0, 0, 1_000_000);
-        $this->assertEqualsWithDelta(0.01875, $cost, 0.000001);
+
+        $this->assertEqualsWithDelta($rates['cached'], $cost, 0.000001);
+        $this->assertLessThan($rates['input'], $rates['cached'], 'cached tokens should be cheaper than fresh input');
     }
 
     public function test_calculate_cost_returns_zero_for_unknown_model(): void
@@ -282,8 +301,12 @@ class GeminiServiceTest extends TestCase
     public function test_embed_content_returns_array_on_success(): void
     {
         // Vertex AI embedding response format
-        Http::fake([self::VERTEX_URL => Http::response([
-            'predictions' => [['embeddings' => ['values' => [0.1, 0.2, 0.3, 0.4]]]],
+        // gemini-embedding-2-* uses the regional :embedContent endpoint, whose
+        // response is {embedding: {values: []}}. The old fixture used the
+        // :predict shape ({predictions: [{embeddings: {values: []}}]}), which the
+        // service correctly does not read for this model.
+        Http::fake([self::VERTEX_REGIONAL_URL => Http::response([
+            'embedding' => ['values' => [0.1, 0.2, 0.3, 0.4]],
         ], 200)]);
 
         $result = $this->service->embedContent('gemini-embedding-2-preview', 'Test text');

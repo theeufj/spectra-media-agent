@@ -36,5 +36,18 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+
+        <!--
+            The integration suites call live platform APIs. A developer .env that
+            enables them made `php artisan test` fire real Google/Facebook/Gemini
+            requests — each retrying for ~10s — which is what made the default
+            suite unusable. Pinned off here (force overrides .env); use
+            phpunit.integration.xml to run them deliberately.
+        -->
+        <env name="RUN_INTEGRATION_TESTS" value="false" force="true"/>
+        <env name="RUN_GOOGLE_ADS_INTEGRATION_TESTS" value="false" force="true"/>
+        <env name="RUN_FACEBOOK_INTEGRATION_TESTS" value="false" force="true"/>
+        <env name="RUN_LINKEDIN_ADS_INTEGRATION_TESTS" value="false" force="true"/>
+        <env name="RUN_MICROSOFT_ADS_INTEGRATION_TESTS" value="false" force="true"/>
     </php>
 </phpunit>

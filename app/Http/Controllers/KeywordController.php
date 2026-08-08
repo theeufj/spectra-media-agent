@@ -7,6 +7,7 @@ use App\Models\KeywordQualityScore;
 use App\Models\NegativeKeywordList;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use App\Services\KeywordClusteringService;
+use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -103,7 +104,7 @@ class KeywordController extends Controller
         } catch (\Exception $e) {
             Log::error('KeywordController: Research failed', ['error' => $e->getMessage()]);
 
-            return back()->with('flash', ['type' => 'error', 'message' => 'Keyword research failed: '.$e->getMessage()]);
+            return back()->with('flash', ['type' => 'error', 'message' => SafeError::message($e, "Keyword research didn't complete.")]);
         }
     }
 
@@ -381,7 +382,7 @@ class KeywordController extends Controller
         } catch (\Exception $e) {
             Log::error('KeywordController: Inline research failed', ['error' => $e->getMessage()]);
 
-            return response()->json(['error' => 'Keyword research failed: '.$e->getMessage()], 500);
+            return response()->json(['error' => SafeError::message($e, "Keyword research didn't complete.")], 500);
         }
     }
 }

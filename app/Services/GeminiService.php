@@ -82,7 +82,24 @@ class GeminiService
             // getenv('GOOGLE_APPLICATION_CREDENTIALS') check always returns false.
             // Load the credentials file explicitly via the Laravel config instead.
             $credentialsPath = config('services.google.credentials_path');
+
+            // Fail with something legible. Previously a missing or unreadable
+            // credentials file produced "makeCredentials(): Argument #2 ($jsonKey)
+            // must be of type array, null given" from deep inside google/auth,
+            // which says nothing about which file or why.
+            if (! $credentialsPath || ! is_readable($credentialsPath)) {
+                throw new \RuntimeException(
+                    'Google credentials file is missing or unreadable: '
+                    .($credentialsPath ?: '(services.google.credentials_path is not set)')
+                );
+            }
+
             $keyData = json_decode(file_get_contents($credentialsPath), true);
+
+            if (! is_array($keyData)) {
+                throw new \RuntimeException("Google credentials file is not valid JSON: {$credentialsPath}");
+            }
+
             $credentials = CredentialsLoader::makeCredentials(
                 ['https://www.googleapis.com/auth/cloud-platform'],
                 $keyData
