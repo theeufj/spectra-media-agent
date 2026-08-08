@@ -369,3 +369,34 @@ Schedule::command('googleads:check-mcc-eligibility')
     ->dailyAt('09:00')
     ->withoutOverlapping()
     ->onFailure(notifyAdminOnFailure('googleads:check-mcc-eligibility'));
+
+// ============================================================
+// RETENTION
+// ============================================================
+
+// Nothing pruned the operational tables, so they grew unbounded: 1,278 failed
+// jobs going back to April, 1,697 captured exceptions, 1,932 agent runs. The
+// volume is not the problem — the problem is that 44 ProcessDailyAdSpendBilling
+// failures were invisible inside it. Keeping these tables short is what makes
+// the failed-job list worth reading.
+Schedule::command('queue:prune-failed --hours=336')   // 14 days
+    ->daily()
+    ->withoutOverlapping();
+
+Schedule::command('queue:prune-batches --hours=336')
+    ->daily()
+    ->withoutOverlapping();
+
+// Retention windows live on each model's prunable(): ExceptionLog 90d,
+// AgentRun 90d, AgentActivity 180d.
+//
+// Deliberately NOT pruned: ai_costs (spend history — the AI cost dashboard
+// reports over long periods and this is financial data), notifications and
+// recommendations (both user-facing).
+Schedule::command('model:prune', [
+    '--model' => [
+        \App\Models\ExceptionLog::class,
+        \App\Models\AgentRun::class,
+        \App\Models\AgentActivity::class,
+    ],
+])->daily()->withoutOverlapping();

@@ -3,10 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Prunable;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AgentActivity extends Model
 {
+    use Prunable;
+
     protected $fillable = [
         'customer_id',
         'campaign_id',
@@ -52,5 +55,16 @@ class AgentActivity extends Model
             'details' => $details ?: null,
             'status' => $status,
         ]);
+    }
+
+    /**
+     * Records eligible for `model:prune` (scheduled nightly).
+     *
+     * Customer-visible activity feed — kept longer than the operational tables,
+     * but still bounded.
+     */
+    public function prunable(): \Illuminate\Database\Eloquent\Builder
+    {
+        return static::where('created_at', '<', now()->subDays(180));
     }
 }
