@@ -122,6 +122,7 @@ return [
         // Image model: output priced at the image-output rate ($60/1M tokens).
         'gemini-2.5-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-3.1-flash-image-preview' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
+        'gemini-embedding-2-preview' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'text-embedding-005' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'veo-3.1-generate-001' => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
