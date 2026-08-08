@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Connection;
+use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -187,7 +188,7 @@ class GoogleApiOAuthController extends Controller
                 'count' => count($names),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'accounts' => []];
+            return ['error' => SafeError::message($e, "We couldn't load your Google Ads accounts."), 'accounts' => []];
         }
     }
 
@@ -212,7 +213,7 @@ class GoogleApiOAuthController extends Controller
                 'count' => count($accounts),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'accounts' => []];
+            return ['error' => SafeError::message($e, "We couldn't load your Google Ads accounts."), 'accounts' => []];
         }
     }
 
@@ -238,7 +239,7 @@ class GoogleApiOAuthController extends Controller
                 'count' => count($accounts),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'accounts' => []];
+            return ['error' => SafeError::message($e, "We couldn't load your Google Ads accounts."), 'accounts' => []];
         }
     }
 }

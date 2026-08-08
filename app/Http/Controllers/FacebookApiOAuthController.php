@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Connection;
+use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Http;
@@ -204,7 +205,7 @@ class FacebookApiOAuthController extends Controller
                 'objective' => 'OUTCOME_AWARENESS',
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage()]);
+            return response()->json(['error' => SafeError::message($e, "We couldn't complete the Facebook connection.")]);
         }
     }
 
@@ -278,7 +279,7 @@ class FacebookApiOAuthController extends Controller
                 'actions' => $row['actions'] ?? [],
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage()];
+            return ['error' => SafeError::message($e, "We couldn't reach Facebook just now.")];
         }
     }
 
@@ -316,7 +317,7 @@ class FacebookApiOAuthController extends Controller
                 'count' => count($pages),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'pages' => []];
+            return ['error' => SafeError::message($e, "We couldn't load your Facebook pages."), 'pages' => []];
         }
     }
 
@@ -358,7 +359,7 @@ class FacebookApiOAuthController extends Controller
                 'count' => count($posts),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'posts' => []];
+            return ['error' => SafeError::message($e, "We couldn't load posts for that page."), 'posts' => []];
         }
     }
 
@@ -389,7 +390,7 @@ class FacebookApiOAuthController extends Controller
                 'count' => count($pages),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'pages' => []];
+            return ['error' => SafeError::message($e, "We couldn't load your Facebook pages."), 'pages' => []];
         }
     }
 
@@ -407,7 +408,7 @@ class FacebookApiOAuthController extends Controller
 
             return ['error' => null, 'data' => $response->json()];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage()];
+            return ['error' => SafeError::message($e, "We couldn't reach Facebook just now.")];
         }
     }
 
@@ -435,7 +436,7 @@ class FacebookApiOAuthController extends Controller
                 'count' => count($accounts),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'accounts' => []];
+            return ['error' => SafeError::message($e, "We couldn't load your Facebook ad accounts."), 'accounts' => []];
         }
     }
 
@@ -462,7 +463,7 @@ class FacebookApiOAuthController extends Controller
                 'count' => count($businesses),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'accounts' => []];
+            return ['error' => SafeError::message($e, "We couldn't load your Facebook ad accounts."), 'accounts' => []];
         }
     }
 
@@ -487,7 +488,7 @@ class FacebookApiOAuthController extends Controller
                 ], $data),
             ];
         } catch (\Exception $e) {
-            return ['error' => $e->getMessage(), 'permissions' => []];
+            return ['error' => SafeError::message($e, "We couldn't check your Facebook permissions."), 'permissions' => []];
         }
     }
 }

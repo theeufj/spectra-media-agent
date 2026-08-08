@@ -9,6 +9,7 @@ use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\CreativeQuotaService;
 use App\Services\StorageHelper;
+use App\Support\SafeError;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -172,7 +173,7 @@ class VideoCollateralController extends Controller
 
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Failed to start video extension: '.$e->getMessage(),
+                'message' => SafeError::message($e, "We couldn't start the video extension."),
             ]);
         }
     }
