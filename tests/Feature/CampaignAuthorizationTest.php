@@ -29,8 +29,11 @@ class CampaignAuthorizationTest extends TestCase
     {
         parent::setUp();
 
-        $this->owner = User::factory()->create();
-        $this->otherUser = User::factory()->create();
+        // campaigns.* sit behind the 'subscribed' middleware, which was added
+        // after these tests were written — without an active subscription every
+        // request 302'd to pricing before authorization was ever evaluated.
+        $this->owner = User::factory()->create(['subscription_status' => 'active']);
+        $this->otherUser = User::factory()->create(['subscription_status' => 'active']);
 
         $this->customer = Customer::factory()->create();
         $this->otherCustomer = Customer::factory()->create();

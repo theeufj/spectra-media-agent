@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -10,9 +11,23 @@ class ProfileTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_profile_page_is_displayed(): void
+    /**
+     * Every authenticated page sits behind ensureUserHasCustomer, which sends a
+     * user with no customer to /customers/create. These tests predate that
+     * middleware and were creating a bare user, so every request 302'd.
+     */
+    private function userWithCustomer(): User
     {
         $user = User::factory()->create();
+        $user->customers()->attach(Customer::factory()->create());
+        session(['active_customer_id' => $user->customers()->first()->id]);
+
+        return $user;
+    }
+
+    public function test_profile_page_is_displayed(): void
+    {
+        $user = $this->userWithCustomer();
 
         $response = $this
             ->actingAs($user)
@@ -23,7 +38,7 @@ class ProfileTest extends TestCase
 
     public function test_profile_information_can_be_updated(): void
     {
-        $user = User::factory()->create();
+        $user = $this->userWithCustomer();
 
         $response = $this
             ->actingAs($user)
@@ -45,7 +60,7 @@ class ProfileTest extends TestCase
 
     public function test_email_verification_status_is_unchanged_when_the_email_address_is_unchanged(): void
     {
-        $user = User::factory()->create();
+        $user = $this->userWithCustomer();
 
         $response = $this
             ->actingAs($user)
@@ -63,7 +78,7 @@ class ProfileTest extends TestCase
 
     public function test_user_can_delete_their_account(): void
     {
-        $user = User::factory()->create();
+        $user = $this->userWithCustomer();
 
         $response = $this
             ->actingAs($user)
@@ -81,7 +96,7 @@ class ProfileTest extends TestCase
 
     public function test_correct_password_must_be_provided_to_delete_account(): void
     {
-        $user = User::factory()->create();
+        $user = $this->userWithCustomer();
 
         $response = $this
             ->actingAs($user)

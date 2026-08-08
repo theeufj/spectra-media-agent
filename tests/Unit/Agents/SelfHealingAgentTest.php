@@ -6,12 +6,18 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\GeminiService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
 class SelfHealingAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     protected SelfHealingAgent $agent;
 
     protected GeminiService $geminiMock;

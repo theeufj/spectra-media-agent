@@ -1,8 +1,10 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\ConfirmablePasswordController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\NewPasswordController;
+use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
@@ -67,6 +69,17 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    // The profile page renders UpdatePasswordForm, which does
+    // put(route('password.update')) — but this route was missing, so Ziggy could
+    // not resolve the name and users had no way to change their password.
+    // PasswordController and ConfirmablePasswordController both already existed;
+    // only the routes were absent.
+    Route::put('password', [PasswordController::class, 'update'])->name('password.update');
+
+    Route::get('confirm-password', [ConfirmablePasswordController::class, 'show'])
+        ->name('password.confirm');
+    Route::post('confirm-password', [ConfirmablePasswordController::class, 'store']);
+
     Route::post('logout', [AuthenticatedSessionController::class, 'destroy'])
         ->name('logout');
 });

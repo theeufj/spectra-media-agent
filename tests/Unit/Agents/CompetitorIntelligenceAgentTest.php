@@ -8,12 +8,18 @@ use App\Services\Agents\CompetitorAnalysisAgent;
 use App\Services\Agents\CompetitorDiscoveryAgent;
 use App\Services\Agents\CompetitorIntelligenceAgent;
 use App\Services\GeminiService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
 class CompetitorIntelligenceAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     protected CompetitorIntelligenceAgent $agent;
 
     protected GeminiService $geminiMock;

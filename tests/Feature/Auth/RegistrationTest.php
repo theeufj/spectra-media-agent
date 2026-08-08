@@ -26,6 +26,8 @@ class RegistrationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        // User implements MustVerifyEmail and RegisteredUserController redirects to
+        // the verification notice — the dashboard is only reachable once verified.
+        $response->assertRedirect(route('verification.notice', absolute: false));
     }
 }

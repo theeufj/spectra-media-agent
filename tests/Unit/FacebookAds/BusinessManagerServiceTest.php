@@ -10,6 +10,16 @@ use Tests\TestCase;
 
 class BusinessManagerServiceTest extends TestCase
 {
+    /**
+     * These fakes hardcoded v18.0 while the service reads
+     * services.facebook.graph_version (v22.0), so every fake silently failed
+     * to match and the requests fell through as unmatched.
+     */
+    private static function graph(): string
+    {
+        return 'https://graph.facebook.com/'.config('services.facebook.graph_version', 'v22.0');
+    }
+
     use RefreshDatabase;
 
     private BusinessManagerService $service;
@@ -50,7 +60,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_verify_ad_account_access_success(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_1991968421347247*' => Http::response([
+            self::graph().'/act_1991968421347247*' => Http::response([
                 'id' => 'act_1991968421347247',
                 'name' => 'Proveably Ad Account',
                 'account_status' => 1,
@@ -68,7 +78,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_verify_ad_account_access_strips_act_prefix(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_1991968421347247*' => Http::response([
+            self::graph().'/act_1991968421347247*' => Http::response([
                 'id' => 'act_1991968421347247',
                 'name' => 'Test Account',
                 'account_status' => 1,
@@ -84,7 +94,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_verify_ad_account_access_failure(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_999999999*' => Http::response([
+            self::graph().'/act_999999999*' => Http::response([
                 'error' => [
                     'message' => 'Unsupported get request',
                     'type' => 'GraphMethodException',
@@ -102,7 +112,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_assign_ad_account_saves_to_customer(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_1991968421347247*' => Http::response([
+            self::graph().'/act_1991968421347247*' => Http::response([
                 'id' => 'act_1991968421347247',
                 'name' => 'Proveably',
                 'account_status' => 1,
@@ -151,7 +161,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_assign_ad_account_fails_when_verification_fails(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/act_999999*' => Http::response([
+            self::graph().'/act_999999*' => Http::response([
                 'error' => ['message' => 'No access', 'code' => 100],
             ], 403),
         ]);
@@ -168,7 +178,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_verify_system_user_token_success(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/me*' => Http::response([
+            self::graph().'/me*' => Http::response([
                 'id' => '112233',
                 'name' => 'Platform System User',
             ], 200),
@@ -183,7 +193,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_verify_system_user_token_failure(): void
     {
         Http::fake([
-            'https://graph.facebook.com/v18.0/me*' => Http::response([
+            self::graph().'/me*' => Http::response([
                 'error' => ['message' => 'Invalid OAuth access token', 'code' => 190],
             ], 401),
         ]);

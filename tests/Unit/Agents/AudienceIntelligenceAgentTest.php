@@ -5,12 +5,18 @@ namespace Tests\Unit\Agents;
 use App\Models\Customer;
 use App\Services\Agents\AudienceIntelligenceAgent;
 use App\Services\GeminiService;
+use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
 
 class AudienceIntelligenceAgentTest extends TestCase
 {
+    // GeminiService::recordCost() writes an ai_costs row on every call, so
+    // these tests were committing cost rows that leaked into the suite and
+    // broke AiCostControllerTest's totals.
+    use DatabaseTransactions;
+
     protected AudienceIntelligenceAgent $agent;
 
     protected GeminiService $geminiMock;
@@ -74,7 +80,10 @@ class AudienceIntelligenceAgentTest extends TestCase
         $this->geminiMock->shouldReceive('generateContent')
             ->once()
             ->withArgs(function ($model, $prompt, $config, $systemPrompt, $thinking) {
-                return $model === 'gemini-3-flash-preview' && str_contains($prompt, 'Acme Corp');
+                // Was pinned to 'gemini-3-flash-preview'; config('ai.models.default')
+                // has since moved, so the matcher never matched and the mock
+                // returned null instead of the stubbed segments.
+                return $model === config('ai.models.default') && str_contains($prompt, 'Acme Corp');
             })
             ->andReturn(['text' => json_encode($expectedSegments)]);
 
