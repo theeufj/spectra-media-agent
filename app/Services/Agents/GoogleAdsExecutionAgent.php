@@ -2,71 +2,41 @@
 
 namespace App\Services\Agents;
 
+use App\Mail\GoogleAdsVerificationRequired;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
+use App\Models\VideoCollateral;
+use App\Notifications\ConversionTrackingReady;
 use App\Prompts\GoogleAdsExecutionPrompt;
-use App\Services\GeminiService;
-use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
-use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
-use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
-use App\Services\GoogleAds\DisplayServices\CreateDisplayCampaign;
-use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
-use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
-use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
-use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
-use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
-use App\Services\GoogleAds\CommonServices\AddCampaignCriterion;
-use App\Services\GoogleAds\CommonServices\LinkAdGroupAsset;
-use App\Services\GoogleAds\CommonServices\SearchAudience;
-use App\Services\GoogleAds\CommonServices\CreateTextAsset;
-use App\Services\GoogleAds\PerformanceMaxServices\CreatePerformanceMaxCampaign;
-use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroup;
-use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
-use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroupWithAssets;
-use App\Services\GoogleAds\CommonServices\CreateSitelinkAsset;
-use App\Services\GoogleAds\CommonServices\CreateCalloutAsset;
-use App\Services\GoogleAds\CommonServices\CreateStructuredSnippetAsset;
-use App\Services\GoogleAds\CommonServices\CreateCallAsset;
-use App\Services\GoogleAds\CommonServices\CreatePriceAsset;
-use App\Services\GoogleAds\CommonServices\CreatePromotionAsset;
-use App\Services\GoogleAds\CommonServices\GetAndLinkLocationAssets;
-use App\Services\GoogleAds\CommonServices\LinkCampaignAsset;
-use Google\Ads\GoogleAds\V22\Enums\PriceExtensionTypeEnum\PriceExtensionType;
-use Google\Ads\GoogleAds\V22\Enums\PriceExtensionPriceQualifierEnum\PriceExtensionPriceQualifier;
-use Google\Ads\GoogleAds\V22\Enums\PriceExtensionPriceUnitEnum\PriceExtensionPriceUnit;
+use App\Services\Agents\Google\AdExtensionBuilder;
+use App\Services\Agents\Google\AudienceTargeter;
+use App\Services\Agents\Google\BiddingStrategyApplier;
+use App\Services\Agents\Google\Executors\CampaignTypeExecutor;
+use App\Services\Agents\Google\Executors\DemandGenCampaignExecutor;
+use App\Services\Agents\Google\Executors\DisplayCampaignExecutor;
+use App\Services\Agents\Google\Executors\LocalServicesCampaignExecutor;
+use App\Services\Agents\Google\Executors\PerformanceMaxCampaignExecutor;
+use App\Services\Agents\Google\Executors\SearchCampaignExecutor;
+use App\Services\Agents\Google\Executors\ShoppingCampaignExecutor;
+use App\Services\Agents\Google\Executors\VideoCampaignExecutor;
+use App\Services\Agents\Google\GeoTargetResolver;
+use App\Services\Agents\Google\LandingUrlBuilder;
+use App\Services\Agents\Google\SearchKeywordBuilder;
+use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\GoogleAds\CommonServices\CreateConversionAction;
-use App\Services\GoogleAds\VideoServices\CreateVideoCampaign;
-use App\Services\GoogleAds\VideoServices\UploadVideoAsset;
-use App\Services\GoogleAds\VideoServices\CreateVideoAdGroup;
-use App\Services\GoogleAds\VideoServices\CreateResponsiveVideoAd;
-use App\Services\GoogleAds\DemandGenServices\CreateDemandGenCampaign;
-use App\Services\GoogleAds\DemandGenServices\CreateDemandGenAdGroup;
-use App\Services\GoogleAds\DemandGenServices\CreateDemandGenMultiAssetAd;
-use App\Services\GoogleAds\ShoppingServices\CreateShoppingCampaign;
-use App\Services\GoogleAds\ShoppingServices\CreateShoppingAdGroup;
-use App\Services\GoogleAds\ShoppingServices\CreateShoppingProductAd;
-use App\Services\GoogleAds\LocalServicesServices\CreateLocalServicesCampaign;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
 use App\Services\GTM\GTMContainerService;
-use App\Mail\GoogleAdsVerificationRequired;
-use App\Notifications\ConversionTrackingReady;
-use App\Services\Agents\CampaignReviewAgent;
-use Illuminate\Support\Facades\Mail;
-use App\Services\Agents\Traits\RetryableApiOperation;
-use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
-use App\Models\VideoCollateral;
-use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * Google Ads Execution Agent
- * 
+ *
  * AI-powered execution agent for Google Ads platform that dynamically generates
  * and executes deployment plans based on available assets, budget, and platform capabilities.
- * 
+ *
  * Features:
  * - Dynamic campaign type selection (Search, Display, Performance Max)
  * - AI-driven execution planning with Google Search grounding
@@ -78,49 +48,55 @@ use Illuminate\Support\Facades\Storage;
 class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 {
     use RetryableApiOperation;
-    
+
     protected string $platform = 'google';
-    
+
     /**
      * Execute the deployment with ExecutionContext
      */
     public function execute(ExecutionContext $context): ExecutionResult
     {
-        Log::info("GoogleAdsExecutionAgent: Starting execution", [
+        Log::info('GoogleAdsExecutionAgent: Starting execution', [
             'campaign_id' => $context->campaign->id,
             'strategy_id' => $context->strategy->id,
         ]);
-        
+
         // Validate prerequisites
         $validation = $this->validatePrerequisites($context);
-        if (!$validation->passes()) {
-            Log::error("GoogleAdsExecutionAgent: Prerequisites validation failed", [
-                'errors' => $validation->errors
+        if (! $validation->passes()) {
+            Log::error('GoogleAdsExecutionAgent: Prerequisites validation failed', [
+                'errors' => $validation->errors,
             ]);
+
             return ExecutionResult::failure($validation->errors);
         }
-        
-        // Analyze optimization opportunities
-        $optimization = $this->analyzeOptimizationOpportunities($context);
-        
+
+        // NOTE: analyzeOptimizationOpportunities() used to be called here and its
+        // result discarded — it costs a Google Ads conversion query plus several
+        // collateral counts on every deploy for nothing. It is left in place
+        // because executePlan() independently re-derives PMax eligibility with a
+        // *different* rule set (>=3 valid-ratio images vs. images + video +
+        // conversion tracking + budget). Those two decisions should be unified and
+        // fed into generateExecutionPlan(); until then, don't pay for the analysis.
+
         // Generate execution plan
         $plan = $this->generateExecutionPlan($context);
-        
+
         // Execute the plan
         $result = $this->executePlan($plan, $context);
-        
-        Log::info("GoogleAdsExecutionAgent: Execution completed", [
+
+        Log::info('GoogleAdsExecutionAgent: Execution completed', [
             'campaign_id' => $context->campaign->id,
             'success' => $result->success,
-            'execution_time' => $result->executionTime
+            'execution_time' => $result->executionTime,
         ]);
-        
+
         return $result;
     }
-    
+
     /**
      * Validate prerequisites before deployment
-     * 
+     *
      * Checks:
      * - Google Ads account connection
      * - Customer ID validity
@@ -132,53 +108,55 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     protected function validatePrerequisites(ExecutionContext $context): ValidationResult
     {
         $result = new ValidationResult(true);
-        
+
         // Ensure the customer has a Google Ads sub-account.
         // If not, auto-provision one under the platform MCC.
-        if (!$this->customer->google_ads_customer_id) {
+        if (! $this->customer->google_ads_customer_id) {
             $provisioned = $this->provisionGoogleAdsAccount();
-            if (!$provisioned) {
+            if (! $provisioned) {
                 $result->addError('google_ads_no_account', 'Failed to provision Google Ads account - check MCC configuration');
+
                 return $result;
             }
         }
-        
+
         // Verify platform MCC credentials are configured
         $mccAccount = \App\Models\MccAccount::getActive();
-        if (!$mccAccount) {
+        if (! $mccAccount) {
             $result->addError('google_ads_not_authorized', 'No active MCC account configured');
+
             return $result;
         }
-        
+
         // Check conversion tracking (warning only - campaigns can run without it)
-        if (!$this->hasConversionTracking($context)) {
+        if (! $this->hasConversionTracking($context)) {
             $result->addWarning('no_conversion_tracking', 'No conversion tracking configured - Smart Bidding will be limited');
         }
-        
+
         // Validate creative assets
         $strategy = $context->strategy;
         $hasImages = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->exists();
         $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
-        
-        if (!$hasAdCopy) {
+
+        if (! $hasAdCopy) {
             $result->addError('no_ad_copy', 'No ad copy available for Google Ads');
         }
-        
-        if (!$hasImages) {
+
+        if (! $hasImages) {
             $result->addWarning('no_images', 'No images available - Display and Performance Max campaigns will be limited');
         }
-        
+
         // Validate budget meets Google Ads minimums
         $budgetValidation = $this->validateBudget($context);
-        if (!$budgetValidation->passes()) {
+        if (! $budgetValidation->passes()) {
             foreach ($budgetValidation->errors as $error) {
-                $result->addError('budget_' . $error['code'], $error['message']);
+                $result->addError('budget_'.$error['code'], $error['message']);
             }
         }
-        
+
         return $result;
     }
-    
+
     /**
      * Auto-provision a Google Ads sub-account under the platform MCC.
      */
@@ -186,37 +164,39 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     {
         $mccAccount = \App\Models\MccAccount::getActive();
 
-        if (!$mccAccount) {
+        if (! $mccAccount) {
             Log::error('Cannot provision Google Ads account: No active MCC configured');
+
             return false;
         }
 
         $mccCustomerId = $mccAccount->google_customer_id;
-        
+
         try {
-            Log::info("Provisioning Google Ads sub-account under platform MCC", [
+            Log::info('Provisioning Google Ads sub-account under platform MCC', [
                 'customer_id' => $this->customer->id,
                 'customer_name' => $this->customer->name,
                 'mcc_id' => $mccCustomerId,
             ]);
-            
+
             $mccManager = new \App\Services\GoogleAds\MCCAccountManager($this->customer);
             $result = $mccManager->createStandardAccountUnderMCC(
                 $mccCustomerId,
                 $this->customer->name
             );
-            
-            if (!$result) {
+
+            if (! $result) {
                 Log::error('Failed to create sub-account under MCC', [
                     'customer_id' => $this->customer->id,
                 ]);
+
                 return false;
             }
-            
+
             // Refresh the customer model to pick up the new IDs
             $this->customer->refresh();
-            
-            Log::info("Successfully provisioned Google Ads sub-account", [
+
+            Log::info('Successfully provisioned Google Ads sub-account', [
                 'customer_id' => $this->customer->id,
                 'google_ads_customer_id' => $this->customer->google_ads_customer_id,
                 'mcc_id' => $this->customer->google_ads_manager_customer_id,
@@ -230,17 +210,18 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
             return true;
         } catch (\Exception $e) {
-            Log::error("Error provisioning Google Ads sub-account: " . $e->getMessage(), [
+            Log::error('Error provisioning Google Ads sub-account: '.$e->getMessage(), [
                 'customer_id' => $this->customer->id,
                 'exception' => $e,
             ]);
+
             return false;
         }
     }
-    
+
     /**
      * Analyze optimization opportunities for Google Ads
-     * 
+     *
      * Evaluates:
      * - Performance Max eligibility (multiple assets + conversion tracking + $250 min budget)
      * - Smart Bidding eligibility (conversion count and quality)
@@ -251,16 +232,16 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function analyzeOptimizationOpportunities(ExecutionContext $context): OptimizationAnalysis
     {
-        $analysis = new OptimizationAnalysis();
+        $analysis = new OptimizationAnalysis;
         $strategy = $context->strategy;
         $campaign = $context->campaign;
-        
+
         // Check Performance Max eligibility
         $hasMultipleAssets = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->count() >= 3
             && VideoCollateral::where('campaign_id', $campaign->id)->where('is_active', true)->count() >= 1;
         $hasConversionTracking = $this->hasConversionTracking($context);
         $meetsPerformanceMaxBudget = $context->calculateDailyBudget() >= 8.33; // ~$250/month minimum
-        
+
         if ($hasMultipleAssets && $hasConversionTracking && $meetsPerformanceMaxBudget) {
             $analysis->addOpportunity(
                 'performance_max_eligible',
@@ -269,7 +250,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 ['multiple_assets' => true, 'conversion_tracking' => true, 'budget_meets_minimum' => true]
             );
         }
-        
+
         // Check Smart Bidding eligibility
         // Google's minimums: Target ROAS needs 50+/month, Target CPA needs 30+/month.
         $conversionCount = $this->getConversionCount($context);
@@ -288,7 +269,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 ['conversion_count' => $conversionCount]
             );
         }
-        
+
         // Check for keyword opportunities
         if ($strategy->bidding_strategy && isset($strategy->bidding_strategy['keywords'])) {
             $keywordCount = count($strategy->bidding_strategy['keywords']);
@@ -301,7 +282,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 );
             }
         }
-        
+
         // Check ad extension opportunities
         $analysis->addOpportunity(
             'ad_extensions',
@@ -309,17 +290,17 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'medium',
             ['business_name' => $campaign->name, 'website' => $campaign->landing_page_url]
         );
-        
+
         return $analysis;
     }
-    
+
     /**
      * Validate budget meets Google Ads requirements
      */
     protected function validateBudget(ExecutionContext $context): BudgetValidation
     {
         $dailyBudget = $context->calculateDailyBudget();
-        
+
         // Google Ads minimum daily budget is typically $1
         if ($dailyBudget < 1.0) {
             return BudgetValidation::invalid(
@@ -328,19 +309,19 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 [['code' => 'below_minimum', 'message' => 'Daily budget must be at least $1.00 for Google Ads']]
             );
         }
-        
+
         // Warn if budget is low for Performance Max
         $warnings = [];
         if ($dailyBudget < 8.33) {
             $warnings[] = [
                 'code' => 'performance_max_budget',
-                'message' => 'Daily budget below $8.33 (~$250/month) - Performance Max campaigns not recommended'
+                'message' => 'Daily budget below $8.33 (~$250/month) - Performance Max campaigns not recommended',
             ];
         }
-        
+
         return BudgetValidation::valid($dailyBudget, ['minimum_daily_budget' => 1.0], $warnings);
     }
-    
+
     /**
      * Generate AI-powered execution plan for Google Ads
      */
@@ -348,11 +329,11 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     {
         $prompt = GoogleAdsExecutionPrompt::generate($context);
         $systemInstruction = GoogleAdsExecutionPrompt::getSystemInstruction();
-        
+
         Log::info("GoogleAdsExecutionAgent: Generating execution plan for Campaign {$context->campaign->id}");
 
         $lastException = null;
-        $maxAttempts   = 3;
+        $maxAttempts = 3;
 
         for ($attempt = 1; $attempt <= $maxAttempts; $attempt++) {
             try {
@@ -360,30 +341,30 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                     model: config('ai.models.default'),
                     prompt: $prompt,
                     config: [
-                        'temperature'     => 0.7,
+                        'temperature' => 0.7,
                         'maxOutputTokens' => 65536,
                     ],
                     systemInstruction: $systemInstruction,
                     enableGoogleSearch: false
                 );
 
-                if (!$response || !isset($response['text'])) {
+                if (! $response || ! isset($response['text'])) {
                     throw new \Exception('Empty response from AI model');
                 }
 
-                Log::debug("GoogleAdsExecutionAgent: Raw AI response", [
-                    'attempt'          => $attempt,
-                    'response_length'  => strlen($response['text']),
+                Log::debug('GoogleAdsExecutionAgent: Raw AI response', [
+                    'attempt' => $attempt,
+                    'response_length' => strlen($response['text']),
                     'response_preview' => substr($response['text'], 0, 500),
                 ]);
 
                 $plan = ExecutionPlan::fromJson($response['text']);
                 $plan = (new CampaignReviewAgent($this->customer))->review($plan, 'google');
 
-                Log::info("GoogleAdsExecutionAgent: Generated execution plan", [
-                    'campaign_id'   => $context->campaign->id,
-                    'attempt'       => $attempt,
-                    'steps_count'   => count($plan->steps),
+                Log::info('GoogleAdsExecutionAgent: Generated execution plan', [
+                    'campaign_id' => $context->campaign->id,
+                    'attempt' => $attempt,
+                    'steps_count' => count($plan->steps),
                     'campaign_type' => $plan->getCampaignStructure()['type'] ?? 'unknown',
                 ]);
 
@@ -391,17 +372,17 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
             } catch (\Exception $e) {
                 $lastException = $e;
-                Log::warning("GoogleAdsExecutionAgent: Execution plan attempt {$attempt}/{$maxAttempts} failed: " . $e->getMessage());
+                Log::warning("GoogleAdsExecutionAgent: Execution plan attempt {$attempt}/{$maxAttempts} failed: ".$e->getMessage());
                 if ($attempt < $maxAttempts) {
                     usleep(500000 * $attempt); // 0.5s, 1s back-off
                 }
             }
         }
 
-        Log::error("GoogleAdsExecutionAgent: Failed to generate execution plan after {$maxAttempts} attempts: " . $lastException->getMessage());
+        Log::error("GoogleAdsExecutionAgent: Failed to generate execution plan after {$maxAttempts} attempts: ".$lastException->getMessage());
         throw $lastException;
     }
-    
+
     /**
      * Execute the AI-generated deployment plan
      */
@@ -412,9 +393,9 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $customerId = $this->customer->google_ads_customer_id;
         $strategy = $context->strategy;
         $campaign = $context->campaign;
-        
+
         Log::info("GoogleAdsExecutionAgent: Starting plan execution for Campaign {$campaign->id}");
-        
+
         try {
             // Setup Conversion Tracking (Best Effort)
             $this->setupConversionTracking($customerId, $result, $campaign);
@@ -438,10 +419,14 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
                     foreach ($images as $img) {
                         $url = $img->cloudfront_url ?? $img->s3_path ?? null;
-                        if (!$url) continue;
+                        if (! $url) {
+                            continue;
+                        }
                         try {
                             $size = @getimagesize($url);
-                            if (!$size || $size[0] === 0 || $size[1] === 0) continue;
+                            if (! $size || $size[0] === 0 || $size[1] === 0) {
+                                continue;
+                            }
                             $ratio = $size[0] / $size[1];
                             // PMax requires 1.91:1 (±5%) or 1:1 (±5%)
                             $is191 = $ratio >= 1.8145 && $ratio <= 2.0055;
@@ -457,8 +442,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
                 if ($validPmaxImages >= 3 && $hasAdCopy && $minBudget) {
                     Log::info("GoogleAdsExecutionAgent: Upgrading {$campaignType} → performance_max (assets ready)", [
-                        'campaign_id'        => $campaign->id,
-                        'valid_pmax_images'  => $validPmaxImages,
+                        'campaign_id' => $campaign->id,
+                        'valid_pmax_images' => $validPmaxImages,
                     ]);
                     $campaignType = 'performance_max';
                     $result->addWarning('campaign_type_upgraded', 'Campaign type upgraded to Performance Max — all Google surfaces will be targeted using your uploaded assets.');
@@ -469,1493 +454,71 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 }
             }
 
-            // Execute based on campaign type
-            switch ($campaignType) {
-                case 'search':
-                    $this->executeSearchCampaign($customerId, $campaign, $strategy, $plan, $result);
-                    break;
-                    
-                case 'display':
-                    $this->executeDisplayCampaign($customerId, $campaign, $strategy, $plan, $result);
-                    break;
-                    
-                case 'performance_max':
-                    $this->executePerformanceMaxCampaign($customerId, $campaign, $strategy, $plan, $result);
-                    break;
-                    
-                case 'video':
-                    $this->executeVideoCampaign($customerId, $campaign, $strategy, $plan, $result);
-                    break;
+            $this->executorFor($campaignType)
+                ->execute($customerId, $campaign, $strategy, $plan, $result);
 
-                case 'demand_gen':
-                    $this->executeDemandGenCampaign($customerId, $campaign, $strategy, $plan, $result);
-                    break;
-
-                case 'shopping':
-                    $this->executeShoppingCampaign($customerId, $campaign, $strategy, $plan, $result);
-                    break;
-
-                case 'local_services':
-                    $this->executeLocalServicesCampaign($customerId, $campaign, $strategy, $plan, $result);
-                    break;
-                    
-                default:
-                    throw new \Exception("Unsupported campaign type: {$campaignType}");
-            }
-            
             $result->executionTime = microtime(true) - $startTime;
-            
-            Log::info("GoogleAdsExecutionAgent: Successfully executed plan", [
+
+            Log::info('GoogleAdsExecutionAgent: Successfully executed plan', [
                 'campaign_id' => $campaign->id,
                 'execution_time' => $result->executionTime,
-                'platform_ids_count' => count($result->platformIds)
+                'platform_ids_count' => count($result->platformIds),
             ]);
-            
+
             return $result;
-            
+
         } catch (\Exception $e) {
-            Log::error("GoogleAdsExecutionAgent: Plan execution failed: " . $e->getMessage());
-            
+            Log::error('GoogleAdsExecutionAgent: Plan execution failed: '.$e->getMessage());
+
             $result = ExecutionResult::failure([$e->getMessage()]);
             $result->plan = $plan;
             $result->executionTime = microtime(true) - $startTime;
-            
+
             return $result;
         }
     }
-    
-    /**
-     * Execute Search campaign deployment
-     */
-    protected function executeSearchCampaign(
-        string $customerId,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        // Verify we are targeting the correct account
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID", [
-                'provided_id' => $customerId,
-                'stored_id' => $this->customer->google_ads_customer_id
-            ]);
-            $customerId = $this->customer->google_ads_customer_id;
-        }
-
-        Log::info("GoogleAdsExecutionAgent: Creating Search Campaign in account", [
-            'customer_id' => $customerId
-        ]);
-
-        // 1. Create Campaign — idempotency guard prevents duplicates on retry
-        $timestamp = now()->format('Ymd_His');
-        if (!empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing Search campaign from prior attempt", [
-                'campaign_id'              => $campaign->id,
-                'google_ads_campaign_id'   => $campaignResourceName,
-            ]);
-            $result->addPlatformId('campaign', $campaignResourceName);
-        } else {
-            $createCampaignService = new CreateSearchCampaign($this->customer);
-            $campaignName = $campaign->name . ' - ' . $timestamp;
-
-            $campaignData = [
-                'businessName' => $campaignName,
-                'budget'    => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate' => now()->addDay()->format('Y-m-d'),
-                'endDate'   => now()->addYear()->format('Y-m-d'),
-            ];
-
-            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-            if (!$campaignResourceName) {
-                throw new \Exception('Failed to create search campaign');
-            }
-
-            $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
-        }
-
-        // 1.5 Add Location Targeting
-        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
-        
-        // 2. Create Ad Group — reuse if already created in a prior attempt
-        if (!empty($strategy->google_ads_ad_group_id)) {
-            $adGroupResourceName = $strategy->google_ads_ad_group_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing Search ad group from prior attempt", [
-                'strategy_id'           => $strategy->id,
-                'google_ads_ad_group_id' => $adGroupResourceName,
-            ]);
-            $result->addPlatformId('ad_group', $adGroupResourceName);
-        } else {
-            $createAdGroupService = new CreateSearchAdGroup($this->customer);
-            $adGroupName = 'Default Ad Group - ' . $timestamp;
-            $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-            if (!$adGroupResourceName) {
-                throw new \Exception('Failed to create search ad group');
-            }
-
-            $result->addPlatformId('ad_group', $adGroupResourceName);
-            $strategy->google_ads_ad_group_id = $adGroupResourceName;
-            $strategy->save();
-        }
-        
-        // 3. Add Keywords — always validate through Keyword Planner for volume data
-        $keywords = $this->getKeywords($campaign, $strategy, $plan);
-        if (empty($keywords)) {
-            // Fallback: use AI keyword research to generate initial keywords
-            $keywords = $this->researchKeywords($customerId, $campaign, $strategy);
-        }
-        // Validate all keywords through Keyword Planner to filter low-volume terms
-        if (!empty($keywords)) {
-            $keywords = $this->validateAndEnrichKeywords($customerId, $keywords, $campaign, $strategy);
-        }
-        if (!empty($keywords)) {
-            $this->addKeywords($customerId, $adGroupResourceName, $keywords, $result);
-        }
-
-        // 3.2 Add negative keywords at campaign creation time
-        $this->addInitialNegativeKeywords($customerId, $campaignResourceName, $campaign, $strategy, $result);
-
-        // 3.5 Add Audience Targeting
-        $this->addAudienceTargeting($customerId, $adGroupResourceName, $strategy, $result);
-        
-        // 4. Upload Image Assets for Responsive Search Ad (if available)
-        $imageAssetResourceNames = [];
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
-        if ($imageCollaterals->isNotEmpty()) {
-            $uploadImageAssetService = new UploadImageAsset($this->customer);
-            $linkAdGroupAssetService = new LinkAdGroupAsset($this->customer);
-
-            foreach ($imageCollaterals as $image) {
-                try {
-                    $imageData = StorageHelper::get($image->s3_path);
-                    if (!$imageData) {
-                        Log::warning("GoogleAdsExecutionAgent: Image data is null, skipping upload", [
-                            's3_path' => $image->s3_path,
-                        ]);
-                        continue;
-                    }
-                    
-                    $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
-                    if ($assetResourceName) {
-                        $imageAssetResourceNames[] = $assetResourceName;
-                        $result->addPlatformId('image_asset', $assetResourceName);
-
-                        // Determine field type from image dimensions.
-                        // AD_IMAGE is Display/Video only — Search image extensions require
-                        // MARKETING_IMAGE (landscape) or SQUARE_MARKETING_IMAGE (square).
-                        $size       = @getimagesizefromstring($imageData);
-                        $width      = $size[0] ?? 0;
-                        $height     = $size[1] ?? 1;
-                        $ratio      = $height > 0 ? $width / $height : 1;
-                        $fieldType  = ($ratio >= 0.8 && $ratio < 1.5 && $width >= 300 && $height >= 300)
-                            ? AssetFieldType::SQUARE_MARKETING_IMAGE
-                            : AssetFieldType::MARKETING_IMAGE;
-
-                        $linkResourceName = ($linkAdGroupAssetService)($customerId, $adGroupResourceName, $assetResourceName, $fieldType);
-                        if ($linkResourceName) {
-                            $result->addPlatformId('ad_group_asset', $linkResourceName);
-                            Log::info("GoogleAdsExecutionAgent: Linked image asset to ad group", [
-                                'asset' => $assetResourceName,
-                                'ad_group' => $adGroupResourceName,
-                                'field_type' => $fieldType,
-                            ]);
-                        }
-                    }
-                } catch (\Exception $e) {
-                    $result->addWarning("Failed to upload/link image asset {$image->s3_path}: " . $e->getMessage());
-                }
-            }
-        }
-        
-        // 5. Create Responsive Search Ads (2-3 variants per Google best practices)
-        $adCopies = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->limit(3)->get();
-        if ($adCopies->isEmpty()) {
-            $adCopies = $strategy->adCopies()->limit(3)->get();
-        }
-
-        if ($adCopies->isNotEmpty()) {
-            $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
-
-            if (!$finalUrl) {
-                $result->addWarning('No landing page URL found for ad creation. Skipping ad creation.');
-            } else {
-                $createAdService = new CreateResponsiveSearchAd($this->customer);
-
-                foreach ($adCopies as $adCopy) {
-                    $adData = [
-                        'finalUrls'   => [$finalUrl],
-                        'headlines'   => $adCopy->headlines ?? [],
-                        'descriptions' => $adCopy->descriptions ?? [],
-                        'imageAssets' => $imageAssetResourceNames,
-                    ];
-                    $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
-                    if ($adResourceName) {
-                        $result->addPlatformId('ad', $adResourceName);
-                    }
-                }
-
-                // If only 1 ad copy with enough headlines, create a second RSA variant
-                // with rotated headlines so Google has two containers to A/B test.
-                if ($adCopies->count() === 1) {
-                    $firstCopy = $adCopies->first();
-                    $allHeadlines = $firstCopy->headlines ?? [];
-                    if (count($allHeadlines) >= 6) {
-                        $rotated = array_merge(array_slice($allHeadlines, 4), array_slice($allHeadlines, 0, 4));
-                        $adData2 = [
-                            'finalUrls'    => [$finalUrl],
-                            'headlines'    => $rotated,
-                            'descriptions' => array_reverse($firstCopy->descriptions ?? []),
-                            'imageAssets'  => $imageAssetResourceNames,
-                        ];
-                        $adResourceName2 = ($createAdService)($customerId, $adGroupResourceName, $adData2);
-                        if ($adResourceName2) {
-                            $result->addPlatformId('ad', $adResourceName2);
-                        }
-                    }
-                }
-            }
-        }
-
-        // 6. Add Ad Extensions (Sitelinks, Callouts)
-        $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
-
-        // 7. Apply bidding strategy from strategy record, with a safety guard:
-        // Target CPA requires 30+/month, Target ROAS requires 50+/month — fall back to
-        // MaximizeConversions on accounts below those thresholds.
-        $this->applyBiddingStrategy($customerId, $campaignResourceName, $strategy, $result);
-
-        // 8. Apply conversion value rules (device + audience modifiers)
-        try {
-            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
-            $applyValueRules($customerId, $campaignResourceName, $this->customer);
-        } catch (\Exception $e) {
-            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: ' . $e->getMessage());
-        }
-    }
 
     /**
-     * Apply the strategy's recommended bidding strategy to a campaign.
-     * Automatically downgrades Smart Bidding strategies to MaximizeConversions
-     * when the account has insufficient conversion history.
+     * Build the executor for a campaign type, wiring the shared building blocks.
+     *
+     * Each campaign type used to be a ~100-250 line method on this class; they now
+     * live in App\Services\Agents\Google\Executors and share the collaborators below.
+     *
+     * @throws \InvalidArgumentException when the type has no executor
      */
-    protected function applyBiddingStrategy(
-        string $customerId,
-        string $campaignResourceName,
-        Strategy $strategy,
-        ExecutionResult $result
-    ): void {
-        $biddingData = $strategy->bidding_strategy ?? [];
-        $strategyName = strtoupper($biddingData['name'] ?? '');
+    protected function executorFor(string $campaignType): CampaignTypeExecutor
+    {
+        $geo = new GeoTargetResolver($this->customer);
+        $extensions = new AdExtensionBuilder($this->customer, $this->gemini);
+        $urls = new LandingUrlBuilder($this->customer);
+        $bidding = new BiddingStrategyApplier($this->customer);
 
-        if (empty($strategyName) || $strategyName === 'MANUAL_CPC') {
-            return;
-        }
-
-        // Smart Bidding strategies that need conversion data to work effectively.
-        // Google minimums: Target CPA needs 30+/month, Target ROAS needs 50+/month.
-        $targetRoasStrategies = ['TARGET_ROAS', 'TARGETROAS'];
-        $targetCpaStrategies  = ['TARGET_CPA', 'TARGETCPA'];
-        $needsConversionData  = in_array($strategyName, array_merge($targetRoasStrategies, $targetCpaStrategies), true);
-
-        if ($needsConversionData) {
-            $conversionCount = $this->getConversionCountForCustomer($customerId);
-            $minRequired     = in_array($strategyName, $targetRoasStrategies, true) ? 50 : 30;
-
-            if ($conversionCount < $minRequired) {
-                Log::info("GoogleAdsExecutionAgent: Downgrading {$strategyName} to MaximizeConversions — only {$conversionCount} conversions recorded (need {$minRequired})", [
-                    'campaign' => $campaignResourceName,
-                ]);
-                $result->addWarning(
-                    'bidding_strategy_downgraded',
-                    "Bidding strategy changed from {$strategyName} to Maximize Conversions — account needs {$minRequired}+ conversions/month before this strategy is effective. Will auto-upgrade via BiddingStrategyProgressionAgent."
-                );
-                $strategyName = 'MAXIMIZE_CONVERSIONS';
-            }
-        }
-
-        $mappedStrategy = match ($strategyName) {
-            'TARGET_CPA', 'TARGETCPA'   => 'TARGET_CPA',
-            'TARGET_ROAS', 'TARGETROAS' => 'TARGET_ROAS',
-            'MAXIMIZE_CONVERSIONS'       => 'MAXIMIZE_CONVERSIONS',
-            'MAXIMIZE_CLICKS'            => 'MAXIMIZE_CLICKS',
-            default                      => null,
+        return match ($campaignType) {
+            'search' => new SearchCampaignExecutor(
+                $this->customer, $geo, $extensions, $urls, $bidding,
+                new SearchKeywordBuilder($this->customer),
+                new AudienceTargeter($this->customer),
+            ),
+            'display' => new DisplayCampaignExecutor($this->customer, $geo, $extensions, $urls, $bidding),
+            'performance_max' => new PerformanceMaxCampaignExecutor($this->customer, $geo, $extensions, $urls, $bidding),
+            'video' => new VideoCampaignExecutor($this->customer, $geo, $extensions, $urls, $bidding),
+            'demand_gen' => new DemandGenCampaignExecutor($this->customer, $geo, $extensions, $urls, $bidding),
+            'shopping' => new ShoppingCampaignExecutor($this->customer, $geo, $extensions, $urls, $bidding),
+            'local_services' => new LocalServicesCampaignExecutor($this->customer, $geo, $extensions, $urls, $bidding),
+            default => throw new \InvalidArgumentException("Unsupported campaign type: {$campaignType}"),
         };
-
-        if (!$mappedStrategy) {
-            return;
-        }
-
-        $targetCpa  = isset($biddingData['parameters']['targetCpaMicros'])
-            ? $biddingData['parameters']['targetCpaMicros'] / 1_000_000
-            : null;
-        $targetRoas = $biddingData['parameters']['targetRoas'] ?? null;
-
-        $updateService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignBiddingStrategy($this->customer);
-        $success = $updateService($customerId, $campaignResourceName, $mappedStrategy, $targetCpa, $targetRoas);
-
-        if ($success) {
-            Log::info("GoogleAdsExecutionAgent: Applied bidding strategy {$mappedStrategy} to campaign {$campaignResourceName}");
-        } else {
-            $result->addWarning('bidding_strategy_not_applied', "Could not apply {$mappedStrategy} bidding strategy — campaign will run on Manual CPC until next optimisation cycle.");
-        }
     }
 
-    /**
-     * Get 30-day conversion count for a Google Ads customer account.
-     */
-    protected function getConversionCountForCustomer(string $customerId): int
-    {
-        try {
-            $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
-            return $conversionService->getConversionCountLast30Days($customerId);
-        } catch (\Exception $e) {
-            Log::warning('GoogleAdsExecutionAgent: Could not fetch conversion count, assuming 0', [
-                'error' => $e->getMessage(),
-            ]);
-            return 0;
-        }
-    }
-
-    /**
-     * Execute Display campaign deployment
-     */
-    protected function executeDisplayCampaign(
-        string $customerId,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        // Verify we are targeting the correct account
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID", [
-                'provided_id' => $customerId,
-                'stored_id' => $this->customer->google_ads_customer_id
-            ]);
-            $customerId = $this->customer->google_ads_customer_id;
-        }
-
-        Log::info("GoogleAdsExecutionAgent: Creating Display Campaign in account", [
-            'customer_id' => $customerId
-        ]);
-
-        // 1. Create Campaign — idempotency guard prevents duplicates on retry
-        $timestamp = now()->format('Ymd_His');
-        if (!empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing Display campaign from prior attempt", [
-                'campaign_id'            => $campaign->id,
-                'google_ads_campaign_id' => $campaignResourceName,
-            ]);
-            $result->addPlatformId('campaign', $campaignResourceName);
-        } else {
-            $createCampaignService = new CreateDisplayCampaign($this->customer);
-            $campaignName = $campaign->name . ' - ' . $timestamp;
-
-            $campaignData = [
-                'businessName' => $campaignName,
-                'budget'    => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate' => now()->addDay()->format('Y-m-d'),
-                'endDate'   => now()->addYear()->format('Y-m-d'),
-            ];
-
-            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-            if (!$campaignResourceName) {
-                throw new \Exception('Failed to create display campaign');
-            }
-
-            $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
-        }
-
-        // 1.5 Add Location Targeting
-        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
-        
-        // 2. Create Ad Group — reuse if already created in a prior attempt
-        if (!empty($strategy->google_ads_ad_group_id)) {
-            $adGroupResourceName = $strategy->google_ads_ad_group_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing Display ad group from prior attempt", [
-                'strategy_id'            => $strategy->id,
-                'google_ads_ad_group_id' => $adGroupResourceName,
-            ]);
-            $result->addPlatformId('ad_group', $adGroupResourceName);
-        } else {
-            $createAdGroupService = new CreateDisplayAdGroup($this->customer);
-            $adGroupName = 'Default Ad Group - ' . $timestamp;
-            $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-            if (!$adGroupResourceName) {
-                throw new \Exception('Failed to create display ad group');
-            }
-
-            $result->addPlatformId('ad_group', $adGroupResourceName);
-            $strategy->google_ads_ad_group_id = $adGroupResourceName;
-            $strategy->save();
-        }
-        
-        // 3. Upload Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
-        $imageAssetResourceNames = [];
-        
-        if ($imageCollaterals->isNotEmpty()) {
-            $uploadImageAssetService = new UploadImageAsset($this->customer);
-            foreach ($imageCollaterals as $image) {
-                try {
-                    $imageData = StorageHelper::get($image->s3_path);
-                    if (!$imageData) {
-                        Log::warning("GoogleAdsExecutionAgent: Image data is null, skipping upload", [
-                            's3_path' => $image->s3_path,
-                        ]);
-                        continue;
-                    }
-                    
-                    $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
-                    if ($assetResourceName) {
-                        $imageAssetResourceNames[] = $assetResourceName;
-                        $result->addPlatformId('image_asset', $assetResourceName);
-                    }
-                } catch (\Exception $e) {
-                    $result->addWarning("Failed to upload image asset {$image->s3_path}: " . $e->getMessage());
-                }
-            }
-        }
-        
-        // 4. Create Responsive Display Ad
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
-        if ($adCopy && !empty($imageAssetResourceNames)) {
-            $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
-            
-            if (!$finalUrl) {
-                $result->addWarning('No landing page URL found for display ad creation. Skipping ad creation.');
-            } else {
-                $createAdService = new CreateResponsiveDisplayAd($this->customer);
-                $adData = [
-                    'finalUrls' => [$finalUrl],
-                    'headlines' => $adCopy->headlines ?? [],
-                    'longHeadlines' => [$adCopy->headlines[0] ?? 'Get Started Today'],
-                    'descriptions' => $adCopy->descriptions ?? [],
-                    'imageAssets' => $imageAssetResourceNames,
-                ];
-                
-                $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
-                if ($adResourceName) {
-                    $result->addPlatformId('ad', $adResourceName);
-                }
-            }
-        }
-
-        // 5. Add Ad Extensions
-        // Note: Display campaigns support fewer extensions, but Sitelinks/Callouts are often compatible.
-        $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
-
-        // 6. Apply conversion value rules (device + audience modifiers)
-        try {
-            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
-            $applyValueRules($customerId, $campaignResourceName, $this->customer);
-        } catch (\Exception $e) {
-            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Execute Performance Max campaign deployment
-     */
-    protected function executePerformanceMaxCampaign(
-        string $customerId,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        // Verify we are targeting the correct account
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            Log::warning("GoogleAdsExecutionAgent: Customer ID mismatch, switching to stored account ID", [
-                'provided_id' => $customerId,
-                'stored_id' => $this->customer->google_ads_customer_id
-            ]);
-            $customerId = $this->customer->google_ads_customer_id;
-        }
-
-        Log::info("GoogleAdsExecutionAgent: Creating Performance Max Campaign in account", [
-            'customer_id' => $customerId
-        ]);
-
-        // 1. Create Campaign — idempotency guard prevents duplicates on retry.
-        // This was the source of 6 duplicate PMax campaigns created on 2026-05-19
-        // when the deployment job was retried without checking for an existing campaign.
-        $timestamp = now()->format('Ymd_His');
-        if (!empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing PMax campaign from prior attempt — skipping creation to prevent duplicate", [
-                'campaign_id'            => $campaign->id,
-                'google_ads_campaign_id' => $campaignResourceName,
-            ]);
-            $result->addPlatformId('campaign', $campaignResourceName);
-        } else {
-            $createCampaignService = new CreatePerformanceMaxCampaign($this->customer);
-            $campaignName = $campaign->name . ' - PMax - ' . $timestamp;
-
-            // Only set a Target CPA if the account has enough conversion history.
-            // Below 50 conversions, PMax uses Maximize Conversions (no target).
-            // BiddingStrategyProgressionAgent will add the target once data matures.
-            $conversionCount = $this->getConversionCountForCustomer($customerId);
-            $targetCpaMicros = null;
-            if ($strategy->cpa_target && $conversionCount >= 50) {
-                $targetCpaMicros = $strategy->cpa_target;
-            } elseif ($strategy->cpa_target && $conversionCount < 50) {
-                $result->addWarning('pmax_bidding_downgraded', "Performance Max will use Maximize Conversions until 50 conversions are recorded ({$conversionCount} so far). Target CPA will be applied automatically by the Bidding Progression Agent.");
-            }
-
-            $campaignData = [
-                'businessName'    => $campaignName,
-                'budget'          => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate'       => now()->addDay()->format('Y-m-d'),
-                'endDate'         => now()->addYear()->format('Y-m-d'),
-                'targetCpaMicros' => $targetCpaMicros,
-            ];
-
-            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-            if (!$campaignResourceName) {
-                throw new \Exception('Failed to create Performance Max campaign');
-            }
-
-            $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
-        }
-
-        // 1.5 Add Location Targeting
-        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
-
-        // 2. Prepare Assets
-        $assets = [];
-        $createTextAssetService = new CreateTextAsset($this->customer);
-        $uploadImageService = new UploadImageAsset($this->customer);
-
-        // 2.1 Text Assets
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
-        
-        if ($adCopy) {
-            // Headlines (Min 3, Max 5)
-            $headlines = array_slice($adCopy->headlines ?? [], 0, 5);
-            foreach ($headlines as $headline) {
-                $assetResourceName = ($createTextAssetService)($customerId, $headline);
-                if ($assetResourceName) {
-                    $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::HEADLINE];
-                }
-            }
-
-            // Long Headlines (Min 1, Max 5)
-            $longHeadline = $headlines[0] ?? 'Discover Our Amazing Products'; 
-            $assetResourceName = ($createTextAssetService)($customerId, $longHeadline);
-            if ($assetResourceName) {
-                $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::LONG_HEADLINE];
-            }
-
-            // Descriptions (Min 2, Max 5)
-            $descriptions = array_slice($adCopy->descriptions ?? [], 0, 5);
-            foreach ($descriptions as $description) {
-                $assetResourceName = ($createTextAssetService)($customerId, $description);
-                if ($assetResourceName) {
-                    $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::DESCRIPTION];
-                }
-            }
-
-            // Business Name (Min 1, Max 1) — max 25 chars
-            $rawBusinessName = $this->customer->name ?? 'ShopFree';
-            $businessName = mb_substr($rawBusinessName, 0, 25);
-            $assetResourceName = ($createTextAssetService)($customerId, $businessName);
-            if ($assetResourceName) {
-                $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::BUSINESS_NAME];
-            }
-        }
-
-        // 2.2 Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
-        $hasLogo = false;
-        $firstSquareAsset = null; // track for logo fallback
-
-        foreach ($imageCollaterals as $image) {
-            try {
-                $imageData = StorageHelper::get($image->s3_path);
-                if (!$imageData) {
-                    Log::warning("GoogleAdsExecutionAgent: Image data is null, skipping upload", [
-                        's3_path' => $image->s3_path,
-                    ]);
-                    continue;
-                }
-
-                $assetResourceName = ($uploadImageService)($customerId, $imageData, $image->s3_path);
-
-                if ($assetResourceName) {
-                    if (str_contains(strtolower($image->s3_path), 'logo')) {
-                        $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::LOGO];
-                        $hasLogo = true;
-                    } else {
-                        $size = @getimagesizefromstring($imageData);
-                        $width  = $size[0] ?? 0;
-                        $height = $size[1] ?? 1;
-                        $ratio  = $height > 0 ? $width / $height : 1;
-
-                        // Google PMax accepted ratios (±5% tolerance):
-                        //   MARKETING_IMAGE:        1.91:1  (landscape) — ratio 1.8145–2.0055, min 600×314
-                        //   SQUARE_MARKETING_IMAGE: 1:1     (square)    — ratio 0.95–1.05,     min 300×300
-                        $is191    = $ratio >= 1.8145 && $ratio <= 2.0055 && $width >= 600 && $height >= 314;
-                        $isSquare = $ratio >= 0.95   && $ratio <= 1.05   && $width >= 300 && $height >= 300;
-                        if ($is191) {
-                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::MARKETING_IMAGE];
-                        } elseif ($isSquare) {
-                            $assets[] = ['asset' => $assetResourceName, 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
-                            $firstSquareAsset ??= $assetResourceName;
-                        } else {
-                            Log::info("GoogleAdsExecutionAgent: Skipping image asset — dimensions {$width}×{$height} (ratio {$ratio}) don't meet PMax ratio requirements", [
-                                's3_path' => $image->s3_path,
-                            ]);
-                        }
-                    }
-                }
-            } catch (\Exception $e) {
-                $result->addWarning("Failed to upload/link image asset {$image->s3_path}: " . $e->getMessage());
-            }
-        }
-
-        // Logo is required for PMax. Use the first square image as fallback (logos must be image assets).
-        if (!$hasLogo && $firstSquareAsset) {
-            $assets[] = ['asset' => $firstSquareAsset, 'field_type' => AssetFieldType::LOGO];
-            Log::warning("GoogleAdsExecutionAgent: No explicit logo found, using first square image as logo fallback.");
-        } elseif (!$hasLogo) {
-            Log::warning("GoogleAdsExecutionAgent: No logo or square image available — asset group may be rejected by Google.");
-        }
-
-        // 2.3 Video Assets — collected separately and linked AFTER the asset group
-        // is created, so a short/invalid video can't abort the whole batch.
-        $uploadVideoAssetService = new UploadVideoAsset($this->customer);
-        $videoCollaterals = VideoCollateral::where('campaign_id', $campaign->id)
-            ->where('is_active', true)
-            ->whereNotNull('youtube_video_id')
-            ->get();
-        $videosWithoutYouTubeId = VideoCollateral::where('campaign_id', $campaign->id)
-            ->where('is_active', true)
-            ->whereNull('youtube_video_id')
-            ->count();
-
-        // Pre-register video assets (upload step only — linking happens after group creation)
-        $videoAssetResourceNames = [];
-        foreach ($videoCollaterals as $video) {
-            try {
-                $assetResourceName = ($uploadVideoAssetService)($customerId, $video->youtube_video_id, "Video Asset #{$video->id}");
-                if ($assetResourceName) {
-                    $videoAssetResourceNames[] = $assetResourceName;
-                }
-            } catch (\Exception $e) {
-                $result->addWarning("Failed to register video asset {$video->id}: " . $e->getMessage());
-            }
-        }
-
-        if ($videosWithoutYouTubeId > 0) {
-            $result->addWarning('videos_pending_youtube', "{$videosWithoutYouTubeId} video(s) have no YouTube ID yet — they will be linked automatically once uploaded. Run: php artisan pmax:repair-assets --strategy={$strategy->id}");
-        }
-
-        // 3. Create Asset Group with text + image assets only (no videos)
-        // Videos are linked individually below so a short/rejected video skips gracefully.
-        $createAssetGroupService = new CreateAssetGroupWithAssets($this->customer);
-        $assetGroupName = 'Asset Group - ' . $timestamp;
-        $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
-
-        if (!$finalUrl) {
-            throw new \Exception('No landing page URL found for Asset Group creation.');
-        }
-
-        $assetGroupResourceName = ($createAssetGroupService)($customerId, $campaignResourceName, $assetGroupName, [$finalUrl], $assets);
-        if (!$assetGroupResourceName) {
-            throw new \Exception('Failed to create Asset Group');
-        }
-
-        // 3b. Link video assets individually — skip any that Google rejects (e.g. too short)
-        $linkAssetGroupService = new LinkAssetGroupAsset($this->customer);
-        foreach ($videoAssetResourceNames as $videoAssetResource) {
-            try {
-                ($linkAssetGroupService)($customerId, $assetGroupResourceName, $videoAssetResource, AssetFieldType::YOUTUBE_VIDEO);
-                Log::info("GoogleAdsExecutionAgent: Linked video asset to PMax asset group", [
-                    'asset_group' => $assetGroupResourceName,
-                    'video_asset' => $videoAssetResource,
-                ]);
-            } catch (\Exception $e) {
-                Log::warning("GoogleAdsExecutionAgent: Skipping video asset (rejected by Google): " . $e->getMessage(), [
-                    'video_asset' => $videoAssetResource,
-                ]);
-                $result->addWarning("Video asset skipped: " . $e->getMessage());
-            }
-        }
-
-        $result->addPlatformId('asset_group', $assetGroupResourceName);
-
-        // Dispatch async job to upload any videos that don't have YouTube IDs yet
-        if ($videosWithoutYouTubeId > 0) {
-            \App\Jobs\UploadPMaxVideoAssets::dispatch($strategy->id, $customerId, $assetGroupResourceName)
-                ->delay(now()->addSeconds(30));
-        }
-
-        // 4. Add Ad Extensions (Sitelinks, Callouts) - PMax can use campaign-level assets
-        $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
-
-        // 5. Apply conversion value rules (device + audience modifiers)
-        try {
-            $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
-            $applyValueRules($customerId, $campaignResourceName, $this->customer);
-        } catch (\Exception $e) {
-            Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: ' . $e->getMessage());
-        }
-    }
-
-    /**
-     * Execute Video campaign deployment
-     */
-    protected function executeVideoCampaign(
-        string $customerId,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        // Verify we are targeting the correct account
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            $customerId = $this->customer->google_ads_customer_id;
-        }
-
-        Log::info("GoogleAdsExecutionAgent: Creating Video Campaign in account", [
-            'customer_id' => $customerId
-        ]);
-
-        // 1. Create Campaign — idempotency guard prevents duplicates on retry
-        $timestamp = now()->format('Ymd_His');
-        if (!empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing Video campaign from prior attempt", [
-                'campaign_id'            => $campaign->id,
-                'google_ads_campaign_id' => $campaignResourceName,
-            ]);
-            $result->addPlatformId('campaign', $campaignResourceName);
-        } else {
-            $createCampaignService = new CreateVideoCampaign($this->customer);
-            $campaignName = $campaign->name . ' - Video - ' . $timestamp;
-
-            $campaignData = [
-                'businessName' => $campaignName,
-                'budget'    => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate' => now()->addDay()->format('Y-m-d'),
-                'endDate'   => now()->addYear()->format('Y-m-d'),
-            ];
-
-            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-            if (!$campaignResourceName) {
-                throw new \Exception('Failed to create video campaign');
-            }
-
-            $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
-        }
-
-        // 1.5 Add Location Targeting
-        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
-        
-        // 2. Create Ad Group
-        $createAdGroupService = new CreateVideoAdGroup($this->customer);
-        $adGroupName = 'Video Ad Group - ' . $timestamp;
-        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-        if (!$adGroupResourceName) {
-            throw new \Exception('Failed to create video ad group');
-        }
-        
-        $result->addPlatformId('ad_group', $adGroupResourceName);
-
-        // 3. Create Video Ad
-        // Note: Video ads require a YouTube Video ID. 
-        // We assume the strategy or ad copy provides this, or we use a placeholder.
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%youtube%'])->first();
-        
-        if ($adCopy && !empty($adCopy->video_id)) {
-            $createAdService = new CreateResponsiveVideoAd($this->customer);
-            
-            $adData = [
-                'videoId' => $adCopy->video_id,
-                'headline' => $adCopy->headlines[0] ?? 'Watch Now',
-                'longHeadline' => $adCopy->headlines[1] ?? 'Discover More',
-                'description' => $adCopy->descriptions[0] ?? 'Click to learn more',
-                'callToAction' => 'WATCH_NOW',
-            ];
-            
-            $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
-            if ($adResourceName) {
-                $result->addPlatformId('ad', $adResourceName);
-            }
-        } else {
-            $result->addWarning("No YouTube Video ID found in Ad Copy. Skipping Video Ad creation.");
-        }
-
-        // 4. Add Ad Extensions
-        $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
-    }
-    
-    /**
-     * Execute Demand Gen campaign deployment
-     *
-     * Demand Gen campaigns run across YouTube, Gmail, and Discover using multi-asset ads.
-     */
-    protected function executeDemandGenCampaign(
-        string $customerId,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            $customerId = $this->customer->google_ads_customer_id;
-        }
-
-        Log::info("GoogleAdsExecutionAgent: Creating Demand Gen Campaign", ['customer_id' => $customerId]);
-
-        // 1. Create Campaign — idempotency guard prevents duplicates on retry
-        $timestamp = now()->format('Ymd_His');
-        if (!empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing DemandGen campaign from prior attempt", [
-                'campaign_id'            => $campaign->id,
-                'google_ads_campaign_id' => $campaignResourceName,
-            ]);
-            $result->addPlatformId('campaign', $campaignResourceName);
-        } else {
-            $createCampaignService = new CreateDemandGenCampaign($this->customer);
-            $campaignName = $campaign->name . ' - DemandGen - ' . $timestamp;
-
-            $campaignData = [
-                'businessName'    => $campaignName,
-                'budget'          => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate'       => now()->addDay()->format('Y-m-d'),
-                'endDate'         => now()->addYear()->format('Y-m-d'),
-                'targetCpaMicros' => $strategy->cpa_target ?? null,
-            ];
-
-            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-            if (!$campaignResourceName) {
-                throw new \Exception('Failed to create Demand Gen campaign');
-            }
-
-            $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
-        }
-
-        // 1.5 Add Location Targeting
-        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
-
-        // 2. Create Ad Group
-        $createAdGroupService = new CreateDemandGenAdGroup($this->customer);
-        $adGroupName = 'Demand Gen Ad Group - ' . $timestamp;
-        $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-        if (!$adGroupResourceName) {
-            throw new \Exception('Failed to create Demand Gen ad group');
-        }
-
-        $result->addPlatformId('ad_group', $adGroupResourceName);
-        $strategy->google_ads_ad_group_id = $adGroupResourceName;
-        $strategy->save();
-
-        // 3. Upload Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
-        $imageAssetResourceNames = [];
-        $logoAssetResourceNames = [];
-
-        if ($imageCollaterals->isNotEmpty()) {
-            $uploadImageAssetService = new UploadImageAsset($this->customer);
-            foreach ($imageCollaterals as $image) {
-                try {
-                    $imageData = StorageHelper::get($image->s3_path);
-                    if (!$imageData) continue;
-
-                    $assetResourceName = ($uploadImageAssetService)($customerId, $imageData, $image->s3_path);
-                    if ($assetResourceName) {
-                        if (str_contains(strtolower($image->s3_path), 'logo')) {
-                            $logoAssetResourceNames[] = $assetResourceName;
-                        } else {
-                            $imageAssetResourceNames[] = $assetResourceName;
-                        }
-                        $result->addPlatformId('image_asset', $assetResourceName);
-                    }
-                } catch (\Exception $e) {
-                    $result->addWarning("Failed to upload image asset {$image->s3_path}: " . $e->getMessage());
-                }
-            }
-        }
-
-        // 4. Create Demand Gen Multi-Asset Ad
-        $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
-        if ($adCopy && !empty($imageAssetResourceNames)) {
-            $finalUrl = $this->getFinalUrl($campaign, $strategy, $plan);
-
-            if (!$finalUrl) {
-                $result->addWarning('No landing page URL found for Demand Gen ad. Skipping ad creation.');
-            } else {
-                $createAdService = new CreateDemandGenMultiAssetAd($this->customer);
-                $adData = [
-                    'finalUrls' => [$finalUrl],
-                    'headlines' => array_slice($adCopy->headlines ?? [], 0, 5),
-                    'descriptions' => array_slice($adCopy->descriptions ?? [], 0, 5),
-                    'businessName' => $this->customer->business_name ?? $campaign->name,
-                    'imageAssets' => $imageAssetResourceNames,
-                    'logoAssets' => $logoAssetResourceNames,
-                    'callToActionText' => 'Learn more',
-                ];
-
-                $adResourceName = ($createAdService)($customerId, $adGroupResourceName, $adData);
-                if ($adResourceName) {
-                    $result->addPlatformId('ad', $adResourceName);
-                }
-            }
-        }
-
-        // 5. Add Ad Extensions
-        $this->createAndLinkAdExtensions($customerId, $campaignResourceName, $strategy, $result);
-    }
-
-    /**
-     * Execute Shopping campaign deployment
-     *
-     * Shopping campaigns require a linked Google Merchant Center account.
-     * Product data comes from the feed — ads are auto-generated.
-     */
-    protected function executeShoppingCampaign(
-        string $customerId,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            $customerId = $this->customer->google_ads_customer_id;
-        }
-
-        Log::info("GoogleAdsExecutionAgent: Creating Shopping Campaign", ['customer_id' => $customerId]);
-
-        // Validate Merchant Center ID
-        $merchantId = $this->customer->google_merchant_id
-            ?? $plan->getCampaignStructure()['merchant_id']
-            ?? null;
-
-        if (!$merchantId) {
-            throw new \Exception('Shopping campaigns require a linked Google Merchant Center account. No merchant_id found.');
-        }
-
-        // 1. Create Campaign — idempotency guard prevents duplicates on retry
-        $timestamp = now()->format('Ymd_His');
-        if (!empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing Shopping campaign from prior attempt", [
-                'campaign_id'            => $campaign->id,
-                'google_ads_campaign_id' => $campaignResourceName,
-            ]);
-            $result->addPlatformId('campaign', $campaignResourceName);
-        } else {
-            $createCampaignService = new CreateShoppingCampaign($this->customer);
-            $campaignStructure = $plan->getCampaignStructure();
-            $campaignName = $campaign->name . ' - Shopping - ' . $timestamp;
-
-            $campaignData = [
-                'businessName'     => $campaignName,
-                'budget'           => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate'        => now()->addDay()->format('Y-m-d'),
-                'endDate'          => now()->addYear()->format('Y-m-d'),
-                'merchantId'       => $merchantId,
-                'feedLabel'        => $plan->getCampaignStructure()['feed_label'] ?? null,
-                'campaignPriority' => $plan->getCampaignStructure()['campaign_priority'] ?? 0,
-                'enableLocal'      => $plan->getCampaignStructure()['enable_local'] ?? false,
-                'targetCpaMicros'  => $strategy->cpa_target ?? null,
-            ];
-
-            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-            if (!$campaignResourceName) {
-                throw new \Exception('Failed to create Shopping campaign');
-            }
-
-            $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
-        }
-
-        // 1.5 Add Location Targeting
-        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
-
-        // 2. Create Ad Group — reuse if already created in a prior attempt
-        if (!empty($strategy->google_ads_ad_group_id)) {
-            $adGroupResourceName = $strategy->google_ads_ad_group_id;
-            $result->addPlatformId('ad_group', $adGroupResourceName);
-        } else {
-            $createAdGroupService = new CreateShoppingAdGroup($this->customer);
-            $adGroupName = 'All Products - ' . $timestamp;
-            $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, $adGroupName);
-            if (!$adGroupResourceName) {
-                throw new \Exception('Failed to create Shopping ad group');
-            }
-
-            $result->addPlatformId('ad_group', $adGroupResourceName);
-            $strategy->google_ads_ad_group_id = $adGroupResourceName;
-            $strategy->save();
-        }
-
-        // 3. Create Shopping Product Ad (auto-generated from feed)
-        $createAdService = new CreateShoppingProductAd($this->customer);
-        $adResourceName = ($createAdService)($customerId, $adGroupResourceName);
-        if ($adResourceName) {
-            $result->addPlatformId('ad', $adResourceName);
-        }
-    }
-
-    /**
-     * Execute Local Services campaign deployment
-     *
-     * Local Services Ads are auto-generated from the business profile.
-     * No ad groups or ad creatives are needed — just the campaign.
-     */
-    protected function executeLocalServicesCampaign(
-        string $customerId,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        if ($this->customer->google_ads_customer_id && $customerId !== $this->customer->google_ads_customer_id) {
-            $customerId = $this->customer->google_ads_customer_id;
-        }
-
-        Log::info("GoogleAdsExecutionAgent: Creating Local Services Campaign", ['customer_id' => $customerId]);
-
-        // 1. Create Campaign (Local Services campaigns don't need ad groups or ads)
-        $campaignStructure = $plan->getCampaignStructure();
-        $timestamp = now()->format('Ymd_His');
-
-        if (!empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
-            Log::info("GoogleAdsExecutionAgent: Reusing existing Local Services campaign from prior attempt", [
-                'campaign_id'            => $campaign->id,
-                'google_ads_campaign_id' => $campaignResourceName,
-            ]);
-            $result->addPlatformId('campaign', $campaignResourceName);
-        } else {
-            $createCampaignService = new CreateLocalServicesCampaign($this->customer);
-            $campaignName = $campaign->name . ' - Local Services - ' . $timestamp;
-
-            $campaignData = [
-                'businessName' => $campaignName,
-                'budget' => $strategy->daily_budget ?: ($campaign->daily_budget ?: $campaign->total_budget / 30),
-                'startDate' => now()->addDay()->format('Y-m-d'),
-                'endDate' => now()->addYear()->format('Y-m-d'),
-                'categoryBids' => $campaignStructure['category_bids'] ?? [],
-            ];
-
-            $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-            if (!$campaignResourceName) {
-                throw new \Exception('Failed to create Local Services campaign');
-            }
-
-            $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
-        }
-
-        // 1.5 Add Location Targeting (critical for local services)
-        $this->addLocationTargeting($customerId, $campaignResourceName, $campaign, $strategy, $plan, $result);
-    }
-
-    /**
-     * Get keywords from campaign, targeting config, or execution plan
-     */
-    protected function getKeywords(Campaign $campaign, Strategy $strategy, ExecutionPlan $plan): array
-    {
-        $keywords = [];
-        
-        // 1. Check campaign-level keywords (highest priority)
-        if (!empty($campaign->keywords)) {
-            $keywords = $campaign->keywords;
-            Log::info("GoogleAdsExecutionAgent: Using campaign keywords", ['count' => count($keywords)]);
-            return $keywords;
-        }
-        
-        // 2. Check targeting config keywords
-        $targetingConfig = $strategy->targetingConfig;
-        if ($targetingConfig && isset($targetingConfig->google_options['keywords']) && !empty($targetingConfig->google_options['keywords'])) {
-            $keywords = $targetingConfig->google_options['keywords'];
-            Log::info("GoogleAdsExecutionAgent: Using targeting config keywords", ['count' => count($keywords)]);
-            return $keywords;
-        }
-        
-        // 3. Check execution plan keywords (AI-generated)
-        $creativeStrategy = $plan->getCreativeStrategy();
-        if (isset($creativeStrategy['keywords']) && !empty($creativeStrategy['keywords'])) {
-            $keywords = $creativeStrategy['keywords'];
-            Log::info("GoogleAdsExecutionAgent: Using execution plan keywords", ['count' => count($keywords)]);
-            return $keywords;
-        }
-        
-        Log::warning("GoogleAdsExecutionAgent: No keywords found for campaign");
-        return [];
-    }
-    
-    /**
-     * Add keywords to ad group
-     */
-    protected function addKeywords(string $customerId, string $adGroupResourceName, array $keywords, ExecutionResult $result): void
-    {
-        $addCriterionService = new AddAdGroupCriterion($this->customer);
-        
-        foreach ($keywords as $keyword) {
-            try {
-                $keywordText = is_array($keyword) ? ($keyword['text'] ?? $keyword['keyword'] ?? '') : $keyword;
-                $matchType = is_array($keyword) && isset($keyword['match_type']) 
-                    ? $keyword['match_type'] 
-                    : 'BROAD';
-                
-                if (empty($keywordText)) {
-                    continue;
-                }
-                
-                $criterionResourceName = ($addCriterionService)($customerId, $adGroupResourceName, [
-                    'type' => 'KEYWORD',
-                    'text' => $keywordText,
-                    'matchType' => $matchType
-                ]);
-                if ($criterionResourceName) {
-                    $result->addPlatformId('keyword', $criterionResourceName);
-                }
-            } catch (\Exception $e) {
-                $result->addWarning("Failed to add keyword: " . $e->getMessage());
-            }
-        }
-    }
-
-    /**
-     * Validate keywords through Google Keyword Planner and filter out low-volume terms.
-     * Uses AI keywords as seeds, expands via Keyword Planner, and returns only viable keywords.
-     */
-    protected function validateAndEnrichKeywords(string $customerId, array $keywords, Campaign $campaign, Strategy $strategy): array
-    {
-        try {
-            // Extract keyword texts to use as seeds for Keyword Planner
-            $seedTexts = array_map(function ($kw) {
-                return is_array($kw) ? ($kw['text'] ?? $kw['keyword'] ?? '') : $kw;
-            }, $keywords);
-            $seedTexts = array_values(array_filter($seedTexts));
-
-            if (empty($seedTexts)) {
-                return $keywords;
-            }
-
-            $landingPageUrl = $campaign->landing_page_url ?? null;
-            $generateIdeas = new \App\Services\GoogleAds\KeywordResearch\GenerateKeywordIdeas($this->customer);
-            $ideas = ($generateIdeas)($customerId, array_slice($seedTexts, 0, 20), $landingPageUrl);
-
-            if (empty($ideas)) {
-                Log::warning('GoogleAdsExecutionAgent: Keyword Planner returned no ideas, using original keywords');
-                return $keywords;
-            }
-
-            // Build a lookup of keyword volumes from Planner results
-            $ideaMap = [];
-            foreach ($ideas as $idea) {
-                $ideaMap[strtolower($idea['keyword'])] = $idea;
-            }
-
-            // Check which original keywords have sufficient volume
-            $validated = [];
-            $minVolume = 10;
-            foreach ($keywords as $kw) {
-                $text = is_array($kw) ? ($kw['text'] ?? $kw['keyword'] ?? '') : $kw;
-                $lower = strtolower($text);
-                if (isset($ideaMap[$lower]) && ($ideaMap[$lower]['avg_monthly_searches'] ?? 0) >= $minVolume) {
-                    $idea = $ideaMap[$lower];
-                    $validated[] = [
-                        'text' => $text,
-                        'match_type' => $this->recommendMatchTypeFromMetrics($idea),
-                        'avg_monthly_searches' => $idea['avg_monthly_searches'],
-                    ];
-                }
-            }
-
-            // If too few original keywords survived, supplement with top Keyword Planner suggestions
-            if (count($validated) < 6) {
-                $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
-                $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
-                $industry = $strategy->businessProfile?->industry ?? null;
-                $research = $researchService->research($customerId, $businessName, $industry, $landingPageUrl, 'languageConstants/1000', [], 20);
-                $researchKeywords = $research['keywords'] ?? [];
-
-                // Add research keywords that aren't already in validated set
-                $existingTexts = array_map(fn($v) => strtolower($v['text']), $validated);
-                foreach ($researchKeywords as $rk) {
-                    if (count($validated) >= 20) break;
-                    $rkText = strtolower($rk['text'] ?? '');
-                    if (!in_array($rkText, $existingTexts) && ($rk['avg_monthly_searches'] ?? 0) >= $minVolume) {
-                        $validated[] = $rk;
-                        $existingTexts[] = $rkText;
-                    }
-                }
-            }
-
-            Log::info('GoogleAdsExecutionAgent: Keyword validation complete', [
-                'original_count' => count($keywords),
-                'validated_count' => count($validated),
-            ]);
-
-            return !empty($validated) ? $validated : $keywords;
-        } catch (\Exception $e) {
-            Log::warning('GoogleAdsExecutionAgent: Keyword validation failed, using original keywords', [
-                'error' => $e->getMessage(),
-            ]);
-            return $keywords;
-        }
-    }
-
-    /**
-     * Recommend match type from Keyword Planner metrics.
-     */
-    protected function recommendMatchTypeFromMetrics(array $idea): string
-    {
-        $volume = $idea['avg_monthly_searches'] ?? 0;
-        $competitionIndex = $idea['competition_index'] ?? 50;
-        $cpc = ($idea['average_cpc_micros'] ?? 0) / 1_000_000;
-
-        if ($volume > 1000 && $competitionIndex < 30) {
-            return 'BROAD';
-        }
-        if ($competitionIndex > 70 || $cpc > 5.0) {
-            return 'EXACT';
-        }
-        return 'PHRASE';
-    }
-
-    /**
-     * Use AI-powered keyword research when no keywords are configured.
-     */
-    protected function researchKeywords(string $customerId, Campaign $campaign, Strategy $strategy): array
-    {
-        try {
-            if (!config('services.gemini.api_key')) {
-                return [];
-            }
-
-            $businessName    = $campaign->business_name
-                ?? $strategy->businessProfile?->business_name
-                ?? $this->customer->name
-                ?? 'Business';
-            $industry        = $strategy->businessProfile?->industry ?? null;
-            // Fall back to strategy landing page when campaign doesn't have one set
-            $landingPageUrl  = $campaign->landing_page_url
-                ?? $strategy->bidding_strategy['landing_page_url']
-                ?? $this->customer->website
-                ?? null;
-
-            $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
-            $research = $researchService->research($customerId, $businessName, $industry, $landingPageUrl);
-
-            $keywords = $research['keywords'] ?? [];
-            if (!empty($keywords)) {
-                Log::info("GoogleAdsExecutionAgent: AI keyword research generated " . count($keywords) . " keywords", [
-                    'campaign_id' => $campaign->id,
-                ]);
-            }
-
-            return $keywords;
-        } catch (\Exception $e) {
-            Log::warning("GoogleAdsExecutionAgent: AI keyword research failed", [
-                'campaign_id' => $campaign->id,
-                'error' => $e->getMessage(),
-            ]);
-            return [];
-        }
-    }
-
-    /**
-     * Add initial negative keywords at campaign creation time.
-     */
-    protected function addInitialNegativeKeywords(string $customerId, string $campaignResourceName, Campaign $campaign, Strategy $strategy, ExecutionResult $result): void
-    {
-        try {
-            if (!config('services.gemini.api_key')) {
-                return;
-            }
-
-            $businessName = $campaign->business_name ?? $strategy->businessProfile?->business_name ?? 'Business';
-            $industry = $strategy->businessProfile?->industry ?? null;
-
-            $researchService = new \App\Services\GoogleAds\KeywordResearch\KeywordResearchService($this->customer);
-            $research = $researchService->research($customerId, $businessName, $industry);
-            $negatives = $research['negative_keywords'] ?? [];
-
-            if (empty($negatives)) {
-                // Fallback: brand-protection negatives for any broad-match campaign
-                $negatives = ['free', 'cheap', 'diy', 'tutorial', 'how to', 'torrent', 'crack', 'pirate', 'course'];
-                Log::info('GoogleAdsExecutionAgent: No LLM negatives — using default broad-match protection negatives', [
-                    'campaign_id' => $campaign->id,
-                ]);
-            }
-
-            $addNegativeService = new AddNegativeKeyword($this->customer);
-            $added = 0;
-            foreach ($negatives as $negative) {
-                try {
-                    $resourceName = ($addNegativeService)($customerId, $campaignResourceName, $negative, \Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType::EXACT);
-                    if ($resourceName) {
-                        $added++;
-                        $result->addPlatformId('negative_keyword', $resourceName);
-                    }
-                } catch (\Exception $e) {
-                    // May fail if negative already exists
-                }
-            }
-
-            if ($added > 0) {
-                Log::info("GoogleAdsExecutionAgent: Added {$added} initial negative keywords", [
-                    'campaign_id' => $campaign->id,
-                ]);
-            }
-        } catch (\Exception $e) {
-            Log::warning("GoogleAdsExecutionAgent: Failed to add initial negatives", [
-                'campaign_id' => $campaign->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-    }
-
-    /**
-     * Add audience targeting to ad group
-     */
-    protected function addAudienceTargeting(string $customerId, string $adGroupResourceName, Strategy $strategy, ExecutionResult $result): void
-    {
-        $targetingConfig = $strategy->targetingConfig;
-        if (!$targetingConfig) {
-            return;
-        }
-
-        $searchAudienceService = new SearchAudience($this->customer);
-        $addCriterionService = new AddAdGroupCriterion($this->customer);
-
-        $audiences = [];
-        // Merge interests and behaviors
-        if (!empty($targetingConfig->interests)) {
-            $audiences = array_merge($audiences, $targetingConfig->interests);
-        }
-        if (!empty($targetingConfig->behaviors)) {
-            $audiences = array_merge($audiences, $targetingConfig->behaviors);
-        }
-
-        foreach ($audiences as $audienceKeyword) {
-            try {
-                // Search for the audience ID
-                $foundAudiences = ($searchAudienceService)($customerId, $audienceKeyword);
-                
-                if (empty($foundAudiences)) {
-                    Log::warning("GoogleAdsExecutionAgent: No audience found for keyword '{$audienceKeyword}'");
-                    continue;
-                }
-
-                // Pick the first match
-                $bestMatch = $foundAudiences[0];
-                $audienceResourceName = $bestMatch['id'];
-
-                Log::info("GoogleAdsExecutionAgent: Found audience for '{$audienceKeyword}'", [
-                    'name' => $bestMatch['name'],
-                    'id' => $audienceResourceName
-                ]);
-
-                // Determine type based on resource name
-                if (strpos($audienceResourceName, 'userInterests') !== false) {
-                    $type = 'USER_INTEREST';
-                    $key = 'userInterestId';
-                } else {
-                    $type = 'AUDIENCE';
-                    $key = 'audienceId';
-                }
-
-                // Add to Ad Group
-                $criterionResourceName = ($addCriterionService)($customerId, $adGroupResourceName, [
-                    'type' => $type,
-                    $key => $audienceResourceName
-                ]);
-
-                if ($criterionResourceName) {
-                    $result->addPlatformId('audience', $criterionResourceName);
-                }
-
-            } catch (\Exception $e) {
-                $result->addWarning("Failed to add audience targeting for '{$audienceKeyword}': " . $e->getMessage());
-            }
-        }
-    }
-    
-    /**
-     * Get final URL from campaign, strategy, or plan
-     */
-    protected function getFinalUrl(Campaign $campaign, Strategy $strategy, ExecutionPlan $plan): ?string
-    {
-        // 1. Check Strategy recommendation (most specific)
-        if (isset($strategy->bidding_strategy['landing_page_url']) && !empty($strategy->bidding_strategy['landing_page_url'])) {
-            $url = $strategy->bidding_strategy['landing_page_url'];
-        }
-        // 2. Check Campaign default
-        elseif (!empty($campaign->landing_page_url)) {
-            $url = $campaign->landing_page_url;
-        }
-        // 3. Check Execution Plan (AI generated during execution)
-        else {
-            $url = null;
-            foreach ($plan->steps as $step) {
-                if (isset($step['parameters']['final_urls'][0]) && !empty($step['parameters']['final_urls'][0])) {
-                    $url = $step['parameters']['final_urls'][0];
-                    break;
-                }
-            }
-        }
-
-        if (!$url) {
-            return null;
-        }
-
-        // Append Spectra UTM parameters for attribution tracking
-        return $this->appendUtmParameters($url, $campaign, $strategy, 'google');
-    }
-
-    /**
-     * Append UTM parameters for attribution tracking.
-     */
-    protected function appendUtmParameters(string $url, Campaign $campaign, Strategy $strategy, string $platform): string
-    {
-        $params = [
-            'utm_source' => $platform,
-            'utm_medium' => $strategy->campaign_type ?? 'cpc',
-            'utm_campaign' => 'spectra_' . $campaign->id,
-            'utm_content' => 'strategy_' . $strategy->id,
-        ];
-
-        $separator = str_contains($url, '?') ? '&' : '?';
-        return $url . $separator . http_build_query($params);
-    }
-
-    /**
-     * Handle execution errors with AI-powered recovery
-     */
     protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
     {
-        Log::error("GoogleAdsExecutionAgent: Execution error - " . $error->getMessage(), [
+        Log::error('GoogleAdsExecutionAgent: Execution error - '.$error->getMessage(), [
             'campaign_id' => $context->campaign->id,
-            'customer_id' => $this->customer->id
+            'customer_id' => $this->customer->id,
         ]);
-        
+
         // Generate AI-powered recovery plan
         $recoveryPrompt = $this->buildRecoveryPrompt($error, $context);
-        
+
         try {
             $response = $this->gemini->generateContent(
                 model: config('ai.models.default'),
@@ -1963,24 +526,24 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 config: ['temperature' => 0.3, 'maxOutputTokens' => 2048],
                 systemInstruction: 'You are an expert at diagnosing and recovering from Google Ads API errors. Provide specific, actionable recovery steps.'
             );
-            
+
             if ($response && isset($response['text'])) {
                 return RecoveryPlan::fromJson($response['text']);
             }
         } catch (\Exception $e) {
-            Log::error("GoogleAdsExecutionAgent: Failed to generate recovery plan: " . $e->getMessage());
+            Log::error('GoogleAdsExecutionAgent: Failed to generate recovery plan: '.$e->getMessage());
         }
-        
+
         // Fallback to simple recovery plan
         return RecoveryPlan::simple($error->getMessage(), [
             'Check Google Ads account connection',
             'Verify customer ID is correct',
             'Ensure sufficient permissions',
             'Review campaign budget and settings',
-            'Check for API quota limits'
+            'Check for API quota limits',
         ]);
     }
-    
+
     /**
      * Build recovery prompt for AI
      */
@@ -2011,7 +574,7 @@ Provide a JSON response with:
 }
 PROMPT;
     }
-    
+
     /**
      * Check if conversion tracking is configured
      */
@@ -2019,18 +582,20 @@ PROMPT;
     {
         try {
             $customerId = $context->customer->google_ads_customer_id;
-            if (!$customerId) {
+            if (! $customerId) {
                 return false;
             }
 
             $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($context->customer);
+
             return $conversionService->isConversionTrackingSetUp($customerId);
         } catch (\Exception $e) {
-            Log::warning('Failed to check conversion tracking: ' . $e->getMessage());
+            Log::warning('Failed to check conversion tracking: '.$e->getMessage());
+
             return false;
         }
     }
-    
+
     /**
      * Get conversion count for Smart Bidding eligibility
      */
@@ -2038,18 +603,20 @@ PROMPT;
     {
         try {
             $customerId = $context->customer->google_ads_customer_id;
-            if (!$customerId) {
+            if (! $customerId) {
                 return 0;
             }
 
             $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($context->customer);
+
             return $conversionService->getConversionCountLast30Days($customerId);
         } catch (\Exception $e) {
-            Log::warning('Failed to get conversion count: ' . $e->getMessage());
+            Log::warning('Failed to get conversion count: '.$e->getMessage());
+
             return 0;
         }
     }
-    
+
     /**
      * Get the platform name for this agent
      */
@@ -2057,190 +624,26 @@ PROMPT;
     {
         return 'Google Ads';
     }
-    
-    /**
-     * Add location targeting to campaign
-     */
-    protected function addLocationTargeting(
-        string $customerId,
-        string $campaignResourceName,
-        Campaign $campaign,
-        Strategy $strategy,
-        ExecutionPlan $plan,
-        ExecutionResult $result
-    ): void {
-        $locationIds = [];
-
-        // 1. Check campaign-level geographic targeting (highest priority)
-        if (!empty($campaign->geographic_targeting)) {
-            $locationIds = array_map(fn($loc) => $this->resolveGeoTargetId($loc), $campaign->geographic_targeting);
-            Log::info("GoogleAdsExecutionAgent: Using campaign geographic targeting", ['count' => count($locationIds)]);
-        }
-        // 2. Check targeting config — use the proper getter that extracts criterion IDs
-        elseif ($strategy->targetingConfig && !empty($strategy->targetingConfig->geo_locations)) {
-            $googleTargeting = $strategy->targetingConfig->getGoogleGeoTargeting();
-            if (!empty($googleTargeting)) {
-                $locationIds = $googleTargeting;
-                Log::info("GoogleAdsExecutionAgent: Using targeting config geo criterion IDs", ['count' => count($locationIds)]);
-            } else {
-                // Fallback: resolve raw location names/objects to IDs
-                $locationIds = array_map(fn($loc) => $this->resolveGeoTargetId($loc), $strategy->targetingConfig->geo_locations);
-                Log::info("GoogleAdsExecutionAgent: Resolved targeting config locations to IDs", ['count' => count($locationIds)]);
-            }
-        }
-        // 3. Check execution plan
-        else {
-            $campaignStructure = $plan->getCampaignStructure();
-            if (isset($campaignStructure['locations']) && !empty($campaignStructure['locations'])) {
-                $locationIds = array_map(fn($loc) => $this->resolveGeoTargetId($loc), $campaignStructure['locations']);
-                Log::info("GoogleAdsExecutionAgent: Resolved execution plan locations to IDs", ['count' => count($locationIds)]);
-            }
-        }
-
-        // Filter out nulls (unresolvable locations)
-        $locationIds = array_filter($locationIds);
-
-        if (empty($locationIds)) {
-            // Default to English-speaking markets with meaningful SaaS ad spend
-            $locationIds = [2840, 2124, 2036, 2826]; // US, CA, AU, GB
-            Log::info('GoogleAdsExecutionAgent: No geo configured — defaulting to US/CA/AU/GB');
-        }
-
-        $addCriterionService = new AddCampaignCriterion($this->customer);
-
-        foreach ($locationIds as $locationId) {
-            try {
-                $criterionResourceName = ($addCriterionService)($customerId, $campaignResourceName, [
-                    'type' => 'LOCATION',
-                    'locationId' => $locationId
-                ]);
-
-                if ($criterionResourceName) {
-                    $result->addPlatformId('location_criterion', $criterionResourceName);
-                }
-            } catch (\Exception $e) {
-                $result->addWarning("Failed to add location targeting for ID {$locationId}: " . $e->getMessage());
-            }
-        }
-    }
 
     /**
-     * Resolve a location value (string name, numeric ID, or array) to a Google Ads geo target constant ID.
-     */
-    protected function resolveGeoTargetId(mixed $location): ?int
-    {
-        // Already a numeric ID
-        if (is_numeric($location)) {
-            return (int) $location;
-        }
-
-        // Array with criterion ID
-        if (is_array($location)) {
-            if (isset($location['google_criterion_id'])) {
-                return (int) $location['google_criterion_id'];
-            }
-            if (isset($location['id'])) {
-                return (int) $location['id'];
-            }
-            if (isset($location['location_id'])) {
-                return (int) $location['location_id'];
-            }
-            // Try to resolve the country name from the array
-            $name = $location['country'] ?? $location['name'] ?? null;
-            if ($name && is_string($name)) {
-                return $this->geoTargetNameToId($name);
-            }
-            return null;
-        }
-
-        // String — resolve country/region name to ID
-        if (is_string($location)) {
-            return $this->geoTargetNameToId($location);
-        }
-
-        return null;
-    }
-
-    /**
-     * Map common country/region names to Google Ads geo target constant IDs.
-     * @see https://developers.google.com/google-ads/api/reference/data/geotargets
-     */
-    protected function geoTargetNameToId(string $name): ?int
-    {
-        static $map = [
-            // Countries
-            'united states' => 2840, 'us' => 2840, 'usa' => 2840,
-            'united kingdom' => 2826, 'uk' => 2826, 'gb' => 2826,
-            'canada' => 2124, 'ca' => 2124,
-            'australia' => 2036, 'au' => 2036,
-            'germany' => 2276, 'de' => 2276,
-            'france' => 2250, 'fr' => 2250,
-            'japan' => 2392, 'jp' => 2392,
-            'india' => 2356, 'in' => 2356,
-            'brazil' => 2076, 'br' => 2076,
-            'mexico' => 2484, 'mx' => 2484,
-            'italy' => 2380, 'it' => 2380,
-            'spain' => 2724, 'es' => 2724,
-            'netherlands' => 2528, 'nl' => 2528,
-            'south korea' => 2410, 'kr' => 2410,
-            'singapore' => 2702, 'sg' => 2702,
-            'new zealand' => 2554, 'nz' => 2554,
-            'ireland' => 2372, 'ie' => 2372,
-            'south africa' => 2710, 'za' => 2710,
-            'sweden' => 2752, 'se' => 2752,
-            'norway' => 2578, 'no' => 2578,
-            'denmark' => 2208, 'dk' => 2208,
-            'finland' => 2246, 'fi' => 2246,
-            'switzerland' => 2756, 'ch' => 2756,
-            'austria' => 2040, 'at' => 2040,
-            'belgium' => 2056, 'be' => 2056,
-            'portugal' => 2620, 'pt' => 2620,
-            'poland' => 2616, 'pl' => 2616,
-            'israel' => 2376, 'il' => 2376,
-            'united arab emirates' => 2784, 'uae' => 2784, 'ae' => 2784,
-            'saudi arabia' => 2682, 'sa' => 2682,
-            'philippines' => 2608, 'ph' => 2608,
-            'indonesia' => 2360, 'id' => 2360,
-            'malaysia' => 2458, 'my' => 2458,
-            'thailand' => 2764, 'th' => 2764,
-            'vietnam' => 2704, 'vn' => 2704,
-            'china' => 2156, 'cn' => 2156,
-            'hong kong' => 2344, 'hk' => 2344,
-            'taiwan' => 2158, 'tw' => 2158,
-            'argentina' => 2032, 'ar' => 2032,
-            'colombia' => 2170, 'co' => 2170,
-            'chile' => 2152, 'cl' => 2152,
-            'nigeria' => 2566, 'ng' => 2566,
-            'egypt' => 2818, 'eg' => 2818,
-            'kenya' => 2404, 'ke' => 2404,
-        ];
-
-        $normalized = strtolower(trim($name));
-        $id = $map[$normalized] ?? null;
-
-        if (!$id) {
-            Log::warning("GoogleAdsExecutionAgent: Unknown geo target name, cannot resolve to ID", ['name' => $name]);
-        }
-
-        return $id;
-    }
-
-    /**
-     * Setup conversion tracking if needed
+     * Create the customer's conversion action (and wire the GTM tag) if absent.
+     * Best-effort: never fails the deployment.
      */
     protected function setupConversionTracking(string $customerId, ExecutionResult $result, ?Campaign $campaign = null): void
     {
         try {
             // Fast path: customer already has a saved conversion action — nothing to do
             if ($this->customer->conversion_action_id) {
-                Log::info("GoogleAdsExecutionAgent: Conversion tracking already set up, skipping creation");
+                Log::info('GoogleAdsExecutionAgent: Conversion tracking already set up, skipping creation');
+
                 return;
             }
 
             // Slower API check: action may exist in Google Ads but not yet saved locally
             $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
             if ($conversionService->isConversionTrackingSetUp($customerId)) {
-                Log::info("GoogleAdsExecutionAgent: Conversion tracking already exists in Google Ads, skipping creation");
+                Log::info('GoogleAdsExecutionAgent: Conversion tracking already exists in Google Ads, skipping creation');
+
                 return;
             }
 
@@ -2250,8 +653,8 @@ PROMPT;
             $isEcommerce = in_array($industry, $ecommerceIndustries, true);
 
             $conversionCategory = $isEcommerce ? ConversionActionCategory::PURCHASE : ConversionActionCategory::LEAD;
-            $conversionName     = $isEcommerce ? "Default Purchase Conversion" : "Default Lead Conversion";
-            $gtmTagLabel        = $isEcommerce ? "Google Ads Conversion - Purchase" : "Google Ads Conversion - Lead";
+            $conversionName = $isEcommerce ? 'Default Purchase Conversion' : 'Default Lead Conversion';
+            $gtmTagLabel = $isEcommerce ? 'Google Ads Conversion - Purchase' : 'Google Ads Conversion - Lead';
 
             $createConversionService = new CreateConversionAction($this->customer);
             $resourceName = ($createConversionService)($customerId, $conversionName, $conversionCategory);
@@ -2279,7 +682,7 @@ PROMPT;
                     $details = ($getDetails)($customerId, $resourceName);
 
                     if ($details && isset($details['conversion_id'], $details['conversion_label'])) {
-                        $gtmService = new GTMContainerService();
+                        $gtmService = new GTMContainerService;
 
                         $tagResult = $gtmService->addConversionTag(
                             $this->customer,
@@ -2289,417 +692,20 @@ PROMPT;
                         );
 
                         if ($tagResult['success']) {
-                            Log::info("Created GTM Tag for conversion: " . ($tagResult['tag_id'] ?? 'unknown'));
+                            Log::info('Created GTM Tag for conversion: '.($tagResult['tag_id'] ?? 'unknown'));
                             $gtmService->publishContainer($this->customer, 'Spectra: conversion tag wired on campaign deploy');
                         } else {
-                            Log::warning("Failed to create GTM Tag: " . ($tagResult['error'] ?? 'Unknown'));
+                            Log::warning('Failed to create GTM Tag: '.($tagResult['error'] ?? 'Unknown'));
                         }
                     }
                 } catch (\Throwable $e) {
-                    Log::warning("GTM Integration failed: " . $e->getMessage());
+                    Log::warning('GTM Integration failed: '.$e->getMessage());
                 }
             }
         } catch (\Throwable $e) {
             // Don't fail the whole execution for this, just warn
-            Log::warning("GoogleAdsExecutionAgent: Failed to setup conversion tracking: " . $e->getMessage());
-            $result->addWarning("Conversion tracking setup failed: " . $e->getMessage());
-        }
-    }
-
-    /**
-     * Create and link ad extensions (Sitelinks, Callouts, Structured Snippets, Call)
-     */
-    protected function createAndLinkAdExtensions(
-        string $customerId,
-        string $campaignResourceName,
-        Strategy $strategy,
-        ExecutionResult $result
-    ): void {
-        $createSitelinkService = new CreateSitelinkAsset($this->customer);
-        $createCalloutService = new CreateCalloutAsset($this->customer);
-        $linkAssetService = new LinkCampaignAsset($this->customer);
-
-        $landingUrl = $strategy->landing_page_url
-            ?? $strategy->bidding_strategy['landing_page_url']
-            ?? $this->customer->website
-            ?? null;
-
-        // 1. Sitelinks — prefer strategy-defined ones, fall back to business-relevant defaults
-        $sitelinks = $strategy->bidding_strategy['sitelinks'] ?? [];
-
-        if (empty($sitelinks)) {
-            $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->first();
-            $descriptions = $adCopy?->descriptions ?? [];
-
-            // Build sitelinks from ad copy descriptions where available, otherwise use
-            // product-appropriate defaults (not generic retail placeholders).
-            $sitelinks = [
-                [
-                    'text'  => 'How It Works',
-                    'desc1' => $descriptions[0] ?? 'See the AI in action',
-                    'desc2' => 'Setup takes under 5 minutes',
-                ],
-                [
-                    'text'  => 'Pricing',
-                    'desc1' => 'Transparent, no retainer fees',
-                    'desc2' => 'Pay only for what you use',
-                ],
-                [
-                    'text'  => 'Start Free Trial',
-                    'desc1' => $descriptions[1] ?? 'No credit card required',
-                    'desc2' => 'Cancel anytime',
-                ],
-                [
-                    'text'  => 'Case Studies',
-                    'desc1' => 'Real results from real customers',
-                    'desc2' => 'See the ROI data',
-                ],
-            ];
-        }
-
-        foreach ($sitelinks as $sitelink) {
-            try {
-                $url = $sitelink['url'] ?? $landingUrl;
-                if (!$url) {
-                    Log::warning('GoogleAdsExecutionAgent: Skipping sitelink — no URL available and customer has no website');
-                    continue;
-                }
-
-                $assetResourceName = ($createSitelinkService)(
-                    $customerId,
-                    $sitelink['text'],
-                    $sitelink['desc1'],
-                    $sitelink['desc2'],
-                    $url
-                );
-
-                if ($assetResourceName) {
-                    ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::SITELINK);
-                    $result->addPlatformId('sitelink_asset', $assetResourceName);
-                }
-            } catch (\Exception $e) {
-                Log::warning("GoogleAdsExecutionAgent: Failed to create/link sitelink: " . $e->getMessage());
-            }
-        }
-
-        // 2. Callouts — prefer strategy-defined ones, fall back to product-appropriate defaults
-        $callouts = $strategy->bidding_strategy['callouts'] ?? [
-            'No Agency Retainers',
-            'AI-Powered Ad Management',
-            'Cancel Anytime',
-            'Setup in Minutes',
-        ];
-
-        foreach ($callouts as $text) {
-            try {
-                $assetResourceName = ($createCalloutService)($customerId, $text);
-
-                if ($assetResourceName) {
-                    ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::CALLOUT);
-                    $result->addPlatformId('callout_asset', $assetResourceName);
-                }
-            } catch (\Exception $e) {
-                Log::warning("GoogleAdsExecutionAgent: Failed to create/link callout: " . $e->getMessage());
-            }
-        }
-
-        // 3. Structured Snippets — zero-cost, improves ad quality score and CTR
-        $snippets = $strategy->bidding_strategy['structured_snippets'] ?? [];
-
-        if (empty($snippets)) {
-            // Build from strategy bidding_strategy service list or ad copy, else use business-appropriate defaults
-            $serviceList = $strategy->bidding_strategy['services'] ?? [];
-            $snippets = [
-                [
-                    'header' => 'Services',
-                    'values' => !empty($serviceList)
-                        ? array_slice($serviceList, 0, 10)
-                        : ['Google Ads', 'Facebook Ads', 'LinkedIn Ads', 'Microsoft Ads', 'AI Optimisation'],
-                ],
-            ];
-        }
-
-        $createSnippetService = new CreateStructuredSnippetAsset($this->customer);
-        foreach ($snippets as $snippet) {
-            try {
-                $values = array_slice($snippet['values'] ?? [], 0, 10);
-                if (empty($values) || empty($snippet['header'])) {
-                    continue;
-                }
-                $assetResourceName = ($createSnippetService)($customerId, $snippet['header'], $values);
-                if ($assetResourceName) {
-                    ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::STRUCTURED_SNIPPET);
-                    $result->addPlatformId('structured_snippet_asset', $assetResourceName);
-                }
-            } catch (\Exception $e) {
-                Log::warning("GoogleAdsExecutionAgent: Failed to create/link structured snippet: " . $e->getMessage());
-            }
-        }
-
-        // 4. Call Extension — only when customer has a phone number on file
-        $phone = $this->customer->phone ?? null;
-        if ($phone) {
-            try {
-                $createCallService = new CreateCallAsset($this->customer);
-                $countryCode = $strategy->bidding_strategy['call_country_code'] ?? 'US';
-                $callAssetResourceName = ($createCallService)($customerId, $phone, $countryCode);
-                if ($callAssetResourceName) {
-                    ($linkAssetService)($customerId, $campaignResourceName, $callAssetResourceName, AssetFieldType::CALL);
-                    $result->addPlatformId('call_asset', $callAssetResourceName);
-                }
-            } catch (\Exception $e) {
-                Log::warning("GoogleAdsExecutionAgent: Failed to create/link call asset: " . $e->getMessage());
-            }
-        }
-
-        // 5. Promotion Extension — strategy-defined or AI-generated
-        $this->createPromotionExtension($customerId, $campaignResourceName, $strategy, $landingUrl, $result);
-
-        // 6. Price Extension — strategy-defined or AI-generated pricing tiers
-        $this->createPriceExtension($customerId, $campaignResourceName, $strategy, $landingUrl, $result);
-
-        // 7. Location Extension — links synced Business Profile location assets if GBP is connected
-        $this->createLocationExtension($customerId, $campaignResourceName, $result);
-    }
-
-    protected function createPromotionExtension(
-        string $customerId,
-        string $campaignResourceName,
-        Strategy $strategy,
-        ?string $landingUrl,
-        ExecutionResult $result
-    ): void {
-        // Strategy can define explicit promotion; fall back to AI generation
-        $promotionData = $strategy->bidding_strategy['promotion'] ?? null;
-
-        if (!$promotionData) {
-            $promotionData = $this->generatePromotionWithAI($strategy);
-        }
-
-        if (!$promotionData || ($promotionData['skip'] ?? false)) {
-            return;
-        }
-
-        try {
-            $createService = new CreatePromotionAsset($this->customer);
-            $target = $promotionData['promotion_target'] ?? $promotionData['target'] ?? null;
-            if (!$target) {
-                return;
-            }
-
-            $payload = [
-                'language_code' => $promotionData['language_code'] ?? 'en',
-            ];
-            if (!empty($promotionData['percent_off'])) {
-                $payload['percent_off'] = (int) $promotionData['percent_off'];
-            } elseif (!empty($promotionData['money_amount_off'])) {
-                $payload['money_amount_off'] = $promotionData['money_amount_off'];
-            } else {
-                return; // Google requires one discount type
-            }
-            if (!empty($promotionData['promotion_code'])) {
-                $payload['promotion_code'] = $promotionData['promotion_code'];
-            }
-            if (!empty($promotionData['start_date'])) {
-                $payload['start_date'] = $promotionData['start_date'];
-            }
-            if (!empty($promotionData['end_date'])) {
-                $payload['end_date'] = $promotionData['end_date'];
-            }
-            if ($landingUrl) {
-                $payload['final_url'] = $landingUrl;
-            }
-
-            $assetResourceName = ($createService)($customerId, $target, $payload);
-            if ($assetResourceName) {
-                (new LinkCampaignAsset($this->customer))($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::PROMOTION);
-                $result->addPlatformId('promotion_asset', $assetResourceName);
-                Log::info("GoogleAdsExecutionAgent: Created promotion extension: {$target}");
-            }
-        } catch (\Exception $e) {
-            Log::warning("GoogleAdsExecutionAgent: Failed to create/link promotion asset: " . $e->getMessage());
-        }
-    }
-
-    protected function generatePromotionWithAI(Strategy $strategy): ?array
-    {
-        $businessName     = $this->customer->name;
-        $businessType     = $this->customer->business_type ?? 'business';
-        $adCopyStrategy   = $strategy->ad_copy_strategy ?? '';
-
-        $prompt = <<<PROMPT
-Generate a Google Ads Promotion Extension for this business.
-
-Business: {$businessName}
-Type: {$businessType}
-Ad Copy Strategy: {$adCopyStrategy}
-
-Rules:
-- Only suggest a promotion that a business of this type would realistically offer
-- For SaaS/software: use percent_off 1000000 (100%) for a free trial period
-- For service businesses: use percent_off between 100000 (10%) and 300000 (30%)
-- For e-commerce: use a realistic percentage or money amount
-- If no believable promotion fits this business, set skip to true
-- percent_off is in millionths (20% = 200000, 100% = 1000000)
-- promotion_code is optional but recommended
-
-Return JSON only:
-{
-  "skip": false,
-  "promotion_target": "14-Day Free Trial",
-  "percent_off": 1000000,
-  "promotion_code": "TRIAL14",
-  "language_code": "en"
-}
-PROMPT;
-
-        try {
-            $response = $this->gemini->generateContent(
-                config('ai.models.default'),
-                $prompt,
-                ['temperature' => 0.3, 'responseMimeType' => 'application/json'],
-            );
-            if ($response && isset($response['text'])) {
-                return json_decode($response['text'], true) ?: null;
-            }
-        } catch (\Exception $e) {
-            Log::warning("GoogleAdsExecutionAgent: AI promotion generation failed", ['error' => $e->getMessage()]);
-        }
-
-        return null;
-    }
-
-    protected function createPriceExtension(
-        string $customerId,
-        string $campaignResourceName,
-        Strategy $strategy,
-        ?string $landingUrl,
-        ExecutionResult $result
-    ): void {
-        // Strategy can define explicit pricing; fall back to AI generation
-        $pricingData = $strategy->bidding_strategy['pricing'] ?? null;
-
-        if (!$pricingData) {
-            $pricingData = $this->generatePricingWithAI($strategy, $landingUrl);
-        }
-
-        if (!$pricingData || ($pricingData['skip'] ?? false) || empty($pricingData['offerings'])) {
-            return;
-        }
-
-        try {
-            $currencyCode = $this->customer->currency_code ?? 'USD';
-
-            $offerings = array_map(function (array $o) use ($landingUrl, $currencyCode): array {
-                return [
-                    'header'        => substr($o['header'] ?? '', 0, 25),
-                    'description'   => substr($o['description'] ?? '', 0, 25),
-                    'price_micros'  => (int) ($o['price_micros'] ?? 0),
-                    'currency_code' => $o['currency_code'] ?? $currencyCode,
-                    'unit'          => $o['unit'] ?? PriceExtensionPriceUnit::PER_MONTH,
-                    'final_url'     => $o['final_url'] ?? $landingUrl ?? '',
-                ];
-            }, array_slice($pricingData['offerings'], 0, 8));
-
-            // Filter out offerings with no price or URL
-            $offerings = array_values(array_filter($offerings, fn ($o) => $o['price_micros'] > 0 && $o['final_url']));
-
-            if (count($offerings) < 3) {
-                Log::info("GoogleAdsExecutionAgent: Skipping price extension — fewer than 3 valid offerings");
-                return;
-            }
-
-            $createService = new CreatePriceAsset($this->customer);
-            $type          = $pricingData['type']      ?? PriceExtensionType::SERVICE_TIERS;
-            $qualifier     = $pricingData['qualifier']  ?? PriceExtensionPriceQualifier::FROM;
-
-            $assetResourceName = ($createService)($customerId, $type, $qualifier, $offerings);
-            if ($assetResourceName) {
-                (new LinkCampaignAsset($this->customer))($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::PRICE);
-                $result->addPlatformId('price_asset', $assetResourceName);
-                Log::info("GoogleAdsExecutionAgent: Created price extension with " . count($offerings) . " tiers");
-            }
-        } catch (\Exception $e) {
-            Log::warning("GoogleAdsExecutionAgent: Failed to create/link price asset: " . $e->getMessage());
-        }
-    }
-
-    protected function generatePricingWithAI(Strategy $strategy, ?string $landingUrl): ?array
-    {
-        $businessName   = $this->customer->name;
-        $businessType   = $this->customer->business_type ?? 'business';
-        $industry       = $this->customer->industry ?? '';
-        $currencyCode   = $this->customer->currency_code ?? 'USD';
-        $adCopyStrategy = $strategy->ad_copy_strategy ?? '';
-
-        $prompt = <<<PROMPT
-Generate Google Ads Price Extension data for this business.
-
-Business: {$businessName}
-Type: {$businessType}
-Industry: {$industry}
-Currency: {$currencyCode}
-Ad Copy Strategy: {$adCopyStrategy}
-Landing URL: {$landingUrl}
-
-Rules:
-- Only generate prices you can confidently infer from the business type/industry
-- price_micros is price in micros (e.g. \$99/month = 99000000)
-- Provide 3-5 service tiers or product categories
-- unit: 5 = PER_MONTH, 6 = PER_YEAR, 2 = PER_HOUR, 0 = UNSPECIFIED
-- type: 10 = SERVICE_TIERS, 8 = SERVICES, 6 = PRODUCT_CATEGORIES
-- qualifier: 2 = FROM, 3 = UP_TO
-- If you cannot confidently determine realistic pricing, set skip to true
-- header max 25 characters, description max 25 characters
-
-Return JSON only:
-{
-  "skip": false,
-  "type": 10,
-  "qualifier": 2,
-  "offerings": [
-    {"header": "Starter", "description": "3 campaigns", "price_micros": 99000000, "currency_code": "USD", "unit": 5, "final_url": "https://example.com/pricing"},
-    {"header": "Professional", "description": "10 campaigns", "price_micros": 299000000, "currency_code": "USD", "unit": 5, "final_url": "https://example.com/pricing"},
-    {"header": "Enterprise", "description": "Unlimited", "price_micros": 999000000, "currency_code": "USD", "unit": 5, "final_url": "https://example.com/pricing"}
-  ]
-}
-PROMPT;
-
-        try {
-            $response = $this->gemini->generateContent(
-                config('ai.models.default'),
-                $prompt,
-                ['temperature' => 0.3, 'responseMimeType' => 'application/json'],
-            );
-            if ($response && isset($response['text'])) {
-                return json_decode($response['text'], true) ?: null;
-            }
-        } catch (\Exception $e) {
-            Log::warning("GoogleAdsExecutionAgent: AI pricing generation failed", ['error' => $e->getMessage()]);
-        }
-
-        return null;
-    }
-
-    protected function createLocationExtension(
-        string $customerId,
-        string $campaignResourceName,
-        ExecutionResult $result
-    ): void {
-        try {
-            $service = new GetAndLinkLocationAssets($this->customer);
-            $linked  = ($service)($customerId, $campaignResourceName);
-
-            if ($linked > 0) {
-                $result->addPlatformId('location_assets_linked', (string) $linked);
-                Log::info("GoogleAdsExecutionAgent: Linked {$linked} Business Profile location asset(s)", [
-                    'campaign' => $campaignResourceName,
-                ]);
-            } else {
-                Log::info("GoogleAdsExecutionAgent: No Business Profile location assets found — connect Business Profile in Google Ads UI (Tools → Linked accounts → Business Profile) to enable location extensions");
-            }
-        } catch (\Exception $e) {
-            Log::warning("GoogleAdsExecutionAgent: Location extension setup failed: " . $e->getMessage());
+            Log::warning('GoogleAdsExecutionAgent: Failed to setup conversion tracking: '.$e->getMessage());
+            $result->addWarning('Conversion tracking setup failed: '.$e->getMessage());
         }
     }
 }
