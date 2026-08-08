@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
+import { fetchJson } from '@/utils/http';
 
 // ─── shared ─────────────────────────────────────────────────────────────────
 
@@ -130,16 +131,10 @@ function CampaignCreateSection({ adAccounts }) {
         if (!firstAccount) return;
         setLoading(true);
         try {
-            const res = await fetch(route('facebook-api.test-campaign'), {
+            const data = await fetchJson(route('facebook-api.test-campaign'), {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                    'Accept': 'application/json',
-                },
-                body: JSON.stringify({ ad_account_id: firstAccount.id }),
+                json: { ad_account_id: firstAccount.id },
             });
-            const data = await res.json();
             setResult(data);
         } catch (e) {
             setResult({ error: e.message });

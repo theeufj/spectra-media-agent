@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { fetchJson } from '@/utils/http';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { useToast } from '@/Components/Toast';
 import { Head, router } from '@inertiajs/react';
@@ -60,19 +61,13 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
 
         // Send to server
         try {
-            const response = await fetch('/billing/ad-spend/update-payment-method', {
+            const result = await fetchJson('/billing/ad-spend/update-payment-method', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                },
-                body: JSON.stringify({
+                json: {
                     payment_method_id: paymentMethod.id,
                     retry_payment: isRetry,
-                }),
+                },
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 setSucceeded(true);
