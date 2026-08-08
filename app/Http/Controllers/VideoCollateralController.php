@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\GenerateVideo;
 use App\Jobs\ExtendVideo;
-use App\Jobs\CheckVideoStatus;
+use App\Jobs\GenerateVideo;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
@@ -20,9 +19,6 @@ class VideoCollateralController extends Controller
     /**
      * store is the handler for dispatching the video generation job.
      *
-     * @param Request $request
-     * @param Campaign $campaign
-     * @param Strategy $strategy
      * @return \Illuminate\Http\RedirectResponse
      */
     public function store(Request $request, Campaign $campaign, Strategy $strategy)
@@ -32,8 +28,8 @@ class VideoCollateralController extends Controller
         try {
             // Ensure the campaign belongs to a customer that the authenticated user is part of.
             $user = Auth::user();
-            if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists() || $strategy->campaign_id !== $campaign->id) {
-                Log::warning("Unauthorized attempt to generate video for Campaign ID: {$campaign->id} by User ID: " . Auth::id());
+            if (! $user->can('view', $campaign) || $strategy->campaign_id !== $campaign->id) {
+                Log::warning("Unauthorized attempt to generate video for Campaign ID: {$campaign->id} by User ID: ".Auth::id());
                 abort(403, 'Unauthorized action.');
             }
 
@@ -63,7 +59,7 @@ class VideoCollateralController extends Controller
 
             // Check creative quota
             $quotaService = app(CreativeQuotaService::class);
-            if (!$quotaService->canGenerate($user, 'video')) {
+            if (! $quotaService->canGenerate($user, 'video')) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
                     'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
@@ -72,23 +68,24 @@ class VideoCollateralController extends Controller
 
             Log::info("Dispatching GenerateVideo job for Strategy ID: {$strategy->id}...");
             GenerateVideo::dispatch($campaign, $strategy, $validated['platform']);
-            Log::info("GenerateVideo job dispatched successfully.");
+            Log::info('GenerateVideo job dispatched successfully.');
 
             $quotaService->recordUsage($user, 'video');
 
             return redirect()->back()->with('flash', [
                 'type' => 'success',
-                'message' => 'Video generation has been queued. This process can take several minutes. You will be notified upon completion.'
+                'message' => 'Video generation has been queued. This process can take several minutes. You will be notified upon completion.',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error("Validation failed for video generation request. Errors: " . json_encode($e->errors()));
+            Log::error('Validation failed for video generation request. Errors: '.json_encode($e->errors()));
             // Re-throw the validation exception to let Laravel handle the response.
             throw $e;
         } catch (\Exception $e) {
-            Log::error("An unexpected error occurred during video generation dispatch for Strategy ID: {$strategy->id}. Error: " . $e->getMessage());
+            Log::error("An unexpected error occurred during video generation dispatch for Strategy ID: {$strategy->id}. Error: ".$e->getMessage());
+
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Failed to start video generation: An unexpected error occurred. Please check the logs for more details.'
+                'message' => 'Failed to start video generation: An unexpected error occurred. Please check the logs for more details.',
             ]);
         }
     }
@@ -97,8 +94,6 @@ class VideoCollateralController extends Controller
      * Extend an existing Veo-generated video by up to 7 seconds.
      * Can extend up to 20 times (cumulative 148 seconds max).
      *
-     * @param Request $request
-     * @param VideoCollateral $video
      * @return \Illuminate\Http\RedirectResponse
      */
     public function extend(Request $request, VideoCollateral $video)
@@ -109,9 +104,9 @@ class VideoCollateralController extends Controller
             // Ensure the video belongs to a campaign that the authenticated user has access to
             $user = Auth::user();
             $campaign = $video->campaign;
-            
-            if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-                Log::warning("Unauthorized attempt to extend video ID: {$video->id} by User ID: " . Auth::id());
+
+            if (! $user->can('view', $campaign)) {
+                Log::warning("Unauthorized attempt to extend video ID: {$video->id} by User ID: ".Auth::id());
                 abort(403, 'Unauthorized action.');
             }
 
@@ -119,14 +114,14 @@ class VideoCollateralController extends Controller
             if ($video->status !== 'completed') {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
-                    'message' => 'Video must be completed before it can be extended.'
+                    'message' => 'Video must be completed before it can be extended.',
                 ]);
             }
 
-            if (!$video->gemini_video_uri) {
+            if (! $video->gemini_video_uri) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
-                    'message' => 'This video cannot be extended. Only Veo-generated videos can be extended.'
+                    'message' => 'This video cannot be extended. Only Veo-generated videos can be extended.',
                 ]);
             }
 
@@ -134,20 +129,20 @@ class VideoCollateralController extends Controller
             if ($extensionCount >= 20) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
-                    'message' => 'Maximum extension limit (20) reached for this video.'
+                    'message' => 'Maximum extension limit (20) reached for this video.',
                 ]);
             }
 
             // Check creative quota (extensions count against video budget)
             $quotaService = app(CreativeQuotaService::class);
-            if (!$quotaService->canGenerate($user, 'video')) {
+            if (! $quotaService->canGenerate($user, 'video')) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
                     'message' => 'Monthly video generation limit reached. Purchase a Creative Boost pack for more.',
                 ]);
             }
 
-            if (!$quotaService->canExtendVideo($video, $user)) {
+            if (! $quotaService->canExtendVideo($video, $user)) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
                     'message' => 'This video has reached its maximum extension limit (3 extensions).',
@@ -170,13 +165,14 @@ class VideoCollateralController extends Controller
             ]);
 
         } catch (\Illuminate\Validation\ValidationException $e) {
-            Log::error("Validation failed for video extension request. Errors: " . json_encode($e->errors()));
+            Log::error('Validation failed for video extension request. Errors: '.json_encode($e->errors()));
             throw $e;
         } catch (\Exception $e) {
-            Log::error("An unexpected error occurred during video extension for VideoCollateral ID: {$video->id}. Error: " . $e->getMessage());
+            Log::error("An unexpected error occurred during video extension for VideoCollateral ID: {$video->id}. Error: ".$e->getMessage());
+
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Failed to start video extension: ' . $e->getMessage()
+                'message' => 'Failed to start video extension: '.$e->getMessage(),
             ]);
         }
     }
@@ -187,9 +183,7 @@ class VideoCollateralController extends Controller
     public function upload(Request $request, Campaign $campaign, Strategy $strategy)
     {
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('view', $campaign);
 
         if ($strategy->campaign_id !== $campaign->id) {
             abort(403, 'Strategy does not belong to this campaign.');
@@ -214,7 +208,7 @@ class VideoCollateralController extends Controller
         $file = $request->file('video');
         $contents = file_get_contents($file->getPathname());
         $ext = $file->getClientOriginalExtension() ?: 'mp4';
-        $path = 'collateral/videos/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+        $path = 'collateral/videos/'.$campaign->id.'/'.Str::uuid().'.'.$ext;
         $contentType = $file->getMimeType() ?: 'video/mp4';
 
         [$s3Path, $url] = StorageHelper::put($path, $contents, $contentType);
@@ -243,7 +237,7 @@ class VideoCollateralController extends Controller
     {
         $user = Auth::user();
         $customerId = $video->campaign?->customer_id ?? $video->strategy?->campaign?->customer_id;
-        if (!$customerId || !$user->customers()->where('customers.id', $customerId)->exists()) {
+        if (! $customerId || ! $user->customers()->where('customers.id', $customerId)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 

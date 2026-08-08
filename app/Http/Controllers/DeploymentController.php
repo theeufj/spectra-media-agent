@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Jobs\DeployCampaign;
+use App\Enums\CampaignStatus;
 use App\Http\Requests\DeployCollateralRequest;
+use App\Jobs\DeployCampaign;
 use App\Models\ActivityLog;
 use App\Models\Campaign;
 use App\Models\Setting;
@@ -15,7 +16,7 @@ class DeploymentController extends Controller
     /**
      * Toggles the deployment status of a given piece of collateral.
      *
-     * @param Request $request
+     * @param  Request  $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function toggleCollateral(DeployCollateralRequest $request)
@@ -34,7 +35,7 @@ class DeploymentController extends Controller
             default => null,
         };
 
-        if (!$modelClass) {
+        if (! $modelClass) {
             abort(400, 'Invalid collateral type provided.');
         }
 
@@ -43,16 +44,16 @@ class DeploymentController extends Controller
         // Authorization check: Ensure the user owns the campaign this collateral belongs to.
         $campaign = $collateral->campaign ?? $collateral->strategy?->campaign;
 
-        if (!$campaign) {
+        if (! $campaign) {
             abort(404, 'Campaign not found for this collateral.');
         }
 
         $customer = $campaign->customer;
-        if (!$customer || !$request->user()->customers()->where('customers.id', $customer->id)->exists()) {
+        if (! $customer || ! $request->user()->can('view', $customer)) {
             abort(403);
         }
 
-        $collateral->update(['should_deploy' => !$collateral->should_deploy]);
+        $collateral->update(['should_deploy' => ! $collateral->should_deploy]);
 
         return back();
     }
@@ -60,7 +61,6 @@ class DeploymentController extends Controller
     /**
      * Handles the final deployment of the selected collateral.
      *
-     * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function deploy(Request $request)
@@ -82,7 +82,7 @@ class DeploymentController extends Controller
         // Get campaign and verify ownership
         $campaign = Campaign::findOrFail($validated['campaign_id']);
         $customer = $user->customers()->findOrFail(session('active_customer_id'));
-        
+
         if ($campaign->customer_id !== $customer->id) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
@@ -100,16 +100,17 @@ class DeploymentController extends Controller
         $customerHasAccess = $userHasAccess || $customer->users()
             ->where(function ($q) {
                 $q->where('subscription_status', 'active')
-                  ->orWhereNotNull('pm_type')
-                  ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
+                    ->orWhereNotNull('pm_type')
+                    ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
             })
             ->exists();
 
-        if (!$customerHasAccess) {
+        if (! $customerHasAccess) {
             ActivityLog::log('campaign_deploy_blocked', "Deploy blocked — no active subscription for campaign '{$campaign->name}'", $campaign, [
                 'campaign_id' => $campaign->id,
                 'reason' => 'no_subscription',
             ]);
+
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'error',
                 'message' => 'You must have an active subscription to deploy campaigns.',
@@ -118,8 +119,8 @@ class DeploymentController extends Controller
 
         // 2. Deployment Enabled Check (Admin Setting)
         $deploymentEnabled = Setting::get('deployment_enabled', true);
-        
-        if (!$deploymentEnabled) {
+
+        if (! $deploymentEnabled) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'We\'re currently enhancing our deployment system to serve you better. Campaign deployment will be available soon! Your subscription remains active and you can continue creating campaigns.',
@@ -166,17 +167,17 @@ class DeploymentController extends Controller
             ->exists();
 
         if ($hasGoogleStrategy && empty($customer->google_ads_customer_id)) {
-            $campaign->update(['status' => 'pending_admin_deployment']);
+            $campaign->update(['status' => CampaignStatus::PendingAdminDeployment]);
 
             \Illuminate\Support\Facades\Mail::raw(
                 "Campaign pending deployment — admin action required\n\n"
-                . "Customer: {$customer->business_name} (ID: {$customer->id})\n"
-                . "Campaign: {$campaign->name} (ID: {$campaign->id})\n"
-                . "Budget: \${$campaign->daily_budget}/day\n"
-                . "Strategies: {$signedOffCount} signed off\n\n"
-                . "The customer has no Google Ads account ID. Create a sub-account under the MCC,\n"
-                . "attach it in the admin portal, then click Deploy on this campaign:\n\n"
-                . url(route('admin.customers.show', $customer->id)),
+                ."Customer: {$customer->business_name} (ID: {$customer->id})\n"
+                ."Campaign: {$campaign->name} (ID: {$campaign->id})\n"
+                ."Budget: \${$campaign->daily_budget}/day\n"
+                ."Strategies: {$signedOffCount} signed off\n\n"
+                ."The customer has no Google Ads account ID. Create a sub-account under the MCC,\n"
+                ."attach it in the admin portal, then click Deploy on this campaign:\n\n"
+                .url(route('admin.customers.show', $customer->id)),
                 fn ($m) => $m->to(config('app.admin_email'))
                     ->subject("Action required: Deploy \"{$campaign->name}\" for {$customer->business_name}")
             );
@@ -186,7 +187,7 @@ class DeploymentController extends Controller
                 'customer_id' => $customer->id,
             ]);
 
-            Log::info("Campaign queued for admin deployment — no Google Ads account ID", [
+            Log::info('Campaign queued for admin deployment — no Google Ads account ID', [
                 'campaign_id' => $campaign->id,
                 'customer_id' => $customer->id,
             ]);
@@ -245,26 +246,26 @@ class DeploymentController extends Controller
         $customerHasAccess = $userHasAccess || $customer->users()
             ->where(function ($q) {
                 $q->where('subscription_status', 'active')
-                  ->orWhereNotNull('pm_type')
-                  ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
+                    ->orWhereNotNull('pm_type')
+                    ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
             })
             ->exists();
 
-        if (!$customerHasAccess) {
+        if (! $customerHasAccess) {
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'error',
                 'message' => 'You must have an active subscription to deploy campaigns.',
             ]);
         }
 
-        if (!Setting::get('deployment_enabled', true)) {
+        if (! Setting::get('deployment_enabled', true)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Deployment is currently disabled.',
             ]);
         }
 
-        if (!$strategy->signed_off_at) {
+        if (! $strategy->signed_off_at) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => "The {$strategy->platform} strategy must be signed off before deploying.",
@@ -276,17 +277,17 @@ class DeploymentController extends Controller
 
         DeployCampaign::dispatch($campaign, useAgents: true, strategyId: $strategy->id);
 
-        Log::info("Single-platform deploy dispatched", [
+        Log::info('Single-platform deploy dispatched', [
             'campaign_id' => $campaign->id,
             'strategy_id' => $strategy->id,
-            'platform'    => $strategy->platform,
-            'user_id'     => $user->id,
+            'platform' => $strategy->platform,
+            'user_id' => $user->id,
         ]);
 
         ActivityLog::log('campaign_deployed', "Single-platform deployment initiated for '{$strategy->platform}' on campaign '{$campaign->name}'", $campaign, [
             'campaign_id' => $campaign->id,
             'strategy_id' => $strategy->id,
-            'platform'    => $strategy->platform,
+            'platform' => $strategy->platform,
         ]);
 
         return redirect()->back()->with('flash', [

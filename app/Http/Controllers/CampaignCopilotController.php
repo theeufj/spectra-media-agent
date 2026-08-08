@@ -30,9 +30,7 @@ class CampaignCopilotController extends Controller
         $user = $request->user();
 
         // Verify user owns this campaign
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403);
-        }
+        $this->authorize('view', $campaign);
 
         $userMessage = $request->input('message');
 
@@ -93,9 +91,7 @@ class CampaignCopilotController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403);
-        }
+        $this->authorize('view', $campaign);
 
         $conversation = CampaignConversation::where('campaign_id', $campaign->id)
             ->where('user_id', $user->id)
@@ -113,9 +109,7 @@ class CampaignCopilotController extends Controller
     {
         $user = $request->user();
 
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403);
-        }
+        $this->authorize('view', $campaign);
 
         CampaignConversation::where('campaign_id', $campaign->id)
             ->where('user_id', $user->id)

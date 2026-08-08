@@ -71,9 +71,7 @@ class ProposalController extends Controller
      */
     public function show(Request $request, Proposal $proposal)
     {
-        if ($proposal->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorize('view', $proposal);
 
         return Inertia::render('Proposals/Show', [
             'proposal' => $proposal,
@@ -85,9 +83,7 @@ class ProposalController extends Controller
      */
     public function status(Request $request, Proposal $proposal)
     {
-        if ($proposal->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorize('view', $proposal);
 
         return response()->json([
             'status' => $proposal->status,
@@ -100,24 +96,22 @@ class ProposalController extends Controller
      */
     public function exportPdf(Request $request, Proposal $proposal, ProposalPdfService $pdfService)
     {
-        if ($proposal->user_id !== $request->user()->id) {
-            abort(403);
-        }
+        $this->authorize('view', $proposal);
 
-        if (!$proposal->isReady()) {
+        if (! $proposal->isReady()) {
             abort(404, 'Proposal is not ready yet.');
         }
 
         $pdf = $pdfService->getPdfContent($proposal);
 
-        if (!$pdf) {
+        if (! $pdf) {
             abort(500, 'Failed to generate PDF.');
         }
 
-        $filename = str_replace(' ', '_', $proposal->client_name) . '_Proposal_' . now()->format('Y-m-d') . '.pdf';
+        $filename = str_replace(' ', '_', $proposal->client_name).'_Proposal_'.now()->format('Y-m-d').'.pdf';
 
         return response($pdf, 200)
             ->header('Content-Type', 'application/pdf')
-            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+            ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
     }
 }

@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
-use App\Http\Requests\StoreCustomerRequest;
-use App\Http\Requests\UpdateCustomerRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -56,13 +54,14 @@ class CustomerController extends Controller
 
         if ($maxAllowed !== null && $currentCount >= $maxAllowed) {
             $planLabel = ucfirst($slug);
+
             return redirect()->back()->withErrors([
-                'name' => "{$planLabel} plan is limited to {$maxAllowed} customer account" . ($maxAllowed > 1 ? 's' : '') . ". Upgrade your plan to add more.",
+                'name' => "{$planLabel} plan is limited to {$maxAllowed} customer account".($maxAllowed > 1 ? 's' : '').'. Upgrade your plan to add more.',
             ])->withInput();
         }
 
         $tenant = $request->attributes->get('tenant');
-        if ($tenant && ($tenant['locked_vertical'] ?? false) && !empty($tenant['vertical'])) {
+        if ($tenant && ($tenant['locked_vertical'] ?? false) && ! empty($tenant['vertical'])) {
             $validated['industry'] = $tenant['vertical'];
         }
 
@@ -83,9 +82,10 @@ class CustomerController extends Controller
     {
         $user = Auth::user();
 
-        if ($user->customers->contains($customer)) {
+        if ($user->can('switchTo', $customer)) {
             session(['active_customer_id' => $customer->id]);
-            return redirect()->route('dashboard')->with('success', 'Switched to customer ' . $customer->name);
+
+            return redirect()->route('dashboard')->with('success', 'Switched to customer '.$customer->name);
         }
 
         return redirect()->back()->with('error', 'You do not have permission to access this customer.');
@@ -99,12 +99,12 @@ class CustomerController extends Controller
         $user = Auth::user();
 
         // Check if user has access to this customer
-        if (!$user->customers->contains($customer)) {
+        if (! $user->can('update', $customer)) {
             return redirect()->back()->with('error', 'You do not have permission to edit this customer.');
         }
 
         return Inertia::render('Customers/Edit', [
-            'customer'      => $customer,
+            'customer' => $customer,
         ]);
     }
 
@@ -116,7 +116,7 @@ class CustomerController extends Controller
         $user = Auth::user();
 
         // Check if user has access to this customer
-        if (!$user->customers->contains($customer)) {
+        if (! $user->can('update', $customer)) {
             return redirect()->back()->with('error', 'You do not have permission to update this customer.');
         }
 

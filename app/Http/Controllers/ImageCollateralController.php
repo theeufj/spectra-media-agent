@@ -19,9 +19,6 @@ class ImageCollateralController extends Controller
     /**
      * store is the handler for dispatching the image generation job.
      *
-     * @param Request $request
-     * @param Campaign $campaign
-     * @param Strategy $strategy
      * @return \Illuminate\Http\RedirectResponse
      */
     public function store(Request $request, Campaign $campaign, Strategy $strategy)
@@ -31,9 +28,7 @@ class ImageCollateralController extends Controller
 
         // Ensure the campaign belongs to a customer that the authenticated user is part of.
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('view', $campaign);
 
         // Ensure the strategy belongs to the campaign.
         if ($strategy->campaign_id !== $campaign->id) {
@@ -42,7 +37,7 @@ class ImageCollateralController extends Controller
 
         // Check creative quota
         $quotaService = app(CreativeQuotaService::class);
-        if (!$quotaService->canGenerate($user, 'image')) {
+        if (! $quotaService->canGenerate($user, 'image')) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Monthly image generation limit reached. Purchase a Creative Boost pack for more.',
@@ -56,15 +51,13 @@ class ImageCollateralController extends Controller
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
-            'message' => 'Image generation has been queued. You will be notified upon completion.'
+            'message' => 'Image generation has been queued. You will be notified upon completion.',
         ]);
     }
 
     /**
      * update is the handler for dispatching the image refinement job.
      *
-     * @param Request $request
-     * @param ImageCollateral $imageCollateral
      * @return \Illuminate\Http\RedirectResponse
      */
     public function update(Request $request, ImageCollateral $imageCollateral)
@@ -76,20 +69,18 @@ class ImageCollateralController extends Controller
 
         // Ensure the user is authorized to edit this image.
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $imageCollateral->campaign->customer_id)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('view', $imageCollateral->campaign);
 
         // Check creative quota for refinements
         $quotaService = app(CreativeQuotaService::class);
-        if (!$quotaService->canGenerate($user, 'refinement')) {
+        if (! $quotaService->canGenerate($user, 'refinement')) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Monthly refinement limit reached. Purchase a Creative Boost pack for more.',
             ]);
         }
 
-        if (!$quotaService->canRefineImage($imageCollateral, $user)) {
+        if (! $quotaService->canRefineImage($imageCollateral, $user)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'This image has reached its maximum refinement limit (3 edits).',
@@ -110,7 +101,7 @@ class ImageCollateralController extends Controller
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
-            'message' => 'Image refinement has been queued. Please check back in a few moments.'
+            'message' => 'Image refinement has been queued. Please check back in a few moments.',
         ]);
     }
 
@@ -120,9 +111,7 @@ class ImageCollateralController extends Controller
     public function upload(Request $request, Campaign $campaign, Strategy $strategy)
     {
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('view', $campaign);
 
         if ($strategy->campaign_id !== $campaign->id) {
             abort(403, 'Strategy does not belong to this campaign.');
@@ -141,6 +130,7 @@ class ImageCollateralController extends Controller
         $incoming = count($request->file('images'));
         if ($existingUploads + $incoming > 10) {
             $remaining = max(0, 10 - $existingUploads);
+
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => "Upload limit: 10 images per campaign. You have {$existingUploads} uploaded, can add {$remaining} more.",
@@ -163,20 +153,22 @@ class ImageCollateralController extends Controller
 
         foreach ($request->file('images') as $i => $file) {
             $imageSize = @getimagesize($file->getPathname());
-            if (!$imageSize) {
+            if (! $imageSize) {
                 $errors[] = "{$file->getClientOriginalName()}: could not read image dimensions.";
+
                 continue;
             }
 
             [$width, $height] = $imageSize;
             if ($width < $rules['min_width'] || $height < $rules['min_height']) {
                 $errors[] = "{$file->getClientOriginalName()}: {$width}×{$height} is too small. Minimum: {$rules['min_width']}×{$rules['min_height']} for {$platform}.";
+
                 continue;
             }
 
             $contents = file_get_contents($file->getPathname());
             $ext = $file->getClientOriginalExtension() ?: 'jpg';
-            $path = 'collateral/images/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            $path = 'collateral/images/'.$campaign->id.'/'.Str::uuid().'.'.$ext;
             $contentType = $file->getMimeType() ?: 'image/jpeg';
 
             [$s3Path, $url] = StorageHelper::put($path, $contents, $contentType);
@@ -194,16 +186,16 @@ class ImageCollateralController extends Controller
             $created++;
         }
 
-        if ($created === 0 && !empty($errors)) {
+        if ($created === 0 && ! empty($errors)) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'No images uploaded. ' . implode(' ', $errors),
+                'message' => 'No images uploaded. '.implode(' ', $errors),
             ]);
         }
 
-        $msg = "{$created} image" . ($created !== 1 ? 's' : '') . ' uploaded successfully.';
-        if (!empty($errors)) {
-            $msg .= ' ' . count($errors) . ' skipped: ' . implode(' ', $errors);
+        $msg = "{$created} image".($created !== 1 ? 's' : '').' uploaded successfully.';
+        if (! empty($errors)) {
+            $msg .= ' '.count($errors).' skipped: '.implode(' ', $errors);
         }
 
         return redirect()->back()->with('flash', [
@@ -219,7 +211,7 @@ class ImageCollateralController extends Controller
     {
         $user = Auth::user();
         $customerId = $imageCollateral->campaign?->customer_id ?? $imageCollateral->strategy?->campaign?->customer_id;
-        if (!$customerId || !$user->customers()->where('customers.id', $customerId)->exists()) {
+        if (! $customerId || ! $user->customers()->where('customers.id', $customerId)->exists()) {
             abort(403, 'Unauthorized action.');
         }
 
