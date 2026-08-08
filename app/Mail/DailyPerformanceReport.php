@@ -22,6 +22,31 @@ class DailyPerformanceReport extends Mailable
     {
         $this->user = $user;
         $this->summary = $summary;
+
+        // SendDailyPerformanceReports queues one of these per user in a tight
+        // loop, so they all hit the 'resend' limiter (4/sec) in the same instant.
+        // Spread them, mirroring CriticalAgentAlert.
+        $this->delay(now()->addSeconds(rand(0, 30)));
+
+        // The 'default' supervisor runs tries:1. RateLimited *releases* a job when
+        // the limit is hit and that release counts as an attempt, so the first
+        // rate-limited send exceeded tries and died with
+        // MaxAttemptsExceededException. 'notifications' is the queue sized for
+        // this (tries:3) and is where the other transactional mail already goes.
+        $this->onQueue('notifications');
+    }
+
+    /**
+     * Retry on a deadline rather than an attempt count.
+     *
+     * With RateLimited, every release burns an attempt, so a fixed $tries budget
+     * is really a budget of "times we were allowed to be rate limited" — not a
+     * budget of genuine failures. A deadline lets the limiter defer this mail as
+     * often as it needs to within the window.
+     */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addMinutes(30);
     }
 
     public function envelope(): Envelope

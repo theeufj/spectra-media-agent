@@ -26,6 +26,24 @@ class MonthlyExecutiveReport extends Mailable
         $this->user = $user;
         $this->report = $report;
         $this->pdfPath = $pdfPath;
+
+        // Queued one-per-user in a loop, so these all hit the 'resend' limiter
+        // (4/sec) at once. Spread them out.
+        $this->delay(now()->addSeconds(rand(0, 30)));
+
+        // RateLimited releases the job when the limit is hit, and each release
+        // counts as an attempt — on the 'default' supervisor (tries:1) the first
+        // rate-limited send died with MaxAttemptsExceededException.
+        $this->onQueue('notifications');
+    }
+
+    /**
+     * Retry on a deadline, not an attempt count: with RateLimited a $tries budget
+     * is really a budget of "times we may be rate limited", not of real failures.
+     */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addMinutes(30);
     }
 
     public function envelope(): Envelope
