@@ -26,7 +26,7 @@ class StorageHelper
                 'ACL' => 'public-read',
             ]);
 
-            if (!isset($result['ETag'])) {
+            if (! isset($result['ETag'])) {
                 throw new \RuntimeException('S3 upload failed - no ETag in response.');
             }
 
@@ -93,6 +93,7 @@ class StorageHelper
             } catch (\Throwable $e) {
                 Log::warning("Failed to delete from S3: {$e->getMessage()}");
             }
+
             return;
         }
 
@@ -134,6 +135,6 @@ class StorageHelper
      */
     public static function usesS3(): bool
     {
-        return !empty(config('filesystems.disks.s3.bucket')) && !empty(config('filesystems.disks.s3.key'));
+        return ! empty(config('filesystems.disks.s3.bucket')) && ! empty(config('filesystems.disks.s3.key'));
     }
 }

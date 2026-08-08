@@ -7,17 +7,15 @@ use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\GoogleAdsExecutionAgent;
-use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
 use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
 use App\Services\GoogleAds\DisplayServices\CreateDisplayCampaign;
 use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
 use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
-use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
-use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
+use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
+use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class GoogleAdsDeploymentStrategy implements DeploymentStrategy
 {
@@ -36,24 +34,25 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             $customerId = $this->customer->google_ads_customer_id;
 
             // Use explicit campaign_type field instead of fragile detection
-            $campaignResourceName = match($strategy->campaign_type) {
+            $campaignResourceName = match ($strategy->campaign_type) {
                 'display' => $this->deployDisplayCampaign($customerId, $campaign, $strategy),
                 'search' => $this->deploySearchCampaign($customerId, $campaign, $strategy),
-                'video', 'shopping', 'demand_gen', 'local_services', 'performance_max'
-                    => $this->deployViaExecutionAgent($campaign, $strategy),
-                'app' => throw new \Exception("App campaigns are not yet supported. Please create App campaigns directly in Google Ads."),
+                'video', 'shopping', 'demand_gen', 'local_services', 'performance_max' => $this->deployViaExecutionAgent($campaign, $strategy),
+                'app' => throw new \Exception('App campaigns are not yet supported. Please create App campaigns directly in Google Ads.'),
                 default => throw new \Exception("Unknown campaign type: {$strategy->campaign_type}"),
             };
 
-            if (!$campaignResourceName) {
+            if (! $campaignResourceName) {
                 throw new \Exception('Failed to create Google Ads campaign.');
             }
 
             Log::info("Successfully deployed to Google Ads for Strategy ID: {$strategy->id}");
+
             return true;
 
         } catch (\Exception $e) {
-            Log::error("Google Ads deployment failed for Strategy ID {$strategy->id}: " . $e->getMessage());
+            Log::error("Google Ads deployment failed for Strategy ID {$strategy->id}: ".$e->getMessage());
+
             return false;
         }
     }
@@ -73,9 +72,9 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         $context = ExecutionContext::create($strategy, $campaign, $this->customer);
         $result = $agent->execute($context);
 
-        if (!$result->success) {
+        if (! $result->success) {
             throw new \Exception(
-                "Execution agent deployment failed: " . implode('; ', $result->errors)
+                'Execution agent deployment failed: '.implode('; ', $result->errors)
             );
         }
 
@@ -96,7 +95,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             'endDate' => now()->addMonth()->format('Y-m-d'),
         ];
         $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
+        if (! $campaignResourceName) {
             throw new \Exception('Failed to create display campaign.');
         }
 
@@ -109,7 +108,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         // 2. Create Ad Group
         $createAdGroupService = new CreateDisplayAdGroup($this->customer);
         $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, 'Default Ad Group');
-        if (!$adGroupResourceName) {
+        if (! $adGroupResourceName) {
             throw new \Exception('Failed to create display ad group.');
         }
 
@@ -129,7 +128,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             }
         }
 
-        if ($adCopy && !empty($imageAssetResourceNames)) {
+        if ($adCopy && ! empty($imageAssetResourceNames)) {
             $createAdService = new CreateResponsiveDisplayAd($this->customer);
             $adData = [
                 'finalUrls' => [$campaign->landing_page_url],
@@ -155,7 +154,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             'endDate' => now()->addMonth()->format('Y-m-d'),
         ];
         $campaignResourceName = ($createCampaignService)($customerId, $campaignData);
-        if (!$campaignResourceName) {
+        if (! $campaignResourceName) {
             throw new \Exception('Failed to create search campaign.');
         }
 
@@ -168,7 +167,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         // 2. Create Ad Group
         $createAdGroupService = new CreateSearchAdGroup($this->customer);
         $adGroupResourceName = ($createAdGroupService)($customerId, $campaignResourceName, 'Default Ad Group');
-        if (!$adGroupResourceName) {
+        if (! $adGroupResourceName) {
             throw new \Exception('Failed to create search ad group.');
         }
 
@@ -177,7 +176,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
 
         // 3. Create Responsive Search Ad
         $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
-        
+
         if ($adCopy) {
             $createAdService = new CreateResponsiveSearchAd($this->customer);
             $adData = [
@@ -194,17 +193,17 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
     /**
      * Apply targeting criteria to a Google Ads campaign from TargetingConfig.
      *
-     * @param string $customerId Google Ads customer ID
-     * @param string $campaignResourceName Campaign resource name
-     * @param Strategy $strategy Strategy with targeting config
-     * @return void
+     * @param  string  $customerId  Google Ads customer ID
+     * @param  string  $campaignResourceName  Campaign resource name
+     * @param  Strategy  $strategy  Strategy with targeting config
      */
     private function applyCampaignTargeting(string $customerId, string $campaignResourceName, Strategy $strategy): void
     {
         $targetingConfig = $strategy->targetingConfig;
-        
-        if (!$targetingConfig || !$targetingConfig->isCompatibleWith('google')) {
+
+        if (! $targetingConfig || ! $targetingConfig->isCompatibleWith('google')) {
             Log::info("No targeting config found for strategy {$strategy->id}, using defaults");
+
             return;
         }
 
@@ -220,7 +219,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
                         'locationId' => $geoId,
                     ]);
                 } catch (\Exception $e) {
-                    Log::warning("Failed to add location targeting (ID: {$geoId}): " . $e->getMessage());
+                    Log::warning("Failed to add location targeting (ID: {$geoId}): ".$e->getMessage());
                 }
             }
 
@@ -231,7 +230,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
             ]);
 
         } catch (\Exception $e) {
-            Log::warning("Failed to apply targeting criteria: " . $e->getMessage());
+            Log::warning('Failed to apply targeting criteria: '.$e->getMessage());
             // Don't fail deployment if targeting application fails
         }
     }

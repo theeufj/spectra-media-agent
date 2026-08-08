@@ -4,12 +4,12 @@ namespace App\Jobs;
 
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
-use App\Models\MicrosoftAdsPerformanceData;
 use App\Models\LinkedInAdsPerformanceData;
+use App\Models\MicrosoftAdsPerformanceData;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\CampaignAlertService;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
+use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,7 +28,7 @@ use Illuminate\Support\Facades\Log;
  */
 class HourlyBudgetOptimization implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $timeout = 300; // 5 minutes max
 
@@ -36,8 +36,9 @@ class HourlyBudgetOptimization implements ShouldQueue
     {
         // Prevent duplicate runs if the scheduler dispatches a second instance before the first finishes
         $lock = Cache::lock('hourly-budget-optimization', 3300); // 55 min — releases before next hour
-        if (!$lock->get()) {
+        if (! $lock->get()) {
             Log::info('HourlyBudgetOptimization: Skipping — another instance is already running');
+
             return;
         }
 
@@ -53,11 +54,11 @@ class HourlyBudgetOptimization implements ShouldQueue
         Log::info('HourlyBudgetOptimization: Starting hourly run');
         $runStart = $this->startRun();
 
-        $alertService = new CampaignAlertService();
+        $alertService = new CampaignAlertService;
 
         $campaigns = Campaign::with('customer')
             ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
-            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
+            ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id')
                 ->orWhereNotNull('microsoft_ads_campaign_id')
                 ->orWhereNotNull('linkedin_campaign_id'))
@@ -81,7 +82,7 @@ class HourlyBudgetOptimization implements ShouldQueue
                 $results = $budgetAgent->optimize($campaign);
                 $adjustments = array_filter(
                     $results['adjustments'] ?? [],
-                    fn($a) => $a['type'] === 'budget_updated'
+                    fn ($a) => $a['type'] === 'budget_updated'
                 );
                 $summary['budget_adjustments'] += count($adjustments);
 
@@ -91,6 +92,8 @@ class HourlyBudgetOptimization implements ShouldQueue
 
                 $summary['campaigns_processed']++;
             } catch (\Exception $e) {
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
                 $summary['errors']++;
                 Log::error('HourlyBudgetOptimization: Failed', [
                     'campaign_id' => $campaign->id,
@@ -101,7 +104,7 @@ class HourlyBudgetOptimization implements ShouldQueue
 
         Log::info('HourlyBudgetOptimization: Completed', $summary);
 
-        $this->finishRun($runStart, actions: $summary['budget_adjustments'], errors: $summary['errors'], scope: $campaigns->count() . ' campaigns', details: $summary);
+        $this->finishRun($runStart, actions: $summary['budget_adjustments'], errors: $summary['errors'], scope: $campaigns->count().' campaigns', details: $summary);
     }
 
     /**
@@ -111,7 +114,9 @@ class HourlyBudgetOptimization implements ShouldQueue
     protected function recordHourlySnapshot(Campaign $campaign): void
     {
         $customer = $campaign->customer;
-        if (!$customer) return;
+        if (! $customer) {
+            return;
+        }
 
         $now = now();
         $hour = (int) $now->format('H');
@@ -120,7 +125,9 @@ class HourlyBudgetOptimization implements ShouldQueue
 
         // Get current hour's performance from the platform
         $metrics = $this->getHourlyMetrics($campaign, $customer);
-        if (!$metrics) return;
+        if (! $metrics) {
+            return;
+        }
 
         CampaignHourlyPerformance::updateOrCreate(
             [
@@ -192,11 +199,11 @@ class HourlyBudgetOptimization implements ShouldQueue
 
             if ($msRow) {
                 return [
-                    'platform'         => 'microsoft_ads',
-                    'impressions'      => (int) $msRow->impressions,
-                    'clicks'           => (int) $msRow->clicks,
-                    'conversions'      => (float) $msRow->conversions,
-                    'spend'            => (float) $msRow->cost,
+                    'platform' => 'microsoft_ads',
+                    'impressions' => (int) $msRow->impressions,
+                    'clicks' => (int) $msRow->clicks,
+                    'conversions' => (float) $msRow->conversions,
+                    'spend' => (float) $msRow->cost,
                     'conversion_value' => (float) $msRow->conversion_value,
                 ];
             }
@@ -215,11 +222,11 @@ class HourlyBudgetOptimization implements ShouldQueue
 
             if ($liRow) {
                 return [
-                    'platform'         => 'linkedin_ads',
-                    'impressions'      => (int) $liRow->impressions,
-                    'clicks'           => (int) $liRow->clicks,
-                    'conversions'      => (float) $liRow->conversions,
-                    'spend'            => (float) $liRow->cost,
+                    'platform' => 'linkedin_ads',
+                    'impressions' => (int) $liRow->impressions,
+                    'clicks' => (int) $liRow->clicks,
+                    'conversions' => (float) $liRow->conversions,
+                    'spend' => (float) $liRow->cost,
                     'conversion_value' => (float) $liRow->conversion_value,
                 ];
             }
@@ -235,7 +242,7 @@ class HourlyBudgetOptimization implements ShouldQueue
                     $today
                 );
 
-                if (!empty($insights)) {
+                if (! empty($insights)) {
                     $day = $insights[0];
                     $conversionValue = 0;
                     foreach ($day['action_values'] ?? [] as $av) {
@@ -266,7 +273,7 @@ class HourlyBudgetOptimization implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('HourlyBudgetOptimization failed: ' . $exception->getMessage(), [
+        Log::error('HourlyBudgetOptimization failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
         $this->recordRunFailure($exception);

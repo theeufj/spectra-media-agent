@@ -5,9 +5,9 @@ namespace App\Services\Health;
 use App\Models\Customer;
 use App\Services\GoogleAds\CommonServices\GetAccountStatus;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
-use Carbon\Carbon;
 
 class GoogleAdsHealthChecker
 {
@@ -19,19 +19,20 @@ class GoogleAdsHealthChecker
 
         try {
             $connectivity = $this->testConnectivity($customer);
-            if (!$connectivity['connected']) {
+            if (! $connectivity['connected']) {
                 $health['issues'][] = [
-                    'type'     => 'connectivity',
+                    'type' => 'connectivity',
                     'severity' => 'critical',
-                    'message'  => 'Unable to connect to Google Ads API',
-                    'details'  => $connectivity['error'] ?? 'Unknown error',
+                    'message' => 'Unable to connect to Google Ads API',
+                    'details' => $connectivity['error'] ?? 'Unknown error',
                 ];
                 $health['status'] = 'critical';
+
                 return $health;
             }
 
             $tokenHealth = $this->checkTokenHealth($customer);
-            $health['issues']   = array_merge($health['issues'], $tokenHealth['issues']);
+            $health['issues'] = array_merge($health['issues'], $tokenHealth['issues']);
             $health['warnings'] = array_merge($health['warnings'], $tokenHealth['warnings']);
 
             $accountHealth = $this->checkAccountStatus($customer);
@@ -42,25 +43,26 @@ class GoogleAdsHealthChecker
             $health['metrics']['conversion_tracking'] = $conversionHealth;
 
         } catch (\Exception $e) {
-            Log::error("GoogleAdsHealthChecker: Error checking Google Ads health", [
+            Log::error('GoogleAdsHealthChecker: Error checking Google Ads health', [
                 'customer_id' => $customer->id,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
             $health['issues'][] = [
-                'type'     => 'error',
+                'type' => 'error',
                 'severity' => 'high',
-                'message'  => 'Error during Google Ads health check',
-                'details'  => $e->getMessage(),
+                'message' => 'Error during Google Ads health check',
+                'details' => $e->getMessage(),
             ];
         }
 
         $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+
         return $health;
     }
 
     private function testConnectivity(Customer $customer): array
     {
-        if (!$customer->google_ads_customer_id) {
+        if (! $customer->google_ads_customer_id) {
             return ['connected' => false, 'error' => 'No customer ID configured'];
         }
 
@@ -73,6 +75,7 @@ class GoogleAdsHealthChecker
             new GetCampaignPerformance($customer, true);
             $result = ['connected' => true];
             Cache::put($cacheKey, $result, now()->addMinutes(30));
+
             return $result;
         } catch (\Exception $e) {
             return ['connected' => false, 'error' => $e->getMessage()];
@@ -83,22 +86,22 @@ class GoogleAdsHealthChecker
     {
         $health = ['issues' => [], 'warnings' => []];
 
-        if (!\App\Models\MccAccount::getActive()) {
+        if (! \App\Models\MccAccount::getActive()) {
             $health['issues'][] = [
-                'type'     => 'token',
+                'type' => 'token',
                 'severity' => 'critical',
-                'message'  => 'No active MCC account configured',
-                'details'  => 'Add an MCC account via Admin > MCC Accounts, or set GOOGLE_ADS_MCC_CUSTOMER_ID and GOOGLE_ADS_MCC_REFRESH_TOKEN env vars',
+                'message' => 'No active MCC account configured',
+                'details' => 'Add an MCC account via Admin > MCC Accounts, or set GOOGLE_ADS_MCC_CUSTOMER_ID and GOOGLE_ADS_MCC_REFRESH_TOKEN env vars',
             ];
         }
 
         $lastSuccess = Cache::get("google_ads_last_success:{$customer->id}");
         if ($lastSuccess && Carbon::parse($lastSuccess)->lt(now()->subHours(24))) {
             $health['warnings'][] = [
-                'type'     => 'api_activity',
+                'type' => 'api_activity',
                 'severity' => 'medium',
-                'message'  => 'No successful Google Ads API activity in 24 hours',
-                'details'  => 'This may indicate token or connectivity issues',
+                'message' => 'No successful Google Ads API activity in 24 hours',
+                'details' => 'This may indicate token or connectivity issues',
             ];
         }
 
@@ -110,9 +113,9 @@ class GoogleAdsHealthChecker
         $health = ['issues' => []];
 
         try {
-            $service    = new GetAccountStatus($customer);
+            $service = new GetAccountStatus($customer);
             $customerId = $customer->cleanGoogleCustomerId();
-            $status     = ($service)($customerId);
+            $status = ($service)($customerId);
 
             if ($status) {
                 // Status enum: 2=ENABLED, 3=CANCELED, 4=SUSPENDED, 5=CLOSED
@@ -128,9 +131,9 @@ class GoogleAdsHealthChecker
                 }
             }
         } catch (\Exception $e) {
-            Log::debug("GoogleAdsHealthChecker: Could not check Google account status", [
+            Log::debug('GoogleAdsHealthChecker: Could not check Google account status', [
                 'customer_id' => $customer->id,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 
@@ -145,10 +148,10 @@ class GoogleAdsHealthChecker
             $health['has_tracking'] = true;
         } else {
             $health['warnings'][] = [
-                'type'     => 'conversion_tracking',
+                'type' => 'conversion_tracking',
                 'severity' => 'medium',
-                'message'  => 'No Google Ads conversion tracking configured',
-                'details'  => 'Smart Bidding performance will be limited without conversion data',
+                'message' => 'No Google Ads conversion tracking configured',
+                'details' => 'Smart Bidding performance will be limited without conversion data',
             ];
         }
 

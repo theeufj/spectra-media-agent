@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Jobs\ExtractBrandGuidelines;
 use App\Models\Customer;
 use App\Models\CustomerPage;
 use App\Models\User;
@@ -22,10 +21,13 @@ class DiscoverNavigationUrls implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 120;
 
     public Customer $customer;
+
     public User $user;
+
     public array $alreadyCrawledUrls;
 
     public function __construct(Customer $customer, User $user, array $alreadyCrawledUrls = [])
@@ -43,6 +45,7 @@ class DiscoverNavigationUrls implements ShouldQueue
             Log::warning('DiscoverNavigationUrls: No website URL for customer', [
                 'customer_id' => $this->customer->id,
             ]);
+
             return;
         }
 
@@ -74,12 +77,14 @@ class DiscoverNavigationUrls implements ShouldQueue
                 Log::error('DiscoverNavigationUrls: All fetch methods failed', [
                     'error' => $e2->getMessage(),
                 ]);
+
                 return;
             }
         }
 
         if (empty($html)) {
             Log::warning('DiscoverNavigationUrls: Empty HTML from homepage');
+
             return;
         }
 
@@ -91,15 +96,15 @@ class DiscoverNavigationUrls implements ShouldQueue
             ->toArray();
 
         $allKnownUrls = array_unique(array_merge(
-            array_map(fn($url) => $this->normalizeUrl($url), $this->alreadyCrawledUrls),
-            array_map(fn($url) => $this->normalizeUrl($url), $existingPageUrls),
+            array_map(fn ($url) => $this->normalizeUrl($url), $this->alreadyCrawledUrls),
+            array_map(fn ($url) => $this->normalizeUrl($url), $existingPageUrls),
         ));
 
         // Find URLs in the navigation that weren't in the sitemap
         $missingUrls = [];
         foreach ($discoveredUrls as $url) {
             $normalized = $this->normalizeUrl($url);
-            if (!in_array($normalized, $allKnownUrls)) {
+            if (! in_array($normalized, $allKnownUrls)) {
                 $missingUrls[] = $url;
             }
         }
@@ -110,6 +115,7 @@ class DiscoverNavigationUrls implements ShouldQueue
                 'nav_urls_found' => count($discoveredUrls),
             ]);
             ExtractBrandGuidelines::dispatch($this->customer);
+
             return;
         }
 
@@ -121,7 +127,7 @@ class DiscoverNavigationUrls implements ShouldQueue
             'missing_count' => count($missingUrls),
         ]);
 
-        $jobs = array_map(fn($url) => new CrawlPage($this->user, $url, $this->customer->id, [
+        $jobs = array_map(fn ($url) => new CrawlPage($this->user, $url, $this->customer->id, [
             'source' => 'navigation_discovery',
             'sitemap_gap' => true,
         ]), $missingUrls);
@@ -151,7 +157,7 @@ class DiscoverNavigationUrls implements ShouldQueue
         $parsedBase = parse_url($websiteUrl);
         $baseHost = $parsedBase['host'] ?? '';
         $baseScheme = $parsedBase['scheme'] ?? 'https';
-        $baseUrl = $baseScheme . '://' . $baseHost;
+        $baseUrl = $baseScheme.'://'.$baseHost;
 
         $crawler = new Crawler($html, $websiteUrl);
         $urls = [];
@@ -208,11 +214,11 @@ class DiscoverNavigationUrls implements ShouldQueue
 
         // Protocol-relative
         if (str_starts_with($href, '//')) {
-            return 'https:' . strtok($href, '#');
+            return 'https:'.strtok($href, '#');
         }
 
         // Relative URL
-        return rtrim($baseUrl, '/') . '/' . ltrim(strtok($href, '#'), '/');
+        return rtrim($baseUrl, '/').'/'.ltrim(strtok($href, '#'), '/');
     }
 
     private function isInternalUrl(string $url, string $baseHost): bool
@@ -259,6 +265,7 @@ class DiscoverNavigationUrls implements ShouldQueue
         $url = strtolower(trim($url));
         $url = preg_replace('/^https?:\/\/(www\.)?/', '', $url);
         $url = rtrim($url, '/');
+
         return $url;
     }
 

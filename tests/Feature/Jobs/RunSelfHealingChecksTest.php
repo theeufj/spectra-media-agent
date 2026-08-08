@@ -26,14 +26,14 @@ class RunSelfHealingChecksTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
     }
 
     public function test_job_can_be_instantiated(): void
     {
-        $job = new RunSelfHealingChecks();
+        $job = new RunSelfHealingChecks;
 
         $this->assertInstanceOf(RunSelfHealingChecks::class, $job);
         $this->assertSame(1, $job->tries);
@@ -51,8 +51,8 @@ class RunSelfHealingChecksTest extends TestCase
                 ->orWhereNotNull('linkedin_campaign_id')
             )->exists();
 
-        if (!$eligibleExists) {
-            $job = new RunSelfHealingChecks();
+        if (! $eligibleExists) {
+            $job = new RunSelfHealingChecks;
             $job->handle(
                 app(SelfHealingAgent::class),
                 app(CampaignDiagnosticsAgent::class),
@@ -62,6 +62,7 @@ class RunSelfHealingChecksTest extends TestCase
                 app(LinkedInCampaignOptimizationAgent::class),
             );
             $this->assertTrue(true);
+
             return;
         }
 
@@ -76,11 +77,11 @@ class RunSelfHealingChecksTest extends TestCase
                 ->orWhereNotNull('facebook_ads_campaign_id')
             )->exists();
 
-        if (!$eligibleExists) {
+        if (! $eligibleExists) {
             $this->markTestSkipped('No eligible/learning campaigns in DB.');
         }
 
-        $job = new RunSelfHealingChecks();
+        $job = new RunSelfHealingChecks;
         $job->handle(
             app(SelfHealingAgent::class),
             app(CampaignDiagnosticsAgent::class),

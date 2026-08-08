@@ -1,6 +1,5 @@
 <?php
 
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // Stripe webhook endpoint — signature-verified (STRIPE_WEBHOOK_SECRET). Cashier's
@@ -21,8 +20,6 @@ Route::middleware('throttle:60,1')->group(function () {
     Route::post('/tracking/conversion', [\App\Http\Controllers\TrackingController::class, 'conversion'])
         ->name('tracking.conversion');
 });
-
-
 
 // Demo Endpoint (Rate limited)
 Route::middleware('throttle:3,1')->group(function () {

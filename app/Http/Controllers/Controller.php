@@ -3,10 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 
 abstract class Controller
 {
+    use AuthorizesRequests;
+
     protected function getActiveCustomer(Request $request): ?Customer
     {
         $user = $request->user();
@@ -15,7 +18,7 @@ abstract class Controller
         if ($customerId) {
             return Customer::where('id', $customerId)
                 ->where('is_sandbox', false)
-                ->whereHas('users', fn($q) => $q->where('user_id', $user->id))
+                ->whereHas('users', fn ($q) => $q->where('user_id', $user->id))
                 ->first();
         }
 

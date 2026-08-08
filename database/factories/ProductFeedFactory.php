@@ -12,7 +12,7 @@ class ProductFeedFactory extends Factory
         return [
             'customer_id' => Customer::factory(),
             'merchant_id' => (string) $this->faker->randomNumber(8),
-            'feed_name' => $this->faker->company() . ' Feed',
+            'feed_name' => $this->faker->company().' Feed',
             'source_type' => $this->faker->randomElement(['manual', 'url', 'api', 'shopify', 'woocommerce']),
             'source_url' => $this->faker->url(),
             'status' => 'active',

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Log;
 class MerchantCenterService
 {
     protected Customer $customer;
+
     protected string $baseUrl = 'https://shoppingcontent.googleapis.com/content/v2.1';
 
     public function __construct(Customer $customer)
@@ -27,6 +28,7 @@ class MerchantCenterService
     public function getAccountInfo(string $merchantId): ?array
     {
         $response = $this->apiCall("accounts/{$merchantId}");
+
         return $response;
     }
 
@@ -40,10 +42,14 @@ class MerchantCenterService
 
         do {
             $params = ['maxResults' => $maxResults];
-            if ($pageToken) $params['pageToken'] = $pageToken;
+            if ($pageToken) {
+                $params['pageToken'] = $pageToken;
+            }
 
             $response = $this->apiCall("{$merchantId}/products", $params);
-            if (!$response) break;
+            if (! $response) {
+                break;
+            }
 
             foreach ($response['resources'] ?? [] as $product) {
                 $products[] = $this->normalizeProduct($product);
@@ -65,10 +71,14 @@ class MerchantCenterService
 
         do {
             $params = ['maxResults' => 250];
-            if ($pageToken) $params['pageToken'] = $pageToken;
+            if ($pageToken) {
+                $params['pageToken'] = $pageToken;
+            }
 
             $response = $this->apiCall("{$merchantId}/productstatuses", $params);
-            if (!$response) break;
+            if (! $response) {
+                break;
+            }
 
             foreach ($response['resources'] ?? [] as $status) {
                 $statuses[$status['productId'] ?? ''] = [
@@ -97,6 +107,7 @@ class MerchantCenterService
     public function deleteProduct(string $merchantId, string $productId): bool
     {
         $response = $this->apiCall("{$merchantId}/products/{$productId}", method: 'DELETE');
+
         return $response !== null;
     }
 
@@ -106,7 +117,9 @@ class MerchantCenterService
     public function getFeedDiagnostics(string $merchantId): array
     {
         $response = $this->apiCall("{$merchantId}/accountstatuses/{$merchantId}");
-        if (!$response) return [];
+        if (! $response) {
+            return [];
+        }
 
         return [
             'account_level_issues' => $response['accountLevelIssues'] ?? [],
@@ -120,7 +133,9 @@ class MerchantCenterService
     public function syncToDatabase(ProductFeed $feed): int
     {
         $merchantId = $feed->merchant_id;
-        if (!$merchantId) return 0;
+        if (! $merchantId) {
+            return 0;
+        }
 
         $products = $this->listProducts($merchantId);
         $statuses = $this->getProductStatuses($merchantId);
@@ -179,7 +194,7 @@ class MerchantCenterService
         }
 
         if ($status === 404) {
-            throw new \RuntimeException("Merchant Center account or resource not found. Verify your Merchant Center ID.");
+            throw new \RuntimeException('Merchant Center account or resource not found. Verify your Merchant Center ID.');
         }
 
         throw new \RuntimeException("Merchant Center API error (HTTP {$status}): {$errorBody}");
@@ -189,7 +204,8 @@ class MerchantCenterService
     {
         // Reuse Google Ads OAuth token since Merchant Center uses the same credentials
         try {
-            $base = new class($this->customer) extends BaseGoogleAdsService {
+            $base = new class($this->customer) extends BaseGoogleAdsService
+            {
                 public function getToken(): ?string
                 {
                     return $this->client?->getOAuth2Credential()?->fetchAuthToken()['access_token'] ?? null;
@@ -197,7 +213,7 @@ class MerchantCenterService
             };
             $token = $base->getToken();
 
-            if (!$token) {
+            if (! $token) {
                 throw new \RuntimeException('Could not obtain Merchant Center access token. Check Google Ads MCC credentials.');
             }
 
@@ -205,7 +221,7 @@ class MerchantCenterService
         } catch (\RuntimeException $e) {
             throw $e;
         } catch (\Exception $e) {
-            throw new \RuntimeException('Merchant Center authentication failed: ' . $e->getMessage(), 0, $e);
+            throw new \RuntimeException('Merchant Center authentication failed: '.$e->getMessage(), 0, $e);
         }
     }
 
@@ -235,19 +251,28 @@ class MerchantCenterService
         $destinations = $status['destinationStatuses'] ?? [];
         foreach ($destinations as $dest) {
             if (($dest['destination'] ?? '') === 'SurfacesAcrossGoogle' || ($dest['destination'] ?? '') === 'Shopping') {
-                if (($dest['status'] ?? '') === 'approved') return 'approved';
-                if (($dest['status'] ?? '') === 'disapproved') return 'disapproved';
+                if (($dest['status'] ?? '') === 'approved') {
+                    return 'approved';
+                }
+                if (($dest['status'] ?? '') === 'disapproved') {
+                    return 'disapproved';
+                }
             }
         }
         $issues = $status['itemLevelIssues'] ?? [];
-        if (!empty($issues)) return 'disapproved';
+        if (! empty($issues)) {
+            return 'disapproved';
+        }
+
         return 'pending';
     }
 
     protected function extractDisapprovalReasons(array $status): ?array
     {
         $issues = $status['itemLevelIssues'] ?? [];
-        if (empty($issues)) return null;
+        if (empty($issues)) {
+            return null;
+        }
 
         return array_map(fn ($i) => [
             'code' => $i['code'] ?? '',

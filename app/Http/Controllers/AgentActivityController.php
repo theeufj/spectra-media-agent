@@ -14,7 +14,7 @@ class AgentActivityController extends Controller
     public function healthPage()
     {
         return Inertia::render('Admin/AgentHealth', [
-            'jobs'    => $this->healthSummary(),
+            'jobs' => $this->healthSummary(),
             'tracked' => array_keys(MonitorAgentHealth::EXPECTED_MAX_GAP_HOURS),
         ]);
     }
@@ -43,23 +43,24 @@ class AgentActivityController extends Controller
                 $recent = AgentRun::where('job', $run->job)->latest('id')->take(12)->get();
                 $ageHours = round($run->created_at->diffInHours(now(), true), 1);
                 $maxGap = $gaps[$run->job] ?? null;
+
                 return [
-                    'job'          => $run->job,
-                    'last_status'  => $run->status,
-                    'last_run_at'  => $run->created_at,
-                    'age_hours'    => $ageHours,
-                    'is_stale'     => $maxGap !== null && $ageHours > $maxGap,
+                    'job' => $run->job,
+                    'last_status' => $run->status,
+                    'last_run_at' => $run->created_at,
+                    'age_hours' => $ageHours,
+                    'is_stale' => $maxGap !== null && $ageHours > $maxGap,
                     'expected_gap' => $maxGap,
-                    'actions'      => $run->actions_taken,
-                    'errors'       => $run->errors,
-                    'scope'        => $run->scope,
-                    'note'         => $run->note,
+                    'actions' => $run->actions_taken,
+                    'errors' => $run->errors,
+                    'scope' => $run->scope,
+                    'note' => $run->note,
                     'no_op_streak' => $recent->takeWhile(fn ($r) => $r->status === AgentRun::STATUS_NO_OP)->count(),
-                    'recent'       => $recent->map(fn ($r) => [
-                        'status'  => $r->status,
+                    'recent' => $recent->map(fn ($r) => [
+                        'status' => $r->status,
                         'actions' => $r->actions_taken,
-                        'errors'  => $r->errors,
-                        'at'      => $r->created_at,
+                        'errors' => $r->errors,
+                        'at' => $r->created_at,
                     ])->values(),
                 ];
             })
@@ -89,7 +90,7 @@ class AgentActivityController extends Controller
         $user = $request->user();
         $customerId = session('active_customer_id');
 
-        if (!$customerId || !$user->customers()->where('customers.id', $customerId)->exists()) {
+        if (! $customerId || ! $user->customers()->where('customers.id', $customerId)->exists()) {
             return response()->json(['data' => []]);
         }
 

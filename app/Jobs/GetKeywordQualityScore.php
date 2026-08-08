@@ -37,29 +37,30 @@ class GetKeywordQualityScore implements ShouldQueue
             $service = new AccountStructureService($campaign->customer);
             $client = $service->getClient();
 
-            if (!$client) {
+            if (! $client) {
                 Log::error("Google Ads client not available for campaign {$this->campaignId}");
+
                 return;
             }
 
             $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
 
-            $query = "SELECT "
-                . "ad_group_criterion.keyword.text, "
-                . "ad_group_criterion.keyword.match_type, "
-                . "ad_group_criterion.quality_info.quality_score, "
-                . "ad_group_criterion.quality_info.creative_quality_score, "
-                . "ad_group_criterion.quality_info.post_click_quality_score, "
-                . "ad_group_criterion.quality_info.search_predicted_ctr, "
-                . "ad_group_criterion.cpc_bid_micros, "
-                . "ad_group_criterion.resource_name, "
-                . "ad_group.resource_name, "
-                . "metrics.impressions, "
-                . "metrics.clicks, "
-                . "metrics.conversions, "
-                . "metrics.cost_micros "
-                . "FROM keyword_view "
-                . "WHERE campaign.id = {$campaign->googleCampaignNumericId()}";
+            $query = 'SELECT '
+                .'ad_group_criterion.keyword.text, '
+                .'ad_group_criterion.keyword.match_type, '
+                .'ad_group_criterion.quality_info.quality_score, '
+                .'ad_group_criterion.quality_info.creative_quality_score, '
+                .'ad_group_criterion.quality_info.post_click_quality_score, '
+                .'ad_group_criterion.quality_info.search_predicted_ctr, '
+                .'ad_group_criterion.cpc_bid_micros, '
+                .'ad_group_criterion.resource_name, '
+                .'ad_group.resource_name, '
+                .'metrics.impressions, '
+                .'metrics.clicks, '
+                .'metrics.conversions, '
+                .'metrics.cost_micros '
+                .'FROM keyword_view '
+                ."WHERE campaign.id = {$campaign->googleCampaignNumericId()}";
 
             $response = $googleAdsServiceClient->search(new SearchGoogleAdsRequest([
                 'customer_id' => $campaign->customer->google_ads_customer_id,
@@ -101,7 +102,7 @@ class GetKeywordQualityScore implements ShouldQueue
                 ]);
             }
         } catch (\Exception $e) {
-            Log::error("Error getting keyword Quality Score for campaign {$this->campaignId}: " . $e->getMessage(), [
+            Log::error("Error getting keyword Quality Score for campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
         }
@@ -112,7 +113,7 @@ class GetKeywordQualityScore implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GetKeywordQualityScore failed: ' . $exception->getMessage(), [
+        Log::error('GetKeywordQualityScore failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

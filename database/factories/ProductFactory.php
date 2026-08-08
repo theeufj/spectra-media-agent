@@ -13,7 +13,7 @@ class ProductFactory extends Factory
         return [
             'product_feed_id' => ProductFeed::factory(),
             'customer_id' => Customer::factory(),
-            'offer_id' => 'SKU-' . $this->faker->unique()->numerify('####'),
+            'offer_id' => 'SKU-'.$this->faker->unique()->numerify('####'),
             'title' => $this->faker->words(4, true),
             'description' => $this->faker->sentence(),
             'link' => $this->faker->url(),

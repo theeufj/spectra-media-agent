@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Jobs\GenerateExecutiveReport;
 use App\Jobs\GenerateMonthlyReport;
-use App\Models\Customer;
-use App\Services\Reporting\ExecutiveReportService;
 use App\Services\Reporting\ReportPdfService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -20,7 +18,7 @@ class ReportController extends Controller
     public function index(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('dashboard');
         }
 
@@ -43,7 +41,7 @@ class ReportController extends Controller
         ]);
 
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return back()->with('flash', ['type' => 'error', 'message' => 'No active customer selected.']);
         }
 
@@ -57,7 +55,7 @@ class ReportController extends Controller
 
         return back()->with('flash', [
             'type' => 'success',
-            'message' => ucfirst($period) . ' report is being generated. You\'ll receive it by email shortly.',
+            'message' => ucfirst($period).' report is being generated. You\'ll receive it by email shortly.',
         ]);
     }
 
@@ -67,7 +65,7 @@ class ReportController extends Controller
     public function download(Request $request, string $period, string $date)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             abort(403);
         }
 
@@ -80,7 +78,7 @@ class ReportController extends Controller
 
         $filename = "reports/{$customer->id}/{$period}_{$date}.pdf";
 
-        if (!Storage::disk('local')->exists($filename)) {
+        if (! Storage::disk('local')->exists($filename)) {
             // Try to regenerate from cached data
             $cacheKey = "executive_report:{$customer->id}:{$period}";
             $report = Cache::get($cacheKey);
@@ -90,7 +88,7 @@ class ReportController extends Controller
                 $pdfService->generate($customer, $report);
             }
 
-            if (!Storage::disk('local')->exists($filename)) {
+            if (! Storage::disk('local')->exists($filename)) {
                 return back()->with('flash', ['type' => 'error', 'message' => 'Report not found. Please generate a new one.']);
             }
         }
@@ -110,7 +108,7 @@ class ReportController extends Controller
     public function settings(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('dashboard');
         }
 
@@ -125,12 +123,12 @@ class ReportController extends Controller
      */
     public function updateBranding(Request $request)
     {
-        if (!$this->canWhiteLabel($request)) {
+        if (! $this->canWhiteLabel($request)) {
             return back()->with('flash', ['type' => 'error', 'message' => 'White-label reports require an Agency plan.']);
         }
 
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) {
+        if (! $customer) {
             return back()->with('flash', ['type' => 'error', 'message' => 'No active customer selected.']);
         }
 
@@ -147,9 +145,9 @@ class ReportController extends Controller
                 'company_name' => $validated['company_name'] ?? null,
                 'logo_url' => $validated['logo_url'] ?? null,
                 'primary_color' => $validated['primary_color'] ?? null,
-                'primary_dark' => !empty($validated['primary_color'])
+                'primary_dark' => ! empty($validated['primary_color'])
                     ? $this->darkenColor($validated['primary_color'], 30) : null,
-                'primary_darkest' => !empty($validated['primary_color'])
+                'primary_darkest' => ! empty($validated['primary_color'])
                     ? $this->darkenColor($validated['primary_color'], 60) : null,
             ],
         ]);
@@ -170,6 +168,7 @@ class ReportController extends Controller
             $subscription = $user->subscription('default');
             if ($subscription && $subscription->stripe_price) {
                 $plan = \App\Models\Plan::where('stripe_price_id', $subscription->stripe_price)->first();
+
                 return $plan && strtolower($plan->slug ?? '') === 'agency';
             }
         }
@@ -180,9 +179,9 @@ class ReportController extends Controller
     protected function darkenColor(string $hex, int $percent): string
     {
         $hex = ltrim($hex, '#');
-        $r = max(0, hexdec(substr($hex, 0, 2)) - (int)(hexdec(substr($hex, 0, 2)) * $percent / 100));
-        $g = max(0, hexdec(substr($hex, 2, 2)) - (int)(hexdec(substr($hex, 2, 2)) * $percent / 100));
-        $b = max(0, hexdec(substr($hex, 4, 2)) - (int)(hexdec(substr($hex, 4, 2)) * $percent / 100));
+        $r = max(0, hexdec(substr($hex, 0, 2)) - (int) (hexdec(substr($hex, 0, 2)) * $percent / 100));
+        $g = max(0, hexdec(substr($hex, 2, 2)) - (int) (hexdec(substr($hex, 2, 2)) * $percent / 100));
+        $b = max(0, hexdec(substr($hex, 4, 2)) - (int) (hexdec(substr($hex, 4, 2)) * $percent / 100));
 
         return sprintf('#%02x%02x%02x', $r, $g, $b);
     }

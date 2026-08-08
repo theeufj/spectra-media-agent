@@ -17,15 +17,18 @@ class InsightServiceIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected string $accountId;
+
     protected InsightService $service;
+
     protected Campaign $liveCampaign;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
+        if (! env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_FACEBOOK_INTEGRATION_TESTS=true to run.');
         }
 
@@ -33,13 +36,13 @@ class InsightServiceIntegrationTest extends TestCase
 
         $this->customer = Customer::whereNotNull('facebook_ads_account_id')->firstOrFail();
         $this->accountId = $this->customer->facebook_ads_account_id;
-        $this->service   = new InsightService($this->customer);
+        $this->service = new InsightService($this->customer);
 
         $live = Campaign::where('customer_id', $this->customer->id)
             ->whereNotNull('facebook_ads_campaign_id')
             ->first();
 
-        if (!$live) {
+        if (! $live) {
             $this->markTestSkipped('No deployed Facebook campaign found in DB.');
         }
 
@@ -130,7 +133,7 @@ class InsightServiceIntegrationTest extends TestCase
     public function test_gets_insights_by_level(): void
     {
         $result = $this->service->getAccountInsightsByLevel(
-            'act_' . $this->accountId,
+            'act_'.$this->accountId,
             now()->subDays(7)->toDateString(),
             now()->toDateString(),
             'campaign',

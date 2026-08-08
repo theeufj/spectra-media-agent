@@ -11,10 +11,10 @@ class TriggerGenerator
      *
      * Fires when a user views a specific page or all pages.
      *
-     * @param array $config Configuration:
-     *   - 'name' (optional): Trigger name
-     *   - 'url_match_type' (optional): 'all', 'contains', 'equals', 'starts_with', 'ends_with' (default: 'all')
-     *   - 'page_path' (optional): Page path to match (required if not 'all')
+     * @param  array  $config  Configuration:
+     *                         - 'name' (optional): Trigger name
+     *                         - 'url_match_type' (optional): 'all', 'contains', 'equals', 'starts_with', 'ends_with' (default: 'all')
+     *                         - 'page_path' (optional): Page path to match (required if not 'all')
      * @return array GTM trigger configuration
      */
     public function generatePageViewTrigger(array $config = []): array
@@ -76,10 +76,10 @@ class TriggerGenerator
      *
      * Fires when a purchase is completed (typically on order confirmation page).
      *
-     * @param array $config Configuration:
-     *   - 'name' (optional): Trigger name
-     *   - 'confirmation_url' (optional): URL pattern for confirmation page
-     *   - 'datalayer_event' (optional): DataLayer event name (default: 'purchase')
+     * @param  array  $config  Configuration:
+     *                         - 'name' (optional): Trigger name
+     *                         - 'confirmation_url' (optional): URL pattern for confirmation page
+     *                         - 'datalayer_event' (optional): DataLayer event name (default: 'purchase')
      * @return array GTM trigger configuration
      */
     public function generatePurchaseTrigger(array $config = []): array
@@ -140,11 +140,11 @@ class TriggerGenerator
      *
      * Fires when a user submits a form.
      *
-     * @param array $config Configuration:
-     *   - 'name' (optional): Trigger name
-     *   - 'form_selector' (optional): CSS selector for form (e.g., '#contact-form')
-     *   - 'form_id' (optional): Form ID to match
-     *   - 'form_class' (optional): Form class to match
+     * @param  array  $config  Configuration:
+     *                         - 'name' (optional): Trigger name
+     *                         - 'form_selector' (optional): CSS selector for form (e.g., '#contact-form')
+     *                         - 'form_id' (optional): Form ID to match
+     *                         - 'form_class' (optional): Form class to match
      * @return array GTM trigger configuration
      */
     public function generateFormSubmitTrigger(array $config = []): array
@@ -210,10 +210,10 @@ class TriggerGenerator
      *
      * Fires when a custom event is pushed to the DataLayer.
      *
-     * @param array $config Configuration:
-     *   - 'name' (optional): Trigger name
-     *   - 'event_name' (required): Event name to match
-     *   - 'event_condition' (optional): Additional condition
+     * @param  array  $config  Configuration:
+     *                         - 'name' (optional): Trigger name
+     *                         - 'event_name' (required): Event name to match
+     *                         - 'event_condition' (optional): Additional condition
      * @return array GTM trigger configuration
      */
     public function generateCustomEventTrigger(array $config = []): array
@@ -227,7 +227,7 @@ class TriggerGenerator
                 'event_name' => $config['event_name'],
             ]);
 
-            $name = $config['name'] ?? 'Custom Event: ' . $config['event_name'];
+            $name = $config['name'] ?? 'Custom Event: '.$config['event_name'];
             $eventName = $config['event_name'];
 
             // Build custom event trigger configuration
@@ -263,9 +263,9 @@ class TriggerGenerator
      *
      * Fires when user scrolls to a certain depth on the page.
      *
-     * @param array $config Configuration:
-     *   - 'name' (optional): Trigger name
-     *   - 'scroll_percentage' (optional): Scroll percentage (25, 50, 75, 90, 100) (default: 50)
+     * @param  array  $config  Configuration:
+     *                         - 'name' (optional): Trigger name
+     *                         - 'scroll_percentage' (optional): Scroll percentage (25, 50, 75, 90, 100) (default: 50)
      * @return array GTM trigger configuration
      */
     public function generateScrollDepthTrigger(array $config = []): array
@@ -278,8 +278,8 @@ class TriggerGenerator
 
             // Validate scroll percentage
             $validPercentages = [25, 50, 75, 90, 100];
-            if (!in_array($scrollPercentage, $validPercentages)) {
-                throw new \InvalidArgumentException('scroll_percentage must be one of: ' . implode(', ', $validPercentages));
+            if (! in_array($scrollPercentage, $validPercentages)) {
+                throw new \InvalidArgumentException('scroll_percentage must be one of: '.implode(', ', $validPercentages));
             }
 
             // Build scroll depth trigger configuration
@@ -315,11 +315,11 @@ class TriggerGenerator
      *
      * Fires when a user clicks on elements matching the selector.
      *
-     * @param array $config Configuration:
-     *   - 'name' (optional): Trigger name
-     *   - 'css_selector' (optional): CSS selector for elements to track
-     *   - 'element_id' (optional): Element ID to match
-     *   - 'element_class' (optional): Element class to match
+     * @param  array  $config  Configuration:
+     *                         - 'name' (optional): Trigger name
+     *                         - 'css_selector' (optional): CSS selector for elements to track
+     *                         - 'element_id' (optional): Element ID to match
+     *                         - 'element_class' (optional): Element class to match
      * @return array GTM trigger configuration
      */
     public function generateClickTrigger(array $config = []): array
@@ -383,11 +383,11 @@ class TriggerGenerator
     /**
      * Generate an auto-setup trigger configuration for common events.
      *
-     * @param array $events Event types to generate triggers for:
-     *   - 'pageview' => config array
-     *   - 'purchase' => config array
-     *   - 'form_submit' => config array
-     *   - 'scroll_depth' => config array
+     * @param  array  $events  Event types to generate triggers for:
+     *                         - 'pageview' => config array
+     *                         - 'purchase' => config array
+     *                         - 'form_submit' => config array
+     *                         - 'scroll_depth' => config array
      * @return array Configuration for all triggers
      */
     public function generateAutoSetupTriggers(array $events): array
@@ -400,22 +400,22 @@ class TriggerGenerator
             $triggerConfigs = [];
 
             // Generate page view triggers
-            if (!empty($events['pageview'])) {
+            if (! empty($events['pageview'])) {
                 $triggerConfigs['pageview'] = $this->generatePageViewTrigger($events['pageview']);
             }
 
             // Generate purchase triggers
-            if (!empty($events['purchase'])) {
+            if (! empty($events['purchase'])) {
                 $triggerConfigs['purchase'] = $this->generatePurchaseTrigger($events['purchase']);
             }
 
             // Generate form submit triggers
-            if (!empty($events['form_submit'])) {
+            if (! empty($events['form_submit'])) {
                 $triggerConfigs['form_submit'] = $this->generateFormSubmitTrigger($events['form_submit']);
             }
 
             // Generate scroll depth triggers
-            if (!empty($events['scroll_depth'])) {
+            if (! empty($events['scroll_depth'])) {
                 $triggerConfigs['scroll_depth'] = $this->generateScrollDepthTrigger($events['scroll_depth']);
             }
 

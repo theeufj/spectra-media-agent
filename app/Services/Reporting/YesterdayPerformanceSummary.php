@@ -3,8 +3,8 @@
 namespace App\Services\Reporting;
 
 use App\Models\Customer;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use Illuminate\Support\Carbon;
 
 class YesterdayPerformanceSummary
@@ -54,7 +54,7 @@ class YesterdayPerformanceSummary
             ')
             ->first();
 
-        if (!$data || ($data->impressions ?? 0) == 0) {
+        if (! $data || ($data->impressions ?? 0) == 0) {
             return $this->emptyMetrics();
         }
 
@@ -79,7 +79,7 @@ class YesterdayPerformanceSummary
             ')
             ->first();
 
-        if (!$data || ($data->impressions ?? 0) == 0) {
+        if (! $data || ($data->impressions ?? 0) == 0) {
             return $this->emptyMetrics();
         }
 
@@ -169,7 +169,7 @@ class YesterdayPerformanceSummary
                 ->whereDate('date', $date)
                 ->first();
 
-            if (!$google && !$facebook) {
+            if (! $google && ! $facebook) {
                 continue;
             }
 

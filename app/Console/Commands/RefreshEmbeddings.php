@@ -20,7 +20,7 @@ class RefreshEmbeddings extends Command
     {
         $model = $this->option('model');
         $only = $this->option('only');
-        $gemini = new GeminiService();
+        $gemini = new GeminiService;
 
         if (in_array($only, ['all', 'pages'])) {
             $this->refreshCustomerPages($gemini, $model);
@@ -31,6 +31,7 @@ class RefreshEmbeddings extends Command
         }
 
         $this->info('Done.');
+
         return Command::SUCCESS;
     }
 
@@ -42,7 +43,7 @@ class RefreshEmbeddings extends Command
 
         foreach ($pages as $page) {
             $text = substr(
-                $page->title . "\n" . $page->meta_description . "\n" . $page->content,
+                $page->title."\n".$page->meta_description."\n".$page->content,
                 0,
                 8000
             );
@@ -72,8 +73,9 @@ class RefreshEmbeddings extends Command
         foreach ($kbs as $kb) {
             $chunks = json_decode($kb->content, true);
 
-            if (!is_array($chunks) || empty($chunks)) {
+            if (! is_array($chunks) || empty($chunks)) {
                 $bar->advance();
+
                 continue;
             }
 
@@ -94,7 +96,7 @@ class RefreshEmbeddings extends Command
                 usleep(100_000); // 100ms rate-limit buffer
             }
 
-            if (!empty($allEmbeddings)) {
+            if (! empty($allEmbeddings)) {
                 $kb->update(['embedding' => $allEmbeddings]);
             }
 

@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\User;
-use Goutte\Client;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -17,7 +16,9 @@ class CrawlCompetitorWebsite implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $user;
+
     protected $url;
+
     protected $customerId;
 
     /**
@@ -47,7 +48,7 @@ class CrawlCompetitorWebsite implements ShouldQueue
                 CrawlPage::dispatch($this->user, $this->url, $this->customerId);
             }
         } catch (\Exception $e) {
-            Log::error("Error crawling competitor website {$this->url}: " . $e->getMessage(), [
+            Log::error("Error crawling competitor website {$this->url}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
         }
@@ -60,7 +61,7 @@ class CrawlCompetitorWebsite implements ShouldQueue
     {
         // 1. Check robots.txt
         try {
-            $robotsUrl = rtrim($this->url, '/') . '/robots.txt';
+            $robotsUrl = rtrim($this->url, '/').'/robots.txt';
             $response = Http::get($robotsUrl);
 
             if ($response->successful()) {
@@ -70,19 +71,19 @@ class CrawlCompetitorWebsite implements ShouldQueue
                 }
             }
         } catch (\Exception $e) {
-            Log::warning("Could not fetch or parse robots.txt for {$this->url}: " . $e->getMessage());
+            Log::warning("Could not fetch or parse robots.txt for {$this->url}: ".$e->getMessage());
         }
 
         // 2. Fallback to common location
         try {
-            $sitemapUrl = rtrim($this->url, '/') . '/sitemap.xml';
+            $sitemapUrl = rtrim($this->url, '/').'/sitemap.xml';
             $response = Http::head($sitemapUrl);
 
             if ($response->successful()) {
                 return $sitemapUrl;
             }
         } catch (\Exception $e) {
-            Log::warning("Could not find sitemap at common location for {$this->url}: " . $e->getMessage());
+            Log::warning("Could not find sitemap at common location for {$this->url}: ".$e->getMessage());
         }
 
         return null;
@@ -93,7 +94,7 @@ class CrawlCompetitorWebsite implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('CrawlCompetitorWebsite failed: ' . $exception->getMessage(), [
+        Log::error('CrawlCompetitorWebsite failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

@@ -2,8 +2,8 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class AdSetService extends BaseFacebookAdsService
 {
@@ -15,8 +15,7 @@ class AdSetService extends BaseFacebookAdsService
     /**
      * List all ad sets for a campaign.
      *
-     * @param string $campaignId Campaign ID
-     * @return ?array
+     * @param  string  $campaignId  Campaign ID
      */
     public function listAdSets(string $campaignId): ?array
     {
@@ -30,16 +29,18 @@ class AdSetService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'adset_count' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
             return [];
         } catch (\Exception $e) {
-            Log::error("Error listing ad sets: " . $e->getMessage(), [
+            Log::error('Error listing ad sets: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -47,10 +48,9 @@ class AdSetService extends BaseFacebookAdsService
     /**
      * List ad sets for an ad account (account-level).
      *
-     * @param string $accountId Account ID (with act_ prefix)
-     * @param array $filters Optional API filtering
-     * @param int $limit Max results
-     * @return array
+     * @param  string  $accountId  Account ID (with act_ prefix)
+     * @param  array  $filters  Optional API filtering
+     * @param  int  $limit  Max results
      */
     public function listAdSetsByAccount(string $accountId, array $filters = [], int $limit = 100): array
     {
@@ -60,7 +60,7 @@ class AdSetService extends BaseFacebookAdsService
                 'limit' => $limit,
             ];
 
-            if (!empty($filters)) {
+            if (! empty($filters)) {
                 $params['filtering'] = json_encode($filters);
             }
 
@@ -68,9 +68,10 @@ class AdSetService extends BaseFacebookAdsService
 
             return $response['data'] ?? [];
         } catch (\Exception $e) {
-            Log::error("Error listing ad sets by account: " . $e->getMessage(), [
+            Log::error('Error listing ad sets by account: '.$e->getMessage(), [
                 'account_id' => $accountId,
             ]);
+
             return [];
         }
     }
@@ -78,13 +79,12 @@ class AdSetService extends BaseFacebookAdsService
     /**
      * Create a new ad set.
      *
-     * @param string $campaignId Campaign ID
-     * @param string $adSetName Ad set name
-     * @param int $dailyBudget Daily budget in cents
-     * @param array $targeting Targeting parameters
-     * @param string $billingEvent Billing event (e.g., 'IMPRESSIONS', 'LINK_CLICKS', 'PURCHASE')
-     * @param string $optimizationGoal Optimization goal (e.g., 'LINK_CLICKS', 'CONVERSIONS')
-     * @return ?array
+     * @param  string  $campaignId  Campaign ID
+     * @param  string  $adSetName  Ad set name
+     * @param  int  $dailyBudget  Daily budget in cents
+     * @param  array  $targeting  Targeting parameters
+     * @param  string  $billingEvent  Billing event (e.g., 'IMPRESSIONS', 'LINK_CLICKS', 'PURCHASE')
+     * @param  string  $optimizationGoal  Optimization goal (e.g., 'LINK_CLICKS', 'CONVERSIONS')
      */
     public function createAdSet(
         string $accountId,
@@ -107,20 +107,20 @@ class AdSetService extends BaseFacebookAdsService
             if ($optimizationGoal === 'LEAD_GENERATION'
                 && $promotedObject !== null
                 && isset($promotedObject['pixel_id'])
-                && !isset($promotedObject['leadgen_id'])
+                && ! isset($promotedObject['leadgen_id'])
             ) {
-                Log::info("AdSetService: Auto-correcting optimization_goal from LEAD_GENERATION to OFFSITE_CONVERSIONS (pixel-based tracking detected)");
+                Log::info('AdSetService: Auto-correcting optimization_goal from LEAD_GENERATION to OFFSITE_CONVERSIONS (pixel-based tracking detected)');
                 $optimizationGoal = 'OFFSITE_CONVERSIONS';
             }
 
             $data = [
-                'campaign_id'      => $campaignId,
-                'name'             => $adSetName,
+                'campaign_id' => $campaignId,
+                'name' => $adSetName,
                 // No daily_budget here — campaign uses CBO (Campaign Budget Optimisation);
                 // the budget set on the campaign flows down automatically.
-                'billing_event'    => $billingEvent,
+                'billing_event' => $billingEvent,
                 'optimization_goal' => $optimizationGoal,
-                'status'           => $status,
+                'status' => $status,
             ];
 
             if ($promotedObject !== null) {
@@ -128,9 +128,9 @@ class AdSetService extends BaseFacebookAdsService
             }
 
             // Add targeting if provided
-            if (!empty($targeting)) {
+            if (! empty($targeting)) {
                 // Meta requires advantage_audience flag in targeting_automation
-                if (!isset($targeting['targeting_automation'])) {
+                if (! isset($targeting['targeting_automation'])) {
                     $targeting['targeting_automation'] = ['advantage_audience' => 1];
                 }
                 // Facebook rejects age_max < 65 when Advantage+ audience is active (error 1870189).
@@ -156,22 +156,25 @@ class AdSetService extends BaseFacebookAdsService
                     'adset_id' => $response['id'],
                     'adset_name' => $adSetName,
                 ]);
+
                 return $response;
             }
 
-            Log::error("Failed to create ad set", [
+            Log::error('Failed to create ad set', [
                 'customer_id' => $this->customer->id,
                 'campaign_id' => $campaignId,
                 'response' => $response,
             ]);
+
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating ad set: " . $e->getMessage(), [
+            Log::error('Error creating ad set: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
                 'adset_name' => $adSetName,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -179,9 +182,8 @@ class AdSetService extends BaseFacebookAdsService
     /**
      * Update an ad set.
      *
-     * @param string $adSetId Ad set ID
-     * @param array $updateData Data to update
-     * @return bool
+     * @param  string  $adSetId  Ad set ID
+     * @param  array  $updateData  Data to update
      */
     public function updateAdSet(string $adSetId, array $updateData): bool
     {
@@ -192,21 +194,24 @@ class AdSetService extends BaseFacebookAdsService
                 Log::info("Updated ad set {$adSetId}", [
                     'customer_id' => $this->customer->id,
                 ]);
+
                 return true;
             }
 
-            Log::error("Failed to update ad set", [
+            Log::error('Failed to update ad set', [
                 'customer_id' => $this->customer->id,
                 'adset_id' => $adSetId,
                 'response' => $response,
             ]);
+
             return false;
         } catch (\Exception $e) {
-            Log::error("Error updating ad set: " . $e->getMessage(), [
+            Log::error('Error updating ad set: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return false;
         }
     }
@@ -214,10 +219,9 @@ class AdSetService extends BaseFacebookAdsService
     /**
      * Get ad set performance insights.
      *
-     * @param string $adSetId Ad set ID
-     * @param string $dateStart Start date (YYYY-MM-DD)
-     * @param string $dateEnd End date (YYYY-MM-DD)
-     * @return ?array
+     * @param  string  $adSetId  Ad set ID
+     * @param  string  $dateStart  Start date (YYYY-MM-DD)
+     * @param  string  $dateEnd  End date (YYYY-MM-DD)
      */
     public function getAdSetInsights(string $adSetId, string $dateStart, string $dateEnd): ?array
     {
@@ -233,16 +237,18 @@ class AdSetService extends BaseFacebookAdsService
                     'customer_id' => $this->customer->id,
                     'data_points' => count($response['data']),
                 ]);
+
                 return $response['data'];
             }
 
             return [];
         } catch (\Exception $e) {
-            Log::error("Error getting ad set insights: " . $e->getMessage(), [
+            Log::error('Error getting ad set insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }

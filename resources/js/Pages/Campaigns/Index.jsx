@@ -3,6 +3,27 @@ import { Head, Link, router } from '@inertiajs/react';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import React from 'react';
 
+// Mirrors App\Enums\CampaignStatus. Values are canonical lowercase — the column
+// previously held mixed casing ('DRAFT', 'PAUSED') and this badge only ever
+// special-cased 'DRAFT', so paused campaigns rendered as green/active.
+const CAMPAIGN_STATUS_LABELS = {
+    draft: 'Draft',
+    pending_admin_deployment: 'Pending deployment',
+    active: 'Active',
+    paused: 'Paused',
+    completed: 'Completed',
+    ended: 'Ended',
+};
+
+const CAMPAIGN_STATUS_STYLES = {
+    draft: 'bg-yellow-100 text-yellow-800',
+    pending_admin_deployment: 'bg-yellow-100 text-yellow-800',
+    active: 'bg-green-100 text-green-800',
+    paused: 'bg-gray-200 text-gray-800',
+    completed: 'bg-blue-100 text-blue-800',
+    ended: 'bg-gray-100 text-gray-600',
+};
+
 export default function Index({ auth, campaigns = [] }) {
     const [expandedCampaign, setExpandedCampaign] = React.useState(null);
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
@@ -74,9 +95,9 @@ export default function Index({ auth, campaigns = [] }) {
                                         </div>
                                         <div className="flex items-center gap-3 ml-8 sm:ml-0">
                                             <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                                                campaign.status === 'DRAFT' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'
+                                                CAMPAIGN_STATUS_STYLES[campaign.status] ?? 'bg-gray-100 text-gray-800'
                                             }`}>
-                                                {campaign.status}
+                                                {CAMPAIGN_STATUS_LABELS[campaign.status] ?? campaign.status}
                                             </span>
                                             <span className="text-sm font-semibold text-flame-orange-600 bg-flame-orange-50 px-3 py-1 rounded">{campaign.strategies?.length || 0} {(campaign.strategies?.length || 0) === 1 ? 'strategy' : 'strategies'}</span>
                                         </div>

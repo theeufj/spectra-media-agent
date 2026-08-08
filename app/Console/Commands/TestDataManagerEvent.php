@@ -35,12 +35,14 @@ class TestDataManagerEvent extends Command
         $mcc = MccAccount::getActive();
         if (! $mcc) {
             $this->error('No active MCC account.');
+
             return self::FAILURE;
         }
 
         $operatingAccountId = config('conversions.google_ads_customer_id');
         if (! $operatingAccountId) {
             $this->error('SPECTRA_GOOGLE_ADS_CUSTOMER_ID (config conversions.google_ads_customer_id) is not set.');
+
             return self::FAILURE;
         }
 
@@ -52,6 +54,7 @@ class TestDataManagerEvent extends Command
         }
         if (! $actionId) {
             $this->error('No conversion action id — pass --action=<id>.');
+
             return self::FAILURE;
         }
 
@@ -79,11 +82,13 @@ class TestDataManagerEvent extends Command
 
         if ($result['success']) {
             $this->info('SUCCESS — request accepted by Data Manager API.');
-            $this->line('  requestId: ' . ($result['requestId'] ?? '(none)'));
+            $this->line('  requestId: '.($result['requestId'] ?? '(none)'));
+
             return self::SUCCESS;
         }
 
-        $this->error('FAILED: ' . ($result['error'] ?? 'unknown error'));
+        $this->error('FAILED: '.($result['error'] ?? 'unknown error'));
+
         return self::FAILURE;
     }
 }

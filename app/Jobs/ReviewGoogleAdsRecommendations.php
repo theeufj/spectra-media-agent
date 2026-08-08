@@ -6,12 +6,12 @@ use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\User;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\Agents\CreativeIntelligenceAgent;
+use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\ApplyRecommendation;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
 use App\Services\NotificationService;
-use App\Services\Agents\CreativeIntelligenceAgent;
-use App\Services\GeminiService;
 use Google\Ads\GoogleAds\V22\Enums\RecommendationTypeEnum\RecommendationType;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -42,9 +42,10 @@ use Illuminate\Support\Facades\Log;
  */
 class ReviewGoogleAdsRecommendations implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries   = 2;
+    public $tries = 2;
+
     public $timeout = 300;
 
     private const AUTO_APPLY = [
@@ -73,11 +74,11 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
     private const NEEDS_HUMAN = [
         RecommendationType::SHOPPING_FIX_SUSPENDED_MERCHANT_CENTER_ACCOUNT => 'Merchant Center account suspension — requires human review to resolve policy or payment issue',
-        RecommendationType::SHOPPING_FIX_DISAPPROVED_PRODUCTS               => 'Disapproved products — product feed content needs human review',
+        RecommendationType::SHOPPING_FIX_DISAPPROVED_PRODUCTS => 'Disapproved products — product feed content needs human review',
     ];
 
     public function __construct(
-        private readonly NotificationService $notifications = new NotificationService()
+        private readonly NotificationService $notifications = new NotificationService
     ) {}
 
     public function handle(): void
@@ -85,8 +86,8 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
         $runStart = $this->startRun();
 
         $customers = Customer::whereNotNull('google_ads_customer_id')
-            ->whereHas('campaigns', fn($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id'))
-            ->with(['campaigns' => fn($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id')])
+            ->whereHas('campaigns', fn ($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id'))
+            ->with(['campaigns' => fn ($q) => $q->where('status', 'active')->whereNotNull('google_ads_campaign_id')])
             ->get();
 
         Log::info("ReviewGoogleAdsRecommendations: Checking {$customers->count()} customer(s)");
@@ -99,19 +100,19 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
                 $actions += $this->reviewCustomer($customer);
             } catch (\Throwable $e) {
                 $errors++;
-                Log::error("ReviewGoogleAdsRecommendations: Failed for customer {$customer->id}: " . $e->getMessage());
+                Log::error("ReviewGoogleAdsRecommendations: Failed for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
-        $this->finishRun($runStart, actions: $actions, errors: $errors, scope: $customers->count() . ' customers');
+        $this->finishRun($runStart, actions: $actions, errors: $errors, scope: $customers->count().' customers');
     }
 
     private function reviewCustomer(Customer $customer): int
     {
-        $customerId     = $customer->cleanGoogleCustomerId();
-        $getRecs        = new GetGoogleAdsRecommendations($customer);
-        $apply          = new ApplyRecommendation($customer);
-        $dismiss        = new DismissRecommendation($customer);
+        $customerId = $customer->cleanGoogleCustomerId();
+        $getRecs = new GetGoogleAdsRecommendations($customer);
+        $apply = new ApplyRecommendation($customer);
+        $dismiss = new DismissRecommendation($customer);
 
         $allRecs = ($getRecs)($customerId);
 
@@ -119,37 +120,42 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
             return 0;
         }
 
-        $toApply        = [];
-        $toDismiss      = [];
+        $toApply = [];
+        $toDismiss = [];
         $creativeCampaigns = [];  // campaign_resource => Campaign model
-        $humanNeeded    = [];
+        $humanNeeded = [];
 
         foreach ($allRecs as $rec) {
             $type = $rec['type'];
 
             if (in_array($type, self::AUTO_APPLY)) {
                 $toApply[] = $rec['resource_name'];
+
                 continue;
             }
 
             if (in_array($type, self::AUTO_FIX_CREATIVE)) {
                 $creativeCampaigns[$rec['campaign_resource']] = true;
                 $toDismiss[] = $rec['resource_name'];
+
                 continue;
             }
 
             if (in_array($type, self::AUTO_DISMISS)) {
                 $toDismiss[] = $rec['resource_name'];
+
                 continue;
             }
 
             if (in_array($type, self::NOTIFY_CLIENT_BUDGET)) {
                 $this->notifyClientBudget($customer, $rec);
+
                 continue;
             }
 
             if (isset(self::NEEDS_HUMAN[$type])) {
                 $humanNeeded[$type] = self::NEEDS_HUMAN[$type];
+
                 continue;
             }
 
@@ -164,13 +170,13 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
         }
 
         // Auto-apply bidding/CPA recommendations
-        if (!empty($toApply)) {
+        if (! empty($toApply)) {
             $ok = ($apply)($customerId, $toApply);
             if ($ok) {
                 AgentActivity::record(
                     'google_ads_recommendations',
                     'recommendations_applied',
-                    'Auto-applied ' . count($toApply) . ' Google Ads recommendation(s) for "' . $customer->name . '"',
+                    'Auto-applied '.count($toApply).' Google Ads recommendation(s) for "'.$customer->name.'"',
                     $customer->id,
                     null,
                     ['applied' => $toApply]
@@ -179,21 +185,21 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
         }
 
         // Dismiss auto-handled and creative ones (creative agent will fix the actual issue)
-        if (!empty($toDismiss)) {
+        if (! empty($toDismiss)) {
             ($dismiss)($customerId, $toDismiss);
         }
 
         // Trigger creative agent for campaigns with weak ad copy
-        if (!empty($creativeCampaigns)) {
+        if (! empty($creativeCampaigns)) {
             $this->triggerCreativeFix($customer, array_keys($creativeCampaigns));
         }
 
         // Notify admin only for things we truly can't fix
-        if (!empty($humanNeeded)) {
+        if (! empty($humanNeeded)) {
             $this->notifyAdminHumanRequired($customer, $humanNeeded);
         }
 
-        Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — applied: " . count($toApply) . ", dismissed: " . count($toDismiss) . ", creative-fix: " . count($creativeCampaigns) . ", human-needed: " . count($humanNeeded));
+        Log::info("ReviewGoogleAdsRecommendations: Customer {$customer->id} — applied: ".count($toApply).', dismissed: '.count($toDismiss).', creative-fix: '.count($creativeCampaigns).', human-needed: '.count($humanNeeded));
 
         return count($toApply) + count($toDismiss) + count($creativeCampaigns);
     }
@@ -202,7 +208,7 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
     {
         $user = $customer->users()->wherePivot('role', 'owner')->first()
             ?? $customer->users()->first();
-        if (!$user) {
+        if (! $user) {
             return;
         }
 
@@ -238,14 +244,14 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
                 $agent->analyze($campaign);
                 $fixed++;
             } catch (\Throwable $e) {
-                Log::error("ReviewGoogleAdsRecommendations: Creative fix failed for campaign {$campaign->id}: " . $e->getMessage());
+                Log::error("ReviewGoogleAdsRecommendations: Creative fix failed for campaign {$campaign->id}: ".$e->getMessage());
             }
         }
 
         AgentActivity::record(
             'google_ads_recommendations',
             'creative_fix_triggered',
-            'Ran creative agent on ' . $fixed . ' campaign(s) with weak ad copy for "' . $customer->name . '"',
+            'Ran creative agent on '.$fixed.' campaign(s) with weak ad copy for "'.$customer->name.'"',
             $customer->id
         );
     }
@@ -254,12 +260,12 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
     {
         CriticalAgentAlert::deliver(
             'google_ads_human_required',
-            $customer->name . ': Google Ads issue requires human review',
-            'The following issue(s) in "' . $customer->name . '" cannot be fixed automatically and need a human to resolve:',
+            $customer->name.': Google Ads issue requires human review',
+            'The following issue(s) in "'.$customer->name.'" cannot be fixed automatically and need a human to resolve:',
             [
-                'issues'          => array_values($issues),
-                'customer_name'   => $customer->name,
-                'action_required' => 'Log into the Google Ads account for ' . $customer->name . ' and resolve the flagged issue(s).',
+                'issues' => array_values($issues),
+                'customer_name' => $customer->name,
+                'action_required' => 'Log into the Google Ads account for '.$customer->name.' and resolve the flagged issue(s).',
             ],
             CriticalAgentAlert::RECIPIENTS_ADMINS,
             $customer
@@ -268,7 +274,7 @@ class ReviewGoogleAdsRecommendations implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error("ReviewGoogleAdsRecommendations failed: " . $exception->getMessage());
+        Log::error('ReviewGoogleAdsRecommendations failed: '.$exception->getMessage());
         $this->recordRunFailure($exception);
     }
 }

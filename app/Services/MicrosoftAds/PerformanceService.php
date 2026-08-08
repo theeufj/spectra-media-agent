@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
 class PerformanceService extends BaseMicrosoftAdsService
 {
     private const POLL_ATTEMPTS = 12;
+
     private const POLL_WAIT_SECONDS = 5;
 
     /**
@@ -20,26 +21,26 @@ class PerformanceService extends BaseMicrosoftAdsService
     public function syncPerformance(Campaign $campaign, int $days = 30): array
     {
         $campaignId = $campaign->microsoft_ads_campaign_id;
-        if (!$campaignId) {
+        if (! $campaignId) {
             return ['error' => 'No Microsoft Ads campaign ID'];
         }
 
         $startDate = now()->subDays($days)->format('Y-m-d');
-        $endDate   = now()->format('Y-m-d');
+        $endDate = now()->format('Y-m-d');
 
         // Step 1: Submit the report request
         $submission = $this->reportingCallWithRetry('SubmitGenerateReport', [
             'ReportRequest' => [
-                'Type'                  => 'CampaignPerformanceReportRequest',
-                'Format'                => 'Csv',
-                'Language'              => 'English',
-                'ReportName'            => "Campaign Performance {$startDate} to {$endDate}",
+                'Type' => 'CampaignPerformanceReportRequest',
+                'Format' => 'Csv',
+                'Language' => 'English',
+                'ReportName' => "Campaign Performance {$startDate} to {$endDate}",
                 'ReturnOnlyCompleteData' => false,
-                'ExcludeReportHeader'   => true,
-                'ExcludeReportFooter'   => true,
+                'ExcludeReportHeader' => true,
+                'ExcludeReportFooter' => true,
                 'Time' => [
                     'CustomDateRangeStart' => $this->formatDate($startDate),
-                    'CustomDateRangeEnd'   => $this->formatDate($endDate),
+                    'CustomDateRangeEnd' => $this->formatDate($endDate),
                 ],
                 'Columns' => [
                     'CampaignPerformanceReportColumn' => [
@@ -48,7 +49,7 @@ class PerformanceService extends BaseMicrosoftAdsService
                     ],
                 ],
                 'Filter' => ['CampaignIds' => ['long' => [$campaignId]]],
-                'Scope'  => [
+                'Scope' => [
                     'AccountIds' => ['long' => [$this->customer->microsoft_ads_account_id]],
                 ],
                 'Aggregation' => 'Daily',
@@ -56,19 +57,20 @@ class PerformanceService extends BaseMicrosoftAdsService
         ]);
 
         $reportRequestId = $submission['ReportRequestId'] ?? null;
-        if (!$reportRequestId) {
+        if (! $reportRequestId) {
             Log::error('Microsoft Ads: Failed to submit performance report', ['campaign_id' => $campaign->id]);
+
             return ['error' => 'Report submission failed'];
         }
 
         Log::info('Microsoft Ads: Performance report submitted', [
-            'campaign_id'      => $campaign->id,
+            'campaign_id' => $campaign->id,
             'report_request_id' => $reportRequestId,
         ]);
 
         // Step 2: Poll until the report is ready
         $downloadUrl = $this->pollForReportCompletion($reportRequestId);
-        if (!$downloadUrl) {
+        if (! $downloadUrl) {
             return ['error' => 'Report did not complete within polling window', 'report_request_id' => $reportRequestId];
         }
 
@@ -76,6 +78,7 @@ class PerformanceService extends BaseMicrosoftAdsService
         $rows = $this->downloadAndParseCsv($downloadUrl);
         if (empty($rows)) {
             Log::info('Microsoft Ads: No performance data returned', ['campaign_id' => $campaign->id]);
+
             return ['rows_stored' => 0];
         }
 
@@ -84,7 +87,7 @@ class PerformanceService extends BaseMicrosoftAdsService
 
         Log::info('Microsoft Ads: Performance data synced', [
             'campaign_id' => $campaign->id,
-            'rows_stored'  => $stored,
+            'rows_stored' => $stored,
         ]);
 
         return ['rows_stored' => $stored];
@@ -97,20 +100,20 @@ class PerformanceService extends BaseMicrosoftAdsService
     public function getSearchTerms(string $campaignId, int $days = 30): array
     {
         $startDate = now()->subDays($days)->format('Y-m-d');
-        $endDate   = now()->format('Y-m-d');
+        $endDate = now()->format('Y-m-d');
 
         $submission = $this->reportingCallWithRetry('SubmitGenerateReport', [
             'ReportRequest' => [
-                'Type'                  => 'SearchQueryPerformanceReportRequest',
-                'Format'                => 'Csv',
-                'Language'              => 'English',
-                'ReportName'            => "Search Terms {$startDate} to {$endDate}",
+                'Type' => 'SearchQueryPerformanceReportRequest',
+                'Format' => 'Csv',
+                'Language' => 'English',
+                'ReportName' => "Search Terms {$startDate} to {$endDate}",
                 'ReturnOnlyCompleteData' => false,
-                'ExcludeReportHeader'   => true,
-                'ExcludeReportFooter'   => true,
+                'ExcludeReportHeader' => true,
+                'ExcludeReportFooter' => true,
                 'Time' => [
                     'CustomDateRangeStart' => $this->formatDate($startDate),
-                    'CustomDateRangeEnd'   => $this->formatDate($endDate),
+                    'CustomDateRangeEnd' => $this->formatDate($endDate),
                 ],
                 'Columns' => [
                     'SearchQueryPerformanceReportColumn' => [
@@ -118,20 +121,21 @@ class PerformanceService extends BaseMicrosoftAdsService
                         'Impressions', 'Clicks', 'Spend', 'Conversions', 'Ctr',
                     ],
                 ],
-                'Filter'      => ['CampaignIds' => ['long' => [$campaignId]]],
-                'Scope'       => ['AccountIds' => ['long' => [$this->customer->microsoft_ads_account_id]]],
+                'Filter' => ['CampaignIds' => ['long' => [$campaignId]]],
+                'Scope' => ['AccountIds' => ['long' => [$this->customer->microsoft_ads_account_id]]],
                 'Aggregation' => 'Summary',
             ],
         ]);
 
         $reportRequestId = $submission['ReportRequestId'] ?? null;
-        if (!$reportRequestId) {
+        if (! $reportRequestId) {
             Log::error('Microsoft Ads: Failed to submit search terms report', ['campaign_id' => $campaignId]);
+
             return [];
         }
 
         $downloadUrl = $this->pollForReportCompletion($reportRequestId);
-        if (!$downloadUrl) {
+        if (! $downloadUrl) {
             return [];
         }
 
@@ -140,13 +144,13 @@ class PerformanceService extends BaseMicrosoftAdsService
         // Normalise to the same shape Google's search term report returns
         return array_map(fn ($row) => [
             'search_term' => $row['searchquery'] ?? $row['search query'] ?? '',
-            'impressions' => (int)   ($row['impressions'] ?? 0),
-            'clicks'      => (int)   ($row['clicks']      ?? 0),
-            'cost'        => (float) ($row['spend']        ?? 0),
-            'conversions' => (float) ($row['conversions']  ?? 0),
-            'ctr'         => (float) ($row['ctr']          ?? 0),
-            'ad_group_id' => $row['adgroupid']  ?? $row['ad group id']  ?? '',
-            'campaign_id' => $row['campaignid'] ?? $row['campaign id']  ?? '',
+            'impressions' => (int) ($row['impressions'] ?? 0),
+            'clicks' => (int) ($row['clicks'] ?? 0),
+            'cost' => (float) ($row['spend'] ?? 0),
+            'conversions' => (float) ($row['conversions'] ?? 0),
+            'ctr' => (float) ($row['ctr'] ?? 0),
+            'ad_group_id' => $row['adgroupid'] ?? $row['ad group id'] ?? '',
+            'campaign_id' => $row['campaignid'] ?? $row['campaign id'] ?? '',
         ], $rows);
     }
 
@@ -160,18 +164,19 @@ class PerformanceService extends BaseMicrosoftAdsService
             MicrosoftAdsPerformanceData::updateOrCreate(
                 ['campaign_id' => $campaign->id, 'date' => $row['date']],
                 [
-                    'impressions'      => $row['impressions']      ?? 0,
-                    'clicks'           => $row['clicks']           ?? 0,
-                    'cost'             => $row['cost']             ?? 0,
-                    'conversions'      => $row['conversions']      ?? 0,
+                    'impressions' => $row['impressions'] ?? 0,
+                    'clicks' => $row['clicks'] ?? 0,
+                    'cost' => $row['cost'] ?? 0,
+                    'conversions' => $row['conversions'] ?? 0,
                     'conversion_value' => $row['conversion_value'] ?? 0,
-                    'ctr'              => $row['ctr']              ?? 0,
-                    'cpc'              => $row['cpc']              ?? 0,
-                    'cpa'              => $row['cpa']              ?? 0,
+                    'ctr' => $row['ctr'] ?? 0,
+                    'cpc' => $row['cpc'] ?? 0,
+                    'cpa' => $row['cpa'] ?? 0,
                 ]
             );
             $stored++;
         }
+
         return $stored;
     }
 
@@ -188,12 +193,12 @@ class PerformanceService extends BaseMicrosoftAdsService
                 'ReportRequestId' => $reportRequestId,
             ]);
 
-            $status      = $result['ReportRequestStatus']['Status'] ?? null;
+            $status = $result['ReportRequestStatus']['Status'] ?? null;
             $downloadUrl = $result['ReportRequestStatus']['ReportDownloadUrl'] ?? null;
 
-            Log::info("Microsoft Ads: Report poll {$attempt}/" . self::POLL_ATTEMPTS, [
+            Log::info("Microsoft Ads: Report poll {$attempt}/".self::POLL_ATTEMPTS, [
                 'report_request_id' => $reportRequestId,
-                'status'            => $status,
+                'status' => $status,
             ]);
 
             if ($status === 'Success') {
@@ -202,9 +207,10 @@ class PerformanceService extends BaseMicrosoftAdsService
 
             if ($status === 'Error' || $status === 'Expired') {
                 Log::error('Microsoft Ads: Report generation failed', [
-                    'status'            => $status,
+                    'status' => $status,
                     'report_request_id' => $reportRequestId,
                 ]);
+
                 return null;
             }
 
@@ -214,6 +220,7 @@ class PerformanceService extends BaseMicrosoftAdsService
         }
 
         Log::warning('Microsoft Ads: Report polling timed out', ['report_request_id' => $reportRequestId]);
+
         return null;
     }
 
@@ -226,10 +233,11 @@ class PerformanceService extends BaseMicrosoftAdsService
         try {
             $response = Http::timeout(60)->get($downloadUrl);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::error('Microsoft Ads: Report download failed', [
                     'status' => $response->status(),
                 ]);
+
                 return [];
             }
 
@@ -238,7 +246,7 @@ class PerformanceService extends BaseMicrosoftAdsService
             // ZIP detection (PK magic bytes)
             if (str_starts_with($content, "PK\x03\x04")) {
                 $content = $this->extractCsvFromZip($content);
-                if (!$content) {
+                if (! $content) {
                     return [];
                 }
             }
@@ -246,17 +254,18 @@ class PerformanceService extends BaseMicrosoftAdsService
             return $this->parseCsvContent($content);
         } catch (\Exception $e) {
             Log::error('Microsoft Ads: Report download exception', ['error' => $e->getMessage()]);
+
             return [];
         }
     }
 
     private function extractCsvFromZip(string $zipContent): ?string
     {
-        $tmpPath = tempnam(sys_get_temp_dir(), 'msads_') . '.zip';
+        $tmpPath = tempnam(sys_get_temp_dir(), 'msads_').'.zip';
         file_put_contents($tmpPath, $zipContent);
 
         try {
-            $zip = new \ZipArchive();
+            $zip = new \ZipArchive;
             if ($zip->open($tmpPath) !== true) {
                 return null;
             }
@@ -270,9 +279,10 @@ class PerformanceService extends BaseMicrosoftAdsService
             }
 
             $zip->close();
+
             return $csv;
         } finally {
-            if (file_exists($tmpPath) && !unlink($tmpPath)) {
+            if (file_exists($tmpPath) && ! unlink($tmpPath)) {
                 Log::warning('Microsoft Ads: Failed to delete temp zip', ['path' => $tmpPath]);
             }
         }
@@ -284,7 +294,7 @@ class PerformanceService extends BaseMicrosoftAdsService
      */
     private function parseCsvContent(string $content): array
     {
-        $rows    = [];
+        $rows = [];
         $headers = null;
 
         foreach (explode("\n", $content) as $line) {
@@ -301,6 +311,7 @@ class PerformanceService extends BaseMicrosoftAdsService
                 if (in_array('timeperiod', $normalized) || in_array('searchquery', $normalized)) {
                     $headers = $normalized;
                 }
+
                 // If not a header row, skip (report meta lines)
                 continue;
             }
@@ -313,7 +324,7 @@ class PerformanceService extends BaseMicrosoftAdsService
 
             // Campaign performance rows have a date in TimePeriod (YYYY-MM-DD or MM/DD/YYYY)
             $rawDate = $row['timeperiod'] ?? '';
-            if (!$rawDate) {
+            if (! $rawDate) {
                 continue;
             }
 
@@ -325,15 +336,15 @@ class PerformanceService extends BaseMicrosoftAdsService
             }
 
             $rows[] = [
-                'date'             => $date,
-                'impressions'      => (int)   str_replace(',', '', $row['impressions']        ?? 0),
-                'clicks'           => (int)   str_replace(',', '', $row['clicks']             ?? 0),
-                'cost'             => (float) str_replace(',', '', $row['spend']              ?? 0),
-                'conversions'      => (float) str_replace(',', '', $row['conversions']        ?? 0),
-                'conversion_value' => (float) str_replace(',', '', $row['revenue']            ?? 0),
-                'ctr'              => (float) str_replace(['%', ','], '', $row['ctr']         ?? 0),
-                'cpc'              => (float) str_replace(',', '', $row['averagecpc']         ?? 0),
-                'cpa'              => (float) str_replace(',', '', $row['costperconversion']  ?? 0),
+                'date' => $date,
+                'impressions' => (int) str_replace(',', '', $row['impressions'] ?? 0),
+                'clicks' => (int) str_replace(',', '', $row['clicks'] ?? 0),
+                'cost' => (float) str_replace(',', '', $row['spend'] ?? 0),
+                'conversions' => (float) str_replace(',', '', $row['conversions'] ?? 0),
+                'conversion_value' => (float) str_replace(',', '', $row['revenue'] ?? 0),
+                'ctr' => (float) str_replace(['%', ','], '', $row['ctr'] ?? 0),
+                'cpc' => (float) str_replace(',', '', $row['averagecpc'] ?? 0),
+                'cpa' => (float) str_replace(',', '', $row['costperconversion'] ?? 0),
             ] + $row; // keep raw row for search-terms callers that need extra cols
         }
 
@@ -343,6 +354,7 @@ class PerformanceService extends BaseMicrosoftAdsService
     protected function formatDate(string $date): array
     {
         $d = Carbon::parse($date);
+
         return ['Day' => $d->day, 'Month' => $d->month, 'Year' => $d->year];
     }
 }

@@ -3,7 +3,6 @@
 namespace Tests\Unit;
 
 use App\Models\AdSpendCredit;
-use App\Models\Customer;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 

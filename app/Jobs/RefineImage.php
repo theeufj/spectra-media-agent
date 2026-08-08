@@ -18,14 +18,14 @@ class RefineImage implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $timeout = 900;
 
     public function __construct(
         protected ImageCollateral $originalImage,
         protected string $prompt,
         protected ?string $contextImagePath = null
-    ) {
-    }
+    ) {}
 
     public function handle(GeminiService $geminiService): void
     {
@@ -34,8 +34,9 @@ class RefineImage implements ShouldQueue
         try {
             // Check free-tier image limit (refinement creates a new record)
             $campaign = $this->originalImage->campaign;
-            if ($campaign && !ImageCollateral::canGenerateForCampaign($campaign)) {
+            if ($campaign && ! ImageCollateral::canGenerateForCampaign($campaign)) {
                 Log::info("Image limit reached for Campaign ID: {$campaign->id}, skipping refinement");
+
                 return;
             }
 
@@ -52,8 +53,8 @@ class RefineImage implements ShouldQueue
 
             // Add the user-uploaded context image, if provided
             if ($this->contextImagePath) {
-                $fullPath = storage_path('app/' . $this->contextImagePath);
-                if (!file_exists($fullPath)) {
+                $fullPath = storage_path('app/'.$this->contextImagePath);
+                if (! file_exists($fullPath)) {
                     throw new \Exception("Temporary context image not found at path: {$fullPath}");
                 }
                 $uploadedImageData = file_get_contents($fullPath);
@@ -66,7 +67,7 @@ class RefineImage implements ShouldQueue
             // Generate a single new image based on the prompt and context
             $imageData = $geminiService->refineImage($this->prompt, $contextImages);
 
-            if (empty($imageData) || !isset($imageData['data'])) {
+            if (empty($imageData) || ! isset($imageData['data'])) {
                 throw new \Exception('Failed to generate refined image from Gemini.');
             }
 
@@ -78,7 +79,7 @@ class RefineImage implements ShouldQueue
 
             // Store the new image in S3
             $extension = $this->getExtensionFromMimeType($imageData['mimeType']);
-            $filename = uniqid('img_refined_', true) . '.' . $extension;
+            $filename = uniqid('img_refined_', true).'.'.$extension;
             $storagePath = "collateral/images/{$this->originalImage->campaign_id}/{$filename}";
 
             [$s3Path, $cloudFrontUrl] = StorageHelper::put($storagePath, $decodedImage, $imageData['mimeType']);
@@ -107,7 +108,7 @@ class RefineImage implements ShouldQueue
             }
 
         } catch (\Exception $e) {
-            Log::error("Error in RefineImage job for ImageCollateral ID {$this->originalImage->id}: " . $e->getMessage());
+            Log::error("Error in RefineImage job for ImageCollateral ID {$this->originalImage->id}: ".$e->getMessage());
             $this->fail($e);
         }
     }
@@ -115,6 +116,7 @@ class RefineImage implements ShouldQueue
     private function getExtensionFromMimeType(string $mimeType): string
     {
         $parts = explode('/', $mimeType);
+
         return end($parts) ?: 'png';
     }
 
@@ -123,7 +125,7 @@ class RefineImage implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('RefineImage failed: ' . $exception->getMessage(), [
+        Log::error('RefineImage failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

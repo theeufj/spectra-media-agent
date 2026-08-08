@@ -11,7 +11,7 @@ class CustomerObserver
 {
     /**
      * Handle the Customer "created" event.
-     * 
+     *
      * When a new customer is created with a website URL,
      * automatically dispatch the ScrapeCustomerWebsite job
      * to detect GTM and gather initial website information.
@@ -19,11 +19,11 @@ class CustomerObserver
     public function created(Customer $customer): void
     {
         // Auto-generate tracking signing secret for HMAC pixel verification
-        if (!$customer->tracking_signing_secret) {
+        if (! $customer->tracking_signing_secret) {
             $customer->updateQuietly(['tracking_signing_secret' => Str::random(64)]);
         }
 
-        if ($customer->website && !$customer->is_sandbox) {
+        if ($customer->website && ! $customer->is_sandbox) {
             Log::info('New customer created with website - dispatching scrape job', [
                 'customer_id' => $customer->id,
                 'website' => $customer->website,
@@ -35,7 +35,7 @@ class CustomerObserver
 
     /**
      * Handle the Customer "updated" event.
-     * 
+     *
      * When a customer's website URL is updated,
      * automatically dispatch the ScrapeCustomerWebsite job
      * to re-detect GTM with the new website.
@@ -43,7 +43,7 @@ class CustomerObserver
     public function updated(Customer $customer): void
     {
         // Check if website was changed and is now populated (skip sandbox customers)
-        if ($customer->isDirty('website') && $customer->website && !$customer->is_sandbox) {
+        if ($customer->isDirty('website') && $customer->website && ! $customer->is_sandbox) {
             Log::info('Customer website updated - dispatching scrape job', [
                 'customer_id' => $customer->id,
                 'old_website' => $customer->getOriginal('website'),

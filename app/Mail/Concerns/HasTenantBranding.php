@@ -20,17 +20,17 @@ trait HasTenantBranding
             }
         }
 
-        if (!$config) {
+        if (! $config) {
             $defaultDomain = $tenants['default'] ?? 'sitetospend.com';
             $config = $tenants[$defaultDomain] ?? $tenants['sitetospend.com'];
         }
 
         return [
-            'tenantName'    => $config['name'] ?? 'Site to Spend',
+            'tenantName' => $config['name'] ?? 'Site to Spend',
             'tenantPrimary' => $config['colors']['primary'] ?? '#ff4d00',
-            'tenantDark'    => $config['colors']['dark'] ?? '#cc3d00',
-            'tenantAccent'  => $config['colors']['accent'] ?? '#ffc300',
-            'tenantLogoText'=> $config['logo_text'] ?? 'Site to Spend',
+            'tenantDark' => $config['colors']['dark'] ?? '#cc3d00',
+            'tenantAccent' => $config['colors']['accent'] ?? '#ffc300',
+            'tenantLogoText' => $config['logo_text'] ?? 'Site to Spend',
         ];
     }
 }

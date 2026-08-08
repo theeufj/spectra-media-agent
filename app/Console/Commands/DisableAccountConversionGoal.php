@@ -28,26 +28,29 @@ class DisableAccountConversionGoal extends Command
     public function handle(): int
     {
         $customer = Customer::find($this->argument('customer'));
-        if (!$customer || !$customer->google_ads_customer_id) {
+        if (! $customer || ! $customer->google_ads_customer_id) {
             $this->error('Customer not found or has no Google Ads account.');
+
             return 1;
         }
 
         $categoryName = strtoupper($this->option('category'));
-        $categoryVal  = ConversionActionCategory::value($categoryName);
-        $customerId   = $customer->cleanGoogleCustomerId();
+        $categoryVal = ConversionActionCategory::value($categoryName);
+        $customerId = $customer->cleanGoogleCustomerId();
 
-        $svc = new class($customer) extends BaseGoogleAdsService {
+        $svc = new class($customer) extends BaseGoogleAdsService
+        {
             public function goals(string $cid): array
             {
                 $this->ensureClient();
                 $rows = [];
-                $q = "SELECT customer_conversion_goal.resource_name, customer_conversion_goal.category, "
-                    . "customer_conversion_goal.biddable FROM customer_conversion_goal";
+                $q = 'SELECT customer_conversion_goal.resource_name, customer_conversion_goal.category, '
+                    .'customer_conversion_goal.biddable FROM customer_conversion_goal';
                 foreach ($this->searchQuery($cid, $q)->iterateAllElements() as $row) {
                     $g = $row->getCustomerConversionGoal();
                     $rows[] = ['resource' => $g->getResourceName(), 'category' => $g->getCategory(), 'biddable' => $g->getBiddable()];
                 }
+
                 return $rows;
             }
 
@@ -56,7 +59,7 @@ class DisableAccountConversionGoal extends Command
                 return count($this->client->getCustomerConversionGoalServiceClient()
                     ->mutateCustomerConversionGoals(new MutateCustomerConversionGoalsRequest([
                         'customer_id' => $cid,
-                        'operations'  => $ops,
+                        'operations' => $ops,
                     ]))->getResults());
             }
         };
@@ -70,27 +73,31 @@ class DisableAccountConversionGoal extends Command
             }
         }
 
-        if (!$target) {
+        if (! $target) {
             $this->info("Account does not have a {$categoryName} goal — nothing to do.");
+
             return 0;
         }
-        if (!$target['biddable']) {
+        if (! $target['biddable']) {
             $this->info("{$categoryName} account goal is already non-biddable.");
+
             return 0;
         }
 
-        if (!$this->option('apply')) {
+        if (! $this->option('apply')) {
             $this->warn("Would set the account {$categoryName} goal to non-biddable. Re-run with --apply.");
+
             return 0;
         }
 
         $goal = new CustomerConversionGoal(['resource_name' => $target['resource'], 'biddable' => false]);
-        $op = new CustomerConversionGoalOperation();
+        $op = new CustomerConversionGoalOperation;
         $op->setUpdate($goal);
         $op->setUpdateMask(new FieldMask(['paths' => ['biddable']]));
 
         $n = $svc->mutate($customerId, [$op]);
         $this->info("Set account {$categoryName} goal to non-biddable ({$n} change).");
+
         return 0;
     }
 }

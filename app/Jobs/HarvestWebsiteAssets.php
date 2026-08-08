@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Models\Customer;
 use App\Models\HarvestedAsset;
 use App\Services\AssetHarvestingService;
-use App\Services\GeminiService;
 use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,6 +22,7 @@ class HarvestWebsiteAssets implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
+
     public $timeout = 600;
 
     public function __construct(
@@ -37,6 +37,7 @@ class HarvestWebsiteAssets implements ShouldQueue
 
         if (empty($imageUrls)) {
             Log::info('HarvestWebsiteAssets: No images found', ['customer_id' => $this->customer->id]);
+
             return;
         }
 
@@ -53,7 +54,7 @@ class HarvestWebsiteAssets implements ShouldQueue
             }
 
             $imageData = $service->downloadAndValidate($entry['url']);
-            if (!$imageData) {
+            if (! $imageData) {
                 continue;
             }
 
@@ -63,7 +64,7 @@ class HarvestWebsiteAssets implements ShouldQueue
                 'jpeg' => 'jpg',
                 default => $extension,
             };
-            $filename = uniqid('harvest_', true) . '.' . $extension;
+            $filename = uniqid('harvest_', true).'.'.$extension;
             $storagePath = "harvested/{$this->customer->id}/{$filename}";
 
             try {
@@ -77,6 +78,7 @@ class HarvestWebsiteAssets implements ShouldQueue
                     'url' => $entry['url'],
                     'error' => $e->getMessage(),
                 ]);
+
                 continue;
             }
 

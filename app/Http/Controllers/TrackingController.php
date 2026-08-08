@@ -24,7 +24,7 @@ class TrackingController extends Controller
         $timestamp = $request->input('timestamp') ?? $request->header('X-Tracking-Timestamp');
         $customerId = $request->input('customer_id');
 
-        if (!$signature || !$timestamp || !$customerId) {
+        if (! $signature || ! $timestamp || ! $customerId) {
             return null;
         }
 
@@ -39,13 +39,13 @@ class TrackingController extends Controller
         }
 
         $customer = Customer::find($customerId);
-        if (!$customer || !$customer->tracking_signing_secret) {
+        if (! $customer || ! $customer->tracking_signing_secret) {
             return null;
         }
 
-        $expectedSignature = hash_hmac('sha256', $customerId . '|' . $timestamp, $customer->tracking_signing_secret);
+        $expectedSignature = hash_hmac('sha256', $customerId.'|'.$timestamp, $customer->tracking_signing_secret);
 
-        if (!hash_equals($expectedSignature, $signature)) {
+        if (! hash_equals($expectedSignature, $signature)) {
             return null;
         }
 
@@ -59,7 +59,7 @@ class TrackingController extends Controller
     public function touchpoint(Request $request): JsonResponse
     {
         // Rate limit: 60 requests per minute per IP
-        $key = 'touchpoint:' . $request->ip();
+        $key = 'touchpoint:'.$request->ip();
         if (RateLimiter::tooManyAttempts($key, 60)) {
             return response()->json(['error' => 'Too many requests'], 429);
         }
@@ -67,7 +67,7 @@ class TrackingController extends Controller
 
         // Verify HMAC signature
         $customer = $this->verifyTrackingSignature($request);
-        if (!$customer) {
+        if (! $customer) {
             return response()->json(['error' => 'Invalid or missing tracking signature'], 403);
         }
 
@@ -107,7 +107,7 @@ class TrackingController extends Controller
     public function conversion(Request $request, AttributionService $attributionService): JsonResponse
     {
         // Rate limit: 30 conversions per minute per IP
-        $key = 'conversion:' . $request->ip();
+        $key = 'conversion:'.$request->ip();
         if (RateLimiter::tooManyAttempts($key, 30)) {
             return response()->json(['error' => 'Too many requests'], 429);
         }
@@ -115,7 +115,7 @@ class TrackingController extends Controller
 
         // Verify HMAC signature
         $customer = $this->verifyTrackingSignature($request);
-        if (!$customer) {
+        if (! $customer) {
             return response()->json(['error' => 'Invalid or missing tracking signature'], 403);
         }
 
@@ -134,7 +134,7 @@ class TrackingController extends Controller
             ->toArray();
 
         // Merge with client-provided touchpoints (may contain additional data)
-        $journey = !empty($storedTouchpoints) ? $storedTouchpoints : ($validated['touchpoints'] ?? []);
+        $journey = ! empty($storedTouchpoints) ? $storedTouchpoints : ($validated['touchpoints'] ?? []);
 
         // Run all attribution models
         $attribution = $attributionService->attributeAll($journey, $validated['conversion_value'] ?? 0);

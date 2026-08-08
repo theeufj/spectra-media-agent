@@ -29,7 +29,7 @@ class CreativeBoostController extends Controller
         $refinements = (int) Setting::get('creative_boost_refinements', 25);
 
         // Ensure user is a Stripe customer
-        if (!$user->hasStripeId()) {
+        if (! $user->hasStripeId()) {
             $user->createAsStripeCustomer();
         }
 
@@ -69,15 +69,15 @@ class CreativeBoostController extends Controller
                     'user_id' => $user->id,
                     'period' => $period,
                 ],
-                'success_url' => route('creative-usage') . '?boost=success',
-                'cancel_url' => route('creative-usage') . '?boost=cancelled',
+                'success_url' => route('creative-usage').'?boost=success',
+                'cancel_url' => route('creative-usage').'?boost=cancelled',
             ]);
 
             $purchase->update(['stripe_checkout_session_id' => $session->id]);
 
             return Inertia::location($session->url);
         } catch (\Exception $e) {
-            Log::error('Creative Boost checkout failed: ' . $e->getMessage());
+            Log::error('Creative Boost checkout failed: '.$e->getMessage());
             $purchase->update(['status' => 'failed']);
 
             return redirect()->back()->with('flash', [

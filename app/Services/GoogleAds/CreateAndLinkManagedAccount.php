@@ -2,10 +2,8 @@
 
 namespace App\Services\GoogleAds;
 
-use Google\Ads\GoogleAds\V22\Services\CreateCustomerClientRequest;
-use Google\Ads\GoogleAds\V22\Services\CustomerServiceClient;
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer as CustomerModel;
+use Illuminate\Support\Facades\Log;
 
 class CreateAndLinkManagedAccount extends BaseGoogleAdsService
 {
@@ -23,10 +21,10 @@ class CreateAndLinkManagedAccount extends BaseGoogleAdsService
      * Creates a new managed account and links it to the MCC account.
      * Then associates it with the Laravel customer record for tracking.
      *
-     * @param string $managerCustomerId The MCC account ID
-     * @param string $accountName The name of the new managed account
-     * @param string $currencyCode Currency code (e.g., 'USD')
-     * @param string $timeZone Timezone (e.g., 'America/New_York')
+     * @param  string  $managerCustomerId  The MCC account ID
+     * @param  string  $accountName  The name of the new managed account
+     * @param  string  $currencyCode  Currency code (e.g., 'USD')
+     * @param  string  $timeZone  Timezone (e.g., 'America/New_York')
      * @return ?array Array with 'resource_name' and 'customer_id' or null on failure
      */
     public function __invoke(
@@ -44,11 +42,12 @@ class CreateAndLinkManagedAccount extends BaseGoogleAdsService
                 $timeZone
             );
 
-            if (!$resourceName) {
-                Log::error("Failed to create managed account", [
+            if (! $resourceName) {
+                Log::error('Failed to create managed account', [
                     'manager_customer_id' => $managerCustomerId,
                     'account_name' => $accountName,
                 ]);
+
                 return null;
             }
 
@@ -56,17 +55,18 @@ class CreateAndLinkManagedAccount extends BaseGoogleAdsService
             preg_match('/customers\/(\d+)/', $resourceName, $matches);
             $newCustomerId = $matches[1] ?? null;
 
-            if (!$newCustomerId) {
-                Log::error("Failed to extract customer ID from resource name", [
+            if (! $newCustomerId) {
+                Log::error('Failed to extract customer ID from resource name', [
                     'resource_name' => $resourceName,
                 ]);
+
                 return null;
             }
 
             // Note: In Google Ads API v22, createCustomerClient() automatically links the account to MCC
             // No separate linking step is needed
-            
-            Log::info("Successfully created managed account (automatically linked via API)", [
+
+            Log::info('Successfully created managed account (automatically linked via API)', [
                 'manager_customer_id' => $managerCustomerId,
                 'new_customer_id' => $newCustomerId,
                 'resource_name' => $resourceName,
@@ -77,11 +77,12 @@ class CreateAndLinkManagedAccount extends BaseGoogleAdsService
                 'customer_id' => $newCustomerId,
             ];
         } catch (\Exception $e) {
-            Log::error("Error creating and linking managed account: " . $e->getMessage(), [
+            Log::error('Error creating and linking managed account: '.$e->getMessage(), [
                 'exception' => $e,
                 'manager_customer_id' => $managerCustomerId,
                 'account_name' => $accountName,
             ]);
+
             return null;
         }
     }

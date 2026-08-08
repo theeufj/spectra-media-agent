@@ -22,14 +22,16 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries   = 2;
+    public $tries = 2;
+
     public $timeout = 600;
 
     public function handle(BiddingStrategyProgressionAgent $agent): void
     {
         $lock = Cache::lock('job:bidding_progression', 3600);
-        if (!$lock->get()) {
+        if (! $lock->get()) {
             Log::info('EvaluateBiddingStrategyProgression: Already running, skipping');
+
             return;
         }
 
@@ -63,7 +65,7 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
                 }
             } catch (\Exception $e) {
                 $summary['errors']++;
-                Log::error("EvaluateBiddingStrategyProgression: Error for campaign {$campaign->id}: " . $e->getMessage());
+                Log::error("EvaluateBiddingStrategyProgression: Error for campaign {$campaign->id}: ".$e->getMessage());
             }
 
             // Check for regression independently — a campaign that was just skipped for graduation
@@ -76,16 +78,15 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
                     Log::info("EvaluateBiddingStrategyProgression: Reverted {$campaign->id}", $regressResult);
                 }
             } catch (\Exception $e) {
-                Log::error("EvaluateBiddingStrategyProgression: Regression check error for campaign {$campaign->id}: " . $e->getMessage());
+                Log::error("EvaluateBiddingStrategyProgression: Regression check error for campaign {$campaign->id}: ".$e->getMessage());
             }
         }
 
         Log::info('EvaluateBiddingStrategyProgression: Complete', $summary);
     }
 
-
     public function failed(\Throwable $exception): void
     {
-        Log::error('EvaluateBiddingStrategyProgression failed: ' . $exception->getMessage());
+        Log::error('EvaluateBiddingStrategyProgression failed: '.$exception->getMessage());
     }
 }

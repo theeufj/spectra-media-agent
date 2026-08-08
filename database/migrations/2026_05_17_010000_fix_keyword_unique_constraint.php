@@ -11,14 +11,14 @@ return new class extends Migration
     {
         // Remove duplicates introduced by the old updateOrCreate key before adding the unique constraint.
         // Keep the most recently updated row for each (customer_id, keyword_text, match_type, campaign_id) tuple.
-        DB::statement("
+        DB::statement('
             DELETE FROM keywords
             WHERE id NOT IN (
                 SELECT DISTINCT ON (customer_id, keyword_text, match_type, campaign_id) id
                 FROM keywords
                 ORDER BY customer_id, keyword_text, match_type, campaign_id, updated_at DESC
             )
-        ");
+        ');
 
         Schema::table('keywords', function (Blueprint $table) {
             $table->unique(['customer_id', 'keyword_text', 'match_type', 'campaign_id'], 'keywords_unique_per_match_type');

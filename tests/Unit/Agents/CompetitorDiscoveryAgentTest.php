@@ -14,6 +14,7 @@ use Tests\TestCase;
 class CompetitorDiscoveryAgentTest extends TestCase
 {
     protected GeminiService $geminiMock;
+
     protected GoogleSearchService $searchMock;
 
     protected function setUp(): void

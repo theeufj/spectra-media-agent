@@ -44,7 +44,7 @@ class Product extends Model
         'custom_attributes' => 'array',
         'impressions' => 'float',
         'clicks' => 'float',
-        'cost' => 'float',
+        'cost' => 'decimal:2',
         'conversions' => 'float',
     ];
 

@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Log;
 
 class OptimizeCampaigns implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * Execute the job.
@@ -34,12 +34,12 @@ class OptimizeCampaigns implements ShouldQueue
         $campaigns = Campaign::whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
-                      ->orWhereNotNull('facebook_ads_campaign_id')
-                      ->orWhereNotNull('microsoft_ads_campaign_id');
+                    ->orWhereNotNull('facebook_ads_campaign_id')
+                    ->orWhereNotNull('microsoft_ads_campaign_id');
             })
             ->where(function ($query) {
                 $query->whereNull('last_optimized_at')
-                      ->orWhere('last_optimized_at', '<=', now()->subHours(24));
+                    ->orWhere('last_optimized_at', '<=', now()->subHours(24));
             })
             ->get();
 
@@ -76,7 +76,7 @@ class OptimizeCampaigns implements ShouldQueue
                         ->delete();
 
                     $categorized = $recommendations['categorized'] ?? [];
-                    $autoApply   = $categorized['auto_apply'] ?? [];
+                    $autoApply = $categorized['auto_apply'] ?? [];
                     $needsReview = array_merge(
                         $categorized['recommended'] ?? [],
                         $categorized['review_required'] ?? []
@@ -90,14 +90,14 @@ class OptimizeCampaigns implements ShouldQueue
                         $result = $optimizationAgent->applyRecommendation($campaign, $rec);
 
                         Recommendation::create([
-                            'campaign_id'       => $campaign->id,
-                            'type'              => $rec['type'] ?? 'general',
-                            'target_entity'     => $rec['target_entity'] ?? $rec['target'] ?? null,
-                            'parameters'        => $rec['parameters'] ?? $rec['params'] ?? null,
-                            'rationale'         => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
-                            'status'            => $result['applied'] ? 'applied' : 'failed',
+                            'campaign_id' => $campaign->id,
+                            'type' => $rec['type'] ?? 'general',
+                            'target_entity' => $rec['target_entity'] ?? $rec['target'] ?? null,
+                            'parameters' => $rec['parameters'] ?? $rec['params'] ?? null,
+                            'rationale' => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
+                            'status' => $result['applied'] ? 'applied' : 'failed',
                             'requires_approval' => false,
-                            'platform'          => $platform,
+                            'platform' => $platform,
                         ]);
 
                         if ($result['applied']) {
@@ -108,14 +108,14 @@ class OptimizeCampaigns implements ShouldQueue
                     // Store lower-confidence recommendations for human review
                     foreach ($needsReview as $rec) {
                         Recommendation::create([
-                            'campaign_id'       => $campaign->id,
-                            'type'              => $rec['type'] ?? 'general',
-                            'target_entity'     => $rec['target_entity'] ?? $rec['target'] ?? null,
-                            'parameters'        => $rec['parameters'] ?? $rec['params'] ?? null,
-                            'rationale'         => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
-                            'status'            => 'pending',
+                            'campaign_id' => $campaign->id,
+                            'type' => $rec['type'] ?? 'general',
+                            'target_entity' => $rec['target_entity'] ?? $rec['target'] ?? null,
+                            'parameters' => $rec['parameters'] ?? $rec['params'] ?? null,
+                            'rationale' => $rec['rationale'] ?? $rec['reason'] ?? $rec['description'] ?? null,
+                            'status' => 'pending',
                             'requires_approval' => true,
-                            'platform'          => $platform,
+                            'platform' => $platform,
                         ]);
                         $pendingCount++;
                     }
@@ -139,9 +139,9 @@ class OptimizeCampaigns implements ShouldQueue
                 $totalApplied += $appliedCount;
 
                 Log::info("Optimization complete for campaign {$campaign->id}", [
-                    'auto_applied'   => $appliedCount,
+                    'auto_applied' => $appliedCount,
                     'pending_review' => $pendingCount,
-                    'had_data'       => $recommendations !== null,
+                    'had_data' => $recommendations !== null,
                 ]);
 
                 // Run Facebook ad relevance diagnostics for Facebook campaigns
@@ -149,31 +149,39 @@ class OptimizeCampaigns implements ShouldQueue
                     try {
                         $fbDiagnostics->analyze($campaign);
                     } catch (\Exception $e) {
-                        Log::warning("FacebookAdRelevanceDiagnosticsAgent failed for campaign {$campaign->id}: " . $e->getMessage());
+                        // Surface in the admin exception dashboard; the batch continues.
+                        report($e);
+                        Log::warning("FacebookAdRelevanceDiagnosticsAgent failed for campaign {$campaign->id}: ".$e->getMessage());
                     }
                 }
 
                 // LinkedIn-specific optimization
                 if ($campaign->linkedin_campaign_id) {
                     try {
-                        (new LinkedInCampaignOptimizationAgent())->analyze($campaign);
+                        (new LinkedInCampaignOptimizationAgent)->analyze($campaign);
                     } catch (\Exception $e) {
-                        Log::warning("LinkedInCampaignOptimizationAgent failed for campaign {$campaign->id}: " . $e->getMessage());
+                        // Surface in the admin exception dashboard; the batch continues.
+                        report($e);
+                        Log::warning("LinkedInCampaignOptimizationAgent failed for campaign {$campaign->id}: ".$e->getMessage());
                     }
                 }
 
                 // Microsoft Ads-specific optimization
                 if ($campaign->microsoft_ads_campaign_id) {
                     try {
-                        (new MicrosoftAdsCampaignOptimizationAgent())->analyze($campaign);
+                        (new MicrosoftAdsCampaignOptimizationAgent)->analyze($campaign);
                     } catch (\Exception $e) {
-                        Log::warning("MicrosoftAdsCampaignOptimizationAgent failed for campaign {$campaign->id}: " . $e->getMessage());
+                        // Surface in the admin exception dashboard; the batch continues.
+                        report($e);
+                        Log::warning("MicrosoftAdsCampaignOptimizationAgent failed for campaign {$campaign->id}: ".$e->getMessage());
                     }
                 }
 
             } catch (\Exception $e) {
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
                 $errors++;
-                Log::error("Failed to optimize campaign {$campaign->id}: " . $e->getMessage(), [
+                Log::error("Failed to optimize campaign {$campaign->id}: ".$e->getMessage(), [
                     'campaign_id' => $campaign->id,
                     'exception' => get_class($e),
                 ]);
@@ -181,7 +189,7 @@ class OptimizeCampaigns implements ShouldQueue
             }
         }
 
-        $this->finishRun($runStart, actions: $totalApplied, errors: $errors, scope: $campaigns->count() . ' campaigns');
+        $this->finishRun($runStart, actions: $totalApplied, errors: $errors, scope: $campaigns->count().' campaigns');
     }
 
     /**
@@ -189,7 +197,7 @@ class OptimizeCampaigns implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('OptimizeCampaigns failed: ' . $exception->getMessage(), [
+        Log::error('OptimizeCampaigns failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
         $this->recordRunFailure($exception);

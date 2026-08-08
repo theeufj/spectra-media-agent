@@ -46,7 +46,10 @@ class ProductFeed extends Model
 
     public function getHealthScoreAttribute(): int
     {
-        if ($this->total_products === 0) return 0;
+        if ($this->total_products === 0) {
+            return 0;
+        }
+
         return (int) round(($this->approved_products / $this->total_products) * 100);
     }
 }

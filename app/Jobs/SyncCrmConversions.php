@@ -23,7 +23,9 @@ class SyncCrmConversions implements ShouldQueue
     public function handle(): void
     {
         $integration = CrmIntegration::find($this->crmIntegrationId);
-        if (!$integration || !$integration->isSyncable()) return;
+        if (! $integration || ! $integration->isSyncable()) {
+            return;
+        }
 
         try {
             $integration->update(['status' => 'syncing']);
@@ -39,10 +41,14 @@ class SyncCrmConversions implements ShouldQueue
                     ->where('crm_lead_id', $lead['crm_lead_id'])
                     ->exists();
 
-                if ($exists) continue;
+                if ($exists) {
+                    continue;
+                }
 
                 // Only create if we have a click ID for attribution
-                if (!$lead['gclid'] && !$lead['fbclid'] && !$lead['msclid']) continue;
+                if (! $lead['gclid'] && ! $lead['fbclid'] && ! $lead['msclid']) {
+                    continue;
+                }
 
                 OfflineConversion::create([
                     'customer_id' => $integration->customer_id,
@@ -105,7 +111,7 @@ class SyncCrmConversions implements ShouldQueue
             ]);
         }
 
-        Log::error('SyncCrmConversions failed: ' . $exception->getMessage(), [
+        Log::error('SyncCrmConversions failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

@@ -179,6 +179,7 @@ class AssetService extends BaseMicrosoftAdsService
                 'extension_ids' => $extensionIds,
                 'type' => $extensionType,
             ]);
+
             return true;
         }
 
@@ -213,6 +214,7 @@ class AssetService extends BaseMicrosoftAdsService
                 'extension_ids' => $extensionIds,
                 'type' => $extensionType,
             ]);
+
             return true;
         }
 
@@ -232,6 +234,7 @@ class AssetService extends BaseMicrosoftAdsService
 
         if ($result && isset($result['AdExtensions']['AdExtension'])) {
             $extensions = $result['AdExtensions']['AdExtension'];
+
             return isset($extensions['Id']) ? [$extensions] : $extensions;
         }
 
@@ -268,6 +271,7 @@ class AssetService extends BaseMicrosoftAdsService
         if ($result && isset($result['MediaIds'])) {
             $id = is_array($result['MediaIds']) ? $result['MediaIds'][0] : $result['MediaIds'];
             Log::info('Microsoft Ads: Uploaded image', ['media_id' => $id]);
+
             return (int) $id;
         }
 
@@ -288,6 +292,7 @@ class AssetService extends BaseMicrosoftAdsService
             Log::info("Microsoft Ads: Created {$typeName} extension", [
                 'identities' => $result['AdExtensionIdentities'],
             ]);
+
             return $result;
         }
 

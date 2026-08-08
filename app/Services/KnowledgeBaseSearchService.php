@@ -16,10 +16,9 @@ class KnowledgeBaseSearchService
      * Search the customer's website content and knowledge base for a query.
      * Uses vector similarity search when embeddings are available, falls back to ILIKE.
      *
-     * @param int   $customerId
-     * @param array $userIds    User IDs associated with the customer (for knowledge_bases lookup)
-     * @param string $query     Natural-language search query
-     * @param int   $limit      Max results per source
+     * @param  array  $userIds  User IDs associated with the customer (for knowledge_bases lookup)
+     * @param  string  $query  Natural-language search query
+     * @param  int  $limit  Max results per source
      * @return string Formatted text suitable for returning as a tool response
      */
     public function search(int $customerId, array $userIds, string $query, int $limit = 5): string
@@ -44,7 +43,7 @@ class KnowledgeBaseSearchService
             return "No relevant content found for: \"{$query}\"";
         }
 
-        Log::info("KnowledgeBaseSearchService: query \"{$query}\" returned " . count($results) . " results");
+        Log::info("KnowledgeBaseSearchService: query \"{$query}\" returned ".count($results).' results');
 
         return implode("\n\n---\n\n", $results);
     }
@@ -66,7 +65,7 @@ class KnowledgeBaseSearchService
             }
         }
 
-        if (!empty($userIds)) {
+        if (! empty($userIds)) {
             $kbs = KnowledgeBase::whereIn('user_id', $userIds)
                 ->nearestNeighbors('embedding', $embedding, Distance::Cosine)
                 ->take($limit)
@@ -86,13 +85,13 @@ class KnowledgeBaseSearchService
     private function keywordSearch(int $customerId, array $userIds, string $query, int $limit): array
     {
         $results = [];
-        $like    = '%' . $query . '%';
+        $like = '%'.$query.'%';
 
         $pages = CustomerPage::where('customer_id', $customerId)
             ->where(function ($q) use ($like) {
                 $q->where('content', 'ilike', $like)
-                  ->orWhere('title', 'ilike', $like)
-                  ->orWhere('meta_description', 'ilike', $like);
+                    ->orWhere('title', 'ilike', $like)
+                    ->orWhere('meta_description', 'ilike', $like);
             })
             ->take($limit)
             ->get(['title', 'url', 'content', 'page_type', 'meta_description']);
@@ -105,7 +104,7 @@ class KnowledgeBaseSearchService
             }
         }
 
-        if (!empty($userIds)) {
+        if (! empty($userIds)) {
             $kbs = KnowledgeBase::whereIn('user_id', $userIds)
                 ->where('content', 'ilike', $like)
                 ->take($limit)

@@ -4,16 +4,20 @@ namespace App\Services\Agents;
 
 /**
  * Represents an AI-generated recovery plan for handling execution errors.
- * 
+ *
  * Contains the error details and recovery actions suggested by AI to
  * resolve or work around the error.
  */
 class RecoveryPlan
 {
     public ?\Exception $error;
+
     public array $recoveryActions;
+
     public string $reasoning;
+
     public array $metadata;
+
     public bool $canAutoRecover;
 
     public function __construct(
@@ -25,7 +29,7 @@ class RecoveryPlan
         bool $canAutoRecover = false,
     ) {
         $this->error = $error;
-        $this->recoveryActions = !empty($recoveryActions) ? $recoveryActions : $actions;
+        $this->recoveryActions = ! empty($recoveryActions) ? $recoveryActions : $actions;
         $this->reasoning = $reasoning;
         $this->metadata = $metadata;
         $this->canAutoRecover = $canAutoRecover;
@@ -33,7 +37,7 @@ class RecoveryPlan
 
     /**
      * Create a RecoveryPlan from AI-generated JSON response.
-     * 
+     *
      * Expected JSON structure:
      * {
      *   "error_analysis": "...",
@@ -46,10 +50,10 @@ class RecoveryPlan
      *   ],
      *   "reasoning": "..."
      * }
-     * 
-     * @param \Exception $error The original error
-     * @param string $json JSON response from AI
-     * @return self
+     *
+     * @param  \Exception  $error  The original error
+     * @param  string  $json  JSON response from AI
+     *
      * @throws \Exception If JSON is invalid
      */
     public static function fromJson(\Exception $error, string $json): self
@@ -57,7 +61,7 @@ class RecoveryPlan
         $data = json_decode($json, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            throw new \Exception('Invalid JSON in recovery plan: ' . json_last_error_msg());
+            throw new \Exception('Invalid JSON in recovery plan: '.json_last_error_msg());
         }
 
         $recoveryActions = $data['recovery_actions'] ?? [];
@@ -73,11 +77,10 @@ class RecoveryPlan
 
     /**
      * Create a simple recovery plan without AI.
-     * 
-     * @param \Exception $error The error
-     * @param string $action Simple recovery action description
-     * @param string $reasoning Reasoning for the action
-     * @return self
+     *
+     * @param  \Exception  $error  The error
+     * @param  string  $action  Simple recovery action description
+     * @param  string  $reasoning  Reasoning for the action
      */
     public static function simple(
         \Exception $error,
@@ -90,7 +93,7 @@ class RecoveryPlan
                 [
                     'action' => $action,
                     'reasoning' => $reasoning,
-                ]
+                ],
             ],
             reasoning: $reasoning
         );
@@ -98,17 +101,17 @@ class RecoveryPlan
 
     /**
      * Check if recovery plan has any actions.
-     * 
+     *
      * @return bool True if actions exist
      */
     public function hasActions(): bool
     {
-        return !empty($this->recoveryActions);
+        return ! empty($this->recoveryActions);
     }
 
     /**
      * Get count of recovery actions.
-     * 
+     *
      * @return int Number of actions
      */
     public function getActionCount(): int
@@ -118,8 +121,8 @@ class RecoveryPlan
 
     /**
      * Get a specific recovery action by index.
-     * 
-     * @param int $index Action index
+     *
+     * @param  int  $index  Action index
      * @return array|null Action data or null if not found
      */
     public function getAction(int $index): ?array
@@ -129,7 +132,7 @@ class RecoveryPlan
 
     /**
      * Get error message.
-     * 
+     *
      * @return string Error message
      */
     public function getErrorMessage(): string
@@ -139,7 +142,7 @@ class RecoveryPlan
 
     /**
      * Convert to array for storage or logging.
-     * 
+     *
      * @return array Recovery plan as array
      */
     public function toArray(): array

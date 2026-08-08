@@ -20,6 +20,7 @@ class GenerateMonthlyReport implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 600;
 
     protected int $customerId;
@@ -51,7 +52,7 @@ class GenerateMonthlyReport implements ShouldQueue
 
             // Email to all users
             foreach ($customer->users as $user) {
-                if (!$user->email) {
+                if (! $user->email) {
                     continue;
                 }
                 $prefs = $user->notification_preferences ?? [];
@@ -64,10 +65,10 @@ class GenerateMonthlyReport implements ShouldQueue
             Log::info("Monthly report generated for customer {$customer->id}", [
                 'campaigns' => $report['summary']['total_campaigns'],
                 'total_spend' => $report['summary']['total_cost'],
-                'pdf_generated' => !empty($pdfPath),
+                'pdf_generated' => ! empty($pdfPath),
             ]);
         } catch (\Exception $e) {
-            Log::error("Failed to generate monthly report for customer {$this->customerId}: " . $e->getMessage(), [
+            Log::error("Failed to generate monthly report for customer {$this->customerId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
             throw $e;
@@ -106,7 +107,7 @@ class GenerateMonthlyReport implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateMonthlyReport failed: ' . $exception->getMessage(), [
+        Log::error('GenerateMonthlyReport failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

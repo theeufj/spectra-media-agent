@@ -72,13 +72,13 @@ return [
     'reallocation_rules' => [
         // Minimum ROAS before a campaign is considered "underperforming"
         'min_roas_threshold' => 1.5,
-        
+
         // Maximum percentage of budget to shift in a single reallocation
         'max_shift_percentage' => 20,
-        
+
         // Minimum days of data before reallocation is considered
         'min_data_days' => 7,
-        
+
         // Minimum conversions before a campaign is eligible for reallocation
         'min_conversions' => 5,
     ],
@@ -94,16 +94,16 @@ return [
     'self_healing' => [
         // Maximum number of auto-fix attempts per ad
         'max_fix_attempts' => 3,
-        
+
         // Hours to wait before retrying a failed fix
         'retry_delay_hours' => 24,
-        
+
         // Auto-pause ads after this many consecutive disapprovals
         'auto_pause_after_failures' => 2,
-        
+
         // Automatically pause segments with CTR below this threshold
         'min_ctr_threshold' => 0.005, // 0.5%
-        
+
         // Automatically pause segments with this cost and no conversions
         'max_spend_no_conversion' => 50.00,
     ],
@@ -119,19 +119,19 @@ return [
     'search_term_mining' => [
         // Minimum impressions before a search term is evaluated
         'min_impressions' => 100,
-        
+
         // Minimum clicks before a search term is evaluated
         'min_clicks' => 5,
-        
+
         // Add as exact match if CTR is above this and has conversions
         'promote_ctr_threshold' => 0.05, // 5%
-        
+
         // Add as negative if cost is above this with no conversions
         'negative_cost_threshold' => 20.00,
-        
+
         // Add as negative if CTR is below this with high impressions
         'negative_ctr_threshold' => 0.002, // 0.2%
-        
+
         // Minimum impressions to consider for low-CTR negative
         'negative_min_impressions' => 500,
     ],

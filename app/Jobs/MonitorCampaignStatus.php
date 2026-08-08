@@ -4,9 +4,9 @@ namespace App\Jobs;
 
 use App\Models\AgentActivity;
 use App\Models\Campaign;
-use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
-use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Notifications\CampaignStatusUpdated;
+use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
+use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -17,7 +17,7 @@ use Illuminate\Support\Facades\Log;
 
 class MonitorCampaignStatus implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * Execute the job.
@@ -29,9 +29,9 @@ class MonitorCampaignStatus implements ShouldQueue
         $campaigns = Campaign::with('customer.users')
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
-                      ->orWhereNotNull('facebook_ads_campaign_id')
-                      ->orWhereNotNull('microsoft_ads_campaign_id')
-                      ->orWhereNotNull('linkedin_campaign_id');
+                    ->orWhereNotNull('facebook_ads_campaign_id')
+                    ->orWhereNotNull('microsoft_ads_campaign_id')
+                    ->orWhereNotNull('linkedin_campaign_id');
             })
             ->whereNotNull('customer_id')
             ->get();
@@ -71,12 +71,14 @@ class MonitorCampaignStatus implements ShouldQueue
                 $processed++;
 
             } catch (\Exception $e) {
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
                 $errors++;
-                Log::error("Failed to monitor campaign {$campaign->id}: " . $e->getMessage());
+                Log::error("Failed to monitor campaign {$campaign->id}: ".$e->getMessage());
             }
         }
 
-        $this->finishRun($runStart, actions: $processed, errors: $errors, scope: $campaigns->count() . ' campaigns');
+        $this->finishRun($runStart, actions: $processed, errors: $errors, scope: $campaigns->count().' campaigns');
     }
 
     private function updateOverallStatus(Campaign $campaign, array $platformResults): void
@@ -114,7 +116,7 @@ class MonitorCampaignStatus implements ShouldQueue
 
         // Only alert on unexpected problem states — not intentional pause/end.
         $silentStatuses = ['PAUSED', 'ENDED', 'REMOVED', 'ELIGIBLE', 'UNKNOWN'];
-        if (!in_array($campaign->primary_status, $silentStatuses, true)) {
+        if (! in_array($campaign->primary_status, $silentStatuses, true)) {
             $this->notifyIfStatusChanged($campaign, $oldStatus, $campaign->primary_status);
         }
     }
@@ -136,14 +138,14 @@ class MonitorCampaignStatus implements ShouldQueue
 
     private function getGoogleAdsStatus(Campaign $campaign, GetCampaignStatus $getCampaignStatus): ?array
     {
-        if (!$campaign->customer?->google_ads_customer_id) {
+        if (! $campaign->customer?->google_ads_customer_id) {
             return null;
         }
         $customerId = $campaign->customer->cleanGoogleCustomerId();
 
         // google_ads_campaign_id stores the full resource name (customers/X/campaigns/Y)
         $resourceName = $campaign->google_ads_campaign_id;
-        if (!str_starts_with($resourceName, 'customers/')) {
+        if (! str_starts_with($resourceName, 'customers/')) {
             $resourceName = "customers/{$customerId}/campaigns/{$resourceName}";
         }
         $statusData = $getCampaignStatus($customerId, $resourceName);
@@ -153,6 +155,7 @@ class MonitorCampaignStatus implements ShouldQueue
             foreach ($statusData['primary_status_reasons'] ?? [] as $reasonInt) {
                 $reasons[] = $this->mapPrimaryStatusReason((int) $reasonInt);
             }
+
             return [
                 'platform_status' => $this->mapStatus($statusData['status']),
                 'primary_status' => $this->mapPrimaryStatus($statusData['primary_status']),
@@ -195,7 +198,7 @@ class MonitorCampaignStatus implements ShouldQueue
     private function getFacebookAdsStatus(Campaign $campaign): ?array
     {
         $customer = $campaign->customer;
-        if (!$customer || !$customer->facebook_ads_account_id) {
+        if (! $customer || ! $customer->facebook_ads_account_id) {
             return null;
         }
 
@@ -209,7 +212,7 @@ class MonitorCampaignStatus implements ShouldQueue
             return [
                 'platform_status' => $fbCampaign['status'] ?? 'UNKNOWN',
                 'primary_status' => $primaryStatus,
-                'primary_status_reasons' => !empty($fbCampaign['issues_info']) ? json_encode($fbCampaign['issues_info']) : null,
+                'primary_status_reasons' => ! empty($fbCampaign['issues_info']) ? json_encode($fbCampaign['issues_info']) : null,
             ];
         }
 
@@ -275,14 +278,14 @@ class MonitorCampaignStatus implements ShouldQueue
     {
         // Google Ads API V22 CampaignPrimaryStatus enum
         return match ($status) {
-            2  => 'ELIGIBLE',
-            3  => 'PAUSED',
-            4  => 'REMOVED',
-            5  => 'ENDED',
-            6  => 'PENDING',
-            7  => 'MISCONFIGURED',
-            8  => 'LIMITED',
-            9  => 'LEARNING',
+            2 => 'ELIGIBLE',
+            3 => 'PAUSED',
+            4 => 'REMOVED',
+            5 => 'ENDED',
+            6 => 'PENDING',
+            7 => 'MISCONFIGURED',
+            8 => 'LIMITED',
+            9 => 'LEARNING',
             10 => 'NOT_ELIGIBLE',
             default => 'UNKNOWN',
         };
@@ -292,14 +295,14 @@ class MonitorCampaignStatus implements ShouldQueue
     {
         // Google Ads API V22 CampaignPrimaryStatusReason enum
         return match ($reason) {
-            2  => 'CAMPAIGN_SERVING_STATUS_RESTRICTED',
-            3  => 'CAMPAIGN_STATUS_REMOVED',
-            4  => 'CAMPAIGN_STATUS_PAUSED',
-            5  => 'CAMPAIGN_BUDGET_UNDERFUNDED',
-            6  => 'CAMPAIGN_BUDGET_MISCONFIGURED',
-            7  => 'CAMPAIGN_PENDING_SCHEDULED_START',
-            8  => 'CAMPAIGN_PENDING_BUDGET_APPROVAL',
-            9  => 'CAMPAIGN_LEARNING_PERIOD',
+            2 => 'CAMPAIGN_SERVING_STATUS_RESTRICTED',
+            3 => 'CAMPAIGN_STATUS_REMOVED',
+            4 => 'CAMPAIGN_STATUS_PAUSED',
+            5 => 'CAMPAIGN_BUDGET_UNDERFUNDED',
+            6 => 'CAMPAIGN_BUDGET_MISCONFIGURED',
+            7 => 'CAMPAIGN_PENDING_SCHEDULED_START',
+            8 => 'CAMPAIGN_PENDING_BUDGET_APPROVAL',
+            9 => 'CAMPAIGN_LEARNING_PERIOD',
             10 => 'AD_GROUP_AD_NOT_ELIGIBLE_SERVING',
             11 => 'AD_GROUP_NOT_ELIGIBLE_SERVING',
             12 => 'AD_GROUP_STATUS_PAUSED',
@@ -310,12 +313,12 @@ class MonitorCampaignStatus implements ShouldQueue
     private function getMicrosoftAdsStatus(Campaign $campaign): ?array
     {
         $customer = $campaign->customer;
-        if (!$customer || !$customer->microsoft_ads_account_id) {
+        if (! $customer || ! $customer->microsoft_ads_account_id) {
             return null;
         }
 
         try {
-            $service = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
+            $service = new \App\Services\MicrosoftAds\CampaignService($customer);
             $msStatus = $service->getCampaignStatus($campaign->microsoft_ads_campaign_id);
 
             if ($msStatus) {
@@ -326,7 +329,9 @@ class MonitorCampaignStatus implements ShouldQueue
                 ];
             }
         } catch (\Exception $e) {
-            Log::warning("MonitorCampaignStatus: Microsoft Ads check failed for campaign {$campaign->id}: " . $e->getMessage());
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
+            Log::warning("MonitorCampaignStatus: Microsoft Ads check failed for campaign {$campaign->id}: ".$e->getMessage());
         }
 
         return null;
@@ -335,7 +340,7 @@ class MonitorCampaignStatus implements ShouldQueue
     private function getLinkedInAdsStatus(Campaign $campaign): ?array
     {
         $customer = $campaign->customer;
-        if (!$customer || !$customer->linkedin_ads_account_id) {
+        if (! $customer || ! $customer->linkedin_ads_account_id) {
             return null;
         }
 
@@ -345,6 +350,7 @@ class MonitorCampaignStatus implements ShouldQueue
 
             if ($liCampaign) {
                 $liStatus = $liCampaign['status'] ?? 'UNKNOWN';
+
                 return [
                     'platform_status' => $liStatus,
                     'primary_status' => $this->mapLinkedInStatus($liStatus),
@@ -352,7 +358,9 @@ class MonitorCampaignStatus implements ShouldQueue
                 ];
             }
         } catch (\Exception $e) {
-            Log::warning("MonitorCampaignStatus: LinkedIn Ads check failed for campaign {$campaign->id}: " . $e->getMessage());
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
+            Log::warning("MonitorCampaignStatus: LinkedIn Ads check failed for campaign {$campaign->id}: ".$e->getMessage());
         }
 
         return null;
@@ -390,7 +398,7 @@ class MonitorCampaignStatus implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('MonitorCampaignStatus failed: ' . $exception->getMessage(), [
+        Log::error('MonitorCampaignStatus failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
         $this->recordRunFailure($exception);

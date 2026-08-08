@@ -15,7 +15,7 @@ class SandboxController extends Controller
         $user = $request->user();
 
         $existingSandbox = Customer::sandbox()
-            ->whereHas('users', fn($q) => $q->where('user_id', $user->id))
+            ->whereHas('users', fn ($q) => $q->where('user_id', $user->id))
             ->first();
 
         return Inertia::render('Sandbox/Index', [
@@ -24,7 +24,7 @@ class SandboxController extends Controller
                 'id' => $existingSandbox->id,
                 'name' => $existingSandbox->name,
                 'expires_at' => $existingSandbox->sandbox_expires_at?->toIso8601String(),
-                'has_results' => !empty($existingSandbox->sandbox_results),
+                'has_results' => ! empty($existingSandbox->sandbox_results),
                 'campaign_count' => $existingSandbox->campaigns()->count(),
             ] : null,
         ]);
@@ -47,11 +47,11 @@ class SandboxController extends Controller
         $user = $request->user();
 
         // Verify user owns this sandbox
-        if (!$customer->is_sandbox || !$customer->users()->where('user_id', $user->id)->exists()) {
+        if (! $customer->is_sandbox || ! $customer->users()->where('user_id', $user->id)->exists()) {
             abort(403);
         }
 
-        $campaigns = $customer->campaigns()->get()->map(fn($campaign) => [
+        $campaigns = $customer->campaigns()->get()->map(fn ($campaign) => [
             'id' => $campaign->id,
             'name' => $campaign->name,
             'platform' => $this->detectPlatform($campaign),
@@ -65,7 +65,7 @@ class SandboxController extends Controller
             ->orderBy('created_at', 'desc')
             ->get()
             ->groupBy('agent_type')
-            ->map(fn($activities) => $activities->map(fn($a) => [
+            ->map(fn ($activities) => $activities->map(fn ($a) => [
                 'action' => $a->action,
                 'description' => $a->description,
                 'details' => $a->details,
@@ -87,7 +87,7 @@ class SandboxController extends Controller
             'campaigns' => $campaigns,
             'agentResults' => $agentResults,
             'performanceSummary' => $performanceSummary,
-            'simulationComplete' => !empty($customer->sandbox_results),
+            'simulationComplete' => ! empty($customer->sandbox_results),
         ]);
     }
 
@@ -95,7 +95,7 @@ class SandboxController extends Controller
     {
         $user = $request->user();
 
-        if (!$customer->is_sandbox || !$customer->users()->where('user_id', $user->id)->exists()) {
+        if (! $customer->is_sandbox || ! $customer->users()->where('user_id', $user->id)->exists()) {
             abort(403);
         }
 
@@ -107,10 +107,19 @@ class SandboxController extends Controller
 
     protected function detectPlatform(object $campaign): string
     {
-        if ($campaign->google_ads_campaign_id) return 'google';
-        if ($campaign->facebook_ads_campaign_id) return 'facebook';
-        if ($campaign->microsoft_ads_campaign_id) return 'microsoft';
-        if ($campaign->linkedin_campaign_id) return 'linkedin';
+        if ($campaign->google_ads_campaign_id) {
+            return 'google';
+        }
+        if ($campaign->facebook_ads_campaign_id) {
+            return 'facebook';
+        }
+        if ($campaign->microsoft_ads_campaign_id) {
+            return 'microsoft';
+        }
+        if ($campaign->linkedin_campaign_id) {
+            return 'linkedin';
+        }
+
         return 'unknown';
     }
 

@@ -9,11 +9,11 @@ class ConversionTagGenerator
     /**
      * Generate a Google Ads conversion tracking tag configuration.
      *
-     * @param array $config Configuration array with:
-     *   - 'conversion_id' (required): Google Ads conversion ID
-     *   - 'conversion_label' (required): Google Ads conversion label
-     *   - 'event_value' (optional): Conversion value in cents
-     *   - 'currency' (optional): Currency code (e.g., USD)
+     * @param  array  $config  Configuration array with:
+     *                         - 'conversion_id' (required): Google Ads conversion ID
+     *                         - 'conversion_label' (required): Google Ads conversion label
+     *                         - 'event_value' (optional): Conversion value in cents
+     *                         - 'currency' (optional): Currency code (e.g., USD)
      * @return array GTM tag configuration
      */
     public function generateConversionTag(array $config): array
@@ -28,7 +28,7 @@ class ConversionTagGenerator
                 throw new \InvalidArgumentException('conversion_id and conversion_label are required');
             }
 
-            $tagName = $config['tag_name'] ?? 'Google Ads Conversion - ' . $config['conversion_label'];
+            $tagName = $config['tag_name'] ?? 'Google Ads Conversion - '.$config['conversion_label'];
             $eventValue = $config['event_value'] ?? null;
             $currency = $config['currency'] ?? 'USD';
 
@@ -84,11 +84,11 @@ class ConversionTagGenerator
     /**
      * Generate a Facebook Pixel conversion tracking tag configuration.
      *
-     * @param string $pixelId Facebook Pixel ID
-     * @param array $config Additional configuration:
-     *   - 'event_name' (optional): Facebook conversion event name
-     *   - 'event_value' (optional): Conversion value
-     *   - 'currency' (optional): Currency code
+     * @param  string  $pixelId  Facebook Pixel ID
+     * @param  array  $config  Additional configuration:
+     *                         - 'event_name' (optional): Facebook conversion event name
+     *                         - 'event_value' (optional): Conversion value
+     *                         - 'currency' (optional): Currency code
      * @return array GTM tag configuration
      */
     public function generateFacebookPixelTag(string $pixelId, array $config = []): array
@@ -109,7 +109,7 @@ class ConversionTagGenerator
             // Build Facebook Pixel tag configuration
             $tagConfig = [
                 'type' => 'html',  // Custom HTML tag in GTM
-                'name' => $config['tag_name'] ?? 'Facebook Pixel - ' . $eventName,
+                'name' => $config['tag_name'] ?? 'Facebook Pixel - '.$eventName,
                 'html' => $this->getFacebookPixelCode($pixelId, $eventName, $eventValue, $currency),
                 'firingTriggerId' => $config['trigger_id'] ?? null,
             ];
@@ -133,10 +133,10 @@ class ConversionTagGenerator
     /**
      * Generate a Google Analytics 4 event tracking tag configuration.
      *
-     * @param string $measurementId Google Analytics 4 Measurement ID (G-XXXXXX)
-     * @param array $config Additional configuration:
-     *   - 'event_name' (required): Event name
-     *   - 'event_parameters' (optional): Additional event parameters
+     * @param  string  $measurementId  Google Analytics 4 Measurement ID (G-XXXXXX)
+     * @param  array  $config  Additional configuration:
+     *                         - 'event_name' (required): Event name
+     *                         - 'event_parameters' (optional): Additional event parameters
      * @return array GTM tag configuration
      */
     public function generateGA4EventTag(string $measurementId, array $config = []): array
@@ -160,7 +160,7 @@ class ConversionTagGenerator
             // Build GA4 tag configuration
             $tagConfig = [
                 'type' => 'ga4_event',  // GA4 event tag type in GTM
-                'name' => $config['tag_name'] ?? 'GA4 Event - ' . $eventName,
+                'name' => $config['tag_name'] ?? 'GA4 Event - '.$eventName,
                 'parameter' => [
                     [
                         'type' => 'template',
@@ -180,7 +180,7 @@ class ConversionTagGenerator
             foreach ($eventParameters as $key => $value) {
                 $tagConfig['parameter'][] = [
                     'type' => 'template',
-                    'key' => 'eventParameter.' . $key,
+                    'key' => 'eventParameter.'.$key,
                     'value' => $value,
                 ];
             }
@@ -204,10 +204,6 @@ class ConversionTagGenerator
     /**
      * Generate HTML code for Facebook Pixel tracking.
      *
-     * @param string $pixelId
-     * @param string $eventName
-     * @param float|null $eventValue
-     * @param string $currency
      * @return string HTML/JavaScript code
      */
     private function getFacebookPixelCode(string $pixelId, string $eventName, ?float $eventValue = null, string $currency = 'USD'): string
@@ -218,7 +214,7 @@ class ConversionTagGenerator
             $fbqCall .= ", {value: {$eventValue}, currency: '{$currency}'}";
         }
 
-        $fbqCall .= ");";
+        $fbqCall .= ');';
 
         return <<<JAVASCRIPT
 <!-- Facebook Pixel -->
@@ -240,10 +236,10 @@ JAVASCRIPT;
     /**
      * Generate auto-setup configuration for all major conversion platforms.
      *
-     * @param array $platforms Platform credentials:
-     *   - 'google_ads' => ['conversion_id', 'conversion_label']
-     *   - 'facebook' => ['pixel_id']
-     *   - 'ga4' => ['measurement_id']
+     * @param  array  $platforms  Platform credentials:
+     *                            - 'google_ads' => ['conversion_id', 'conversion_label']
+     *                            - 'facebook' => ['pixel_id']
+     *                            - 'ga4' => ['measurement_id']
      * @return array Configuration for all tags
      */
     public function generateAutoSetupConfiguration(array $platforms): array
@@ -256,12 +252,12 @@ JAVASCRIPT;
             $tagConfigs = [];
 
             // Generate Google Ads tags
-            if (!empty($platforms['google_ads'])) {
+            if (! empty($platforms['google_ads'])) {
                 $tagConfigs['google_ads'] = $this->generateConversionTag($platforms['google_ads']);
             }
 
             // Generate Facebook Pixel tags
-            if (!empty($platforms['facebook'])) {
+            if (! empty($platforms['facebook'])) {
                 $tagConfigs['facebook'] = $this->generateFacebookPixelTag(
                     $platforms['facebook']['pixel_id'],
                     $platforms['facebook']
@@ -269,7 +265,7 @@ JAVASCRIPT;
             }
 
             // Generate GA4 tags
-            if (!empty($platforms['ga4'])) {
+            if (! empty($platforms['ga4'])) {
                 $tagConfigs['ga4'] = $this->generateGA4EventTag(
                     $platforms['ga4']['measurement_id'],
                     $platforms['ga4']
@@ -293,13 +289,13 @@ JAVASCRIPT;
     /**
      * Generate a Spectra Attribution Pixel tag for GTM.
      *
-     * @param string $customerId The Spectra customer ID
-     * @param array $config Optional configuration
+     * @param  string  $customerId  The Spectra customer ID
+     * @param  array  $config  Optional configuration
      * @return array GTM tag configuration
      */
     public function generateSpectraPixelTag(string $customerId, array $config = []): array
     {
-        $pixelUrl = config('app.url') . '/js/spectra-pixel.js';
+        $pixelUrl = config('app.url').'/js/spectra-pixel.js';
 
         $tagConfig = [
             'type' => 'html',
@@ -308,14 +304,14 @@ JAVASCRIPT;
                 [
                     'type' => 'template',
                     'key' => 'html',
-                    'value' => '<script src="' . $pixelUrl . '" data-customer="' . $customerId . '"></script>',
+                    'value' => '<script src="'.$pixelUrl.'" data-customer="'.$customerId.'"></script>',
                 ],
             ],
             'firingTriggerId' => $config['trigger_id'] ?? null,
             'tagFiringOption' => 'ONCE_PER_EVENT',
         ];
 
-        if (!$tagConfig['firingTriggerId']) {
+        if (! $tagConfig['firingTriggerId']) {
             unset($tagConfig['firingTriggerId']);
         }
 

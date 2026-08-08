@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreCampaignRequest;
-use App\Jobs\GenerateStrategy;
 use App\Jobs\GenerateCampaignCollateral;
+use App\Jobs\GenerateStrategy;
 use App\Jobs\GenerateStrategyCollateral;
 use App\Models\Campaign;
 use App\Models\ImageCollateral;
@@ -12,7 +12,6 @@ use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\StorageHelper;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -167,7 +166,7 @@ class CampaignController extends Controller
         unset($validated['keywords'], $validated['images'], $validated['seed_images'], $validated['videos']);
 
         // Calculate daily_budget if not provided
-        if (empty($validated['daily_budget']) && !empty($validated['total_budget'])) {
+        if (empty($validated['daily_budget']) && ! empty($validated['total_budget'])) {
             $startDate = \Carbon\Carbon::parse($validated['start_date']);
             $endDate = \Carbon\Carbon::parse($validated['end_date']);
             $days = max(1, $startDate->diffInDays($endDate) + 1); // +1 to include both start and end days
@@ -181,7 +180,7 @@ class CampaignController extends Controller
         }
 
         // Store user-selected keywords
-        if (!empty($keywords)) {
+        if (! empty($keywords)) {
             foreach ($keywords as $kw) {
                 \App\Models\Keyword::updateOrCreate(
                     [
@@ -211,50 +210,50 @@ class CampaignController extends Controller
         $defaultPlatform = $campaign->platforms[0] ?? 'google';
         foreach ($uploadedImages as $file) {
             $ext = $file->getClientOriginalExtension() ?: 'jpg';
-            $path = 'collateral/images/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            $path = 'collateral/images/'.$campaign->id.'/'.Str::uuid().'.'.$ext;
             [$s3Path, $url] = StorageHelper::put($path, file_get_contents($file->getPathname()), $file->getMimeType() ?: 'image/jpeg');
             ImageCollateral::create([
-                'campaign_id'    => $campaign->id,
-                'strategy_id'    => null,
-                'platform'       => $defaultPlatform,
-                's3_path'        => $s3Path,
+                'campaign_id' => $campaign->id,
+                'strategy_id' => null,
+                'platform' => $defaultPlatform,
+                's3_path' => $s3Path,
                 'cloudfront_url' => $url,
-                'is_active'      => true,
-                'source'         => 'uploaded',
+                'is_active' => true,
+                'source' => 'uploaded',
             ]);
         }
 
         // Upload seed images — these are used as visual reference for AI-generated ads
         foreach ($seedImages as $file) {
             $ext = $file->getClientOriginalExtension() ?: 'jpg';
-            $path = 'collateral/images/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            $path = 'collateral/images/'.$campaign->id.'/'.Str::uuid().'.'.$ext;
             [$s3Path, $url] = StorageHelper::put($path, file_get_contents($file->getPathname()), $file->getMimeType() ?: 'image/jpeg');
             ImageCollateral::create([
-                'campaign_id'    => $campaign->id,
-                'strategy_id'    => null,
-                'platform'       => $defaultPlatform,
-                's3_path'        => $s3Path,
+                'campaign_id' => $campaign->id,
+                'strategy_id' => null,
+                'platform' => $defaultPlatform,
+                's3_path' => $s3Path,
                 'cloudfront_url' => $url,
-                'is_active'      => true,
-                'is_seed'        => true,
-                'source'         => 'uploaded',
+                'is_active' => true,
+                'is_seed' => true,
+                'source' => 'uploaded',
             ]);
         }
 
         // Upload any user-provided videos from the wizard
         foreach ($uploadedVideos as $file) {
             $ext = $file->getClientOriginalExtension() ?: 'mp4';
-            $path = 'collateral/videos/' . $campaign->id . '/' . Str::uuid() . '.' . $ext;
+            $path = 'collateral/videos/'.$campaign->id.'/'.Str::uuid().'.'.$ext;
             [$s3Path, $url] = StorageHelper::put($path, file_get_contents($file->getPathname()), $file->getMimeType() ?: 'video/mp4');
             VideoCollateral::create([
-                'campaign_id'    => $campaign->id,
-                'strategy_id'    => null,
-                'platform'       => $campaign->platforms[0] ?? 'google',
-                's3_path'        => $s3Path,
+                'campaign_id' => $campaign->id,
+                'strategy_id' => null,
+                'platform' => $campaign->platforms[0] ?? 'google',
+                's3_path' => $s3Path,
                 'cloudfront_url' => $url,
-                'status'         => 'completed',
-                'is_active'      => true,
-                'source'         => 'uploaded',
+                'status' => 'completed',
+                'is_active' => true,
+                'source' => 'uploaded',
             ]);
         }
 
@@ -355,7 +354,7 @@ class CampaignController extends Controller
         $force = $request->boolean('force', false);
 
         if ($campaign->strategies()->whereNotNull('signed_off_at')->exists()) {
-            if (!$force) {
+            if (! $force) {
                 return back()->with('error', 'Some strategies are already signed off. Use force regeneration to revert sign-offs and start over.');
             }
             // Force regeneration: delete all collateral and revert sign-offs
@@ -405,9 +404,9 @@ class CampaignController extends Controller
 
         // Check if user is admin OR owns this campaign
         $isAdmin = $user->hasRole('admin');
-        $isOwner = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
+        $isOwner = $user->can('view', $campaign);
 
-        if (!$isAdmin && !$isOwner) {
+        if (! $isAdmin && ! $isOwner) {
             abort(403, 'You do not have access to this campaign.');
         }
 
@@ -433,7 +432,7 @@ class CampaignController extends Controller
             ->where('platform', 'google_ads')
             ->first();
 
-        if (!$connection || !$campaign->google_ads_campaign_id) {
+        if (! $connection || ! $campaign->google_ads_campaign_id) {
             // Fall back to stored performance data if available
             $dailyData = $this->getStoredDailyData($campaign, $startDate, $endDate);
             if ($dailyData->isNotEmpty()) {
@@ -442,6 +441,7 @@ class CampaignController extends Controller
                     'daily_data' => $this->formatDailyData($dailyData),
                 ]);
             }
+
             return response()->json(array_merge($emptyResponse, [
                 'message' => 'No Google Ads connection or campaign not deployed',
             ]));
@@ -460,13 +460,14 @@ class CampaignController extends Controller
             // Get daily data from stored records
             $dailyData = $this->getStoredDailyData($campaign, $startDate, $endDate);
 
-            if (!$metrics) {
+            if (! $metrics) {
                 if ($dailyData->isNotEmpty()) {
                     return response()->json([
                         'summary' => $this->summarizeStoredData($dailyData),
                         'daily_data' => $this->formatDailyData($dailyData),
                     ]);
                 }
+
                 return response()->json(array_merge($emptyResponse, [
                     'message' => 'No performance data available yet',
                 ]));
@@ -486,7 +487,7 @@ class CampaignController extends Controller
             ]);
 
         } catch (\Exception $e) {
-            \Log::error("Failed to fetch performance for campaign {$campaign->id}: " . $e->getMessage());
+            \Log::error("Failed to fetch performance for campaign {$campaign->id}: ".$e->getMessage());
 
             // Fall back to stored data on API error
             $dailyData = $this->getStoredDailyData($campaign, $startDate, $endDate);
@@ -550,6 +551,7 @@ class CampaignController extends Controller
                 'conversions' => $row->conversions,
             ];
         }
+
         return (object) $formatted;
     }
 
@@ -560,9 +562,9 @@ class CampaignController extends Controller
     {
         // Check if user has access to this campaign through any of their customers
         $user = $request->user();
-        $hasAccess = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
+        $hasAccess = $user->can('view', $campaign);
 
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             abort(403, 'You do not have access to this campaign.');
         }
 
@@ -582,9 +584,9 @@ class CampaignController extends Controller
     {
         // Check if user has access to this campaign
         $user = $request->user();
-        $hasAccess = $user->customers()->where('customers.id', $campaign->customer_id)->exists();
+        $hasAccess = $user->can('view', $campaign);
 
-        if (!$hasAccess) {
+        if (! $hasAccess) {
             abort(403, 'You do not have access to this campaign.');
         }
 
@@ -616,7 +618,7 @@ class CampaignController extends Controller
             'campaign' => [
                 'id' => $campaign->id,
                 'name' => $campaign->name,
-                'status' => $campaign->status ?? 'pending',
+                'status' => $campaign->status->value,
             ],
             'deployments' => $deployments,
             'overall_progress' => $overallProgress,

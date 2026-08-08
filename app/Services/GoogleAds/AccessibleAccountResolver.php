@@ -13,14 +13,14 @@ class AccessibleAccountResolver
 
         return collect($resourceNames)
             ->map(function (string $resourceName) {
-                if (!preg_match('/customers\/(\d+)/', $resourceName, $matches)) {
+                if (! preg_match('/customers\/(\d+)/', $resourceName, $matches)) {
                     return null;
                 }
 
                 return [
                     'id' => $matches[1],
                     'resource_name' => $resourceName,
-                    'name' => 'Google Ads Account ' . $matches[1],
+                    'name' => 'Google Ads Account '.$matches[1],
                 ];
             })
             ->filter()

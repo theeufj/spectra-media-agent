@@ -31,7 +31,7 @@ class GoogleApiOAuthController extends Controller
         return Inertia::render('Settings/GoogleApiConnect', [
             'connection' => $existing ? [
                 'connected_at' => $existing->updated_at->toISOString(),
-                'scopes'       => $existing->scopes ?? [],
+                'scopes' => $existing->scopes ?? [],
             ] : null,
         ]);
     }
@@ -43,7 +43,7 @@ class GoogleApiOAuthController extends Controller
             ->scopes(self::SCOPES)
             ->with([
                 'access_type' => 'offline',
-                'prompt'      => 'consent',
+                'prompt' => 'consent',
             ])
             ->stateless()
             ->redirect();
@@ -58,16 +58,16 @@ class GoogleApiOAuthController extends Controller
 
         Connection::updateOrCreate(
             [
-                'user_id'  => Auth::id(),
+                'user_id' => Auth::id(),
                 'platform' => 'google_api',
             ],
             [
-                'access_token'  => $googleUser->token,
+                'access_token' => $googleUser->token,
                 'refresh_token' => $googleUser->refreshToken ?? null,
-                'expires_at'    => now()->addSeconds($googleUser->expiresIn ?? 3600),
-                'account_id'    => $googleUser->getId(),
-                'account_name'  => $googleUser->getName(),
-                'scopes'        => self::SCOPES,
+                'expires_at' => now()->addSeconds($googleUser->expiresIn ?? 3600),
+                'account_id' => $googleUser->getId(),
+                'account_name' => $googleUser->getName(),
+                'scopes' => self::SCOPES,
             ]
         );
 
@@ -80,15 +80,15 @@ class GoogleApiOAuthController extends Controller
             ->where('platform', 'google_api')
             ->first();
 
-        if (!$connection) {
+        if (! $connection) {
             return redirect()->route('google-api.show');
         }
 
         return Inertia::render('Settings/GoogleApiSuccess', [
-            'account_name'  => $connection->account_name,
-            'account_id'    => $connection->account_id,
-            'scopes'        => $connection->scopes ?? [],
-            'connected_at'  => $connection->updated_at->toISOString(),
+            'account_name' => $connection->account_name,
+            'account_id' => $connection->account_id,
+            'scopes' => $connection->scopes ?? [],
+            'connected_at' => $connection->updated_at->toISOString(),
         ]);
     }
 
@@ -98,7 +98,7 @@ class GoogleApiOAuthController extends Controller
             ->where('platform', 'google_api')
             ->first();
 
-        if (!$connection) {
+        if (! $connection) {
             return redirect()->route('google-api.show');
         }
 
@@ -106,9 +106,9 @@ class GoogleApiOAuthController extends Controller
 
         return Inertia::render('Settings/GoogleApiVerify', [
             'account_name' => $connection->account_name,
-            'googleAds'    => $this->fetchGoogleAdsAccounts($token),
-            'tagManager'   => $this->fetchTagManagerAccounts($token),
-            'analytics'    => $this->fetchAnalyticsAccounts($token),
+            'googleAds' => $this->fetchGoogleAdsAccounts($token),
+            'tagManager' => $this->fetchTagManagerAccounts($token),
+            'analytics' => $this->fetchAnalyticsAccounts($token),
         ]);
     }
 
@@ -133,21 +133,22 @@ class GoogleApiOAuthController extends Controller
 
         // Refresh using stored refresh token
         $response = Http::asForm()->post('https://oauth2.googleapis.com/token', [
-            'client_id'     => config('services.google.client_id'),
+            'client_id' => config('services.google.client_id'),
             'client_secret' => config('services.google.client_secret'),
             'refresh_token' => $connection->refresh_token,
-            'grant_type'    => 'refresh_token',
+            'grant_type' => 'refresh_token',
         ]);
 
-        if (!$response->successful()) {
+        if (! $response->successful()) {
             Log::warning('GoogleApiOAuth: token refresh failed', ['body' => $response->body()]);
+
             return $connection->access_token; // fall back, call may fail gracefully
         }
 
         $data = $response->json();
         $connection->update([
             'access_token' => $data['access_token'],
-            'expires_at'   => now()->addSeconds($data['expires_in'] ?? 3600),
+            'expires_at' => now()->addSeconds($data['expires_in'] ?? 3600),
         ]);
 
         return $data['access_token'];
@@ -163,7 +164,7 @@ class GoogleApiOAuthController extends Controller
                 ->withHeaders(['developer-token' => $developerToken])
                 ->get('https://googleads.googleapis.com/v22/customers:listAccessibleCustomers');
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 $body = $response->json();
                 // Google Ads REST API nests errors under errors[0].errorCode or error.message
                 $message = $body['error']['message']
@@ -171,17 +172,19 @@ class GoogleApiOAuthController extends Controller
                     ?? $response->body();
                 Log::warning('GoogleApiVerify: Ads API failed', [
                     'status' => $response->status(),
-                    'body'   => $body,
-                    'dev_token_present' => !empty($developerToken),
+                    'body' => $body,
+                    'dev_token_present' => ! empty($developerToken),
                 ]);
+
                 return ['error' => $message, 'accounts' => [], 'status' => $response->status()];
             }
 
             $names = $response->json('resourceNames') ?? [];
+
             return [
-                'error'    => null,
-                'accounts' => array_map(fn($n) => ['resource_name' => $n, 'id' => str_replace('customers/', '', $n)], $names),
-                'count'    => count($names),
+                'error' => null,
+                'accounts' => array_map(fn ($n) => ['resource_name' => $n, 'id' => str_replace('customers/', '', $n)], $names),
+                'count' => count($names),
             ];
         } catch (\Exception $e) {
             return ['error' => $e->getMessage(), 'accounts' => []];
@@ -194,15 +197,16 @@ class GoogleApiOAuthController extends Controller
             $response = Http::withToken($token)
                 ->get('https://tagmanager.googleapis.com/tagmanager/v2/accounts');
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'API call failed', 'accounts' => []];
             }
 
             $accounts = $response->json('account') ?? [];
+
             return [
-                'error'    => null,
-                'accounts' => array_map(fn($a) => [
-                    'id'   => $a['accountId'] ?? '',
+                'error' => null,
+                'accounts' => array_map(fn ($a) => [
+                    'id' => $a['accountId'] ?? '',
                     'name' => $a['name'] ?? '',
                 ], $accounts),
                 'count' => count($accounts),
@@ -218,17 +222,18 @@ class GoogleApiOAuthController extends Controller
             $response = Http::withToken($token)
                 ->get('https://analyticsadmin.googleapis.com/v1beta/accounts');
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'API call failed', 'accounts' => []];
             }
 
             $accounts = $response->json('accounts') ?? [];
+
             return [
-                'error'    => null,
-                'accounts' => array_map(fn($a) => [
-                    'name'         => $a['displayName'] ?? '',
-                    'resource'     => $a['name'] ?? '',
-                    'region'       => $a['regionCode'] ?? '',
+                'error' => null,
+                'accounts' => array_map(fn ($a) => [
+                    'name' => $a['displayName'] ?? '',
+                    'resource' => $a['name'] ?? '',
+                    'region' => $a['regionCode'] ?? '',
                 ], $accounts),
                 'count' => count($accounts),
             ];

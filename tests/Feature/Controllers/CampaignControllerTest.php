@@ -17,17 +17,18 @@ class CampaignControllerTest extends TestCase
     use DatabaseTransactions;
 
     protected User $user;
+
     protected Customer $customer;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->user     = User::factory()->create();
+        $this->user = User::factory()->create();
         $this->customer = Customer::factory()->create();
         $this->customer->users()->attach($this->user->id, ['role' => 'owner']);
     }
@@ -87,9 +88,9 @@ class CampaignControllerTest extends TestCase
     public function test_destroy_deletes_campaign_owned_by_user(): void
     {
         $campaign = Campaign::factory()->create([
-            'customer_id'            => $this->customer->id,
+            'customer_id' => $this->customer->id,
             'google_ads_campaign_id' => null,
-            'status'                 => 'draft',
+            'status' => 'draft',
         ]);
 
         $response = $this->actingAs($this->user)
@@ -107,6 +108,6 @@ class CampaignControllerTest extends TestCase
             ->getJson("/campaigns/{$campaign->id}/api");
 
         $response->assertStatus(200)
-                 ->assertJsonStructure(['id']);
+            ->assertJsonStructure(['id']);
     }
 }

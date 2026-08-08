@@ -3,9 +3,9 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\ApiCore\ApiException;
 
 class RemoveKeyword extends BaseGoogleAdsService
@@ -14,7 +14,7 @@ class RemoveKeyword extends BaseGoogleAdsService
     {
         $this->ensureClient();
 
-        $operation = new AdGroupCriterionOperation();
+        $operation = new AdGroupCriterionOperation;
         $operation->setRemove($criterionResourceName);
 
         try {
@@ -25,9 +25,11 @@ class RemoveKeyword extends BaseGoogleAdsService
                 ])
             );
             $this->logInfo("Removed keyword: {$criterionResourceName}");
+
             return true;
         } catch (GoogleAdsException|ApiException $e) {
-            $this->logError("Failed to remove keyword: " . $e->getMessage());
+            $this->logError('Failed to remove keyword: '.$e->getMessage());
+
             return false;
         }
     }

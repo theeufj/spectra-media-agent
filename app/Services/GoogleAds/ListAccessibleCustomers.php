@@ -2,10 +2,9 @@
 
 namespace App\Services\GoogleAds;
 
+use App\Models\Customer;
 use Google\Ads\GoogleAds\V22\Services\CustomerServiceClient;
 use Google\Ads\GoogleAds\V22\Services\ListAccessibleCustomersRequest;
-use Illuminate\Support\Facades\Log;
-use App\Models\Customer;
 
 class ListAccessibleCustomers extends BaseGoogleAdsService
 {
@@ -18,7 +17,7 @@ class ListAccessibleCustomers extends BaseGoogleAdsService
     {
         /** @var CustomerServiceClient $customerServiceClient */
         $customerServiceClient = $this->client->getCustomerServiceClient();
-        $response = $customerServiceClient->listAccessibleCustomers(new ListAccessibleCustomersRequest());
+        $response = $customerServiceClient->listAccessibleCustomers(new ListAccessibleCustomersRequest);
 
         $customerResourceNames = [];
         foreach ($response->getResourceNames() as $resourceName) {

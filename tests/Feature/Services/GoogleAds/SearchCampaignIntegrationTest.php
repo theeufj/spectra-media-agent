@@ -31,14 +31,16 @@ class SearchCampaignIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected string $customerId;
+
     protected array $createdCampaignResources = [];
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_GOOGLE_ADS_INTEGRATION_TESTS=true to run.');
         }
 
@@ -55,17 +57,17 @@ class SearchCampaignIntegrationTest extends TestCase
 
     public function test_creates_search_campaign_and_returns_resource_name(): void
     {
-        $service  = new CreateSearchCampaign($this->customer);
+        $service = new CreateSearchCampaign($this->customer);
         $campaign = Campaign::factory()->make([
-            'customer_id'  => $this->customer->id,
-            'name'         => 'PHPUnit Search Test ' . now()->timestamp,
+            'customer_id' => $this->customer->id,
+            'name' => 'PHPUnit Search Test '.now()->timestamp,
             'daily_budget' => 5.00,
         ]);
 
         $resource = $service->create($this->customerId, $campaign);
 
         $this->assertNotNull($resource);
-        $this->assertStringContainsString('customers/' . $this->customerId, $resource);
+        $this->assertStringContainsString('customers/'.$this->customerId, $resource);
         $this->assertStringContainsString('/campaigns/', $resource);
 
         $this->createdCampaignResources[] = $resource;
@@ -75,7 +77,7 @@ class SearchCampaignIntegrationTest extends TestCase
     {
         $campaignResource = $this->createTestCampaign();
 
-        $service  = new CreateSearchAdGroup($this->customer);
+        $service = new CreateSearchAdGroup($this->customer);
         $resource = $service->create($this->customerId, $campaignResource, 'PHPUnit Ad Group');
 
         $this->assertNotNull($resource);
@@ -84,17 +86,17 @@ class SearchCampaignIntegrationTest extends TestCase
 
     public function test_creates_responsive_search_ad(): void
     {
-        $campaignResource  = $this->createTestCampaign();
-        $adGroupService    = new CreateSearchAdGroup($this->customer);
-        $adGroupResource   = $adGroupService->create($this->customerId, $campaignResource, 'PHPUnit Ad Group');
+        $campaignResource = $this->createTestCampaign();
+        $adGroupService = new CreateSearchAdGroup($this->customer);
+        $adGroupResource = $adGroupService->create($this->customerId, $campaignResource, 'PHPUnit Ad Group');
 
-        $service  = new CreateResponsiveSearchAd($this->customer);
+        $service = new CreateResponsiveSearchAd($this->customer);
         $resource = $service->create(
-            customerId:       $this->customerId,
-            adGroupResource:  $adGroupResource,
-            headlines:        ['Buy Now', 'Great Deals', 'Shop Today'],
-            descriptions:     ['Find what you need fast.', 'Quality products at great prices.'],
-            finalUrl:         'https://sitetospend.com',
+            customerId: $this->customerId,
+            adGroupResource: $adGroupResource,
+            headlines: ['Buy Now', 'Great Deals', 'Shop Today'],
+            descriptions: ['Find what you need fast.', 'Quality products at great prices.'],
+            finalUrl: 'https://sitetospend.com',
         );
 
         $this->assertNotNull($resource);
@@ -104,15 +106,15 @@ class SearchCampaignIntegrationTest extends TestCase
     public function test_adds_keyword_to_ad_group(): void
     {
         $campaignResource = $this->createTestCampaign();
-        $adGroupService   = new CreateSearchAdGroup($this->customer);
-        $adGroupResource  = $adGroupService->create($this->customerId, $campaignResource, 'PHPUnit Ad Group');
+        $adGroupService = new CreateSearchAdGroup($this->customer);
+        $adGroupResource = $adGroupService->create($this->customerId, $campaignResource, 'PHPUnit Ad Group');
 
-        $service  = new AddKeyword($this->customer);
+        $service = new AddKeyword($this->customer);
         $resource = $service->add(
-            customerId:      $this->customerId,
+            customerId: $this->customerId,
             adGroupResource: $adGroupResource,
-            keyword:         'integration test keyword',
-            matchType:       'EXACT',
+            keyword: 'integration test keyword',
+            matchType: 'EXACT',
         );
 
         $this->assertNotNull($resource);
@@ -124,13 +126,13 @@ class SearchCampaignIntegrationTest extends TestCase
         $campaignResource = $this->createTestCampaign();
 
         $service = new UpdateCampaignStatus($this->customer);
-        $result  = $service->update($this->customerId, $campaignResource, 'PAUSED');
+        $result = $service->update($this->customerId, $campaignResource, 'PAUSED');
 
         $this->assertTrue($result);
 
         // Verify via GetCampaignStatus
         $statusService = new GetCampaignStatus($this->customer);
-        $status        = $statusService->get($this->customerId, $campaignResource);
+        $status = $statusService->get($this->customerId, $campaignResource);
 
         $this->assertEquals('PAUSED', $status);
     }
@@ -140,7 +142,7 @@ class SearchCampaignIntegrationTest extends TestCase
         $campaignResource = $this->createTestCampaign();
 
         $service = new UpdateCampaignBudget($this->customer);
-        $result  = $service->update($this->customerId, $campaignResource, 7.50);
+        $result = $service->update($this->customerId, $campaignResource, 7.50);
 
         $this->assertTrue($result);
     }
@@ -152,12 +154,12 @@ class SearchCampaignIntegrationTest extends TestCase
             ->whereNotNull('google_ads_campaign_id')
             ->first();
 
-        if (!$existingCampaign) {
+        if (! $existingCampaign) {
             $this->markTestSkipped('No existing Google Ads campaign in DB for this customer.');
         }
 
         $service = new GetCampaignPerformance($this->customer);
-        $perf    = $service->get(
+        $perf = $service->get(
             $this->customerId,
             $existingCampaign->google_ads_campaign_id,
             now()->subDays(30)->toDateString(),
@@ -175,10 +177,10 @@ class SearchCampaignIntegrationTest extends TestCase
 
     private function createTestCampaign(): string
     {
-        $service  = new CreateSearchCampaign($this->customer);
+        $service = new CreateSearchCampaign($this->customer);
         $campaign = Campaign::factory()->make([
-            'customer_id'  => $this->customer->id,
-            'name'         => 'PHPUnit Test ' . now()->timestamp . '-' . rand(100, 999),
+            'customer_id' => $this->customer->id,
+            'name' => 'PHPUnit Test '.now()->timestamp.'-'.rand(100, 999),
             'daily_budget' => 5.00,
         ]);
 
@@ -196,10 +198,10 @@ class SearchCampaignIntegrationTest extends TestCase
 
         try {
             $configPath = storage_path('app/google_ads_php.ini');
-            $mccId      = config('googleads.mcc_customer_id', env('GOOGLE_ADS_MCC_CUSTOMER_ID'));
+            $mccId = config('googleads.mcc_customer_id', env('GOOGLE_ADS_MCC_CUSTOMER_ID'));
 
-            $oAuth2 = (new OAuth2TokenBuilder())->fromFile($configPath)->build();
-            $client = (new GoogleAdsClientBuilder())
+            $oAuth2 = (new OAuth2TokenBuilder)->fromFile($configPath)->build();
+            $client = (new GoogleAdsClientBuilder)
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2)
                 ->withLoginCustomerId($mccId)
@@ -208,18 +210,19 @@ class SearchCampaignIntegrationTest extends TestCase
             $ops = array_map(function (string $resource) {
                 $campaign = new GoogleCampaign([
                     'resource_name' => $resource,
-                    'status'        => CampaignStatus::REMOVED,
+                    'status' => CampaignStatus::REMOVED,
                 ]);
-                $op = new CampaignOperation();
+                $op = new CampaignOperation;
                 $op->setUpdate($campaign);
                 $op->setUpdateMask(new FieldMask(['paths' => ['status']]));
+
                 return $op;
             }, $this->createdCampaignResources);
 
             $client->getCampaignServiceClient()->mutateCampaigns(
                 new MutateCampaignsRequest([
                     'customer_id' => $this->customerId,
-                    'operations'  => $ops,
+                    'operations' => $ops,
                 ])
             );
         } catch (\Throwable $e) {

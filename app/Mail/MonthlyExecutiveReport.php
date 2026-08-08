@@ -16,7 +16,9 @@ class MonthlyExecutiveReport extends Mailable
     use Queueable, SerializesModels;
 
     public User $user;
+
     public array $report;
+
     protected ?string $pdfPath;
 
     public function __construct(User $user, array $report, ?string $pdfPath = null)

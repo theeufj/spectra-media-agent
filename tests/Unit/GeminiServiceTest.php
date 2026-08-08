@@ -2,11 +2,11 @@
 
 namespace Tests\Unit;
 
-use Tests\TestCase;
 use App\Services\GeminiService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
+use Tests\TestCase;
 
 class GeminiServiceTest extends TestCase
 {
@@ -19,15 +19,15 @@ class GeminiServiceTest extends TestCase
         parent::setUp();
 
         config([
-            'services.google.project_id'       => 'test-project',
-            'services.google.location'          => 'us-central1',
-            'services.google.credentials_path'  => '/dev/null',
+            'services.google.project_id' => 'test-project',
+            'services.google.location' => 'us-central1',
+            'services.google.credentials_path' => '/dev/null',
         ]);
 
         // Skip real GCP auth — inject a fake token directly into the cache
         Cache::put('gcp_vertex_access_token', 'test-token', 3000);
 
-        $this->service = new GeminiService();
+        $this->service = new GeminiService;
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -41,9 +41,9 @@ class GeminiServiceTest extends TestCase
                 'finishReason' => 'STOP',
             ]],
             'usageMetadata' => array_merge([
-                'promptTokenCount'     => 100,
+                'promptTokenCount' => 100,
                 'candidatesTokenCount' => 50,
-                'totalTokenCount'      => 150,
+                'totalTokenCount' => 150,
             ], $usage),
         ]];
     }
@@ -60,7 +60,7 @@ class GeminiServiceTest extends TestCase
 
     // ─── generateContent ──────────────────────────────────────────────────────
 
-    public function test_generateContent_returns_array_on_success(): void
+    public function test_generate_content_returns_array_on_success(): void
     {
         Http::fake([self::VERTEX_URL => Http::response($this->streamChunk('Generated text response'), 200)]);
 
@@ -71,7 +71,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals('Generated text response', $result['text']);
     }
 
-    public function test_generateContent_returns_null_on_api_failure(): void
+    public function test_generate_content_returns_null_on_api_failure(): void
     {
         Http::fake([self::VERTEX_URL => Http::response(['error' => ['message' => 'API error']], 500)]);
         Log::spy();
@@ -81,7 +81,7 @@ class GeminiServiceTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function test_generateContent_returns_null_when_candidates_missing(): void
+    public function test_generate_content_returns_null_when_candidates_missing(): void
     {
         Http::fake([self::VERTEX_URL => Http::response([['data' => 'no candidates']], 200)]);
 
@@ -90,7 +90,7 @@ class GeminiServiceTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function test_generateContent_applies_task_type_temperature(): void
+    public function test_generate_content_applies_task_type_temperature(): void
     {
         Http::fake([self::VERTEX_URL => Http::response($this->streamChunk('ok'), 200)]);
 
@@ -104,12 +104,13 @@ class GeminiServiceTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = json_decode($request->body(), true);
+
             // extraction task_type should apply low temperature (0.15)
             return ($body['generationConfig']['temperature'] ?? null) == 0.15;
         });
     }
 
-    public function test_generateContent_caller_config_overrides_task_preset(): void
+    public function test_generate_content_caller_config_overrides_task_preset(): void
     {
         Http::fake([self::VERTEX_URL => Http::response($this->streamChunk('ok'), 200)]);
 
@@ -124,18 +125,19 @@ class GeminiServiceTest extends TestCase
 
         Http::assertSent(function ($request) {
             $body = json_decode($request->body(), true);
+
             return ($body['generationConfig']['temperature'] ?? null) == 0.99;
         });
     }
 
     // ─── Fallback chain ───────────────────────────────────────────────────────
 
-    public function test_generateContent_falls_back_to_next_model_on_failure(): void
+    public function test_generate_content_falls_back_to_next_model_on_failure(): void
     {
         // Match per-model URL so the pro model always fails and the fallback always succeeds.
         Http::fake([
             '*gemini-3.1-pro-preview*' => Http::response([], 500),
-            '*gemini-2.5-flash*'        => Http::response($this->streamChunk('fallback response'), 200),
+            '*gemini-2.5-flash*' => Http::response($this->streamChunk('fallback response'), 200),
         ]);
 
         $result = $this->service->generateContent('gemini-3.1-pro-preview', 'Test prompt');
@@ -144,7 +146,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals('fallback response', $result['text']);
     }
 
-    public function test_generateContent_returns_null_when_both_models_fail(): void
+    public function test_generate_content_returns_null_when_both_models_fail(): void
     {
         Http::fake([self::VERTEX_URL => Http::response([], 500)]);
         Log::spy();
@@ -156,42 +158,42 @@ class GeminiServiceTest extends TestCase
 
     // ─── resolveModel ─────────────────────────────────────────────────────────
 
-    public function test_resolveModel_resolves_model_key(): void
+    public function test_resolve_model_resolves_model_key(): void
     {
         $this->assertEquals(config('ai.models.default'), $this->service->resolveModel('default'));
-        $this->assertEquals(config('ai.models.pro'),     $this->service->resolveModel('pro'));
-        $this->assertEquals(config('ai.models.lite'),    $this->service->resolveModel('lite'));
+        $this->assertEquals(config('ai.models.pro'), $this->service->resolveModel('pro'));
+        $this->assertEquals(config('ai.models.lite'), $this->service->resolveModel('lite'));
     }
 
-    public function test_resolveModel_resolves_task_type(): void
+    public function test_resolve_model_resolves_task_type(): void
     {
-        $this->assertEquals(config('ai.models.pro'),     $this->service->resolveModel('strategy'));
-        $this->assertEquals(config('ai.models.lite'),    $this->service->resolveModel('extraction'));
-        $this->assertEquals(config('ai.models.lite'),    $this->service->resolveModel('classification'));
+        $this->assertEquals(config('ai.models.pro'), $this->service->resolveModel('strategy'));
+        $this->assertEquals(config('ai.models.lite'), $this->service->resolveModel('extraction'));
+        $this->assertEquals(config('ai.models.lite'), $this->service->resolveModel('classification'));
         $this->assertEquals(config('ai.models.default'), $this->service->resolveModel('creative'));
     }
 
-    public function test_resolveModel_passes_through_raw_model_string(): void
+    public function test_resolve_model_passes_through_raw_model_string(): void
     {
         $this->assertEquals('gemini-2.5-pro', $this->service->resolveModel('gemini-2.5-pro'));
     }
 
     // ─── Cost calculation ─────────────────────────────────────────────────────
 
-    public function test_calculateCost_returns_correct_usd_amount(): void
+    public function test_calculate_cost_returns_correct_usd_amount(): void
     {
         // gemini-3.5-flash: $0.075/1M input, $0.30/1M output
         $cost = $this->service->calculateCost('gemini-3.5-flash', 1_000_000, 1_000_000);
         $this->assertEqualsWithDelta(0.375, $cost, 0.000001);
     }
 
-    public function test_calculateCost_includes_cached_token_discount(): void
+    public function test_calculate_cost_includes_cached_token_discount(): void
     {
         $cost = $this->service->calculateCost('gemini-3.5-flash', 0, 0, 1_000_000);
         $this->assertEqualsWithDelta(0.01875, $cost, 0.000001);
     }
 
-    public function test_calculateCost_returns_zero_for_unknown_model(): void
+    public function test_calculate_cost_returns_zero_for_unknown_model(): void
     {
         $cost = $this->service->calculateCost('unknown-model-xyz', 1_000_000, 1_000_000);
         $this->assertEquals(0.0, $cost);
@@ -199,7 +201,7 @@ class GeminiServiceTest extends TestCase
 
     // ─── Retry logic ──────────────────────────────────────────────────────────
 
-    public function test_generateContent_retries_on_503(): void
+    public function test_generate_content_retries_on_503(): void
     {
         Http::fake([self::VERTEX_URL => Http::sequence()
             ->push([], 503)
@@ -212,7 +214,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals('Generated text', $result['text']);
     }
 
-    public function test_generateContent_retries_on_429(): void
+    public function test_generate_content_retries_on_429(): void
     {
         Http::fake([self::VERTEX_URL => Http::sequence()
             ->push([], 429)
@@ -225,7 +227,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals('Generated text', $result['text']);
     }
 
-    public function test_generateContent_retries_multiple_times(): void
+    public function test_generate_content_retries_multiple_times(): void
     {
         Http::fake([self::VERTEX_URL => Http::sequence()
             ->push([], 503)
@@ -239,7 +241,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals('Generated text', $result['text']);
     }
 
-    public function test_generateContent_fails_after_max_retries(): void
+    public function test_generate_content_fails_after_max_retries(): void
     {
         Http::fake([self::VERTEX_URL => Http::sequence()
             ->push([], 503)->push([], 503)->push([], 503),
@@ -251,7 +253,7 @@ class GeminiServiceTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function test_generateContent_does_not_retry_on_400(): void
+    public function test_generate_content_does_not_retry_on_400(): void
     {
         // 400 is not retryable — no retry attempts, but the fallback chain still fires once.
         // Verify by checking only 2 HTTP requests were made (primary + one fallback attempt).
@@ -263,7 +265,7 @@ class GeminiServiceTest extends TestCase
         Http::assertSentCount(2); // 1 primary (no retries on 400) + 1 fallback
     }
 
-    public function test_generateContent_respects_custom_max_retries(): void
+    public function test_generate_content_respects_custom_max_retries(): void
     {
         // maxRetries: 2 → 1 retry attempt (attempt 0 + retry 1 = 2 total requests for primary)
         Http::fake([self::VERTEX_URL => Http::response([], 503)]);
@@ -277,7 +279,7 @@ class GeminiServiceTest extends TestCase
 
     // ─── embedContent ─────────────────────────────────────────────────────────
 
-    public function test_embedContent_returns_array_on_success(): void
+    public function test_embed_content_returns_array_on_success(): void
     {
         // Vertex AI embedding response format
         Http::fake([self::VERTEX_URL => Http::response([
@@ -290,7 +292,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals([0.1, 0.2, 0.3, 0.4], $result);
     }
 
-    public function test_embedContent_returns_null_on_api_failure(): void
+    public function test_embed_content_returns_null_on_api_failure(): void
     {
         Http::fake([self::VERTEX_URL => Http::response(['error' => ['message' => 'API error']], 500)]);
         Log::spy();
@@ -301,7 +303,7 @@ class GeminiServiceTest extends TestCase
         Log::shouldHaveReceived('error')->once();
     }
 
-    public function test_embedContent_returns_null_when_values_missing(): void
+    public function test_embed_content_returns_null_when_values_missing(): void
     {
         Http::fake([self::VERTEX_URL => Http::response(['predictions' => [[]]], 200)]);
 
@@ -312,7 +314,7 @@ class GeminiServiceTest extends TestCase
 
     // ─── generateImage ────────────────────────────────────────────────────────
 
-    public function test_generateImage_returns_array_on_success(): void
+    public function test_generate_image_returns_array_on_success(): void
     {
         Http::fake([self::VERTEX_URL => Http::response($this->imageChunk(), 200)]);
 
@@ -325,7 +327,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals('image/png', $result['mimeType']);
     }
 
-    public function test_generateImage_returns_null_when_inlinedata_missing(): void
+    public function test_generate_image_returns_null_when_inlinedata_missing(): void
     {
         Http::fake([self::VERTEX_URL => Http::response(
             [['candidates' => [['content' => ['parts' => [['text' => 'some text']]]]]]],
@@ -339,7 +341,7 @@ class GeminiServiceTest extends TestCase
         Log::shouldHaveReceived('warning')->once();
     }
 
-    public function test_generateImage_returns_null_on_api_failure(): void
+    public function test_generate_image_returns_null_on_api_failure(): void
     {
         Http::fake([self::VERTEX_URL => Http::response(
             [['error' => ['message' => 'API error', 'code' => 500, 'status' => 'INTERNAL']]],
@@ -355,7 +357,7 @@ class GeminiServiceTest extends TestCase
 
     // ─── startVideoGeneration ─────────────────────────────────────────────────
 
-    public function test_startVideoGeneration_returns_operation_name_on_success(): void
+    public function test_start_video_generation_returns_operation_name_on_success(): void
     {
         Http::fake([self::VERTEX_URL => Http::response([
             'name' => 'projects/123/locations/us-central1/operations/abc123',
@@ -367,7 +369,7 @@ class GeminiServiceTest extends TestCase
         $this->assertEquals('projects/123/locations/us-central1/operations/abc123', $result);
     }
 
-    public function test_startVideoGeneration_returns_null_on_api_failure(): void
+    public function test_start_video_generation_returns_null_on_api_failure(): void
     {
         Http::fake([self::VERTEX_URL => Http::response(['error' => ['message' => 'API error']], 500)]);
         Log::spy();
@@ -378,20 +380,21 @@ class GeminiServiceTest extends TestCase
         Log::shouldHaveReceived('error')->once();
     }
 
-    public function test_startVideoGeneration_accepts_custom_parameters(): void
+    public function test_start_video_generation_accepts_custom_parameters(): void
     {
         Http::fake([self::VERTEX_URL => Http::response([
             'name' => 'projects/123/locations/us-central1/operations/abc123',
         ], 200)]);
 
         $result = $this->service->startVideoGeneration('A video', 'veo-3.1-generate-preview', [
-            'aspectRatio'     => '9:16',
+            'aspectRatio' => '9:16',
             'durationSeconds' => 15,
         ]);
 
         $this->assertIsString($result);
         Http::assertSent(function ($request) {
             $body = json_decode($request->body(), true);
+
             return $body['parameters']['aspectRatio'] === '9:16'
                 && $body['parameters']['durationSeconds'] === 15;
         });
@@ -399,10 +402,10 @@ class GeminiServiceTest extends TestCase
 
     // ─── checkVideoGenerationStatus ───────────────────────────────────────────
 
-    public function test_checkVideoGenerationStatus_returns_operation_when_done(): void
+    public function test_check_video_generation_status_returns_operation_when_done(): void
     {
         Http::fake([self::VERTEX_URL => Http::response([
-            'done'     => true,
+            'done' => true,
             'response' => ['predictions' => [['bytesBase64Encoded' => 'base64video', 'mimeType' => 'video/mp4']]],
         ], 200)]);
 
@@ -412,7 +415,7 @@ class GeminiServiceTest extends TestCase
         $this->assertTrue($result['done']);
     }
 
-    public function test_checkVideoGenerationStatus_returns_null_when_not_done(): void
+    public function test_check_video_generation_status_returns_null_when_not_done(): void
     {
         Http::fake([self::VERTEX_URL => Http::response([
             'done' => false,
@@ -424,7 +427,7 @@ class GeminiServiceTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function test_checkVideoGenerationStatus_returns_null_on_api_failure(): void
+    public function test_check_video_generation_status_returns_null_on_api_failure(): void
     {
         Http::fake([self::VERTEX_URL => Http::response(['error' => ['message' => 'API error']], 500)]);
         Log::spy();
@@ -467,7 +470,7 @@ class GeminiServiceTest extends TestCase
     public function test_pricing_table_has_entries_for_all_named_models(): void
     {
         $namedModels = array_values(config('ai.models'));
-        $pricing     = config('ai.pricing');
+        $pricing = config('ai.pricing');
 
         foreach ($namedModels as $model) {
             $this->assertArrayHasKey($model, $pricing,

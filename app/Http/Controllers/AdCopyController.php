@@ -14,9 +14,9 @@ class AdCopyController extends Controller
     /**
      * Store a newly generated ad copy in storage.
      *
-     * @param Request $request The incoming HTTP request.
-     * @param Campaign $campaign The campaign model instance.
-     * @param Strategy $strategy The strategy model instance.
+     * @param  Request  $request  The incoming HTTP request.
+     * @param  Campaign  $campaign  The campaign model instance.
+     * @param  Strategy  $strategy  The strategy model instance.
      * @return \Illuminate\Http\RedirectResponse
      */
     public function store(Request $request, Campaign $campaign, Strategy $strategy)
@@ -26,9 +26,7 @@ class AdCopyController extends Controller
 
         // Ensure the campaign belongs to a customer that the authenticated user is part of.
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('view', $campaign);
 
         // Ensure the strategy belongs to the campaign.
         if ($strategy->campaign_id !== $campaign->id) {
@@ -51,7 +49,7 @@ class AdCopyController extends Controller
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
-            'message' => 'Ad copy generation has been queued. You will be notified upon completion.'
+            'message' => 'Ad copy generation has been queued. You will be notified upon completion.',
         ]);
     }
 }

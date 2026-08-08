@@ -2,11 +2,11 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Customer;
 use App\Services\GoogleAds\CreateAndLinkManagedAccount;
-use App\Services\GoogleAds\CreateManagedAccount;
 use App\Services\GoogleAds\CreateCustomerClientLink;
+use App\Services\GoogleAds\CreateManagedAccount;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class CreateGoogleAdsSubAccount extends Command
@@ -24,27 +24,29 @@ class CreateGoogleAdsSubAccount extends Command
         $customerId = $this->argument('customer_id');
         $customer = Customer::find($customerId);
 
-        if (!$customer) {
+        if (! $customer) {
             $this->error("Customer with ID {$customerId} not found");
+
             return 1;
         }
 
         // Check if customer already has a Google Ads account
         if ($customer->google_ads_customer_id) {
             $this->warn("Customer already has a Google Ads account: {$customer->google_ads_customer_id}");
-            if (!$this->confirm('Do you want to create a new sub-account anyway?')) {
+            if (! $this->confirm('Do you want to create a new sub-account anyway?')) {
                 return 0;
             }
         }
 
         $mccAccount = \App\Models\MccAccount::getActive();
-        if (!$mccAccount) {
+        if (! $mccAccount) {
             $this->error('No active MCC account configured. Add one via Admin > MCC Accounts.');
+
             return 1;
         }
         $mccCustomerId = $mccAccount->google_customer_id;
 
-        $accountName = $this->option('name') ?: ($customer->name . ' - Google Ads');
+        $accountName = $this->option('name') ?: ($customer->name.' - Google Ads');
         $currencyCode = $this->option('currency');
         $timeZone = $this->option('timezone');
 
@@ -67,8 +69,9 @@ class CreateGoogleAdsSubAccount extends Command
                 $timeZone
             );
 
-            if (!$result) {
+            if (! $result) {
                 $this->error('Failed to create sub-account. Check logs for details.');
+
                 return 1;
             }
 
@@ -79,18 +82,19 @@ class CreateGoogleAdsSubAccount extends Command
                 'google_ads_customer_is_manager' => false,
             ]);
 
-            $this->info("✅ Successfully created Google Ads sub-account!");
+            $this->info('✅ Successfully created Google Ads sub-account!');
             $this->info("Customer ID: {$result['customer_id']}");
             $this->info("Resource Name: {$result['resource_name']}");
             $this->info("Updated customer record #{$customer->id}");
 
             return 0;
         } catch (\Exception $e) {
-            $this->error("Error: " . $e->getMessage());
-            Log::error("Failed to create Google Ads sub-account", [
+            $this->error('Error: '.$e->getMessage());
+            Log::error('Failed to create Google Ads sub-account', [
                 'customer_id' => $customerId,
                 'exception' => $e->getMessage(),
             ]);
+
             return 1;
         }
     }

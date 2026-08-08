@@ -6,14 +6,6 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\SelfHealingAgent;
 use App\Services\GeminiService;
-use App\Services\GoogleAds\CommonServices\GetAdStatus;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
-use App\Services\FacebookAds\AdService as FacebookAdService;
-use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
-use App\Services\FacebookAds\CreativeService as FacebookCreativeService;
-use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
@@ -21,6 +13,7 @@ use Tests\TestCase;
 class SelfHealingAgentTest extends TestCase
 {
     protected SelfHealingAgent $agent;
+
     protected GeminiService $geminiMock;
 
     protected function setUp(): void

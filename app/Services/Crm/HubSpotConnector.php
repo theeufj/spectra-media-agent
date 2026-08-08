@@ -8,6 +8,7 @@ use Illuminate\Support\Facades\Log;
 class HubSpotConnector implements CrmConnectorInterface
 {
     protected string $accessToken;
+
     protected string $baseUrl = 'https://api.hubapi.com';
 
     public function __construct(array $credentials)
@@ -25,9 +26,11 @@ class HubSpotConnector implements CrmConnectorInterface
         try {
             $response = Http::withToken($this->accessToken)
                 ->get("{$this->baseUrl}/crm/v3/objects/contacts", ['limit' => 1]);
+
             return $response->successful();
         } catch (\Exception $e) {
             Log::debug('HubSpot connection test failed', ['error' => $e->getMessage()]);
+
             return false;
         }
     }
@@ -56,7 +59,7 @@ class HubSpotConnector implements CrmConnectorInterface
             $response = Http::withToken($this->accessToken)
                 ->post("{$this->baseUrl}/crm/v3/objects/deals/search", $params);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('HubSpot fetchClosedLeads failed', ['status' => $response->status()]);
                 break;
             }
@@ -94,25 +97,31 @@ class HubSpotConnector implements CrmConnectorInterface
         $response = Http::withToken($this->accessToken)
             ->get("{$this->baseUrl}/crm/v3/pipelines/deals");
 
-        if (!$response->successful()) return [];
+        if (! $response->successful()) {
+            return [];
+        }
 
         $stages = [];
         foreach ($response->json()['results'] ?? [] as $pipeline) {
             foreach ($pipeline['stages'] ?? [] as $stage) {
                 $stages[] = [
                     'id' => $stage['id'],
-                    'label' => $pipeline['label'] . ' > ' . $stage['label'],
+                    'label' => $pipeline['label'].' > '.$stage['label'],
                     'pipeline' => $pipeline['label'],
                 ];
             }
         }
+
         return $stages;
     }
 
     protected function extractParam(string $url, string $param): ?string
     {
-        if (!$url) return null;
+        if (! $url) {
+            return null;
+        }
         parse_str(parse_url($url, PHP_URL_QUERY) ?: '', $params);
+
         return $params[$param] ?? null;
     }
 }

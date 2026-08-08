@@ -8,7 +8,9 @@ namespace App\Services\Agents;
 class ExecutionStep
 {
     public string $action;
+
     public string $description;
+
     public array $params;
 
     public function __construct(

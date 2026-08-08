@@ -16,23 +16,25 @@ class MicrosoftAdsLinkAccount extends Command
 
     public function handle(): int
     {
-        $customerId   = $this->option('customer-id');
-        $accountId    = $this->option('account-id');
+        $customerId = $this->option('customer-id');
+        $accountId = $this->option('account-id');
         $msCustomerId = $this->option('ms-customer-id');
 
-        if (!$customerId || !$accountId || !$msCustomerId) {
+        if (! $customerId || ! $accountId || ! $msCustomerId) {
             $this->error('All three options are required: --customer-id, --account-id, --ms-customer-id');
+
             return 1;
         }
 
         $customer = Customer::find($customerId);
-        if (!$customer) {
+        if (! $customer) {
             $this->error("Customer {$customerId} not found.");
+
             return 1;
         }
 
         $customer->update([
-            'microsoft_ads_account_id'  => $accountId,
+            'microsoft_ads_account_id' => $accountId,
             'microsoft_ads_customer_id' => $msCustomerId,
         ]);
 
@@ -40,7 +42,7 @@ class MicrosoftAdsLinkAccount extends Command
         $this->line("  microsoft_ads_account_id:  {$accountId}");
         $this->line("  microsoft_ads_customer_id: {$msCustomerId}");
         $this->line('');
-        $this->info("Microsoft Ads is now enabled for this customer. It will appear as an available platform when deploying campaigns.");
+        $this->info('Microsoft Ads is now enabled for this customer. It will appear as an available platform when deploying campaigns.');
 
         return 0;
     }

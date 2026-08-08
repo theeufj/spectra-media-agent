@@ -35,9 +35,9 @@ trait RecordsAgentRun
     ): void {
         $status = match (true) {
             $errors > 0 && $actions === 0 => AgentRun::STATUS_FAILED,
-            $errors > 0                   => AgentRun::STATUS_PARTIAL,
-            $actions === 0                => AgentRun::STATUS_NO_OP,
-            default                       => AgentRun::STATUS_COMPLETED,
+            $errors > 0 => AgentRun::STATUS_PARTIAL,
+            $actions === 0 => AgentRun::STATUS_NO_OP,
+            default => AgentRun::STATUS_COMPLETED,
         };
 
         $this->writeRun($status, $actions, $errors, $warnings, $scope, $note,
@@ -60,19 +60,19 @@ trait RecordsAgentRun
     ): void {
         try {
             AgentRun::create([
-                'job'           => class_basename(static::class),
-                'status'        => $status,
+                'job' => class_basename(static::class),
+                'status' => $status,
                 'actions_taken' => $actions,
-                'errors'        => $errors,
-                'warnings'      => $warnings,
-                'scope'         => $scope,
-                'duration_ms'   => $durationMs,
-                'note'          => $note,
-                'details'       => $details ?: null,
+                'errors' => $errors,
+                'warnings' => $warnings,
+                'scope' => $scope,
+                'duration_ms' => $durationMs,
+                'note' => $note,
+                'details' => $details ?: null,
             ]);
         } catch (\Throwable $e) {
             // Observability must never break the job it observes.
-            Log::warning('RecordsAgentRun: failed to write run trace: ' . $e->getMessage());
+            Log::warning('RecordsAgentRun: failed to write run trace: '.$e->getMessage());
         }
     }
 }

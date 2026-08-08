@@ -9,20 +9,19 @@ use App\Notifications\CriticalAgentAlert;
 use App\Services\FacebookAds\AdService as FacebookAdService;
 use App\Services\FacebookAds\AdSetService;
 use App\Services\FacebookAds\CreativeService as FacebookCreativeService;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\SearchAudience;
-use Google\Ads\GoogleAds\V22\Resources\AssetGroup;
-use Google\Ads\GoogleAds\V22\Services\AssetGroupOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupsRequest;
-use Google\Protobuf\FieldMask;
 use App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateImageAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
 use App\Services\StorageHelper;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V22\Resources\AssetGroup;
+use Google\Ads\GoogleAds\V22\Services\AssetGroupOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupsRequest;
+use Google\Protobuf\FieldMask;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -56,10 +55,10 @@ class CampaignRemediationAgent
         }
 
         $results = [
-            'campaign_id'   => $campaign->id,
+            'campaign_id' => $campaign->id,
             'actions_taken' => [],
-            'alerts_sent'   => [],
-            'errors'        => [],
+            'alerts_sent' => [],
+            'errors' => [],
         ];
 
         foreach ($findings as $finding) {
@@ -70,20 +69,20 @@ class CampaignRemediationAgent
                     $this->alertCustomer($campaign, $finding, $results);
                 }
             } catch (\Exception $e) {
-                $results['errors'][] = "[{$finding['type']}] " . $e->getMessage();
+                $results['errors'][] = "[{$finding['type']}] ".$e->getMessage();
                 Log::error('CampaignRemediationAgent: Remediation failed', [
                     'campaign_id' => $campaign->id,
-                    'finding'     => $finding['type'],
-                    'error'       => $e->getMessage(),
+                    'finding' => $finding['type'],
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
 
-        if (!empty($results['actions_taken'])) {
+        if (! empty($results['actions_taken'])) {
             AgentActivity::record(
                 'campaign_remediation',
                 'auto_fixed',
-                count($results['actions_taken']) . ' issue(s) auto-remediated in "' . $campaign->name . '"',
+                count($results['actions_taken']).' issue(s) auto-remediated in "'.$campaign->name.'"',
                 $campaign->customer_id,
                 $campaign->id,
                 ['actions' => $results['actions_taken']]
@@ -98,12 +97,12 @@ class CampaignRemediationAgent
     private function autoFix(Campaign $campaign, array $finding, array &$results): void
     {
         match ($finding['auto_fix_action'] ?? '') {
-            'refresh_creative'      => $this->refreshCreative($campaign, $finding, $results),
-            'add_audience_signals'  => $this->addAudienceSignals($campaign, $finding, $results),
-            'fix_landing_page'      => $this->fixLandingPage($campaign, $finding, $results),
+            'refresh_creative' => $this->refreshCreative($campaign, $finding, $results),
+            'add_audience_signals' => $this->addAudienceSignals($campaign, $finding, $results),
+            'fix_landing_page' => $this->fixLandingPage($campaign, $finding, $results),
             'provision_conversions' => $this->provisionConversions($finding, $results),
             'refresh_meta_creative' => $this->refreshMetaCreative($campaign, $finding, $results),
-            default                 => $this->alertCustomer($campaign, $finding, $results),
+            default => $this->alertCustomer($campaign, $finding, $results),
         };
     }
 
@@ -112,15 +111,16 @@ class CampaignRemediationAgent
     private function addAudienceSignals(Campaign $campaign, array $finding, array &$results): void
     {
         $customer = $campaign->customer;
-        if (!$customer) {
+        if (! $customer) {
             return;
         }
 
-        $customerId  = $customer->cleanGoogleCustomerId();
+        $customerId = $customer->cleanGoogleCustomerId();
         $assetGroups = $finding['details']['asset_groups'] ?? $this->fetchAssetGroups($customer, $customerId, $campaign);
 
         if (empty($assetGroups)) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
@@ -128,10 +128,10 @@ class CampaignRemediationAgent
         // (instead of a 7-day cache) makes this idempotent and self-correcting: a prior
         // partial/failed attempt retries next pass rather than being blocked for a week,
         // and we never pile signals onto groups that already have them.
-        $withSignals  = $this->assetGroupsWithSignals($customer, $customerId, $campaign);
+        $withSignals = $this->assetGroupsWithSignals($customer, $customerId, $campaign);
         $targetGroups = array_values(array_filter(
             $assetGroups,
-            fn ($g) => !in_array($g['resource_name'], $withSignals, true)
+            fn ($g) => ! in_array($g['resource_name'], $withSignals, true)
         ));
 
         if (empty($targetGroups)) {
@@ -150,6 +150,7 @@ class CampaignRemediationAgent
 
         if (empty($themes) && empty($audienceResources)) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
@@ -159,32 +160,32 @@ class CampaignRemediationAgent
         foreach ($targetGroups as $assetGroup) {
             $groupResource = $assetGroup['resource_name'];
 
-            if (!empty($themes)) {
+            if (! empty($themes)) {
                 $totalAdded += $addSignals->addSearchThemes($customerId, $groupResource, $themes);
             }
 
-            if (!empty($audienceResources)) {
+            if (! empty($audienceResources)) {
                 $totalAdded += $addSignals->addAudienceInterests($customerId, $groupResource, $audienceResources);
             }
         }
 
         if ($totalAdded > 0) {
             $results['actions_taken'][] = [
-                'type'     => 'audience_signals_added',
+                'type' => 'audience_signals_added',
                 'platform' => 'google_ads',
-                'message'  => "Added {$totalAdded} audience signal(s) across " . count($targetGroups) . ' asset group(s)',
-                'themes'   => $themes,
+                'message' => "Added {$totalAdded} audience signal(s) across ".count($targetGroups).' asset group(s)',
+                'themes' => $themes,
                 'audiences' => $audienceResources,
             ];
 
             CriticalAgentAlert::deliver(
                 'audience_signals_added',
-                'Auto-Fixed: Audience Signals Added to "' . $campaign->name . '"',
-                "Your PMax campaign had no audience signals — Google was guessing who to show ads to. "
-                . "We automatically added " . count($themes) . " search-theme signal(s) and "
-                . count($audienceResources) . " in-market audience(s) based on your business profile. "
-                . "Themes: " . implode(', ', array_slice($themes, 0, 5)) . (count($themes) > 5 ? '...' : '') . ". "
-                . "Google will now use these to find relevant, high-intent audiences.",
+                'Auto-Fixed: Audience Signals Added to "'.$campaign->name.'"',
+                'Your PMax campaign had no audience signals — Google was guessing who to show ads to. '
+                .'We automatically added '.count($themes).' search-theme signal(s) and '
+                .count($audienceResources).' in-market audience(s) based on your business profile. '
+                .'Themes: '.implode(', ', array_slice($themes, 0, 5)).(count($themes) > 5 ? '...' : '').'. '
+                .'Google will now use these to find relevant, high-intent audiences.',
                 ['campaign_id' => $campaign->id, 'themes' => $themes, 'audiences' => $audienceResources, 'auto_resolved' => true],
                 CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
                 $customer
@@ -196,23 +197,23 @@ class CampaignRemediationAgent
 
     private function generateSearchThemes(Campaign $campaign, Customer $customer): array
     {
-        $name     = $customer->name ?? 'the business';
+        $name = $customer->name ?? 'the business';
         $industry = $customer->industry ?? 'SaaS';
-        $website  = $customer->website ?? '';
+        $website = $customer->website ?? '';
 
         // Pull keywords from existing strategies if available
         $strategyKeywords = $campaign->strategies()
             ->whereIn('deployment_status', ['deployed', 'verified', 'signed_off'])
             ->limit(3)
             ->get()
-            ->flatMap(fn($s) => $s->keywords ?? [])
+            ->flatMap(fn ($s) => $s->keywords ?? [])
             ->filter()
             ->take(20)
             ->values()
             ->toArray();
 
-        $keywordContext = !empty($strategyKeywords)
-            ? "\n\nExisting campaign keywords for reference: " . implode(', ', $strategyKeywords)
+        $keywordContext = ! empty($strategyKeywords)
+            ? "\n\nExisting campaign keywords for reference: ".implode(', ', $strategyKeywords)
             : '';
 
         $prompt = <<<PROMPT
@@ -236,9 +237,9 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                model:   config('ai.models.default'),
-                prompt:  $prompt,
-                config:  ['temperature' => 0.7],
+                model: config('ai.models.default'),
+                prompt: $prompt,
+                config: ['temperature' => 0.7],
                 context: ['operation' => 'search_themes', 'campaign_id' => $campaign->id],
             );
 
@@ -247,7 +248,7 @@ PROMPT;
                     $themes = json_decode($m[0], true);
                     if (is_array($themes)) {
                         return array_values(array_filter(array_map(
-                            fn($t) => mb_substr(trim((string) $t), 0, 80),
+                            fn ($t) => mb_substr(trim((string) $t), 0, 80),
                             $themes
                         )));
                     }
@@ -264,7 +265,7 @@ PROMPT;
     {
         // Search for in-market audiences relevant to B2B SaaS / marketing software
         $searchTerms = ['business software', 'marketing', 'advertising'];
-        $found       = [];
+        $found = [];
 
         try {
             $searcher = new SearchAudience($customer);
@@ -291,7 +292,7 @@ PROMPT;
     private function refreshCreative(Campaign $campaign, array $finding, array &$results): void
     {
         $customer = $campaign->customer;
-        if (!$customer) {
+        if (! $customer) {
             return;
         }
 
@@ -301,20 +302,22 @@ PROMPT;
             Log::info('CampaignRemediationAgent: Creative refresh skipped (cooldown)', [
                 'campaign_id' => $campaign->id,
             ]);
+
             return;
         }
 
-        $customerId  = $customer->cleanGoogleCustomerId();
+        $customerId = $customer->cleanGoogleCustomerId();
         $assetGroups = $finding['details']['asset_groups']
             ?? $this->fetchAssetGroups($customer, $customerId, $campaign);
 
         if (empty($assetGroups)) {
             $results['errors'][] = 'conversion_starvation: no asset groups found for creative refresh';
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
-        $copySummary  = [];
+        $copySummary = [];
         $imageSummary = [];
 
         foreach ($assetGroups as $assetGroup) {
@@ -334,28 +337,28 @@ PROMPT;
         }
 
         $summaryParts = array_filter([
-            !empty($copySummary)  ? count($copySummary)  . ' new copy variant(s)'  : null,
-            !empty($imageSummary) ? count($imageSummary) . ' new image(s)'          : null,
+            ! empty($copySummary) ? count($copySummary).' new copy variant(s)' : null,
+            ! empty($imageSummary) ? count($imageSummary).' new image(s)' : null,
         ]);
 
-        if (!empty($summaryParts)) {
+        if (! empty($summaryParts)) {
             Cache::put($cacheKey, true, now()->addHours(72));
 
             $results['actions_taken'][] = [
-                'type'    => 'creative_refresh',
+                'type' => 'creative_refresh',
                 'platform' => 'google_ads',
-                'message' => 'Creative refresh: ' . implode(', ', $summaryParts),
-                'copy'    => $copySummary,
-                'images'  => $imageSummary,
+                'message' => 'Creative refresh: '.implode(', ', $summaryParts),
+                'copy' => $copySummary,
+                'images' => $imageSummary,
             ];
 
             $spend = number_format($finding['details']['spend'] ?? 0, 2);
             CriticalAgentAlert::deliver(
                 'creative_refresh',
-                'Auto-Fixed: Creative Refresh on "' . $campaign->name . '"',
+                'Auto-Fixed: Creative Refresh on "'.$campaign->name.'"',
                 "Your campaign spent \${$spend} with no conversions. We automatically added "
-                . implode(' and ', $summaryParts) . ' to give the algorithm fresh signals to optimise from. '
-                . 'Allow 3–5 days for Google to test the new variants before judging performance.',
+                .implode(' and ', $summaryParts).' to give the algorithm fresh signals to optimise from. '
+                .'Allow 3–5 days for Google to test the new variants before judging performance.',
                 ['campaign_id' => $campaign->id, 'actions' => array_merge($copySummary, $imageSummary), 'auto_resolved' => true],
                 CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
                 $customer
@@ -368,7 +371,7 @@ PROMPT;
 
     private function generateConversionCopy(Campaign $campaign, Customer $customer): ?array
     {
-        $name     = $customer->name ?? 'the business';
+        $name = $customer->name ?? 'the business';
         $industry = $customer->industry ?? 'SaaS';
 
         $prompt = <<<PROMPT
@@ -397,16 +400,16 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                model:   config('ai.models.default'),
-                prompt:  $prompt,
-                config:  ['temperature' => 0.9],
+                model: config('ai.models.default'),
+                prompt: $prompt,
+                config: ['temperature' => 0.9],
                 context: ['operation' => 'creative_refresh', 'campaign_id' => $campaign->id],
             );
 
             if ($response && isset($response['text'])) {
                 if (preg_match('/\{.*?\}/s', $response['text'], $m)) {
                     $data = json_decode($m[0], true);
-                    if (is_array($data) && !empty($data['headlines'])) {
+                    if (is_array($data) && ! empty($data['headlines'])) {
                         return $data;
                     }
                 }
@@ -426,11 +429,13 @@ PROMPT;
         array &$summary
     ): void {
         $createText = new CreateTextAsset($customer);
-        $linkAsset  = new LinkAssetGroupAsset($customer);
+        $linkAsset = new LinkAssetGroupAsset($customer);
 
         foreach ($copy['headlines'] ?? [] as $text) {
             $text = mb_substr(trim($text), 0, 30);
-            if (!$text) continue;
+            if (! $text) {
+                continue;
+            }
 
             $assetResource = ($createText)($customerId, $text);
             if ($assetResource) {
@@ -441,7 +446,9 @@ PROMPT;
 
         foreach ($copy['descriptions'] ?? [] as $text) {
             $text = mb_substr(trim($text), 0, 90);
-            if (!$text) continue;
+            if (! $text) {
+                continue;
+            }
 
             $assetResource = ($createText)($customerId, $text);
             if ($assetResource) {
@@ -465,14 +472,14 @@ PROMPT;
             try {
                 $result = $this->gemini->generateImage(
                     prompt: $prompt,
-                    model:  config('ai.models.image', 'gemini-2.5-flash-image'),
+                    model: config('ai.models.image', 'gemini-2.5-flash-image'),
                 );
 
                 if ($result && isset($result['data'])) {
-                    $decoded     = base64_decode($result['data']);
-                    $mimeType    = $result['mimeType'] ?? 'image/png';
-                    $extension   = str_contains($mimeType, 'jpeg') ? 'jpg' : 'png';
-                    $storagePath = 'remediation/' . $campaign->id . '/' . uniqid('img_', true) . '.' . $extension;
+                    $decoded = base64_decode($result['data']);
+                    $mimeType = $result['mimeType'] ?? 'image/png';
+                    $extension = str_contains($mimeType, 'jpeg') ? 'jpg' : 'png';
+                    $storagePath = 'remediation/'.$campaign->id.'/'.uniqid('img_', true).'.'.$extension;
 
                     [$s3Path, $publicUrl] = StorageHelper::put($storagePath, $decoded, $mimeType);
 
@@ -483,7 +490,7 @@ PROMPT;
             } catch (\Exception $e) {
                 Log::warning('CampaignRemediationAgent: Image generation failed', [
                     'campaign_id' => $campaign->id,
-                    'error'       => $e->getMessage(),
+                    'error' => $e->getMessage(),
                 ]);
             }
         }
@@ -499,9 +506,9 @@ PROMPT;
         array &$summary
     ): void {
         try {
-            $createImage   = new CreateImageAsset($customer);
-            $linkAsset     = new LinkAssetGroupAsset($customer);
-            $assetName     = 'Auto-Refresh ' . now()->format('Y-m-d H:i');
+            $createImage = new CreateImageAsset($customer);
+            $linkAsset = new LinkAssetGroupAsset($customer);
+            $assetName = 'Auto-Refresh '.now()->format('Y-m-d H:i');
             $assetResource = ($createImage)($customerId, $imageUrl, $assetName);
 
             if ($assetResource) {
@@ -510,7 +517,7 @@ PROMPT;
             }
         } catch (\Exception $e) {
             Log::warning('CampaignRemediationAgent: Image asset upload failed', [
-                'url'   => $imageUrl,
+                'url' => $imageUrl,
                 'error' => $e->getMessage(),
             ]);
         }
@@ -522,18 +529,20 @@ PROMPT;
         $campaignId = $m[1] ?? $campaign->google_ads_campaign_id;
 
         try {
-            $service = new class($customer) extends BaseGoogleAdsService {
+            $service = new class($customer) extends BaseGoogleAdsService
+            {
                 public function get(string $customerId, string $campaignId): array
                 {
                     $this->ensureClient();
                     $groups = [];
-                    $resp   = $this->searchQuery($customerId,
+                    $resp = $this->searchQuery($customerId,
                         "SELECT asset_group.resource_name, asset_group.name FROM asset_group WHERE campaign.id = {$campaignId}"
                     );
                     foreach ($resp->getIterator() as $row) {
-                        $ag       = $row->getAssetGroup();
+                        $ag = $row->getAssetGroup();
                         $groups[] = ['resource_name' => $ag->getResourceName(), 'name' => $ag->getName()];
                     }
+
                     return $groups;
                 }
             };
@@ -550,12 +559,13 @@ PROMPT;
     private function assetGroupsWithSignals(Customer $customer, string $customerId, Campaign $campaign): array
     {
         $campaignId = $campaign->googleCampaignNumericId();
-        if (!$campaignId) {
+        if (! $campaignId) {
             return [];
         }
 
         try {
-            $service = new class($customer) extends BaseGoogleAdsService {
+            $service = new class($customer) extends BaseGoogleAdsService
+            {
                 public function get(string $customerId, string $campaignId): array
                 {
                     $this->ensureClient();
@@ -566,6 +576,7 @@ PROMPT;
                     foreach ($resp->getIterator() as $row) {
                         $groups[] = $row->getAssetGroupSignal()->getAssetGroup();
                     }
+
                     return array_values(array_unique($groups));
                 }
             };
@@ -611,7 +622,7 @@ PROMPT;
     private function fixLandingPage(Campaign $campaign, array $finding, array &$results): void
     {
         $customer = $campaign->customer;
-        if (!$customer) {
+        if (! $customer) {
             return;
         }
 
@@ -620,12 +631,13 @@ PROMPT;
             return;
         }
 
-        $website     = rtrim($finding['details']['website'] ?? $customer->website ?? '', '/');
-        $currentUrl  = $finding['details']['current_url'] ?? '';
+        $website = rtrim($finding['details']['website'] ?? $customer->website ?? '', '/');
+        $currentUrl = $finding['details']['current_url'] ?? '';
         $assetGroups = $finding['details']['asset_groups'] ?? [];
 
-        if (!$website || empty($assetGroups)) {
+        if (! $website || empty($assetGroups)) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
@@ -633,39 +645,42 @@ PROMPT;
         $urls = $this->fetchSitemapUrls($website);
         if (empty($urls)) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
         // 2. Use AI to identify the best conversion-focused URL
         $bestUrl = $this->selectBestLandingPage($campaign, $customer, $website, $urls, $currentUrl);
-        if (!$bestUrl || $bestUrl === $currentUrl) {
+        if (! $bestUrl || $bestUrl === $currentUrl) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
         // 3. Update every asset group's final URL
         $customerId = $customer->cleanGoogleCustomerId();
-        $updated    = 0;
+        $updated = 0;
 
         try {
-            $service = new class($customer) extends BaseGoogleAdsService {
+            $service = new class($customer) extends BaseGoogleAdsService
+            {
                 public function updateFinalUrl(string $customerId, string $assetGroupResource, string $url): bool
                 {
                     $this->ensureClient();
 
                     $assetGroup = new AssetGroup([
                         'resource_name' => $assetGroupResource,
-                        'final_urls'    => [$url],
+                        'final_urls' => [$url],
                     ]);
 
-                    $op = new AssetGroupOperation();
+                    $op = new AssetGroupOperation;
                     $op->setUpdate($assetGroup);
                     $op->setUpdateMask(new FieldMask(['paths' => ['final_urls']]));
 
                     $this->client->getAssetGroupServiceClient()->mutateAssetGroups(
                         new MutateAssetGroupsRequest([
                             'customer_id' => $customerId,
-                            'operations'  => [$op],
+                            'operations' => [$op],
                         ])
                     );
 
@@ -681,14 +696,15 @@ PROMPT;
                 } catch (\Exception $e) {
                     Log::warning('CampaignRemediationAgent: Failed to update final URL for asset group', [
                         'asset_group' => $ag['resource_name'],
-                        'url'         => $bestUrl,
-                        'error'       => $e->getMessage(),
+                        'url' => $bestUrl,
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
         } catch (\Exception $e) {
             Log::error('CampaignRemediationAgent: Landing page fix failed', ['error' => $e->getMessage()]);
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
@@ -696,20 +712,20 @@ PROMPT;
             Cache::put($cacheKey, true, now()->addDays(30));
 
             $results['actions_taken'][] = [
-                'type'        => 'landing_page_fixed',
-                'platform'    => 'google_ads',
-                'message'     => "Updated {$updated} asset group(s) from {$currentUrl} → {$bestUrl}",
-                'old_url'     => $currentUrl,
-                'new_url'     => $bestUrl,
+                'type' => 'landing_page_fixed',
+                'platform' => 'google_ads',
+                'message' => "Updated {$updated} asset group(s) from {$currentUrl} → {$bestUrl}",
+                'old_url' => $currentUrl,
+                'new_url' => $bestUrl,
                 'urls_scanned' => count($urls),
             ];
 
             CriticalAgentAlert::deliver(
                 'landing_page_fixed',
-                'Auto-Fixed: Landing Page Updated on "' . $campaign->name . '"',
+                'Auto-Fixed: Landing Page Updated on "'.$campaign->name.'"',
                 "Your PMax campaign was sending paid traffic to {$currentUrl} — an informational page with no conversion path. "
-                . "We scanned your sitemap (" . count($urls) . " pages), identified the best conversion-focused URL, "
-                . "and updated {$updated} asset group(s) to point to: {$bestUrl}",
+                .'We scanned your sitemap ('.count($urls).' pages), identified the best conversion-focused URL, '
+                ."and updated {$updated} asset group(s) to point to: {$bestUrl}",
                 ['campaign_id' => $campaign->id, 'old_url' => $currentUrl, 'new_url' => $bestUrl, 'auto_resolved' => true],
                 CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
                 $customer
@@ -725,22 +741,22 @@ PROMPT;
 
         // Try standard sitemap locations
         $candidates = [
-            $website . '/sitemap.xml',
-            $website . '/sitemap_index.xml',
-            $website . '/sitemap/',
+            $website.'/sitemap.xml',
+            $website.'/sitemap_index.xml',
+            $website.'/sitemap/',
         ];
 
         foreach ($candidates as $sitemapUrl) {
             try {
-                $ctx  = stream_context_create(['http' => ['timeout' => 8, 'user_agent' => 'Spectra/1.0 SitemapBot']]);
-                $xml  = @file_get_contents($sitemapUrl, false, $ctx);
-                if (!$xml) {
+                $ctx = stream_context_create(['http' => ['timeout' => 8, 'user_agent' => 'Spectra/1.0 SitemapBot']]);
+                $xml = @file_get_contents($sitemapUrl, false, $ctx);
+                if (! $xml) {
                     continue;
                 }
 
                 libxml_use_internal_errors(true);
                 $doc = simplexml_load_string($xml);
-                if (!$doc) {
+                if (! $doc) {
                     continue;
                 }
 
@@ -778,12 +794,12 @@ PROMPT;
                     }
                 }
 
-                if (!empty($urls)) {
+                if (! empty($urls)) {
                     break;
                 }
             } catch (\Exception $e) {
                 Log::debug('CampaignRemediationAgent: Sitemap fetch failed', [
-                    'url'   => $sitemapUrl,
+                    'url' => $sitemapUrl,
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -802,7 +818,7 @@ PROMPT;
         // Cap to 150 URLs to stay within prompt limits
         $urlList = implode("\n", array_slice($urls, 0, 150));
 
-        $name     = $customer->name ?? 'the business';
+        $name = $customer->name ?? 'the business';
         $industry = $customer->industry ?? 'SaaS';
 
         $prompt = <<<PROMPT
@@ -832,9 +848,9 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                model:   config('ai.models.default'),
-                prompt:  $prompt,
-                config:  ['temperature' => 0.1], // low temperature — deterministic URL selection
+                model: config('ai.models.default'),
+                prompt: $prompt,
+                config: ['temperature' => 0.1], // low temperature — deterministic URL selection
                 context: ['operation' => 'landing_page_selection', 'campaign_id' => $campaign->id],
             );
 
@@ -850,7 +866,7 @@ PROMPT;
         }
 
         // Safe fallback: homepage
-        return $website . '/';
+        return $website.'/';
     }
 
     // ─── Meta creative refresh ────────────────────────────────────────────────
@@ -858,7 +874,7 @@ PROMPT;
     private function refreshMetaCreative(Campaign $campaign, array $finding, array &$results): void
     {
         $customer = $campaign->customer;
-        if (!$customer) {
+        if (! $customer) {
             return;
         }
 
@@ -868,50 +884,55 @@ PROMPT;
         }
 
         $accountId = $customer->facebook_ads_account_id;
-        if (!$accountId) {
+        if (! $accountId) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
         // 1. Generate AI copy (Meta limits: primary text ≤125 chars, headline ≤40 chars)
         $copy = $this->generateMetaCopy($campaign, $customer);
-        if (!$copy) {
+        if (! $copy) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
         // 2. Generate image
         $imagePrompt = "Professional advertising banner for {$customer->name}: {$copy['headline']}. "
-            . "Clean, modern design suitable for Facebook/Instagram feed. No text overlay.";
+            .'Clean, modern design suitable for Facebook/Instagram feed. No text overlay.';
 
         $imageResult = $this->gemini->generateImage($imagePrompt, context: ['campaign_id' => $campaign->id]);
-        if (!$imageResult) {
+        if (! $imageResult) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
         // 3. Store image and get a public URL
-        $filename  = "meta-creative/{$campaign->id}-" . now()->timestamp . '.jpg';
-        $imageUrl  = StorageHelper::put($filename, base64_decode($imageResult['data']), $imageResult['mimeType'] ?? 'image/jpeg');
-        if (!$imageUrl) {
+        $filename = "meta-creative/{$campaign->id}-".now()->timestamp.'.jpg';
+        $imageUrl = StorageHelper::put($filename, base64_decode($imageResult['data']), $imageResult['mimeType'] ?? 'image/jpeg');
+        if (! $imageUrl) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
         // 4. Create new Meta creative
         $creativeService = new FacebookCreativeService($customer);
         $creative = $creativeService->createImageCreative(
-            accountId:    $accountId,
-            creativeName: 'Spectra Auto-Refresh — ' . $campaign->name . ' — ' . now()->toDateString(),
-            imageUrl:     $imageUrl,
-            headline:     $copy['headline'],
-            description:  $copy['primary_text'],
+            accountId: $accountId,
+            creativeName: 'Spectra Auto-Refresh — '.$campaign->name.' — '.now()->toDateString(),
+            imageUrl: $imageUrl,
+            headline: $copy['headline'],
+            description: $copy['primary_text'],
             callToAction: 'LEARN_MORE',
-            linkUrl:      $customer->website,
+            linkUrl: $customer->website,
         );
 
-        if (!$creative || empty($creative['id'])) {
+        if (! $creative || empty($creative['id'])) {
             $this->alertCustomer($campaign, $finding, $results);
+
             return;
         }
 
@@ -919,9 +940,9 @@ PROMPT;
 
         // 5. Apply new creative to all active ads in this campaign
         $adSetService = new AdSetService($customer);
-        $adService    = new FacebookAdService($customer);
+        $adService = new FacebookAdService($customer);
 
-        $adSets  = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
+        $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id) ?? [];
         $updated = 0;
 
         foreach ($adSets as $adSet) {
@@ -939,22 +960,22 @@ PROMPT;
             Cache::put($cacheKey, true, now()->addHours(72));
 
             $results['actions_taken'][] = [
-                'type'        => 'meta_creative_refreshed',
-                'platform'    => 'meta',
-                'message'     => "Refreshed creative on {$updated} Meta ad(s) with new AI-generated copy and image",
+                'type' => 'meta_creative_refreshed',
+                'platform' => 'meta',
+                'message' => "Refreshed creative on {$updated} Meta ad(s) with new AI-generated copy and image",
                 'creative_id' => $creativeId,
-                'headline'    => $copy['headline'],
+                'headline' => $copy['headline'],
                 'ads_updated' => $updated,
             ];
 
             CriticalAgentAlert::deliver(
                 'meta_creative_refreshed',
-                'Auto-Fixed: Meta Ad Creative Refreshed on "' . $campaign->name . '"',
-                "We detected " . ($finding['type'] === 'meta_audience_fatigue'
+                'Auto-Fixed: Meta Ad Creative Refreshed on "'.$campaign->name.'"',
+                'We detected '.($finding['type'] === 'meta_audience_fatigue'
                     ? "audience fatigue (frequency {$finding['details']['frequency']}x)"
-                    : "conversion starvation ($" . number_format($finding['details']['spend'] ?? 0, 2) . " spent, 0 conversions)")
-                . ". A fresh creative has been generated and applied to {$updated} ad(s).\n\n"
-                . "New headline: \"{$copy['headline']}\"\nNew copy: \"{$copy['primary_text']}\"",
+                    : 'conversion starvation ($'.number_format($finding['details']['spend'] ?? 0, 2).' spent, 0 conversions)')
+                .". A fresh creative has been generated and applied to {$updated} ad(s).\n\n"
+                ."New headline: \"{$copy['headline']}\"\nNew copy: \"{$copy['primary_text']}\"",
                 ['campaign_id' => $campaign->id, 'creative_id' => $creativeId, 'auto_resolved' => true],
                 CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
                 $customer
@@ -966,9 +987,9 @@ PROMPT;
 
     private function generateMetaCopy(Campaign $campaign, Customer $customer): ?array
     {
-        $name     = $customer->name ?? 'the business';
+        $name = $customer->name ?? 'the business';
         $industry = $customer->industry ?? 'SaaS';
-        $website  = $customer->website ?? '';
+        $website = $customer->website ?? '';
 
         $prompt = <<<PROMPT
 You are a direct-response copywriter creating a Facebook/Instagram ad for a SaaS business.
@@ -987,29 +1008,30 @@ PROMPT;
 
         try {
             $response = $this->gemini->generateContent(
-                model:   config('ai.models.default'),
-                prompt:  $prompt,
-                config:  ['temperature' => 0.7],
+                model: config('ai.models.default'),
+                prompt: $prompt,
+                config: ['temperature' => 0.7],
                 context: ['operation' => 'meta_copy_generation', 'campaign_id' => $campaign->id],
             );
 
-            if (!$response || !isset($response['text'])) {
+            if (! $response || ! isset($response['text'])) {
                 return null;
             }
 
             $text = trim(preg_replace('/^```json\s*|\s*```$/m', '', $response['text']));
             $data = json_decode($text, true);
 
-            if (!$data || empty($data['headline']) || empty($data['primary_text'])) {
+            if (! $data || empty($data['headline']) || empty($data['primary_text'])) {
                 return null;
             }
 
             return [
-                'headline'     => mb_substr(trim($data['headline']), 0, 40),
+                'headline' => mb_substr(trim($data['headline']), 0, 40),
                 'primary_text' => mb_substr(trim($data['primary_text']), 0, 125),
             ];
         } catch (\Exception $e) {
             Log::warning('CampaignRemediationAgent: Meta copy generation failed', ['error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -1021,7 +1043,7 @@ PROMPT;
         try {
             Artisan::call('conversions:provision');
             $results['actions_taken'][] = [
-                'type'    => 'provision_conversions',
+                'type' => 'provision_conversions',
                 'message' => 'Ran conversions:provision to restore missing conversion labels',
                 'missing' => $finding['details']['missing'] ?? [],
             ];
@@ -1029,7 +1051,7 @@ PROMPT;
                 'missing' => $finding['details']['missing'] ?? [],
             ]);
         } catch (\Exception $e) {
-            $results['errors'][] = 'conversions:provision failed: ' . $e->getMessage();
+            $results['errors'][] = 'conversions:provision failed: '.$e->getMessage();
         }
     }
 
@@ -1038,7 +1060,7 @@ PROMPT;
     private function alertCustomer(Campaign $campaign, array $finding, array &$results): void
     {
         $customer = $campaign->customer;
-        if (!$customer?->users) {
+        if (! $customer?->users) {
             return;
         }
 
@@ -1050,25 +1072,25 @@ PROMPT;
         Cache::put($cacheKey, true, now()->addHours(24));
 
         $body = $finding['message'];
-        if (!empty($finding['recommended_action'])) {
-            $body .= "\n\nWhat to do: " . $finding['recommended_action'];
+        if (! empty($finding['recommended_action'])) {
+            $body .= "\n\nWhat to do: ".$finding['recommended_action'];
         }
 
         CriticalAgentAlert::deliver(
             $finding['type'],
-            'Campaign Issue: ' . $campaign->name,
+            'Campaign Issue: '.$campaign->name,
             $body,
             [
                 'campaign_id' => $campaign->id,
-                'severity'    => $finding['severity'],
-                'details'     => $finding['details'] ?? [],
+                'severity' => $finding['severity'],
+                'details' => $finding['details'] ?? [],
             ],
             CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
             $customer
         );
 
         $results['alerts_sent'][] = [
-            'type'    => $finding['type'],
+            'type' => $finding['type'],
             'message' => $finding['message'],
         ];
     }

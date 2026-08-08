@@ -22,7 +22,7 @@ use Laravel\Pennant\Feature;
  */
 class PauseWastefulAdGroups implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $timeout = 600;
 
@@ -30,8 +30,8 @@ class PauseWastefulAdGroups implements ShouldQueue
     {
         $runStart = $this->startRun();
 
-        $minSpend       = (float) config('optimization.ad_group_pause.min_spend', 50);
-        $windowDays     = (int) config('optimization.ad_group_pause.window_days', 30);
+        $minSpend = (float) config('optimization.ad_group_pause.min_spend', 50);
+        $windowDays = (int) config('optimization.ad_group_pause.window_days', 30);
         $maxPerCampaign = (int) config('optimization.ad_group_pause.max_per_campaign', 5);
 
         $paused = 0;
@@ -45,11 +45,11 @@ class PauseWastefulAdGroups implements ShouldQueue
 
         foreach ($campaigns as $campaign) {
             $customer = $campaign->customer;
-            if (!$customer || !$customer->google_ads_customer_id) {
+            if (! $customer || ! $customer->google_ads_customer_id) {
                 continue;
             }
             // Same gate as every other auto-applied optimisation.
-            if (!Feature::for($customer)->active(AutoOptimization::class)) {
+            if (! Feature::for($customer)->active(AutoOptimization::class)) {
                 continue;
             }
 
@@ -64,11 +64,11 @@ class PauseWastefulAdGroups implements ShouldQueue
                     $rationale = "No conversions in {$windowDays} days on \${$adGroup['cost']} spend";
 
                     Recommendation::create([
-                        'campaign_id'       => $campaign->id,
-                        'type'              => 'AD_GROUP_PAUSE',
-                        'target_entity'     => ['ad_group' => $adGroup['name'], 'resource' => $adGroup['resource']],
-                        'rationale'         => "Paused ad group \"{$adGroup['name']}\" — {$rationale}",
-                        'status'            => 'applied',
+                        'campaign_id' => $campaign->id,
+                        'type' => 'AD_GROUP_PAUSE',
+                        'target_entity' => ['ad_group' => $adGroup['name'], 'resource' => $adGroup['resource']],
+                        'rationale' => "Paused ad group \"{$adGroup['name']}\" — {$rationale}",
+                        'status' => 'applied',
                         'requires_approval' => false,
                     ]);
 
@@ -83,7 +83,7 @@ class PauseWastefulAdGroups implements ShouldQueue
                 }
             } catch (\Exception $e) {
                 $errors++;
-                Log::error("PauseWastefulAdGroups: failed for campaign {$campaign->id}: " . $e->getMessage());
+                Log::error("PauseWastefulAdGroups: failed for campaign {$campaign->id}: ".$e->getMessage());
             }
         }
 
@@ -96,7 +96,7 @@ class PauseWastefulAdGroups implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('PauseWastefulAdGroups failed: ' . $exception->getMessage(), [
+        Log::error('PauseWastefulAdGroups failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
         $this->recordRunFailure($exception);

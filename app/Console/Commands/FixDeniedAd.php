@@ -41,13 +41,14 @@ class FixDeniedAd extends Command
 
     public function handle(): int
     {
-        $customerId  = $this->option('customer-id');
-        $adResource  = $this->option('ad-resource') ?: self::DEFAULT_AD_RESOURCE;
-        $dryRun      = $this->option('dry-run');
+        $customerId = $this->option('customer-id');
+        $adResource = $this->option('ad-resource') ?: self::DEFAULT_AD_RESOURCE;
+        $dryRun = $this->option('dry-run');
 
         $customer = Customer::where('google_ads_customer_id', $customerId)->first();
-        if (!$customer) {
+        if (! $customer) {
             $this->error("No customer found with google_ads_customer_id = {$customerId}");
+
             return 1;
         }
 
@@ -58,17 +59,18 @@ class FixDeniedAd extends Command
         $getStatus = new GetAdStatus($customer);
         $ads = $getStatus($customerId);
 
-        $target = collect($ads)->first(fn($a) => $a['resource_name'] === $adResource);
-        if (!$target) {
-            $this->error("Ad not found in account. Check the resource name.");
-            $this->line("Available ads:");
+        $target = collect($ads)->first(fn ($a) => $a['resource_name'] === $adResource);
+        if (! $target) {
+            $this->error('Ad not found in account. Check the resource name.');
+            $this->line('Available ads:');
             foreach ($ads as $ad) {
                 $this->line("  {$ad['resource_name']}");
             }
+
             return 1;
         }
 
-        $existingHeadlines    = $target['headlines'];
+        $existingHeadlines = $target['headlines'];
         $existingDescriptions = $target['descriptions'];
 
         $this->line("\n<fg=yellow>Current headlines:</>");
@@ -89,16 +91,18 @@ class FixDeniedAd extends Command
 
         if ($dryRun) {
             $this->warn("\n[DRY RUN] No changes applied.");
+
             return 0;
         }
 
-        if (!$this->confirm("\nApply replacement headlines?", true)) {
+        if (! $this->confirm("\nApply replacement headlines?", true)) {
             $this->info('Aborted.');
+
             return 0;
         }
 
         $updater = new UpdateResponsiveSearchAd($customer);
-        $result  = $updater->replace(
+        $result = $updater->replace(
             $customerId,
             $adResource,
             self::REPLACEMENT_HEADLINES,
@@ -107,10 +111,12 @@ class FixDeniedAd extends Command
 
         if ($result) {
             $this->info("\nAd updated successfully. Google will re-review the ad shortly.");
+
             return 0;
         }
 
         $this->error("\nUpdate failed — check Laravel logs for details.");
+
         return 1;
     }
 
@@ -126,6 +132,7 @@ class FixDeniedAd extends Command
                 return true;
             }
         }
+
         return false;
     }
 }

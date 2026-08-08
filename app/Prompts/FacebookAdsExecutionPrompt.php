@@ -6,7 +6,7 @@ use App\Services\Agents\ExecutionContext;
 
 /**
  * Facebook Ads Execution Prompt
- * 
+ *
  * Generates AI prompts for creating Facebook/Meta Ads deployment execution plans.
  * Uses Google Search grounding for real-time API documentation access.
  */
@@ -17,7 +17,7 @@ class FacebookAdsExecutionPrompt
      */
     public static function getSystemInstruction(): string
     {
-        return <<<INSTRUCTION
+        return <<<'INSTRUCTION'
 You are an expert Facebook/Meta Ads campaign strategist and technical implementation specialist with deep knowledge of the Facebook Marketing API.
 
 Your expertise includes:
@@ -38,7 +38,7 @@ Use your extended thinking capabilities to reason through campaign structure dec
 Use Google Search to access current Facebook Marketing API documentation, best practices, policy updates, and feature releases when needed.
 INSTRUCTION;
     }
-    
+
     /**
      * Generate execution planning prompt from context
      */
@@ -48,17 +48,17 @@ INSTRUCTION;
         $strategy = $context->strategy;
         $customer = $context->customer;
         $contextData = $context->toArray();
-        
+
         // Calculate budget information
         $totalBudget = $campaign->total_budget ?? 0;
         $dailyBudget = $context->calculateDailyBudget();
         $monthlyBudget = $dailyBudget * 30;
-        
+
         // Asset inventory
         $imageCount = $contextData['available_assets']['images'] ?? 0;
         $videoCount = $contextData['available_assets']['videos'] ?? 0;
         $adCopyCount = $contextData['available_assets']['ad_copy'] ?? 0;
-        
+
         // Strategy insights from Strategy Agent
         $adCopyStrategy = $strategy->ad_copy_strategy ?? 'Not provided';
         $imageryStrategy = $strategy->imagery_strategy ?? 'Not provided';
@@ -68,7 +68,7 @@ INSTRUCTION;
             : 'Not provided';
 
         // Customer platform info
-        $hasPixel       = $customer->facebook_pixel_id ? 'Yes' : 'No';
+        $hasPixel = $customer->facebook_pixel_id ? 'Yes' : 'No';
         $landingPageUrl = $campaign->landing_page_url
             ?? $strategy->bidding_strategy['landing_page_url']
             ?? $customer->website
@@ -77,32 +77,32 @@ INSTRUCTION;
         // Prior performance section
         $priorPerformance = $context->metadata['prior_performance'] ?? [];
         $priorSection = '';
-        if (!empty($priorPerformance['facebook'])) {
+        if (! empty($priorPerformance['facebook'])) {
             $s = $priorPerformance['facebook'];
             $priorSection = "\n# PRIOR CAMPAIGN PERFORMANCE (last 30 days)\n\n"
-                . "This campaign has run before on Facebook. Use this data to avoid repeating past mistakes:\n\n"
-                . "CTR {$s['avg_ctr']}%, CPC \${$s['avg_cpc']}, CPA \${$s['avg_cpa']}, "
-                . "{$s['total_conversions']} conversions, \${$s['total_spend']} spend over {$s['days_of_data']} days\n\n---\n";
+                ."This campaign has run before on Facebook. Use this data to avoid repeating past mistakes:\n\n"
+                ."CTR {$s['avg_ctr']}%, CPC \${$s['avg_cpc']}, CPA \${$s['avg_cpa']}, "
+                ."{$s['total_conversions']} conversions, \${$s['total_spend']} spend over {$s['days_of_data']} days\n\n---\n";
         }
 
         $learningOutcome = $context->metadata['fb_learning_outcome'] ?? null;
         $learningSection = '';
         if ($learningOutcome) {
-            $details = !empty($learningOutcome['details'])
-                ? ' Details: ' . json_encode($learningOutcome['details'])
+            $details = ! empty($learningOutcome['details'])
+                ? ' Details: '.json_encode($learningOutcome['details'])
                 : '';
             $learningSection = "\n# FACEBOOK LEARNING PHASE HISTORY\n\n"
-                . "The last recorded Facebook learning phase event for this campaign was **{$learningOutcome['action']}** "
-                . "on {$learningOutcome['recorded_at']}: {$learningOutcome['description']}.{$details} "
-                . "Take this into account when structuring ad sets and budgets — avoid repeating the same configuration that caused this issue.\n\n---\n";
+                ."The last recorded Facebook learning phase event for this campaign was **{$learningOutcome['action']}** "
+                ."on {$learningOutcome['recorded_at']}: {$learningOutcome['description']}.{$details} "
+                ."Take this into account when structuring ad sets and budgets — avoid repeating the same configuration that caused this issue.\n\n---\n";
         }
 
         $brandSection = '';
         if ($context->brandGuideline) {
             $bg = $context->brandGuideline;
-            $doNotUse = !empty($bg->do_not_use) ? implode(', ', $bg->do_not_use) : 'None specified';
+            $doNotUse = ! empty($bg->do_not_use) ? implode(', ', $bg->do_not_use) : 'None specified';
             $tone = $bg->brand_voice['primary_tone'] ?? 'professional';
-            $usps = !empty($bg->unique_selling_propositions)
+            $usps = ! empty($bg->unique_selling_propositions)
                 ? implode("\n- ", $bg->unique_selling_propositions)
                 : 'Not specified';
             $brandSection = <<<BRAND

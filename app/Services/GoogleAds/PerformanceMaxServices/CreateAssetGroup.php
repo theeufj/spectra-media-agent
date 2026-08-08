@@ -4,10 +4,10 @@ namespace App\Services\GoogleAds\PerformanceMaxServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Enums\AssetGroupStatusEnum\AssetGroupStatus;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\AssetGroup;
 use Google\Ads\GoogleAds\V22\Services\AssetGroupOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetGroupsRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class CreateAssetGroup extends BaseGoogleAdsService
 {
@@ -22,7 +22,7 @@ class CreateAssetGroup extends BaseGoogleAdsService
             'status' => AssetGroupStatus::ENABLED,
         ]);
 
-        $operation = new AssetGroupOperation();
+        $operation = new AssetGroupOperation;
         $operation->setCreate($assetGroup);
 
         try {
@@ -37,7 +37,8 @@ class CreateAssetGroup extends BaseGoogleAdsService
 
             return $resourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to create Asset Group: " . $e->getMessage());
+            $this->logError('Failed to create Asset Group: '.$e->getMessage());
+
             return null;
         }
     }

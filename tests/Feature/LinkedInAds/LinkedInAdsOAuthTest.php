@@ -9,7 +9,6 @@ use Tests\TestCase;
  *
  * LinkedIn Ads uses the management account pattern — all API calls use the
  * platform-level refresh token from config('linkedinads.refresh_token').
- *
  * @see config/platform_architecture.php
  */
 class LinkedInAdsOAuthTest extends TestCase

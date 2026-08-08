@@ -5,18 +5,17 @@ namespace App\Services\GoogleAds\CommonServices;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Common\CalloutAsset;
 use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Asset;
 use Google\Ads\GoogleAds\V22\Services\AssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
 class CreateCalloutAsset extends BaseGoogleAdsService
 {
     /**
      * Create a Callout Asset.
      *
-     * @param string $customerId
-     * @param string $calloutText The text for the callout (max 25 chars)
+     * @param  string  $calloutText  The text for the callout (max 25 chars)
      * @return string|null Resource name of the created Asset
      */
     public function __invoke(string $customerId, string $calloutText): ?string
@@ -28,12 +27,12 @@ class CreateCalloutAsset extends BaseGoogleAdsService
         ]);
 
         $asset = new Asset([
-            'name' => 'Callout: ' . $calloutText . ' - ' . uniqid(),
+            'name' => 'Callout: '.$calloutText.' - '.uniqid(),
             'type' => AssetType::CALLOUT,
             'callout_asset' => $calloutAsset,
         ]);
 
-        $assetOperation = new AssetOperation();
+        $assetOperation = new AssetOperation;
         $assetOperation->setCreate($asset);
 
         try {
@@ -48,7 +47,8 @@ class CreateCalloutAsset extends BaseGoogleAdsService
 
             return $assetResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to create Callout Asset: " . $e->getMessage());
+            $this->logError('Failed to create Callout Asset: '.$e->getMessage());
+
             return null;
         }
     }

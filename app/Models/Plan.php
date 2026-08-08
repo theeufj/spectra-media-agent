@@ -47,6 +47,7 @@ class Plan extends Model
         }
 
         $dollars = number_format($this->price_cents / 100, 0);
+
         return "\${$dollars} / {$this->billing_interval}";
     }
 

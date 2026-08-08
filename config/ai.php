@@ -17,7 +17,7 @@ return [
      */
     'seasonal' => [
         'max_daily_budget' => (float) env('AI_SEASONAL_MAX_DAILY_BUDGET', 2000.0),
-        'no_baseline_cap'  => (float) env('AI_SEASONAL_NO_BASELINE_CAP', 500.0),
+        'no_baseline_cap' => (float) env('AI_SEASONAL_NO_BASELINE_CAP', 500.0),
     ],
 
     'models' => [
@@ -64,11 +64,11 @@ return [
      * will automatically try the next model in this chain before giving up.
      */
     'fallback_chain' => [
-        'gemini-3.1-pro-preview'        => 'gemini-3.5-flash',
-        'gemini-2.5-pro'                => 'gemini-3.5-flash',
-        'gemini-3.5-flash'              => 'gemini-2.5-flash',
-        'gemini-3-flash-preview'        => 'gemini-3.5-flash',
-        'gemini-2.5-flash'              => 'gemini-3.1-flash-lite-preview',
+        'gemini-3.1-pro-preview' => 'gemini-3.5-flash',
+        'gemini-2.5-pro' => 'gemini-3.5-flash',
+        'gemini-3.5-flash' => 'gemini-2.5-flash',
+        'gemini-3-flash-preview' => 'gemini-3.5-flash',
+        'gemini-2.5-flash' => 'gemini-3.1-flash-lite-preview',
         'gemini-3.1-flash-lite-preview' => 'gemini-2.5-flash-lite',
     ],
 
@@ -84,12 +84,12 @@ return [
      * - strategy:      full campaign strategy, competitive research
      */
     'task_config' => [
-        'creative'       => ['temperature' => 1.0,  'topP' => 0.95, 'topK' => 40],
-        'analytical'     => ['temperature' => 0.7,  'topP' => 0.90, 'topK' => 32],
-        'extraction'     => ['temperature' => 0.15, 'topP' => 0.85, 'topK' => 16],
+        'creative' => ['temperature' => 1.0,  'topP' => 0.95, 'topK' => 40],
+        'analytical' => ['temperature' => 0.7,  'topP' => 0.90, 'topK' => 32],
+        'extraction' => ['temperature' => 0.15, 'topP' => 0.85, 'topK' => 16],
         'classification' => ['temperature' => 0.10, 'topP' => 0.80, 'topK' => 8],
         'conversational' => ['temperature' => 0.85, 'topP' => 0.95, 'topK' => 40],
-        'strategy'       => ['temperature' => 0.80, 'topP' => 0.92, 'topK' => 40],
+        'strategy' => ['temperature' => 0.80, 'topP' => 0.92, 'topK' => 40],
     ],
 
     /*
@@ -97,12 +97,12 @@ return [
      * Agents should pass task_type in context rather than hardcoding model names.
      */
     'task_models' => [
-        'creative'       => 'default',
-        'analytical'     => 'default',
-        'extraction'     => 'lite',
+        'creative' => 'default',
+        'analytical' => 'default',
+        'extraction' => 'lite',
         'classification' => 'lite',
         'conversational' => 'default',
-        'strategy'       => 'pro',
+        'strategy' => 'pro',
     ],
 
     /*
@@ -112,19 +112,19 @@ return [
      * global rate. Veo is billed per second, not per token, so it stays at 0.
      */
     'pricing' => [
-        'gemini-3.1-pro-preview'        => ['input' => 2.00,   'output' => 12.00, 'cached' => 0.20],
-        'gemini-2.5-pro'                => ['input' => 1.25,   'output' => 10.00, 'cached' => 0.13],
-        'gemini-3.5-flash'              => ['input' => 1.50,   'output' => 9.00,  'cached' => 0.15],
-        'gemini-3-flash-preview'        => ['input' => 0.50,   'output' => 3.00,  'cached' => 0.05],
-        'gemini-2.5-flash'              => ['input' => 0.30,   'output' => 2.50,  'cached' => 0.03],
+        'gemini-3.1-pro-preview' => ['input' => 2.00,   'output' => 12.00, 'cached' => 0.20],
+        'gemini-2.5-pro' => ['input' => 1.25,   'output' => 10.00, 'cached' => 0.13],
+        'gemini-3.5-flash' => ['input' => 1.50,   'output' => 9.00,  'cached' => 0.15],
+        'gemini-3-flash-preview' => ['input' => 0.50,   'output' => 3.00,  'cached' => 0.05],
+        'gemini-2.5-flash' => ['input' => 0.30,   'output' => 2.50,  'cached' => 0.03],
         'gemini-3.1-flash-lite-preview' => ['input' => 0.25,   'output' => 1.50,  'cached' => 0.025],
-        'gemini-2.5-flash-lite'         => ['input' => 0.10,   'output' => 0.40,  'cached' => 0.01],
+        'gemini-2.5-flash-lite' => ['input' => 0.10,   'output' => 0.40,  'cached' => 0.01],
         // Image model: output priced at the image-output rate ($60/1M tokens).
-        'gemini-2.5-flash-image'        => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
-        'gemini-3.1-flash-image-preview'=> ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
-        'gemini-embedding-001'          => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
-        'text-embedding-005'            => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
-        'veo-3.1-generate-001'      => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
+        'gemini-2.5-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
+        'gemini-3.1-flash-image-preview' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
+        'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
+        'text-embedding-005' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
+        'veo-3.1-generate-001' => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
     ],
 
 ];

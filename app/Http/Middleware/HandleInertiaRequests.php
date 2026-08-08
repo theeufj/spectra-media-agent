@@ -31,7 +31,7 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
 
-        if ($user && !$request->session()->has('active_customer_id') && $user->customers->isNotEmpty()) {
+        if ($user && ! $request->session()->has('active_customer_id') && $user->customers->isNotEmpty()) {
             $request->session()->put('active_customer_id', $user->customers->first()->id);
         }
 
@@ -67,12 +67,12 @@ class HandleInertiaRequests extends Middleware
             ],
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
             'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),
-            'tenant' => $request->attributes->get('tenant', config('tenants.' . config('tenants.default'))),
+            'tenant' => $request->attributes->get('tenant', config('tenants.'.config('tenants.default'))),
             // Client-side (gtag) conversion labels served to the frontend.
             'conversionLabels' => fn () => [
-                'signup'           => \App\Models\Setting::get('conversion_label.signup',    config('conversions.events.signup.label')),
-                'try_now'          => \App\Models\Setting::get('conversion_label.try_now'),
-                'pricing_visit'    => \App\Models\Setting::get('conversion_label.pricing_visit'),
+                'signup' => \App\Models\Setting::get('conversion_label.signup', config('conversions.events.signup.label')),
+                'try_now' => \App\Models\Setting::get('conversion_label.try_now'),
+                'pricing_visit' => \App\Models\Setting::get('conversion_label.pricing_visit'),
                 'sandbox_launched' => \App\Models\Setting::get('conversion_label.sandbox_launched'),
             ],
         ];

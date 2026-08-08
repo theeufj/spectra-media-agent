@@ -12,10 +12,6 @@ class GetExtensionPerformance extends BaseGoogleAdsService
      *
      * Returns an array of assets keyed by resource name with CTR, clicks, impressions,
      * asset type, and field type so the AdExtensionAgent can identify underperformers.
-     *
-     * @param string $customerId
-     * @param string $campaignResourceName
-     * @return array
      */
     public function __invoke(string $customerId, string $campaignResourceName): array
     {
@@ -44,17 +40,17 @@ class GetExtensionPerformance extends BaseGoogleAdsService
             foreach ($stream->iterateAllElements() as $row) {
                 $assetResource = $row->getCampaignAsset()->getAsset();
                 $results[$assetResource] = [
-                    'asset_resource'   => $assetResource,
-                    'field_type'       => $row->getCampaignAsset()->getFieldType(),
-                    'asset_type'       => $row->getAsset()->getType(),
-                    'asset_name'       => $row->getAsset()->getName(),
-                    'clicks'           => $row->getMetrics()->getClicks(),
-                    'impressions'      => $row->getMetrics()->getImpressions(),
-                    'ctr'              => $row->getMetrics()->getCtr(),
+                    'asset_resource' => $assetResource,
+                    'field_type' => $row->getCampaignAsset()->getFieldType(),
+                    'asset_type' => $row->getAsset()->getType(),
+                    'asset_name' => $row->getAsset()->getName(),
+                    'clicks' => $row->getMetrics()->getClicks(),
+                    'impressions' => $row->getMetrics()->getImpressions(),
+                    'ctr' => $row->getMetrics()->getCtr(),
                 ];
             }
         } catch (\Exception $e) {
-            $this->logError('GetExtensionPerformance failed: ' . $e->getMessage());
+            $this->logError('GetExtensionPerformance failed: '.$e->getMessage());
         }
 
         return $results;
@@ -63,10 +59,7 @@ class GetExtensionPerformance extends BaseGoogleAdsService
     /**
      * Count how many assets of a given field type are linked to the campaign.
      *
-     * @param string $customerId
-     * @param string $campaignResourceName
-     * @param int    $fieldType  AssetFieldType enum value
-     * @return int
+     * @param  int  $fieldType  AssetFieldType enum value
      */
     public function countByFieldType(string $customerId, string $campaignResourceName, int $fieldType): int
     {
@@ -74,7 +67,7 @@ class GetExtensionPerformance extends BaseGoogleAdsService
 
         // GAQL requires the enum name string, not the integer value.
         $fieldTypeName = \Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType::name($fieldType);
-        if (!$fieldTypeName) {
+        if (! $fieldTypeName) {
             return 0;
         }
 
@@ -94,7 +87,7 @@ class GetExtensionPerformance extends BaseGoogleAdsService
                 $count++;
             }
         } catch (\Exception $e) {
-            $this->logError('GetExtensionPerformance::countByFieldType failed: ' . $e->getMessage());
+            $this->logError('GetExtensionPerformance::countByFieldType failed: '.$e->getMessage());
         }
 
         return $count;

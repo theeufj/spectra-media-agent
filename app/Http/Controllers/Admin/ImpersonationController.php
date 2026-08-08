@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Services\ActivityLogger;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
@@ -60,7 +59,7 @@ class ImpersonationController extends Controller
         $impersonatedUserId = session('impersonate_user_id');
         $adminId = session('impersonate_admin_id');
 
-        if (!$adminId) {
+        if (! $adminId) {
             return redirect()->route('dashboard');
         }
 
@@ -100,7 +99,7 @@ class ImpersonationController extends Controller
      */
     public static function getImpersonationInfo(): ?array
     {
-        if (!self::isImpersonating()) {
+        if (! self::isImpersonating()) {
             return null;
         }
 

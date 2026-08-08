@@ -22,16 +22,16 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->agent = new CampaignDiagnosticsAgent();
+        $this->agent = new CampaignDiagnosticsAgent;
     }
 
     public function test_diagnoses_real_google_ads_campaign(): void
     {
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_GOOGLE_ADS_INTEGRATION_TESTS=true to run.');
         }
 
@@ -40,7 +40,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
             ->whereHas('customer', fn ($q) => $q->whereNotNull('google_ads_customer_id'))
             ->first();
 
-        if (!$campaign) {
+        if (! $campaign) {
             $this->markTestSkipped('No deployed Google Ads campaign in DB.');
         }
 
@@ -61,7 +61,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
     public function test_diagnoses_real_meta_campaign(): void
     {
-        if (!env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
+        if (! env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_FACEBOOK_INTEGRATION_TESTS=true to run.');
         }
 
@@ -72,7 +72,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
             ->whereHas('customer', fn ($q) => $q->whereNotNull('facebook_ads_account_id'))
             ->first();
 
-        if (!$campaign) {
+        if (! $campaign) {
             $this->markTestSkipped('No deployed Meta campaign in DB.');
         }
 
@@ -90,8 +90,8 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
     {
         $customer = Customer::factory()->create();
         $campaign = Campaign::factory()->create([
-            'customer_id'             => $customer->id,
-            'google_ads_campaign_id'  => null,
+            'customer_id' => $customer->id,
+            'google_ads_campaign_id' => null,
             'facebook_ads_campaign_id' => null,
         ]);
 
@@ -103,7 +103,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
     public function test_meta_pixel_missing_detected_when_no_pixel_id(): void
     {
-        if (!env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
+        if (! env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
             $this->markTestSkipped('...');
         }
 
@@ -111,23 +111,23 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
         $customer = Customer::factory()->create([
             'facebook_ads_account_id' => Customer::whereNotNull('facebook_ads_account_id')->value('facebook_ads_account_id'),
-            'facebook_pixel_id'       => null,
+            'facebook_pixel_id' => null,
         ]);
         $campaign = Campaign::factory()->create([
-            'customer_id'              => $customer->id,
+            'customer_id' => $customer->id,
             'facebook_ads_campaign_id' => Campaign::whereNotNull('facebook_ads_campaign_id')->value('facebook_ads_campaign_id'),
         ]);
         $campaign->setRelation('customer', $customer);
 
         $findings = $this->agent->diagnose($campaign);
-        $types    = array_column($findings, 'type');
+        $types = array_column($findings, 'type');
 
         $this->assertContains('meta_pixel_missing', $types);
     }
 
     public function test_meta_pixel_finding_absent_when_pixel_configured(): void
     {
-        if (!env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
+        if (! env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
             $this->markTestSkipped('...');
         }
 
@@ -135,23 +135,23 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
 
         $customer = Customer::factory()->create([
             'facebook_ads_account_id' => Customer::whereNotNull('facebook_ads_account_id')->value('facebook_ads_account_id'),
-            'facebook_pixel_id'       => env('FACEBOOK_SPECTRA_PIXEL_ID', '978925284547796'),
+            'facebook_pixel_id' => env('FACEBOOK_SPECTRA_PIXEL_ID', '978925284547796'),
         ]);
         $campaign = Campaign::factory()->create([
-            'customer_id'              => $customer->id,
+            'customer_id' => $customer->id,
             'facebook_ads_campaign_id' => Campaign::whereNotNull('facebook_ads_campaign_id')->value('facebook_ads_campaign_id'),
         ]);
         $campaign->setRelation('customer', $customer);
 
         $findings = $this->agent->diagnose($campaign);
-        $types    = array_column($findings, 'type');
+        $types = array_column($findings, 'type');
 
         $this->assertNotContains('meta_pixel_missing', $types);
     }
 
     public function test_findings_have_auto_fix_action_when_can_auto_fix_is_true(): void
     {
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('...');
         }
 
@@ -160,7 +160,7 @@ class CampaignDiagnosticsIntegrationTest extends TestCase
             ->whereHas('customer', fn ($q) => $q->whereNotNull('google_ads_customer_id'))
             ->first();
 
-        if (!$campaign) {
+        if (! $campaign) {
             $this->markTestSkipped('No deployed Google Ads campaign in DB.');
         }
 

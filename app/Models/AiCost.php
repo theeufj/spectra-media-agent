@@ -26,7 +26,7 @@ class AiCost extends Model
     ];
 
     protected $casts = [
-        'cost'     => 'decimal:6',
+        'cost' => 'decimal:6',
         'metadata' => 'array',
     ];
 

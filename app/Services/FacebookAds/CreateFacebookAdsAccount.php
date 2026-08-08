@@ -2,8 +2,8 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class CreateFacebookAdsAccount extends BaseFacebookAdsService
 {
@@ -15,9 +15,9 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
     /**
      * Create a new Facebook Ads account under the platform Business Manager.
      *
-     * @param string $accountName Name for the new ad account
-     * @param string $currency Currency code (e.g., 'USD', 'AUD')
-     * @param int $timezoneId Facebook timezone ID (e.g., 37 = Australia/Sydney, 1 = America/New_York)
+     * @param  string  $accountName  Name for the new ad account
+     * @param  string  $currency  Currency code (e.g., 'USD', 'AUD')
+     * @param  int  $timezoneId  Facebook timezone ID (e.g., 37 = Australia/Sydney, 1 = America/New_York)
      * @return ?array Array with account ID or null on failure
      */
     public function __invoke(
@@ -28,25 +28,26 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
         try {
             $businessId = config('services.facebook.business_manager_id');
 
-            if (!$businessId) {
-                Log::error("FACEBOOK_BUSINESS_MANAGER_ID not configured");
+            if (! $businessId) {
+                Log::error('FACEBOOK_BUSINESS_MANAGER_ID not configured');
+
                 return null;
             }
 
             // POST /{business_id}/adaccount — requires business admin access
             $response = $this->post("/{$businessId}/adaccount", [
-                'name'           => $accountName,
-                'currency'       => $currency,
-                'timezone_id'    => $timezoneId,
+                'name' => $accountName,
+                'currency' => $currency,
+                'timezone_id' => $timezoneId,
                 'end_advertiser' => $businessId,
-                'media_agency'   => 'NONE',
-                'partner'        => 'NONE',
+                'media_agency' => 'NONE',
+                'partner' => 'NONE',
             ]);
 
             if ($response && isset($response['id'])) {
                 // Store the account ID (may include 'act_' prefix)
                 $accountId = str_replace('act_', '', $response['id']);
-                
+
                 Log::info("Created Facebook Ads account for customer {$this->customer->id}", [
                     'account_id' => $accountId,
                     'account_name' => $accountName,
@@ -61,7 +62,7 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
                 ];
             }
 
-            Log::error("Failed to create Facebook Ads account", [
+            Log::error('Failed to create Facebook Ads account', [
                 'customer_id' => $this->customer->id,
                 'account_name' => $accountName,
                 'response' => $response,
@@ -69,11 +70,12 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
 
             return null;
         } catch (\Exception $e) {
-            Log::error("Error creating Facebook Ads account: " . $e->getMessage(), [
+            Log::error('Error creating Facebook Ads account: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
                 'account_name' => $accountName,
             ]);
+
             return null;
         }
     }
@@ -82,10 +84,9 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
      * Get or create a Facebook Ads account.
      * If no accounts exist, create one. Otherwise, return the first available account.
      *
-     * @param string $accountName Name for the account if creating new
-     * @param string $currency Currency code
-     * @param string $timezone Timezone
-     * @return ?array
+     * @param  string  $accountName  Name for the account if creating new
+     * @param  string  $currency  Currency code
+     * @param  string  $timezone  Timezone
      */
     public function getOrCreate(
         string $accountName,
@@ -116,10 +117,11 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
             // No existing accounts, create a new one
             return $this($accountName, $currency, $timezone);
         } catch (\Exception $e) {
-            Log::error("Error in getOrCreate: " . $e->getMessage(), [
+            Log::error('Error in getOrCreate: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }

@@ -48,8 +48,9 @@ class AttributionTouchpoint extends Model
     public function getChannelAttribute(): string
     {
         if ($this->utm_source && $this->utm_medium) {
-            return ucfirst($this->utm_source) . ' / ' . ucfirst($this->utm_medium);
+            return ucfirst($this->utm_source).' / '.ucfirst($this->utm_medium);
         }
+
         return $this->utm_source ? ucfirst($this->utm_source) : 'Direct';
     }
 }

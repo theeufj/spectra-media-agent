@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Microsoft Advertising OAuth2 Refresh Token Generator
  *
@@ -10,15 +11,15 @@
  * Usage: php scripts/generate_microsoft_ads_token.php
  */
 
-require __DIR__ . '/../vendor/autoload.php';
+require __DIR__.'/../vendor/autoload.php';
 
-$dotenv = Dotenv\Dotenv::createImmutable(__DIR__ . '/..');
+$dotenv = Dotenv\Dotenv::createImmutable(__DIR__.'/..');
 $dotenv->load();
 
 $clientId = $_ENV['MICROSOFT_ADS_CLIENT_ID'] ?? '';
 $clientSecret = $_ENV['MICROSOFT_ADS_CLIENT_SECRET'] ?? '';
 
-if (!$clientId || !$clientSecret) {
+if (! $clientId || ! $clientSecret) {
     echo "ERROR: MICROSOFT_ADS_CLIENT_ID and MICROSOFT_ADS_CLIENT_SECRET must be set in .env\n";
     exit(1);
 }
@@ -30,7 +31,7 @@ $scope = 'https://ads.microsoft.com/msads.manage offline_access';
 $tenantId = 'common';
 
 // Step 1: Generate authorization URL
-$authUrl = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize?" . http_build_query([
+$authUrl = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize?".http_build_query([
     'client_id' => $clientId,
     'response_type' => 'code',
     'redirect_uri' => $redirectUri,
@@ -41,7 +42,7 @@ $authUrl = "https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/authorize?
 
 echo "\n=== Microsoft Advertising OAuth2 Token Generator ===\n\n";
 echo "Step 1: Open this URL in your browser:\n\n";
-echo $authUrl . "\n\n";
+echo $authUrl."\n\n";
 echo "Step 2: Sign in with your Microsoft Advertising account (josh@sitetospend.com)\n";
 echo "Step 3: After granting access, you'll be redirected to a URL starting with https://localhost/?code=\n\n";
 echo "Please paste the full URL you are redirected to here:\n";
@@ -52,7 +53,7 @@ $redirectedUrl = trim(fgets($stdin));
 preg_match('/code=([^\s&]+)/', $redirectedUrl, $matches);
 $code = $matches[1] ?? null;
 
-if (!$code) {
+if (! $code) {
     echo "ERROR: No authorization code found in the URL.\n";
     exit(1);
 }
@@ -85,7 +86,7 @@ curl_close($ch);
 
 $data = json_decode($response, true);
 
-if ($httpCode !== 200 || !isset($data['refresh_token'])) {
+if ($httpCode !== 200 || ! isset($data['refresh_token'])) {
     echo "ERROR: Token exchange failed (HTTP $httpCode)\n";
     echo "Response: $response\n";
     exit(1);
@@ -100,16 +101,16 @@ echo "Add this to your .env:\n";
 echo "MICROSOFT_ADS_REFRESH_TOKEN=$refreshToken\n\n";
 
 // Ask to auto-update .env
-echo "Auto-update .env? (y/n): ";
+echo 'Auto-update .env? (y/n): ';
 $stdin = fopen('php://stdin', 'r');
 $answer = trim(fgets($stdin));
 
 if (strtolower($answer) === 'y') {
-    $envFile = __DIR__ . '/../.env';
+    $envFile = __DIR__.'/../.env';
     $envContent = file_get_contents($envFile);
     $envContent = preg_replace(
         '/^MICROSOFT_ADS_REFRESH_TOKEN=.*$/m',
-        'MICROSOFT_ADS_REFRESH_TOKEN=' . $refreshToken,
+        'MICROSOFT_ADS_REFRESH_TOKEN='.$refreshToken,
         $envContent
     );
     file_put_contents($envFile, $envContent);
@@ -129,8 +130,8 @@ curl_setopt_array($ch, [
     CURLOPT_RETURNTRANSFER => true,
     CURLOPT_HTTPHEADER => [
         'Content-Type: application/json',
-        'Authorization: Bearer ' . $accessToken,
-        'DeveloperToken: ' . ($_ENV['MICROSOFT_ADS_DEVELOPER_TOKEN'] ?? ''),
+        'Authorization: Bearer '.$accessToken,
+        'DeveloperToken: '.($_ENV['MICROSOFT_ADS_DEVELOPER_TOKEN'] ?? ''),
     ],
 ]);
 

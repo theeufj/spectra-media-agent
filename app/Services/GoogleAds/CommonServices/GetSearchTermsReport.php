@@ -10,29 +10,27 @@ class GetSearchTermsReport extends BaseGoogleAdsService
     /**
      * Get the Search Terms Report for a campaign.
      *
-     * @param string $customerId
-     * @param string $campaignResourceName
-     * @param string $dateRange 'LAST_30_DAYS', 'LAST_7_DAYS', etc.
+     * @param  string  $dateRange  'LAST_30_DAYS', 'LAST_7_DAYS', etc.
      * @return array List of search terms with performance metrics
      */
     public function __invoke(string $customerId, string $campaignResourceName, string $dateRange = 'LAST_30_DAYS'): array
     {
         $this->ensureClient();
 
-        $query = "SELECT " .
-                 "search_term_view.search_term, " .
-                 "search_term_view.status, " .
-                 "metrics.impressions, " .
-                 "metrics.clicks, " .
-                 "metrics.cost_micros, " .
-                 "metrics.conversions, " .
-                 "metrics.ctr, " .
-                 "campaign.resource_name, " .
-                 "ad_group.resource_name " .
-                 "FROM search_term_view " .
-                 "WHERE campaign.resource_name = '$campaignResourceName' " .
-                 "AND segments.date DURING $dateRange " .
-                 "ORDER BY metrics.cost_micros DESC";
+        $query = 'SELECT '.
+                 'search_term_view.search_term, '.
+                 'search_term_view.status, '.
+                 'metrics.impressions, '.
+                 'metrics.clicks, '.
+                 'metrics.cost_micros, '.
+                 'metrics.conversions, '.
+                 'metrics.ctr, '.
+                 'campaign.resource_name, '.
+                 'ad_group.resource_name '.
+                 'FROM search_term_view '.
+                 "WHERE campaign.resource_name = '$campaignResourceName' ".
+                 "AND segments.date DURING $dateRange ".
+                 'ORDER BY metrics.cost_micros DESC';
 
         try {
             $response = $this->searchQuery($customerId, $query);
@@ -59,7 +57,8 @@ class GetSearchTermsReport extends BaseGoogleAdsService
             return $searchTerms;
 
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to get search terms report: " . $e->getMessage());
+            $this->logError('Failed to get search terms report: '.$e->getMessage());
+
             return [];
         }
     }

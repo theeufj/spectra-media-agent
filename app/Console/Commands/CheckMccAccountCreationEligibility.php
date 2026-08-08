@@ -37,6 +37,7 @@ class CheckMccAccountCreationEligibility extends Command
         if (! $mcc) {
             $this->error('No active MCC account configured.');
             Log::error('[MccEligibility] No active MCC account configured.');
+
             return self::FAILURE;
         }
 
@@ -45,19 +46,20 @@ class CheckMccAccountCreationEligibility extends Command
         try {
             $client = $this->buildMccClient($mcc, $mccId);
         } catch (\Throwable $e) {
-            $this->error('Failed to build Google Ads client: ' . $e->getMessage());
-            Log::error('[MccEligibility] Failed to build client: ' . $e->getMessage());
+            $this->error('Failed to build Google Ads client: '.$e->getMessage());
+            Log::error('[MccEligibility] Failed to build client: '.$e->getMessage());
+
             return self::FAILURE;
         }
 
         $request = new CreateCustomerClientRequest([
-            'customer_id'     => $mccId,
+            'customer_id' => $mccId,
             'customer_client' => new Customer([
                 'descriptive_name' => 'API eligibility probe (validate_only)',
-                'currency_code'    => 'AUD',
-                'time_zone'        => 'Australia/Sydney',
+                'currency_code' => 'AUD',
+                'time_zone' => 'Australia/Sydney',
             ]),
-            'validate_only'   => true, // dry-run: runs eligibility checks, creates nothing
+            'validate_only' => true, // dry-run: runs eligibility checks, creates nothing
         ]);
 
         try {
@@ -69,8 +71,9 @@ class CheckMccAccountCreationEligibility extends Command
             }
 
             // Any other API error is unexpected — surface it loudly.
-            $this->error('Unexpected API error during probe: ' . $e->getBasicMessage());
-            Log::error('[MccEligibility] Unexpected API error: ' . $e->getMessage());
+            $this->error('Unexpected API error during probe: '.$e->getBasicMessage());
+            Log::error('[MccEligibility] Unexpected API error: '.$e->getMessage());
+
             return self::FAILURE;
         }
 
@@ -105,7 +108,7 @@ class CheckMccAccountCreationEligibility extends Command
 
         $spent = $this->lifetimeSpend($client, $mccId);
         $context = $spent !== null
-            ? sprintf('Lifetime spend across MCC: %s (threshold is ~US$1,000).', number_format($spent, 2) . ' AUD')
+            ? sprintf('Lifetime spend across MCC: %s (threshold is ~US$1,000).', number_format($spent, 2).' AUD')
             : 'Lifetime spend could not be read.';
 
         $this->warn("❌ MCC {$mccId} is NOT YET eligible to create accounts. {$context}");
@@ -121,7 +124,7 @@ class CheckMccAccountCreationEligibility extends Command
             $svc = $client->getGoogleAdsServiceClient();
             $tree = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
                 'customer_id' => $mccId,
-                'query'       => 'SELECT customer_client.id, customer_client.manager FROM customer_client',
+                'query' => 'SELECT customer_client.id, customer_client.manager FROM customer_client',
             ]);
 
             $total = 0.0;
@@ -133,7 +136,7 @@ class CheckMccAccountCreationEligibility extends Command
                 try {
                     $costReq = new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
                         'customer_id' => (string) $cc->getId(),
-                        'query'       => 'SELECT metrics.cost_micros FROM customer',
+                        'query' => 'SELECT metrics.cost_micros FROM customer',
                     ]);
                     foreach ($svc->search($costReq)->iterateAllElements() as $costRow) {
                         $total += $costRow->getMetrics()->getCostMicros() / 1_000_000;
@@ -153,12 +156,12 @@ class CheckMccAccountCreationEligibility extends Command
     {
         $configPath = storage_path('app/google_ads_php.ini');
 
-        $oAuth2Credential = (new OAuth2TokenBuilder())
+        $oAuth2Credential = (new OAuth2TokenBuilder)
             ->fromFile($configPath)
             ->withRefreshToken($mcc->getDecryptedRefreshToken())
             ->build();
 
-        return (new GoogleAdsClientBuilder())
+        return (new GoogleAdsClientBuilder)
             ->fromFile($configPath)
             ->withOAuth2Credential($oAuth2Credential)
             ->withLoginCustomerId($mccId)

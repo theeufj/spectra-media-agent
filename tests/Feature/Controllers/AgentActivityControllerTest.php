@@ -18,17 +18,18 @@ class AgentActivityControllerTest extends TestCase
     use DatabaseTransactions;
 
     protected User $user;
+
     protected Customer $customer;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->user     = User::factory()->create();
+        $this->user = User::factory()->create();
         $this->customer = Customer::factory()->create();
         $this->customer->users()->attach($this->user->id, ['role' => 'owner']);
     }
@@ -53,12 +54,12 @@ class AgentActivityControllerTest extends TestCase
 
         AgentActivity::factory()->create([
             'campaign_id' => $campaign->id,
-            'action'      => 'test_action',
+            'action' => 'test_action',
         ]);
 
         // Activity for a different customer
-        $otherCustomer  = Customer::factory()->create();
-        $otherCampaign  = Campaign::factory()->create(['customer_id' => $otherCustomer->id]);
+        $otherCustomer = Customer::factory()->create();
+        $otherCampaign = Campaign::factory()->create(['customer_id' => $otherCustomer->id]);
         AgentActivity::factory()->create(['campaign_id' => $otherCampaign->id]);
 
         $response = $this->actingAs($this->user)->getJson('/agent-activities');

@@ -16,6 +16,7 @@ class RunSeoAudit implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 120;
 
     public function __construct(
@@ -26,7 +27,9 @@ class RunSeoAudit implements ShouldQueue
     public function handle(): void
     {
         $customer = Customer::find($this->customerId);
-        if (!$customer) return;
+        if (! $customer) {
+            return;
+        }
 
         try {
             $service = new SeoAuditService($customer);
@@ -51,7 +54,7 @@ class RunSeoAudit implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('RunSeoAudit failed: ' . $exception->getMessage(), [
+        Log::error('RunSeoAudit failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

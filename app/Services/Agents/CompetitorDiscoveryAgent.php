@@ -2,20 +2,20 @@
 
 namespace App\Services\Agents;
 
-use App\Models\Customer;
 use App\Models\Competitor;
+use App\Models\Customer;
+use App\Prompts\CompetitorDiscoveryPrompt;
 use App\Services\GeminiService;
 use App\Services\GoogleSearchService;
-use App\Prompts\CompetitorDiscoveryPrompt;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 /**
  * CompetitorDiscoveryAgent
- * 
+ *
  * An agentic service that uses AI with Google Search grounding to discover
  * competitors based on the customer's website content and industry.
- * 
+ *
  * Flow:
  * 1. Gathers context from customer's knowledge base (sitemap content)
  * 2. Uses Google Custom Search API to find competitors programmatically
@@ -26,13 +26,15 @@ use Illuminate\Support\Facades\Http;
 class CompetitorDiscoveryAgent
 {
     protected GeminiService $gemini;
+
     protected GoogleSearchService $searchService;
+
     protected array $config;
 
     public function __construct(GeminiService $gemini, ?GoogleSearchService $searchService = null)
     {
         $this->gemini = $gemini;
-        $this->searchService = $searchService ?? new GoogleSearchService();
+        $this->searchService = $searchService ?? new GoogleSearchService;
         $this->config = config('competitive_intelligence', [
             'max_competitors' => 10,
             'discovery_model' => config('ai.models.default'),
@@ -42,7 +44,7 @@ class CompetitorDiscoveryAgent
     /**
      * Discover competitors for a customer.
      *
-     * @param Customer $customer The customer to find competitors for
+     * @param  Customer  $customer  The customer to find competitors for
      * @return array Results including discovered competitors
      */
     public function discover(Customer $customer): array
@@ -58,7 +60,7 @@ class CompetitorDiscoveryAgent
         try {
             // Step 1: Gather knowledge base content
             $knowledgeBaseContent = $this->getKnowledgeBaseSummary($customer);
-            
+
             // Step 2: Get existing competitors to exclude
             $existingCompetitors = $this->getExistingCompetitorDomains($customer);
 
@@ -66,14 +68,14 @@ class CompetitorDiscoveryAgent
                 'customer_id' => $customer->id,
                 'website' => $customer->website,
                 'existing_competitors' => count($existingCompetitors),
-                'has_knowledge_base' => !empty($knowledgeBaseContent),
+                'has_knowledge_base' => ! empty($knowledgeBaseContent),
                 'search_api_configured' => $this->searchService->isConfigured(),
             ]);
 
             // Step 3: Try Google Custom Search API first (structured results)
             if ($this->searchService->isConfigured()) {
                 $searchResults = $this->discoverViaSearchAPI($customer, $existingCompetitors);
-                
+
                 foreach ($searchResults as $competitorData) {
                     $saved = $this->saveCompetitor($customer, $competitorData);
                     if ($saved) {
@@ -81,23 +83,23 @@ class CompetitorDiscoveryAgent
                         $results['competitors_found'][] = $competitorData;
                     }
                 }
-                
+
                 $results['discovery_methods'][] = 'google_custom_search';
             }
 
             // Step 4: Use Gemini with Google Search grounding for AI-enhanced discovery
             // Fall back to website + business type context when knowledge base is empty
             $geminiContext = $knowledgeBaseContent;
-            if (empty($geminiContext) && !empty($customer->website)) {
+            if (empty($geminiContext) && ! empty($customer->website)) {
                 $geminiContext = "Website: {$customer->website}\n"
-                    . "Business: {$customer->name}\n"
-                    . "Type: " . ($customer->business_type ?? $customer->industry ?? 'unknown') . "\n"
-                    . "Description: " . ($customer->description ?? '');
+                    ."Business: {$customer->name}\n"
+                    .'Type: '.($customer->business_type ?? $customer->industry ?? 'unknown')."\n"
+                    .'Description: '.($customer->description ?? '');
             }
 
-            if (!empty($geminiContext)) {
+            if (! empty($geminiContext)) {
                 $aiResults = $this->discoverViaGemini($customer, $geminiContext, $existingCompetitors);
-                
+
                 foreach ($aiResults as $competitorData) {
                     $saved = $this->saveCompetitor($customer, $competitorData);
                     if ($saved) {
@@ -105,7 +107,7 @@ class CompetitorDiscoveryAgent
                         $results['competitors_found'][] = $competitorData;
                     }
                 }
-                
+
                 $results['discovery_methods'][] = 'gemini_grounded_search';
             }
 
@@ -121,7 +123,7 @@ class CompetitorDiscoveryAgent
             ]);
 
         } catch (\Exception $e) {
-            $results['errors'][] = 'Discovery failed: ' . $e->getMessage();
+            $results['errors'][] = 'Discovery failed: '.$e->getMessage();
             Log::error('CompetitorDiscoveryAgent: Exception', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -142,7 +144,7 @@ class CompetitorDiscoveryAgent
 
         // Build search query based on business type/industry
         $businessType = $customer->business_type ?? $customer->industry ?? 'business';
-        
+
         $searchResults = $this->searchService->searchCompetitors(
             $businessType,
             $customer->country
@@ -150,7 +152,7 @@ class CompetitorDiscoveryAgent
 
         foreach ($searchResults['competitors'] ?? [] as $result) {
             $domain = $result['domain'] ?? '';
-            
+
             // Skip if it's our own domain or already tracked
             if ($domain === $ourDomain || in_array($domain, $existingCompetitors)) {
                 continue;
@@ -214,6 +216,7 @@ class CompetitorDiscoveryAgent
 
             if (empty($responseText)) {
                 Log::warning('CompetitorDiscoveryAgent: Empty Gemini response');
+
                 return [];
             }
 
@@ -223,7 +226,7 @@ class CompetitorDiscoveryAgent
 
             foreach ($discoveredCompetitors as $competitorData) {
                 $domain = Competitor::extractDomain($competitorData['url'] ?? '');
-                
+
                 // Skip if it's our own domain or already tracked
                 if ($domain === $ourDomain || in_array($domain, $existingCompetitors)) {
                     continue;
@@ -261,8 +264,8 @@ class CompetitorDiscoveryAgent
     {
         // Get the user's knowledge base content
         $user = $customer->users()->first();
-        
-        if (!$user) {
+
+        if (! $user) {
             return '';
         }
 
@@ -328,7 +331,7 @@ class CompetitorDiscoveryAgent
     {
         // Clean the response
         $cleaned = trim($responseText);
-        
+
         // Remove markdown code blocks if present
         if (str_starts_with($cleaned, '```json')) {
             $cleaned = substr($cleaned, 7);
@@ -347,6 +350,7 @@ class CompetitorDiscoveryAgent
                 'error' => json_last_error_msg(),
                 'response' => substr($responseText, 0, 500),
             ]);
+
             return [];
         }
 
@@ -370,9 +374,10 @@ class CompetitorDiscoveryAgent
     {
         try {
             $url = $data['url'] ?? null;
-            
-            if (!$url || !filter_var($url, FILTER_VALIDATE_URL)) {
+
+            if (! $url || ! filter_var($url, FILTER_VALIDATE_URL)) {
                 Log::debug('CompetitorDiscoveryAgent: Invalid URL', ['url' => $url]);
+
                 return false;
             }
 
@@ -382,12 +387,14 @@ class CompetitorDiscoveryAgent
             $existing = $customer->competitors()->where('domain', $domain)->first();
             if ($existing) {
                 Log::debug('CompetitorDiscoveryAgent: Competitor already exists', ['domain' => $domain]);
+
                 return false;
             }
 
             // Validate URL is reachable (quick HEAD request)
-            if (!$this->isUrlReachable($url)) {
+            if (! $this->isUrlReachable($url)) {
                 Log::debug('CompetitorDiscoveryAgent: URL not reachable', ['url' => $url]);
+
                 return false;
             }
 
@@ -412,6 +419,7 @@ class CompetitorDiscoveryAgent
                 'error' => $e->getMessage(),
                 'data' => $data,
             ]);
+
             return false;
         }
     }
@@ -423,11 +431,13 @@ class CompetitorDiscoveryAgent
     {
         try {
             $response = Http::timeout(5)->head($url);
+
             return $response->successful() || $response->status() < 500;
         } catch (\Exception $e) {
             // Try GET as fallback (some servers don't support HEAD)
             try {
                 $response = Http::timeout(5)->get($url);
+
                 return $response->successful() || $response->status() < 500;
             } catch (\Exception $e) {
                 return false;

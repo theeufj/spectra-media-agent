@@ -19,10 +19,10 @@ class HelpController extends Controller
     {
         $article = HelpArticles::find($slug);
 
-        abort_if(!$article, 404);
+        abort_if(! $article, 404);
 
         return Inertia::render('Blog/Article', [
-            'article'       => $article,
+            'article' => $article,
             'relatedArticles' => collect(HelpArticles::index())
                 ->where('slug', '!=', $slug)
                 ->take(3)

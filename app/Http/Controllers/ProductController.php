@@ -13,7 +13,9 @@ class ProductController extends Controller
     public function index(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $feeds = ProductFeed::where('customer_id', $customer->id)->get();
 
         $stats = Product::where('customer_id', $customer->id)
@@ -35,7 +37,9 @@ class ProductController extends Controller
     public function createFeed(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $validated = $request->validate([
             'feed_name' => 'required|string|max:255',
             'merchant_id' => 'required|string',
@@ -58,7 +62,7 @@ class ProductController extends Controller
     public function syncFeed(Request $request, ProductFeed $feed)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $feed->customer_id !== $customer->id) {
+        if (! $customer || $feed->customer_id !== $customer->id) {
             abort(403);
         }
 
@@ -70,7 +74,7 @@ class ProductController extends Controller
     public function deleteFeed(Request $request, ProductFeed $feed)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $feed->customer_id !== $customer->id) {
+        if (! $customer || $feed->customer_id !== $customer->id) {
             abort(403);
         }
 
@@ -82,7 +86,9 @@ class ProductController extends Controller
     public function products(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
         $query = Product::where('customer_id', $customer->id);
 
         if ($request->status) {

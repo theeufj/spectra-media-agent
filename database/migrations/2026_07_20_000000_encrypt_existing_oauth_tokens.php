@@ -20,7 +20,7 @@ return new class extends Migration
 {
     private array $targets = [
         'connections' => ['access_token', 'refresh_token'],
-        'customers'   => ['tracking_signing_secret', 'google_ads_refresh_token'],
+        'customers' => ['tracking_signing_secret', 'google_ads_refresh_token'],
     ];
 
     public function up(): void
@@ -51,6 +51,7 @@ return new class extends Migration
                         // Already encrypted? Leave it.
                         try {
                             Crypt::decryptString($value);
+
                             continue;
                         } catch (DecryptException $e) {
                             // Plaintext — encrypt it below.
@@ -59,7 +60,7 @@ return new class extends Migration
                         $updates[$column] = Crypt::encryptString($value);
                     }
 
-                    if (!empty($updates)) {
+                    if (! empty($updates)) {
                         DB::table($table)->where('id', $row->id)->update($updates);
                     }
                 }

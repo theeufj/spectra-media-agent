@@ -2,10 +2,9 @@
 
 namespace App\Jobs;
 
+use App\Mail\CollateralGenerated;
 use App\Models\Campaign;
 use App\Models\Strategy;
-use App\Mail\CollateralGenerated;
-use App\Jobs\GenerateAdCopy;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -20,13 +19,13 @@ class GenerateCampaignCollateral implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $timeout = 3600; // 1 hour timeout for all collateral generation
 
     public function __construct(
         protected Campaign $campaign,
         protected int $userId
-    ) {
-    }
+    ) {}
 
     public function handle(): void
     {
@@ -37,6 +36,7 @@ class GenerateCampaignCollateral implements ShouldQueue
 
             if ($strategies->isEmpty()) {
                 Log::warning("No signed-off strategies found for Campaign ID: {$this->campaign->id}");
+
                 return;
             }
 
@@ -48,6 +48,7 @@ class GenerateCampaignCollateral implements ShouldQueue
 
             if (empty($jobs)) {
                 Log::warning("No collateral jobs to dispatch for Campaign ID: {$this->campaign->id}");
+
                 return;
             }
 
@@ -66,9 +67,9 @@ class GenerateCampaignCollateral implements ShouldQueue
                         Log::info("Collateral generation complete email sent to {$user->email} for Campaign ID: {$campaignId}");
 
                         // If user is not yet subscribed, send them the 'Ads Are Ready to Deploy' upsell email
-                        if (!$user->subscribed('default') && $user->subscription_status !== 'active') {
-                            $totalAssets = $campaign->strategies->sum('ad_copies_count') + 
-                                           $campaign->strategies->sum('image_collaterals_count') + 
+                        if (! $user->subscribed('default') && $user->subscription_status !== 'active') {
+                            $totalAssets = $campaign->strategies->sum('ad_copies_count') +
+                                           $campaign->strategies->sum('image_collaterals_count') +
                                            $campaign->strategies->sum('video_collaterals_count');
                             Mail::to($user->email)->send(new \App\Mail\AdsReadyToDeploy($user, $campaign, $totalAssets ?? 0));
                             Log::info("Sent AdsReadyToDeploy trial upsell email to {$user->email}");
@@ -76,7 +77,7 @@ class GenerateCampaignCollateral implements ShouldQueue
                     }
                 })
                 ->catch(function ($batch, $e) use ($campaignId) {
-                    Log::error("Some collateral jobs failed for Campaign ID {$campaignId}: " . $e->getMessage());
+                    Log::error("Some collateral jobs failed for Campaign ID {$campaignId}: ".$e->getMessage());
 
                     // Stamp the error onto any strategy for this campaign that has no collateral yet,
                     // so the polling endpoint can surface it to the UI.
@@ -90,10 +91,10 @@ class GenerateCampaignCollateral implements ShouldQueue
                 })
                 ->dispatch();
 
-            Log::info("Dispatched " . count($jobs) . " collateral generation jobs as batch for Campaign ID: {$campaignId}");
+            Log::info('Dispatched '.count($jobs)." collateral generation jobs as batch for Campaign ID: {$campaignId}");
 
         } catch (\Exception $e) {
-            Log::error("Error in GenerateCampaignCollateral job for Campaign ID {$this->campaign->id}: " . $e->getMessage());
+            Log::error("Error in GenerateCampaignCollateral job for Campaign ID {$this->campaign->id}: ".$e->getMessage());
             $this->fail($e);
         }
     }
@@ -133,23 +134,23 @@ class GenerateCampaignCollateral implements ShouldQueue
     private function hasActionableVideoContent(string $videoStrategy): bool
     {
         $content = trim($videoStrategy);
-        
+
         if (empty($content)) {
             return false;
         }
-        
+
         // Check if it's purely "N/A" or "Not Applicable"
         if (preg_match('/^(n\/a|not applicable|none)\.?$/i', $content)) {
             return false;
         }
-        
+
         // If content is short and just says "N/A for [reason]" without alternatives
-        if (strlen($content) < 100 && 
-            stripos($content, 'n/a') !== false && 
-            !preg_match('/\b(however|but|if|when|use|create|generate|show|feature|include)\b/i', $content)) {
+        if (strlen($content) < 100 &&
+            stripos($content, 'n/a') !== false &&
+            ! preg_match('/\b(however|but|if|when|use|create|generate|show|feature|include)\b/i', $content)) {
             return false;
         }
-        
+
         return true;
     }
 
@@ -158,7 +159,7 @@ class GenerateCampaignCollateral implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateCampaignCollateral failed: ' . $exception->getMessage(), [
+        Log::error('GenerateCampaignCollateral failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

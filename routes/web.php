@@ -1,21 +1,19 @@
 <?php
 
-use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\AnalyticsController;
+use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\IntegrationController;
+use App\Http\Controllers\KeywordController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\LegalController;
-use App\Http\Controllers\ReportController;
-use App\Http\Controllers\KeywordController;
-use App\Http\Controllers\BudgetController;
-use App\Http\Controllers\IntegrationController;
 use App\Http\Controllers\PersonaController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SeoController;
-use App\Http\Controllers\AnalyticsController;
-use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::get('/', [LandingController::class, 'index'])->name('landing');
 Route::get('/features', [LandingController::class, 'features'])->name('features');
@@ -306,13 +304,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 Route::post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
     $event = $r->input('event');
     $allowed = array_keys(config('conversions.events', []));
-    if (!in_array($event, $allowed, true)) {
+    if (! in_array($event, $allowed, true)) {
         return response()->json(['ok' => false], 422);
     }
     $user = $r->user();
     \App\Models\SpectraConversionEvent::record($event, $user?->id, [
         'gclid' => $user?->gclid,
     ]);
+
     return response()->json(['ok' => true]);
 })->middleware('throttle:30,1')->name('spectra.conversion.log');
 
@@ -481,8 +480,6 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
         ->middleware('admin')->name('admin.agent-health');
 });
 
-
-
 /*
 |--------------------------------------------------------------------------
 | Admin Routes
@@ -492,42 +489,42 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('dashboard', [App\Http\Controllers\AdminController::class, 'index'])->name('admin.dashboard');
     Route::get('automation-health', [\App\Http\Controllers\AgentActivityController::class, 'healthPage'])->name('admin.automation-health');
     Route::get('help', fn () => \Inertia\Inertia::render('Admin/PlatformSetupGuide'))->name('admin.help');
-    Route::get('users', [App\Http\Controllers\AdminController::class, 'usersIndex'])->name('admin.users.index');
-    Route::get('customers', [App\Http\Controllers\AdminController::class, 'customersIndex'])->name('admin.customers.index');
-    Route::get('customers/{customer}', [App\Http\Controllers\AdminController::class, 'customerShow'])->name('admin.customers.show');
-    Route::get('customers/{customer}/dashboard', [App\Http\Controllers\AdminController::class, 'customerDashboard'])->name('admin.customers.dashboard');
-    Route::get('campaigns/{campaign}', [App\Http\Controllers\AdminController::class, 'campaignShow'])->name('admin.campaigns.show');
-    Route::get('campaigns/{campaign}/performance', [App\Http\Controllers\AdminController::class, 'campaignPerformance'])->name('admin.campaigns.performance');
-    Route::post('campaigns/{campaign}/pause', [App\Http\Controllers\AdminController::class, 'pauseCampaign'])->name('admin.campaigns.pause');
-    Route::post('campaigns/{campaign}/start', [App\Http\Controllers\AdminController::class, 'startCampaign'])->name('admin.campaigns.start');
-    Route::post('campaigns/{campaign}/admin-deploy', [App\Http\Controllers\AdminController::class, 'adminDeployCampaign'])->name('admin.campaigns.admin-deploy');
-    Route::put('campaigns/{campaign}', [App\Http\Controllers\AdminController::class, 'updateCampaign'])->name('admin.campaigns.update');
-    Route::get('notifications', [App\Http\Controllers\AdminController::class, 'notificationsIndex'])->name('admin.notifications.index');
-    Route::get('notification-templates', [App\Http\Controllers\AdminController::class, 'notificationTemplatesIndex'])->name('admin.notification-templates.index');
-    Route::post('notification-templates', [App\Http\Controllers\AdminController::class, 'updateNotificationTemplate'])->name('admin.notification-templates.update');
-    Route::post('notification-templates/preview', [App\Http\Controllers\AdminController::class, 'previewNotificationTemplate'])->name('admin.notification-templates.preview');
-    Route::post('notification-templates/test', [App\Http\Controllers\AdminController::class, 'sendTestNotificationTemplate'])->name('admin.notification-templates.test');
-    Route::get('settings', [App\Http\Controllers\AdminController::class, 'settingsIndex'])->name('admin.settings.index');
-    Route::get('conversions', [App\Http\Controllers\AdminController::class, 'conversionTrackingIndex'])->name('admin.conversions.index');
-    Route::post('settings', [App\Http\Controllers\AdminController::class, 'updateSettings'])->name('admin.settings.update');
-    Route::post('users/{user}/promote', [App\Http\Controllers\AdminController::class, 'promoteToAdmin'])->name('admin.users.promote');
-    Route::post('customers/{customer}/reconcile-spend', [App\Http\Controllers\AdminController::class, 'reconcileSpend'])->name('admin.customers.reconcile-spend');
-    Route::get('customers/{customer}/credit-ledger', [App\Http\Controllers\AdminController::class, 'customerCreditLedger'])->name('admin.customers.credit-ledger');
-    Route::put('customers/{customer}', [App\Http\Controllers\AdminController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
-    Route::put('customers/{customer}/microsoft', [App\Http\Controllers\AdminController::class, 'updateCustomerMicrosoft'])->name('admin.customers.update-microsoft');
-    Route::put('customers/{customer}/google', [App\Http\Controllers\AdminController::class, 'updateCustomerGoogle'])->name('admin.customers.update-google');
-    Route::delete('customers/{customer}', [App\Http\Controllers\AdminController::class, 'deleteCustomer'])->name('admin.customers.delete');
-    Route::post('users/{user}/ban', [App\Http\Controllers\AdminController::class, 'banUser'])->name('admin.users.ban');
-    Route::delete('users/{user}', [App\Http\Controllers\AdminController::class, 'deleteUser'])->name('admin.users.delete');
-    Route::post('users/{user}/assign-plan', [App\Http\Controllers\AdminController::class, 'assignPlan'])->name('admin.users.assign-plan');
+    Route::get('users', [App\Http\Controllers\Admin\UserController::class, 'usersIndex'])->name('admin.users.index');
+    Route::get('customers', [App\Http\Controllers\Admin\CustomerController::class, 'customersIndex'])->name('admin.customers.index');
+    Route::get('customers/{customer}', [App\Http\Controllers\Admin\CustomerController::class, 'customerShow'])->name('admin.customers.show');
+    Route::get('customers/{customer}/dashboard', [App\Http\Controllers\Admin\CustomerController::class, 'customerDashboard'])->name('admin.customers.dashboard');
+    Route::get('campaigns/{campaign}', [App\Http\Controllers\Admin\CampaignController::class, 'campaignShow'])->name('admin.campaigns.show');
+    Route::get('campaigns/{campaign}/performance', [App\Http\Controllers\Admin\CampaignController::class, 'campaignPerformance'])->name('admin.campaigns.performance');
+    Route::post('campaigns/{campaign}/pause', [App\Http\Controllers\Admin\CampaignController::class, 'pauseCampaign'])->name('admin.campaigns.pause');
+    Route::post('campaigns/{campaign}/start', [App\Http\Controllers\Admin\CampaignController::class, 'startCampaign'])->name('admin.campaigns.start');
+    Route::post('campaigns/{campaign}/admin-deploy', [App\Http\Controllers\Admin\CampaignController::class, 'adminDeployCampaign'])->name('admin.campaigns.admin-deploy');
+    Route::put('campaigns/{campaign}', [App\Http\Controllers\Admin\CampaignController::class, 'updateCampaign'])->name('admin.campaigns.update');
+    Route::get('notifications', [App\Http\Controllers\Admin\NotificationController::class, 'notificationsIndex'])->name('admin.notifications.index');
+    Route::get('notification-templates', [App\Http\Controllers\Admin\NotificationController::class, 'notificationTemplatesIndex'])->name('admin.notification-templates.index');
+    Route::post('notification-templates', [App\Http\Controllers\Admin\NotificationController::class, 'updateNotificationTemplate'])->name('admin.notification-templates.update');
+    Route::post('notification-templates/preview', [App\Http\Controllers\Admin\NotificationController::class, 'previewNotificationTemplate'])->name('admin.notification-templates.preview');
+    Route::post('notification-templates/test', [App\Http\Controllers\Admin\NotificationController::class, 'sendTestNotificationTemplate'])->name('admin.notification-templates.test');
+    Route::get('settings', [App\Http\Controllers\Admin\SettingsController::class, 'settingsIndex'])->name('admin.settings.index');
+    Route::get('conversions', [App\Http\Controllers\Admin\ConversionTrackingController::class, 'conversionTrackingIndex'])->name('admin.conversions.index');
+    Route::post('settings', [App\Http\Controllers\Admin\SettingsController::class, 'updateSettings'])->name('admin.settings.update');
+    Route::post('users/{user}/promote', [App\Http\Controllers\Admin\UserController::class, 'promoteToAdmin'])->name('admin.users.promote');
+    Route::post('customers/{customer}/reconcile-spend', [App\Http\Controllers\Admin\CustomerBillingController::class, 'reconcileSpend'])->name('admin.customers.reconcile-spend');
+    Route::get('customers/{customer}/credit-ledger', [App\Http\Controllers\Admin\CustomerBillingController::class, 'customerCreditLedger'])->name('admin.customers.credit-ledger');
+    Route::put('customers/{customer}', [App\Http\Controllers\Admin\CustomerController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
+    Route::put('customers/{customer}/microsoft', [App\Http\Controllers\Admin\CustomerController::class, 'updateCustomerMicrosoft'])->name('admin.customers.update-microsoft');
+    Route::put('customers/{customer}/google', [App\Http\Controllers\Admin\CustomerController::class, 'updateCustomerGoogle'])->name('admin.customers.update-google');
+    Route::delete('customers/{customer}', [App\Http\Controllers\Admin\CustomerController::class, 'deleteCustomer'])->name('admin.customers.delete');
+    Route::post('users/{user}/ban', [App\Http\Controllers\Admin\UserController::class, 'banUser'])->name('admin.users.ban');
+    Route::delete('users/{user}', [App\Http\Controllers\Admin\UserController::class, 'deleteUser'])->name('admin.users.delete');
+    Route::post('users/{user}/assign-plan', [App\Http\Controllers\Admin\UserController::class, 'assignPlan'])->name('admin.users.assign-plan');
 
     // Execution Metrics Dashboard (Admin Only)
     Route::get('execution-metrics', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'index'])->name('admin.execution.metrics');
     Route::get('execution-metrics/{strategy}', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'show'])->name('admin.execution.detail');
-    Route::post('users/{user}/unban', [App\Http\Controllers\AdminController::class, 'unbanUser'])->name('admin.users.unban');
-    Route::post('users/{user}/inbox', [App\Http\Controllers\AdminController::class, 'assignInbox'])->name('admin.users.inbox.assign');
-    Route::delete('users/{user}/inbox', [App\Http\Controllers\AdminController::class, 'removeInbox'])->name('admin.users.inbox.remove');
-    Route::post('notification', [App\Http\Controllers\AdminController::class, 'sendNotification'])->name('admin.notification.send');
+    Route::post('users/{user}/unban', [App\Http\Controllers\Admin\UserController::class, 'unbanUser'])->name('admin.users.unban');
+    Route::post('users/{user}/inbox', [App\Http\Controllers\Admin\UserController::class, 'assignInbox'])->name('admin.users.inbox.assign');
+    Route::delete('users/{user}/inbox', [App\Http\Controllers\Admin\UserController::class, 'removeInbox'])->name('admin.users.inbox.remove');
+    Route::post('notification', [App\Http\Controllers\Admin\NotificationController::class, 'sendNotification'])->name('admin.notification.send');
 
     // Impersonation
     Route::post('impersonate/{user}', [App\Http\Controllers\Admin\ImpersonationController::class, 'start'])->name('admin.impersonation.start');
@@ -703,13 +700,13 @@ Route::middleware('auth')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
-    Route::get('/settings/facebook-api',             [App\Http\Controllers\FacebookApiOAuthController::class, 'show'])->name('facebook-api.show');
-    Route::get('/settings/facebook-api/connect',     [App\Http\Controllers\FacebookApiOAuthController::class, 'redirect'])->name('facebook-api.redirect');
-    Route::get('/settings/facebook-api/callback',    [App\Http\Controllers\FacebookApiOAuthController::class, 'callback'])->name('facebook-api.callback');
-    Route::get('/settings/facebook-api/success',     [App\Http\Controllers\FacebookApiOAuthController::class, 'success'])->name('facebook-api.success');
-    Route::get('/settings/facebook-api/verify',      [App\Http\Controllers\FacebookApiOAuthController::class, 'verify'])->name('facebook-api.verify');
-    Route::post('/settings/facebook-api/disconnect',     [App\Http\Controllers\FacebookApiOAuthController::class, 'disconnect'])->name('facebook-api.disconnect');
-    Route::post('/settings/facebook-api/test-campaign',  [App\Http\Controllers\FacebookApiOAuthController::class, 'createTestCampaign'])->name('facebook-api.test-campaign');
+    Route::get('/settings/facebook-api', [App\Http\Controllers\FacebookApiOAuthController::class, 'show'])->name('facebook-api.show');
+    Route::get('/settings/facebook-api/connect', [App\Http\Controllers\FacebookApiOAuthController::class, 'redirect'])->name('facebook-api.redirect');
+    Route::get('/settings/facebook-api/callback', [App\Http\Controllers\FacebookApiOAuthController::class, 'callback'])->name('facebook-api.callback');
+    Route::get('/settings/facebook-api/success', [App\Http\Controllers\FacebookApiOAuthController::class, 'success'])->name('facebook-api.success');
+    Route::get('/settings/facebook-api/verify', [App\Http\Controllers\FacebookApiOAuthController::class, 'verify'])->name('facebook-api.verify');
+    Route::post('/settings/facebook-api/disconnect', [App\Http\Controllers\FacebookApiOAuthController::class, 'disconnect'])->name('facebook-api.disconnect');
+    Route::post('/settings/facebook-api/test-campaign', [App\Http\Controllers\FacebookApiOAuthController::class, 'createTestCampaign'])->name('facebook-api.test-campaign');
 });
 
 /*

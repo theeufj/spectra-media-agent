@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\AdCopy;
 use App\Models\Campaign;
 use App\Models\HarvestedAsset;
-use App\Models\Strategy;
 use App\Models\Setting;
+use App\Models\Strategy;
 use App\Services\CreativeQuotaService;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
@@ -17,17 +15,15 @@ class CollateralController extends Controller
     /**
      * Display the collateral generation page for a specific campaign strategy.
      *
-     * @param Campaign $campaign The campaign model instance.
-     * @param Strategy $strategy The strategy model instance.
+     * @param  Campaign  $campaign  The campaign model instance.
+     * @param  Strategy  $strategy  The strategy model instance.
      * @return \Inertia\Response
      */
     public function show(Campaign $campaign, Strategy $strategy)
     {
         // Ensure the campaign belongs to a customer that the authenticated user is part of.
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('view', $campaign);
 
         // Ensure the strategy belongs to the campaign.
         if ($strategy->campaign_id !== $campaign->id) {
@@ -47,7 +43,7 @@ class CollateralController extends Controller
 
         // Find the specific ad copy for the current strategy and platform
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
-        
+
         // Find all active image collaterals for the current strategy
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
 
@@ -90,19 +86,16 @@ class CollateralController extends Controller
     /**
      * getCollateralJson returns the latest collateral data as JSON for polling.
      *
-     * @param Strategy $strategy
      * @return \Illuminate\Http\JsonResponse
      */
     public function getCollateralJson(Strategy $strategy)
     {
         // Ensure the user is authorized to view this collateral.
         $user = Auth::user();
-        if (!$user->customers()->where('customers.id', $strategy->campaign->customer_id)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('view', $strategy->campaign);
 
         $strategy->load(['adCopies', 'imageCollaterals', 'videoCollaterals']);
-        
+
         return response()->json([
             'adCopy' => $strategy->adCopies->where('platform', $strategy->platform)->first(),
             'imageCollaterals' => $strategy->imageCollaterals()->where('is_active', true)->get(),

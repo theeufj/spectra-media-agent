@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Mail;
 class DemoController extends Controller
 {
     protected BrandGuidelineExtractorService $brandService;
+
     protected GeminiService $geminiService;
 
     public function __construct(BrandGuidelineExtractorService $brandService, GeminiService $geminiService)
@@ -24,12 +25,12 @@ class DemoController extends Controller
     public function generateFull(Request $request)
     {
         $request->validate([
-            'url'        => 'required|url|max:255',
+            'url' => 'required|url|max:255',
             'first_name' => 'nullable|string|max:100',
-            'email'      => 'nullable|email|max:255',
+            'email' => 'nullable|email|max:255',
         ]);
 
-        $url       = $request->input('url');
+        $url = $request->input('url');
         $firstName = $request->input('first_name', '');
         $userEmail = $request->input('email', '');
 
@@ -37,16 +38,16 @@ class DemoController extends Controller
 
         // Notify the team every time someone hits Try Now — one email to all recipients
         try {
-            $ip        = $request->ip();
+            $ip = $request->ip();
             $userAgent = $request->userAgent() ?? 'unknown';
-            $time      = now()->format('d M Y, H:i') . ' UTC';
-            $subject   = $firstName ? "Try Now: {$firstName} — {$url}" : "Try Now: {$url}";
+            $time = now()->format('d M Y, H:i').' UTC';
+            $subject = $firstName ? "Try Now: {$firstName} — {$url}" : "Try Now: {$url}";
 
             $displayName = e($firstName ?: '—');
             $displayEmail = $userEmail
-                ? '<a href="mailto:' . e($userEmail) . '" style="color:#ff4d00;text-decoration:none;">' . e($userEmail) . '</a>'
+                ? '<a href="mailto:'.e($userEmail).'" style="color:#ff4d00;text-decoration:none;">'.e($userEmail).'</a>'
                 : '—';
-            $displayUrl = '<a href="' . e($url) . '" style="color:#ff4d00;text-decoration:none;">' . e($url) . '</a>';
+            $displayUrl = '<a href="'.e($url).'" style="color:#ff4d00;text-decoration:none;">'.e($url).'</a>';
             $displayIp = e($ip);
             $displayTime = e($time);
 
@@ -121,7 +122,7 @@ HTML;
                 ->subject($subject)
             );
         } catch (\Exception $e) {
-            Log::warning("DemoController: Failed to send Try Now notification: " . $e->getMessage());
+            Log::warning('DemoController: Failed to send Try Now notification: '.$e->getMessage());
         }
 
         // 1. Scrape text using basic HTTP
@@ -148,7 +149,7 @@ HTML;
 
                 // Extract colors directly from HTML styles
                 preg_match_all('/#([a-fA-F0-9]{6})\b/', $html, $colorMatches);
-                if (!empty($colorMatches[0])) {
+                if (! empty($colorMatches[0])) {
                     $cssColors = array_merge($cssColors, $colorMatches[0]);
                 }
 
@@ -161,10 +162,10 @@ HTML;
                 foreach ($cssUrlsToFetch as $cssPath) {
                     try {
                         // Handle relative URLs
-                        if (!str_starts_with($cssPath, 'http')) {
+                        if (! str_starts_with($cssPath, 'http')) {
                             $parsedUrl = parse_url($url);
-                            $basePath = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? '');
-                            $cssUrlToFetch = str_starts_with($cssPath, '/') ? $basePath . $cssPath : $basePath . '/' . $cssPath;
+                            $basePath = ($parsedUrl['scheme'] ?? 'https').'://'.($parsedUrl['host'] ?? '');
+                            $cssUrlToFetch = str_starts_with($cssPath, '/') ? $basePath.$cssPath : $basePath.'/'.$cssPath;
                         } else {
                             $cssUrlToFetch = $cssPath;
                         }
@@ -172,27 +173,27 @@ HTML;
                         $cssResponse = Http::timeout(5)->get($cssUrlToFetch);
                         if ($cssResponse->successful()) {
                             preg_match_all('/#([a-fA-F0-9]{6})\b/', $cssResponse->body(), $cssFileColorMatches);
-                            if (!empty($cssFileColorMatches[0])) {
+                            if (! empty($cssFileColorMatches[0])) {
                                 $cssColors = array_merge($cssColors, $cssFileColorMatches[0]);
                             }
                         }
                     } catch (\Exception $e) {
-                        Log::warning("Could not fetch CSS from: " . $cssPath);
+                        Log::warning('Could not fetch CSS from: '.$cssPath);
                     }
                 }
 
                 // Get unique, lowercased colors and take top 5 most frequent (or just unique)
-                if (!empty($cssColors)) {
+                if (! empty($cssColors)) {
                     $cssColors = array_map('strtolower', $cssColors);
                     $colorCounts = array_count_values($cssColors);
-                    
+
                     // Filter out neutral/grayscale colors
                     foreach ($colorCounts as $hex => $count) {
                         if (strlen($hex) === 7) {
                             $r = hexdec(substr($hex, 1, 2));
                             $g = hexdec(substr($hex, 3, 2));
                             $b = hexdec(substr($hex, 5, 2));
-                            
+
                             $max = max($r, $g, $b);
                             $min = min($r, $g, $b);
                             // If difference between max and min is small, it's very gray/neutral
@@ -204,20 +205,20 @@ HTML;
                             unset($colorCounts[$hex]);
                         }
                     }
-                    
+
                     arsort($colorCounts);
                     $cssColors = array_slice(array_keys($colorCounts), 0, 5);
                 }
             }
         } catch (\Exception $e) {
-            Log::warning("DemoController text scraping failed: " . $e->getMessage());
-            $textContent = "Domain: " . parse_url($url, PHP_URL_HOST);
+            Log::warning('DemoController text scraping failed: '.$e->getMessage());
+            $textContent = 'Domain: '.parse_url($url, PHP_URL_HOST);
         }
 
         // 2. Generate Ad Copy with Gemini
         $adCopy = ['headlines' => [], 'descriptions' => []];
         try {
-            $prompt = "Based on this website data, write 3 Google Search Ad headlines (max 30 chars each) and 2 descriptions (max 90 chars each). Keep it punchy and highlight the value proposition. Return strict JSON with the keys 'headlines' (array of strings) and 'descriptions' (array of strings).\n\nWebsite Data:\n" . substr($textContent, 0, 1000);
+            $prompt = "Based on this website data, write 3 Google Search Ad headlines (max 30 chars each) and 2 descriptions (max 90 chars each). Keep it punchy and highlight the value proposition. Return strict JSON with the keys 'headlines' (array of strings) and 'descriptions' (array of strings).\n\nWebsite Data:\n".substr($textContent, 0, 1000);
 
             $aiResponse = $this->geminiService->generateContent(
                 config('ai.models.default', 'gemini-1.5-flash-latest'), // Adjust to your text model
@@ -233,10 +234,10 @@ HTML;
                 }
             }
         } catch (\Exception $e) {
-            Log::warning("DemoController ad copy generation failed: " . $e->getMessage());
+            Log::warning('DemoController ad copy generation failed: '.$e->getMessage());
             $adCopy = [
                 'headlines' => ['Leading Industry Solution', 'Start Your Free Trial', 'Transform Your Business'],
-                'descriptions' => ['Discover why thousands trust our platform. Get started today and see results fast.', 'The all-in-one solution you have been looking for. Flexible pricing to suit any scale.']
+                'descriptions' => ['Discover why thousands trust our platform. Get started today and see results fast.', 'The all-in-one solution you have been looking for. Flexible pricing to suit any scale.'],
             ];
         }
 
@@ -251,7 +252,7 @@ HTML;
         ];
 
         // Fallback to CSS colors if Vision failed to extract them
-        if (empty($visuals['colors']) && !empty($cssColors)) {
+        if (empty($visuals['colors']) && ! empty($cssColors)) {
             $visuals['colors'] = $cssColors;
         }
 

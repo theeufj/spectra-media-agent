@@ -9,39 +9,57 @@ use Illuminate\Support\Str;
 
 /**
  * Facebook Conversions API (CAPI) Service
- * 
+ *
  * Server-side event tracking for Facebook/Meta Ads.
  * This complements the client-side Pixel to ensure accurate attribution
  * even with iOS 14.5+ privacy changes and ad blockers.
- * 
+ *
  * Events are sent to the Conversions API and deduplicated with Pixel events
  * using the event_id parameter.
  */
 class ConversionsApiService
 {
     protected ?string $accessToken = null;
+
     protected ?Customer $customer = null;
+
     protected string $apiVersion;
+
     protected string $graphApiUrl = 'https://graph.facebook.com';
-    
+
     /**
      * Supported standard events
      */
     public const EVENT_PAGE_VIEW = 'PageView';
+
     public const EVENT_VIEW_CONTENT = 'ViewContent';
+
     public const EVENT_SEARCH = 'Search';
+
     public const EVENT_ADD_TO_CART = 'AddToCart';
+
     public const EVENT_ADD_TO_WISHLIST = 'AddToWishlist';
+
     public const EVENT_INITIATE_CHECKOUT = 'InitiateCheckout';
+
     public const EVENT_ADD_PAYMENT_INFO = 'AddPaymentInfo';
+
     public const EVENT_PURCHASE = 'Purchase';
+
     public const EVENT_LEAD = 'Lead';
+
     public const EVENT_COMPLETE_REGISTRATION = 'CompleteRegistration';
+
     public const EVENT_CONTACT = 'Contact';
+
     public const EVENT_FIND_LOCATION = 'FindLocation';
+
     public const EVENT_SCHEDULE = 'Schedule';
+
     public const EVENT_START_TRIAL = 'StartTrial';
+
     public const EVENT_SUBMIT_APPLICATION = 'SubmitApplication';
+
     public const EVENT_SUBSCRIBE = 'Subscribe';
 
     public function __construct(Customer $customer)
@@ -54,14 +72,12 @@ class ConversionsApiService
     /**
      * Get the Facebook access token from the customer record.
      */
-    
 
     /**
      * Send a single event to the Conversions API.
      *
-     * @param string $pixelId The Facebook Pixel ID
-     * @param array $eventData The event data
-     * @return array|null
+     * @param  string  $pixelId  The Facebook Pixel ID
+     * @param  array  $eventData  The event data
      */
     public function sendEvent(string $pixelId, array $eventData): ?array
     {
@@ -71,14 +87,14 @@ class ConversionsApiService
     /**
      * Send multiple events to the Conversions API.
      *
-     * @param string $pixelId The Facebook Pixel ID
-     * @param array $events Array of event data
-     * @return array|null
+     * @param  string  $pixelId  The Facebook Pixel ID
+     * @param  array  $events  Array of event data
      */
     public function sendEvents(string $pixelId, array $events): ?array
     {
-        if (!$this->accessToken) {
+        if (! $this->accessToken) {
             Log::error('CAPI: No access token available');
+
             return null;
         }
 
@@ -95,13 +111,13 @@ class ConversionsApiService
 
             if ($response->successful()) {
                 $result = $response->json();
-                
+
                 Log::info('CAPI: Events sent successfully', [
                     'pixel_id' => $pixelId,
                     'events_received' => $result['events_received'] ?? count($events),
                     'customer_id' => $this->customer->id,
                 ]);
-                
+
                 return $result;
             }
 
@@ -114,18 +130,16 @@ class ConversionsApiService
             return null;
 
         } catch (\Exception $e) {
-            Log::error('CAPI: Exception sending events: ' . $e->getMessage(), [
+            Log::error('CAPI: Exception sending events: '.$e->getMessage(), [
                 'pixel_id' => $pixelId,
             ]);
+
             return null;
         }
     }
 
     /**
      * Format an event for the Conversions API.
-     *
-     * @param array $event
-     * @return array
      */
     protected function formatEvent(array $event): array
     {
@@ -161,9 +175,6 @@ class ConversionsApiService
 
     /**
      * Format and hash user data.
-     *
-     * @param array $userData
-     * @return array
      */
     protected function formatUserData(array $userData): array
     {
@@ -171,7 +182,7 @@ class ConversionsApiService
 
         // Hash personally identifiable information
         $hashFields = ['em', 'ph', 'fn', 'ln', 'db', 'ge', 'ct', 'st', 'zp', 'country'];
-        
+
         foreach ($userData as $key => $value) {
             if (empty($value)) {
                 continue;
@@ -195,10 +206,6 @@ class ConversionsApiService
 
     /**
      * Normalize a value before hashing.
-     *
-     * @param string $key
-     * @param string $value
-     * @return string
      */
     protected function normalizeValue(string $key, string $value): string
     {
@@ -207,28 +214,28 @@ class ConversionsApiService
         switch ($key) {
             case 'em': // Email
                 return $value;
-                
+
             case 'ph': // Phone
                 return preg_replace('/[^0-9]/', '', $value);
-                
+
             case 'fn': // First name
             case 'ln': // Last name
             case 'ct': // City
                 return preg_replace('/[^a-z]/', '', $value);
-                
+
             case 'st': // State
             case 'country':
                 return preg_replace('/[^a-z]/', '', $value);
-                
+
             case 'zp': // Zip code
                 return preg_replace('/[^a-z0-9]/', '', $value);
-                
+
             case 'ge': // Gender
                 return in_array($value, ['m', 'f']) ? $value : '';
-                
+
             case 'db': // Date of birth (YYYYMMDD)
                 return preg_replace('/[^0-9]/', '', $value);
-                
+
             default:
                 return $value;
         }
@@ -237,11 +244,9 @@ class ConversionsApiService
     /**
      * Send a PageView event.
      *
-     * @param string $pixelId
-     * @param array $userData User matching data
-     * @param string $sourceUrl The page URL
-     * @param string|null $eventId Event ID for deduplication with Pixel
-     * @return array|null
+     * @param  array  $userData  User matching data
+     * @param  string  $sourceUrl  The page URL
+     * @param  string|null  $eventId  Event ID for deduplication with Pixel
      */
     public function sendPageView(
         string $pixelId,
@@ -261,14 +266,12 @@ class ConversionsApiService
     /**
      * Send a Purchase event.
      *
-     * @param string $pixelId
-     * @param array $userData User matching data
-     * @param float $value Purchase value
-     * @param string $currency Currency code (e.g., 'USD')
-     * @param string|null $orderId Order ID
-     * @param array $contents Array of product contents
-     * @param string|null $eventId Event ID for deduplication
-     * @return array|null
+     * @param  array  $userData  User matching data
+     * @param  float  $value  Purchase value
+     * @param  string  $currency  Currency code (e.g., 'USD')
+     * @param  string|null  $orderId  Order ID
+     * @param  array  $contents  Array of product contents
+     * @param  string|null  $eventId  Event ID for deduplication
      */
     public function sendPurchase(
         string $pixelId,
@@ -288,7 +291,7 @@ class ConversionsApiService
             $customData['order_id'] = $orderId;
         }
 
-        if (!empty($contents)) {
+        if (! empty($contents)) {
             $customData['contents'] = $contents;
             $customData['num_items'] = count($contents);
         }
@@ -305,12 +308,10 @@ class ConversionsApiService
     /**
      * Send a Lead event.
      *
-     * @param string $pixelId
-     * @param array $userData User matching data
-     * @param float|null $value Lead value (optional)
-     * @param string $currency Currency code
-     * @param string|null $eventId Event ID for deduplication
-     * @return array|null
+     * @param  array  $userData  User matching data
+     * @param  float|null  $value  Lead value (optional)
+     * @param  string  $currency  Currency code
+     * @param  string|null  $eventId  Event ID for deduplication
      */
     public function sendLead(
         string $pixelId,
@@ -338,13 +339,11 @@ class ConversionsApiService
     /**
      * Send an AddToCart event.
      *
-     * @param string $pixelId
-     * @param array $userData User matching data
-     * @param float $value Cart value
-     * @param string $currency Currency code
-     * @param array $contents Product contents
-     * @param string|null $eventId Event ID for deduplication
-     * @return array|null
+     * @param  array  $userData  User matching data
+     * @param  float  $value  Cart value
+     * @param  string  $currency  Currency code
+     * @param  array  $contents  Product contents
+     * @param  string|null  $eventId  Event ID for deduplication
      */
     public function sendAddToCart(
         string $pixelId,
@@ -359,7 +358,7 @@ class ConversionsApiService
             'currency' => $currency,
         ];
 
-        if (!empty($contents)) {
+        if (! empty($contents)) {
             $customData['contents'] = $contents;
         }
 
@@ -375,13 +374,11 @@ class ConversionsApiService
     /**
      * Send an InitiateCheckout event.
      *
-     * @param string $pixelId
-     * @param array $userData User matching data
-     * @param float $value Cart value
-     * @param string $currency Currency code
-     * @param int $numItems Number of items
-     * @param string|null $eventId Event ID for deduplication
-     * @return array|null
+     * @param  array  $userData  User matching data
+     * @param  float  $value  Cart value
+     * @param  string  $currency  Currency code
+     * @param  int  $numItems  Number of items
+     * @param  string|null  $eventId  Event ID for deduplication
      */
     public function sendInitiateCheckout(
         string $pixelId,
@@ -407,11 +404,9 @@ class ConversionsApiService
     /**
      * Send a CompleteRegistration event.
      *
-     * @param string $pixelId
-     * @param array $userData User matching data
-     * @param string|null $status Registration status
-     * @param string|null $eventId Event ID for deduplication
-     * @return array|null
+     * @param  array  $userData  User matching data
+     * @param  string|null  $status  Registration status
+     * @param  string|null  $eventId  Event ID for deduplication
      */
     public function sendCompleteRegistration(
         string $pixelId,
@@ -420,7 +415,7 @@ class ConversionsApiService
         ?string $eventId = null
     ): ?array {
         $customData = [];
-        
+
         if ($status) {
             $customData['status'] = $status;
         }
@@ -437,12 +432,10 @@ class ConversionsApiService
     /**
      * Send a custom event.
      *
-     * @param string $pixelId
-     * @param string $eventName Custom event name
-     * @param array $userData User matching data
-     * @param array $customData Custom event data
-     * @param string|null $eventId Event ID for deduplication
-     * @return array|null
+     * @param  string  $eventName  Custom event name
+     * @param  array  $userData  User matching data
+     * @param  array  $customData  Custom event data
+     * @param  string|null  $eventId  Event ID for deduplication
      */
     public function sendCustomEvent(
         string $pixelId,
@@ -463,13 +456,11 @@ class ConversionsApiService
     /**
      * Test the CAPI connection with a test event.
      *
-     * @param string $pixelId
-     * @param string $testCode Test event code from Events Manager
-     * @return array|null
+     * @param  string  $testCode  Test event code from Events Manager
      */
     public function sendTestEvent(string $pixelId, string $testCode): ?array
     {
-        if (!$this->accessToken) {
+        if (! $this->accessToken) {
             return null;
         }
 
@@ -484,7 +475,7 @@ class ConversionsApiService
                         'event_id' => Str::uuid()->toString(),
                         'action_source' => 'website',
                         'user_data' => [
-                            'em' => hash('sha256', 'test_' . $testCode . '@test.internal'),
+                            'em' => hash('sha256', 'test_'.$testCode.'@test.internal'),
                             'client_ip_address' => request()->ip() ?? '0.0.0.0',
                             'client_user_agent' => request()->userAgent() ?? 'CAPI-TestEvent/1.0',
                         ],
@@ -496,7 +487,8 @@ class ConversionsApiService
             return $response->successful() ? $response->json() : null;
 
         } catch (\Exception $e) {
-            Log::error('CAPI: Test event failed: ' . $e->getMessage());
+            Log::error('CAPI: Test event failed: '.$e->getMessage());
+
             return null;
         }
     }

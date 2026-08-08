@@ -16,9 +16,7 @@ use Illuminate\Support\Facades\Log;
 class PromoteCampaignExperiment extends BaseGoogleAdsService
 {
     /**
-     * @param  string $customerId
-     * @param  string $experimentResourceName  e.g. "customers/123/experiments/456"
-     * @return bool
+     * @param  string  $experimentResourceName  e.g. "customers/123/experiments/456"
      */
     public function __invoke(string $customerId, string $experimentResourceName): bool
     {
@@ -30,20 +28,23 @@ class PromoteCampaignExperiment extends BaseGoogleAdsService
             );
 
             $this->logInfo("PromoteCampaignExperiment: Promotion initiated for {$experimentResourceName}");
+
             return true;
         } catch (GoogleAdsException|ApiException $e) {
             Log::error('PromoteCampaignExperiment: Failed to promote experiment', [
                 'customer_id' => $customerId,
-                'experiment'  => $experimentResourceName,
-                'error'       => $e->getMessage(),
+                'experiment' => $experimentResourceName,
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         } catch (\Exception $e) {
             Log::error('PromoteCampaignExperiment: Unexpected error', [
                 'customer_id' => $customerId,
-                'experiment'  => $experimentResourceName,
-                'error'       => $e->getMessage(),
+                'experiment' => $experimentResourceName,
+                'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }

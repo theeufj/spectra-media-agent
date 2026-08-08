@@ -27,8 +27,8 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
 
         $customerId = $this->customer->cleanGoogleCustomerId();
         $campaignId = $campaign->googleCampaignNumericId();
-        $resource   = $campaign->googleAdsResourceName();
-        if (!$campaignId || !$resource) {
+        $resource = $campaign->googleAdsResourceName();
+        if (! $campaignId || ! $resource) {
             return 0;
         }
 
@@ -36,13 +36,14 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
         $existing = 0;
         try {
             // campaign.id must be in the SELECT clause when filtering campaign_asset by it.
-            $q = "SELECT campaign.id, campaign_asset.resource_name FROM campaign_asset "
-                . "WHERE campaign.id = {$campaignId} AND campaign_asset.field_type = 'SITELINK'";
+            $q = 'SELECT campaign.id, campaign_asset.resource_name FROM campaign_asset '
+                ."WHERE campaign.id = {$campaignId} AND campaign_asset.field_type = 'SITELINK'";
             foreach ($this->searchQuery($customerId, $q)->getIterator() as $_) {
                 $existing++;
             }
         } catch (\Throwable $e) {
-            $this->logError('CreateSitelinkAssets: sitelink count query failed: ' . $e->getMessage());
+            $this->logError('CreateSitelinkAssets: sitelink count query failed: '.$e->getMessage());
+
             return 0;
         }
 
@@ -56,7 +57,7 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
         }
 
         $linker = new LinkCampaignAsset($this->customer);
-        $added  = 0;
+        $added = 0;
 
         foreach ($sitelinks as $sl) {
             $assetResource = $this->createSitelinkAsset($customerId, $sl);
@@ -71,31 +72,33 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
     private function createSitelinkAsset(string $customerId, array $sl): ?string
     {
         $sitelink = new SitelinkAsset(['link_text' => mb_substr($sl['text'], 0, 25)]);
-        if (!empty($sl['desc1'])) {
+        if (! empty($sl['desc1'])) {
             $sitelink->setDescription1(mb_substr($sl['desc1'], 0, 35));
         }
-        if (!empty($sl['desc2'])) {
+        if (! empty($sl['desc2'])) {
             $sitelink->setDescription2(mb_substr($sl['desc2'], 0, 35));
         }
 
         $asset = new Asset([
-            'name'           => 'Sitelink: ' . mb_substr($sl['text'], 0, 25) . ' - ' . uniqid(),
-            'type'           => AssetType::SITELINK,
+            'name' => 'Sitelink: '.mb_substr($sl['text'], 0, 25).' - '.uniqid(),
+            'type' => AssetType::SITELINK,
             'sitelink_asset' => $sitelink,
-            'final_urls'     => [$sl['url']],
+            'final_urls' => [$sl['url']],
         ]);
 
-        $operation = new AssetOperation();
+        $operation = new AssetOperation;
         $operation->setCreate($asset);
 
         try {
             $resp = $this->client->getAssetServiceClient()->mutateAssets(new MutateAssetsRequest([
                 'customer_id' => $customerId,
-                'operations'  => [$operation],
+                'operations' => [$operation],
             ]));
+
             return $resp->getResults()[0]->getResourceName();
         } catch (\Throwable $e) {
-            $this->logError('CreateSitelinkAssets: asset create failed: ' . $e->getMessage());
+            $this->logError('CreateSitelinkAssets: asset create failed: '.$e->getMessage());
+
             return null;
         }
     }
@@ -105,13 +108,13 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
      */
     private function buildSitelinks(Campaign $campaign): array
     {
-        $customer  = $campaign->customer;
+        $customer = $campaign->customer;
         $sitelinks = [];
-        $seen      = [];
+        $seen = [];
 
         foreach ($customer->pages()->whereNotNull('url')->limit(12)->get() as $page) {
             $text = trim((string) ($page->title ?? ''));
-            $url  = trim((string) $page->url);
+            $url = trim((string) $page->url);
             if ($text === '' || $url === '') {
                 continue;
             }
@@ -127,7 +130,7 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
         if (empty($sitelinks) && $customer->website) {
             $base = rtrim($customer->website, '/');
             foreach ([['Get Started', '/'], ['Pricing', '/pricing'], ['About Us', '/about'], ['Contact', '/contact']] as [$t, $path]) {
-                $sitelinks[] = ['text' => $t, 'url' => $base . $path, 'desc1' => null, 'desc2' => null];
+                $sitelinks[] = ['text' => $t, 'url' => $base.$path, 'desc1' => null, 'desc2' => null];
             }
         }
 

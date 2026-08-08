@@ -24,7 +24,8 @@ use Illuminate\Support\Facades\Log;
 class DataManagerService
 {
     private const INGEST_ENDPOINT = 'https://datamanager.googleapis.com/v1/events:ingest';
-    private const TOKEN_ENDPOINT  = 'https://oauth2.googleapis.com/token';
+
+    private const TOKEN_ENDPOINT = 'https://oauth2.googleapis.com/token';
 
     private ?MccAccount $mcc;
 
@@ -40,14 +41,14 @@ class DataManagerService
      * Ingest a single gclid-keyed offline conversion into a Google Ads
      * conversion action.
      *
-     * @param  string             $operatingAccountId  Ad account id (digits only, no dashes)
-     * @param  string             $conversionActionId  Numeric conversion action id (productDestinationId)
-     * @param  string             $gclid               Google click id
-     * @param  float              $value               Conversion value
-     * @param  string             $currency            ISO 4217 code
-     * @param  \DateTimeInterface $occurredAt          When the conversion happened
-     * @param  string|null        $email               Raw email — SHA-256 hashed here for enhanced matching
-     * @param  bool               $validateOnly        Dry run: validate without ingesting
+     * @param  string  $operatingAccountId  Ad account id (digits only, no dashes)
+     * @param  string  $conversionActionId  Numeric conversion action id (productDestinationId)
+     * @param  string  $gclid  Google click id
+     * @param  float  $value  Conversion value
+     * @param  string  $currency  ISO 4217 code
+     * @param  \DateTimeInterface  $occurredAt  When the conversion happened
+     * @param  string|null  $email  Raw email — SHA-256 hashed here for enhanced matching
+     * @param  bool  $validateOnly  Dry run: validate without ingesting
      * @return array{success:bool, requestId?:string, error?:string}
      */
     public function ingestGclidConversion(
@@ -72,15 +73,15 @@ class DataManagerService
 
         $event = [
             'destinationReferences' => ['google_ads'],
-            'eventSource'           => $eventSource, // required: WEB | APP | IN_STORE | PHONE | ...
-            'eventTimestamp'        => Carbon::instance(Carbon::parse($occurredAt))->utc()->toIso8601ZuluString(),
-            'adIdentifiers'         => ['gclid' => $gclid],
-            'currency'              => $currency,
-            'conversionValue'       => $value,
+            'eventSource' => $eventSource, // required: WEB | APP | IN_STORE | PHONE | ...
+            'eventTimestamp' => Carbon::instance(Carbon::parse($occurredAt))->utc()->toIso8601ZuluString(),
+            'adIdentifiers' => ['gclid' => $gclid],
+            'currency' => $currency,
+            'conversionValue' => $value,
             // DMA consent. These are our own funnel conversions where the visitor
             // proceeded through the site; adjust if a real consent signal is available.
-            'consent'               => [
-                'adUserData'        => 'CONSENT_GRANTED',
+            'consent' => [
+                'adUserData' => 'CONSENT_GRANTED',
                 'adPersonalization' => 'CONSENT_GRANTED',
             ],
         ];
@@ -96,11 +97,11 @@ class DataManagerService
 
         $payload = [
             'validateOnly' => $validateOnly,
-            'encoding'     => 'HEX', // encoding of any hashed userData values
+            'encoding' => 'HEX', // encoding of any hashed userData values
             'destinations' => [[
-                'reference'            => 'google_ads',
-                'loginAccount'         => ['accountType' => 'GOOGLE_ADS', 'accountId' => (string) $this->mcc->google_customer_id],
-                'operatingAccount'     => ['accountType' => 'GOOGLE_ADS', 'accountId' => $operatingAccountId],
+                'reference' => 'google_ads',
+                'loginAccount' => ['accountType' => 'GOOGLE_ADS', 'accountId' => (string) $this->mcc->google_customer_id],
+                'operatingAccount' => ['accountType' => 'GOOGLE_ADS', 'accountId' => $operatingAccountId],
                 'productDestinationId' => $conversionActionId,
             ]],
             'events' => [$event],
@@ -117,13 +118,13 @@ class DataManagerService
 
             Log::warning('DataManagerService: ingest failed', [
                 'status' => $response->status(),
-                'body'   => $response->body(),
+                'body' => $response->body(),
                 'action' => $conversionActionId,
             ]);
 
-            return ['success' => false, 'error' => "HTTP {$response->status()}: " . $response->body()];
+            return ['success' => false, 'error' => "HTTP {$response->status()}: ".$response->body()];
         } catch (\Throwable $e) {
-            Log::error('DataManagerService: ingest exception: ' . $e->getMessage());
+            Log::error('DataManagerService: ingest exception: '.$e->getMessage());
 
             return ['success' => false, 'error' => $e->getMessage()];
         }
@@ -139,7 +140,7 @@ class DataManagerService
             return $this->cachedToken;
         }
 
-        $cfg   = @parse_ini_file(storage_path('app/google_ads_php.ini'), true) ?: [];
+        $cfg = @parse_ini_file(storage_path('app/google_ads_php.ini'), true) ?: [];
         $oauth = $cfg['OAUTH2'] ?? [];
 
         if (empty($oauth['clientId']) || empty($oauth['clientSecret']) || ! $this->mcc?->refresh_token) {
@@ -148,15 +149,15 @@ class DataManagerService
 
         try {
             $response = Http::asForm()->timeout(15)->post(self::TOKEN_ENDPOINT, [
-                'client_id'     => $oauth['clientId'],
+                'client_id' => $oauth['clientId'],
                 'client_secret' => $oauth['clientSecret'],
                 'refresh_token' => $this->mcc->getDecryptedRefreshToken(),
-                'grant_type'    => 'refresh_token',
+                'grant_type' => 'refresh_token',
             ]);
 
             return $this->cachedToken = $response->json('access_token');
         } catch (\Throwable $e) {
-            Log::error('DataManagerService: token exchange failed: ' . $e->getMessage());
+            Log::error('DataManagerService: token exchange failed: '.$e->getMessage());
 
             return null;
         }

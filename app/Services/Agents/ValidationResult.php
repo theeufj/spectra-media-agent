@@ -4,14 +4,16 @@ namespace App\Services\Agents;
 
 /**
  * Represents the result of prerequisite validation.
- * 
+ *
  * Contains validation status, errors, and warnings about
  * platform prerequisites that must be met before deployment.
  */
 class ValidationResult
 {
     public bool $passed;
+
     public array $errors;
+
     public array $warnings;
 
     public function __construct(bool $passed, array $errors = [], array $warnings = [])
@@ -23,7 +25,7 @@ class ValidationResult
 
     /**
      * Check if validation passed.
-     * 
+     *
      * @return bool True if validation passed
      */
     public function isValid(): bool
@@ -33,7 +35,7 @@ class ValidationResult
 
     /**
      * Check if validation passed (alias for isValid).
-     * 
+     *
      * @return bool True if validation passed
      */
     public function passes(): bool
@@ -43,70 +45,70 @@ class ValidationResult
 
     /**
      * Check if validation failed.
-     * 
+     *
      * @return bool True if validation failed
      */
     public function failed(): bool
     {
-        return !$this->passed;
+        return ! $this->passed;
     }
 
     /**
      * Add an error to the validation result.
-     * 
-     * @param string $code Error code
-     * @param string $message Error message
-     * @return self
+     *
+     * @param  string  $code  Error code
+     * @param  string  $message  Error message
      */
     public function addError(string $code, string $message = ''): self
     {
         $this->errors[] = [
             'code' => $code,
-            'message' => $message ?: $code
+            'message' => $message ?: $code,
         ];
         $this->passed = false;
+
         return $this;
     }
 
     /**
      * Add a warning to the validation result.
-     * 
-     * @param string $code Warning code
-     * @param string $message Warning message
-     * @return self
+     *
+     * @param  string  $code  Warning code
+     * @param  string  $message  Warning message
      */
     public function addWarning(string $code, string $message = ''): self
     {
         $this->warnings[] = [
             'code' => $code,
-            'message' => $message ?: $code
+            'message' => $message ?: $code,
         ];
+
         return $this;
     }
 
     /**
      * Check if there are any errors.
-     * 
+     *
      * @return bool True if errors exist
      */
     public function hasErrors(): bool
     {
-        return !empty($this->errors);
+        return ! empty($this->errors);
     }
 
     /**
      * Check if there are any warnings.
-     * 
+     *
      * @return bool True if warnings exist
      */
     public function hasWarnings(): bool
     {
-        return !empty($this->warnings);
+        return ! empty($this->warnings);
     }
 
     /**
      * Get all error messages.
-     * 
+     *
      * @return array Error messages
      */
     public function getErrors(): array
@@ -116,7 +118,7 @@ class ValidationResult
 
     /**
      * Get all warning messages.
-     * 
+     *
      * @return array Warning messages
      */
     public function getWarnings(): array
@@ -126,8 +128,8 @@ class ValidationResult
 
     /**
      * Get error messages as a single string.
-     * 
-     * @param string $separator Separator between messages
+     *
+     * @param  string  $separator  Separator between messages
      * @return string Combined error message
      */
     public function getErrorsAsString(string $separator = '; '): string
@@ -137,7 +139,7 @@ class ValidationResult
 
     /**
      * Convert result to array for storage or logging.
-     * 
+     *
      * @return array Result as array
      */
     public function toArray(): array

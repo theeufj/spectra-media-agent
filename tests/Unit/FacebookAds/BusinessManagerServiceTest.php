@@ -23,7 +23,7 @@ class BusinessManagerServiceTest extends TestCase
             'services.facebook.business_manager_id' => '123456',
         ]);
 
-        $this->service = new BusinessManagerService();
+        $this->service = new BusinessManagerService;
     }
 
     public function test_is_configured_returns_true_when_credentials_set(): void
@@ -34,7 +34,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_is_configured_returns_false_when_token_missing(): void
     {
         config(['services.facebook.system_user_token' => '']);
-        $service = new BusinessManagerService();
+        $service = new BusinessManagerService;
 
         $this->assertFalse($service->isConfigured());
     }
@@ -42,7 +42,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_is_configured_returns_false_when_bm_id_missing(): void
     {
         config(['services.facebook.business_manager_id' => '']);
-        $service = new BusinessManagerService();
+        $service = new BusinessManagerService;
 
         $this->assertFalse($service->isConfigured());
     }
@@ -138,7 +138,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_assign_ad_account_fails_when_not_configured(): void
     {
         config(['services.facebook.system_user_token' => '']);
-        $service = new BusinessManagerService();
+        $service = new BusinessManagerService;
 
         $customer = Customer::factory()->create();
 
@@ -202,7 +202,7 @@ class BusinessManagerServiceTest extends TestCase
     public function test_get_system_user_token_returns_null_when_empty(): void
     {
         config(['services.facebook.system_user_token' => '']);
-        $service = new BusinessManagerService();
+        $service = new BusinessManagerService;
 
         $this->assertNull($service->getSystemUserToken());
     }

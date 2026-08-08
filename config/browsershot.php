@@ -18,7 +18,7 @@ return [
     | Chrome Arguments
     |--------------------------------------------------------------------------
     |
-    | Additional arguments to pass to the Chrome instance. The --no-sandbox 
+    | Additional arguments to pass to the Chrome instance. The --no-sandbox
     | argument is often required in headless environments like Linux servers.
     |
     */

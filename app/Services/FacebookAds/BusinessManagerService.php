@@ -21,14 +21,17 @@ use Illuminate\Support\Facades\Log;
 class BusinessManagerService
 {
     protected string $apiVersion;
+
     protected string $graphApiUrl = 'https://graph.facebook.com';
+
     protected string $systemUserToken;
+
     protected string $businessManagerId;
 
     public function __construct()
     {
-        $this->apiVersion        = config('services.facebook.graph_version', 'v22.0');
-        $this->systemUserToken   = config('services.facebook.system_user_token', '');
+        $this->apiVersion = config('services.facebook.graph_version', 'v22.0');
+        $this->systemUserToken = config('services.facebook.system_user_token', '');
         $this->businessManagerId = config('services.facebook.business_manager_id', '');
     }
 
@@ -37,7 +40,7 @@ class BusinessManagerService
      */
     public function isConfigured(): bool
     {
-        return !empty($this->systemUserToken) && !empty($this->businessManagerId);
+        return ! empty($this->systemUserToken) && ! empty($this->businessManagerId);
     }
 
     /**
@@ -55,13 +58,12 @@ class BusinessManagerService
      *   3. Assign the System User as Admin on that account
      *   4. Copy the numeric account ID (strip 'act_' prefix) and call this method.
      *
-     * @param  Customer $customer
-     * @param  string   $adAccountId  Numeric account ID (with or without 'act_' prefix)
+     * @param  string  $adAccountId  Numeric account ID (with or without 'act_' prefix)
      * @return array{success: bool, account_id?: string, name?: string, error?: string}
      */
     public function assignAdAccount(Customer $customer, string $adAccountId): array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             return ['success' => false, 'error' => 'Facebook Business Manager not configured.'];
         }
 
@@ -75,19 +77,19 @@ class BusinessManagerService
 
         // Verify the System User can actually access this account
         $verify = $this->verifyAdAccountAccess($accountId);
-        if (!$verify['success']) {
+        if (! $verify['success']) {
             return $verify;
         }
 
         $customer->update([
-            'facebook_ads_account_id'      => $accountId,
-            'facebook_bm_owned'            => true,
+            'facebook_ads_account_id' => $accountId,
+            'facebook_bm_owned' => true,
             'facebook_token_is_long_lived' => false,
         ]);
 
         Log::info('FacebookBusinessManagerService: Ad account assigned to customer', [
             'customer_id' => $customer->id,
-            'account_id'  => $accountId,
+            'account_id' => $accountId,
             'account_name' => $verify['name'] ?? null,
         ]);
 
@@ -97,7 +99,7 @@ class BusinessManagerService
     /**
      * Verify that the platform System User token has access to a given ad account.
      *
-     * @param  string $adAccountId  Numeric account ID (without 'act_' prefix)
+     * @param  string  $adAccountId  Numeric account ID (without 'act_' prefix)
      * @return array{success: bool, name?: string, currency?: string, error?: string}
      */
     public function verifyAdAccountAccess(string $adAccountId): array
@@ -106,14 +108,14 @@ class BusinessManagerService
 
         try {
             $response = Http::get("{$this->graphApiUrl}/{$this->apiVersion}/act_{$accountId}", [
-                'fields'       => 'id,name,account_status,currency',
+                'fields' => 'id,name,account_status,currency',
                 'access_token' => $this->systemUserToken,
             ]);
 
             if ($response->successful()) {
                 return [
-                    'success'  => true,
-                    'name'     => $response->json('name'),
+                    'success' => true,
+                    'name' => $response->json('name'),
                     'currency' => $response->json('currency'),
                 ];
             }
@@ -131,14 +133,14 @@ class BusinessManagerService
      */
     public function verifySystemUserToken(): array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             return ['success' => false, 'error' => 'Not configured'];
         }
 
         try {
             $response = Http::get("{$this->graphApiUrl}/{$this->apiVersion}/me", [
                 'access_token' => $this->systemUserToken,
-                'fields'       => 'id,name',
+                'fields' => 'id,name',
             ]);
 
             if ($response->successful()) {

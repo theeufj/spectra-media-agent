@@ -2,22 +2,22 @@
 
 namespace App\Services\Reporting;
 
-use App\Models\AttributionConversion;
-use App\Models\Customer;
-use App\Models\Campaign;
 use App\Models\AgentActivity;
-use App\Models\KeywordQualityScore;
-use App\Models\GoogleAdsPerformanceData;
+use App\Models\AttributionConversion;
+use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
+use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
+use App\Models\KeywordQualityScore;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\Reporting\QualityScoreTrendingService;
 use Illuminate\Support\Facades\Log;
 
 class ExecutiveReportService
 {
     protected GeminiService $gemini;
+
     protected QualityScoreTrendingService $trendingService;
 
     public function __construct(GeminiService $gemini, QualityScoreTrendingService $trendingService)
@@ -29,16 +29,14 @@ class ExecutiveReportService
     /**
      * Generate an executive performance report for a customer.
      *
-     * @param Customer $customer
-     * @param string $period 'weekly' or 'monthly'
-     * @return array
+     * @param  string  $period  'weekly' or 'monthly'
      */
     public function generate(Customer $customer, string $period = 'weekly'): array
     {
         $days = match ($period) {
-            'monthly'   => 30,
+            'monthly' => 30,
             'quarterly' => 90,
-            default     => 7,
+            default => 7,
         };
         $startDate = now()->subDays($days)->toDateString();
         $endDate = now()->toDateString();
@@ -52,7 +50,7 @@ class ExecutiveReportService
         $campaigns = Campaign::where('customer_id', $customer->id)
             ->where(function ($q) {
                 $q->whereNotNull('google_ads_campaign_id')
-                  ->orWhereNotNull('facebook_ads_campaign_id');
+                    ->orWhereNotNull('facebook_ads_campaign_id');
             })
             ->get();
 
@@ -85,12 +83,12 @@ class ExecutiveReportService
             'hourly_insights' => $hourlyInsights,
             'prior_period' => $priorPeriodData,
             'agent_activity_summary' => $this->getAgentActivitySummary($customer, $days),
-            'attribution_summary'    => $this->getAttributionSummary($customer, $startDate, $endDate),
+            'attribution_summary' => $this->getAttributionSummary($customer, $startDate, $endDate),
             'generated_at' => now()->toIso8601String(),
         ];
 
         $report['ai_executive_summary'] = $this->generateNarrative($report);
-        $report['ai_insights']          = $this->generateWoWInsights($report, $customer, $days);
+        $report['ai_insights'] = $this->generateWoWInsights($report, $customer, $days);
 
         Log::info("Generated {$period} executive report for customer {$customer->id}", [
             'campaigns_analyzed' => count($campaigns),
@@ -105,7 +103,7 @@ class ExecutiveReportService
         $dateRange = $days <= 7 ? 'LAST_7_DAYS' : 'LAST_30_DAYS';
 
         foreach ($campaigns as $campaign) {
-            if (!$campaign->google_ads_campaign_id) {
+            if (! $campaign->google_ads_campaign_id) {
                 continue;
             }
 
@@ -121,7 +119,7 @@ class ExecutiveReportService
                     $results[] = $metrics;
                 }
             } catch (\Exception $e) {
-                Log::warning("Failed to get performance for campaign {$campaign->id}: " . $e->getMessage());
+                Log::warning("Failed to get performance for campaign {$campaign->id}: ".$e->getMessage());
             }
         }
 
@@ -153,7 +151,7 @@ class ExecutiveReportService
             'top_keywords' => $withQs->sortByDesc('quality_score')
                 ->unique('keyword_text')
                 ->take(5)
-                ->map(fn($k) => [
+                ->map(fn ($k) => [
                     'keyword' => $k->keyword_text,
                     'quality_score' => $k->quality_score,
                     'impressions' => $k->impressions,
@@ -161,7 +159,7 @@ class ExecutiveReportService
             'worst_keywords' => $withQs->sortBy('quality_score')
                 ->unique('keyword_text')
                 ->take(5)
-                ->map(fn($k) => [
+                ->map(fn ($k) => [
                     'keyword' => $k->keyword_text,
                     'quality_score' => $k->quality_score,
                     'impressions' => $k->impressions,
@@ -234,40 +232,40 @@ class ExecutiveReportService
         $facebookSummary = $report['facebook_summary'];
 
         $prompt = "You are a senior digital marketing strategist writing a {$period} executive summary for {$report['customer_name']}.\n\n"
-            . "Combined Performance:\n"
-            . "- Total Campaigns: {$summary['total_campaigns']}\n"
-            . "- Impressions: " . number_format($summary['total_impressions']) . "\n"
-            . "- Clicks: " . number_format($summary['total_clicks']) . "\n"
-            . "- CTR: {$summary['blended_ctr']}%\n"
-            . "- Total Spend: \${$summary['total_cost']}\n"
-            . "- Conversions: {$summary['total_conversions']}\n"
-            . "- CPA: \${$summary['blended_cpa']}\n"
-            . "- Avg CPC: \${$summary['blended_cpc']}\n";
+            ."Combined Performance:\n"
+            ."- Total Campaigns: {$summary['total_campaigns']}\n"
+            .'- Impressions: '.number_format($summary['total_impressions'])."\n"
+            .'- Clicks: '.number_format($summary['total_clicks'])."\n"
+            ."- CTR: {$summary['blended_ctr']}%\n"
+            ."- Total Spend: \${$summary['total_cost']}\n"
+            ."- Conversions: {$summary['total_conversions']}\n"
+            ."- CPA: \${$summary['blended_cpa']}\n"
+            ."- Avg CPC: \${$summary['blended_cpc']}\n";
 
         if ($googleSummary['total_campaigns'] > 0) {
             $prompt .= "\nGoogle Ads:\n"
-                . "- Campaigns: {$googleSummary['total_campaigns']}\n"
-                . "- Spend: \${$googleSummary['total_cost']}\n"
-                . "- Conversions: {$googleSummary['total_conversions']}\n"
-                . "- CPA: \${$googleSummary['blended_cpa']}\n";
+                ."- Campaigns: {$googleSummary['total_campaigns']}\n"
+                ."- Spend: \${$googleSummary['total_cost']}\n"
+                ."- Conversions: {$googleSummary['total_conversions']}\n"
+                ."- CPA: \${$googleSummary['blended_cpa']}\n";
         }
 
         if ($facebookSummary['total_campaigns'] > 0) {
             $prompt .= "\nFacebook Ads:\n"
-                . "- Campaigns: {$facebookSummary['total_campaigns']}\n"
-                . "- Spend: \${$facebookSummary['total_cost']}\n"
-                . "- Conversions: {$facebookSummary['total_conversions']}\n"
-                . "- CPA: \${$facebookSummary['blended_cpa']}\n"
-                . "- Reach: " . number_format($facebookSummary['total_reach']) . "\n"
-                . "- Frequency: {$facebookSummary['avg_frequency']}\n";
+                ."- Campaigns: {$facebookSummary['total_campaigns']}\n"
+                ."- Spend: \${$facebookSummary['total_cost']}\n"
+                ."- Conversions: {$facebookSummary['total_conversions']}\n"
+                ."- CPA: \${$facebookSummary['blended_cpa']}\n"
+                .'- Reach: '.number_format($facebookSummary['total_reach'])."\n"
+                ."- Frequency: {$facebookSummary['avg_frequency']}\n";
         }
 
         if ($kwInsights['average_qs']) {
             $prompt .= "\nKeyword Quality:\n"
-                . "- Average Quality Score: {$kwInsights['average_qs']}/10\n"
-                . "- Keywords tracked: {$kwInsights['total_keywords_tracked']}\n"
-                . "- High QS keywords (7+): {$kwInsights['high_qs_keywords']}\n"
-                . "- Low QS keywords (<5): {$kwInsights['low_qs_keywords']}\n";
+                ."- Average Quality Score: {$kwInsights['average_qs']}/10\n"
+                ."- Keywords tracked: {$kwInsights['total_keywords_tracked']}\n"
+                ."- High QS keywords (7+): {$kwInsights['high_qs_keywords']}\n"
+                ."- Low QS keywords (<5): {$kwInsights['low_qs_keywords']}\n";
         }
 
         $prompt .= "\nWrite a concise 3-4 paragraph executive summary covering: 1) Overall cross-platform performance, 2) Platform-specific highlights and concerns, 3) Key wins, 4) Recommended next steps. Be data-driven and specific.";
@@ -283,9 +281,9 @@ class ExecutiveReportService
                 }
             }
             $prompt .= "\n\nIMPORTANT: In your summary, explain how these autonomous agent actions impacted the performance metrics. "
-                . "For example, 'CPA improved because the Search Term Mining agent added X negative keywords' or "
-                . "'Budget utilization improved after the Budget Intelligence agent shifted spend to peak hours.' "
-                . "This helps the client understand the value of the autonomous optimization.";
+                ."For example, 'CPA improved because the Search Term Mining agent added X negative keywords' or "
+                ."'Budget utilization improved after the Budget Intelligence agent shifted spend to peak hours.' "
+                .'This helps the client understand the value of the autonomous optimization.';
         }
 
         try {
@@ -298,7 +296,8 @@ class ExecutiveReportService
 
             return $result['text'] ?? null;
         } catch (\Exception $e) {
-            Log::warning("Failed to generate AI narrative: " . $e->getMessage());
+            Log::warning('Failed to generate AI narrative: '.$e->getMessage());
+
             return null;
         }
     }
@@ -309,7 +308,7 @@ class ExecutiveReportService
         $startDate = now()->subDays($days)->toDateString();
 
         foreach ($campaigns as $campaign) {
-            if (!$campaign->facebook_ads_campaign_id) {
+            if (! $campaign->facebook_ads_campaign_id) {
                 continue;
             }
 
@@ -447,7 +446,7 @@ class ExecutiveReportService
                 'key_actions' => $group->where('status', 'completed')
                     ->sortByDesc('created_at')
                     ->take(3)
-                    ->map(fn($a) => [
+                    ->map(fn ($a) => [
                         'action' => $a->action,
                         'description' => $a->description,
                         'date' => $a->created_at->toDateTimeString(),
@@ -475,7 +474,7 @@ class ExecutiveReportService
         // Build prior period on-the-fly for weekly reports (monthly already has it)
         $prior = $report['prior_period'] ?? $this->getPriorPeriodComparison($customer, $days);
 
-        if (!$prior || ($prior['total_impressions'] ?? 0) === 0) {
+        if (! $prior || ($prior['total_impressions'] ?? 0) === 0) {
             return [];
         }
 
@@ -483,13 +482,13 @@ class ExecutiveReportService
 
         // Compute deltas
         $metrics = [
-            'spend'       => ['current' => $current['total_cost'],        'prior' => $prior['total_cost'],        'label' => 'Total Spend',       'higher_is' => 'neutral'],
+            'spend' => ['current' => $current['total_cost'],        'prior' => $prior['total_cost'],        'label' => 'Total Spend',       'higher_is' => 'neutral'],
             'impressions' => ['current' => $current['total_impressions'],  'prior' => $prior['total_impressions'],  'label' => 'Impressions',       'higher_is' => 'good'],
-            'clicks'      => ['current' => $current['total_clicks'],       'prior' => $prior['total_clicks'],       'label' => 'Clicks',            'higher_is' => 'good'],
-            'ctr'         => ['current' => $current['blended_ctr'],        'prior' => $prior['blended_ctr'],        'label' => 'CTR',               'higher_is' => 'good'],
-            'cpc'         => ['current' => $current['blended_cpc'],        'prior' => $prior['blended_cpc'],        'label' => 'CPC',               'higher_is' => 'bad'],
+            'clicks' => ['current' => $current['total_clicks'],       'prior' => $prior['total_clicks'],       'label' => 'Clicks',            'higher_is' => 'good'],
+            'ctr' => ['current' => $current['blended_ctr'],        'prior' => $prior['blended_ctr'],        'label' => 'CTR',               'higher_is' => 'good'],
+            'cpc' => ['current' => $current['blended_cpc'],        'prior' => $prior['blended_cpc'],        'label' => 'CPC',               'higher_is' => 'bad'],
             'conversions' => ['current' => $current['total_conversions'],  'prior' => $prior['total_conversions'],  'label' => 'Conversions',       'higher_is' => 'good'],
-            'cpa'         => ['current' => $current['blended_cpa'],        'prior' => $prior['blended_cpa'],        'label' => 'CPA',               'higher_is' => 'bad'],
+            'cpa' => ['current' => $current['blended_cpa'],        'prior' => $prior['blended_cpa'],        'label' => 'CPA',               'higher_is' => 'bad'],
         ];
 
         $movers = [];
@@ -504,18 +503,18 @@ class ExecutiveReportService
 
             $direction = match (true) {
                 $changePct > 0 && $m['higher_is'] === 'good' => 'improved',
-                $changePct < 0 && $m['higher_is'] === 'bad'  => 'improved',
-                $changePct > 0 && $m['higher_is'] === 'bad'  => 'declined',
+                $changePct < 0 && $m['higher_is'] === 'bad' => 'improved',
+                $changePct > 0 && $m['higher_is'] === 'bad' => 'declined',
                 $changePct < 0 && $m['higher_is'] === 'good' => 'declined',
                 default => 'changed',
             };
 
             $movers[] = [
-                'metric'    => $key,
-                'label'     => $m['label'],
-                'current'   => $m['current'],
-                'prior'     => $m['prior'],
-                'change'    => $changePct,
+                'metric' => $key,
+                'label' => $m['label'],
+                'current' => $m['current'],
+                'prior' => $m['prior'],
+                'change' => $changePct,
                 'direction' => $direction,
             ];
         }
@@ -525,7 +524,7 @@ class ExecutiveReportService
         }
 
         // Sort by absolute change descending — biggest movers first
-        usort($movers, fn($a, $b) => abs($b['change']) <=> abs($a['change']));
+        usort($movers, fn ($a, $b) => abs($b['change']) <=> abs($a['change']));
         $movers = array_slice($movers, 0, 5);
 
         // Ask Gemini to add likely cause + action for each mover
@@ -534,9 +533,8 @@ class ExecutiveReportService
 
     private function enrichMoversWithInsights(array $movers, string $customerName, string $period): array
     {
-        $moveSummary = implode("\n", array_map(fn($m) =>
-            "- {$m['label']}: {$m['change']}% ({$m['direction']}) — was {$m['prior']}, now {$m['current']}",
-        $movers));
+        $moveSummary = implode("\n", array_map(fn ($m) => "- {$m['label']}: {$m['change']}% ({$m['direction']}) — was {$m['prior']}, now {$m['current']}",
+            $movers));
 
         $prompt = <<<PROMPT
 You are a senior SEM analyst writing a {$period} performance brief for {$customerName}.
@@ -557,21 +555,21 @@ PROMPT;
                 $prompt,
                 ['temperature' => 0.3, 'maxOutputTokens' => 400]
             );
-            $text    = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
+            $text = preg_replace('/```json\s*|\s*```/', '', $response['text'] ?? '');
             $bullets = json_decode(trim($text), true);
 
-            if (is_array($bullets) && !empty($bullets)) {
+            if (is_array($bullets) && ! empty($bullets)) {
                 foreach ($movers as $i => $mover) {
                     $movers[$i]['insight'] = $bullets[$i] ?? null;
                 }
             }
         } catch (\Exception $e) {
-            Log::debug("ExecutiveReportService: WoW insight generation failed: " . $e->getMessage());
+            Log::debug('ExecutiveReportService: WoW insight generation failed: '.$e->getMessage());
         }
 
         // Return flat string array so templates can safely call e($insight)
         return array_values(array_filter(array_map(
-            fn($m) => is_string($m['insight'] ?? null) ? $m['insight'] : null,
+            fn ($m) => is_string($m['insight'] ?? null) ? $m['insight'] : null,
             $movers
         )));
     }
@@ -585,15 +583,15 @@ PROMPT;
     {
         try {
             $conversions = AttributionConversion::forCustomer($customer->id)
-                ->whereBetween('created_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->whereBetween('created_at', [$startDate.' 00:00:00', $endDate.' 23:59:59'])
                 ->get();
 
             if ($conversions->isEmpty()) {
                 return [];
             }
 
-            $models   = ['last_click', 'linear', 'time_decay', 'first_click', 'position_based'];
-            $summary  = [];
+            $models = ['last_click', 'linear', 'time_decay', 'first_click', 'position_based'];
+            $summary = [];
 
             foreach ($models as $model) {
                 $byPlatform = [];
@@ -601,17 +599,18 @@ PROMPT;
                     $attribution = $conv->getAttributionFor($model);
                     foreach ($attribution as $platform => $value) {
                         $byPlatform[$platform]['conversions'] = ($byPlatform[$platform]['conversions'] ?? 0) + 1;
-                        $byPlatform[$platform]['value']       = ($byPlatform[$platform]['value'] ?? 0) + (float) $value;
+                        $byPlatform[$platform]['value'] = ($byPlatform[$platform]['value'] ?? 0) + (float) $value;
                     }
                 }
-                if (!empty($byPlatform)) {
+                if (! empty($byPlatform)) {
                     $summary[$model] = $byPlatform;
                 }
             }
 
             return $summary;
         } catch (\Exception $e) {
-            Log::debug("ExecutiveReportService: Attribution summary failed: " . $e->getMessage());
+            Log::debug('ExecutiveReportService: Attribution summary failed: '.$e->getMessage());
+
             return [];
         }
     }

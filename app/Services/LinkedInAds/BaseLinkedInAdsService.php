@@ -20,9 +20,13 @@ abstract class BaseLinkedInAdsService
     use RetryableApiOperation;
 
     protected string $platform = 'linkedin_ads';
+
     protected ?string $accessToken = null;
+
     protected Customer $customer;
+
     protected array $config;
+
     protected string $baseUrl = 'https://api.linkedin.com/rest';
 
     public function __construct(Customer $customer)
@@ -41,8 +45,9 @@ abstract class BaseLinkedInAdsService
         try {
             $refreshToken = $this->config['refresh_token'] ?? null;
 
-            if (!$refreshToken) {
+            if (! $refreshToken) {
                 Log::error('LinkedIn Ads: No management refresh token configured. Set LINKEDIN_ADS_REFRESH_TOKEN in .env');
+
                 return;
             }
 
@@ -76,8 +81,9 @@ abstract class BaseLinkedInAdsService
      */
     protected function apiCall(string $path, string $method = 'GET', ?array $body = null, array $params = []): ?array
     {
-        if (!$this->ensureAuthenticated()) {
+        if (! $this->ensureAuthenticated()) {
             Log::error('LinkedIn Ads: Not authenticated');
+
             return null;
         }
 
@@ -116,6 +122,7 @@ abstract class BaseLinkedInAdsService
                 'path' => $path,
                 'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }

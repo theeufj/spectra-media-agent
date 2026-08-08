@@ -18,7 +18,7 @@ class FacebookAdAccountController extends Controller
     {
 
         return Inertia::render('Customers/Facebook/AdAccountSetup', [
-            'customer'      => $customer->only([
+            'customer' => $customer->only([
                 'id', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
                 'facebook_page_id', 'facebook_page_name',
             ]),
@@ -44,12 +44,12 @@ class FacebookAdAccountController extends Controller
 
         $result = $this->bmService->assignAdAccount($customer, $validated['ad_account_id']);
 
-        if (!$result['success']) {
-            return back()->with('error', 'Could not link ad account: ' . $result['error']);
+        if (! $result['success']) {
+            return back()->with('error', 'Could not link ad account: '.$result['error']);
         }
 
         return back()->with([
-            'success'  => 'Facebook ad account linked! Account: act_' . $result['account_id'] . ($result['name'] ? ' (' . $result['name'] . ')' : ''),
+            'success' => 'Facebook ad account linked! Account: act_'.$result['account_id'].($result['name'] ? ' ('.$result['name'].')' : ''),
             'customer' => $customer->fresh()->only([
                 'id', 'name', 'facebook_ads_account_id', 'facebook_bm_owned',
                 'facebook_page_id', 'facebook_page_name',
@@ -62,17 +62,16 @@ class FacebookAdAccountController extends Controller
      */
     public function verify(Request $request, Customer $customer)
     {
-        if (!$customer->facebook_ads_account_id) {
+        if (! $customer->facebook_ads_account_id) {
             return back()->with('error', 'No ad account linked yet.');
         }
 
         $result = $this->bmService->verifyAdAccountAccess($customer->facebook_ads_account_id);
 
-        if (!$result['success']) {
-            return back()->with('error', 'Access check failed: ' . $result['error']);
+        if (! $result['success']) {
+            return back()->with('error', 'Access check failed: '.$result['error']);
         }
 
-        return back()->with('success', 'System User has access to act_' . $customer->facebook_ads_account_id . ' (' . ($result['name'] ?? 'unknown') . ')');
+        return back()->with('success', 'System User has access to act_'.$customer->facebook_ads_account_id.' ('.($result['name'] ?? 'unknown').')');
     }
-
 }

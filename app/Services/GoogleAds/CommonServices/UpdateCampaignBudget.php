@@ -3,10 +3,8 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\Campaign;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Protobuf\FieldMask;
 
 class UpdateCampaignBudget extends BaseGoogleAdsService
@@ -14,9 +12,7 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
     /**
      * Update a campaign's daily budget.
      *
-     * @param string $customerId
-     * @param string $campaignResourceName
-     * @param float $newDailyBudgetMicros New daily budget in micros
+     * @param  float  $newDailyBudgetMicros  New daily budget in micros
      * @return bool Success status
      */
     public function __invoke(string $customerId, string $campaignResourceName, float $newDailyBudgetMicros): bool
@@ -35,8 +31,9 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
                 break;
             }
 
-            if (!$budgetResourceName) {
+            if (! $budgetResourceName) {
                 $this->logError("Could not find budget for campaign: $campaignResourceName");
+
                 return false;
             }
 
@@ -46,7 +43,7 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
                 'amount_micros' => (int) $newDailyBudgetMicros,
             ]);
 
-            $budgetOperation = new \Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation();
+            $budgetOperation = new \Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
             $budgetOperation->setUpdate($budget);
             $budgetOperation->setUpdateMask(new FieldMask(['paths' => ['amount_micros']]));
 
@@ -61,7 +58,8 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
             return count($response->getResults()) > 0;
 
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to update campaign budget: " . $e->getMessage());
+            $this->logError('Failed to update campaign budget: '.$e->getMessage());
+
             return false;
         }
     }

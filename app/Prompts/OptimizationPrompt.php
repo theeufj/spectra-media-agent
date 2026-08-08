@@ -7,9 +7,9 @@ class OptimizationPrompt
     /**
      * Generate optimization prompt with support for historical comparison and confidence scoring.
      *
-     * @param array $campaignData Campaign information
-     * @param array $performanceMetrics Current performance metrics (last 30 days)
-     * @param array|null $historicalMetrics Historical metrics for trend analysis (optional)
+     * @param  array  $campaignData  Campaign information
+     * @param  array  $performanceMetrics  Current performance metrics (last 30 days)
+     * @param  array|null  $historicalMetrics  Historical metrics for trend analysis (optional)
      * @return string The generated prompt
      */
     public static function generate(array $campaignData, array $performanceMetrics, ?array $historicalMetrics = null): string
@@ -17,7 +17,7 @@ class OptimizationPrompt
         $campaignJson = json_encode($campaignData, JSON_PRETTY_PRINT);
         $metricsJson = json_encode($performanceMetrics, JSON_PRETTY_PRINT);
         $historicalJson = $historicalMetrics ? json_encode($historicalMetrics, JSON_PRETTY_PRINT) : 'No historical data available';
-        
+
         $dataQualityNote = self::getDataQualityNote($campaignData);
 
         return <<<PROMPT
@@ -113,19 +113,19 @@ PROMPT;
     {
         $score = $campaignData['data_quality_score'] ?? null;
         $notes = $campaignData['data_quality_notes'] ?? [];
-        
+
         if ($score === null) {
             return 'Data quality assessment not available.';
         }
-        
+
         $level = match (true) {
             $score >= 80 => 'HIGH',
             $score >= 50 => 'MEDIUM',
             default => 'LOW',
         };
-        
-        $noteString = !empty($notes) ? implode('; ', $notes) : 'No specific data quality concerns.';
-        
+
+        $noteString = ! empty($notes) ? implode('; ', $notes) : 'No specific data quality concerns.';
+
         return "Data Quality Level: {$level} (Score: {$score}/100)\nNotes: {$noteString}";
     }
 }

@@ -63,7 +63,7 @@ class TargetingConfig extends Model
      */
     public function getGoogleGeoTargeting(): array
     {
-        if (!$this->geo_locations) {
+        if (! $this->geo_locations) {
             return [2840]; // Default: United States
         }
 
@@ -80,25 +80,25 @@ class TargetingConfig extends Model
      */
     public function getFacebookGeoTargeting(): array
     {
-        if (!$this->geo_locations) {
+        if (! $this->geo_locations) {
             return [['key' => 'US']]; // Default: United States
         }
 
         return array_map(function ($location) {
             $targeting = [];
-            
+
             if (isset($location['country'])) {
                 $targeting['countries'] = [$location['country']];
             }
-            
+
             if (isset($location['region'])) {
                 $targeting['regions'] = [['key' => $location['region']]];
             }
-            
+
             if (isset($location['city'])) {
                 $targeting['cities'] = [['key' => $location['city']]];
             }
-            
+
             return $targeting;
         }, $this->geo_locations);
     }
@@ -112,9 +112,9 @@ class TargetingConfig extends Model
     {
         // Map age ranges to Google Ads age range criterion IDs
         // Reference: https://developers.google.com/google-ads/api/reference/rpc/latest/AgeRangeTypeEnum.AgeRangeType
-        
+
         $ageRanges = [];
-        
+
         if ($this->age_min <= 24 && $this->age_max >= 18) {
             $ageRanges[] = 503001; // AGE_RANGE_18_24
         }
@@ -133,7 +133,7 @@ class TargetingConfig extends Model
         if ($this->age_max >= 65) {
             $ageRanges[] = 503006; // AGE_RANGE_65_UP
         }
-        
+
         return $ageRanges;
     }
 
@@ -157,7 +157,7 @@ class TargetingConfig extends Model
      */
     public function getGoogleGenderTargeting(): array
     {
-        if (!$this->genders || in_array('all', $this->genders)) {
+        if (! $this->genders || in_array('all', $this->genders)) {
             return [10, 11]; // Male and Female
         }
 
@@ -166,7 +166,7 @@ class TargetingConfig extends Model
             'female' => 11,
         ];
 
-        return array_map(fn($gender) => $genderMap[$gender] ?? null, $this->genders);
+        return array_map(fn ($gender) => $genderMap[$gender] ?? null, $this->genders);
     }
 
     /**
@@ -176,7 +176,7 @@ class TargetingConfig extends Model
      */
     public function getFacebookGenderTargeting(): array
     {
-        if (!$this->genders || in_array('all', $this->genders)) {
+        if (! $this->genders || in_array('all', $this->genders)) {
             return [1, 2]; // Male and Female
         }
 
@@ -185,14 +185,13 @@ class TargetingConfig extends Model
             'female' => 2,
         ];
 
-        return array_map(fn($gender) => $genderMap[$gender] ?? null, $this->genders);
+        return array_map(fn ($gender) => $genderMap[$gender] ?? null, $this->genders);
     }
 
     /**
      * Check if targeting is compatible with a specific platform.
      *
-     * @param string $platform 'google' or 'facebook'
-     * @return bool
+     * @param  string  $platform  'google' or 'facebook'
      */
     public function isCompatibleWith(string $platform): bool
     {
@@ -202,8 +201,7 @@ class TargetingConfig extends Model
     /**
      * Get default targeting config for a platform.
      *
-     * @param string $platform 'google' or 'facebook'
-     * @return array
+     * @param  string  $platform  'google' or 'facebook'
      */
     public static function getDefaultConfig(string $platform = 'both'): array
     {

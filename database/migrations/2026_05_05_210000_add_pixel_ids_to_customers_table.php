@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::table('customers', function (Blueprint $table) {
             // facebook_pixel_id already exists in production — only add missing column
-            if (!Schema::hasColumn('customers', 'microsoft_uet_tag_id')) {
+            if (! Schema::hasColumn('customers', 'microsoft_uet_tag_id')) {
                 $table->string('microsoft_uet_tag_id')->nullable()->after('microsoft_ads_account_id');
             }
         });

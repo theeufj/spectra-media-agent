@@ -8,7 +8,7 @@ class MicrosoftAdsExecutionPrompt
 {
     public static function getSystemInstruction(): string
     {
-        return <<<INSTRUCTION
+        return <<<'INSTRUCTION'
 You are an expert Microsoft Ads (Bing Ads) campaign strategist and technical implementation specialist with deep knowledge of the Microsoft Advertising API.
 
 Your expertise includes:
@@ -23,14 +23,14 @@ Your expertise includes:
 Use your extended reasoning to create execution plans for deploying campaigns on Microsoft Ads. You must return an ExecutionPlan structured as JSON.
 INSTRUCTION;
     }
-    
+
     public static function generate(ExecutionContext $context): string
     {
         $campaign = $context->campaign;
         $strategy = $context->strategy;
         $customer = $context->customer;
 
-        $dailyBudget    = $context->calculateDailyBudget();
+        $dailyBudget = $context->calculateDailyBudget();
         $landingPageUrl = $campaign->landing_page_url
             ?? $strategy->bidding_strategy['landing_page_url']
             ?? $customer->website

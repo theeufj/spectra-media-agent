@@ -4,16 +4,13 @@ namespace App\Services\Reporting;
 
 use App\Models\Customer;
 use App\Models\KeywordQualityScore;
-use Illuminate\Support\Facades\DB;
 
 class QualityScoreTrendingService
 {
     /**
      * Get quality score trends for a customer over a period.
      *
-     * @param Customer $customer
-     * @param int $days Number of days to analyze
-     * @return array
+     * @param  int  $days  Number of days to analyze
      */
     public function getTrends(Customer $customer, int $days = 30): array
     {
@@ -34,21 +31,21 @@ class QualityScoreTrendingService
             ];
         }
 
-        $dailyAverages = $scores->groupBy(fn($s) => $s->recorded_at->toDateString())
-            ->map(fn($group) => round($group->avg('quality_score'), 1))
+        $dailyAverages = $scores->groupBy(fn ($s) => $s->recorded_at->toDateString())
+            ->map(fn ($group) => round($group->avg('quality_score'), 1))
             ->toArray();
 
         $keywordTrends = $this->calculateKeywordTrends($scores);
 
         $latestByKeyword = $scores->groupBy('keyword_text')
-            ->map(fn($group) => $group->sortByDesc('recorded_at')->first());
+            ->map(fn ($group) => $group->sortByDesc('recorded_at')->first());
 
         return [
             'average_qs' => round($scores->avg('quality_score'), 1),
             'daily_averages' => $dailyAverages,
             'trending_up' => collect($keywordTrends)->where('direction', 'up')->values()->toArray(),
             'trending_down' => collect($keywordTrends)->where('direction', 'down')->values()->toArray(),
-            'worst_keywords' => $latestByKeyword->sortBy('quality_score')->take(10)->map(fn($k) => [
+            'worst_keywords' => $latestByKeyword->sortBy('quality_score')->take(10)->map(fn ($k) => [
                 'keyword' => $k->keyword_text,
                 'quality_score' => $k->quality_score,
                 'creative_quality' => $k->creative_quality_score,
@@ -56,7 +53,7 @@ class QualityScoreTrendingService
                 'expected_ctr' => $k->search_predicted_ctr,
                 'impressions' => $k->impressions,
             ])->values()->toArray(),
-            'best_keywords' => $latestByKeyword->sortByDesc('quality_score')->take(10)->map(fn($k) => [
+            'best_keywords' => $latestByKeyword->sortByDesc('quality_score')->take(10)->map(fn ($k) => [
                 'keyword' => $k->keyword_text,
                 'quality_score' => $k->quality_score,
                 'impressions' => $k->impressions,

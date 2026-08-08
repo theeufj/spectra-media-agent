@@ -48,49 +48,52 @@ class UpdateCampaignNetworkSettings extends BaseGoogleAdsService
 
             if ($channelType !== AdvertisingChannelType::SEARCH) {
                 $this->logError("Refusing to change network settings on non-Search campaign ($campaignResourceName)");
+
                 return false;
             }
 
-            $networkSettings = new NetworkSettings();
+            $networkSettings = new NetworkSettings;
             $paths = [];
 
             foreach (self::ALLOWED_FIELDS as $field) {
-                if (!array_key_exists($field, $settings)) {
+                if (! array_key_exists($field, $settings)) {
                     continue;
                 }
                 // Never disable Google Search itself — that would blind the campaign.
                 if ($field === 'target_google_search' && $settings[$field] === false) {
                     continue;
                 }
-                $setter = 'set' . str_replace('_', '', ucwords($field, '_'));
+                $setter = 'set'.str_replace('_', '', ucwords($field, '_'));
                 $networkSettings->{$setter}((bool) $settings[$field]);
                 $paths[] = "network_settings.$field";
             }
 
             if (empty($paths)) {
                 $this->logError('UpdateCampaignNetworkSettings: no valid network settings supplied');
+
                 return false;
             }
 
             $campaign = new Campaign([
-                'resource_name'    => $campaignResourceName,
+                'resource_name' => $campaignResourceName,
                 'network_settings' => $networkSettings,
             ]);
 
-            $operation = new CampaignOperation();
+            $operation = new CampaignOperation;
             $operation->setUpdate($campaign);
             $operation->setUpdateMask(new FieldMask(['paths' => $paths]));
 
             $client = $this->client->getCampaignServiceClient();
             $result = $client->mutateCampaigns(new MutateCampaignsRequest([
                 'customer_id' => $customerId,
-                'operations'  => [$operation],
+                'operations' => [$operation],
             ]));
 
             return count($result->getResults()) > 0;
 
         } catch (GoogleAdsException $e) {
-            $this->logError('Failed to update campaign network settings: ' . $e->getMessage());
+            $this->logError('Failed to update campaign network settings: '.$e->getMessage());
+
             return false;
         }
     }

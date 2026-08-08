@@ -15,6 +15,7 @@ use Tests\TestCase;
 class ABTestingAgentTest extends TestCase
 {
     protected ABTestingAgent $agent;
+
     protected GeminiService $geminiMock;
 
     protected function setUp(): void

@@ -23,7 +23,7 @@ class FetchGoogleAdsPerformanceDataTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_GOOGLE_ADS_INTEGRATION_TESTS=true to run.');
         }
 
@@ -72,7 +72,7 @@ class FetchGoogleAdsPerformanceDataTest extends TestCase
     {
         $customer = Customer::factory()->create(['google_ads_customer_id' => '123456789']);
         $campaign = Campaign::factory()->create([
-            'customer_id'           => $customer->id,
+            'customer_id' => $customer->id,
             'google_ads_campaign_id' => null,
         ]);
 

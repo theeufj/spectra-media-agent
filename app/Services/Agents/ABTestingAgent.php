@@ -3,18 +3,18 @@
 namespace App\Services\Agents;
 
 use App\Models\ABTest;
+use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Strategy;
+use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
-use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
 use App\Services\GoogleAds\CommonServices\CreateCampaignExperiment;
+use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
 use App\Services\GoogleAds\CommonServices\GetCampaignExperimentResults;
 use App\Services\GoogleAds\CommonServices\PromoteCampaignExperiment;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use App\Models\AdCopy;
 
 /**
  * ABTestingAgent
@@ -28,6 +28,7 @@ class ABTestingAgent
 
     // Minimum sample sizes before evaluating significance
     protected int $minImpressionsPerVariant = 500;
+
     protected int $minTotalClicks = 50;
 
     // Chi-squared critical value for 95% confidence with 1 degree of freedom
@@ -49,7 +50,7 @@ class ABTestingAgent
         $formattedVariants = array_map(function ($variant, $index) {
             return [
                 'id' => $variant['id'] ?? Str::uuid()->toString(),
-                'label' => $variant['label'] ?? "Variant " . chr(65 + $index), // A, B, C...
+                'label' => $variant['label'] ?? 'Variant '.chr(65 + $index), // A, B, C...
                 'content' => $variant['content'],
                 'impressions' => 0,
                 'clicks' => 0,
@@ -73,19 +74,20 @@ class ABTestingAgent
      */
     public function evaluateTest(ABTest $test): array
     {
-        if (!$test->isRunning()) {
+        if (! $test->isRunning()) {
             return ['action' => 'skip', 'reason' => 'Test is not running'];
         }
 
         // Check max duration
         if ($test->started_at->diffInDays(now()) > $this->maxTestDurationDays) {
             $test->markStopped();
+
             return ['action' => 'stopped', 'reason' => 'Maximum test duration exceeded'];
         }
 
         // Refresh variant metrics from the ad platform
         $variants = $this->refreshVariantMetrics($test);
-        if (!$variants) {
+        if (! $variants) {
             return ['action' => 'skip', 'reason' => 'Could not refresh metrics'];
         }
 
@@ -93,7 +95,7 @@ class ABTestingAgent
         $test->update(['variants' => $variants]);
 
         // Check minimum sample sizes
-        if (!$this->hasMinimumSampleSize($variants)) {
+        if (! $this->hasMinimumSampleSize($variants)) {
             return [
                 'action' => 'learning',
                 'reason' => 'Insufficient data for significance testing',
@@ -119,8 +121,8 @@ class ABTestingAgent
             Log::info('ABTestingAgent: Test reached significance', [
                 'test_id' => $test->id,
                 'winner' => $winner['label'],
-                'confidence' => round($significance['confidence'] * 100, 1) . '%',
-                'lift' => round($results['lift_pct'], 1) . '%',
+                'confidence' => round($significance['confidence'] * 100, 1).'%',
+                'lift' => round($results['lift_pct'], 1).'%',
             ]);
 
             return [
@@ -188,16 +190,16 @@ class ABTestingAgent
         }
 
         $strategy = $test->strategy;
-        if (!$strategy) {
+        if (! $strategy) {
             return;
         }
 
         $adCopy = AdCopy::where('strategy_id', $strategy->id)->first();
-        if (!$adCopy) {
+        if (! $adCopy) {
             return;
         }
 
-        $winnerHeadlines    = $winner['meta']['headlines']    ?? explode(' | ', $winner['content'] ?? '');
+        $winnerHeadlines = $winner['meta']['headlines'] ?? explode(' | ', $winner['content'] ?? '');
         $winnerDescriptions = $winner['meta']['descriptions'] ?? $adCopy->descriptions ?? [];
 
         if ($test->test_type === ABTest::TYPE_HEADLINE) {
@@ -220,10 +222,10 @@ class ABTestingAgent
         }
 
         Log::info('ABTestingAgent: AdCopy updated with winner', [
-            'test_id'    => $test->id,
+            'test_id' => $test->id,
             'strategy_id' => $strategy->id,
             'ad_copy_id' => $adCopy->id,
-            'test_type'  => $test->test_type,
+            'test_type' => $test->test_type,
         ]);
     }
 
@@ -234,7 +236,7 @@ class ABTestingAgent
     protected function refreshVariantMetrics(ABTest $test): ?array
     {
         $campaign = $test->campaign;
-        if (!$campaign || !$campaign->customer) {
+        if (! $campaign || ! $campaign->customer) {
             return null;
         }
 
@@ -298,6 +300,7 @@ class ABTestingAgent
                 'test_id' => $test->id,
                 'error' => $e->getMessage(),
             ]);
+
             return $test->variants;
         }
     }
@@ -330,7 +333,7 @@ class ABTestingAgent
             $insightLookup = [];
             foreach ($adInsights as $insight) {
                 $key = $insight['ad_name'] ?? $insight['ad_id'] ?? '';
-                if (!isset($insightLookup[$key])) {
+                if (! isset($insightLookup[$key])) {
                     $insightLookup[$key] = [
                         'impressions' => 0,
                         'clicks' => 0,
@@ -362,6 +365,7 @@ class ABTestingAgent
                 'test_id' => $test->id,
                 'error' => $e->getMessage(),
             ]);
+
             return $test->variants;
         }
     }
@@ -378,6 +382,7 @@ class ABTestingAgent
             }
             $totalClicks += $variant['clicks'] ?? 0;
         }
+
         return $totalClicks >= $this->minTotalClicks;
     }
 
@@ -454,7 +459,9 @@ class ABTestingAgent
      */
     protected function chiSquaredPValue(float $chiSquared, int $df): float
     {
-        if ($chiSquared <= 0) return 1.0;
+        if ($chiSquared <= 0) {
+            return 1.0;
+        }
 
         // Use the regularized upper incomplete gamma function: Q(df/2, x/2)
         $a = $df / 2;
@@ -468,7 +475,9 @@ class ABTestingAgent
         for ($n = 1; $n < 200; $n++) {
             $term *= $x / ($a + $n);
             $sum += $term;
-            if (abs($term) < 1e-12) break;
+            if (abs($term) < 1e-12) {
+                break;
+            }
         }
 
         $lnGamma = $this->lnGamma($a);
@@ -482,7 +491,9 @@ class ABTestingAgent
      */
     protected function lnGamma(float $x): float
     {
-        if ($x <= 0) return 0;
+        if ($x <= 0) {
+            return 0;
+        }
 
         // Lanczos approximation
         $coefficients = [
@@ -526,6 +537,7 @@ class ABTestingAgent
         }
 
         $best['ctr'] = round($bestCtr * 100, 2);
+
         return $best;
     }
 
@@ -550,7 +562,9 @@ class ABTestingAgent
 
         $avgLoserCtr = count($loserCtrs) > 0 ? array_sum($loserCtrs) / count($loserCtrs) : 0;
 
-        if ($avgLoserCtr <= 0) return 0;
+        if ($avgLoserCtr <= 0) {
+            return 0;
+        }
 
         return (($winnerCtr - $avgLoserCtr) / $avgLoserCtr) * 100;
     }
@@ -558,32 +572,32 @@ class ABTestingAgent
     /**
      * Create a native Google Ads Campaign Experiment (A/B test) for a campaign.
      *
-     * @param  Campaign  $campaign
-     * @param  Strategy  $strategy
-     * @param  string    $testDescription  Human-readable description for the experiment name
+     * @param  string  $testDescription  Human-readable description for the experiment name
      * @return array{experiment_resource: string, treatment_arm_resource: string}|null
      */
     public function createGoogleNativeExperiment(Campaign $campaign, Strategy $strategy, string $testDescription): ?array
     {
         $campaignResourceName = $campaign->google_ads_campaign_id;
-        if (!$campaignResourceName) {
+        if (! $campaignResourceName) {
             Log::warning('ABTestingAgent: Cannot create Google experiment — no google_ads_campaign_id', [
                 'campaign_id' => $campaign->id,
             ]);
+
             return null;
         }
 
-        $customer   = $campaign->customer;
+        $customer = $campaign->customer;
         $customerId = $customer?->google_ads_customer_id;
-        if (!$customerId) {
+        if (! $customerId) {
             Log::warning('ABTestingAgent: Cannot create Google experiment — no google_ads_customer_id', [
                 'campaign_id' => $campaign->id,
             ]);
+
             return null;
         }
 
         try {
-            $experimentName = $testDescription . ' — Campaign ' . $campaign->id . ' — ' . now()->format('Y-m-d');
+            $experimentName = $testDescription.' — Campaign '.$campaign->id.' — '.now()->format('Y-m-d');
             $createExperiment = new CreateCampaignExperiment($customer);
 
             $experimentResult = ($createExperiment)(
@@ -592,12 +606,12 @@ class ABTestingAgent
                 $experimentName,
                 [
                     'traffic_split' => 50,
-                    'start_date'    => now()->addDay()->format('Y-m-d'),
-                    'end_date'      => now()->addDays(30)->format('Y-m-d'),
+                    'start_date' => now()->addDay()->format('Y-m-d'),
+                    'end_date' => now()->addDays(30)->format('Y-m-d'),
                 ]
             );
 
-            if (!$experimentResult) {
+            if (! $experimentResult) {
                 return null;
             }
 
@@ -614,15 +628,15 @@ class ABTestingAgent
                     $customer->id,
                     $campaign->id,
                     [
-                        'experiment_resource'    => $experimentResource,
+                        'experiment_resource' => $experimentResource,
                         'treatment_arm_resource' => $experimentResult['treatment_arm_resource'],
-                        'test_description'       => $testDescription,
+                        'test_description' => $testDescription,
                     ]
                 );
             }
 
             Log::info('ABTestingAgent: Google native experiment created', [
-                'campaign_id'         => $campaign->id,
+                'campaign_id' => $campaign->id,
                 'experiment_resource' => $experimentResource,
             ]);
 
@@ -630,8 +644,9 @@ class ABTestingAgent
         } catch (\Exception $e) {
             Log::error('ABTestingAgent: Failed to create Google native experiment', [
                 'campaign_id' => $campaign->id,
-                'error'       => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -643,12 +658,11 @@ class ABTestingAgent
      *  - Status is GRADUATED, OR
      *  - Treatment arm shows >10% conversion rate improvement with >100 conversions
      *
-     * @param  Campaign $campaign
-     * @return string|null  'promoted' | 'running' | 'insufficient_data' | null on error
+     * @return string|null 'promoted' | 'running' | 'insufficient_data' | null on error
      */
     public function checkAndPromoteExperiment(Campaign $campaign): ?string
     {
-        $customer   = $campaign->customer;
+        $customer = $campaign->customer;
         $customerId = $customer?->google_ads_customer_id;
 
         // Retrieve the experiment resource — check attribute directly to avoid errors
@@ -660,17 +674,18 @@ class ABTestingAgent
             // Column may not exist
         }
 
-        if (!$experimentResource || !$customerId) {
+        if (! $experimentResource || ! $customerId) {
             Log::warning('ABTestingAgent: checkAndPromoteExperiment — missing experiment resource or customer ID', [
-                'campaign_id'         => $campaign->id,
+                'campaign_id' => $campaign->id,
                 'experiment_resource' => $experimentResource,
             ]);
+
             return null;
         }
 
         try {
             $getResults = new GetCampaignExperimentResults($customer);
-            $results    = ($getResults)($customerId, $experimentResource);
+            $results = ($getResults)($customerId, $experimentResource);
 
             $status = $results['experiment_status'] ?? 'UNKNOWN';
 
@@ -678,6 +693,7 @@ class ABTestingAgent
             if ($status === 'GRADUATED') {
                 $promote = new PromoteCampaignExperiment($customer);
                 $promoted = ($promote)($customerId, $experimentResource);
+
                 return $promoted ? 'promoted' : 'running';
             }
 
@@ -685,24 +701,24 @@ class ABTestingAgent
             $arms = $results['arms'] ?? [];
             if (count($arms) >= 2) {
                 // Arms are returned in operation order: index 0 = control, index 1 = treatment
-                $controlArm   = $arms[0] ?? null;
+                $controlArm = $arms[0] ?? null;
                 $treatmentArm = $arms[count($arms) - 1] ?? null;
 
                 if ($controlArm && $treatmentArm) {
                     $treatmentConversions = (float) ($treatmentArm['conversions'] ?? 0);
-                    $controlConversions   = (float) ($controlArm['conversions'] ?? 0);
+                    $controlConversions = (float) ($controlArm['conversions'] ?? 0);
 
                     if ($treatmentConversions > 100 && $controlConversions > 0) {
                         $lift = ($treatmentConversions - $controlConversions) / $controlConversions;
 
                         if ($lift > 0.10) {
-                            $promote  = new PromoteCampaignExperiment($customer);
+                            $promote = new PromoteCampaignExperiment($customer);
                             $promoted = ($promote)($customerId, $experimentResource);
 
                             Log::info('ABTestingAgent: Promoting experiment due to >10% conversion lift', [
-                                'campaign_id'         => $campaign->id,
+                                'campaign_id' => $campaign->id,
                                 'experiment_resource' => $experimentResource,
-                                'lift_pct'            => round($lift * 100, 1),
+                                'lift_pct' => round($lift * 100, 1),
                                 'treatment_conversions' => $treatmentConversions,
                             ]);
 
@@ -719,10 +735,11 @@ class ABTestingAgent
             return 'running';
         } catch (\Exception $e) {
             Log::error('ABTestingAgent: checkAndPromoteExperiment failed', [
-                'campaign_id'         => $campaign->id,
+                'campaign_id' => $campaign->id,
                 'experiment_resource' => $experimentResource,
-                'error'               => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
     }
@@ -733,7 +750,9 @@ class ABTestingAgent
     protected function generateReplacements(ABTest $test, array $winner, array $losers): array
     {
         $loserCount = count($losers);
-        if ($loserCount === 0) return [];
+        if ($loserCount === 0) {
+            return [];
+        }
 
         $typeDescription = match ($test->test_type) {
             ABTest::TYPE_HEADLINE => 'ad headlines (max 30 characters each)',

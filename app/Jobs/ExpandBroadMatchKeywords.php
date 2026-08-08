@@ -5,10 +5,10 @@ namespace App\Jobs;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Services\GoogleAds\CommonServices\AddKeyword;
+use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\DismissRecommendation;
 use App\Services\GoogleAds\CommonServices\GetCampaignKeywords;
 use App\Services\GoogleAds\CommonServices\GetGoogleAdsRecommendations;
-use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
 use App\Services\GoogleAds\CommonServices\RemoveKeyword;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
@@ -38,7 +38,8 @@ class ExpandBroadMatchKeywords implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries   = 2;
+    public $tries = 2;
+
     public $timeout = 120;
 
     public function __construct(protected Campaign $campaign) {}
@@ -47,27 +48,29 @@ class ExpandBroadMatchKeywords implements ShouldQueue
     {
         $customer = $this->campaign->customer;
 
-        if (!$customer?->google_ads_customer_id || !$this->campaign->google_ads_campaign_id) {
+        if (! $customer?->google_ads_customer_id || ! $this->campaign->google_ads_campaign_id) {
             return;
         }
 
-        $cacheKey    = "broad_match_expanded:{$this->campaign->id}";
+        $cacheKey = "broad_match_expanded:{$this->campaign->id}";
         $hasRunBefore = Cache::has($cacheKey);
 
         if ($hasRunBefore) {
             Log::info("ExpandBroadMatchKeywords: Rate-limited, skipping campaign {$this->campaign->id}");
+
             return;
         }
 
-        $customerId       = $customer->cleanGoogleCustomerId();
+        $customerId = $customer->cleanGoogleCustomerId();
         $campaignResource = $this->campaign->google_ads_campaign_id;
 
         // Fetch all keywords without date segmentation so zero-activity keywords appear
         $getKeywords = new GetCampaignKeywords($customer);
-        $keywords    = ($getKeywords)($customerId, $campaignResource, 'LAST_30_DAYS', false);
+        $keywords = ($getKeywords)($customerId, $campaignResource, 'LAST_30_DAYS', false);
 
         if (empty($keywords)) {
             Log::info("ExpandBroadMatchKeywords: No keywords found for campaign {$this->campaign->id}");
+
             return;
         }
 
@@ -76,12 +79,12 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         // On this first pass it's always false, so pruning is skipped intentionally.
 
         $removeKeyword = new RemoveKeyword($customer);
-        $pruned        = [];
+        $pruned = [];
 
         if ($hasRunBefore) {
             // Fetch performance data separately (segmented query) to find which broad
             // keywords have had any clicks in the last 365 days
-            $perfKeywords     = ($getKeywords)($customerId, $campaignResource, 'LAST_365_DAYS', true);
+            $perfKeywords = ($getKeywords)($customerId, $campaignResource, 'LAST_365_DAYS', true);
             $criteriaWithClicks = [];
             foreach ($perfKeywords as $pk) {
                 if ($pk['match_type'] === KeywordMatchType::BROAD && ($pk['clicks'] ?? 0) > 0) {
@@ -117,7 +120,7 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         }
 
         $addKeyword = new AddKeyword($customer);
-        $added      = [];
+        $added = [];
 
         foreach ($keywords as $kw) {
             if ($kw['match_type'] === KeywordMatchType::BROAD) {
@@ -155,7 +158,7 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         // Generate campaign-specific negatives via Gemini and add them alongside
         // every broad match expansion so the two always travel together.
 
-        if (!empty($added)) {
+        if (! empty($added)) {
             $this->addNegatives($customer, $customerId, $campaignResource);
         }
 
@@ -165,37 +168,37 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         // keywords this run. The recommendation may predate our first expansion.
 
         $getRecommendations = new GetGoogleAdsRecommendations($customer);
-        $allRecs            = ($getRecommendations)($customerId, $campaignResource);
-        $toBeDismissed      = array_column(
-            array_filter($allRecs, fn($r) => in_array($r['type'], [
+        $allRecs = ($getRecommendations)($customerId, $campaignResource);
+        $toBeDismissed = array_column(
+            array_filter($allRecs, fn ($r) => in_array($r['type'], [
                 RecommendationType::KEYWORD_MATCH_TYPE,     // 14
                 RecommendationType::USE_BROAD_MATCH_KEYWORD, // 20
             ])),
             'resource_name'
         );
 
-        if (!empty($toBeDismissed)) {
+        if (! empty($toBeDismissed)) {
             (new DismissRecommendation($customer))($customerId, $toBeDismissed);
-            Log::info("ExpandBroadMatchKeywords: Dismissed " . count($toBeDismissed) . " broad match recommendation(s) for campaign {$this->campaign->id}");
+            Log::info('ExpandBroadMatchKeywords: Dismissed '.count($toBeDismissed)." broad match recommendation(s) for campaign {$this->campaign->id}");
         }
 
         // ── Record & rate-limit ──────────────────────────────────────────────
 
         Cache::put($cacheKey, true, now()->addDays(30));
 
-        if (!empty($added) || !empty($pruned)) {
+        if (! empty($added) || ! empty($pruned)) {
             $summary = [];
-            if (!empty($added)) {
-                $summary[] = 'Added ' . count($added) . ' broad match keyword(s): ' . implode(', ', $added);
+            if (! empty($added)) {
+                $summary[] = 'Added '.count($added).' broad match keyword(s): '.implode(', ', $added);
             }
-            if (!empty($pruned)) {
-                $summary[] = 'Pruned ' . count($pruned) . ' zero-click broad match keyword(s): ' . implode(', ', $pruned);
+            if (! empty($pruned)) {
+                $summary[] = 'Pruned '.count($pruned).' zero-click broad match keyword(s): '.implode(', ', $pruned);
             }
 
             AgentActivity::record(
                 'keyword_expansion',
                 'broad_match_updated',
-                implode('. ', $summary) . " — campaign \"{$this->campaign->name}\"",
+                implode('. ', $summary)." — campaign \"{$this->campaign->name}\"",
                 $this->campaign->customer_id,
                 $this->campaign->id,
                 ['added' => $added, 'pruned' => $pruned]
@@ -203,7 +206,7 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         }
 
         Log::info("ExpandBroadMatchKeywords: Complete for campaign {$this->campaign->id}", [
-            'added'  => count($added),
+            'added' => count($added),
             'pruned' => count($pruned),
         ]);
     }
@@ -211,7 +214,7 @@ class ExpandBroadMatchKeywords implements ShouldQueue
     private function addNegatives($customer, string $customerId, string $campaignResource): void
     {
         $researchService = new KeywordResearchService($customer);
-        $negatives       = $researchService->generateNegativeKeywords(
+        $negatives = $researchService->generateNegativeKeywords(
             $customer->name ?? 'this business',
             $this->campaign->strategy?->industry ?? null
         );
@@ -221,7 +224,7 @@ class ExpandBroadMatchKeywords implements ShouldQueue
         }
 
         $addNegative = new AddNegativeKeyword($customer);
-        $added       = [];
+        $added = [];
 
         foreach ($negatives as $term) {
             $result = ($addNegative)($customerId, $campaignResource, $term, KeywordMatchType::BROAD);
@@ -230,13 +233,13 @@ class ExpandBroadMatchKeywords implements ShouldQueue
             }
         }
 
-        if (!empty($added)) {
-            Log::info("ExpandBroadMatchKeywords: Added " . count($added) . " negative keywords to campaign {$this->campaign->id}");
+        if (! empty($added)) {
+            Log::info('ExpandBroadMatchKeywords: Added '.count($added)." negative keywords to campaign {$this->campaign->id}");
         }
     }
 
     public function failed(\Throwable $exception): void
     {
-        Log::error("ExpandBroadMatchKeywords failed for campaign {$this->campaign->id}: " . $exception->getMessage());
+        Log::error("ExpandBroadMatchKeywords failed for campaign {$this->campaign->id}: ".$exception->getMessage());
     }
 }

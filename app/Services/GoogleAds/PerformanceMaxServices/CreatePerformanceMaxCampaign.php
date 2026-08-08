@@ -2,19 +2,16 @@
 
 namespace App\Services\GoogleAds\PerformanceMaxServices;
 
+use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use App\Services\GoogleAds\CreateCampaignBudget;
 use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelSubTypeEnum\AdvertisingChannelSubType;
-use Google\Ads\GoogleAds\V22\Enums\BudgetDeliveryMethodEnum\BudgetDeliveryMethod;
-use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
+use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
-use App\Services\GoogleAds\CreateCampaignBudget;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
-use App\Services\CampaignStatusHelper;
 
 class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
 {
@@ -24,19 +21,19 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
 
         // 1. Create Budget
         $budgetService = new CreateCampaignBudget($this->customer);
-        
+
         // Ensure budget is a multiple of 10000 (1 cent) to avoid NON_MULTIPLE_OF_MINIMUM_CURRENCY_UNIT error
-        $dailyBudgetMicros = (int)($campaignData['budget'] * 1000000);
+        $dailyBudgetMicros = (int) ($campaignData['budget'] * 1000000);
         $dailyBudgetMicros = round($dailyBudgetMicros / 10000) * 10000;
 
         $budgetResourceName = ($budgetService)(
-            $customerId, 
-            'Budget for ' . $campaignData['businessName'], 
+            $customerId,
+            'Budget for '.$campaignData['businessName'],
             $dailyBudgetMicros,
             false // Not explicitly shared for PMax to avoid BIDDING_STRATEGY_TYPE_INCOMPATIBLE_WITH_SHARED_BUDGET
         );
 
-        if (!$budgetResourceName) {
+        if (! $budgetResourceName) {
             return null;
         }
 
@@ -65,13 +62,13 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
         // For simplicity, we'll use Maximize Conversions with optional Target CPA
         if (isset($campaignData['targetCpaMicros'])) {
             $campaign->setMaximizeConversions(new \Google\Ads\GoogleAds\V22\Common\MaximizeConversions([
-                'target_cpa_micros' => $campaignData['targetCpaMicros']
+                'target_cpa_micros' => $campaignData['targetCpaMicros'],
             ]));
         } else {
-            $campaign->setMaximizeConversions(new \Google\Ads\GoogleAds\V22\Common\MaximizeConversions());
+            $campaign->setMaximizeConversions(new \Google\Ads\GoogleAds\V22\Common\MaximizeConversions);
         }
 
-        $campaignOperation = new CampaignOperation();
+        $campaignOperation = new CampaignOperation;
         $campaignOperation->setCreate($campaign);
 
         try {
@@ -86,7 +83,8 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
 
             return $campaignResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Failed to create Performance Max campaign: " . $e->getMessage());
+            $this->logError('Failed to create Performance Max campaign: '.$e->getMessage());
+
             return null;
         }
     }

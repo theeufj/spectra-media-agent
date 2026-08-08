@@ -3,7 +3,6 @@
 namespace Tests\Feature\Services\Reporting;
 
 use App\Models\Customer;
-use App\Models\User;
 use App\Services\Reporting\YesterdayPerformanceSummary;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
@@ -19,7 +18,7 @@ class YesterdayPerformanceSummaryTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
     }
@@ -27,8 +26,8 @@ class YesterdayPerformanceSummaryTest extends TestCase
     public function test_returns_summary_array_with_expected_keys(): void
     {
         $customer = Customer::factory()->create();
-        $service  = new YesterdayPerformanceSummary();
-        $summary  = $service->forCustomer($customer);
+        $service = new YesterdayPerformanceSummary;
+        $summary = $service->forCustomer($customer);
 
         $this->assertIsArray($summary);
         $this->assertArrayHasKey('date', $summary);
@@ -41,9 +40,9 @@ class YesterdayPerformanceSummaryTest extends TestCase
     public function test_accepts_explicit_date(): void
     {
         $customer = Customer::factory()->create();
-        $service  = new YesterdayPerformanceSummary();
-        $date     = now()->subDays(3)->toDateString();
-        $summary  = $service->forCustomer($customer, $date);
+        $service = new YesterdayPerformanceSummary;
+        $date = now()->subDays(3)->toDateString();
+        $summary = $service->forCustomer($customer, $date);
 
         $this->assertIsArray($summary);
         $this->assertSame($date, $summary['date'] ?? $date);
@@ -52,8 +51,8 @@ class YesterdayPerformanceSummaryTest extends TestCase
     public function test_returns_zero_values_for_new_customer(): void
     {
         $customer = Customer::factory()->create();
-        $service  = new YesterdayPerformanceSummary();
-        $summary  = $service->forCustomer($customer);
+        $service = new YesterdayPerformanceSummary;
+        $summary = $service->forCustomer($customer);
 
         $this->assertGreaterThanOrEqual(0, $summary['impressions'] ?? 0);
         $this->assertGreaterThanOrEqual(0, $summary['clicks'] ?? 0);
@@ -65,11 +64,11 @@ class YesterdayPerformanceSummaryTest extends TestCase
         $customer = Customer::whereHas('campaigns.googleAdsPerformanceData')->first()
             ?? Customer::whereHas('campaigns.facebookAdsPerformanceData')->first();
 
-        if (!$customer) {
+        if (! $customer) {
             $this->markTestSkipped('No customer with performance data in DB.');
         }
 
-        $service = new YesterdayPerformanceSummary();
+        $service = new YesterdayPerformanceSummary;
         $summary = $service->forCustomer($customer);
 
         $this->assertIsArray($summary);

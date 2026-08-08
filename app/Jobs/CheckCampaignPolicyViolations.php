@@ -2,17 +2,18 @@
 
 namespace App\Jobs;
 
+use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Services\Agents\SelfHealingAgent;
-use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use App\Services\FacebookAds\AdService as FacebookAdService;
+use App\Services\GoogleAds\CommonServices\GetAdStatus;
+use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
 
 class CheckCampaignPolicyViolations implements ShouldQueue
 {
@@ -50,7 +51,7 @@ class CheckCampaignPolicyViolations implements ShouldQueue
                 $selfHealingAgent->heal($campaign);
             }
         } catch (\Exception $e) {
-            Log::error("Error checking for policy violations for campaign {$this->campaignId}: " . $e->getMessage(), [
+            Log::error("Error checking for policy violations for campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
         }
@@ -59,7 +60,7 @@ class CheckCampaignPolicyViolations implements ShouldQueue
     private function checkGoogleAdsPolicyViolations(Campaign $campaign): bool
     {
         $campaignResourceName = $campaign->google_ads_campaign_id;
-        if (!str_starts_with($campaignResourceName, 'customers/')) {
+        if (! str_starts_with($campaignResourceName, 'customers/')) {
             $campaignResourceName = "customers/{$campaign->customer->google_ads_customer_id}/campaigns/{$campaignResourceName}";
         }
 
@@ -72,7 +73,8 @@ class CheckCampaignPolicyViolations implements ShouldQueue
                     'ad' => $ad['resource_name'] ?? null,
                     'policy_topics' => $ad['policy_topics'] ?? [],
                 ]);
-                $campaign->update(['status' => 'PAUSED']);
+                $campaign->update(['status' => CampaignStatus::Paused]);
+
                 return true;
             }
         }
@@ -83,12 +85,12 @@ class CheckCampaignPolicyViolations implements ShouldQueue
     private function checkFacebookAdsPolicyViolations(Campaign $campaign): bool
     {
         $customer = $campaign->customer;
-        if (!$customer || !$customer->facebook_ads_account_id) {
+        if (! $customer || ! $customer->facebook_ads_account_id) {
             return false;
         }
 
         $adService = new FacebookAdService($customer);
-        $accountId = 'act_' . $customer->facebook_ads_account_id;
+        $accountId = 'act_'.$customer->facebook_ads_account_id;
 
         $ads = $adService->listAdsByAccount($accountId, [
             [
@@ -110,7 +112,7 @@ class CheckCampaignPolicyViolations implements ShouldQueue
             }
         }
 
-        if (!empty($disapprovedAds)) {
+        if (! empty($disapprovedAds)) {
             Log::warning("Facebook Ads policy violations found for campaign {$this->campaignId}.", [
                 'disapproved_count' => count($disapprovedAds),
                 'ads' => $disapprovedAds,
@@ -119,7 +121,7 @@ class CheckCampaignPolicyViolations implements ShouldQueue
             // If all ads are disapproved, pause the campaign
             if (count($disapprovedAds) === count($ads)) {
                 Log::warning("All ads disapproved for Facebook campaign {$this->campaignId}. Pausing campaign.");
-                $campaign->update(['status' => 'PAUSED']);
+                $campaign->update(['status' => CampaignStatus::Paused]);
             }
 
             return true;
@@ -133,7 +135,7 @@ class CheckCampaignPolicyViolations implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('CheckCampaignPolicyViolations failed: ' . $exception->getMessage(), [
+        Log::error('CheckCampaignPolicyViolations failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

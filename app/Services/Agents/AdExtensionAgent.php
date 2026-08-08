@@ -28,10 +28,14 @@ use Illuminate\Support\Facades\Log;
  */
 class AdExtensionAgent
 {
-    private const MIN_SITELINKS  = 4;
-    private const MIN_CALLOUTS   = 4;
-    private const MIN_SNIPPETS   = 1;
+    private const MIN_SITELINKS = 4;
+
+    private const MIN_CALLOUTS = 4;
+
+    private const MIN_SNIPPETS = 1;
+
     private const ROTATION_IMPRESSIONS_THRESHOLD = 500;
+
     private const ROTATION_CTR_RATIO = 0.40;
 
     public function __construct(private GeminiService $gemini) {}
@@ -40,25 +44,25 @@ class AdExtensionAgent
     {
         $customer = $campaign->customer;
 
-        if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
+        if (! $customer?->google_ads_customer_id || ! $campaign->google_ads_campaign_id) {
             return ['skipped' => true];
         }
 
-        $customerId       = $customer->cleanGoogleCustomerId();
+        $customerId = $customer->cleanGoogleCustomerId();
         $campaignResource = $campaign->google_ads_campaign_id;
 
-        $created  = [];
-        $rotated  = [];
-        $errors   = [];
+        $created = [];
+        $rotated = [];
+        $errors = [];
 
-        $perfService  = new GetExtensionPerformance($customer);
-        $linkService  = new LinkCampaignAsset($customer);
+        $perfService = new GetExtensionPerformance($customer);
+        $linkService = new LinkCampaignAsset($customer);
 
         // --- 1. Coverage check ---
         $sitelinkCount = $perfService->countByFieldType($customerId, $campaignResource, AssetFieldType::SITELINK);
-        $calloutCount  = $perfService->countByFieldType($customerId, $campaignResource, AssetFieldType::CALLOUT);
-        $snippetCount  = $perfService->countByFieldType($customerId, $campaignResource, AssetFieldType::STRUCTURED_SNIPPET);
-        $callCount     = $perfService->countByFieldType($customerId, $campaignResource, AssetFieldType::CALL);
+        $calloutCount = $perfService->countByFieldType($customerId, $campaignResource, AssetFieldType::CALLOUT);
+        $snippetCount = $perfService->countByFieldType($customerId, $campaignResource, AssetFieldType::STRUCTURED_SNIPPET);
+        $callCount = $perfService->countByFieldType($customerId, $campaignResource, AssetFieldType::CALL);
 
         $businessContext = $this->buildBusinessContext($campaign);
 
@@ -78,13 +82,13 @@ class AdExtensionAgent
                     ($linkService)($customerId, $campaignResource, $assetResource, AssetFieldType::SITELINK);
                     $created[] = ['type' => 'sitelink', 'text' => $sitelink['link_text']];
                 } else {
-                    $errors[] = 'Failed to create sitelink: ' . $sitelink['link_text'];
+                    $errors[] = 'Failed to create sitelink: '.$sitelink['link_text'];
                 }
             }
         }
 
         if ($calloutCount < self::MIN_CALLOUTS) {
-            $needed  = self::MIN_CALLOUTS - $calloutCount;
+            $needed = self::MIN_CALLOUTS - $calloutCount;
             $callouts = $this->generateCallouts($customer, $campaign, $businessContext, $needed);
             foreach ($callouts as $text) {
                 $service = new CreateCalloutAsset($customer);
@@ -93,7 +97,7 @@ class AdExtensionAgent
                     ($linkService)($customerId, $campaignResource, $assetResource, AssetFieldType::CALLOUT);
                     $created[] = ['type' => 'callout', 'text' => $text];
                 } else {
-                    $errors[] = 'Failed to create callout: ' . $text;
+                    $errors[] = 'Failed to create callout: '.$text;
                 }
             }
         }
@@ -124,9 +128,9 @@ class AdExtensionAgent
         }
 
         // --- 2. Performance rotation ---
-        $assets     = $perfService($customerId, $campaignResource);
-        $avgCtr     = $assets ? array_sum(array_column($assets, 'ctr')) / count($assets) : 0;
-        $threshold  = $avgCtr * self::ROTATION_CTR_RATIO;
+        $assets = $perfService($customerId, $campaignResource);
+        $avgCtr = $assets ? array_sum(array_column($assets, 'ctr')) / count($assets) : 0;
+        $threshold = $avgCtr * self::ROTATION_CTR_RATIO;
 
         foreach ($assets as $asset) {
             if (
@@ -150,7 +154,7 @@ class AdExtensionAgent
             }
         }
 
-        if (!empty($created) || !empty($rotated)) {
+        if (! empty($created) || ! empty($rotated)) {
             $total = count($created) + count($rotated);
             AgentActivity::record(
                 'extensions',
@@ -165,7 +169,7 @@ class AdExtensionAgent
         return [
             'created' => $created,
             'rotated' => $rotated,
-            'errors'  => $errors,
+            'errors' => $errors,
         ];
     }
 
@@ -175,26 +179,27 @@ class AdExtensionAgent
         $pageContent = $customer->pages()
             ->limit(5)
             ->get(['title', 'content'])
-            ->map(fn($p) => trim("{$p->title}\n{$p->content}"))
+            ->map(fn ($p) => trim("{$p->title}\n{$p->content}"))
             ->filter()
             ->implode("\n\n");
 
         return implode("\n", array_filter([
-            'Business: ' . $customer->name,
-            $customer->description ? 'Description: ' . $customer->description : null,
-            'Campaign: ' . $campaign->name,
-            'Website: ' . $customer->website,
-            $pageContent ? "Website content:\n" . $pageContent : null,
+            'Business: '.$customer->name,
+            $customer->description ? 'Description: '.$customer->description : null,
+            'Campaign: '.$campaign->name,
+            'Website: '.$customer->website,
+            $pageContent ? "Website content:\n".$pageContent : null,
         ]));
     }
 
     private function generateSitelinks(object $customer, Campaign $campaign, string $context, int $count): array
     {
         $landingPage = $customer->website ?? null;
-        if (!$landingPage) {
+        if (! $landingPage) {
             Log::warning('[AdExtensionAgent] No website set for customer, skipping sitelink generation', [
                 'customer_id' => $customer->id,
             ]);
+
             return [];
         }
 
@@ -223,10 +228,11 @@ PROMPT;
                 foreach ($data as &$item) {
                     $item['url'] = $item['url'] ?? $landingPage;
                 }
+
                 return array_slice($data, 0, $count);
             }
         } catch (\Exception $e) {
-            Log::error('AdExtensionAgent: Sitelink generation failed: ' . $e->getMessage());
+            Log::error('AdExtensionAgent: Sitelink generation failed: '.$e->getMessage());
         }
 
         return [];
@@ -257,7 +263,7 @@ PROMPT;
                 return array_values(array_filter(array_slice($data, 0, $count), 'is_string'));
             }
         } catch (\Exception $e) {
-            Log::error('AdExtensionAgent: Callout generation failed: ' . $e->getMessage());
+            Log::error('AdExtensionAgent: Callout generation failed: '.$e->getMessage());
         }
 
         return [];
@@ -286,7 +292,7 @@ PROMPT;
                 return $data;
             }
         } catch (\Exception $e) {
-            Log::error('AdExtensionAgent: Structured snippet generation failed: ' . $e->getMessage());
+            Log::error('AdExtensionAgent: Structured snippet generation failed: '.$e->getMessage());
         }
 
         return null;

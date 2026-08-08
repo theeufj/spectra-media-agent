@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class Proposal extends Model
 {
     const STATUS_GENERATING = 'generating';
+
     const STATUS_READY = 'ready';
+
     const STATUS_FAILED = 'failed';
 
     protected $fillable = [

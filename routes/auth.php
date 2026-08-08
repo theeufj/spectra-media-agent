@@ -1,10 +1,10 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\Auth\NewPasswordController;
 use App\Http\Controllers\Auth\PasswordResetLinkController;
 use App\Http\Controllers\Auth\RegisteredUserController;
-use App\Http\Controllers\Auth\GoogleController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -54,12 +54,14 @@ Route::middleware('auth')->group(function () {
     // Handle the email verification link
     Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
         $request->fulfill();
+
         return redirect()->intended(route('customers.create'))->with('status', 'Your email has been verified! Please set up your customer profile.');
     })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
     // Resend verification email
     Route::post('/email/verification-notification', function (Request $request) {
         $request->user()->sendEmailVerificationNotification();
+
         return back()->with('status', 'A new verification link has been sent to your email address.');
     })->middleware('throttle:6,1')->name('verification.send');
 });

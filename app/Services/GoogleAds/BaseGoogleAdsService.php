@@ -6,8 +6,8 @@ use App\Features\PerUserGoogleToken;
 use App\Models\Customer;
 use App\Models\MccAccount;
 use App\Services\Agents\Traits\RetryableApiOperation;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
 use Illuminate\Support\Facades\Log;
 use Laravel\Pennant\Feature;
 
@@ -16,8 +16,11 @@ abstract class BaseGoogleAdsService
     use RetryableApiOperation;
 
     protected string $platform = 'google_ads';
+
     protected ?\Google\Ads\GoogleAds\Lib\V22\GoogleAdsClient $client = null;
+
     protected ?Customer $customer = null;
+
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
@@ -27,16 +30,16 @@ abstract class BaseGoogleAdsService
 
     /**
      * Ensure the Google Ads client is properly initialized
-     * 
+     *
      * @throws \Exception if client is not available
      */
     protected function ensureClient(): void
     {
         if ($this->client === null) {
             throw new \Exception(
-                "Google Ads client not initialized for customer {$this->customer->id}. " .
-                "Please check: 1) OAuth credentials are valid, " .
-                "2) Customer has connected their Google Ads account via OAuth"
+                "Google Ads client not initialized for customer {$this->customer->id}. ".
+                'Please check: 1) OAuth credentials are valid, '.
+                '2) Customer has connected their Google Ads account via OAuth'
             );
         }
     }
@@ -50,46 +53,47 @@ abstract class BaseGoogleAdsService
     {
         $user = $this->customer?->users()->first();
 
-        if (!$user || !Feature::for($user)->active(PerUserGoogleToken::class)) {
+        if (! $user || ! Feature::for($user)->active(PerUserGoogleToken::class)) {
             return;
         }
 
         $connection = $user->connections()
             ->where('platform', 'google_ads')
-            ->where(fn($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->where(fn ($q) => $q->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->first();
 
-        if (!$connection?->refresh_token) {
+        if (! $connection?->refresh_token) {
             Log::warning('[GoogleAds] PerUserGoogleToken flag active but no valid connection found, using MCC credentials', [
                 'customer_id' => $this->customer->id,
-                'user_id'     => $user->id,
+                'user_id' => $user->id,
             ]);
+
             return;
         }
 
         try {
             $configPath = storage_path('app/google_ads_php.ini');
 
-            $oAuth2Credential = (new OAuth2TokenBuilder())
+            $oAuth2Credential = (new OAuth2TokenBuilder)
                 ->fromFile($configPath)
                 ->withRefreshToken($connection->refresh_token)
                 ->build();
 
-            $this->client = (new GoogleAdsClientBuilder())
+            $this->client = (new GoogleAdsClientBuilder)
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2Credential)
                 ->build();
 
             Log::info('[GoogleAds] Using per-user OAuth token', [
-                'customer_id'   => $this->customer->id,
-                'user_id'       => $user->id,
+                'customer_id' => $this->customer->id,
+                'user_id' => $user->id,
                 'connection_id' => $connection->id,
             ]);
         } catch (\Exception $e) {
             Log::warning('[GoogleAds] Failed to build per-user client, retaining MCC credentials', [
                 'customer_id' => $this->customer->id,
-                'user_id'     => $user->id,
-                'error'       => $e->getMessage(),
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -99,8 +103,9 @@ abstract class BaseGoogleAdsService
         try {
             $configPath = storage_path('app/google_ads_php.ini');
 
-            if (!file_exists($configPath)) {
+            if (! file_exists($configPath)) {
                 Log::warning("Google Ads config file not found at {$configPath}. Skipping client build.");
+
                 return null;
             }
 
@@ -108,8 +113,9 @@ abstract class BaseGoogleAdsService
             // Resolved from DB (mcc_accounts table) with env fallback.
             $mccAccount = MccAccount::getActive();
 
-            if (!$mccAccount) {
+            if (! $mccAccount) {
                 Log::error('No active MCC account configured (checked DB and env)');
+
                 return null;
             }
 
@@ -117,31 +123,32 @@ abstract class BaseGoogleAdsService
             // Strip dashes — Google Ads API requires plain numeric IDs (e.g. 8701023448 not 870-102-3448)
             $mccCustomerId = preg_replace('/[^0-9]/', '', $mccAccount->google_customer_id);
 
-            $oAuth2Credential = (new OAuth2TokenBuilder())
+            $oAuth2Credential = (new OAuth2TokenBuilder)
                 ->fromFile($configPath)
                 ->withRefreshToken($mccRefreshToken)
                 ->build();
 
-            $builder = (new GoogleAdsClientBuilder())
+            $builder = (new GoogleAdsClientBuilder)
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2Credential)
                 ->withLoginCustomerId($mccCustomerId);
 
             return $builder->build();
         } catch (\Exception $e) {
-            Log::error("Failed to build Google Ads client for customer {$this->customer->id}: " . $e->getMessage(), [
+            Log::error("Failed to build Google Ads client for customer {$this->customer->id}: ".$e->getMessage(), [
                 'customer_id' => $this->customer->id,
                 'error_type' => get_class($e),
                 'error_message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
+
             return null;
         }
     }
 
     protected function logInfo(string $message, array $context = []): void
     {
-        Log::info("[GoogleAds] " . $message, $context);
+        Log::info('[GoogleAds] '.$message, $context);
     }
 
     protected function logError(string $message, $exception = null): void
@@ -150,10 +157,10 @@ abstract class BaseGoogleAdsService
         if ($exception instanceof \Exception) {
             $context = [
                 'error' => $exception->getMessage(),
-                'trace' => $exception->getTraceAsString()
+                'trace' => $exception->getTraceAsString(),
             ];
         }
-        Log::error("[GoogleAds] " . $message, $context);
+        Log::error('[GoogleAds] '.$message, $context);
     }
 
     /**
@@ -162,6 +169,7 @@ abstract class BaseGoogleAdsService
     protected function searchQuery(string $customerId, string $query): \Google\ApiCore\PagedListResponse
     {
         $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
+
         return $googleAdsServiceClient->search(
             new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
                 'customer_id' => $customerId,

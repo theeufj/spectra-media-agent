@@ -20,14 +20,16 @@ class CommonServicesIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected string $customerId;
+
     protected Campaign $liveCampaign;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_GOOGLE_ADS_INTEGRATION_TESTS=true to run.');
         }
 
@@ -38,7 +40,7 @@ class CommonServicesIntegrationTest extends TestCase
             ->whereNotNull('google_ads_campaign_id')
             ->first();
 
-        if (!$live) {
+        if (! $live) {
             $this->markTestSkipped('No deployed Google Ads campaign found for this customer.');
         }
 
@@ -48,7 +50,7 @@ class CommonServicesIntegrationTest extends TestCase
     public function test_get_ad_status_returns_array_for_campaign(): void
     {
         $service = new GetAdStatus($this->customer);
-        $result  = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
+        $result = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
 
         $this->assertIsArray($result);
         // Each entry should have status and approval_status
@@ -61,7 +63,7 @@ class CommonServicesIntegrationTest extends TestCase
     public function test_get_search_terms_report_returns_array(): void
     {
         $service = new GetSearchTermsReport($this->customer);
-        $result  = $service->get(
+        $result = $service->get(
             $this->customerId,
             $this->liveCampaign->google_ads_campaign_id,
             now()->subDays(30)->toDateString(),
@@ -75,7 +77,7 @@ class CommonServicesIntegrationTest extends TestCase
     public function test_get_campaign_keywords_returns_array(): void
     {
         $service = new GetCampaignKeywords($this->customer);
-        $result  = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
+        $result = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
 
         $this->assertIsArray($result);
     }
@@ -83,7 +85,7 @@ class CommonServicesIntegrationTest extends TestCase
     public function test_get_google_ads_recommendations_returns_array(): void
     {
         $service = new GetGoogleAdsRecommendations($this->customer);
-        $result  = $service->get($this->customerId);
+        $result = $service->get($this->customerId);
 
         $this->assertIsArray($result);
     }
@@ -91,7 +93,7 @@ class CommonServicesIntegrationTest extends TestCase
     public function test_get_ad_status_returns_approval_status_field(): void
     {
         $service = new GetAdStatus($this->customer);
-        $result  = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
+        $result = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
 
         foreach ($result as $ad) {
             $this->assertArrayHasKey('approval_status', $ad);

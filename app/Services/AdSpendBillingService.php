@@ -2,15 +2,15 @@
 
 namespace App\Services;
 
+use App\Mail\AdSpendCampaignsPaused;
+use App\Mail\AdSpendCampaignsResumed;
+use App\Mail\AdSpendLowBalance;
+use App\Mail\AdSpendPaymentFailed;
+use App\Mail\AdSpendPaymentWarning;
 use App\Models\AdSpendCredit;
 use App\Models\AdSpendTransaction;
 use App\Models\Campaign;
 use App\Models\Customer;
-use App\Mail\AdSpendPaymentWarning;
-use App\Mail\AdSpendPaymentFailed;
-use App\Mail\AdSpendCampaignsPaused;
-use App\Mail\AdSpendCampaignsResumed;
-use App\Mail\AdSpendLowBalance;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -20,13 +20,13 @@ use Stripe\Exception\CardException;
 
 /**
  * AdSpendBillingService
- * 
+ *
  * Handles all ad spend billing logic:
  * - Initial credit capture on campaign creation
  * - Daily billing for actual ad spend
  * - Payment failure handling with grace periods
  * - Campaign pausing/resuming based on payment status
- * 
+ *
  * BILLING FLOW:
  * 1. Campaign created → Charge 7 days estimated spend upfront
  * 2. Daily at midnight → Calculate actual spend, deduct from credit
@@ -71,35 +71,35 @@ class AdSpendBillingService
             // Charge the customer's card for the initial credit
             $chargeResult = $this->chargeCustomer($customer, $initialCredit, 'Initial ad spend credit (7 days)');
 
-            if (!$chargeResult['success']) {
-                throw new \Exception('Failed to charge initial ad spend credit: ' . $chargeResult['error']);
+            if (! $chargeResult['success']) {
+                throw new \Exception('Failed to charge initial ad spend credit: '.$chargeResult['error']);
             }
 
-        // Create the credit account
-        $credit = AdSpendCredit::create([
-            'customer_id' => $customer->id,
-            'initial_credit_amount' => $initialCredit,
-            'current_balance' => $initialCredit,
-            'currency' => $customer->billingCurrency(),
-            'status' => AdSpendCredit::STATUS_ACTIVE,
-            'payment_status' => AdSpendCredit::PAYMENT_CURRENT,
-            'last_successful_charge_at' => now(),
-            'stripe_payment_method_id' => $chargeResult['payment_method_id'] ?? null,
-        ]);
+            // Create the credit account
+            $credit = AdSpendCredit::create([
+                'customer_id' => $customer->id,
+                'initial_credit_amount' => $initialCredit,
+                'current_balance' => $initialCredit,
+                'currency' => $customer->billingCurrency(),
+                'status' => AdSpendCredit::STATUS_ACTIVE,
+                'payment_status' => AdSpendCredit::PAYMENT_CURRENT,
+                'last_successful_charge_at' => now(),
+                'stripe_payment_method_id' => $chargeResult['payment_method_id'] ?? null,
+            ]);
 
-        // Record the initial credit transaction
-        $credit->transactions()->create([
-            'type' => AdSpendTransaction::TYPE_CREDIT,
-            'amount' => $initialCredit,
-            'balance_after' => $initialCredit,
-            'description' => 'Initial ad spend credit (7 days prepaid)',
-            'stripe_charge_id' => $chargeResult['charge_id'] ?? null,
-        ]);
+            // Record the initial credit transaction
+            $credit->transactions()->create([
+                'type' => AdSpendTransaction::TYPE_CREDIT,
+                'amount' => $initialCredit,
+                'balance_after' => $initialCredit,
+                'description' => 'Initial ad spend credit (7 days prepaid)',
+                'stripe_charge_id' => $chargeResult['charge_id'] ?? null,
+            ]);
 
-        Log::info('AdSpendBilling: Initialized credit account', [
-            'customer_id' => $customer->id,
-            'initial_credit' => $initialCredit,
-        ]);
+            Log::info('AdSpendBilling: Initialized credit account', [
+                'customer_id' => $customer->id,
+                'initial_credit' => $initialCredit,
+            ]);
 
             return $credit;
         } finally {
@@ -123,9 +123,10 @@ class AdSpendBillingService
 
         try {
             $credit = $customer->adSpendCredit;
-            
-            if (!$credit) {
+
+            if (! $credit) {
                 $result['error'] = 'No credit account found';
+
                 return $result;
             }
 
@@ -141,12 +142,13 @@ class AdSpendBillingService
             if ($actualSpend <= 0) {
                 $result['success'] = true;
                 $result['action_taken'] = 'No spend to bill';
+
                 return $result;
             }
 
             // Deduct from credit balance
             if ($credit->current_balance >= $actualSpend) {
-                $credit->deduct($actualSpend, 'Daily ad spend - ' . now()->subDay()->format('Y-m-d'));
+                $credit->deduct($actualSpend, 'Daily ad spend - '.now()->subDay()->format('Y-m-d'));
                 $result['success'] = true;
                 $result['action_taken'] = 'Deducted from credit balance';
 
@@ -155,15 +157,15 @@ class AdSpendBillingService
             } else {
                 // Not enough credit, need to charge card
                 $shortfall = $actualSpend - $credit->current_balance;
-                
+
                 // Deduct whatever is available
                 if ($credit->current_balance > 0) {
-                    $credit->deduct($credit->current_balance, 'Daily ad spend (partial) - ' . now()->subDay()->format('Y-m-d'));
+                    $credit->deduct($credit->current_balance, 'Daily ad spend (partial) - '.now()->subDay()->format('Y-m-d'));
                 }
 
                 // Try to charge the shortfall plus replenishment
                 $replenishAmount = AdSpendCredit::calculateInitialCredit(
-                    $this->getAverageDailyBudget($customer), 
+                    $this->getAverageDailyBudget($customer),
                     7
                 );
                 $totalToCharge = $shortfall + $replenishAmount;
@@ -172,7 +174,7 @@ class AdSpendBillingService
 
                 if ($chargeResult['success']) {
                     $credit->addCredit($totalToCharge, 'Credit replenishment', $chargeResult['charge_id']);
-                    $credit->deduct($shortfall, 'Daily ad spend (remaining) - ' . now()->subDay()->format('Y-m-d'));
+                    $credit->deduct($shortfall, 'Daily ad spend (remaining) - '.now()->subDay()->format('Y-m-d'));
                     $credit->restoreAccount();
                     $result['success'] = true;
                     $result['action_taken'] = 'Charged card and replenished credit';
@@ -180,7 +182,7 @@ class AdSpendBillingService
                     // Payment failed - enter grace period or escalate
                     $this->handlePaymentFailure($customer, $credit, $chargeResult['error']);
                     $result['success'] = false;
-                    $result['error'] = 'Payment failed: ' . $chargeResult['error'];
+                    $result['error'] = 'Payment failed: '.$chargeResult['error'];
                     $result['action_taken'] = 'Entered payment failure flow';
                 }
             }
@@ -193,6 +195,7 @@ class AdSpendBillingService
                 'error' => $e->getMessage(),
             ]);
             $result['error'] = $e->getMessage();
+
             return $result;
         }
     }
@@ -216,7 +219,7 @@ class AdSpendBillingService
             case 0:
                 // First failure - enter 24-hour grace period
                 $credit->enterGracePeriod(24);
-                
+
                 if ($user) {
                     Mail::to($user->email)->send(new AdSpendPaymentWarning($customer, $credit, $error));
                 }
@@ -226,7 +229,7 @@ class AdSpendBillingService
                 // Second failure - extend grace period, reduce budget
                 $credit->markPaymentFailed();
                 $this->reduceCampaignBudgets($customer, 0.5); // 50% budget
-                
+
                 if ($user) {
                     Mail::to($user->email)->queue(new AdSpendPaymentFailed($customer, $credit, $error));
                 }
@@ -236,7 +239,7 @@ class AdSpendBillingService
                 // Third+ failure - pause all campaigns
                 $credit->pauseCampaigns();
                 $this->pauseAllCampaigns($customer);
-                
+
                 if ($user) {
                     Mail::to($user->email)->queue(new AdSpendCampaignsPaused($customer, $credit));
                 }
@@ -259,7 +262,7 @@ class AdSpendBillingService
 
         // Calculate what we need to charge to get back to healthy state
         $replenishAmount = AdSpendCredit::calculateInitialCredit(
-            $this->getAverageDailyBudget($customer), 
+            $this->getAverageDailyBudget($customer),
             7
         );
 
@@ -285,7 +288,7 @@ class AdSpendBillingService
                 'customer_id' => $customer->id,
             ]);
         } else {
-            $result['error'] = 'Recovery payment failed: ' . $chargeResult['error'];
+            $result['error'] = 'Recovery payment failed: '.$chargeResult['error'];
             $result['action_taken'] = 'Recovery attempt failed';
         }
 
@@ -320,7 +323,7 @@ class AdSpendBillingService
 
             if ($chargeResult['success']) {
                 $credit->addCredit($replenishAmount, 'Auto-replenishment', $chargeResult['charge_id']);
-                
+
                 Log::info('AdSpendBilling: Auto-replenished credit', [
                     'customer_id' => $customer->id,
                     'amount' => $replenishAmount,
@@ -346,7 +349,7 @@ class AdSpendBillingService
             $user = $customer->users()->wherePivot('role', 'owner')->first()
                 ?? $customer->users()->get()->first(fn ($u) => $u->hasDefaultPaymentMethod());
 
-            if (!$user || !$user->hasDefaultPaymentMethod()) {
+            if (! $user || ! $user->hasDefaultPaymentMethod()) {
                 return [
                     'success' => false,
                     'error' => 'No payment method on file for this account',
@@ -413,23 +416,23 @@ class AdSpendBillingService
             $billableCampaigns = $customer->campaigns()
                 ->where(function ($q) {
                     $q->whereNotNull('google_ads_campaign_id')
-                      ->orWhereNotNull('facebook_ads_campaign_id')
-                      ->orWhereNotNull('microsoft_ads_campaign_id')
-                      ->orWhereNotNull('linkedin_campaign_id');
+                        ->orWhereNotNull('facebook_ads_campaign_id')
+                        ->orWhereNotNull('microsoft_ads_campaign_id')
+                        ->orWhereNotNull('linkedin_campaign_id');
                 })
                 ->get();
 
             foreach ($billableCampaigns as $campaign) {
-                if (!empty($campaign->google_ads_campaign_id)) {
+                if (! empty($campaign->google_ads_campaign_id)) {
                     $totalSpend += $this->getGoogleAdsSpend($customer, $campaign);
                 }
-                if (!empty($campaign->facebook_ads_campaign_id)) {
+                if (! empty($campaign->facebook_ads_campaign_id)) {
                     $totalSpend += $this->getFacebookAdsSpend($customer, $campaign);
                 }
-                if (!empty($campaign->microsoft_ads_campaign_id)) {
+                if (! empty($campaign->microsoft_ads_campaign_id)) {
                     $totalSpend += $this->getMicrosoftAdsSpend($customer, $campaign);
                 }
-                if (!empty($campaign->linkedin_campaign_id)) {
+                if (! empty($campaign->linkedin_campaign_id)) {
                     $totalSpend += $this->getLinkedInAdsSpend($customer, $campaign);
                 }
             }
@@ -460,6 +463,7 @@ class AdSpendBillingService
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
+
             return 0;
         }
     }
@@ -473,38 +477,38 @@ class AdSpendBillingService
         if (empty($customer->facebook_ads_account_id)) {
             return 0;
         }
-        
+
         // Check if campaign has Facebook campaign ID
         if (empty($campaign->facebook_ads_campaign_id)) {
             return 0;
         }
-        
+
         try {
             $insightService = new \App\Services\FacebookAds\InsightService($customer);
-            
+
             // Get yesterday's spend
             $yesterday = now()->subDay()->format('Y-m-d');
-            
+
             $insights = $insightService->getCampaignInsights(
                 $campaign->facebook_ads_campaign_id,
                 $yesterday,
                 $yesterday,
                 ['spend']
             );
-            
-            if (!empty($insights) && isset($insights[0]['spend'])) {
+
+            if (! empty($insights) && isset($insights[0]['spend'])) {
                 $spend = (float) $insights[0]['spend'];
-                
+
                 Log::info('AdSpendBilling: Retrieved Facebook Ads spend', [
                     'campaign_id' => $campaign->id,
                     'facebook_campaign_id' => $campaign->facebook_ads_campaign_id,
                     'date' => $yesterday,
                     'spend' => $spend,
                 ]);
-                
+
                 return $spend;
             }
-            
+
             return 0;
         } catch (\Exception $e) {
             Log::warning('AdSpendBilling: Failed to get Facebook Ads spend', [
@@ -512,6 +516,7 @@ class AdSpendBillingService
                 'facebook_campaign_id' => $campaign->facebook_ads_campaign_id,
                 'error' => $e->getMessage(),
             ]);
+
             return 0;
         }
     }
@@ -537,6 +542,7 @@ class AdSpendBillingService
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
+
             return 0;
         }
     }
@@ -562,6 +568,7 @@ class AdSpendBillingService
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
+
             return 0;
         }
     }
@@ -587,7 +594,7 @@ class AdSpendBillingService
 
         foreach ($campaigns as $campaign) {
             try {
-                if (!$campaign->google_ads_campaign_id && !$campaign->facebook_ads_campaign_id) {
+                if (! $campaign->google_ads_campaign_id && ! $campaign->facebook_ads_campaign_id) {
                     continue;
                 }
                 $newBudget = round(($campaign->daily_budget ?? 0) * $multiplier, 2);
@@ -613,29 +620,29 @@ class AdSpendBillingService
         foreach ($campaigns as $campaign) {
             try {
                 // Pause Google Ads campaign
-                if (!empty($campaign->google_ads_campaign_id) && !empty($customer->google_ads_customer_id)) {
+                if (! empty($campaign->google_ads_campaign_id) && ! empty($customer->google_ads_customer_id)) {
                     $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
                     $resourceName = $campaign->googleAdsResourceName();
                     $updateStatusService->pause($resourceName);
                 }
-                
+
                 // Pause Facebook Ads campaign
-                if (!empty($campaign->facebook_ads_campaign_id)) {
+                if (! empty($campaign->facebook_ads_campaign_id)) {
                     $this->pauseFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
                 }
 
                 // Pause Microsoft Ads campaign
-                if (!empty($campaign->microsoft_ads_campaign_id) && !empty($customer->microsoft_ads_account_id)) {
+                if (! empty($campaign->microsoft_ads_campaign_id) && ! empty($customer->microsoft_ads_account_id)) {
                     try {
-                        $msService = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
-                        $msService->updateCampaignStatus($campaign->microsoft_ads_campaign_id, 'Paused');
-                    } catch (\Exception $e) {
+                        $msService = new \App\Services\MicrosoftAds\CampaignService($customer);
+                        $msService->updateStatus($campaign->microsoft_ads_campaign_id, 'Paused');
+                    } catch (\Throwable $e) {
                         Log::warning('AdSpendBilling: Failed to pause Microsoft campaign', ['error' => $e->getMessage()]);
                     }
                 }
 
                 // Pause LinkedIn Ads campaign
-                if (!empty($campaign->linkedin_campaign_id) && !empty($customer->linkedin_ads_account_id)) {
+                if (! empty($campaign->linkedin_campaign_id) && ! empty($customer->linkedin_ads_account_id)) {
                     try {
                         $liService = new \App\Services\LinkedInAds\CampaignService($customer);
                         $liService->updateCampaignStatus($campaign->linkedin_campaign_id, 'PAUSED');
@@ -643,7 +650,7 @@ class AdSpendBillingService
                         Log::warning('AdSpendBilling: Failed to pause LinkedIn campaign', ['error' => $e->getMessage()]);
                     }
                 }
-                
+
                 // Mark as paused in our database
                 $campaign->update([
                     'status' => 'paused',
@@ -678,29 +685,29 @@ class AdSpendBillingService
         foreach ($campaigns as $campaign) {
             try {
                 // Resume Google Ads campaign
-                if (!empty($campaign->google_ads_campaign_id) && !empty($customer->google_ads_customer_id)) {
+                if (! empty($campaign->google_ads_campaign_id) && ! empty($customer->google_ads_customer_id)) {
                     $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
                     $resourceName = $campaign->googleAdsResourceName();
                     $updateStatusService->enable($resourceName);
                 }
-                
+
                 // Resume Facebook Ads campaign
-                if (!empty($campaign->facebook_ads_campaign_id)) {
+                if (! empty($campaign->facebook_ads_campaign_id)) {
                     $this->resumeFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
                 }
 
                 // Resume Microsoft Ads campaign
-                if (!empty($campaign->microsoft_ads_campaign_id) && !empty($customer->microsoft_ads_account_id)) {
+                if (! empty($campaign->microsoft_ads_campaign_id) && ! empty($customer->microsoft_ads_account_id)) {
                     try {
-                        $msService = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
-                        $msService->updateCampaignStatus($campaign->microsoft_ads_campaign_id, 'Active');
-                    } catch (\Exception $e) {
+                        $msService = new \App\Services\MicrosoftAds\CampaignService($customer);
+                        $msService->updateStatus($campaign->microsoft_ads_campaign_id, 'Active');
+                    } catch (\Throwable $e) {
                         Log::warning('AdSpendBilling: Failed to resume Microsoft campaign', ['error' => $e->getMessage()]);
                     }
                 }
 
                 // Resume LinkedIn Ads campaign
-                if (!empty($campaign->linkedin_campaign_id) && !empty($customer->linkedin_ads_account_id)) {
+                if (! empty($campaign->linkedin_campaign_id) && ! empty($customer->linkedin_ads_account_id)) {
                     try {
                         $liService = new \App\Services\LinkedInAds\CampaignService($customer);
                         $liService->updateCampaignStatus($campaign->linkedin_campaign_id, 'ACTIVE');
@@ -708,7 +715,7 @@ class AdSpendBillingService
                         Log::warning('AdSpendBilling: Failed to resume LinkedIn campaign', ['error' => $e->getMessage()]);
                     }
                 }
-                
+
                 $campaign->update([
                     'status' => 'active',
                     'paused_reason' => null,
@@ -728,7 +735,7 @@ class AdSpendBillingService
             }
         }
     }
-    
+
     /**
      * Resume payment-paused campaigns and restore their budgets to 100%.
      *
@@ -753,11 +760,11 @@ class AdSpendBillingService
         if (empty($customer->facebook_ads_account_id)) {
             return;
         }
-        
+
         $campaignService = new \App\Services\FacebookAds\CampaignService($customer);
         $campaignService->updateCampaign($campaignId, ['status' => 'PAUSED']);
     }
-    
+
     /**
      * Resume a Facebook Ads campaign.
      */
@@ -766,7 +773,7 @@ class AdSpendBillingService
         if (empty($customer->facebook_ads_account_id)) {
             return;
         }
-        
+
         $campaignService = new \App\Services\FacebookAds\CampaignService($customer);
         $campaignService->updateCampaign($campaignId, ['status' => 'ACTIVE']);
     }
@@ -774,11 +781,11 @@ class AdSpendBillingService
     /**
      * Add credit to a customer's account (manual top-up).
      */
-    public function addCredit(Customer $customer, float $amount, string $description = null): array
+    public function addCredit(Customer $customer, float $amount, ?string $description = null): array
     {
         $credit = $customer->adSpendCredit;
-        
-        if (!$credit) {
+
+        if (! $credit) {
             return [
                 'success' => false,
                 'error' => 'No credit account found',
@@ -789,7 +796,7 @@ class AdSpendBillingService
 
         if ($chargeResult['success']) {
             $credit->addCredit($amount, $description ?? 'Manual credit top-up', $chargeResult['charge_id']);
-            
+
             return [
                 'success' => true,
                 'new_balance' => $credit->current_balance,

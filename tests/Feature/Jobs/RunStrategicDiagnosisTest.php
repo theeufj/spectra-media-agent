@@ -4,7 +4,6 @@ namespace Tests\Feature\Jobs;
 
 use App\Jobs\RunStrategicDiagnosis;
 use App\Models\Campaign;
-use App\Models\Customer;
 use App\Services\Agents\CampaignDiagnosticsAgent;
 use App\Services\Agents\CampaignRemediationAgent;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
@@ -23,14 +22,14 @@ class RunStrategicDiagnosisTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_INTEGRATION_TESTS')) {
+        if (! env('RUN_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_INTEGRATION_TESTS=true to run.');
         }
     }
 
     public function test_job_can_be_dispatched(): void
     {
-        $job = new RunStrategicDiagnosis();
+        $job = new RunStrategicDiagnosis;
 
         $this->assertInstanceOf(RunStrategicDiagnosis::class, $job);
         $this->assertSame(1, $job->tries);
@@ -41,11 +40,11 @@ class RunStrategicDiagnosisTest extends TestCase
     {
         $hasCampaigns = Campaign::withDeployedPlatforms()->exists();
 
-        if (!$hasCampaigns) {
+        if (! $hasCampaigns) {
             $this->markTestSkipped('No deployed campaigns in DB.');
         }
 
-        $job = new RunStrategicDiagnosis();
+        $job = new RunStrategicDiagnosis;
         $job->handle(
             app(CampaignDiagnosticsAgent::class),
             app(CampaignRemediationAgent::class)
@@ -62,13 +61,13 @@ class RunStrategicDiagnosisTest extends TestCase
             ->whereHas('customer', fn ($q) => $q->whereNotNull('google_ads_customer_id'))
             ->first();
 
-        if (!$campaign) {
+        if (! $campaign) {
             $this->markTestSkipped('No Google Ads campaign in DB.');
         }
 
         $activityBefore = \App\Models\AgentActivity::count();
 
-        $job = new RunStrategicDiagnosis();
+        $job = new RunStrategicDiagnosis;
         $job->handle(
             app(CampaignDiagnosticsAgent::class),
             app(CampaignRemediationAgent::class)

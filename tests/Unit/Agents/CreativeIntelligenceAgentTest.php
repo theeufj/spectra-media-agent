@@ -7,7 +7,6 @@ use App\Models\Customer;
 use App\Services\Agents\CreativeIntelligenceAgent;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Mockery;
 use Tests\TestCase;
@@ -15,6 +14,7 @@ use Tests\TestCase;
 class CreativeIntelligenceAgentTest extends TestCase
 {
     protected CreativeIntelligenceAgent $agent;
+
     protected GeminiService $geminiMock;
 
     protected function setUp(): void
@@ -68,10 +68,11 @@ class CreativeIntelligenceAgentTest extends TestCase
 
         // Override the GetAdPerformanceByAsset creation inside analyze
         // Use a partial mock approach: mock the agent and override the method that creates the service
-        $this->app->bind(GetAdPerformanceByAsset::class, fn() => $assetServiceMock);
+        $this->app->bind(GetAdPerformanceByAsset::class, fn () => $assetServiceMock);
 
         // Instead, since the agent news up the service directly, use a partial mock
-        $agentPartial = new class($this->geminiMock, $assetServiceMock) extends CreativeIntelligenceAgent {
+        $agentPartial = new class($this->geminiMock, $assetServiceMock) extends CreativeIntelligenceAgent
+        {
             protected $assetServiceMock;
 
             public function __construct(GeminiService $gemini, $assetServiceMock)
@@ -91,7 +92,7 @@ class CreativeIntelligenceAgentTest extends TestCase
                     'new_variations' => [],
                 ];
 
-                if (!$campaign->google_ads_campaign_id || !$campaign->customer) {
+                if (! $campaign->google_ads_campaign_id || ! $campaign->customer) {
                     return $results;
                 }
 
@@ -159,7 +160,8 @@ class CreativeIntelligenceAgentTest extends TestCase
         $campaign->id = 3;
         $campaign->setRelation('customer', $customer);
 
-        $agentPartial = new class($this->geminiMock) extends CreativeIntelligenceAgent {
+        $agentPartial = new class($this->geminiMock) extends CreativeIntelligenceAgent
+        {
             public function analyze(Campaign $campaign): array
             {
                 $results = [
@@ -204,7 +206,8 @@ class CreativeIntelligenceAgentTest extends TestCase
         $campaign->setRelation('customer', $customer);
 
         // Mock the agent to throw during asset service creation
-        $agentPartial = new class($this->geminiMock) extends CreativeIntelligenceAgent {
+        $agentPartial = new class($this->geminiMock) extends CreativeIntelligenceAgent
+        {
             public function analyze(Campaign $campaign): array
             {
                 $results = [
@@ -216,7 +219,7 @@ class CreativeIntelligenceAgentTest extends TestCase
                     'new_variations' => [],
                 ];
 
-                if (!$campaign->google_ads_campaign_id || !$campaign->customer) {
+                if (! $campaign->google_ads_campaign_id || ! $campaign->customer) {
                     return $results;
                 }
 

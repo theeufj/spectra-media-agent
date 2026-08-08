@@ -2,22 +2,22 @@
 
 namespace App\Services\Agents;
 
-use App\Models\Customer;
+use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
-use App\Models\FacebookAdsPerformanceData;
 use App\Models\CampaignHourlyPerformance;
+use App\Models\Customer;
+use App\Models\FacebookAdsPerformanceData;
+use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\CommonServices\CustomerMatchService;
-use App\Services\FacebookAds\CustomAudienceService as FacebookCustomAudienceService;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use Illuminate\Support\Facades\Log;
 
 /**
  * AudienceIntelligenceAgent
- * 
+ *
  * Manages audience creation and optimization across platforms:
  * - Google Ads: Customer Match list creation and upload
- * - Facebook Ads: Custom Audience creation (email/phone lists, website, lookalike) 
+ * - Facebook Ads: Custom Audience creation (email/phone lists, website, lookalike)
  * - AI-powered audience segmentation recommendations
  * - Cross-platform lookalike audience suggestions
  */
@@ -51,8 +51,9 @@ class AudienceIntelligenceAgent
         $hasGoogle = (bool) $customer->google_ads_customer_id;
         $hasFacebook = (bool) $customer->facebook_ads_account_id;
 
-        if (!$hasGoogle && !$hasFacebook) {
+        if (! $hasGoogle && ! $hasFacebook) {
             $result['error'] = 'No ad platform connected';
+
             return $result;
         }
 
@@ -99,11 +100,12 @@ class AudienceIntelligenceAgent
             $userListResourceName = $customerMatchService->createUserList(
                 $customerId,
                 $listName,
-                $description ?: "Customer Match list created via Site to Spend"
+                $description ?: 'Customer Match list created via Site to Spend'
             );
 
-            if (!$userListResourceName) {
+            if (! $userListResourceName) {
                 $result['error'] = 'Failed to create user list';
+
                 return $result;
             }
 
@@ -159,7 +161,7 @@ class AudienceIntelligenceAgent
             $audience = $audienceService->createCustomerListAudience(
                 $accountId,
                 $listName,
-                $description ?: "Custom audience created via Site to Spend",
+                $description ?: 'Custom audience created via Site to Spend',
                 $emails
             );
 
@@ -306,7 +308,7 @@ PROMPT;
 
             if ($response && isset($response['text'])) {
                 $recommendations = $this->parseJson($response['text']);
-                
+
                 Log::info('AudienceIntelligenceAgent: Generated segmentation recommendations', [
                     'customer_id' => $customer->id,
                     'segments' => count($recommendations['segments'] ?? []),
@@ -332,7 +334,7 @@ PROMPT;
     public function analyzeAudiencePerformance(Customer $customer): array
     {
         $audiences = $this->getCustomerMatchAudiences($customer);
-        
+
         $analysis = [
             'audiences' => $audiences,
             'recommendations' => [],
@@ -358,7 +360,7 @@ PROMPT;
 
         // Add overall audience health summary
         $totalAudiences = count($audiences);
-        $smallAudiences = count(array_filter($analysis['recommendations'], fn($r) => str_contains($r['issue'] ?? '', 'too small')));
+        $smallAudiences = count(array_filter($analysis['recommendations'], fn ($r) => str_contains($r['issue'] ?? '', 'too small')));
         if ($totalAudiences > 0 && $smallAudiences > ($totalAudiences / 2)) {
             $analysis['recommendations'][] = [
                 'audience' => 'Overall',
@@ -381,7 +383,7 @@ PROMPT;
      */
     protected function detectAudienceSaturation(Customer $customer, array &$analysis): void
     {
-        $campaigns = $customer->campaigns()->where('status', 'active')->get();
+        $campaigns = $customer->campaigns()->where('status', CampaignStatus::Active)->get();
 
         foreach ($campaigns as $campaign) {
             // Facebook frequency check
@@ -575,20 +577,20 @@ PROMPT;
         $context .= "Website: {$customer->website}\n";
         $context .= "Type: {$customer->business_type}\n";
         $context .= "Industry: {$customer->industry}\n";
-        
+
         if ($customer->description) {
             $context .= "Description: {$customer->description}\n";
         }
 
         if ($customer->brandGuideline) {
             $bg = $customer->brandGuideline;
-            
+
             if ($bg->target_audience) {
                 $context .= "Target Audience: {$bg->target_audience}\n";
             }
-            
+
             if ($bg->unique_selling_propositions) {
-                $usps = is_array($bg->unique_selling_propositions) 
+                $usps = is_array($bg->unique_selling_propositions)
                     ? implode(', ', $bg->unique_selling_propositions)
                     : $bg->unique_selling_propositions;
                 $context .= "USPs: {$usps}\n";
@@ -614,35 +616,38 @@ PROMPT;
      */
     public function refreshFacebookAudiences(Customer $customer): array
     {
-        if (!$customer->facebook_ads_account_id) {
+        if (! $customer->facebook_ads_account_id) {
             return ['skipped' => true];
         }
 
         $results = [
-            'flagged_small'    => [],
+            'flagged_small' => [],
             'lookalikes_queued' => [],
             'frequency_expansions' => [],
-            'errors'           => [],
+            'errors' => [],
         ];
 
         $audienceService = new FacebookCustomAudienceService($customer);
-        $accountId       = $customer->facebook_ads_account_id;
+        $accountId = $customer->facebook_ads_account_id;
 
         try {
             $audiences = $audienceService->listAudiences($accountId) ?? [];
         } catch (\Exception $e) {
-            $results['errors'][] = "Could not list audiences: " . $e->getMessage();
+            $results['errors'][] = 'Could not list audiences: '.$e->getMessage();
+
             return $results;
         }
 
         foreach ($audiences as $audience) {
-            $audienceId   = $audience['id'] ?? null;
-            $count        = (int) ($audience['approximate_count'] ?? 0);
-            $subtype      = $audience['subtype'] ?? '';
-            $createdTime  = $audience['time_created'] ?? null;
-            $name         = $audience['name'] ?? $audienceId;
+            $audienceId = $audience['id'] ?? null;
+            $count = (int) ($audience['approximate_count'] ?? 0);
+            $subtype = $audience['subtype'] ?? '';
+            $createdTime = $audience['time_created'] ?? null;
+            $name = $audience['name'] ?? $audienceId;
 
-            if (!$audienceId) continue;
+            if (! $audienceId) {
+                continue;
+            }
 
             // Flag under-sized audiences
             if ($count < 1000 && $count > 0) {
@@ -659,22 +664,22 @@ PROMPT;
                         $source = collect($audiences)->firstWhere('name', $sourceName);
 
                         if ($source && isset($source['id'])) {
-                            $newName = $name . ' (Refreshed ' . now()->format('M Y') . ')';
+                            $newName = $name.' (Refreshed '.now()->format('M Y').')';
                             $audienceService->createLookalikeAudience($accountId, $source['id'], $newName, 'US', 0.01);
                             $results['lookalikes_queued'][] = [
-                                'original_id'  => $audienceId,
+                                'original_id' => $audienceId,
                                 'original_name' => $name,
-                                'age_days'     => $ageInDays,
+                                'age_days' => $ageInDays,
                                 'refreshed_as' => $newName,
                             ];
-                            Log::info("AudienceIntelligenceAgent: Refreshed lookalike audience", [
+                            Log::info('AudienceIntelligenceAgent: Refreshed lookalike audience', [
                                 'customer_id' => $customer->id,
-                                'audience'    => $name,
-                                'age_days'    => $ageInDays,
+                                'audience' => $name,
+                                'age_days' => $ageInDays,
                             ]);
                         }
                     } catch (\Exception $e) {
-                        $results['errors'][] = "Lookalike refresh failed for {$name}: " . $e->getMessage();
+                        $results['errors'][] = "Lookalike refresh failed for {$name}: ".$e->getMessage();
                     }
                 }
             }
@@ -682,7 +687,7 @@ PROMPT;
 
         // Frequency fatigue expansion: find campaigns with frequency >3.0 → create broader 2–5% lookalike
         $campaigns = $customer->campaigns()
-            ->where('status', 'active')
+            ->where('status', CampaignStatus::Active)
             ->whereNotNull('facebook_ads_campaign_id')
             ->get();
 
@@ -692,7 +697,7 @@ PROMPT;
                 ->whereNotNull('frequency')
                 ->avg('frequency');
 
-            if (!$avgFrequency || $avgFrequency < 3.0) {
+            if (! $avgFrequency || $avgFrequency < 3.0) {
                 continue;
             }
 
@@ -702,37 +707,37 @@ PROMPT;
                 ->sortByDesc('approximate_count')
                 ->first();
 
-            if (!$seedAudience) {
+            if (! $seedAudience) {
                 continue;
             }
 
             try {
-                $broadName = "Broad Lookalike 2-5% — {$campaign->name} (" . now()->format('M Y') . ")";
+                $broadName = "Broad Lookalike 2-5% — {$campaign->name} (".now()->format('M Y').')';
                 $audienceService->createLookalikeAudience($accountId, $seedAudience['id'], $broadName, 'US', 0.05);
 
                 $results['frequency_expansions'][] = [
-                    'campaign_id'      => $campaign->id,
-                    'campaign_name'    => $campaign->name,
-                    'avg_frequency'    => round($avgFrequency, 1),
-                    'new_audience'     => $broadName,
+                    'campaign_id' => $campaign->id,
+                    'campaign_name' => $campaign->name,
+                    'avg_frequency' => round($avgFrequency, 1),
+                    'new_audience' => $broadName,
                 ];
 
-                Log::info("AudienceIntelligenceAgent: Created broad lookalike for frequency-fatigued campaign", [
-                    'campaign_id'  => $campaign->id,
-                    'frequency'    => round($avgFrequency, 1),
+                Log::info('AudienceIntelligenceAgent: Created broad lookalike for frequency-fatigued campaign', [
+                    'campaign_id' => $campaign->id,
+                    'frequency' => round($avgFrequency, 1),
                 ]);
             } catch (\Exception $e) {
-                $results['errors'][] = "Frequency expansion failed for campaign {$campaign->id}: " . $e->getMessage();
+                $results['errors'][] = "Frequency expansion failed for campaign {$campaign->id}: ".$e->getMessage();
             }
         }
 
-        if (!empty($results['lookalikes_queued']) || !empty($results['frequency_expansions'])) {
+        if (! empty($results['lookalikes_queued']) || ! empty($results['frequency_expansions'])) {
             AgentActivity::create([
                 'campaign_id' => null,
-                'agent'       => 'AudienceIntelligenceAgent',
-                'action'      => 'facebook_audience_refresh',
-                'details'     => $results,
-                'status'      => 'completed',
+                'agent' => 'AudienceIntelligenceAgent',
+                'action' => 'facebook_audience_refresh',
+                'details' => $results,
+                'status' => 'completed',
             ]);
         }
 

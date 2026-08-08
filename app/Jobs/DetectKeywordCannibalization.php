@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Notifications\CriticalAgentAlert;
@@ -21,21 +22,22 @@ use Illuminate\Support\Facades\Log;
  */
 class DetectKeywordCannibalization implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 600;
 
     public function handle(): void
     {
-        Log::info("DetectKeywordCannibalization: Starting weekly cannibalization scan");
+        Log::info('DetectKeywordCannibalization: Starting weekly cannibalization scan');
         $runStart = $this->startRun();
 
         $found = 0;
         $errors = 0;
 
         $googleCustomers = Customer::whereNotNull('google_ads_customer_id')
-            ->whereHas('campaigns', fn($q) => $q->whereNotNull('google_ads_campaign_id')->where('status', 'active'))
+            ->whereHas('campaigns', fn ($q) => $q->whereNotNull('google_ads_campaign_id')->where('status', CampaignStatus::Active))
             ->get();
 
         foreach ($googleCustomers as $customer) {
@@ -43,12 +45,12 @@ class DetectKeywordCannibalization implements ShouldQueue
                 $found += $this->scanCustomer($customer);
             } catch (\Exception $e) {
                 $errors++;
-                Log::error("DetectKeywordCannibalization: Failed for customer {$customer->id}: " . $e->getMessage());
+                Log::error("DetectKeywordCannibalization: Failed for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
         $microsoftCustomers = Customer::whereNotNull('microsoft_ads_customer_id')
-            ->whereHas('campaigns', fn($q) => $q->whereNotNull('microsoft_ads_campaign_id')->where('status', 'active'))
+            ->whereHas('campaigns', fn ($q) => $q->whereNotNull('microsoft_ads_campaign_id')->where('status', CampaignStatus::Active))
             ->whereNotIn('id', $googleCustomers->pluck('id'))
             ->get();
 
@@ -57,43 +59,45 @@ class DetectKeywordCannibalization implements ShouldQueue
                 $found += $this->scanMicrosoftCustomer($customer);
             } catch (\Exception $e) {
                 $errors++;
-                Log::error("DetectKeywordCannibalization: Failed (Microsoft) for customer {$customer->id}: " . $e->getMessage());
+                Log::error("DetectKeywordCannibalization: Failed (Microsoft) for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
-        Log::info("DetectKeywordCannibalization: Scan complete");
+        Log::info('DetectKeywordCannibalization: Scan complete');
 
-        $this->finishRun($runStart, actions: $found, errors: $errors, scope: ($googleCustomers->count() + $microsoftCustomers->count()) . ' customers');
+        $this->finishRun($runStart, actions: $found, errors: $errors, scope: ($googleCustomers->count() + $microsoftCustomers->count()).' customers');
     }
 
     private function scanCustomer(Customer $customer): int
     {
         $customerId = $customer->cleanGoogleCustomerId();
 
-        $service = new class($customer) extends BaseGoogleAdsService {
+        $service = new class($customer) extends BaseGoogleAdsService
+        {
             public function fetchAllKeywords(string $customerId): array
             {
                 $this->ensureClient();
-                $query = "SELECT campaign.resource_name, campaign.name, "
-                       . "ad_group.resource_name, ad_group.name, "
-                       . "ad_group_criterion.keyword.text "
-                       . "FROM ad_group_criterion "
-                       . "WHERE ad_group_criterion.type = 'KEYWORD' "
-                       . "AND ad_group_criterion.status = 'ENABLED' "
-                       . "AND ad_group_criterion.negative = false "
-                       . "AND campaign.status = 'ENABLED' "
-                       . "AND ad_group.status = 'ENABLED'";
+                $query = 'SELECT campaign.resource_name, campaign.name, '
+                       .'ad_group.resource_name, ad_group.name, '
+                       .'ad_group_criterion.keyword.text '
+                       .'FROM ad_group_criterion '
+                       ."WHERE ad_group_criterion.type = 'KEYWORD' "
+                       ."AND ad_group_criterion.status = 'ENABLED' "
+                       .'AND ad_group_criterion.negative = false '
+                       ."AND campaign.status = 'ENABLED' "
+                       ."AND ad_group.status = 'ENABLED'";
 
                 $results = [];
                 foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
                     $results[] = [
                         'campaign_resource' => $row->getCampaign()->getResourceName(),
-                        'campaign_name'     => $row->getCampaign()->getName(),
+                        'campaign_name' => $row->getCampaign()->getName(),
                         'ad_group_resource' => $row->getAdGroup()->getResourceName(),
-                        'ad_group_name'     => $row->getAdGroup()->getName(),
-                        'keyword'           => strtolower(trim($row->getAdGroupCriterion()->getKeyword()->getText())),
+                        'ad_group_name' => $row->getAdGroup()->getName(),
+                        'keyword' => strtolower(trim($row->getAdGroupCriterion()->getKeyword()->getText())),
                     ];
                 }
+
                 return $results;
             }
         };
@@ -122,10 +126,10 @@ class DetectKeywordCannibalization implements ShouldQueue
 
             if (count($adGroups) >= 2) {
                 $cannibalized[] = [
-                    'keyword'       => $text,
+                    'keyword' => $text,
                     'ad_group_count' => count($adGroups),
                     'campaign_count' => count($campaigns),
-                    'locations'     => array_map(fn($e) => $e['campaign_name'] . ' > ' . $e['ad_group_name'], $entries),
+                    'locations' => array_map(fn ($e) => $e['campaign_name'].' > '.$e['ad_group_name'], $entries),
                 ];
             }
         }
@@ -161,7 +165,7 @@ class DetectKeywordCannibalization implements ShouldQueue
             "{$count} keyword(s) are appearing in multiple ad groups, causing your campaigns to compete against themselves.",
             [
                 'issues' => array_map(
-                    fn($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
+                    fn ($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
                     array_slice($cannibalized, 0, 5)
                 ),
                 'action_required' => 'Consolidate duplicate keywords into single ad groups and use negatives to prevent overlap.',
@@ -178,27 +182,33 @@ class DetectKeywordCannibalization implements ShouldQueue
         $service = new MicrosoftAdGroupService($customer);
         $keywords = [];
 
-        foreach ($customer->campaigns()->whereNotNull('microsoft_ads_campaign_id')->where('status', 'active')->get() as $campaign) {
+        foreach ($customer->campaigns()->whereNotNull('microsoft_ads_campaign_id')->where('status', CampaignStatus::Active)->get() as $campaign) {
             $adGroups = $service->getAdGroupsByCampaignId((string) $campaign->microsoft_ads_campaign_id);
 
             foreach ($adGroups as $adGroup) {
                 $adGroupId = (string) ($adGroup['Id'] ?? '');
-                if (!$adGroupId) continue;
+                if (! $adGroupId) {
+                    continue;
+                }
 
                 foreach ($service->getKeywordsByAdGroupId($adGroupId) as $kw) {
-                    if (($kw['Status'] ?? '') !== 'Active') continue;
+                    if (($kw['Status'] ?? '') !== 'Active') {
+                        continue;
+                    }
                     $keywords[] = [
                         'campaign_resource' => (string) $campaign->microsoft_ads_campaign_id,
-                        'campaign_name'     => $campaign->name,
+                        'campaign_name' => $campaign->name,
                         'ad_group_resource' => $adGroupId,
-                        'ad_group_name'     => $adGroup['Name'] ?? $adGroupId,
-                        'keyword'           => strtolower(trim($kw['Text'] ?? '')),
+                        'ad_group_name' => $adGroup['Name'] ?? $adGroupId,
+                        'keyword' => strtolower(trim($kw['Text'] ?? '')),
                     ];
                 }
             }
         }
 
-        if (empty($keywords)) return 0;
+        if (empty($keywords)) {
+            return 0;
+        }
 
         $grouped = [];
         foreach ($keywords as $kw) {
@@ -211,15 +221,17 @@ class DetectKeywordCannibalization implements ShouldQueue
             if (count($adGroups) >= 2) {
                 $campaigns = array_unique(array_column($entries, 'campaign_resource'));
                 $cannibalized[] = [
-                    'keyword'        => $text,
+                    'keyword' => $text,
                     'ad_group_count' => count($adGroups),
                     'campaign_count' => count($campaigns),
-                    'locations'      => array_map(fn($e) => $e['campaign_name'] . ' > ' . $e['ad_group_name'], $entries),
+                    'locations' => array_map(fn ($e) => $e['campaign_name'].' > '.$e['ad_group_name'], $entries),
                 ];
             }
         }
 
-        if (empty($cannibalized)) return 0;
+        if (empty($cannibalized)) {
+            return 0;
+        }
 
         $count = count($cannibalized);
         Log::warning("DetectKeywordCannibalization (Microsoft): Found {$count} cannibalized keywords for customer {$customer->id}");
@@ -231,14 +243,16 @@ class DetectKeywordCannibalization implements ShouldQueue
             $customer->id,
             null,
             [
-                'platform'       => 'microsoft_ads',
-                'cannibalized'   => array_slice($cannibalized, 0, 20),
+                'platform' => 'microsoft_ads',
+                'cannibalized' => array_slice($cannibalized, 0, 20),
                 'recommendation' => 'Consolidate duplicate keywords into a single ad group or add negatives to prevent intra-account competition.',
             ]
         );
 
         $cacheKey = "cannibalization_alert_microsoft:{$customer->id}";
-        if (Cache::has($cacheKey)) return $count;
+        if (Cache::has($cacheKey)) {
+            return $count;
+        }
         Cache::put($cacheKey, true, now()->addHours(168));
 
         CriticalAgentAlert::deliver(
@@ -246,8 +260,8 @@ class DetectKeywordCannibalization implements ShouldQueue
             'Keyword Cannibalization Detected (Microsoft Ads)',
             "{$count} keyword(s) are appearing in multiple ad groups in Microsoft Ads, causing your campaigns to compete against themselves.",
             [
-                'issues'          => array_map(
-                    fn($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
+                'issues' => array_map(
+                    fn ($c) => "\"{$c['keyword']}\" found in {$c['ad_group_count']} ad groups",
                     array_slice($cannibalized, 0, 5)
                 ),
                 'action_required' => 'Consolidate duplicate keywords into single ad groups and use negatives to prevent overlap.',
@@ -261,7 +275,7 @@ class DetectKeywordCannibalization implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('DetectKeywordCannibalization failed: ' . $exception->getMessage());
+        Log::error('DetectKeywordCannibalization failed: '.$exception->getMessage());
         $this->recordRunFailure($exception);
     }
 }

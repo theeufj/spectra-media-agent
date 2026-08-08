@@ -17,14 +17,16 @@ class MicrosoftAdsCampaignIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected array $createdCampaignIds = [];
-    protected array $createdAdGroupIds  = [];
+
+    protected array $createdAdGroupIds = [];
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_MICROSOFT_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_MICROSOFT_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_MICROSOFT_ADS_INTEGRATION_TESTS=true to run.');
         }
 
@@ -40,10 +42,10 @@ class MicrosoftAdsCampaignIntegrationTest extends TestCase
     public function test_creates_search_campaign(): void
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->createSearchCampaign([
-            'name'         => 'PHPUnit Search Test ' . now()->timestamp,
+        $result = $service->createSearchCampaign([
+            'name' => 'PHPUnit Search Test '.now()->timestamp,
             'daily_budget' => 50.00,
-            'status'       => 'Paused',
+            'status' => 'Paused',
         ]);
 
         $this->assertNotNull($result);
@@ -59,7 +61,7 @@ class MicrosoftAdsCampaignIntegrationTest extends TestCase
         $campaignId = $this->createTestCampaign();
 
         $service = new CampaignService($this->customer);
-        $result  = $service->getCampaign($campaignId);
+        $result = $service->getCampaign($campaignId);
 
         $this->assertNotNull($result);
     }
@@ -86,18 +88,18 @@ class MicrosoftAdsCampaignIntegrationTest extends TestCase
 
     public function test_creates_ad_group_inside_campaign(): void
     {
-        if (!class_exists(AdGroupService::class)) {
+        if (! class_exists(AdGroupService::class)) {
             $this->markTestSkipped('AdGroupService not found.');
         }
 
         $campaignId = $this->createTestCampaign();
 
         $service = new AdGroupService($this->customer);
-        $result  = $service->createAdGroup([
+        $result = $service->createAdGroup([
             'campaign_id' => $campaignId,
-            'name'        => 'PHPUnit Ad Group ' . now()->timestamp,
-            'cpc_bid'     => 1.50,
-            'status'      => 'Paused',
+            'name' => 'PHPUnit Ad Group '.now()->timestamp,
+            'cpc_bid' => 1.50,
+            'status' => 'Paused',
         ]);
 
         $this->assertNotNull($result);
@@ -112,10 +114,10 @@ class MicrosoftAdsCampaignIntegrationTest extends TestCase
     private function createTestCampaign(): string
     {
         $service = new CampaignService($this->customer);
-        $result  = $service->createSearchCampaign([
-            'name'         => 'PHPUnit Test ' . now()->timestamp . '-' . rand(100, 999),
+        $result = $service->createSearchCampaign([
+            'name' => 'PHPUnit Test '.now()->timestamp.'-'.rand(100, 999),
             'daily_budget' => 50.00,
-            'status'       => 'Paused',
+            'status' => 'Paused',
         ]);
 
         $id = is_array($result['CampaignIds']) ? $result['CampaignIds'][0] : $result['CampaignIds'];

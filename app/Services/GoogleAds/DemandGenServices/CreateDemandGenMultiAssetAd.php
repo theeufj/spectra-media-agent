@@ -2,17 +2,17 @@
 
 namespace App\Services\GoogleAds\DemandGenServices;
 
+use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\Ad;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Common\DemandGenMultiAssetAdInfo;
-use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
 use Google\Ads\GoogleAds\V22\Common\AdImageAsset;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
+use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
+use Google\Ads\GoogleAds\V22\Common\DemandGenMultiAssetAdInfo;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Resources\Ad;
+use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
 
 class CreateDemandGenMultiAssetAd extends BaseGoogleAdsService
 {
@@ -27,17 +27,17 @@ class CreateDemandGenMultiAssetAd extends BaseGoogleAdsService
      * This ad format supports images, headlines, descriptions, and optional logos,
      * and runs across YouTube, Gmail, and Discover feeds.
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param string $adGroupResourceName The resource name of the parent ad group.
-     * @param array $adData Ad details:
-     *   - finalUrls: array of landing page URLs
-     *   - headlines: array of headline strings (min 1, max 5, 40 chars)
-     *   - descriptions: array of description strings (min 1, max 5, 90 chars)
-     *   - businessName: string
-     *   - imageAssets: array of image asset resource names (landscape marketing)
-     *   - squareImageAssets: array of square image asset resource names (optional)
-     *   - logoAssets: array of logo asset resource names (optional)
-     *   - callToActionText: string (optional, e.g. 'Learn More')
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  string  $adGroupResourceName  The resource name of the parent ad group.
+     * @param  array  $adData  Ad details:
+     *                         - finalUrls: array of landing page URLs
+     *                         - headlines: array of headline strings (min 1, max 5, 40 chars)
+     *                         - descriptions: array of description strings (min 1, max 5, 90 chars)
+     *                         - businessName: string
+     *                         - imageAssets: array of image asset resource names (landscape marketing)
+     *                         - squareImageAssets: array of square image asset resource names (optional)
+     *                         - logoAssets: array of logo asset resource names (optional)
+     *                         - callToActionText: string (optional, e.g. 'Learn More')
      * @return string|null The resource name of the created ad, or null on failure.
      */
     public function __invoke(string $customerId, string $adGroupResourceName, array $adData): ?string
@@ -98,7 +98,7 @@ class CreateDemandGenMultiAssetAd extends BaseGoogleAdsService
             'ad' => $ad,
         ]);
 
-        $adGroupAdOperation = new AdGroupAdOperation();
+        $adGroupAdOperation = new AdGroupAdOperation;
         $adGroupAdOperation->setCreate($adGroupAd);
 
         try {
@@ -109,10 +109,12 @@ class CreateDemandGenMultiAssetAd extends BaseGoogleAdsService
             ]);
             $response = $adGroupAdServiceClient->mutateAdGroupAds($request);
             $newAdGroupAdResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Demand Gen Multi-Asset Ad: " . $newAdGroupAdResourceName);
+            $this->logInfo('Successfully created Demand Gen Multi-Asset Ad: '.$newAdGroupAdResourceName);
+
             return $newAdGroupAdResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Demand Gen Multi-Asset Ad for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Demand Gen Multi-Asset Ad for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

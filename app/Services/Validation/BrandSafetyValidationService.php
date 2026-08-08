@@ -21,16 +21,18 @@ class BrandSafetyValidationService
 
             $response = $this->geminiService->generateContent(config('ai.models.default'), $prompt);
 
-            if (is_null($response) || !isset($response['text'])) {
-                Log::error("Brand safety validation failed: LLM response was null or missing.");
+            if (is_null($response) || ! isset($response['text'])) {
+                Log::error('Brand safety validation failed: LLM response was null or missing.');
+
                 return false; // Fail safe
             }
 
             return strtolower(trim($response['text'])) === 'true';
         } catch (\Exception $e) {
-            Log::error("Error during brand safety validation: " . $e->getMessage(), [
+            Log::error('Error during brand safety validation: '.$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return false; // Fail safe
         }
     }

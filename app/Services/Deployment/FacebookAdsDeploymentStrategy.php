@@ -5,20 +5,23 @@ namespace App\Services\Deployment;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
-use App\Services\FacebookAds\CampaignService;
-use App\Services\FacebookAds\AdSetService;
-use App\Services\FacebookAds\CreativeService;
 use App\Services\FacebookAds\AdService;
+use App\Services\FacebookAds\AdSetService;
+use App\Services\FacebookAds\CampaignService;
+use App\Services\FacebookAds\CreativeService;
 use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 {
     protected Customer $customer;
+
     protected CampaignService $campaignService;
+
     protected AdSetService $adSetService;
+
     protected CreativeService $creativeService;
+
     protected AdService $adService;
 
     public function __construct(Customer $customer)
@@ -36,12 +39,12 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         try {
             $accountId = $this->customer->facebook_ads_account_id;
-            
-            if (!$accountId) {
+
+            if (! $accountId) {
                 throw new \Exception("No Facebook Ads account linked for customer {$this->customer->id}");
             }
 
-            if (!$this->customer->facebook_page_id) {
+            if (! $this->customer->facebook_page_id) {
                 throw new \Exception("No Facebook Page linked for customer {$this->customer->id}. Please connect a Facebook Page first.");
             }
 
@@ -49,21 +52,23 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
             $accountId = str_replace('act_', '', $accountId);
 
             // Deploy based on campaign type
-            $result = match($strategy->campaign_type) {
+            $result = match ($strategy->campaign_type) {
                 'display' => $this->deployDisplayCampaign($accountId, $campaign, $strategy),
                 'video' => $this->deployVideoCampaign($accountId, $campaign, $strategy),
                 default => throw new \Exception("Campaign type '{$strategy->campaign_type}' not supported for Facebook Ads"),
             };
 
-            if (!$result) {
+            if (! $result) {
                 throw new \Exception('Failed to deploy Facebook Ads campaign');
             }
 
             Log::info("Successfully deployed to Facebook Ads for Strategy ID: {$strategy->id}");
+
             return true;
 
         } catch (\Exception $e) {
-            Log::error("Facebook Ads deployment failed for Strategy ID {$strategy->id}: " . $e->getMessage());
+            Log::error("Facebook Ads deployment failed for Strategy ID {$strategy->id}: ".$e->getMessage());
+
             return false;
         }
     }
@@ -73,18 +78,18 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         // 1. Create Facebook Campaign
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
-            $campaign->name . ' - Display',
+            $campaign->name.' - Display',
             'LINK_CLICKS', // Default objective for display
-            (int)($strategy->budget * 100) // Convert to cents
+            (int) ($strategy->budget * 100) // Convert to cents
         );
 
-        if (!$fbCampaign || !isset($fbCampaign['id'])) {
+        if (! $fbCampaign || ! isset($fbCampaign['id'])) {
             throw new \Exception('Failed to create Facebook campaign');
         }
 
         $campaign->facebook_ads_campaign_id = $fbCampaign['id'];
         $campaign->save();
-        
+
         $strategy->facebook_campaign_id = $fbCampaign['id'];
         $strategy->save();
 
@@ -92,17 +97,17 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         // 2. Create Ad Set with targeting
         $targeting = $this->buildTargeting($strategy);
-        
+
         $fbAdSet = $this->adSetService->createAdSet(
             $accountId,
             $fbCampaign['id'],
-            $campaign->name . ' - Ad Set',
+            $campaign->name.' - Ad Set',
             $targeting,
             'LINK_CLICKS',
             'PAUSED'
         );
 
-        if (!$fbAdSet || !isset($fbAdSet['id'])) {
+        if (! $fbAdSet || ! isset($fbAdSet['id'])) {
             throw new \Exception('Failed to create Facebook ad set');
         }
 
@@ -115,7 +120,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
         $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
 
-        if ($imageCollaterals->isEmpty() || !$adCopy) {
+        if ($imageCollaterals->isEmpty() || ! $adCopy) {
             throw new \Exception('No images or ad copy available for Facebook ad');
         }
 
@@ -125,14 +130,14 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         $fbCreative = $this->creativeService->createImageCreative(
             $accountId,
-            $campaign->name . ' - Creative',
+            $campaign->name.' - Creative',
             $imageUrl,
             $adCopy->headlines[0] ?? 'Default Headline',
             $adCopy->descriptions[0] ?? 'Default Description',
             'LEARN_MORE'
         );
 
-        if (!$fbCreative || !isset($fbCreative['id'])) {
+        if (! $fbCreative || ! isset($fbCreative['id'])) {
             throw new \Exception('Failed to create Facebook ad creative');
         }
 
@@ -145,11 +150,11 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $fbAd = $this->adService->createAd(
             $accountId,
             $fbAdSet['id'],
-            $campaign->name . ' - Ad',
+            $campaign->name.' - Ad',
             $fbCreative['id']
         );
 
-        if (!$fbAd || !isset($fbAd['id'])) {
+        if (! $fbAd || ! isset($fbAd['id'])) {
             throw new \Exception('Failed to create Facebook ad');
         }
 
@@ -167,34 +172,34 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         // 1. Create Facebook Campaign
         $fbCampaign = $this->campaignService->createCampaign(
             $accountId,
-            $campaign->name . ' - Video',
+            $campaign->name.' - Video',
             'VIDEO_VIEWS',
-            (int)($strategy->budget * 100)
+            (int) ($strategy->budget * 100)
         );
 
-        if (!$fbCampaign || !isset($fbCampaign['id'])) {
+        if (! $fbCampaign || ! isset($fbCampaign['id'])) {
             throw new \Exception('Failed to create Facebook video campaign');
         }
 
         $campaign->facebook_ads_campaign_id = $fbCampaign['id'];
         $campaign->save();
-        
+
         $strategy->facebook_campaign_id = $fbCampaign['id'];
         $strategy->save();
 
         // 2. Create Ad Set
         $targeting = $this->buildTargeting($strategy);
-        
+
         $fbAdSet = $this->adSetService->createAdSet(
             $accountId,
             $fbCampaign['id'],
-            $campaign->name . ' - Video Ad Set',
+            $campaign->name.' - Video Ad Set',
             $targeting,
             'VIDEO_VIEWS',
             'PAUSED'
         );
 
-        if (!$fbAdSet || !isset($fbAdSet['id'])) {
+        if (! $fbAdSet || ! isset($fbAdSet['id'])) {
             throw new \Exception('Failed to create Facebook video ad set');
         }
 
@@ -205,7 +210,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
         $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
 
-        if ($videoCollaterals->isEmpty() || !$adCopy) {
+        if ($videoCollaterals->isEmpty() || ! $adCopy) {
             throw new \Exception('No videos or ad copy available for Facebook video ad');
         }
 
@@ -214,13 +219,13 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         $fbCreative = $this->creativeService->createVideoCreative(
             $accountId,
-            $campaign->name . ' - Video Creative',
+            $campaign->name.' - Video Creative',
             $videoUrl,
             $adCopy->headlines[0] ?? 'Default Headline',
             $adCopy->descriptions[0] ?? 'Default Description'
         );
 
-        if (!$fbCreative || !isset($fbCreative['id'])) {
+        if (! $fbCreative || ! isset($fbCreative['id'])) {
             throw new \Exception('Failed to create Facebook video creative');
         }
 
@@ -231,11 +236,11 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $fbAd = $this->adService->createAd(
             $accountId,
             $fbAdSet['id'],
-            $campaign->name . ' - Video Ad',
+            $campaign->name.' - Video Ad',
             $fbCreative['id']
         );
 
-        if (!$fbAd || !isset($fbAd['id'])) {
+        if (! $fbAd || ! isset($fbAd['id'])) {
             throw new \Exception('Failed to create Facebook video ad');
         }
 
@@ -249,8 +254,8 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
     {
         // Load targeting config if available
         $targetingConfig = $strategy->targetingConfig;
-        
-        if (!$targetingConfig || !$targetingConfig->isCompatibleWith('facebook')) {
+
+        if (! $targetingConfig || ! $targetingConfig->isCompatibleWith('facebook')) {
             // Return default targeting
             return [
                 'geo_locations' => [
@@ -267,7 +272,7 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
         // Geographic targeting
         $geoTargeting = $targetingConfig->getFacebookGeoTargeting();
-        if (!empty($geoTargeting)) {
+        if (! empty($geoTargeting)) {
             $targeting['geo_locations'] = $geoTargeting[0]; // Facebook expects single object with arrays
         }
 
@@ -275,9 +280,9 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         $ageTargeting = $targetingConfig->getFacebookAgeTargeting();
         $targeting['age_min'] = $ageTargeting['age_min'];
         $targeting['age_max'] = $ageTargeting['age_max'];
-        
+
         $genderTargeting = $targetingConfig->getFacebookGenderTargeting();
-        if (!empty($genderTargeting)) {
+        if (! empty($genderTargeting)) {
             $targeting['genders'] = $genderTargeting;
         }
 
@@ -289,14 +294,14 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
         // Audience targeting
         if ($targetingConfig->custom_audiences) {
             $targeting['custom_audiences'] = array_map(
-                fn($id) => ['id' => $id],
+                fn ($id) => ['id' => $id],
                 $targetingConfig->custom_audiences
             );
         }
 
         if ($targetingConfig->interests) {
             $targeting['interests'] = array_map(
-                fn($id) => ['id' => $id],
+                fn ($id) => ['id' => $id],
                 $targetingConfig->interests
             );
         }

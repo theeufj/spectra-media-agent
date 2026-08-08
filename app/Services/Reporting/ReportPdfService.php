@@ -40,6 +40,7 @@ class ReportPdfService
             return $filename;
         } catch (\Throwable $e) {
             Log::error("ReportPdfService: Failed to generate PDF for customer #{$customer->id}: {$e->getMessage()}");
+
             return null;
         }
     }
@@ -74,7 +75,7 @@ class ReportPdfService
     {
         $customBranding = $customer->report_branding;
 
-        if (!empty($customBranding) && !empty($customBranding['enabled'])) {
+        if (! empty($customBranding) && ! empty($customBranding['enabled'])) {
             return [
                 'company_name' => $customBranding['company_name'] ?? $customer->name,
                 'logo_url' => $customBranding['logo_url'] ?? null,
@@ -86,10 +87,10 @@ class ReportPdfService
 
         // Attempt to use extracted brand colors
         $brand = $customer->brandGuideline;
-        if ($brand && !empty($brand->color_palette)) {
+        if ($brand && ! empty($brand->color_palette)) {
             $colors = $brand->color_palette;
             $primaryColors = $colors['primary_colors'] ?? [];
-            $primaryHex = !empty($primaryColors) ? ($primaryColors[0]['hex'] ?? null) : null;
+            $primaryHex = ! empty($primaryColors) ? ($primaryColors[0]['hex'] ?? null) : null;
 
             if ($primaryHex) {
                 return [
@@ -118,9 +119,9 @@ class ReportPdfService
     protected function darkenColor(string $hex, int $percent): string
     {
         $hex = ltrim($hex, '#');
-        $r = max(0, hexdec(substr($hex, 0, 2)) - (int)(hexdec(substr($hex, 0, 2)) * $percent / 100));
-        $g = max(0, hexdec(substr($hex, 2, 2)) - (int)(hexdec(substr($hex, 2, 2)) * $percent / 100));
-        $b = max(0, hexdec(substr($hex, 4, 2)) - (int)(hexdec(substr($hex, 4, 2)) * $percent / 100));
+        $r = max(0, hexdec(substr($hex, 0, 2)) - (int) (hexdec(substr($hex, 0, 2)) * $percent / 100));
+        $g = max(0, hexdec(substr($hex, 2, 2)) - (int) (hexdec(substr($hex, 2, 2)) * $percent / 100));
+        $b = max(0, hexdec(substr($hex, 4, 2)) - (int) (hexdec(substr($hex, 4, 2)) * $percent / 100));
 
         return sprintf('#%02x%02x%02x', $r, $g, $b);
     }

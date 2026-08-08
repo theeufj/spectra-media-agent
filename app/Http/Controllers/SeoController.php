@@ -24,7 +24,7 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -66,7 +66,7 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -83,7 +83,7 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -100,7 +100,7 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -129,7 +129,7 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -142,12 +142,12 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
         $domain = $customer->website ? parse_url($customer->website, PHP_URL_HOST) : null;
 
-        if (!$domain) {
+        if (! $domain) {
             return Inertia::render('SEO/Backlinks', [
                 'profile' => null,
                 'domain' => null,
@@ -168,7 +168,7 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
@@ -195,11 +195,11 @@ class SeoController extends Controller
     {
         $customer = $this->resolveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return redirect()->route('customers.create');
         }
 
-        if (!$request->user()->hasFeature('competitor_analysis')) {
+        if (! $request->user()->hasFeature('competitor_analysis')) {
             abort(403);
         }
 

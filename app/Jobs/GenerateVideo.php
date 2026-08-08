@@ -5,9 +5,10 @@ namespace App\Jobs;
 use App\Models\Campaign;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
-use App\Services\VideoGeneration\VideoGenerationService;
-use App\Services\GeminiService;
+use App\Prompts\VideoFromScriptPrompt;
 use App\Prompts\VideoScriptPrompt;
+use App\Services\GeminiService;
+use App\Services\VideoGeneration\VideoGenerationService;
 use Illuminate\Bus\Batchable;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -15,14 +16,13 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
-use App\Prompts\VideoFromScriptPrompt;
 
 class GenerateVideo implements ShouldQueue
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $timeout = 900;
 
     public function __construct(
@@ -31,26 +31,24 @@ class GenerateVideo implements ShouldQueue
         protected string $platform,
         protected int $variationIndex = 0,
         protected bool $force = false
-    ) {
-    }
+    ) {}
 
     /**
      * Extract actionable video content from strategy text.
      * Handles cases where strategy mentions "N/A" but provides alternative scenarios.
-     * 
-     * @param string $videoStrategy
+     *
      * @return string|null Returns actionable content or null if no video should be generated
      */
     private function extractActionableVideoContent(string $videoStrategy): ?string
     {
         // Trim whitespace
         $content = trim($videoStrategy);
-        
+
         // If empty, return null
         if (empty($content)) {
             return null;
         }
-        
+
         // Convert to lowercase for case-insensitive checking
         $lowerContent = strtolower($content);
 
@@ -62,7 +60,7 @@ class GenerateVideo implements ShouldQueue
         if (preg_match('/^(n\/a|not applicable|none)\.?$/i', $content)) {
             return null;
         }
-        
+
         // If content starts with "N/A" but contains conditional statements (however, if, when, for, etc.)
         // extract everything after the conditional indicator
         if (preg_match('/^n\/a[^.]*\.\s*(however|but|if|when|for|in cases where|alternatively)/i', $content, $matches, PREG_OFFSET_CAPTURE)) {
@@ -70,9 +68,10 @@ class GenerateVideo implements ShouldQueue
             // on an earlier substring (e.g. "if" inside "specific").
             $actionableContent = trim(substr($content, $matches[1][1]));
             Log::info("Extracted conditional video content after N/A: {$actionableContent}");
+
             return $actionableContent;
         }
-        
+
         // If the content is flagged N/A and a genuine actionable instruction follows a
         // transition word, extract that part. Transition words are matched with WORD
         // BOUNDARIES so "if" inside "specific", "for" inside "platform", etc. never
@@ -80,38 +79,42 @@ class GenerateVideo implements ShouldQueue
         if (stripos($lowerContent, 'n/a') !== false && preg_match($actionVerbs, $content)) {
             $transitions = ['however', 'but', 'if', 'when', 'for', 'in cases where', 'alternatively'];
             foreach ($transitions as $transition) {
-                if (preg_match('/\b' . preg_quote($transition, '/') . '\b/i', $content, $m, PREG_OFFSET_CAPTURE)) {
+                if (preg_match('/\b'.preg_quote($transition, '/').'\b/i', $content, $m, PREG_OFFSET_CAPTURE)) {
                     $actionableContent = trim(substr($content, $m[0][1]));
                     if (preg_match($actionVerbs, $actionableContent)) {
                         Log::info("Extracted actionable content after '{$transition}': {$actionableContent}");
+
                         return $actionableContent;
                     }
                 }
             }
         }
-        
+
         // "N/A" is mentioned: only generate a video if the text actually instructs one.
         // Otherwise it's just an explanation of why video is N/A (e.g. "video formats
         // inapplicable for this specific setup") and no video should be produced.
         if (stripos($lowerContent, 'n/a') !== false) {
-            if (!preg_match($actionVerbs, $content)) {
+            if (! preg_match($actionVerbs, $content)) {
                 Log::info("Video strategy is N/A without an actionable instruction — skipping video: {$content}");
+
                 return null;
             }
+
             return $content;
         }
-        
+
         // If content doesn't start with "N/A", use the full content
-        if (!preg_match('/^n\/a/i', $content)) {
+        if (! preg_match('/^n\/a/i', $content)) {
             return $content;
         }
-        
+
         // If we get here, content is likely just "N/A for [reason]" with no alternatives
-        if (strlen($content) < 100 && !preg_match('/\b(use|create|generate|show|feature|include|video should)\b/i', $content)) {
+        if (strlen($content) < 100 && ! preg_match('/\b(use|create|generate|show|feature|include|video should)\b/i', $content)) {
             Log::info("Video strategy appears to be N/A without actionable alternatives: {$content}");
+
             return null;
         }
-        
+
         // Default: use the full content if we're unsure
         return $content;
     }
@@ -132,11 +135,12 @@ class GenerateVideo implements ShouldQueue
             ->exists();
 
         if ($alreadyStarted) {
-            Log::info("GenerateVideo: idempotency guard — collateral already exists, skipping", [
+            Log::info('GenerateVideo: idempotency guard — collateral already exists, skipping', [
                 'campaign_id' => $this->campaign->id,
                 'strategy_id' => $this->strategy->id,
-                'platform'    => $this->platform,
+                'platform' => $this->platform,
             ]);
+
             return;
         }
 
@@ -144,7 +148,7 @@ class GenerateVideo implements ShouldQueue
         try {
             // Fetch brand guidelines if available
             $brandGuidelines = $this->campaign->customer->brandGuideline ?? null;
-            if (!$brandGuidelines) {
+            if (! $brandGuidelines) {
                 Log::warning("No brand guidelines found for customer ID: {$this->campaign->customer_id}");
             }
 
@@ -162,13 +166,14 @@ class GenerateVideo implements ShouldQueue
             }
 
             $videoStrategy = $this->strategy->video_strategy;
-            
+
             // Extract actionable content from strategy
             $actionableContent = $this->extractActionableVideoContent($videoStrategy);
 
-            if (!$actionableContent) {
-                if (!$this->force) {
+            if (! $actionableContent) {
+                if (! $this->force) {
                     Log::info("Skipping video generation for Strategy ID: {$this->strategy->id} - no actionable video content found. Original strategy: '{$videoStrategy}'");
+
                     return;
                 }
                 // Forced (e.g. PMax ad-strength healing): PMax needs a video asset even when
@@ -176,8 +181,8 @@ class GenerateVideo implements ShouldQueue
                 $brand = $this->campaign->customer->name ?? 'the brand';
                 $focus = $this->campaign->product_focus ?: 'the product/service';
                 $actionableContent = "Short, modern product-showcase video for {$brand}. Highlight {$focus} "
-                    . "with clean, high-quality visuals and upbeat pacing. No on-screen text overlays. "
-                    . "Suitable as a Performance Max video asset.";
+                    .'with clean, high-quality visuals and upbeat pacing. No on-screen text overlays. '
+                    .'Suitable as a Performance Max video asset.';
                 Log::info("GenerateVideo: forced generation with fallback brief for Strategy ID: {$this->strategy->id}");
             }
 
@@ -185,12 +190,12 @@ class GenerateVideo implements ShouldQueue
             Log::info("Generating video script for Strategy ID: {$this->strategy->id}, variation: {$this->variationIndex}");
             $scriptPrompt = (new VideoScriptPrompt($actionableContent, $brandGuidelines, $productContext, $this->variationIndex))->getPrompt();
             $scriptResponse = $geminiService->generateContent(config('ai.models.default'), $scriptPrompt);
-            
+
             $script = $scriptResponse['text'] ?? null;
             if (empty($script)) {
-                throw new \Exception("Failed to generate video script from Gemini.");
+                throw new \Exception('Failed to generate video script from Gemini.');
             }
-            
+
             Log::info("Generated video script: {$script}");
 
             // Step 2: Create a placeholder VideoCollateral record
@@ -204,7 +209,7 @@ class GenerateVideo implements ShouldQueue
             ]);
 
             // Step 3: Generate the final video prompt using the dedicated prompt class with actionable content
-            // Note: VideoFromScriptPrompt might need update if we want to pass product context there too, 
+            // Note: VideoFromScriptPrompt might need update if we want to pass product context there too,
             // but usually the script is enough.
             $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $script))->getPrompt();
             Log::info("Combined video prompt: {$videoPrompt}");
@@ -216,12 +221,13 @@ class GenerateVideo implements ShouldQueue
             $videoParams = $isMobilePlatform ? ['aspectRatio' => '9:16'] : [];
             $result = $videoGenerationService->startGeneration($videoPrompt, $videoParams, null, $script);
 
-            if (!$result) {
+            if (! $result) {
                 // Don't hard-fail immediately — retry the job after a backoff delay
                 // to handle Veo quota limits when multiple strategies fire simultaneously
                 if ($this->attempts() < 3) {
                     Log::warning("Video generation failed to start for Strategy ID {$this->strategy->id}, attempt {$this->attempts()}/3 — retrying in 5 minutes");
                     $this->release(300);
+
                     return;
                 }
                 $videoCollateral->update(['status' => 'failed']);
@@ -231,12 +237,12 @@ class GenerateVideo implements ShouldQueue
             // Step 5: Update the record with the operation name, provider, and set status to 'generating'
             $videoCollateral->update([
                 'operation_name' => $result['operation_name'],
-                'provider'       => $result['provider'],
-                'status'         => 'generating',
+                'provider' => $result['provider'],
+                'status' => 'generating',
             ]);
 
             Log::info("Video generation initiated for Strategy ID: {$this->strategy->id}.", [
-                'provider'       => $result['provider'],
+                'provider' => $result['provider'],
                 'operation_name' => $result['operation_name'],
             ]);
 
@@ -251,7 +257,7 @@ class GenerateVideo implements ShouldQueue
             if ($videoCollateral) {
                 $videoCollateral->update(['status' => 'failed']);
             }
-            Log::error("Error in GenerateVideo job for Campaign ID {$this->campaign->id}: " . $e->getMessage());
+            Log::error("Error in GenerateVideo job for Campaign ID {$this->campaign->id}: ".$e->getMessage());
             $this->fail($e);
         }
     }
@@ -261,7 +267,7 @@ class GenerateVideo implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateVideo failed: ' . $exception->getMessage(), [
+        Log::error('GenerateVideo failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
 

@@ -2,16 +2,21 @@
 
 namespace App\Services\FacebookAds;
 
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class FacebookAdsOrchestrationService
 {
     protected AdAccountService $adAccountService;
+
     protected CampaignService $campaignService;
+
     protected AdSetService $adSetService;
+
     protected AdService $adService;
+
     protected CreativeService $creativeService;
+
     protected Customer $customer;
 
     public function __construct(Customer $customer)
@@ -26,8 +31,6 @@ class FacebookAdsOrchestrationService
 
     /**
      * Get all ad accounts.
-     *
-     * @return ?array
      */
     public function getAdAccounts(): ?array
     {
@@ -37,16 +40,15 @@ class FacebookAdsOrchestrationService
     /**
      * Create a complete campaign structure with ad set and ad.
      *
-     * @param string $accountId Ad account ID
-     * @param string $campaignName Campaign name
-     * @param string $campaignObjective Campaign objective
-     * @param int $campaignBudget Daily budget in cents
-     * @param string $adSetName Ad set name
-     * @param int $adSetBudget Ad set daily budget in cents
-     * @param array $targeting Targeting parameters
-     * @param string $adName Ad name
-     * @param string $creativeId Creative ID
-     * @return ?array
+     * @param  string  $accountId  Ad account ID
+     * @param  string  $campaignName  Campaign name
+     * @param  string  $campaignObjective  Campaign objective
+     * @param  int  $campaignBudget  Daily budget in cents
+     * @param  string  $adSetName  Ad set name
+     * @param  int  $adSetBudget  Ad set daily budget in cents
+     * @param  array  $targeting  Targeting parameters
+     * @param  string  $adName  Ad name
+     * @param  string  $creativeId  Creative ID
      */
     public function createCompleteCampaign(
         string $accountId,
@@ -68,11 +70,12 @@ class FacebookAdsOrchestrationService
                 $campaignBudget
             );
 
-            if (!$campaign || !isset($campaign['id'])) {
-                Log::error("Failed to create campaign in complete campaign flow", [
+            if (! $campaign || ! isset($campaign['id'])) {
+                Log::error('Failed to create campaign in complete campaign flow', [
                     'account_id' => $accountId,
                     'campaign_name' => $campaignName,
                 ]);
+
                 return null;
             }
 
@@ -86,11 +89,12 @@ class FacebookAdsOrchestrationService
                 $campaignObjective
             );
 
-            if (!$adSet || !isset($adSet['id'])) {
-                Log::error("Failed to create ad set in complete campaign flow", [
+            if (! $adSet || ! isset($adSet['id'])) {
+                Log::error('Failed to create ad set in complete campaign flow', [
                     'campaign_id' => $campaign['id'],
                     'adset_name' => $adSetName,
                 ]);
+
                 return null;
             }
 
@@ -101,15 +105,16 @@ class FacebookAdsOrchestrationService
                 $creativeId
             );
 
-            if (!$ad || !isset($ad['id'])) {
-                Log::error("Failed to create ad in complete campaign flow", [
+            if (! $ad || ! isset($ad['id'])) {
+                Log::error('Failed to create ad in complete campaign flow', [
                     'adset_id' => $adSet['id'],
                     'ad_name' => $adName,
                 ]);
+
                 return null;
             }
 
-            Log::info("Successfully created complete campaign structure", [
+            Log::info('Successfully created complete campaign structure', [
                 'customer_id' => $this->customer->id,
                 'campaign_id' => $campaign['id'],
                 'adset_id' => $adSet['id'],
@@ -122,10 +127,11 @@ class FacebookAdsOrchestrationService
                 'ad' => $ad,
             ];
         } catch (\Exception $e) {
-            Log::error("Error creating complete campaign: " . $e->getMessage(), [
+            Log::error('Error creating complete campaign: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
             ]);
+
             return null;
         }
     }
@@ -133,10 +139,9 @@ class FacebookAdsOrchestrationService
     /**
      * Get performance data for a campaign.
      *
-     * @param string $campaignId Campaign ID
-     * @param string $dateStart Start date (YYYY-MM-DD)
-     * @param string $dateEnd End date (YYYY-MM-DD)
-     * @return ?array
+     * @param  string  $campaignId  Campaign ID
+     * @param  string  $dateStart  Start date (YYYY-MM-DD)
+     * @param  string  $dateEnd  End date (YYYY-MM-DD)
      */
     public function getCampaignPerformance(string $campaignId, string $dateStart, string $dateEnd): ?array
     {
@@ -147,10 +152,11 @@ class FacebookAdsOrchestrationService
                 'campaign_insights' => $campaignInsights,
             ];
         } catch (\Exception $e) {
-            Log::error("Error getting campaign performance: " . $e->getMessage(), [
+            Log::error('Error getting campaign performance: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
             ]);
+
             return null;
         }
     }
@@ -158,8 +164,7 @@ class FacebookAdsOrchestrationService
     /**
      * Pause a complete campaign (campaign, all ad sets, and all ads).
      *
-     * @param string $campaignId Campaign ID
-     * @return bool
+     * @param  string  $campaignId  Campaign ID
      */
     public function pauseCampaign(string $campaignId): bool
     {
@@ -178,10 +183,11 @@ class FacebookAdsOrchestrationService
 
             return true;
         } catch (\Exception $e) {
-            Log::error("Error pausing campaign: " . $e->getMessage(), [
+            Log::error('Error pausing campaign: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
             ]);
+
             return false;
         }
     }
@@ -189,8 +195,7 @@ class FacebookAdsOrchestrationService
     /**
      * Resume a complete campaign.
      *
-     * @param string $campaignId Campaign ID
-     * @return bool
+     * @param  string  $campaignId  Campaign ID
      */
     public function resumeCampaign(string $campaignId): bool
     {
@@ -209,10 +214,11 @@ class FacebookAdsOrchestrationService
 
             return true;
         } catch (\Exception $e) {
-            Log::error("Error resuming campaign: " . $e->getMessage(), [
+            Log::error('Error resuming campaign: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
             ]);
+
             return false;
         }
     }

@@ -10,15 +10,16 @@ class GetAccountStatus extends BaseGoogleAdsService
     {
         $this->ensureClient();
 
-        $query    = 'SELECT customer.status, customer.manager, customer.descriptive_name FROM customer LIMIT 1';
+        $query = 'SELECT customer.status, customer.manager, customer.descriptive_name FROM customer LIMIT 1';
         $response = $this->searchQuery($customerId, $query);
 
         foreach ($response->getIterator() as $row) {
             $c = $row->getCustomer();
+
             return [
-                'status'     => $c->getStatus(),
+                'status' => $c->getStatus(),
                 'is_manager' => $c->getManager(),
-                'name'       => $c->getDescriptiveName(),
+                'name' => $c->getDescriptiveName(),
             ];
         }
 

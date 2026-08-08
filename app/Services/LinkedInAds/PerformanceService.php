@@ -18,10 +18,14 @@ class PerformanceService extends BaseLinkedInAdsService
      */
     public function syncPerformance(Campaign $campaign, int $days = 30): int
     {
-        if (!$campaign->linkedin_campaign_id) return 0;
+        if (! $campaign->linkedin_campaign_id) {
+            return 0;
+        }
 
         $accountId = $this->customer->linkedin_ads_account_id;
-        if (!$accountId) return 0;
+        if (! $accountId) {
+            return 0;
+        }
 
         $startDate = now()->subDays($days)->format('Y-m-d');
         $endDate = now()->format('Y-m-d');
@@ -29,13 +33,15 @@ class PerformanceService extends BaseLinkedInAdsService
         $result = $this->apiCall('adAnalytics', 'GET', null, [
             'q' => 'analytics',
             'pivot' => 'CAMPAIGN',
-            'dateRange' => "(start:(year:" . now()->subDays($days)->year . ",month:" . now()->subDays($days)->month . ",day:" . now()->subDays($days)->day . "),end:(year:" . now()->year . ",month:" . now()->month . ",day:" . now()->day . "))",
+            'dateRange' => '(start:(year:'.now()->subDays($days)->year.',month:'.now()->subDays($days)->month.',day:'.now()->subDays($days)->day.'),end:(year:'.now()->year.',month:'.now()->month.',day:'.now()->day.'))',
             'timeGranularity' => 'DAILY',
             'campaigns' => "List(urn:li:sponsoredCampaign:{$campaign->linkedin_campaign_id})",
             'fields' => 'impressions,clicks,costInLocalCurrency,externalWebsiteConversions,dateRange',
         ]);
 
-        if (!$result || empty($result['elements'])) return 0;
+        if (! $result || empty($result['elements'])) {
+            return 0;
+        }
 
         return $this->storePerformanceData($campaign, $result['elements']);
     }

@@ -28,15 +28,15 @@ class NotificationTemplateService
     {
         $template = NotificationTemplate::resolve($key);
 
-        $subject    = $template?->subject ?: ($defaults['subject'] ?? '');
-        $body       = $template?->body ?: ($defaults['body'] ?? '');
+        $subject = $template?->subject ?: ($defaults['subject'] ?? '');
+        $body = $template?->body ?: ($defaults['body'] ?? '');
         $recipients = $template?->recipients ?: ($defaults['recipients'] ?? NotificationTemplate::RECIPIENTS_BOTH);
-        $enabled    = $template ? $template->enabled : true;
+        $enabled = $template ? $template->enabled : true;
 
         return [
-            'enabled'    => $enabled,
-            'subject'    => $this->render($subject, $vars),
-            'body'       => $this->render($body, $vars),
+            'enabled' => $enabled,
+            'subject' => $this->render($subject, $vars),
+            'body' => $this->render($body, $vars),
             'recipients' => $recipients,
         ];
     }
@@ -50,6 +50,7 @@ class NotificationTemplateService
 
         return preg_replace_callback('/\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/', function ($m) use ($vars) {
             $key = $m[1];
+
             // Only substitute known variables; leave unknown tokens intact so a typo in a
             // template is visible rather than silently blanking out.
             return array_key_exists($key, $vars) ? (string) $vars[$key] : $m[0];
@@ -67,9 +68,9 @@ class NotificationTemplateService
         $custUsers = fn () => $customer ? $customer->users()->get() : collect();
 
         return match ($policy) {
-            NotificationTemplate::RECIPIENTS_ADMINS    => $admins(),
+            NotificationTemplate::RECIPIENTS_ADMINS => $admins(),
             NotificationTemplate::RECIPIENTS_CUSTOMERS => $custUsers(),
-            default                                     => $admins()->concat($custUsers())->unique('id')->values(),
+            default => $admins()->concat($custUsers())->unique('id')->values(),
         };
     }
 }

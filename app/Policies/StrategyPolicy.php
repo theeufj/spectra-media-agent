@@ -30,7 +30,7 @@ class StrategyPolicy
     {
         $campaign = $strategy->campaign;
 
-        if (!$campaign) {
+        if (! $campaign) {
             return false;
         }
 

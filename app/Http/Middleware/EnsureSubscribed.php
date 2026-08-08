@@ -16,14 +16,14 @@ class EnsureSubscribed
     public function handle(Request $request, Closure $next): Response
     {
         // Check if user is subscribed via Cashier OR has active status in DB
-        if ($request->user() && 
-            ! $request->user()->subscribed('default') && 
+        if ($request->user() &&
+            ! $request->user()->subscribed('default') &&
             $request->user()->subscription_status !== 'active') {
-            
+
             if ($request->wantsJson()) {
                 return response()->json(['message' => 'Subscription required.'], 403);
             }
-            
+
             return redirect()->route('subscription.pricing');
         }
 

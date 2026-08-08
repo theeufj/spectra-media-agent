@@ -35,22 +35,26 @@ class UploadOfflineConversions implements ShouldQueue
     public function handle(): void
     {
         $customer = Customer::find($this->customerId);
-        if (!$customer) return;
+        if (! $customer) {
+            return;
+        }
 
         // Include previously-failed rows that still have retries left, so a transient
         // ad-network outage doesn't cause permanent conversion loss. (JOB-3)
         $pending = OfflineConversion::where('customer_id', $this->customerId)
             ->where(function ($q) {
                 $q->where('upload_status', 'pending')
-                  ->orWhere(function ($q) {
-                      $q->where('upload_status', 'failed')
-                        ->where('upload_attempts', '<', self::MAX_ATTEMPTS);
-                  });
+                    ->orWhere(function ($q) {
+                        $q->where('upload_status', 'failed')
+                            ->where('upload_attempts', '<', self::MAX_ATTEMPTS);
+                    });
             })
             ->limit(self::BATCH_SIZE)
             ->get();
 
-        if ($pending->isEmpty()) return;
+        if ($pending->isEmpty()) {
+            return;
+        }
 
         // Per-platform idempotency: a retried row (upload_status='failed') may already
         // have succeeded on one platform, so gate each platform on its own recorded
@@ -59,19 +63,19 @@ class UploadOfflineConversions implements ShouldQueue
         $alreadyUploaded = fn ($c, $platform) => ($c->upload_results[$platform]['status'] ?? null) === 'uploaded';
 
         // Upload to Google Ads (conversions with gclid)
-        $googleConversions = $pending->filter(fn ($c) => !empty($c->gclid) && !$alreadyUploaded($c, 'google_ads'));
+        $googleConversions = $pending->filter(fn ($c) => ! empty($c->gclid) && ! $alreadyUploaded($c, 'google_ads'));
         if ($googleConversions->isNotEmpty()) {
             $this->uploadToGoogleAds($customer, $googleConversions);
         }
 
         // Upload to Facebook (conversions with fbclid)
-        $facebookConversions = $pending->filter(fn ($c) => !empty($c->fbclid) && !$alreadyUploaded($c, 'facebook'));
+        $facebookConversions = $pending->filter(fn ($c) => ! empty($c->fbclid) && ! $alreadyUploaded($c, 'facebook'));
         if ($facebookConversions->isNotEmpty()) {
             $this->uploadToFacebook($customer, $facebookConversions);
         }
 
         // Upload to Microsoft (conversions with msclkid)
-        $microsoftConversions = $pending->filter(fn ($c) => !empty($c->msclid) && !$alreadyUploaded($c, 'microsoft'));
+        $microsoftConversions = $pending->filter(fn ($c) => ! empty($c->msclid) && ! $alreadyUploaded($c, 'microsoft'));
         if ($microsoftConversions->isNotEmpty()) {
             $this->uploadToMicrosoft($customer, $microsoftConversions);
         }
@@ -86,34 +90,38 @@ class UploadOfflineConversions implements ShouldQueue
     {
         try {
             $customerId = $customer->google_ads_customer_id;
-            if (!$customerId) {
+            if (! $customerId) {
                 Log::warning('UploadOfflineConversions: Customer has no Google Ads ID', ['customer_id' => $customer->id]);
+
                 return;
             }
 
             $client = $this->buildGoogleAdsClient();
-            if (!$client) {
+            if (! $client) {
                 Log::error('UploadOfflineConversions: Failed to build Google Ads client');
+
                 return;
             }
 
             $conversionActionResourceName = $this->getConversionActionResourceName($client, $customerId);
-            if (!$conversionActionResourceName) {
+            if (! $conversionActionResourceName) {
                 Log::error('UploadOfflineConversions: Could not resolve conversion action', ['customer_id' => $customerId]);
+
                 return;
             }
 
             // Data Manager ingests into the conversion action by its numeric id
             // (productDestinationId), not the full customers/{cid}/conversionActions/{id}.
             $conversionActionId = explode('/', $conversionActionResourceName)[3] ?? null;
-            if (!$conversionActionId) {
+            if (! $conversionActionId) {
                 Log::error('UploadOfflineConversions: Could not parse conversion action id', ['resource' => $conversionActionResourceName]);
+
                 return;
             }
 
             // Upload each conversion via the Data Manager API (the legacy
             // UploadClickConversions endpoint is closed to new integrations).
-            $dataManager = new DataManagerService();
+            $dataManager = new DataManagerService;
             $uploaded = 0;
             $failed = 0;
 
@@ -134,7 +142,7 @@ class UploadOfflineConversions implements ShouldQueue
                     $uploaded++;
                     $results['google_ads'] = ['status' => 'uploaded', 'request_id' => $result['requestId'] ?? null, 'uploaded_at' => now()->toDateTimeString()];
                     $conversion->update([
-                        'upload_status' => !empty($conversion->fbclid) ? 'uploaded_google' : 'uploaded_all',
+                        'upload_status' => ! empty($conversion->fbclid) ? 'uploaded_google' : 'uploaded_all',
                         'upload_results' => $results,
                     ]);
                 } else {
@@ -154,6 +162,8 @@ class UploadOfflineConversions implements ShouldQueue
                 'failed' => $failed,
             ]);
         } catch (\Exception $e) {
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
             foreach ($conversions as $conversion) {
                 $conversion->update([
                     'upload_status' => 'failed',
@@ -169,8 +179,9 @@ class UploadOfflineConversions implements ShouldQueue
     {
         try {
             $pixelId = $customer->facebook_pixel_id;
-            if (!$pixelId) {
+            if (! $pixelId) {
                 Log::warning('UploadOfflineConversions: Customer has no Facebook Pixel ID', ['customer_id' => $customer->id]);
+
                 return;
             }
 
@@ -221,6 +232,8 @@ class UploadOfflineConversions implements ShouldQueue
                 'count' => $conversions->count(),
             ]);
         } catch (\Exception $e) {
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
             Log::error('UploadOfflineConversions: Facebook upload failed', ['error' => $e->getMessage()]);
         }
     }
@@ -228,16 +241,18 @@ class UploadOfflineConversions implements ShouldQueue
     protected function uploadToMicrosoft(Customer $customer, $conversions): void
     {
         try {
-            if (!$customer->microsoft_ads_account_id) {
+            if (! $customer->microsoft_ads_account_id) {
                 Log::warning('UploadOfflineConversions: Customer has no Microsoft Ads account', ['customer_id' => $customer->id]);
+
                 return;
             }
 
             $msService = new MicrosoftConversionTrackingService($customer);
-            $uetTagId  = $customer->microsoft_uet_tag_id ?? $msService->resolveUetTagId();
+            $uetTagId = $customer->microsoft_uet_tag_id ?? $msService->resolveUetTagId();
 
-            if (!$uetTagId) {
+            if (! $uetTagId) {
                 Log::warning('UploadOfflineConversions: Could not resolve UET tag ID', ['customer_id' => $customer->id]);
+
                 return;
             }
 
@@ -247,20 +262,20 @@ class UploadOfflineConversions implements ShouldQueue
 
                 try {
                     $result = $msService->createEventConversionGoal([
-                        'name'                      => $conversion->conversion_name ?? 'Offline Conversion',
-                        'uet_tag_id'                => $uetTagId,
-                        'action_expression'         => 'offline_conversion',
+                        'name' => $conversion->conversion_name ?? 'Offline Conversion',
+                        'uet_tag_id' => $uetTagId,
+                        'action_expression' => 'offline_conversion',
                         'conversion_window_minutes' => 43200, // 30 days
-                        'revenue_type'              => 'FixedValue',
-                        'revenue_value'             => (float) $conversion->conversion_value,
-                        'currency_code'             => $conversion->currency_code ?? 'USD',
+                        'revenue_type' => 'FixedValue',
+                        'revenue_value' => (float) $conversion->conversion_value,
+                        'currency_code' => $conversion->currency_code ?? 'USD',
                     ]);
 
                     if ($result) {
                         $results['microsoft'] = ['status' => 'uploaded', 'uploaded_at' => now()->toDateTimeString()];
                         $allDone = empty($conversion->gclid) && empty($conversion->fbclid);
                         $conversion->update([
-                            'upload_status'  => $allDone ? 'uploaded_all' : 'uploaded_microsoft',
+                            'upload_status' => $allDone ? 'uploaded_all' : 'uploaded_microsoft',
                             'upload_results' => $results,
                         ]);
                     } else {
@@ -275,9 +290,11 @@ class UploadOfflineConversions implements ShouldQueue
 
             Log::info('UploadOfflineConversions: Microsoft upload complete', [
                 'customer_id' => $customer->id,
-                'count'       => $conversions->count(),
+                'count' => $conversions->count(),
             ]);
         } catch (\Exception $e) {
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
             Log::error('UploadOfflineConversions: Microsoft upload failed', ['error' => $e->getMessage()]);
         }
     }
@@ -296,11 +313,11 @@ class UploadOfflineConversions implements ShouldQueue
         try {
             // Query for existing offline conversion action
             $googleAdsServiceClient = $client->getGoogleAdsServiceClient();
-            $query = "SELECT conversion_action.resource_name, conversion_action.name "
-                . "FROM conversion_action "
-                . "WHERE conversion_action.type = 'UPLOAD_CLICKS' "
-                . "AND conversion_action.status = 'ENABLED' "
-                . "LIMIT 1";
+            $query = 'SELECT conversion_action.resource_name, conversion_action.name '
+                .'FROM conversion_action '
+                ."WHERE conversion_action.type = 'UPLOAD_CLICKS' "
+                ."AND conversion_action.status = 'ENABLED' "
+                .'LIMIT 1';
 
             $response = $googleAdsServiceClient->search(
                 new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -312,6 +329,7 @@ class UploadOfflineConversions implements ShouldQueue
             foreach ($response->iterateAllElements() as $row) {
                 $resourceName = $row->getConversionAction()->getResourceName();
                 Cache::put($cacheKey, $resourceName, now()->addHours(24));
+
                 return $resourceName;
             }
 
@@ -331,7 +349,10 @@ class UploadOfflineConversions implements ShouldQueue
 
             return $resourceName;
         } catch (\Exception $e) {
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
             Log::error('UploadOfflineConversions: Failed to resolve conversion action', ['error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -340,29 +361,32 @@ class UploadOfflineConversions implements ShouldQueue
     {
         try {
             $configPath = storage_path('app/google_ads_php.ini');
-            if (!file_exists($configPath)) {
+            if (! file_exists($configPath)) {
                 return null;
             }
 
             $mccAccount = MccAccount::getActive();
-            if (!$mccAccount) {
+            if (! $mccAccount) {
                 return null;
             }
 
             $mccRefreshToken = $mccAccount->getDecryptedRefreshToken();
 
-            $oAuth2Credential = (new OAuth2TokenBuilder())
+            $oAuth2Credential = (new OAuth2TokenBuilder)
                 ->fromFile($configPath)
                 ->withRefreshToken($mccRefreshToken)
                 ->build();
 
-            return (new GoogleAdsClientBuilder())
+            return (new GoogleAdsClientBuilder)
                 ->fromFile($configPath)
                 ->withOAuth2Credential($oAuth2Credential)
                 ->withLoginCustomerId($mccAccount->google_customer_id)
                 ->build();
         } catch (\Exception $e) {
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
             Log::error('UploadOfflineConversions: Failed to build client', ['error' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -372,7 +396,7 @@ class UploadOfflineConversions implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('UploadOfflineConversions failed: ' . $exception->getMessage(), [
+        Log::error('UploadOfflineConversions failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

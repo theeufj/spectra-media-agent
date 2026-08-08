@@ -29,7 +29,7 @@ class SyncProductFeedJobTest extends TestCase
 
         SyncProductFeed::dispatch($feed->id);
 
-        Queue::assertPushed(SyncProductFeed::class, function ($job) use ($feed) {
+        Queue::assertPushed(SyncProductFeed::class, function ($job) {
             return true;
         });
     }

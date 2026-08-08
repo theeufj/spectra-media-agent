@@ -2,19 +2,17 @@
 
 namespace App\Services\GoogleAds\VideoServices;
 
+use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\Ad;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Common\ResponsiveVideoAdInfo;
 use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
-use Google\Ads\GoogleAds\V22\Common\AdImageAsset;
 use Google\Ads\GoogleAds\V22\Common\AdVideoAsset;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdService;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
+use Google\Ads\GoogleAds\V22\Common\ResponsiveVideoAdInfo;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Resources\Ad;
+use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
 
 class CreateResponsiveVideoAd extends BaseGoogleAdsService
 {
@@ -26,9 +24,9 @@ class CreateResponsiveVideoAd extends BaseGoogleAdsService
     /**
      * Creates a Responsive Video Ad within a Video Ad Group, linking headlines, descriptions, and video assets.
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param string $adGroupResourceName The resource name of the parent Video Ad Group.
-     * @param array $adData Ad details including finalUrls, headlines, descriptions, videoAssets, etc.
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  string  $adGroupResourceName  The resource name of the parent Video Ad Group.
+     * @param  array  $adData  Ad details including finalUrls, headlines, descriptions, videoAssets, etc.
      * @return string|null The resource name of the created Responsive Video Ad, or null on failure.
      */
     public function __invoke(string $customerId, string $adGroupResourceName, array $adData): ?string
@@ -75,7 +73,7 @@ class CreateResponsiveVideoAd extends BaseGoogleAdsService
         ]);
 
         // Create AdGroupAdOperation
-        $adGroupAdOperation = new AdGroupAdOperation();
+        $adGroupAdOperation = new AdGroupAdOperation;
         $adGroupAdOperation->setCreate($adGroupAd);
 
         try {
@@ -86,10 +84,12 @@ class CreateResponsiveVideoAd extends BaseGoogleAdsService
             ]);
             $response = $adGroupAdServiceClient->mutateAdGroupAds($request);
             $newAdGroupAdResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Responsive Video Ad: " . $newAdGroupAdResourceName);
+            $this->logInfo('Successfully created Responsive Video Ad: '.$newAdGroupAdResourceName);
+
             return $newAdGroupAdResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Responsive Video Ad for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Responsive Video Ad for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

@@ -6,8 +6,8 @@ use App\Models\Campaign;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\Recommendation;
 use App\Services\CircuitBreaker\CircuitBreakerService;
-use App\Services\LinkedInAds\PerformanceService;
 use App\Services\GoogleAds\RecommendationGenerationService;
+use App\Services\LinkedInAds\PerformanceService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -21,6 +21,7 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 5;
+
     public $backoff = [10, 20, 30, 40, 50];
 
     protected Campaign $campaign;
@@ -34,6 +35,7 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
     {
         if (empty($this->campaign->linkedin_campaign_id)) {
             Log::warning("Campaign {$this->campaign->id} does not have a LinkedIn Campaign ID. Skipping.");
+
             return;
         }
 
@@ -41,8 +43,9 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
         $circuitBreaker = new CircuitBreakerService('LinkedInAdsAPI');
         $customer = $this->campaign->customer;
 
-        if (!$customer || !$customer->linkedin_ads_account_id) {
+        if (! $customer || ! $customer->linkedin_ads_account_id) {
             Log::warning("Campaign {$this->campaign->id}: No LinkedIn Ads credentials. Skipping.");
+
             return;
         }
 
@@ -66,8 +69,8 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
                         ->get()
                         ->toArray();
 
-                    if (!empty($performanceData)) {
-                        $recommendationService = new RecommendationGenerationService();
+                    if (! empty($performanceData)) {
+                        $recommendationService = new RecommendationGenerationService;
                         $recommendations = ($recommendationService)($performanceData, [
                             'campaignId' => $this->campaign->linkedin_campaign_id,
                             'dailyBudget' => $strategy->budget,
@@ -89,7 +92,7 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
                 }
             } catch (\Exception $e) {
                 $circuitBreaker->recordFailure();
-                Log::error("Error in FetchLinkedInAdsPerformanceData for campaign {$this->campaign->id}: " . $e->getMessage());
+                Log::error("Error in FetchLinkedInAdsPerformanceData for campaign {$this->campaign->id}: ".$e->getMessage());
                 $this->release(60);
             } finally {
                 $lock->release();
@@ -105,7 +108,7 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('FetchLinkedInAdsPerformanceData failed: ' . $exception->getMessage(), [
+        Log::error('FetchLinkedInAdsPerformanceData failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

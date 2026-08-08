@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Head, Link, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
+import { usePolling } from '@/hooks/usePolling';
 
 /**
  * DeploymentStatus - Shows real-time deployment progress and status
@@ -9,49 +10,35 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     const { auth } = usePage().props;
     const [deployments, setDeployments] = useState(initialDeployments || []);
     const [overallProgress, setOverallProgress] = useState(0);
-    const [isPolling, setIsPolling] = useState(true);
-    
-    // Calculate overall progress
+    // Stop once every strategy has reached a terminal state.
+    const allComplete = deployments.length > 0
+        && deployments.every(d => d.status === 'deployed' || d.status === 'failed');
+
+    const { data: polled } = usePolling(
+        `/api/campaigns/${campaign.id}/deployment-status`,
+        {
+            interval: 3000,
+            enabled: !allComplete,
+            until: data => data?.is_complete === true,
+            immediate: false,
+        }
+    );
+
+    useEffect(() => {
+        if (!polled) return;
+        setDeployments(polled.deployments || []);
+        setOverallProgress(polled.overall_progress || 0);
+    }, [polled]);
+
+    // Derive progress locally too, so Echo-pushed updates move the bar without
+    // waiting for the next poll.
     useEffect(() => {
         if (deployments.length === 0) return;
-        
         const completedCount = deployments.filter(d => d.status === 'deployed').length;
-        const progress = Math.round((completedCount / deployments.length) * 100);
-        setOverallProgress(progress);
-        
-        // Stop polling if all deployed or all have errors
-        const allComplete = deployments.every(d => 
-            d.status === 'deployed' || d.status === 'failed'
-        );
-        if (allComplete) {
-            setIsPolling(false);
-        }
+        setOverallProgress(Math.round((completedCount / deployments.length) * 100));
     }, [deployments]);
-    
-    // Poll for updates if deployment is in progress
-    useEffect(() => {
-        if (!isPolling) return;
-        
-        const pollInterval = setInterval(async () => {
-            try {
-                const response = await fetch(`/api/campaigns/${campaign.id}/deployment-status`);
-                if (response.ok) {
-                    const data = await response.json();
-                    setDeployments(data.deployments || []);
-                    setOverallProgress(data.overall_progress || 0);
-                    
-                    if (data.is_complete) {
-                        setIsPolling(false);
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to poll deployment status:', error);
-            }
-        }, 3000);
-        
-        return () => clearInterval(pollInterval);
-    }, [isPolling, campaign.id]);
-    
+
+
     // Listen for real-time updates if Echo is available
     useEffect(() => {
         if (typeof window !== 'undefined' && window.Echo) {

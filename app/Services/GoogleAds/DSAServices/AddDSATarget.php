@@ -6,10 +6,10 @@ use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Common\WebpageConditionInfo;
 use Google\Ads\GoogleAds\V22\Common\WebpageInfo;
 use Google\Ads\GoogleAds\V22\Enums\WebpageConditionOperandEnum\WebpageConditionOperand;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\ApiCore\ApiException;
 
 class AddDSATarget extends BaseGoogleAdsService
@@ -21,13 +21,10 @@ class AddDSATarget extends BaseGoogleAdsService
      *   - URL_EQUALS: targets a specific page URL
      *   - PAGE_TITLE: targets pages whose title contains a keyword
      *
-     * @param string      $customerId
-     * @param string      $adGroupResourceName
-     * @param string      $criterionName  Human-readable name for the criterion
-     * @param string      $mode           'url' or 'title'
-     * @param string      $value          The URL or title substring to match
-     * @param float       $cpcBidMicros   Optional CPC override for this target
-     * @return string|null
+     * @param  string  $criterionName  Human-readable name for the criterion
+     * @param  string  $mode  'url' or 'title'
+     * @param  string  $value  The URL or title substring to match
+     * @param  float  $cpcBidMicros  Optional CPC override for this target
      */
     public function __invoke(
         string $customerId,
@@ -35,7 +32,7 @@ class AddDSATarget extends BaseGoogleAdsService
         string $criterionName,
         string $mode,
         string $value,
-        float  $cpcBidMicros = 0
+        float $cpcBidMicros = 0
     ): ?string {
         $this->ensureClient();
 
@@ -45,18 +42,18 @@ class AddDSATarget extends BaseGoogleAdsService
         };
 
         $condition = new WebpageConditionInfo([
-            'operand'  => $operand,
+            'operand' => $operand,
             'argument' => $value,
         ]);
 
         $webpageInfo = new WebpageInfo([
             'criterion_name' => $criterionName,
-            'conditions'     => [$condition],
+            'conditions' => [$condition],
         ]);
 
         $params = [
             'ad_group' => $adGroupResourceName,
-            'webpage'  => $webpageInfo,
+            'webpage' => $webpageInfo,
         ];
 
         if ($cpcBidMicros > 0) {
@@ -64,7 +61,7 @@ class AddDSATarget extends BaseGoogleAdsService
         }
 
         $criterion = new AdGroupCriterion($params);
-        $operation = new AdGroupCriterionOperation();
+        $operation = new AdGroupCriterionOperation;
         $operation->setCreate($criterion);
 
         try {
@@ -73,9 +70,11 @@ class AddDSATarget extends BaseGoogleAdsService
             );
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Added DSA target ({$mode}={$value}): {$resourceName}");
+
             return $resourceName;
         } catch (GoogleAdsException|ApiException $e) {
-            $this->logError('AddDSATarget failed: ' . $e->getMessage());
+            $this->logError('AddDSATarget failed: '.$e->getMessage());
+
             return null;
         }
     }

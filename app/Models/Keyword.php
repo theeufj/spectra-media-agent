@@ -27,6 +27,8 @@ class Keyword extends Model
         'estimated_cpc_micros' => 'integer',
         'ctr' => 'float',
         'conversions' => 'float',
+        // decimal(12,2) in the DB; float here so Inertia emits a number, matching
+        // the other performance models.
         'cost' => 'float',
     ];
 

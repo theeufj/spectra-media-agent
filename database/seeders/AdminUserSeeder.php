@@ -2,11 +2,11 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 class AdminUserSeeder extends Seeder
 {
@@ -16,7 +16,7 @@ class AdminUserSeeder extends Seeder
     public function run(): void
     {
         $email = 'theeufj@gmail.com';
-        
+
         // Find or create the user
         $user = User::firstOrCreate(
             ['email' => $email],
@@ -32,7 +32,7 @@ class AdminUserSeeder extends Seeder
             ['name' => 'admin']
         );
 
-        if (!$user->hasRole('admin')) {
+        if (! $user->hasRole('admin')) {
             $user->roles()->attach($adminRole->id);
             $this->command->info("Admin role assigned to {$email}");
         } else {
@@ -40,8 +40,8 @@ class AdminUserSeeder extends Seeder
         }
 
         // Set up Stripe customer ID if not exists
-        if (!$user->stripe_id) {
-            $user->stripe_id = 'cus_seed_' . uniqid();
+        if (! $user->stripe_id) {
+            $user->stripe_id = 'cus_seed_'.uniqid();
             $user->save();
             $this->command->info("Stripe customer ID created for {$email}");
         }
@@ -53,7 +53,7 @@ class AdminUserSeeder extends Seeder
                 'type' => 'default', // Cashier default subscription type
             ],
             [
-                'stripe_id' => 'sub_seed_' . uniqid(),
+                'stripe_id' => 'sub_seed_'.uniqid(),
                 'stripe_status' => 'active',
                 'stripe_price' => env('STRIPE_PRICE_ID', 'price_seed_pro'),
                 'quantity' => 1,
@@ -65,6 +65,6 @@ class AdminUserSeeder extends Seeder
         );
 
         $this->command->info("Active Pro subscription created for {$email}");
-        $this->command->info("User setup complete! User has admin access and an active subscription.");
+        $this->command->info('User setup complete! User has admin access and an active subscription.');
     }
 }

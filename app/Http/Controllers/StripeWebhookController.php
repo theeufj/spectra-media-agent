@@ -2,19 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Laravel\Cashier\Http\Controllers\WebhookController as CashierController;
 use App\Models\CreativeBoostPurchase;
 use App\Models\User;
 use App\Services\CreativeQuotaService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Laravel\Cashier\Http\Controllers\WebhookController as CashierController;
 
 class StripeWebhookController extends CashierController
 {
     /**
      * Handle a Stripe webhook call.
      *
-     * @param  \Illuminate\Http\Request  $request
      * @return \Symfony\Component\HttpFoundation\Response
      */
     public function handleWebhook(Request $request)
@@ -23,7 +22,7 @@ class StripeWebhookController extends CashierController
         $type = $payload['type'] ?? 'unknown';
 
         // Log only the event type + id — never the full payload (PII, billing details).
-        Log::info('Stripe Webhook Received: ' . $type, [
+        Log::info('Stripe Webhook Received: '.$type, [
             'event_id' => $payload['id'] ?? null,
         ]);
 
@@ -33,7 +32,6 @@ class StripeWebhookController extends CashierController
     /**
      * Handle customer subscription created webhook.
      *
-     * @param  array  $payload
      * @return \Symfony\Component\HttpFoundation\Response
      */
     protected function handleCustomerSubscriptionCreated(array $payload)
@@ -76,7 +74,6 @@ class StripeWebhookController extends CashierController
     /**
      * Handle checkout session completed webhook.
      *
-     * @param  array  $payload
      * @return \Symfony\Component\HttpFoundation\Response
      */
     protected function handleCheckoutSessionCompleted(array $payload)
@@ -137,7 +134,6 @@ class StripeWebhookController extends CashierController
     /**
      * Handle invoice paid webhook.
      *
-     * @param  array  $payload
      * @return \Symfony\Component\HttpFoundation\Response
      */
     protected function handleInvoicePaid(array $payload)
@@ -169,7 +165,6 @@ class StripeWebhookController extends CashierController
     /**
      * Handle invoice payment succeeded webhook.
      *
-     * @param  array  $payload
      * @return \Symfony\Component\HttpFoundation\Response
      */
     protected function handleInvoicePaymentSucceeded(array $payload)
@@ -184,7 +179,7 @@ class StripeWebhookController extends CashierController
             // Check if this is for a subscription
             if ($subscriptionId) {
                 $subscription = $user->subscriptions()->where('stripe_id', $subscriptionId)->first();
-                
+
                 Log::info('✅ Subscription Payment Succeeded', [
                     'user_id' => $user->id,
                     'user_email' => $user->email,

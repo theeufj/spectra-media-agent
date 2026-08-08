@@ -20,10 +20,10 @@ class GenerateProposal implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 300;
 
-    public function __construct(protected Proposal $proposal)
-    {}
+    public function __construct(protected Proposal $proposal) {}
 
     public function handle(GeminiService $geminiService, ProposalPdfService $pdfService): void
     {
@@ -53,15 +53,17 @@ class GenerateProposal implements ShouldQueue
                 systemInstruction: ProposalPrompt::getSystemInstruction(),
             );
 
-            if (!$response || empty($response['text'])) {
+            if (! $response || empty($response['text'])) {
                 $this->proposal->markFailed('AI generation returned empty response.');
+
                 return;
             }
 
             // Parse JSON from response
             $proposalData = $this->parseJson($response['text']);
-            if (!$proposalData) {
+            if (! $proposalData) {
                 $this->proposal->markFailed('Failed to parse proposal JSON from AI response.');
+
                 return;
             }
 
@@ -131,8 +133,8 @@ class GenerateProposal implements ShouldQueue
             if ($metaDescription) {
                 $parts[] = "Description: {$metaDescription}";
             }
-            if (!empty($headings)) {
-                $parts[] = "Key Headings: " . implode(', ', array_slice($headings, 0, 15));
+            if (! empty($headings)) {
+                $parts[] = 'Key Headings: '.implode(', ', array_slice($headings, 0, 15));
             }
             $parts[] = "Content: {$cleanedContent}";
 
@@ -140,6 +142,7 @@ class GenerateProposal implements ShouldQueue
 
         } catch (\Throwable $e) {
             Log::warning("GenerateProposal: Failed to crawl {$url}: {$e->getMessage()}");
+
             return null;
         }
     }
@@ -150,15 +153,15 @@ class GenerateProposal implements ShouldQueue
     protected function generateHeroImage(GeminiService $geminiService): ?string
     {
         try {
-            $imagePrompt = "Create a clean, modern, professional hero image for an advertising proposal document. "
-                . "The image should convey digital marketing success with abstract elements like rising graphs, "
-                . "connected nodes, and a warm gradient from flame-orange to amber-gold color palette. "
-                . "Industry: {$this->proposal->industry}. Minimalist corporate style. No text.";
+            $imagePrompt = 'Create a clean, modern, professional hero image for an advertising proposal document. '
+                .'The image should convey digital marketing success with abstract elements like rising graphs, '
+                .'connected nodes, and a warm gradient from flame-orange to amber-gold color palette. '
+                ."Industry: {$this->proposal->industry}. Minimalist corporate style. No text.";
 
             $result = $geminiService->generateImage($imagePrompt, config('ai.models.image'), '1K');
 
-            if ($result && !empty($result['data'])) {
-                return 'data:' . ($result['mimeType'] ?? 'image/png') . ';base64,' . $result['data'];
+            if ($result && ! empty($result['data'])) {
+                return 'data:'.($result['mimeType'] ?? 'image/png').';base64,'.$result['data'];
             }
         } catch (\Throwable $e) {
             Log::warning("GenerateProposal: Hero image generation failed: {$e->getMessage()}");
@@ -202,7 +205,7 @@ class GenerateProposal implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('GenerateProposal failed: ' . $exception->getMessage(), [
+        Log::error('GenerateProposal failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

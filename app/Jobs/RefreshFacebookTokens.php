@@ -2,8 +2,8 @@
 
 namespace App\Jobs;
 
-use App\Services\FacebookAds\TokenService;
 use App\Notifications\CriticalAgentAlert;
+use App\Services\FacebookAds\TokenService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -28,16 +28,16 @@ class RefreshFacebookTokens implements ShouldQueue
 
     public function handle(): void
     {
-        $tokenService = new TokenService();
+        $tokenService = new TokenService;
         $health = $tokenService->checkSystemTokenHealth();
 
-        if (!$health['valid']) {
+        if (! $health['valid']) {
             Log::critical('Facebook System User token is invalid or missing', $health);
 
             CriticalAgentAlert::deliver(
                 'facebook',
                 'Facebook System User token is invalid',
-                'Facebook System User token is invalid: ' . ($health['error'] ?? 'unknown error'),
+                'Facebook System User token is invalid: '.($health['error'] ?? 'unknown error'),
                 ['action_required' => 'Regenerate the System User token in Business Manager and update FACEBOOK_SYSTEM_USER_TOKEN in .env'],
                 CriticalAgentAlert::RECIPIENTS_ADMINS
             );

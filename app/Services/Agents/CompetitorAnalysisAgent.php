@@ -2,19 +2,18 @@
 
 namespace App\Services\Agents;
 
-use App\Models\Customer;
 use App\Models\Competitor;
-use App\Services\GeminiService;
-use App\Services\FirecrawlService;
+use App\Models\Customer;
 use App\Prompts\CompetitorAnalysisPrompt;
-use Illuminate\Support\Facades\Log;
+use App\Services\FirecrawlService;
+use App\Services\GeminiService;
 use Illuminate\Support\Facades\Http;
-use Spatie\Browsershot\Browsershot;
+use Illuminate\Support\Facades\Log;
 use Symfony\Component\DomCrawler\Crawler;
 
 /**
  * CompetitorAnalysisAgent
- * 
+ *
  * Scrapes competitor websites and uses AI to extract:
  * - Messaging and positioning
  * - Value propositions
@@ -46,7 +45,7 @@ class CompetitorAnalysisAgent
 
         foreach ($competitors as $competitor) {
             $analysisResult = $this->analyze($competitor, $customer);
-            
+
             if ($analysisResult['success']) {
                 $results['analyzed']++;
             } else {
@@ -90,9 +89,10 @@ class CompetitorAnalysisAgent
 
             // Step 1: Scrape competitor website
             $scrapedContent = $this->scrapeWebsite($competitor->url);
-            
+
             if (empty($scrapedContent['content'])) {
                 $result['error'] = 'Failed to scrape competitor website';
+
                 return $result;
             }
 
@@ -125,16 +125,18 @@ class CompetitorAnalysisAgent
                 true  // Enable thinking for deep analysis
             );
 
-            if (!$response || !isset($response['text'])) {
+            if (! $response || ! isset($response['text'])) {
                 $result['error'] = 'No response from AI model';
+
                 return $result;
             }
 
             // Step 5: Parse and save analysis
             $analysis = $this->parseAnalysis($response['text']);
-            
+
             if (empty($analysis)) {
                 $result['error'] = 'Failed to parse AI analysis';
+
                 return $result;
             }
 
@@ -202,7 +204,7 @@ class CompetitorAnalysisAgent
 
         try {
             // Try Firecrawl first (returns clean markdown, handles JS rendering)
-            $firecrawl = new FirecrawlService();
+            $firecrawl = new FirecrawlService;
 
             if ($firecrawl->isConfigured()) {
                 $scraped = $firecrawl->scrape($url);
@@ -211,6 +213,7 @@ class CompetitorAnalysisAgent
                     $result['content'] = $scraped['markdown'];
                     $result['title'] = $scraped['title'];
                     $result['meta_description'] = $scraped['meta_description'];
+
                     return $result;
                 }
 
@@ -224,7 +227,7 @@ class CompetitorAnalysisAgent
                 'User-Agent' => 'Mozilla/5.0 (compatible; SpectraBot/1.0)',
             ])->timeout(15)->get($url);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return $result;
             }
 
@@ -238,7 +241,7 @@ class CompetitorAnalysisAgent
             $crawler->filter('h1, h2, h3')->each(function (Crawler $node) use (&$headings) {
                 $tag = $node->nodeName();
                 $text = trim($node->text());
-                if (!empty($text)) {
+                if (! empty($text)) {
                     $headings[$tag][] = $text;
                 }
             });
@@ -273,11 +276,11 @@ class CompetitorAnalysisAgent
     {
         $context = "Business: {$customer->name}\n";
         $context .= "Website: {$customer->website}\n";
-        
+
         if ($customer->business_type) {
             $context .= "Type: {$customer->business_type}\n";
         }
-        
+
         if ($customer->description) {
             $context .= "Description: {$customer->description}\n";
         }
@@ -286,12 +289,12 @@ class CompetitorAnalysisAgent
         $brandGuideline = $customer->brandGuideline;
         if ($brandGuideline) {
             if ($brandGuideline->unique_selling_propositions) {
-                $usps = is_array($brandGuideline->unique_selling_propositions) 
+                $usps = is_array($brandGuideline->unique_selling_propositions)
                     ? implode(', ', $brandGuideline->unique_selling_propositions)
                     : $brandGuideline->unique_selling_propositions;
                 $context .= "USPs: {$usps}\n";
             }
-            
+
             if ($brandGuideline->target_audience) {
                 $audience = is_array($brandGuideline->target_audience)
                     ? implode(', ', $brandGuideline->target_audience)
@@ -330,7 +333,7 @@ class CompetitorAnalysisAgent
         $unique = [];
         foreach ($keywords as $kw) {
             $lower = strtolower(trim($kw));
-            if ($lower && !isset($seen[$lower])) {
+            if ($lower && ! isset($seen[$lower])) {
                 $seen[$lower] = true;
                 $unique[] = trim($kw);
             }
@@ -345,7 +348,7 @@ class CompetitorAnalysisAgent
     protected function parseAnalysis(string $responseText): array
     {
         $cleaned = trim($responseText);
-        
+
         // Remove markdown code blocks
         if (str_starts_with($cleaned, '```json')) {
             $cleaned = substr($cleaned, 7);
@@ -363,6 +366,7 @@ class CompetitorAnalysisAgent
             Log::warning('CompetitorAnalysisAgent: Failed to parse JSON', [
                 'error' => json_last_error_msg(),
             ]);
+
             return [];
         }
 
@@ -377,7 +381,7 @@ class CompetitorAnalysisAgent
         if (strlen($content) <= $maxLength) {
             return $content;
         }
-        
-        return substr($content, 0, $maxLength) . '... [truncated]';
+
+        return substr($content, 0, $maxLength).'... [truncated]';
     }
 }

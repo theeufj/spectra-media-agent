@@ -33,12 +33,12 @@ class QualityScoreImprovementAgent
     {
         $customer = $campaign->customer;
 
-        if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
+        if (! $customer?->google_ads_customer_id || ! $campaign->google_ads_campaign_id) {
             return ['skipped' => true];
         }
 
-        $customerId  = $customer->cleanGoogleCustomerId();
-        $pauseDays   = config('optimization.quality_score.pause_min_days', 21);
+        $customerId = $customer->cleanGoogleCustomerId();
+        $pauseDays = config('optimization.quality_score.pause_min_days', 21);
         $qsThreshold = config('optimization.quality_score.pause_qs_threshold', 5);
 
         $decliners = KeywordQualityScore::where('customer_id', $campaign->customer_id)
@@ -48,9 +48,9 @@ class QualityScoreImprovementAgent
             ->groupBy('keyword_text');
 
         $actions = [];
-        $flagged  = [];
-        $paused   = [];
-        $errors   = [];
+        $flagged = [];
+        $paused = [];
+        $errors = [];
 
         foreach ($decliners as $keywordText => $records) {
             $latest = $records->sortByDesc('recorded_at')->first();
@@ -70,12 +70,12 @@ class QualityScoreImprovementAgent
                     $errors
                 );
             } catch (\Exception $e) {
-                $errors[] = "Error processing keyword '{$keywordText}': " . $e->getMessage();
-                Log::error('QualityScoreImprovementAgent: ' . $e->getMessage());
+                $errors[] = "Error processing keyword '{$keywordText}': ".$e->getMessage();
+                Log::error('QualityScoreImprovementAgent: '.$e->getMessage());
             }
         }
 
-        if (!empty($actions) || !empty($paused)) {
+        if (! empty($actions) || ! empty($paused)) {
             $total = count($actions) + count($paused);
             AgentActivity::record(
                 'quality_score',
@@ -88,15 +88,15 @@ class QualityScoreImprovementAgent
         }
 
         // Send ONE aggregated alert if any keywords were paused this run
-        if (!empty($paused)) {
+        if (! empty($paused)) {
             $this->notifyPaused($campaign, $paused, $qsThreshold, $pauseDays);
         }
 
         return [
             'actions' => $actions,
             'flagged' => $flagged,
-            'paused'  => $paused,
-            'errors'  => $errors,
+            'paused' => $paused,
+            'errors' => $errors,
         ];
     }
 
@@ -113,18 +113,18 @@ class QualityScoreImprovementAgent
         array &$paused,
         array &$errors
     ): void {
-        $keyword   = $latest->keyword_text;
-        $qs        = $latest->quality_score;
-        $ctr       = $latest->search_predicted_ctr;
-        $creative  = $latest->creative_quality_score;
+        $keyword = $latest->keyword_text;
+        $qs = $latest->quality_score;
+        $ctr = $latest->search_predicted_ctr;
+        $creative = $latest->creative_quality_score;
         $postClick = $latest->post_click_quality_score;
 
         $isStuck = $allRecords->count() >= 2
-            && $allRecords->every(fn($r) => ($r->quality_score ?? 10) < $qsThreshold)
+            && $allRecords->every(fn ($r) => ($r->quality_score ?? 10) < $qsThreshold)
             && $allRecords->min('recorded_at') <= now()->subDays($pauseDays);
 
         // Root cause 1: Low expected CTR → generate tighter ad copy
-        if ($ctr === 'BELOW_AVERAGE' && !$isStuck) {
+        if ($ctr === 'BELOW_AVERAGE' && ! $isStuck) {
             $strategy = $campaign->strategies()
                 ->whereNotNull('google_ads_ad_group_id')
                 ->latest()
@@ -134,12 +134,12 @@ class QualityScoreImprovementAgent
             if ($strategy) {
                 $variations = $this->generateAdCopyVariations($campaign, $customer, $keyword);
 
-                if (!empty($variations)) {
+                if (! empty($variations)) {
                     foreach ($variations as $variant) {
                         AdCopy::create([
-                            'strategy_id'  => $strategy->id,
-                            'platform'     => 'Google Ads',
-                            'headlines'    => $variant['headlines'],
+                            'strategy_id' => $strategy->id,
+                            'platform' => 'Google Ads',
+                            'headlines' => $variant['headlines'],
                             'descriptions' => $variant['descriptions'],
                         ]);
                     }
@@ -147,16 +147,16 @@ class QualityScoreImprovementAgent
                     AgentActivity::record(
                         'quality_score',
                         'ad_copy_generated',
-                        "Generated " . count($variations) . " ad variation(s) for keyword '{$keyword}' (QS={$qs}, CTR=Below Average) in \"{$campaign->name}\"",
+                        'Generated '.count($variations)." ad variation(s) for keyword '{$keyword}' (QS={$qs}, CTR=Below Average) in \"{$campaign->name}\"",
                         $campaign->customer_id,
                         $campaign->id
                     );
 
                     $actions[] = [
-                        'keyword'  => $keyword,
-                        'action'   => 'generated_ad_copy',
+                        'keyword' => $keyword,
+                        'action' => 'generated_ad_copy',
                         'variants' => count($variations),
-                        'reason'   => 'search_predicted_ctr: BELOW_AVERAGE',
+                        'reason' => 'search_predicted_ctr: BELOW_AVERAGE',
                     ];
                 }
             }
@@ -165,8 +165,8 @@ class QualityScoreImprovementAgent
         // Root cause 2: Poor ad relevance → flag for SKAG review
         if ($creative === 'BELOW_AVERAGE') {
             $flagged[] = [
-                'keyword'        => $keyword,
-                'issue'          => 'creative_quality_score: BELOW_AVERAGE',
+                'keyword' => $keyword,
+                'issue' => 'creative_quality_score: BELOW_AVERAGE',
                 'recommendation' => "Consider moving '{$keyword}' to a dedicated single-keyword ad group (SKAG) for tighter ad relevance.",
             ];
 
@@ -182,8 +182,8 @@ class QualityScoreImprovementAgent
         // Root cause 3: Poor landing page → log improvement recommendation
         if ($postClick === 'BELOW_AVERAGE') {
             $flagged[] = [
-                'keyword'        => $keyword,
-                'issue'          => 'post_click_quality_score: BELOW_AVERAGE',
+                'keyword' => $keyword,
+                'issue' => 'post_click_quality_score: BELOW_AVERAGE',
                 'recommendation' => "Landing page for '{$keyword}' needs: keyword in H1/title, faster load time, and content that directly addresses search intent.",
             ];
 
@@ -217,8 +217,8 @@ class QualityScoreImprovementAgent
         }
 
         $keywordList = implode(', ', array_column($paused, 'keyword'));
-        $count       = count($paused);
-        $message     = "{$count} keyword(s) were paused in \"{$campaign->name}\" after remaining below QS {$qsThreshold} for {$pauseDays}+ days: {$keywordList}.";
+        $count = count($paused);
+        $message = "{$count} keyword(s) were paused in \"{$campaign->name}\" after remaining below QS {$qsThreshold} for {$pauseDays}+ days: {$keywordList}.";
 
         CriticalAgentAlert::deliver(
             'quality_score',
@@ -226,8 +226,8 @@ class QualityScoreImprovementAgent
             $message,
             [
                 'campaign_name' => $campaign->name,
-                'campaign_id'   => $campaign->id,
-                'paused'        => $paused,
+                'campaign_id' => $campaign->id,
+                'paused' => $paused,
             ],
             CriticalAgentAlert::RECIPIENTS_ADMINS,
             $campaign->customer
@@ -239,7 +239,7 @@ class QualityScoreImprovementAgent
     private function generateAdCopyVariations(Campaign $campaign, object $customer, string $keyword): array
     {
         $businessName = $customer->name;
-        $landingPage  = $customer->website ?? '';
+        $landingPage = $customer->website ?? '';
 
         $prompt = <<<PROMPT
 You are an expert Google Ads copywriter. Generate 2 Responsive Search Ad variations specifically designed to improve Quality Score for the keyword: "{$keyword}"
@@ -282,7 +282,7 @@ PROMPT;
                 return $data;
             }
         } catch (\Exception $e) {
-            Log::error('QualityScoreImprovementAgent: Ad copy generation failed: ' . $e->getMessage());
+            Log::error('QualityScoreImprovementAgent: Ad copy generation failed: '.$e->getMessage());
         }
 
         return [];
@@ -298,7 +298,7 @@ PROMPT;
     {
         $customer = $campaign->customer;
 
-        if (!$customer?->google_ads_customer_id || !$campaign->google_ads_campaign_id) {
+        if (! $customer?->google_ads_customer_id || ! $campaign->google_ads_campaign_id) {
             return ['skipped' => true];
         }
 
@@ -309,28 +309,29 @@ PROMPT;
         Cache::put($cacheKey, true, now()->addHours(23));
 
         $customerId = $customer->cleanGoogleCustomerId();
-        $actions    = [];
-        $errors     = [];
+        $actions = [];
+        $errors = [];
 
         try {
             // Fetch ad strength + existing copy via GAQL
-            $service = new class($customer) extends BaseGoogleAdsService {
+            $service = new class($customer) extends BaseGoogleAdsService
+            {
                 public function fetchAdStrength(string $customerId, string $campaignResource): array
                 {
                     $this->ensureClient();
-                    $query = "SELECT ad_group_ad.resource_name, ad_group_ad.ad.id, ad_group_ad.ad_strength, "
-                           . "ad_group_ad.ad.responsive_search_ad.headlines, "
-                           . "ad_group_ad.ad.responsive_search_ad.descriptions, "
-                           . "ad_group.resource_name "
-                           . "FROM ad_group_ad "
-                           . "WHERE campaign.resource_name = '{$campaignResource}' "
-                           . "AND ad_group_ad.status = 'ENABLED' "
-                           . "AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD'";
+                    $query = 'SELECT ad_group_ad.resource_name, ad_group_ad.ad.id, ad_group_ad.ad_strength, '
+                           .'ad_group_ad.ad.responsive_search_ad.headlines, '
+                           .'ad_group_ad.ad.responsive_search_ad.descriptions, '
+                           .'ad_group.resource_name '
+                           .'FROM ad_group_ad '
+                           ."WHERE campaign.resource_name = '{$campaignResource}' "
+                           ."AND ad_group_ad.status = 'ENABLED' "
+                           ."AND ad_group_ad.ad.type = 'RESPONSIVE_SEARCH_AD'";
 
                     $results = [];
                     foreach ($this->searchQuery($customerId, $query)->getIterator() as $row) {
                         $rsa = $row->getAdGroupAd()->getAd()->getResponsiveSearchAd();
-                        $headlines    = [];
+                        $headlines = [];
                         $descriptions = [];
                         foreach ($rsa->getHeadlines() as $asset) {
                             $headlines[] = $asset->getText();
@@ -340,26 +341,27 @@ PROMPT;
                         }
                         $results[] = [
                             'resource_name' => $row->getAdGroupAd()->getResourceName(),
-                            'ad_id'         => $row->getAdGroupAd()->getAd()->getId(),
-                            'ad_strength'   => $row->getAdGroupAd()->getAdStrength(),
-                            'ad_group'      => $row->getAdGroup()->getResourceName(),
-                            'headlines'     => $headlines,
-                            'descriptions'  => $descriptions,
+                            'ad_id' => $row->getAdGroupAd()->getAd()->getId(),
+                            'ad_strength' => $row->getAdGroupAd()->getAdStrength(),
+                            'ad_group' => $row->getAdGroup()->getResourceName(),
+                            'headlines' => $headlines,
+                            'descriptions' => $descriptions,
                         ];
                     }
+
                     return $results;
                 }
             };
 
             $resourceName = $campaign->google_ads_campaign_id;
-            if (!str_starts_with($resourceName, 'customers/')) {
+            if (! str_starts_with($resourceName, 'customers/')) {
                 $resourceName = "customers/{$customerId}/campaigns/{$resourceName}";
             }
 
             $ads = $service->fetchAdStrength($customerId, $resourceName);
 
             // Ad strength enum: 0=UNSPECIFIED, 1=UNKNOWN, 2=PENDING, 3=NO_ADS, 4=POOR, 5=AVERAGE, 6=GOOD, 7=EXCELLENT
-            $weakAds = array_filter($ads, fn($ad) => in_array($ad['ad_strength'], [4, 5], true));
+            $weakAds = array_filter($ads, fn ($ad) => in_array($ad['ad_strength'], [4, 5], true));
 
             $updater = new UpdateResponsiveSearchAd($customer);
 
@@ -374,7 +376,7 @@ PROMPT;
                     continue;
                 }
 
-                $newHeadlines    = array_merge(...array_column($newCopy, 'headlines'));
+                $newHeadlines = array_merge(...array_column($newCopy, 'headlines'));
                 $newDescriptions = array_merge(...array_column($newCopy, 'descriptions'));
 
                 $updated = ($updater)(
@@ -388,7 +390,7 @@ PROMPT;
 
                 if ($updated) {
                     $actions[] = [
-                        'ad_id'           => $ad['ad_id'],
+                        'ad_id' => $ad['ad_id'],
                         'strength_before' => $strengthLabel,
                         'headlines_added' => count($newHeadlines),
                     ];
@@ -398,14 +400,14 @@ PROMPT;
             }
         } catch (\Exception $e) {
             $errors[] = $e->getMessage();
-            Log::warning("QualityScoreImprovementAgent: Ad strength check failed for campaign {$campaign->id}: " . $e->getMessage());
+            Log::warning("QualityScoreImprovementAgent: Ad strength check failed for campaign {$campaign->id}: ".$e->getMessage());
         }
 
-        if (!empty($actions)) {
+        if (! empty($actions)) {
             AgentActivity::record(
                 'quality_score',
                 'ad_strength_improved',
-                "Pushed " . count($actions) . " RSA ad strength improvement(s) for \"{$campaign->name}\"",
+                'Pushed '.count($actions)." RSA ad strength improvement(s) for \"{$campaign->name}\"",
                 $campaign->customer_id,
                 $campaign->id,
                 ['actions' => $actions, 'errors' => $errors]
@@ -420,7 +422,7 @@ PROMPT;
         $pageContext = $customer->pages()
             ->limit(3)
             ->get(['title', 'content'])
-            ->map(fn($p) => trim("{$p->title}\n" . \Illuminate\Support\Str::limit($p->content ?? '', 300)))
+            ->map(fn ($p) => trim("{$p->title}\n".\Illuminate\Support\Str::limit($p->content ?? '', 300)))
             ->filter()
             ->implode("\n\n");
 
@@ -454,7 +456,7 @@ PROMPT;
                 return $data;
             }
         } catch (\Exception $e) {
-            Log::error('QualityScoreImprovementAgent: Ad strength copy generation failed: ' . $e->getMessage());
+            Log::error('QualityScoreImprovementAgent: Ad strength copy generation failed: '.$e->getMessage());
         }
 
         return [];

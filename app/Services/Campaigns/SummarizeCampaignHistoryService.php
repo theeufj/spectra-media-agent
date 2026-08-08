@@ -20,27 +20,29 @@ class SummarizeCampaignHistoryService
         try {
             $campaign = Campaign::findOrFail($campaignId);
             $campaignVersions = $campaign->versions()->orderBy('version_number', 'asc')->get();
-            $history = "";
+            $history = '';
 
             foreach ($campaignVersions as $version) {
                 $history .= "Version {$version->version_number}:\n";
-                $history .= json_encode($version->strategy_snapshot, JSON_PRETTY_PRINT) . "\n\n";
+                $history .= json_encode($version->strategy_snapshot, JSON_PRETTY_PRINT)."\n\n";
             }
 
             $prompt = "You are a marketing analyst. Summarize the following campaign history into a concise overview that can be used to inform future optimizations.\n\n{$history}";
 
             $response = $this->geminiService->generateContent(config('ai.models.default'), $prompt);
 
-            if (is_null($response) || !isset($response['text'])) {
-                Log::error("Failed to summarize campaign history: LLM response was null or missing.");
+            if (is_null($response) || ! isset($response['text'])) {
+                Log::error('Failed to summarize campaign history: LLM response was null or missing.');
+
                 return null;
             }
 
             return $response['text'];
         } catch (\Exception $e) {
-            Log::error("Error summarizing campaign history for campaign {$campaignId}: " . $e->getMessage(), [
+            Log::error("Error summarizing campaign history for campaign {$campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return null;
         }
     }

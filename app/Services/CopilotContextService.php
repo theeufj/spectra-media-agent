@@ -4,8 +4,8 @@ namespace App\Services;
 
 use App\Models\ABTest;
 use App\Models\Campaign;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\FacebookAds\InsightService;
+use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -43,44 +43,44 @@ class CopilotContextService
 
         // Campaign overview
         $c = $context['campaign'];
-        $sections[] = "## Campaign Overview\n" .
-            "Name: {$c['name']}\n" .
-            "Product Focus: {$c['product_focus']}\n" .
-            "Total Budget: \${$c['total_budget']}\n" .
-            "Daily Budget: \${$c['daily_budget']}\n" .
-            "Primary KPI: {$c['primary_kpi']}\n" .
-            "Goals: " . implode(', ', $c['goals'] ?? []) . "\n" .
-            "Target Market: {$c['target_market']}\n" .
-            "Start Date: {$c['start_date']}\n" .
+        $sections[] = "## Campaign Overview\n".
+            "Name: {$c['name']}\n".
+            "Product Focus: {$c['product_focus']}\n".
+            "Total Budget: \${$c['total_budget']}\n".
+            "Daily Budget: \${$c['daily_budget']}\n".
+            "Primary KPI: {$c['primary_kpi']}\n".
+            'Goals: '.implode(', ', $c['goals'] ?? [])."\n".
+            "Target Market: {$c['target_market']}\n".
+            "Start Date: {$c['start_date']}\n".
             "End Date: {$c['end_date']}";
 
         // Strategies
-        if (!empty($context['strategies'])) {
-            $stratSection = "## Active Strategies";
+        if (! empty($context['strategies'])) {
+            $stratSection = '## Active Strategies';
             foreach ($context['strategies'] as $strat) {
-                $stratSection .= "\n\n### {$strat['platform']} — {$strat['campaign_type']}\n" .
-                    "Status: {$strat['status']}\n" .
-                    "Ad Copy: " . mb_substr($strat['ad_copy_strategy'] ?? 'N/A', 0, 200) . "\n" .
-                    "Bidding: " . json_encode($strat['bidding_strategy'] ?? []);
+                $stratSection .= "\n\n### {$strat['platform']} — {$strat['campaign_type']}\n".
+                    "Status: {$strat['status']}\n".
+                    'Ad Copy: '.mb_substr($strat['ad_copy_strategy'] ?? 'N/A', 0, 200)."\n".
+                    'Bidding: '.json_encode($strat['bidding_strategy'] ?? []);
             }
             $sections[] = $stratSection;
         }
 
         // Performance data
-        if (!empty($context['performance'])) {
+        if (! empty($context['performance'])) {
             $perf = $context['performance'];
             $platform = $perf['platform'] ?? 'Unknown';
             $metrics = $perf['current'] ?? [];
             $historical = $perf['historical'] ?? [];
 
             $perfSection = "## Performance Data ({$platform})";
-            if (!empty($metrics)) {
+            if (! empty($metrics)) {
                 $perfSection .= "\n\nLast 30 Days:";
                 foreach ($metrics as $key => $val) {
                     $perfSection .= "\n- {$key}: {$val}";
                 }
             }
-            if (!empty($historical)) {
+            if (! empty($historical)) {
                 $perfSection .= "\n\nPrevious 30 Days:";
                 foreach ($historical as $key => $val) {
                     $perfSection .= "\n- {$key}: {$val}";
@@ -90,12 +90,12 @@ class CopilotContextService
         }
 
         // A/B Tests
-        if (!empty($context['ab_tests'])) {
-            $abSection = "## A/B Tests";
+        if (! empty($context['ab_tests'])) {
+            $abSection = '## A/B Tests';
             foreach ($context['ab_tests'] as $test) {
-                $abSection .= "\n\n### {$test['test_type']} test (Status: {$test['status']})\n" .
-                    "Started: {$test['started_at']}\n" .
-                    "Confidence: " . ($test['confidence_level'] ? round($test['confidence_level'] * 100, 1) . '%' : 'N/A');
+                $abSection .= "\n\n### {$test['test_type']} test (Status: {$test['status']})\n".
+                    "Started: {$test['started_at']}\n".
+                    'Confidence: '.($test['confidence_level'] ? round($test['confidence_level'] * 100, 1).'%' : 'N/A');
                 if ($test['winning_variant_id']) {
                     $abSection .= "\nWinner: {$test['winning_variant_id']}";
                 }
@@ -110,13 +110,13 @@ class CopilotContextService
         }
 
         // Optimization insights
-        if (!empty($context['optimization'])) {
+        if (! empty($context['optimization'])) {
             $opt = $context['optimization'];
-            $optSection = "## Latest Optimization Analysis";
+            $optSection = '## Latest Optimization Analysis';
             if (isset($opt['analysis'])) {
-                $optSection .= "\n" . mb_substr($opt['analysis'], 0, 500);
+                $optSection .= "\n".mb_substr($opt['analysis'], 0, 500);
             }
-            if (!empty($opt['recommendations'])) {
+            if (! empty($opt['recommendations'])) {
                 $optSection .= "\n\nTop Recommendations:";
                 foreach (array_slice($opt['recommendations'], 0, 5) as $rec) {
                     $optSection .= "\n- [{$rec['type']}] {$rec['description']} (Impact: {$rec['impact']}, Risk: {$rec['risk_level']})";
@@ -165,7 +165,7 @@ class CopilotContextService
     protected function getPerformanceData(Campaign $campaign): array
     {
         $customer = $campaign->customer;
-        if (!$customer) {
+        if (! $customer) {
             return [];
         }
 

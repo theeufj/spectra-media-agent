@@ -18,29 +18,30 @@ class ConversionActionsIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected string $customerId;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_GOOGLE_ADS_INTEGRATION_TESTS=true to run.');
         }
 
-        $this->customer   = Customer::whereNotNull('google_ads_customer_id')->firstOrFail();
+        $this->customer = Customer::whereNotNull('google_ads_customer_id')->firstOrFail();
         $this->customerId = $this->customer->cleanGoogleCustomerId();
     }
 
     public function test_creates_conversion_action_and_returns_resource_name(): void
     {
-        $service  = new CreateConversionAction($this->customer);
+        $service = new CreateConversionAction($this->customer);
         $resource = $service->create(
             customerId: $this->customerId,
-            name:       'PHPUnit Test Conversion ' . now()->timestamp,
-            type:       'WEBPAGE',
-            category:   'SUBMIT_LEAD_FORM',
-            value:      10.0,
+            name: 'PHPUnit Test Conversion '.now()->timestamp,
+            type: 'WEBPAGE',
+            category: 'SUBMIT_LEAD_FORM',
+            value: 10.0,
         );
 
         $this->assertNotNull($resource);
@@ -49,8 +50,8 @@ class ConversionActionsIntegrationTest extends TestCase
 
     public function test_gets_conversion_action_details(): void
     {
-        $service  = new GetConversionActionDetails($this->customer);
-        $actions  = $service->get($this->customerId);
+        $service = new GetConversionActionDetails($this->customer);
+        $actions = $service->get($this->customerId);
 
         $this->assertIsArray($actions);
         // Account should have at least one conversion action
@@ -63,7 +64,7 @@ class ConversionActionsIntegrationTest extends TestCase
 
     public function test_provision_conversions_command_runs_successfully(): void
     {
-        if (!env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
+        if (! env('RUN_GOOGLE_ADS_INTEGRATION_TESTS')) {
             $this->markTestSkipped('...');
         }
 
@@ -78,7 +79,7 @@ class ConversionActionsIntegrationTest extends TestCase
 
         // At least one of the conversion labels should be set after provisioning
         $labels = ['signup', 'try_now', 'pricing_visit', 'sandbox_launched'];
-        $found  = false;
+        $found = false;
 
         foreach ($labels as $label) {
             if (\App\Models\Setting::get("conversion_label.{$label}")) {

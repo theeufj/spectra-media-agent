@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * GoogleSearchService
- * 
+ *
  * Provides programmatic access to Google Custom Search API for competitor discovery
  * and market research. This complements the Gemini Google Search grounding by
  * providing structured search results.
@@ -15,7 +15,9 @@ use Illuminate\Support\Facades\Log;
 class GoogleSearchService
 {
     protected string $apiKey;
+
     protected string $searchEngineId;
+
     protected string $baseUrl = 'https://www.googleapis.com/customsearch/v1';
 
     public function __construct()
@@ -27,15 +29,16 @@ class GoogleSearchService
     /**
      * Perform a Google Custom Search.
      *
-     * @param string $query The search query
-     * @param int $num Number of results (1-10)
-     * @param int $start Starting index for pagination
+     * @param  string  $query  The search query
+     * @param  int  $num  Number of results (1-10)
+     * @param  int  $start  Starting index for pagination
      * @return array Search results
      */
     public function search(string $query, int $num = 10, int $start = 1): array
     {
         if (empty($this->apiKey) || empty($this->searchEngineId)) {
             Log::warning('GoogleSearchService: API key or Search Engine ID not configured');
+
             return ['error' => 'Search API not configured', 'items' => []];
         }
 
@@ -50,7 +53,7 @@ class GoogleSearchService
 
             if ($response->successful()) {
                 $data = $response->json();
-                
+
                 Log::info('GoogleSearchService: Search completed', [
                     'query' => $query,
                     'total_results' => $data['searchInformation']['totalResults'] ?? 0,
@@ -85,8 +88,8 @@ class GoogleSearchService
     /**
      * Search for competitors in a specific industry/niche.
      *
-     * @param string $businessType The type of business
-     * @param string $location Optional location filter
+     * @param  string  $businessType  The type of business
+     * @param  string  $location  Optional location filter
      * @return array Competitor search results
      */
     public function searchCompetitors(string $businessType, ?string $location = null): array
@@ -108,12 +111,12 @@ class GoogleSearchService
 
         foreach ($queries as $query) {
             $results = $this->search($query, 5);
-            
+
             foreach ($results['items'] ?? [] as $item) {
                 $domain = $this->extractDomain($item['link']);
-                
+
                 // Deduplicate by domain
-                if (!isset($seenDomains[$domain])) {
+                if (! isset($seenDomains[$domain])) {
                     $seenDomains[$domain] = true;
                     $item['domain'] = $domain;
                     $item['search_query'] = $query;
@@ -138,6 +141,7 @@ class GoogleSearchService
     public function searchIndustryNews(string $industry, int $num = 10): array
     {
         $query = "{$industry} industry news trends 2025";
+
         return $this->search($query, $num);
     }
 
@@ -189,6 +193,7 @@ class GoogleSearchService
     {
         $parsed = parse_url($url);
         $host = $parsed['host'] ?? '';
+
         return preg_replace('/^www\./', '', $host);
     }
 
@@ -197,6 +202,6 @@ class GoogleSearchService
      */
     public function isConfigured(): bool
     {
-        return !empty($this->apiKey) && !empty($this->searchEngineId);
+        return ! empty($this->apiKey) && ! empty($this->searchEngineId);
     }
 }

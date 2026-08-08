@@ -37,22 +37,24 @@ class RecordSiteConversion implements ShouldQueue
     public function handle(): void
     {
         $resourceName = Setting::get("conversion_resource_name.{$this->event}");
-        if (!$resourceName) {
+        if (! $resourceName) {
             Log::debug("RecordSiteConversion: resource_name not in settings for '{$this->event}' — skipping");
+
             return;
         }
 
         // resource name format: customers/{operatingAccountId}/conversionActions/{conversionActionId}
-        $parts              = explode('/', $resourceName);
+        $parts = explode('/', $resourceName);
         $operatingAccountId = $parts[1] ?? null;
         $conversionActionId = $parts[3] ?? null;
-        if (!$operatingAccountId || !$conversionActionId) {
+        if (! $operatingAccountId || ! $conversionActionId) {
             Log::error("RecordSiteConversion: could not parse resource_name '{$resourceName}' for '{$this->event}'");
+
             return;
         }
 
-        $config   = config("conversions.events.{$this->event}", []);
-        $value    = (float) ($config['value'] ?? 0);
+        $config = config("conversions.events.{$this->event}", []);
+        $value = (float) ($config['value'] ?? 0);
         $currency = $config['currency'] ?? 'USD';
 
         $users = $this->customer->users()->whereNotNull('gclid')->get();
@@ -60,7 +62,7 @@ class RecordSiteConversion implements ShouldQueue
             return;
         }
 
-        $dataManager = new DataManagerService();
+        $dataManager = new DataManagerService;
 
         foreach ($users as $user) {
             $result = $dataManager->ingestGclidConversion(
@@ -74,16 +76,16 @@ class RecordSiteConversion implements ShouldQueue
             );
 
             SpectraConversionEvent::record($this->event, $user->id, [
-                'gclid'    => $user->gclid,
-                'mode'     => 'server',
+                'gclid' => $user->gclid,
+                'mode' => 'server',
                 'uploaded' => $result['success'],
             ]);
 
             if ($result['success']) {
-                Log::info("RecordSiteConversion: uploaded '{$this->event}' for gclid {$user->gclid} (request " . ($result['requestId'] ?? 'n/a') . ')');
+                Log::info("RecordSiteConversion: uploaded '{$this->event}' for gclid {$user->gclid} (request ".($result['requestId'] ?? 'n/a').')');
             } else {
-                Log::warning("RecordSiteConversion: upload failed for '{$this->event}': " . ($result['error'] ?? 'unknown'), [
-                    'gclid'    => $user->gclid,
+                Log::warning("RecordSiteConversion: upload failed for '{$this->event}': ".($result['error'] ?? 'unknown'), [
+                    'gclid' => $user->gclid,
                     'customer' => $this->customer->id,
                 ]);
             }

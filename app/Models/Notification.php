@@ -48,26 +48,26 @@ class Notification extends Model
             }
 
             if (is_array($data)) {
-                if (empty($notification->title) && !empty($data['title'])) {
+                if (empty($notification->title) && ! empty($data['title'])) {
                     $notification->title = $data['title'];
                 }
-                if (empty($notification->message) && !empty($data['message'])) {
+                if (empty($notification->message) && ! empty($data['message'])) {
                     $notification->message = $data['message'];
                 }
-                if (empty($notification->action_url) && !empty($data['action_url'])) {
+                if (empty($notification->action_url) && ! empty($data['action_url'])) {
                     $notification->action_url = $data['action_url'];
                 }
-                if (empty($notification->action_text) && !empty($data['action_text'])) {
+                if (empty($notification->action_text) && ! empty($data['action_text'])) {
                     $notification->action_text = $data['action_text'];
                 }
-                if (empty($notification->customer_id) && !empty($data['customer_id'])) {
+                if (empty($notification->customer_id) && ! empty($data['customer_id'])) {
                     $notification->customer_id = $data['customer_id'];
-                } elseif (empty($notification->customer_id) && !empty($data['details']['customer_id'])) {
+                } elseif (empty($notification->customer_id) && ! empty($data['details']['customer_id'])) {
                     $notification->customer_id = $data['details']['customer_id'];
                 }
-                
+
                 // Adjust type from Laravel class name to standard string if configured that way
-                if (!empty($data['alert_type'])) {
+                if (! empty($data['alert_type'])) {
                     $notification->type = $data['alert_type'];
                 }
             }
@@ -86,15 +86,25 @@ class Notification extends Model
      * Notification types constants.
      */
     const TYPE_STRATEGY_READY = 'campaign.strategy_ready';
+
     const TYPE_COLLATERAL_READY = 'campaign.collateral_ready';
+
     const TYPE_DEPLOYMENT_STARTED = 'deployment.started';
+
     const TYPE_DEPLOYMENT_COMPLETED = 'deployment.completed';
+
     const TYPE_DEPLOYMENT_FAILED = 'deployment.failed';
+
     const TYPE_HEALTH_WARNING = 'health.warning';
+
     const TYPE_HEALTH_CRITICAL = 'health.critical';
+
     const TYPE_SYSTEM_INFO = 'system.info';
+
     const TYPE_BILLING_WARNING = 'billing.warning';
+
     const TYPE_BILLING_SUCCESS = 'billing.success';
+
     const TYPE_AB_TEST_COMPLETE = 'ab_test.complete';
 
     /**
@@ -160,7 +170,7 @@ class Notification extends Model
      */
     public function isRead(): bool
     {
-        return !is_null($this->read_at);
+        return ! is_null($this->read_at);
     }
 
     /**

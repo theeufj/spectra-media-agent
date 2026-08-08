@@ -10,7 +10,7 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
     /**
      * Fetch campaign performance segmented by device (MOBILE, DESKTOP, TABLET).
      *
-     * @return array  Keyed by device enum value: ['clicks','impressions','cost_micros','conversions','cpa_micros']
+     * @return array Keyed by device enum value: ['clicks','impressions','cost_micros','conversions','cpa_micros']
      */
     public function byDevice(string $customerId, string $campaignResourceName, string $dateRange = 'LAST_30_DAYS'): array
     {
@@ -24,19 +24,19 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
                   WHERE campaign.resource_name = '{$campaignResourceName}'
                     AND segments.date DURING {$dateRange}";
 
-        return $this->executeSegmentQuery($customerId, $query, fn($row) => [
-            'key'          => $row->getSegments()->getDevice(),
-            'clicks'       => $row->getMetrics()->getClicks(),
-            'impressions'  => $row->getMetrics()->getImpressions(),
-            'cost_micros'  => $row->getMetrics()->getCostMicros(),
-            'conversions'  => $row->getMetrics()->getConversions(),
+        return $this->executeSegmentQuery($customerId, $query, fn ($row) => [
+            'key' => $row->getSegments()->getDevice(),
+            'clicks' => $row->getMetrics()->getClicks(),
+            'impressions' => $row->getMetrics()->getImpressions(),
+            'cost_micros' => $row->getMetrics()->getCostMicros(),
+            'conversions' => $row->getMetrics()->getConversions(),
         ]);
     }
 
     /**
      * Fetch campaign performance segmented by hour of day (0–23).
      *
-     * @return array  Keyed by hour (0-23)
+     * @return array Keyed by hour (0-23)
      */
     public function byHour(string $customerId, string $campaignResourceName, string $dateRange = 'LAST_30_DAYS'): array
     {
@@ -50,9 +50,9 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
                   WHERE campaign.resource_name = '{$campaignResourceName}'
                     AND segments.date DURING {$dateRange}";
 
-        return $this->executeSegmentQuery($customerId, $query, fn($row) => [
-            'key'         => $row->getSegments()->getHour(),
-            'clicks'      => $row->getMetrics()->getClicks(),
+        return $this->executeSegmentQuery($customerId, $query, fn ($row) => [
+            'key' => $row->getSegments()->getHour(),
+            'clicks' => $row->getMetrics()->getClicks(),
             'impressions' => $row->getMetrics()->getImpressions(),
             'cost_micros' => $row->getMetrics()->getCostMicros(),
             'conversions' => $row->getMetrics()->getConversions(),
@@ -62,7 +62,7 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
     /**
      * Fetch campaign performance segmented by day of week (MONDAY–SUNDAY).
      *
-     * @return array  Keyed by DayOfWeek enum value
+     * @return array Keyed by DayOfWeek enum value
      */
     public function byDayOfWeek(string $customerId, string $campaignResourceName, string $dateRange = 'LAST_30_DAYS'): array
     {
@@ -76,9 +76,9 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
                   WHERE campaign.resource_name = '{$campaignResourceName}'
                     AND segments.date DURING {$dateRange}";
 
-        return $this->executeSegmentQuery($customerId, $query, fn($row) => [
-            'key'         => $row->getSegments()->getDayOfWeek(),
-            'clicks'      => $row->getMetrics()->getClicks(),
+        return $this->executeSegmentQuery($customerId, $query, fn ($row) => [
+            'key' => $row->getSegments()->getDayOfWeek(),
+            'clicks' => $row->getMetrics()->getClicks(),
             'impressions' => $row->getMetrics()->getImpressions(),
             'cost_micros' => $row->getMetrics()->getCostMicros(),
             'conversions' => $row->getMetrics()->getConversions(),
@@ -97,10 +97,10 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
 
             foreach ($stream->iterateAllElements() as $row) {
                 $mapped = $mapper($row);
-                $key    = $mapped['key'];
+                $key = $mapped['key'];
                 unset($mapped['key']);
 
-                if (!isset($results[$key])) {
+                if (! isset($results[$key])) {
                     $results[$key] = array_merge($mapped, ['cpa_micros' => 0.0]);
                 } else {
                     foreach (['clicks', 'impressions', 'cost_micros', 'conversions'] as $field) {
@@ -114,7 +114,7 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
                 }
             }
         } catch (\Exception $e) {
-            $this->logError('GetPerformanceBySegment failed: ' . $e->getMessage());
+            $this->logError('GetPerformanceBySegment failed: '.$e->getMessage());
         }
 
         return $results;

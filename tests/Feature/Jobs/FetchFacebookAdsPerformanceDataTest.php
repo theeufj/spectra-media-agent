@@ -23,7 +23,7 @@ class FetchFacebookAdsPerformanceDataTest extends TestCase
     {
         parent::setUp();
 
-        if (!env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
+        if (! env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_FACEBOOK_INTEGRATION_TESTS=true to run.');
         }
 
@@ -71,7 +71,7 @@ class FetchFacebookAdsPerformanceDataTest extends TestCase
     {
         $customer = Customer::factory()->create(['facebook_ads_account_id' => '987654321']);
         $campaign = Campaign::factory()->create([
-            'customer_id'              => $customer->id,
+            'customer_id' => $customer->id,
             'facebook_ads_campaign_id' => null,
         ]);
 

@@ -5,20 +5,17 @@ namespace App\Jobs;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Notifications\MaintenanceSummaryNotification;
-use App\Services\Agents\SelfHealingAgent;
-use App\Services\Agents\SearchTermMiningAgent;
-use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\AdExtensionAgent;
-use App\Services\Agents\BidAdjustmentAgent;
-use App\Services\Agents\QualityScoreImprovementAgent;
-use App\Services\Agents\CreativeIntelligenceAgent;
-use App\Services\Agents\FacebookLearningPhaseAgent;
-use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
-use App\Services\Agents\LinkedInCampaignOptimizationAgent;
 use App\Services\Agents\AudienceIntelligenceAgent;
-use App\Jobs\ExpandBroadMatchKeywords;
-use App\Jobs\FindUnderperformingKeywords;
-use App\Jobs\SetupConversionTracking;
+use App\Services\Agents\BidAdjustmentAgent;
+use App\Services\Agents\BudgetIntelligenceAgent;
+use App\Services\Agents\CreativeIntelligenceAgent;
+use App\Services\Agents\FacebookAdRelevanceDiagnosticsAgent;
+use App\Services\Agents\FacebookLearningPhaseAgent;
+use App\Services\Agents\LinkedInCampaignOptimizationAgent;
+use App\Services\Agents\QualityScoreImprovementAgent;
+use App\Services\Agents\SearchTermMiningAgent;
+use App\Services\Agents\SelfHealingAgent;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -29,7 +26,7 @@ use Illuminate\Support\Facades\Log;
 
 class AutomatedCampaignMaintenance implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
      * Execute the job.
@@ -47,7 +44,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         LinkedInCampaignOptimizationAgent $linkedInAgent,
         AudienceIntelligenceAgent $audienceAgent
     ): void {
-        Log::info("AutomatedCampaignMaintenance: Starting daily maintenance run");
+        Log::info('AutomatedCampaignMaintenance: Starting daily maintenance run');
         $runStart = $this->startRun();
 
         // Per-customer digest: customer_id → [campaign_name => changes]
@@ -56,10 +53,10 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         // Get all active campaigns (Google, Facebook, Microsoft, and LinkedIn)
         $campaigns = Campaign::with('customer')
             ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
-            ->where(fn($q) => $q->whereNotNull('google_ads_campaign_id')
-                                ->orWhereNotNull('facebook_ads_campaign_id')
-                                ->orWhereNotNull('microsoft_ads_campaign_id')
-                                ->orWhereNotNull('linkedin_campaign_id'))
+            ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
+                ->orWhereNotNull('facebook_ads_campaign_id')
+                ->orWhereNotNull('microsoft_ads_campaign_id')
+                ->orWhereNotNull('linkedin_campaign_id'))
             ->get();
 
         $summary = [
@@ -80,19 +77,20 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         foreach ($campaigns as $campaign) {
             // Skip if another worker is already processing this campaign
             $lock = Cache::lock("maintenance:campaign:{$campaign->id}", 3600);
-            if (!$lock->get()) {
+            if (! $lock->get()) {
                 Log::info("AutomatedCampaignMaintenance: Campaign {$campaign->id} already being processed, skipping");
+
                 continue;
             }
 
             try {
-                Log::info("AutomatedCampaignMaintenance: Processing campaign", [
+                Log::info('AutomatedCampaignMaintenance: Processing campaign', [
                     'campaign_id' => $campaign->id,
                     'name' => $campaign->name,
-                    'has_google' => !empty($campaign->google_ads_campaign_id),
-                    'has_facebook' => !empty($campaign->facebook_ads_campaign_id),
-                    'has_microsoft' => !empty($campaign->microsoft_ads_campaign_id),
-                    'has_linkedin' => !empty($campaign->linkedin_campaign_id),
+                    'has_google' => ! empty($campaign->google_ads_campaign_id),
+                    'has_facebook' => ! empty($campaign->facebook_ads_campaign_id),
+                    'has_microsoft' => ! empty($campaign->microsoft_ads_campaign_id),
+                    'has_linkedin' => ! empty($campaign->linkedin_campaign_id),
                 ]);
 
                 // Track platform
@@ -121,7 +119,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 }
 
                 // 1c. Facebook Ad Relevance Diagnostics (Facebook equivalent of QS improvement)
-                if ($campaign->facebook_ads_campaign_id && !FacebookLearningPhaseAgent::isOnHold($campaign)) {
+                if ($campaign->facebook_ads_campaign_id && ! FacebookLearningPhaseAgent::isOnHold($campaign)) {
                     $fbRelevanceAgent->analyze($campaign);
                 }
 
@@ -179,7 +177,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $budgetResults = $budgetAgent->optimize($campaign);
                 $summary['budget_adjustments'] += count(array_filter(
                     $budgetResults['adjustments'] ?? [],
-                    fn($a) => $a['type'] === 'budget_updated'
+                    fn ($a) => $a['type'] === 'budget_updated'
                 ));
                 $summary['errors'] += count($budgetResults['errors'] ?? []);
 
@@ -194,19 +192,19 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
                 // Accumulate per-customer digest
                 $customerId = $campaign->customer_id;
-                $healed     = count($healingResults['actions_taken'] ?? []);
-                $kwAdded    = count($miningResults['keywords_added'] ?? []);
-                $negAdded   = count($miningResults['negatives_added'] ?? []);
-                $budgetAdj  = count(array_filter($budgetResults['adjustments'] ?? [], fn($a) => ($a['type'] ?? '') === 'budget_updated'));
-                $creative   = count($creativeResults['recommendations'] ?? [])
+                $healed = count($healingResults['actions_taken'] ?? []);
+                $kwAdded = count($miningResults['keywords_added'] ?? []);
+                $negAdded = count($miningResults['negatives_added'] ?? []);
+                $budgetAdj = count(array_filter($budgetResults['adjustments'] ?? [], fn ($a) => ($a['type'] ?? '') === 'budget_updated'));
+                $creative = count($creativeResults['recommendations'] ?? [])
                             + count($creativeResults['generated_variations']['headlines'] ?? [])
                             + count($creativeResults['generated_variations']['descriptions'] ?? []);
 
                 $customerDigests[$customerId][$campaign->name] = [
-                    'total_changes'      => $healed + $kwAdded + $negAdded + $budgetAdj + $creative,
-                    'healed'             => $healed ?: null,
-                    'keywords_added'     => $kwAdded ?: null,
-                    'negatives_added'    => $negAdded ?: null,
+                    'total_changes' => $healed + $kwAdded + $negAdded + $budgetAdj + $creative,
+                    'healed' => $healed ?: null,
+                    'keywords_added' => $kwAdded ?: null,
+                    'negatives_added' => $negAdded ?: null,
                     'budget_adjustments' => $budgetAdj ?: null,
                     'creative_adjustments' => $creative ?: null,
                 ];
@@ -226,7 +224,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 $healingActionCount = count($healingResults['actions_taken'] ?? []);
                 $keywordsAdded = count($miningResults['keywords_added'] ?? []);
                 $negativesAdded = count($miningResults['negatives_added'] ?? []);
-                $budgetChangeCount = count(array_filter($budgetResults['adjustments'] ?? [], fn($a) => $a['type'] === 'budget_updated'));
+                $budgetChangeCount = count(array_filter($budgetResults['adjustments'] ?? [], fn ($a) => $a['type'] === 'budget_updated'));
                 $creativeGenCount = count($creativeResults['generated_variations']['headlines'] ?? []) + count($creativeResults['generated_variations']['descriptions'] ?? []);
 
                 if ($healingActionCount > 0) {
@@ -243,8 +241,10 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                 }
 
             } catch (\Exception $e) {
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
                 $summary['errors']++;
-                Log::error("AutomatedCampaignMaintenance: Failed to process campaign", [
+                Log::error('AutomatedCampaignMaintenance: Failed to process campaign', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
                 ]);
@@ -253,17 +253,17 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             }
         }
 
-        Log::info("AutomatedCampaignMaintenance: Completed daily maintenance", $summary);
+        Log::info('AutomatedCampaignMaintenance: Completed daily maintenance', $summary);
 
         // Per-customer post-processing: cross-platform reallocation check + summary email
         foreach ($customerDigests as $customerId => $campaignChanges) {
             $customer = \App\Models\Customer::find($customerId);
-            if (!$customer) {
+            if (! $customer) {
                 continue;
             }
 
             // Ensure conversion tracking is set up (dispatches once; job self-skips if already done)
-            if (!$customer->conversion_action_id) {
+            if (! $customer->conversion_action_id) {
                 SetupConversionTracking::dispatch($customer);
             }
 
@@ -271,14 +271,18 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             try {
                 $budgetAgent->checkCrossPlatformReallocation($customer);
             } catch (\Exception $e) {
-                Log::warning("AutomatedCampaignMaintenance: Cross-platform reallocation check failed for customer {$customerId}: " . $e->getMessage());
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
+                Log::warning("AutomatedCampaignMaintenance: Cross-platform reallocation check failed for customer {$customerId}: ".$e->getMessage());
             }
 
             // Facebook audience refresh cycle (stale lookalikes + frequency expansion)
             try {
                 $audienceAgent->refreshFacebookAudiences($customer);
             } catch (\Exception $e) {
-                Log::warning("AutomatedCampaignMaintenance: Audience refresh failed for customer {$customerId}: " . $e->getMessage());
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
+                Log::warning("AutomatedCampaignMaintenance: Audience refresh failed for customer {$customerId}: ".$e->getMessage());
             }
 
             $processed = count($campaignChanges);
@@ -297,7 +301,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             actions: $totalActions,
             errors: $summary['errors'] ?? 0,
             warnings: $summary['healing_warnings'] ?? 0,
-            scope: ($summary['campaigns_processed'] ?? 0) . ' campaigns',
+            scope: ($summary['campaigns_processed'] ?? 0).' campaigns',
             details: $summary
         );
     }
@@ -307,7 +311,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('AutomatedCampaignMaintenance failed: ' . $exception->getMessage(), [
+        Log::error('AutomatedCampaignMaintenance failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
         $this->recordRunFailure($exception);

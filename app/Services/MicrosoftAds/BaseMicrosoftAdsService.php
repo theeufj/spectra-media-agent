@@ -19,12 +19,19 @@ abstract class BaseMicrosoftAdsService
     use RetryableApiOperation;
 
     protected string $platform = 'microsoft_ads';
+
     protected ?string $accessToken = null;
+
     protected Customer $customer;
+
     protected array $config;
+
     protected string $campaignWsdl = 'https://campaign.api.bingads.microsoft.com/Api/Advertiser/CampaignManagement/v13/CampaignManagementService.svc?singleWsdl';
+
     protected string $reportingWsdl = 'https://reporting.api.bingads.microsoft.com/Api/Advertiser/Reporting/v13/ReportingService.svc?singleWsdl';
+
     protected string $namespace = 'https://bingads.microsoft.com/CampaignManagement/v13';
+
     protected string $reportingNamespace = 'https://bingads.microsoft.com/Reporting/v13';
 
     public function __construct(Customer $customer)
@@ -43,29 +50,31 @@ abstract class BaseMicrosoftAdsService
         try {
             $refreshToken = $this->config['refresh_token'] ?? null;
 
-            if (!$refreshToken) {
+            if (! $refreshToken) {
                 Log::error('Microsoft Ads: No management refresh token configured. Set MICROSOFT_ADS_REFRESH_TOKEN in .env');
+
                 return;
             }
 
             // Cache access tokens to avoid a round-trip on every service instantiation.
             // Key on a hash of the refresh token so different credentials get separate entries.
-            $cacheKey = 'microsoft_ads_access_token_' . substr(md5($refreshToken), 0, 16);
-            $cached   = Cache::get($cacheKey);
+            $cacheKey = 'microsoft_ads_access_token_'.substr(md5($refreshToken), 0, 16);
+            $cached = Cache::get($cacheKey);
 
             if ($cached) {
                 $this->accessToken = $cached;
+
                 return;
             }
 
             $tenantId = $this->config['tenant_id'] ?? 'common';
 
             $response = Http::asForm()->post("https://login.microsoftonline.com/{$tenantId}/oauth2/v2.0/token", [
-                'client_id'     => $this->config['client_id'],
+                'client_id' => $this->config['client_id'],
                 'client_secret' => $this->config['client_secret'],
                 'refresh_token' => $refreshToken,
-                'grant_type'    => 'refresh_token',
-                'scope'         => 'https://ads.microsoft.com/msads.manage offline_access',
+                'grant_type' => 'refresh_token',
+                'scope' => 'https://ads.microsoft.com/msads.manage offline_access',
             ]);
 
             if ($response->successful()) {
@@ -75,8 +84,8 @@ abstract class BaseMicrosoftAdsService
                 Cache::put($cacheKey, $this->accessToken, now()->addSeconds(max(0, $expiresIn - 300)));
             } else {
                 Log::error('Microsoft Ads authentication failed', [
-                    'status'    => $response->status(),
-                    'error'     => $response->json('error'),
+                    'status' => $response->status(),
+                    'error' => $response->json('error'),
                     'error_description' => $response->json('error_description'),
                 ]);
             }
@@ -95,7 +104,9 @@ abstract class BaseMicrosoftAdsService
      */
     protected function apiCall(string $operation, array $body): ?array
     {
-        if (!$this->ensureAuthenticated()) return null;
+        if (! $this->ensureAuthenticated()) {
+            return null;
+        }
 
         try {
             $client = new \SoapClient($this->campaignWsdl, [
@@ -122,9 +133,9 @@ abstract class BaseMicrosoftAdsService
                 'faultcode' => $e->faultcode ?? '',
                 'faultstring' => $e->faultstring ?? '',
                 'detail' => $e->detail ?? '',
-                'message' => $e->getMessage()
+                'message' => $e->getMessage(),
             ]);
-            throw new \Exception("Microsoft Ads API error: {$operation} - " . $e->getMessage());
+            throw new \Exception("Microsoft Ads API error: {$operation} - ".$e->getMessage());
         } catch (\Exception $e) {
             Log::error("Microsoft Ads API exception: {$operation}", ['error' => $e->getMessage()]);
             throw $e;
@@ -136,7 +147,9 @@ abstract class BaseMicrosoftAdsService
      */
     protected function reportingCall(string $operation, array $body): ?array
     {
-        if (!$this->ensureAuthenticated()) return null;
+        if (! $this->ensureAuthenticated()) {
+            return null;
+        }
 
         try {
             $client = new \SoapClient($this->reportingWsdl, [
@@ -158,6 +171,7 @@ abstract class BaseMicrosoftAdsService
             return json_decode(json_encode($response), true);
         } catch (\Exception $e) {
             Log::error("Microsoft Ads Reporting error: {$operation}", ['error' => $e->getMessage()]);
+
             return null;
         }
     }

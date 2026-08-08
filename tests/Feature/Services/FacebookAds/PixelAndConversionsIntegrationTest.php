@@ -17,32 +17,33 @@ class PixelAndConversionsIntegrationTest extends TestCase
     use DatabaseTransactions;
 
     protected Customer $customer;
+
     protected string $pixelId;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        if (!env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
+        if (! env('RUN_FACEBOOK_INTEGRATION_TESTS')) {
             $this->markTestSkipped('Set RUN_FACEBOOK_INTEGRATION_TESTS=true to run.');
         }
 
         config(['services.facebook.system_user_token' => env('FACEBOOK_SYSTEM_USER_TOKEN')]);
 
         $this->customer = Customer::whereNotNull('facebook_ads_account_id')->firstOrFail();
-        $this->pixelId  = env('FACEBOOK_SPECTRA_PIXEL_ID', $this->customer->facebook_pixel_id ?? '978925284547796');
+        $this->pixelId = env('FACEBOOK_SPECTRA_PIXEL_ID', $this->customer->facebook_pixel_id ?? '978925284547796');
     }
 
     public function test_sends_lead_event_via_capi_with_test_code(): void
     {
         $service = new ConversionsApiService($this->customer);
-        $result  = $service->sendEvent($this->pixelId, [
-            'event_name'      => 'Lead',
-            'event_time'      => time(),
+        $result = $service->sendEvent($this->pixelId, [
+            'event_name' => 'Lead',
+            'event_time' => time(),
             'test_event_code' => 'TEST12345',
-            'action_source'   => 'website',
+            'action_source' => 'website',
             'event_source_url' => 'https://sitetospend.com/try-now',
-            'user_data'       => [
+            'user_data' => [
                 'em' => [hash('sha256', 'integrationtest@example.com')],
             ],
         ]);
@@ -55,12 +56,12 @@ class PixelAndConversionsIntegrationTest extends TestCase
     public function test_sends_page_view_event_via_capi(): void
     {
         $service = new ConversionsApiService($this->customer);
-        $result  = $service->sendEvent($this->pixelId, [
-            'event_name'      => 'PageView',
-            'event_time'      => time(),
+        $result = $service->sendEvent($this->pixelId, [
+            'event_name' => 'PageView',
+            'event_time' => time(),
             'test_event_code' => 'TEST12345',
-            'action_source'   => 'website',
-            'user_data'       => [
+            'action_source' => 'website',
+            'user_data' => [
                 'em' => [hash('sha256', 'integrationtest@example.com')],
             ],
         ]);
@@ -72,12 +73,12 @@ class PixelAndConversionsIntegrationTest extends TestCase
     public function test_sends_complete_registration_event(): void
     {
         $service = new ConversionsApiService($this->customer);
-        $result  = $service->sendEvent($this->pixelId, [
-            'event_name'      => 'CompleteRegistration',
-            'event_time'      => time(),
+        $result = $service->sendEvent($this->pixelId, [
+            'event_name' => 'CompleteRegistration',
+            'event_time' => time(),
             'test_event_code' => 'TEST12345',
-            'action_source'   => 'website',
-            'user_data'       => [
+            'action_source' => 'website',
+            'user_data' => [
                 'em' => [hash('sha256', 'integrationtest@example.com')],
                 'fn' => [hash('sha256', 'testuser')],
             ],
@@ -91,7 +92,7 @@ class PixelAndConversionsIntegrationTest extends TestCase
     {
         $customerWithPixel = Customer::whereNotNull('facebook_pixel_id')->first();
 
-        if (!$customerWithPixel) {
+        if (! $customerWithPixel) {
             $this->markTestSkipped('No customer with facebook_pixel_id in DB.');
         }
 
@@ -106,12 +107,12 @@ class PixelAndConversionsIntegrationTest extends TestCase
     {
         // Verify the service hashes data — send uppercase email and confirm it's normalised
         $service = new ConversionsApiService($this->customer);
-        $result  = $service->sendEvent($this->pixelId, [
-            'event_name'      => 'Lead',
-            'event_time'      => time(),
+        $result = $service->sendEvent($this->pixelId, [
+            'event_name' => 'Lead',
+            'event_time' => time(),
             'test_event_code' => 'TEST12345',
-            'action_source'   => 'website',
-            'user_data'       => [
+            'action_source' => 'website',
+            'user_data' => [
                 'em' => [hash('sha256', 'integrationtest@example.com')],
             ],
         ]);

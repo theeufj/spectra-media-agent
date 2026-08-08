@@ -25,6 +25,7 @@ class VerifyDeployment implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
+
     public $backoff = [60, 120, 300]; // retry after 1m, 2m, 5m
 
     public function __construct(
@@ -39,6 +40,7 @@ class VerifyDeployment implements ShouldQueue
 
         if ($strategies->isEmpty()) {
             Log::info("VerifyDeployment: No deployed strategies to verify for campaign {$this->campaign->id}");
+
             return;
         }
 
@@ -52,9 +54,11 @@ class VerifyDeployment implements ShouldQueue
                     'deployment_status' => $verified ? 'verified' : 'deploy_unverified',
                 ]);
 
-                Log::info("VerifyDeployment: Strategy {$strategy->id} ({$strategy->platform}): " . ($verified ? 'verified' : 'unverified'));
+                Log::info("VerifyDeployment: Strategy {$strategy->id} ({$strategy->platform}): ".($verified ? 'verified' : 'unverified'));
             } catch (\Exception $e) {
-                Log::error("VerifyDeployment: Failed to verify strategy {$strategy->id}: " . $e->getMessage());
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
+                Log::error("VerifyDeployment: Failed to verify strategy {$strategy->id}: ".$e->getMessage());
             }
         }
     }
@@ -81,7 +85,7 @@ class VerifyDeployment implements ShouldQueue
             ?? $strategy->campaign->google_ads_campaign_id
             ?? null;
 
-        if (!$googleCampaignId || !$customer->google_ads_customer_id) {
+        if (! $googleCampaignId || ! $customer->google_ads_customer_id) {
             return false;
         }
 
@@ -89,7 +93,7 @@ class VerifyDeployment implements ShouldQueue
 
         // google_ads_campaign_id stores the full resource name (customers/X/campaigns/Y)
         $resourceName = $googleCampaignId;
-        if (!str_starts_with($resourceName, 'customers/')) {
+        if (! str_starts_with($resourceName, 'customers/')) {
             $resourceName = "customers/{$customerId}/campaigns/{$googleCampaignId}";
         }
 
@@ -105,7 +109,7 @@ class VerifyDeployment implements ShouldQueue
             ?? $strategy->facebook_campaign_id
             ?? null;
 
-        if (!$fbCampaignId || !$customer->facebook_ads_account_id) {
+        if (! $fbCampaignId || ! $customer->facebook_ads_account_id) {
             return false;
         }
 
@@ -131,7 +135,7 @@ class VerifyDeployment implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('VerifyDeployment failed: ' . $exception->getMessage(), [
+        Log::error('VerifyDeployment failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

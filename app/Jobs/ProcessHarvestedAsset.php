@@ -4,7 +4,6 @@ namespace App\Jobs;
 
 use App\Models\HarvestedAsset;
 use App\Services\AssetHarvestingService;
-use App\Services\GeminiService;
 use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -23,6 +22,7 @@ class ProcessHarvestedAsset implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 2;
+
     public $timeout = 600;
 
     public function __construct(
@@ -37,8 +37,9 @@ class ProcessHarvestedAsset implements ShouldQueue
         ]);
 
         $imageData = StorageHelper::get($this->asset->s3_path);
-        if (!$imageData) {
+        if (! $imageData) {
             $this->asset->update(['status' => 'failed']);
+
             return;
         }
 
@@ -53,7 +54,7 @@ class ProcessHarvestedAsset implements ShouldQueue
             if ($bgRemoved && isset($bgRemoved['data'])) {
                 $decodedBg = base64_decode($bgRemoved['data']);
                 $bgExt = $this->getExtension($bgRemoved['mimeType'] ?? 'image/png');
-                $bgPath = "harvested/{$customerId}/bg_removed_" . uniqid('', true) . ".{$bgExt}";
+                $bgPath = "harvested/{$customerId}/bg_removed_".uniqid('', true).".{$bgExt}";
 
                 try {
                     [$bgS3, $bgUrl] = StorageHelper::put($bgPath, $decodedBg, $bgRemoved['mimeType'] ?? 'image/png');
@@ -91,7 +92,7 @@ class ProcessHarvestedAsset implements ShouldQueue
 
             // Skip if classification says this crop isn't recommended
             $recommended = $details['recommended_crops'][$recommendedKey] ?? true;
-            if (!$recommended && $format !== 'landscape') {
+            if (! $recommended && $format !== 'landscape') {
                 // Always generate landscape; skip others only if not recommended
                 continue;
             }
@@ -101,7 +102,7 @@ class ProcessHarvestedAsset implements ShouldQueue
             if ($variant && isset($variant['data'])) {
                 $decoded = base64_decode($variant['data']);
                 $ext = $this->getExtension($variant['mimeType'] ?? 'image/jpeg');
-                $varPath = "harvested/{$customerId}/{$format}_" . uniqid('', true) . ".{$ext}";
+                $varPath = "harvested/{$customerId}/{$format}_".uniqid('', true).".{$ext}";
 
                 try {
                     [$varS3, $varUrl] = StorageHelper::put($varPath, $decoded, $variant['mimeType'] ?? 'image/jpeg');
@@ -136,12 +137,12 @@ class ProcessHarvestedAsset implements ShouldQueue
     protected function getBrandColors(): array
     {
         $customer = $this->asset->customer;
-        if (!$customer || !$customer->brandGuideline) {
+        if (! $customer || ! $customer->brandGuideline) {
             return [];
         }
 
         $palette = $customer->brandGuideline->color_palette;
-        if (!is_array($palette)) {
+        if (! is_array($palette)) {
             return [];
         }
 

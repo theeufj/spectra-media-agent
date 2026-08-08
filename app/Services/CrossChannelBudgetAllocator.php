@@ -2,15 +2,13 @@
 
 namespace App\Services;
 
-use App\Models\Campaign;
-use App\Models\Customer;
 use App\Models\CrossChannelRebalanceLog;
-use App\Models\GoogleAdsPerformanceData;
+use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Models\PlatformBudgetAllocation;
-use App\Services\GeminiService;
 use Illuminate\Support\Facades\Log;
 
 class CrossChannelBudgetAllocator
@@ -57,7 +55,7 @@ class CrossChannelBudgetAllocator
     public function rebalance(Customer $customer, string $trigger = 'manual'): array
     {
         $allocation = PlatformBudgetAllocation::where('customer_id', $customer->id)->first();
-        if (!$allocation) {
+        if (! $allocation) {
             return ['error' => 'No budget allocation configured'];
         }
 
@@ -249,7 +247,7 @@ class CrossChannelBudgetAllocator
                 $change = $suggested[$pctField] - $currentPct;
                 if (abs($change) >= 1) {
                     $direction = $change > 0 ? 'Increase' : 'Decrease';
-                    $reasons[] = "{$direction} " . str_replace('_', ' ', $platform) . " by " . abs(round($change, 1)) . "% based on efficiency score";
+                    $reasons[] = "{$direction} ".str_replace('_', ' ', $platform).' by '.abs(round($change, 1)).'% based on efficiency score';
                 }
             } else {
                 $suggested[$pctField] = 0;
@@ -317,7 +315,9 @@ class CrossChannelBudgetAllocator
         $suggested = $this->applyConstraints($suggested, $allocation->constraints);
         $sum = array_sum($suggested);
         if ($sum > 0 && abs($sum - 100) > 0.1) {
-            foreach ($suggested as &$v) { $v = round($v / $sum * 100, 1); }
+            foreach ($suggested as &$v) {
+                $v = round($v / $sum * 100, 1);
+            }
         }
 
         return ['suggested_splits' => $suggested, 'reasons' => ["ROAS target: {$target}x"], 'estimated_improvement_pct' => null];
@@ -330,12 +330,15 @@ class CrossChannelBudgetAllocator
         foreach ($activePlatforms as $platform) {
             $splits[str_replace('_ads', '_ads_pct', $platform)] = $pct;
         }
+
         return ['suggested_splits' => $splits, 'reasons' => ['Equal split across active platforms'], 'estimated_improvement_pct' => null];
     }
 
     protected function applyConstraints(array $splits, ?array $constraints): array
     {
-        if (!$constraints) return $splits;
+        if (! $constraints) {
+            return $splits;
+        }
 
         foreach (['google_ads_pct', 'facebook_ads_pct', 'microsoft_ads_pct', 'linkedin_ads_pct'] as $field) {
             $platform = str_replace('_pct', '', $field);
@@ -371,7 +374,7 @@ class CrossChannelBudgetAllocator
             foreach (['google_ads' => 'Google Ads', 'facebook_ads' => 'Facebook/Instagram', 'microsoft_ads' => 'Microsoft/Bing', 'linkedin_ads' => 'LinkedIn'] as $key => $name) {
                 $p = $snapshot[$key];
                 if ($p['campaigns'] > 0) {
-                    $prompt .= "- {$name}: Spend \${$p['spend']}, ROAS {$p['roas']}x, CPA \${$p['cpa']}, Conversions {$p['conversions']}, CTR " . ($p['ctr'] * 100) . "%, {$p['campaigns']} campaigns\n";
+                    $prompt .= "- {$name}: Spend \${$p['spend']}, ROAS {$p['roas']}x, CPA \${$p['cpa']}, Conversions {$p['conversions']}, CTR ".($p['ctr'] * 100)."%, {$p['campaigns']} campaigns\n";
                 } else {
                     $prompt .= "- {$name}: No active campaigns\n";
                 }
@@ -402,6 +405,7 @@ class CrossChannelBudgetAllocator
             return null;
         } catch (\Exception $e) {
             Log::warning('CrossChannelBudgetAllocator: AI reasoning failed', ['error' => $e->getMessage()]);
+
             return null;
         }
     }

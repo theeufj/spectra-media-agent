@@ -64,21 +64,22 @@ class GetCampaignKeywords extends BaseGoogleAdsService
             $keywords = [];
 
             foreach ($response->getIterator() as $row) {
-                $kw        = $row->getAdGroupCriterion()->getKeyword();
-                $metrics   = $segmented ? $row->getMetrics() : null;
+                $kw = $row->getAdGroupCriterion()->getKeyword();
+                $metrics = $segmented ? $row->getMetrics() : null;
                 $keywords[] = [
-                    'keyword_text'       => $kw->getText(),
-                    'match_type'         => $kw->getMatchType(),
+                    'keyword_text' => $kw->getText(),
+                    'match_type' => $kw->getMatchType(),
                     'criterion_resource' => $row->getAdGroupCriterion()->getResourceName(),
-                    'ad_group_resource'  => $row->getAdGroup()->getResourceName(),
-                    'clicks'             => $metrics?->getClicks(),
-                    'conversions'        => $metrics?->getConversions(),
+                    'ad_group_resource' => $row->getAdGroup()->getResourceName(),
+                    'clicks' => $metrics?->getClicks(),
+                    'conversions' => $metrics?->getConversions(),
                 ];
             }
 
             return $keywords;
         } catch (GoogleAdsException $e) {
-            $this->logError('GetCampaignKeywords: ' . $e->getMessage());
+            $this->logError('GetCampaignKeywords: '.$e->getMessage());
+
             return [];
         }
     }

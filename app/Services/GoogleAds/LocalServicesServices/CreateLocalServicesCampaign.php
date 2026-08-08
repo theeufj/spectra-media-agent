@@ -2,21 +2,21 @@
 
 namespace App\Services\GoogleAds\LocalServicesServices;
 
+use App\Models\Customer;
+use App\Services\CampaignStatusHelper;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
+use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
+use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
+use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Resources\Campaign\LocalServicesCampaignSettings;
 use Google\Ads\GoogleAds\V22\Resources\CampaignBudget;
-use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
-use Google\Ads\GoogleAds\V22\Enums\BudgetTypeEnum\BudgetType;
-use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V22\Services\CampaignBudgetOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
+use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest;
-use Google\Ads\GoogleAds\V22\Common\MaximizeConversions;
-use Google\Ads\GoogleAds\V22\Enums\EuPoliticalAdvertisingStatusEnum\EuPoliticalAdvertisingStatus;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
-use App\Services\CampaignStatusHelper;
+use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
 
 class CreateLocalServicesCampaign extends BaseGoogleAdsService
 {
@@ -36,13 +36,13 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
      * - Business must be verified through Local Services Ads program
      * - Business profile must be complete with license/insurance verification
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param array $campaignData Campaign details:
-     *   - businessName: string
-     *   - budget: float (daily budget in dollars)
-     *   - startDate: string (Y-m-d)
-     *   - endDate: string (Y-m-d)
-     *   - categoryBids: array (optional, array of ['category_id' => string, 'manual_cpa_bid_micros' => int])
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  array  $campaignData  Campaign details:
+     *                               - businessName: string
+     *                               - budget: float (daily budget in dollars)
+     *                               - startDate: string (Y-m-d)
+     *                               - endDate: string (Y-m-d)
+     *                               - categoryBids: array (optional, array of ['category_id' => string, 'manual_cpa_bid_micros' => int])
      * @return string|null The resource name of the created campaign, or null on failure.
      */
     public function __invoke(string $customerId, array $campaignData): ?string
@@ -53,12 +53,13 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
         $campaignBudgetResourceName = $this->createCampaignBudget($customerId, $campaignData['budget']);
         if (is_null($campaignBudgetResourceName)) {
             $this->logError("Failed to create campaign budget for Local Services campaign, customer $customerId.");
+
             return null;
         }
 
         // 2. Create Campaign
         $campaignParams = [
-            'name' => $campaignData['businessName'] . ' Local Services Campaign - ' . uniqid(),
+            'name' => $campaignData['businessName'].' Local Services Campaign - '.uniqid(),
             'advertising_channel_type' => AdvertisingChannelType::LOCAL_SERVICES,
             'campaign_budget' => $campaignBudgetResourceName,
             'status' => CampaignStatusHelper::getGoogleAdsStatus(),
@@ -69,10 +70,10 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
 
         // Local Services uses maximize conversions by default
         $campaign = new Campaign($campaignParams);
-        $campaign->setMaximizeConversions(new MaximizeConversions());
+        $campaign->setMaximizeConversions(new MaximizeConversions);
 
         // Optional: configure category bids
-        if (!empty($campaignData['categoryBids'])) {
+        if (! empty($campaignData['categoryBids'])) {
             $categoryBids = [];
             foreach ($campaignData['categoryBids'] as $bid) {
                 $categoryBids[] = new \Google\Ads\GoogleAds\V22\Resources\Campaign\CategoryBid([
@@ -87,7 +88,7 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
             $campaign->setLocalServicesCampaignSettings($localServicesSettings);
         }
 
-        $campaignOperation = new CampaignOperation();
+        $campaignOperation = new CampaignOperation;
         $campaignOperation->setCreate($campaign);
 
         try {
@@ -98,10 +99,12 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
             ]);
             $response = $campaignServiceClient->mutateCampaigns($request);
             $newCampaignResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Local Services campaign: " . $newCampaignResourceName);
+            $this->logInfo('Successfully created Local Services campaign: '.$newCampaignResourceName);
+
             return $newCampaignResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Local Services campaign for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Local Services campaign for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }
@@ -109,13 +112,13 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
     private function createCampaignBudget(string $customerId, float $budgetAmount): ?string
     {
         $campaignBudget = new CampaignBudget([
-            'name' => 'Daily Budget - ' . uniqid(),
+            'name' => 'Daily Budget - '.uniqid(),
             'amount_micros' => (int) ($budgetAmount * 1_000_000),
             'delivery_method' => BudgetType::STANDARD,
             'explicitly_shared' => false,
         ]);
 
-        $campaignBudgetOperation = new CampaignBudgetOperation();
+        $campaignBudgetOperation = new CampaignBudgetOperation;
         $campaignBudgetOperation->setCreate($campaignBudget);
 
         try {
@@ -126,10 +129,12 @@ class CreateLocalServicesCampaign extends BaseGoogleAdsService
             ]);
             $response = $campaignBudgetServiceClient->mutateCampaignBudgets($request);
             $newBudgetResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Local Services campaign budget: " . $newBudgetResourceName);
+            $this->logInfo('Successfully created Local Services campaign budget: '.$newBudgetResourceName);
+
             return $newBudgetResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Local Services campaign budget for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Local Services campaign budget for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

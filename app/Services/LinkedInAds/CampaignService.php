@@ -28,7 +28,9 @@ class CampaignService extends BaseLinkedInAdsService
     public function listCampaigns(?string $accountId = null): array
     {
         $accountId = $accountId ?? $this->customer->linkedin_ads_account_id;
-        if (!$accountId) return [];
+        if (! $accountId) {
+            return [];
+        }
 
         $result = $this->apiCall('adCampaigns', 'GET', null, [
             'q' => 'search',
@@ -44,7 +46,9 @@ class CampaignService extends BaseLinkedInAdsService
     public function createSponsoredContentCampaign(array $params): ?array
     {
         $accountId = $this->customer->linkedin_ads_account_id;
-        if (!$accountId) return null;
+        if (! $accountId) {
+            return null;
+        }
 
         $campaign = [
             'account' => "urn:li:sponsoredAccount:{$accountId}",
@@ -64,16 +68,16 @@ class CampaignService extends BaseLinkedInAdsService
         ];
 
         // Audience targeting
-        if (!empty($params['targeting'])) {
+        if (! empty($params['targeting'])) {
             $campaign['targetingCriteria'] = $this->buildTargetingCriteria($params['targeting']);
         }
 
         // Schedule
-        if (!empty($params['start_date'])) {
+        if (! empty($params['start_date'])) {
             $campaign['runSchedule'] = [
                 'start' => strtotime($params['start_date']) * 1000,
             ];
-            if (!empty($params['end_date'])) {
+            if (! empty($params['end_date'])) {
                 $campaign['runSchedule']['end'] = strtotime($params['end_date']) * 1000;
             }
         }
@@ -96,7 +100,9 @@ class CampaignService extends BaseLinkedInAdsService
     public function createMessageAdsCampaign(array $params): ?array
     {
         $accountId = $this->customer->linkedin_ads_account_id;
-        if (!$accountId) return null;
+        if (! $accountId) {
+            return null;
+        }
 
         $campaign = [
             'account' => "urn:li:sponsoredAccount:{$accountId}",
@@ -111,7 +117,7 @@ class CampaignService extends BaseLinkedInAdsService
             'status' => $params['status'] ?? 'PAUSED',
         ];
 
-        if (!empty($params['targeting'])) {
+        if (! empty($params['targeting'])) {
             $campaign['targetingCriteria'] = $this->buildTargetingCriteria($params['targeting']);
         }
 
@@ -161,7 +167,7 @@ class CampaignService extends BaseLinkedInAdsService
         $include = ['and' => []];
 
         // Job titles
-        if (!empty($targeting['job_titles'])) {
+        if (! empty($targeting['job_titles'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:titles' => $targeting['job_titles'],
@@ -170,7 +176,7 @@ class CampaignService extends BaseLinkedInAdsService
         }
 
         // Job functions
-        if (!empty($targeting['job_functions'])) {
+        if (! empty($targeting['job_functions'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:jobFunctions' => $targeting['job_functions'],
@@ -179,7 +185,7 @@ class CampaignService extends BaseLinkedInAdsService
         }
 
         // Industries
-        if (!empty($targeting['industries'])) {
+        if (! empty($targeting['industries'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:industries' => $targeting['industries'],
@@ -188,7 +194,7 @@ class CampaignService extends BaseLinkedInAdsService
         }
 
         // Company size
-        if (!empty($targeting['company_sizes'])) {
+        if (! empty($targeting['company_sizes'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:staffCountRanges' => $targeting['company_sizes'],
@@ -197,7 +203,7 @@ class CampaignService extends BaseLinkedInAdsService
         }
 
         // Skills
-        if (!empty($targeting['skills'])) {
+        if (! empty($targeting['skills'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:skills' => $targeting['skills'],
@@ -206,7 +212,7 @@ class CampaignService extends BaseLinkedInAdsService
         }
 
         // Seniority
-        if (!empty($targeting['seniorities'])) {
+        if (! empty($targeting['seniorities'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:seniorities' => $targeting['seniorities'],
@@ -215,7 +221,7 @@ class CampaignService extends BaseLinkedInAdsService
         }
 
         // Locations
-        if (!empty($targeting['locations'])) {
+        if (! empty($targeting['locations'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:locations' => $targeting['locations'],
@@ -224,7 +230,7 @@ class CampaignService extends BaseLinkedInAdsService
         }
 
         // Specific companies
-        if (!empty($targeting['companies'])) {
+        if (! empty($targeting['companies'])) {
             $include['and'][] = [
                 'or' => [
                     'urn:li:adTargetingFacet:employers' => $targeting['companies'],
@@ -234,7 +240,7 @@ class CampaignService extends BaseLinkedInAdsService
 
         return [
             'include' => $include,
-            'exclude' => $targeting['exclude'] ?? new \stdClass(),
+            'exclude' => $targeting['exclude'] ?? new \stdClass,
         ];
     }
 
@@ -244,7 +250,9 @@ class CampaignService extends BaseLinkedInAdsService
     public function getInsightTag(): ?array
     {
         $accountId = $this->customer->linkedin_ads_account_id;
-        if (!$accountId) return null;
+        if (! $accountId) {
+            return null;
+        }
 
         return $this->apiCall("adAccounts/{$accountId}/insightTag");
     }
@@ -255,7 +263,9 @@ class CampaignService extends BaseLinkedInAdsService
     public function createLeadGenForm(array $params): ?array
     {
         $accountId = $this->customer->linkedin_ads_account_id;
-        if (!$accountId) return null;
+        if (! $accountId) {
+            return null;
+        }
 
         $form = [
             'account' => "urn:li:sponsoredAccount:{$accountId}",
@@ -276,16 +286,18 @@ class CampaignService extends BaseLinkedInAdsService
     public function createCreative(string $campaignId, array $params): ?array
     {
         $accountId = $this->customer->linkedin_ads_account_id;
-        if (!$accountId) return null;
+        if (! $accountId) {
+            return null;
+        }
 
         $creative = [
-            'account'  => "urn:li:sponsoredAccount:{$accountId}",
+            'account' => "urn:li:sponsoredAccount:{$accountId}",
             'campaign' => "urn:li:adCampaign:{$campaignId}",
-            'status'   => 'ACTIVE',
-            'content'  => [
+            'status' => 'ACTIVE',
+            'content' => [
                 'adContent' => [
-                    'type'        => 'SPONSORED',
-                    'headline'    => substr($params['headline'] ?? '', 0, 200),
+                    'type' => 'SPONSORED',
+                    'headline' => substr($params['headline'] ?? '', 0, 200),
                     'description' => substr($params['description'] ?? '', 0, 600),
                     'callToAction' => [
                         'url' => $params['destination'] ?? '',

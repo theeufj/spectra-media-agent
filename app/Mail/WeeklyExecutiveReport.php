@@ -15,6 +15,7 @@ class WeeklyExecutiveReport extends Mailable
     use Queueable, SerializesModels;
 
     public User $user;
+
     public array $report;
 
     public function __construct(User $user, array $report)

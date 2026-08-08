@@ -17,6 +17,7 @@ class TrackKeywordRankings implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;
+
     public int $timeout = 300;
 
     public function __construct(
@@ -26,7 +27,9 @@ class TrackKeywordRankings implements ShouldQueue
     public function handle(): void
     {
         $customer = Customer::find($this->customerId);
-        if (!$customer || !$customer->website) return;
+        if (! $customer || ! $customer->website) {
+            return;
+        }
 
         $domain = parse_url($customer->website, PHP_URL_HOST) ?: $customer->website;
 
@@ -40,6 +43,7 @@ class TrackKeywordRankings implements ShouldQueue
 
         if (empty($keywords)) {
             Log::info('TrackKeywordRankings: No keywords to track', ['customer_id' => $this->customerId]);
+
             return;
         }
 
@@ -64,7 +68,7 @@ class TrackKeywordRankings implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('TrackKeywordRankings failed: ' . $exception->getMessage(), [
+        Log::error('TrackKeywordRankings failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

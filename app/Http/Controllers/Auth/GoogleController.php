@@ -42,13 +42,13 @@ class GoogleController extends Controller
         $user = User::firstOrCreate([
             'email' => $googleUser->getEmail(),
         ], [
-            'name'     => $googleUser->getName(),
+            'name' => $googleUser->getName(),
             'password' => Hash::make(Str::random(24)),
             'demo_url' => $demoUrl,
         ]);
 
         // Always mark email as verified when signing in via Google (Google has verified it)
-        if (!$user->email_verified_at) {
+        if (! $user->email_verified_at) {
             $user->email_verified_at = now();
             $user->save();
         }
@@ -58,7 +58,7 @@ class GoogleController extends Controller
         if ($user->wasRecentlyCreated) {
             Mail::to($user->email)->send(new WelcomeEmail($user->name));
             Mail::raw(
-                "New registration on SiteToSpend (Google OAuth)\n\nName: {$user->name}\nEmail: {$user->email}\nTime: " . now()->format('d M Y H:i T'),
+                "New registration on SiteToSpend (Google OAuth)\n\nName: {$user->name}\nEmail: {$user->email}\nTime: ".now()->format('d M Y H:i T'),
                 fn ($m) => $m->to(config('app.admin_email'))->subject("New signup: {$user->name}")
             );
         }

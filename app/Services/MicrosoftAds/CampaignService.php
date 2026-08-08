@@ -37,6 +37,7 @@ class CampaignService extends BaseMicrosoftAdsService
 
         if ($result && isset($result['CampaignIds'])) {
             Log::info('Microsoft Ads: Created campaign', ['id' => $result['CampaignIds']]);
+
             return $result;
         }
 
@@ -53,6 +54,28 @@ class CampaignService extends BaseMicrosoftAdsService
             'CampaignIds' => ['long' => [$campaignId]],
             'CampaignType' => 'Search',
         ]);
+    }
+
+    /**
+     * Current status of a single campaign (e.g. "Active", "Paused", "BudgetPaused").
+     *
+     * GetCampaignsByIds returns Campaigns.Campaign as either a single object or a
+     * list depending on how many IDs were requested, so both shapes are normalised.
+     */
+    public function getCampaignStatus(string $campaignId): ?string
+    {
+        $response = $this->getCampaign($campaignId);
+
+        $campaign = $response['Campaigns']['Campaign'] ?? null;
+        if ($campaign === null) {
+            return null;
+        }
+
+        if (array_is_list($campaign)) {
+            $campaign = $campaign[0] ?? null;
+        }
+
+        return $campaign['Status'] ?? null;
     }
 
     /**

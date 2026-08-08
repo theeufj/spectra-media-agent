@@ -33,7 +33,7 @@ class ImageCollateral extends Model
      */
     protected $casts = [
         'is_active' => 'boolean',
-        'is_seed'   => 'boolean',
+        'is_seed' => 'boolean',
     ];
 
     /**
@@ -76,7 +76,7 @@ class ImageCollateral extends Model
     {
         $user = $campaign->customer?->users()?->first();
 
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 

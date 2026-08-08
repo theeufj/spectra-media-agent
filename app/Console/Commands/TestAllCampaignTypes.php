@@ -2,39 +2,30 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Customer;
 use App\Services\GeminiService;
-use App\Services\GoogleAds\MCCAccountManager;
 use App\Services\GoogleAds\AccountStructureService;
-
-// Campaign creation services
-use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
-use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
-use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
-
-use App\Services\GoogleAds\DisplayServices\CreateDisplayCampaign;
-use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
-use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
-use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
-
-use App\Services\GoogleAds\PerformanceMaxServices\CreatePerformanceMaxCampaign;
-use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroupWithAssets;
-use App\Services\GoogleAds\PerformanceMaxServices\CreateImageAsset;
-use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
-
-use App\Services\GoogleAds\VideoServices\CreateVideoCampaign;
-use App\Services\GoogleAds\VideoServices\CreateVideoAdGroup;
-
-use App\Services\GoogleAds\DemandGenServices\CreateDemandGenCampaign;
-use App\Services\GoogleAds\DemandGenServices\CreateDemandGenAdGroup;
-use App\Services\GoogleAds\DemandGenServices\CreateDemandGenMultiAssetAd;
-
 use App\Services\GoogleAds\CommonServices\AddKeyword;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
+// Campaign creation services
+use App\Services\GoogleAds\DemandGenServices\CreateDemandGenAdGroup;
+use App\Services\GoogleAds\DemandGenServices\CreateDemandGenCampaign;
+use App\Services\GoogleAds\DemandGenServices\CreateDemandGenMultiAssetAd;
+use App\Services\GoogleAds\DisplayServices\CreateDisplayAdGroup;
+use App\Services\GoogleAds\DisplayServices\CreateDisplayCampaign;
+use App\Services\GoogleAds\DisplayServices\CreateResponsiveDisplayAd;
+use App\Services\GoogleAds\DisplayServices\UploadImageAsset;
 use App\Services\GoogleAds\KeywordResearch\KeywordResearchService;
-use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use App\Services\GoogleAds\MCCAccountManager;
+use App\Services\GoogleAds\PerformanceMaxServices\CreateAssetGroupWithAssets;
+use App\Services\GoogleAds\PerformanceMaxServices\CreatePerformanceMaxCampaign;
+use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
+use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
+use App\Services\GoogleAds\SearchServices\CreateSearchAdGroup;
+use App\Services\GoogleAds\SearchServices\CreateSearchCampaign;
 use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
+use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
+use Illuminate\Console\Command;
 
 class TestAllCampaignTypes extends Command
 {
@@ -46,6 +37,7 @@ class TestAllCampaignTypes extends Command
     protected $description = 'Create ONE sub-account under the MCC, then create all campaign types (Search, Display, PMax, Video, Demand Gen) with budgets, images, and ads — then verify everything.';
 
     private array $results = [];
+
     private string $businessName;
 
     public function handle(): int
@@ -66,15 +58,16 @@ class TestAllCampaignTypes extends Command
         $this->info('[1/7] Resolving Google Ads account...');
 
         $customer = $this->resolveCustomer();
-        if (!$customer) {
+        if (! $customer) {
             return 1;
         }
         $customerId = $customer->google_ads_customer_id;
 
-        if (!$customerId) {
+        if (! $customerId) {
             $customerId = $this->provisionAccount($customer);
-            if (!$customerId) {
+            if (! $customerId) {
                 $this->error('Failed to provision a Google Ads sub-account.');
+
                 return 1;
             }
         }
@@ -91,9 +84,10 @@ class TestAllCampaignTypes extends Command
         $images = $this->generateTestImages();
         if (empty($images)) {
             $this->error('Failed to generate any test images. Cannot continue.');
+
             return 1;
         }
-        $this->info("  Generated " . count($images) . " test images");
+        $this->info('  Generated '.count($images).' test images');
         $this->newLine();
 
         // ──────────────────────────────────────────────
@@ -102,7 +96,7 @@ class TestAllCampaignTypes extends Command
         $this->info('[3/7] Uploading image assets to Google Ads...');
 
         $imageAssets = $this->uploadImageAssets($customer, $customerId, $images);
-        $this->info("  Uploaded " . count($imageAssets) . " image assets");
+        $this->info('  Uploaded '.count($imageAssets).' image assets');
         $this->newLine();
 
         // ──────────────────────────────────────────────
@@ -153,12 +147,14 @@ class TestAllCampaignTypes extends Command
         $failures = collect($this->results)->where(1, 'FAILED')->count();
         if ($failures > 0) {
             $this->warn("{$failures} step(s) failed. Check logs for details.");
+
             return 1;
         }
 
         $this->info('All campaign types created and verified under a single account!');
         $this->line("  Account: {$customerId}");
         $this->line("  View at: https://ads.google.com/aw/campaigns?ocid={$customerId}");
+
         return 0;
     }
 
@@ -173,45 +169,49 @@ class TestAllCampaignTypes extends Command
             $customerId = str_replace('-', '', $customerId);
             // Find or create a local customer record linked to this Google Ads account
             $customer = Customer::where('google_ads_customer_id', $customerId)->first();
-            if (!$customer) {
+            if (! $customer) {
                 $customer = Customer::create([
                     'name' => $this->businessName,
-                    'email' => 'test-' . uniqid() . '@spectra-test.local',
+                    'email' => 'test-'.uniqid().'@spectra-test.local',
                     'google_ads_customer_id' => $customerId,
                 ]);
                 $this->info("  Created local customer record #{$customer->id} linked to {$customerId}");
             } else {
                 $this->info("  Found existing customer #{$customer->id} for account {$customerId}");
             }
+
             return $customer;
         }
 
         // Create a fresh customer record for provisioning
         $customer = Customer::create([
             'name' => $this->businessName,
-            'email' => 'test-' . uniqid() . '@spectra-test.local',
+            'email' => 'test-'.uniqid().'@spectra-test.local',
         ]);
         $this->info("  Created local customer record #{$customer->id}");
+
         return $customer;
     }
 
     private function provisionAccount(Customer $customer): ?string
     {
         $mccId = config('googleads.mcc_customer_id');
-        if (!$mccId) {
+        if (! $mccId) {
             $this->error('  No MCC customer ID configured (GOOGLE_ADS_MCC_CUSTOMER_ID)');
+
             return null;
         }
 
         $this->info("  Creating sub-account under MCC {$mccId}...");
         $manager = new MCCAccountManager($customer);
-        $result = $manager->createStandardAccountUnderMCC($mccId, $this->businessName . ' - Test Account');
+        $result = $manager->createStandardAccountUnderMCC($mccId, $this->businessName.' - Test Account');
 
-        if (!$result) {
+        if (! $result) {
             return null;
         }
 
         $this->info("  Sub-account created: {$result['account_id']}");
+
         return $result['account_id'];
     }
 
@@ -223,16 +223,17 @@ class TestAllCampaignTypes extends Command
     {
         if ($this->option('skip-images')) {
             $this->warn('  --skip-images: using placeholder PNGs');
+
             return ['landscape' => $this->createPlaceholderPng(1200, 628), 'square' => $this->createPlaceholderPng(1200, 1200), 'logo' => $this->createPlaceholderPng(1200, 1200)];
         }
 
-        $gemini = new GeminiService();
+        $gemini = new GeminiService;
         $images = [];
 
         $prompts = [
             'landscape' => "Generate a professional 1200x628 landscape marketing banner for a company called '{$this->businessName}'. Modern, clean design with bold typography. No text overlay needed, just a visually appealing marketing image.",
-            'square'    => "Generate a professional 1200x1200 square marketing image for a company called '{$this->businessName}'. Eye-catching design suitable for social media ads.",
-            'logo'      => "Generate a simple, clean 128x128 logo icon for a company called '{$this->businessName}'. Minimal design, suitable as a favicon or small logo.",
+            'square' => "Generate a professional 1200x1200 square marketing image for a company called '{$this->businessName}'. Eye-catching design suitable for social media ads.",
+            'logo' => "Generate a simple, clean 128x128 logo icon for a company called '{$this->businessName}'. Minimal design, suitable as a favicon or small logo.",
         ];
 
         foreach ($prompts as $key => $prompt) {
@@ -241,7 +242,7 @@ class TestAllCampaignTypes extends Command
 
             if ($result && isset($result['data'])) {
                 $images[$key] = base64_decode($result['data']);
-                $this->info("    {$key}: " . strlen($images[$key]) . " bytes");
+                $this->info("    {$key}: ".strlen($images[$key]).' bytes');
             } else {
                 $this->warn("    {$key}: Gemini generation failed, using placeholder");
                 $size = match ($key) {
@@ -273,6 +274,7 @@ class TestAllCampaignTypes extends Command
         imagepng($img);
         $data = ob_get_clean();
         imagedestroy($img);
+
         return $data;
     }
 
@@ -286,7 +288,7 @@ class TestAllCampaignTypes extends Command
         $assets = [];
 
         foreach ($images as $key => $imageData) {
-            $assetName = "{$this->businessName} - {$key} - " . date('Ymd-His');
+            $assetName = "{$this->businessName} - {$key} - ".date('Ymd-His');
             $this->line("  Uploading {$key} asset...");
             $resourceName = ($uploader)($customerId, $imageData, $assetName);
             if ($resourceName) {
@@ -308,71 +310,73 @@ class TestAllCampaignTypes extends Command
 
     private function createSearchCampaign(Customer $customer, string $customerId, string $startDate, string $endDate): void
     {
-      try {
-        $budget = 10.00; // $10/day
+        try {
+            $budget = 10.00; // $10/day
 
-        $campaignData = [
-            'businessName' => $this->businessName,
-            'budget' => $budget,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-        ];
+            $campaignData = [
+                'businessName' => $this->businessName,
+                'budget' => $budget,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+            ];
 
-        $creator = new CreateSearchCampaign($customer);
-        $campaignResource = ($creator)($customerId, $campaignData);
+            $creator = new CreateSearchCampaign($customer);
+            $campaignResource = ($creator)($customerId, $campaignData);
 
-        if (!$campaignResource) {
-            $this->error('  Search campaign creation failed');
-            $this->logResult('Search Campaign', 'FAILED', 'Creation returned null');
-            return;
-        }
-        $this->info("  Campaign: {$campaignResource}");
-        $this->logResult('Search Campaign', 'OK', $campaignResource);
-        $this->logResult('Search Budget', 'OK', "\${$budget}/day");
+            if (! $campaignResource) {
+                $this->error('  Search campaign creation failed');
+                $this->logResult('Search Campaign', 'FAILED', 'Creation returned null');
 
-        // Ad Group
-        $adGroupCreator = new CreateSearchAdGroup($customer);
-        $adGroupResource = ($adGroupCreator)($customerId, $campaignResource, $this->businessName . ' Search Ad Group');
+                return;
+            }
+            $this->info("  Campaign: {$campaignResource}");
+            $this->logResult('Search Campaign', 'OK', $campaignResource);
+            $this->logResult('Search Budget', 'OK', "\${$budget}/day");
 
-        if (!$adGroupResource) {
-            $this->warn('  Search ad group creation failed');
-            $this->logResult('Search Ad Group', 'FAILED', 'Creation returned null');
-            return;
-        }
-        $this->info("  Ad Group: {$adGroupResource}");
-        $this->logResult('Search Ad Group', 'OK', $adGroupResource);
+            // Ad Group
+            $adGroupCreator = new CreateSearchAdGroup($customer);
+            $adGroupResource = ($adGroupCreator)($customerId, $campaignResource, $this->businessName.' Search Ad Group');
 
-        // Keywords — use AI research if Gemini API is available, else hardcoded seeds
-        $this->addSearchKeywords($customer, $customerId, $campaignResource, $adGroupResource);
+            if (! $adGroupResource) {
+                $this->warn('  Search ad group creation failed');
+                $this->logResult('Search Ad Group', 'FAILED', 'Creation returned null');
 
-        // Responsive Search Ad
-        $adCreator = new CreateResponsiveSearchAd($customer);
-        $adResource = ($adCreator)($customerId, $adGroupResource, [
-            'headlines' => [
-                "{$this->businessName} - Best Service",
-                "Grow Your Business Today",
-                "Professional Solutions",
-            ],
-            'descriptions' => [
-                "Trusted by thousands. Get started with {$this->businessName} today.",
-                "Expert solutions tailored to your needs. Free consultation available.",
-            ],
-            'finalUrls' => ['https://example.com'],
-            'path1' => 'services',
-            'path2' => 'start',
-        ]);
+                return;
+            }
+            $this->info("  Ad Group: {$adGroupResource}");
+            $this->logResult('Search Ad Group', 'OK', $adGroupResource);
 
-        if ($adResource) {
-            $this->info("  Ad: {$adResource}");
-            $this->logResult('Search Ad (RSA)', 'OK', $adResource);
-        } else {
-            $this->warn('  Responsive Search Ad creation failed');
-            $this->logResult('Search Ad (RSA)', 'FAILED', 'Creation returned null');
-        }
-      } catch (\Exception $e) {
-            $this->warn('  Search campaign error: ' . $this->extractErrorMessage($e));
+            // Keywords — use AI research if Gemini API is available, else hardcoded seeds
+            $this->addSearchKeywords($customer, $customerId, $campaignResource, $adGroupResource);
+
+            // Responsive Search Ad
+            $adCreator = new CreateResponsiveSearchAd($customer);
+            $adResource = ($adCreator)($customerId, $adGroupResource, [
+                'headlines' => [
+                    "{$this->businessName} - Best Service",
+                    'Grow Your Business Today',
+                    'Professional Solutions',
+                ],
+                'descriptions' => [
+                    "Trusted by thousands. Get started with {$this->businessName} today.",
+                    'Expert solutions tailored to your needs. Free consultation available.',
+                ],
+                'finalUrls' => ['https://example.com'],
+                'path1' => 'services',
+                'path2' => 'start',
+            ]);
+
+            if ($adResource) {
+                $this->info("  Ad: {$adResource}");
+                $this->logResult('Search Ad (RSA)', 'OK', $adResource);
+            } else {
+                $this->warn('  Responsive Search Ad creation failed');
+                $this->logResult('Search Ad (RSA)', 'FAILED', 'Creation returned null');
+            }
+        } catch (\Exception $e) {
+            $this->warn('  Search campaign error: '.$this->extractErrorMessage($e));
             $this->logResult('Search Campaign', 'FAILED', $this->extractErrorMessage($e));
-      }
+        }
     }
 
     private function addSearchKeywords(Customer $customer, string $customerId, string $campaignResource, string $adGroupResource): void
@@ -389,7 +393,7 @@ class TestAllCampaignTypes extends Command
                 $keywords = $research['keywords'] ?? [];
                 $negativeKeywords = $research['negative_keywords'] ?? [];
             } catch (\Exception $e) {
-                $this->warn('  AI keyword research failed: ' . substr($e->getMessage(), 0, 100));
+                $this->warn('  AI keyword research failed: '.substr($e->getMessage(), 0, 100));
             }
         }
 
@@ -430,8 +434,8 @@ class TestAllCampaignTypes extends Command
                 $added++;
             }
         }
-        $this->info("  Keywords: {$added}/" . count($keywords) . " added");
-        $this->logResult('Search Keywords', $added > 0 ? 'OK' : 'FAILED', "{$added} keywords (" . implode(', ', array_map(fn($k) => is_array($k) ? $k['text'] : $k, array_slice($keywords, 0, 5))) . '...)');
+        $this->info("  Keywords: {$added}/".count($keywords).' added');
+        $this->logResult('Search Keywords', $added > 0 ? 'OK' : 'FAILED', "{$added} keywords (".implode(', ', array_map(fn ($k) => is_array($k) ? $k['text'] : $k, array_slice($keywords, 0, 5))).'...)');
 
         // Add negative keywords to campaign
         $addNegativeService = new AddNegativeKeyword($customer);
@@ -442,286 +446,294 @@ class TestAllCampaignTypes extends Command
                 $negAdded++;
             }
         }
-        $this->info("  Negative keywords: {$negAdded}/" . count($negativeKeywords) . " added");
+        $this->info("  Negative keywords: {$negAdded}/".count($negativeKeywords).' added');
         $this->logResult('Search Negatives', $negAdded > 0 ? 'OK' : 'FAILED', "{$negAdded} negative keywords");
     }
 
     private function createDisplayCampaign(Customer $customer, string $customerId, string $startDate, string $endDate, array $imageAssets): void
     {
-      try {
-        $budget = 15.00; // $15/day
+        try {
+            $budget = 15.00; // $15/day
 
-        $campaignData = [
-            'businessName' => $this->businessName,
-            'budget' => $budget,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-        ];
+            $campaignData = [
+                'businessName' => $this->businessName,
+                'budget' => $budget,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+            ];
 
-        $creator = new CreateDisplayCampaign($customer);
-        $campaignResource = ($creator)($customerId, $campaignData);
+            $creator = new CreateDisplayCampaign($customer);
+            $campaignResource = ($creator)($customerId, $campaignData);
 
-        if (!$campaignResource) {
-            $this->error('  Display campaign creation failed');
-            $this->logResult('Display Campaign', 'FAILED', 'Creation returned null');
-            return;
-        }
-        $this->info("  Campaign: {$campaignResource}");
-        $this->logResult('Display Campaign', 'OK', $campaignResource);
-        $this->logResult('Display Budget', 'OK', "\${$budget}/day");
+            if (! $campaignResource) {
+                $this->error('  Display campaign creation failed');
+                $this->logResult('Display Campaign', 'FAILED', 'Creation returned null');
 
-        // Ad Group
-        $adGroupCreator = new CreateDisplayAdGroup($customer);
-        $adGroupResource = ($adGroupCreator)($customerId, $campaignResource, $this->businessName . ' Display Ad Group');
+                return;
+            }
+            $this->info("  Campaign: {$campaignResource}");
+            $this->logResult('Display Campaign', 'OK', $campaignResource);
+            $this->logResult('Display Budget', 'OK', "\${$budget}/day");
 
-        if (!$adGroupResource) {
-            $this->warn('  Display ad group creation failed');
-            $this->logResult('Display Ad Group', 'FAILED', 'Creation returned null');
-            return;
-        }
-        $this->info("  Ad Group: {$adGroupResource}");
-        $this->logResult('Display Ad Group', 'OK', $adGroupResource);
+            // Ad Group
+            $adGroupCreator = new CreateDisplayAdGroup($customer);
+            $adGroupResource = ($adGroupCreator)($customerId, $campaignResource, $this->businessName.' Display Ad Group');
 
-        // Responsive Display Ad with images (separate landscape vs square)
-        $adCreator = new CreateResponsiveDisplayAd($customer);
-        $landscapeImages = array_filter([$imageAssets['landscape'] ?? null]);
-        $squareImages = array_filter([$imageAssets['square'] ?? null]);
-        $logoImages = array_filter([$imageAssets['logo'] ?? null]);
+            if (! $adGroupResource) {
+                $this->warn('  Display ad group creation failed');
+                $this->logResult('Display Ad Group', 'FAILED', 'Creation returned null');
 
-        if (empty($landscapeImages) && empty($squareImages)) {
-            $this->warn('  No image assets available for display ad, skipping ad creation');
-            $this->logResult('Display Ad (RDA)', 'FAILED', 'No images');
-            return;
-        }
+                return;
+            }
+            $this->info("  Ad Group: {$adGroupResource}");
+            $this->logResult('Display Ad Group', 'OK', $adGroupResource);
 
-        $adResource = ($adCreator)($customerId, $adGroupResource, [
-            'headlines' => ["{$this->businessName}"],
-            'longHeadlines' => ["Discover {$this->businessName} - Your Trusted Partner"],
-            'descriptions' => ["Get professional solutions from {$this->businessName}. Start today."],
-            'imageAssets' => $landscapeImages,
-            'squareImageAssets' => $squareImages,
-            'squareLogoAssets' => $logoImages, // 1:1 square logos (logoAssets is 4:1 landscape, which we don't have)
-            'finalUrls' => ['https://example.com'],
-            'businessName' => $this->businessName,
-        ]);
+            // Responsive Display Ad with images (separate landscape vs square)
+            $adCreator = new CreateResponsiveDisplayAd($customer);
+            $landscapeImages = array_filter([$imageAssets['landscape'] ?? null]);
+            $squareImages = array_filter([$imageAssets['square'] ?? null]);
+            $logoImages = array_filter([$imageAssets['logo'] ?? null]);
 
-        if ($adResource) {
-            $this->info("  Ad: {$adResource}");
-            $this->logResult('Display Ad (RDA)', 'OK', $adResource);
-            $this->logResult('Display Images', 'OK', count($landscapeImages) . ' landscape + ' . count($squareImages) . ' square + ' . count($logoImages) . ' logos attached');
-        } else {
-            $this->warn('  Responsive Display Ad creation failed');
-            $this->logResult('Display Ad (RDA)', 'FAILED', 'Creation returned null');
-        }
-      } catch (\Exception $e) {
-            $this->warn('  Display campaign error: ' . $this->extractErrorMessage($e));
+            if (empty($landscapeImages) && empty($squareImages)) {
+                $this->warn('  No image assets available for display ad, skipping ad creation');
+                $this->logResult('Display Ad (RDA)', 'FAILED', 'No images');
+
+                return;
+            }
+
+            $adResource = ($adCreator)($customerId, $adGroupResource, [
+                'headlines' => ["{$this->businessName}"],
+                'longHeadlines' => ["Discover {$this->businessName} - Your Trusted Partner"],
+                'descriptions' => ["Get professional solutions from {$this->businessName}. Start today."],
+                'imageAssets' => $landscapeImages,
+                'squareImageAssets' => $squareImages,
+                'squareLogoAssets' => $logoImages, // 1:1 square logos (logoAssets is 4:1 landscape, which we don't have)
+                'finalUrls' => ['https://example.com'],
+                'businessName' => $this->businessName,
+            ]);
+
+            if ($adResource) {
+                $this->info("  Ad: {$adResource}");
+                $this->logResult('Display Ad (RDA)', 'OK', $adResource);
+                $this->logResult('Display Images', 'OK', count($landscapeImages).' landscape + '.count($squareImages).' square + '.count($logoImages).' logos attached');
+            } else {
+                $this->warn('  Responsive Display Ad creation failed');
+                $this->logResult('Display Ad (RDA)', 'FAILED', 'Creation returned null');
+            }
+        } catch (\Exception $e) {
+            $this->warn('  Display campaign error: '.$this->extractErrorMessage($e));
             $this->logResult('Display Campaign', 'FAILED', $this->extractErrorMessage($e));
-      }
+        }
     }
 
     private function createPerformanceMaxCampaign(Customer $customer, string $customerId, string $startDate, string $endDate, array $imageAssets): void
     {
-      try {
-        $budget = 20.00; // $20/day
+        try {
+            $budget = 20.00; // $20/day
 
-        $campaignData = [
-            'businessName' => $this->businessName . ' PMax Campaign',
-            'budget' => $budget,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-        ];
+            $campaignData = [
+                'businessName' => $this->businessName.' PMax Campaign',
+                'budget' => $budget,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+            ];
 
-        $creator = new CreatePerformanceMaxCampaign($customer);
-        $campaignResource = ($creator)($customerId, $campaignData);
+            $creator = new CreatePerformanceMaxCampaign($customer);
+            $campaignResource = ($creator)($customerId, $campaignData);
 
-        if (!$campaignResource) {
-            $this->error('  Performance Max campaign creation failed');
-            $this->logResult('PMax Campaign', 'FAILED', 'Creation returned null');
-            return;
-        }
-        $this->info("  Campaign: {$campaignResource}");
-        $this->logResult('PMax Campaign', 'OK', $campaignResource);
-        $this->logResult('PMax Budget', 'OK', "\${$budget}/day");
+            if (! $campaignResource) {
+                $this->error('  Performance Max campaign creation failed');
+                $this->logResult('PMax Campaign', 'FAILED', 'Creation returned null');
 
-        // Create text assets for PMax
-        $textAssetCreator = new CreateTextAsset($customer);
-
-        $headlineAssets = [];
-        $headlineTexts = [
-            "{$this->businessName} - Top Rated",
-            "Professional Solutions",
-            "Get Started Today",
-        ];
-        foreach ($headlineTexts as $text) {
-            $resource = ($textAssetCreator)($customerId, $text);
-            if ($resource) {
-                $headlineAssets[] = ['asset' => $resource, 'field_type' => AssetFieldType::HEADLINE];
+                return;
             }
-        }
+            $this->info("  Campaign: {$campaignResource}");
+            $this->logResult('PMax Campaign', 'OK', $campaignResource);
+            $this->logResult('PMax Budget', 'OK', "\${$budget}/day");
 
-        $descriptionAssets = [];
-        $descriptionTexts = [
-            "Trusted by thousands of businesses worldwide. Start your journey today.",
-            "Expert solutions tailored to your needs. Contact us for a free consultation.",
-        ];
-        foreach ($descriptionTexts as $text) {
-            $resource = ($textAssetCreator)($customerId, $text);
-            if ($resource) {
-                $descriptionAssets[] = ['asset' => $resource, 'field_type' => AssetFieldType::DESCRIPTION];
+            // Create text assets for PMax
+            $textAssetCreator = new CreateTextAsset($customer);
+
+            $headlineAssets = [];
+            $headlineTexts = [
+                "{$this->businessName} - Top Rated",
+                'Professional Solutions',
+                'Get Started Today',
+            ];
+            foreach ($headlineTexts as $text) {
+                $resource = ($textAssetCreator)($customerId, $text);
+                if ($resource) {
+                    $headlineAssets[] = ['asset' => $resource, 'field_type' => AssetFieldType::HEADLINE];
+                }
             }
-        }
 
-        // Long headline
-        $longHeadlineResource = ($textAssetCreator)($customerId, "Discover {$this->businessName} — Professional Solutions for Modern Business");
-        $longHeadlineAssets = [];
-        if ($longHeadlineResource) {
-            $longHeadlineAssets[] = ['asset' => $longHeadlineResource, 'field_type' => AssetFieldType::LONG_HEADLINE];
-        }
+            $descriptionAssets = [];
+            $descriptionTexts = [
+                'Trusted by thousands of businesses worldwide. Start your journey today.',
+                'Expert solutions tailored to your needs. Contact us for a free consultation.',
+            ];
+            foreach ($descriptionTexts as $text) {
+                $resource = ($textAssetCreator)($customerId, $text);
+                if ($resource) {
+                    $descriptionAssets[] = ['asset' => $resource, 'field_type' => AssetFieldType::DESCRIPTION];
+                }
+            }
 
-        // Business name asset
-        $businessNameResource = ($textAssetCreator)($customerId, $this->businessName);
-        $businessNameAssets = [];
-        if ($businessNameResource) {
-            $businessNameAssets[] = ['asset' => $businessNameResource, 'field_type' => AssetFieldType::BUSINESS_NAME];
-        }
+            // Long headline
+            $longHeadlineResource = ($textAssetCreator)($customerId, "Discover {$this->businessName} — Professional Solutions for Modern Business");
+            $longHeadlineAssets = [];
+            if ($longHeadlineResource) {
+                $longHeadlineAssets[] = ['asset' => $longHeadlineResource, 'field_type' => AssetFieldType::LONG_HEADLINE];
+            }
 
-        // Image assets
-        $imageAssetOps = [];
-        if (isset($imageAssets['landscape'])) {
-            $imageAssetOps[] = ['asset' => $imageAssets['landscape'], 'field_type' => AssetFieldType::MARKETING_IMAGE];
-        }
-        if (isset($imageAssets['square'])) {
-            $imageAssetOps[] = ['asset' => $imageAssets['square'], 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
-        }
-        if (isset($imageAssets['logo'])) {
-            $imageAssetOps[] = ['asset' => $imageAssets['logo'], 'field_type' => AssetFieldType::LOGO];
-        }
+            // Business name asset
+            $businessNameResource = ($textAssetCreator)($customerId, $this->businessName);
+            $businessNameAssets = [];
+            if ($businessNameResource) {
+                $businessNameAssets[] = ['asset' => $businessNameResource, 'field_type' => AssetFieldType::BUSINESS_NAME];
+            }
 
-        $allAssets = array_merge($headlineAssets, $descriptionAssets, $longHeadlineAssets, $businessNameAssets, $imageAssetOps);
+            // Image assets
+            $imageAssetOps = [];
+            if (isset($imageAssets['landscape'])) {
+                $imageAssetOps[] = ['asset' => $imageAssets['landscape'], 'field_type' => AssetFieldType::MARKETING_IMAGE];
+            }
+            if (isset($imageAssets['square'])) {
+                $imageAssetOps[] = ['asset' => $imageAssets['square'], 'field_type' => AssetFieldType::SQUARE_MARKETING_IMAGE];
+            }
+            if (isset($imageAssets['logo'])) {
+                $imageAssetOps[] = ['asset' => $imageAssets['logo'], 'field_type' => AssetFieldType::LOGO];
+            }
 
-        if (empty($allAssets)) {
-            $this->warn('  No assets available for PMax asset group');
-            $this->logResult('PMax Asset Group', 'FAILED', 'No assets');
-            return;
-        }
+            $allAssets = array_merge($headlineAssets, $descriptionAssets, $longHeadlineAssets, $businessNameAssets, $imageAssetOps);
 
-        // Asset Group with all assets
-        $assetGroupCreator = new CreateAssetGroupWithAssets($customer);
-        $assetGroupResource = ($assetGroupCreator)(
-            $customerId,
-            $campaignResource,
-            $this->businessName . ' Asset Group',
-            ['https://example.com'],
-            $allAssets
-        );
+            if (empty($allAssets)) {
+                $this->warn('  No assets available for PMax asset group');
+                $this->logResult('PMax Asset Group', 'FAILED', 'No assets');
 
-        if ($assetGroupResource) {
-            $this->info("  Asset Group: {$assetGroupResource}");
-            $this->logResult('PMax Asset Group', 'OK', $assetGroupResource);
-            $this->logResult('PMax Assets', 'OK',
-                count($headlineAssets) . ' headlines, ' .
-                count($descriptionAssets) . ' descriptions, ' .
-                count($imageAssetOps) . ' images'
+                return;
+            }
+
+            // Asset Group with all assets
+            $assetGroupCreator = new CreateAssetGroupWithAssets($customer);
+            $assetGroupResource = ($assetGroupCreator)(
+                $customerId,
+                $campaignResource,
+                $this->businessName.' Asset Group',
+                ['https://example.com'],
+                $allAssets
             );
-        } else {
-            $this->warn('  PMax asset group creation failed');
-            $this->logResult('PMax Asset Group', 'FAILED', 'Creation returned null');
-        }
-      } catch (\Exception $e) {
-            $this->warn('  PMax campaign error: ' . $this->extractErrorMessage($e));
+
+            if ($assetGroupResource) {
+                $this->info("  Asset Group: {$assetGroupResource}");
+                $this->logResult('PMax Asset Group', 'OK', $assetGroupResource);
+                $this->logResult('PMax Assets', 'OK',
+                    count($headlineAssets).' headlines, '.
+                    count($descriptionAssets).' descriptions, '.
+                    count($imageAssetOps).' images'
+                );
+            } else {
+                $this->warn('  PMax asset group creation failed');
+                $this->logResult('PMax Asset Group', 'FAILED', 'Creation returned null');
+            }
+        } catch (\Exception $e) {
+            $this->warn('  PMax campaign error: '.$this->extractErrorMessage($e));
             $this->logResult('PMax Campaign', 'FAILED', $this->extractErrorMessage($e));
-      }
+        }
     }
 
     private function createDemandGenCampaign(Customer $customer, string $customerId, string $startDate, string $endDate, array $imageAssets): void
     {
-      try {
-        $budget = 15.00; // $15/day
+        try {
+            $budget = 15.00; // $15/day
 
-        $campaignData = [
-            'businessName' => $this->businessName,
-            'budget' => $budget,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-        ];
+            $campaignData = [
+                'businessName' => $this->businessName,
+                'budget' => $budget,
+                'startDate' => $startDate,
+                'endDate' => $endDate,
+            ];
 
-        $creator = new CreateDemandGenCampaign($customer);
-        $campaignResource = ($creator)($customerId, $campaignData);
+            $creator = new CreateDemandGenCampaign($customer);
+            $campaignResource = ($creator)($customerId, $campaignData);
 
-        if (!$campaignResource) {
-            $this->warn('  Demand Gen campaign creation failed (likely requires conversion tracking on account)');
-            $this->logResult('DemandGen Campaign', 'SKIPPED', 'Requires conversion tracking (new accounts lack this)');
-            return;
-        }
-        $this->info("  Campaign: {$campaignResource}");
-        $this->logResult('DemandGen Campaign', 'OK', $campaignResource);
-        $this->logResult('DemandGen Budget', 'OK', "\${$budget}/day");
+            if (! $campaignResource) {
+                $this->warn('  Demand Gen campaign creation failed (likely requires conversion tracking on account)');
+                $this->logResult('DemandGen Campaign', 'SKIPPED', 'Requires conversion tracking (new accounts lack this)');
 
-        // Ad Group
-        $adGroupCreator = new CreateDemandGenAdGroup($customer);
-        $adGroupResource = ($adGroupCreator)($customerId, $campaignResource, $this->businessName . ' DemandGen Ad Group');
+                return;
+            }
+            $this->info("  Campaign: {$campaignResource}");
+            $this->logResult('DemandGen Campaign', 'OK', $campaignResource);
+            $this->logResult('DemandGen Budget', 'OK', "\${$budget}/day");
 
-        if (!$adGroupResource) {
-            $this->warn('  Demand Gen ad group creation failed');
-            $this->logResult('DemandGen Ad Group', 'FAILED', 'Creation returned null');
-            return;
-        }
-        $this->info("  Ad Group: {$adGroupResource}");
-        $this->logResult('DemandGen Ad Group', 'OK', $adGroupResource);
+            // Ad Group
+            $adGroupCreator = new CreateDemandGenAdGroup($customer);
+            $adGroupResource = ($adGroupCreator)($customerId, $campaignResource, $this->businessName.' DemandGen Ad Group');
 
-        // Multi-asset ad with images
-        $marketingImages = array_filter([
-            $imageAssets['landscape'] ?? null,
-        ]);
-        $squareImages = array_filter([
-            $imageAssets['square'] ?? null,
-        ]);
-        $logoImages = array_filter([
-            $imageAssets['logo'] ?? null,
-        ]);
+            if (! $adGroupResource) {
+                $this->warn('  Demand Gen ad group creation failed');
+                $this->logResult('DemandGen Ad Group', 'FAILED', 'Creation returned null');
 
-        if (empty($marketingImages)) {
-            $this->warn('  No image assets for Demand Gen ad, skipping');
-            $this->logResult('DemandGen Ad', 'FAILED', 'No images');
-            return;
-        }
+                return;
+            }
+            $this->info("  Ad Group: {$adGroupResource}");
+            $this->logResult('DemandGen Ad Group', 'OK', $adGroupResource);
 
-        $adCreator = new CreateDemandGenMultiAssetAd($customer);
-        $adResource = ($adCreator)($customerId, $adGroupResource, [
-            'headlines' => [
-                "{$this->businessName}",
-                "Discover Our Solutions",
-            ],
-            'descriptions' => [
-                "Professional services from {$this->businessName}. Learn more today.",
-                "Trusted by thousands. Get started now.",
-            ],
-            'businessName' => $this->businessName,
-            'imageAssets' => $marketingImages,
-            'squareImageAssets' => $squareImages,
-            // logoAssets omitted — DemandGen logo_images requires 4:1 landscape logos
-            'finalUrls' => ['https://example.com'],
-            'callToActionText' => 'Learn more',
-        ]);
+            // Multi-asset ad with images
+            $marketingImages = array_filter([
+                $imageAssets['landscape'] ?? null,
+            ]);
+            $squareImages = array_filter([
+                $imageAssets['square'] ?? null,
+            ]);
+            $logoImages = array_filter([
+                $imageAssets['logo'] ?? null,
+            ]);
 
-        if ($adResource) {
-            $this->info("  Ad: {$adResource}");
-            $this->logResult('DemandGen Ad', 'OK', $adResource);
-            $this->logResult('DemandGen Images', 'OK', count($marketingImages) . ' landscape + ' . count($squareImages) . ' square + ' . count($logoImages) . ' logos');
-        } else {
-            $this->warn('  Demand Gen ad creation failed');
-            $this->logResult('DemandGen Ad', 'FAILED', 'Creation returned null');
-        }
-      } catch (\Exception $e) {
+            if (empty($marketingImages)) {
+                $this->warn('  No image assets for Demand Gen ad, skipping');
+                $this->logResult('DemandGen Ad', 'FAILED', 'No images');
+
+                return;
+            }
+
+            $adCreator = new CreateDemandGenMultiAssetAd($customer);
+            $adResource = ($adCreator)($customerId, $adGroupResource, [
+                'headlines' => [
+                    "{$this->businessName}",
+                    'Discover Our Solutions',
+                ],
+                'descriptions' => [
+                    "Professional services from {$this->businessName}. Learn more today.",
+                    'Trusted by thousands. Get started now.',
+                ],
+                'businessName' => $this->businessName,
+                'imageAssets' => $marketingImages,
+                'squareImageAssets' => $squareImages,
+                // logoAssets omitted — DemandGen logo_images requires 4:1 landscape logos
+                'finalUrls' => ['https://example.com'],
+                'callToActionText' => 'Learn more',
+            ]);
+
+            if ($adResource) {
+                $this->info("  Ad: {$adResource}");
+                $this->logResult('DemandGen Ad', 'OK', $adResource);
+                $this->logResult('DemandGen Images', 'OK', count($marketingImages).' landscape + '.count($squareImages).' square + '.count($logoImages).' logos');
+            } else {
+                $this->warn('  Demand Gen ad creation failed');
+                $this->logResult('DemandGen Ad', 'FAILED', 'Creation returned null');
+            }
+        } catch (\Exception $e) {
             $errorMsg = $this->extractErrorMessage($e);
             if (str_contains($errorMsg, 'Conversion tracking')) {
                 $this->warn('  DemandGen requires conversion tracking — skipping (account needs conversion actions configured)');
                 $this->logResult('DemandGen Campaign', 'SKIPPED', 'Conversion tracking required (new accounts lack this)');
             } else {
-                $this->warn('  DemandGen campaign error: ' . $errorMsg);
+                $this->warn('  DemandGen campaign error: '.$errorMsg);
                 $this->logResult('DemandGen Campaign', 'FAILED', $errorMsg);
             }
-      }
+        }
     }
 
     // =========================================================================
@@ -749,22 +761,22 @@ class TestAllCampaignTypes extends Command
             // Keyword details
             $this->line('  Fetching keyword details...');
             $keywordData = $this->listKeywords($customer, $customerId);
-            if (!empty($keywordData['keywords'])) {
+            if (! empty($keywordData['keywords'])) {
                 $this->table(
                     ['Keyword', 'Match Type', 'Ad Group', 'Status'],
                     $keywordData['keywords']
                 );
-                $this->logResult('Keywords Verified', 'OK', $keywordData['count'] . ' keywords found');
+                $this->logResult('Keywords Verified', 'OK', $keywordData['count'].' keywords found');
             } else {
                 $this->warn('  No keywords found');
                 $this->logResult('Keywords Verified', 'FAILED', '0 keywords');
             }
-            if (!empty($keywordData['negatives'])) {
+            if (! empty($keywordData['negatives'])) {
                 $this->table(
                     ['Negative Keyword', 'Match Type', 'Campaign'],
                     $keywordData['negatives']
                 );
-                $this->logResult('Negatives Verified', 'OK', count($keywordData['negatives']) . ' negative keywords found');
+                $this->logResult('Negatives Verified', 'OK', count($keywordData['negatives']).' negative keywords found');
             }
 
             // Detailed campaign list
@@ -772,7 +784,7 @@ class TestAllCampaignTypes extends Command
             $mccManager = new MCCAccountManager($customer);
             $campaigns = $this->listCampaigns($customer, $customerId);
 
-            if (!empty($campaigns)) {
+            if (! empty($campaigns)) {
                 $this->table(
                     ['Campaign Name', 'Type', 'Status', 'Budget/day'],
                     $campaigns
@@ -780,7 +792,7 @@ class TestAllCampaignTypes extends Command
             }
 
         } catch (\Exception $e) {
-            $this->warn("  Verification query failed: " . $e->getMessage());
+            $this->warn('  Verification query failed: '.$e->getMessage());
             $this->logResult('Verification', 'FAILED', $e->getMessage());
         }
     }
@@ -795,9 +807,9 @@ class TestAllCampaignTypes extends Command
             $clientProp->setAccessible(true);
             $client = $clientProp->getValue($service);
 
-            $query = "SELECT campaign.name, campaign.advertising_channel_type, campaign.status, campaign_budget.amount_micros " .
-                     "FROM campaign " .
-                     "ORDER BY campaign.name";
+            $query = 'SELECT campaign.name, campaign.advertising_channel_type, campaign.status, campaign_budget.amount_micros '.
+                     'FROM campaign '.
+                     'ORDER BY campaign.name';
 
             $response = $client->getGoogleAdsServiceClient()->search(
                 new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -816,12 +828,14 @@ class TestAllCampaignTypes extends Command
                     $campaign->getName(),
                     \Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType::name($campaign->getAdvertisingChannelType()),
                     \Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus::name($campaign->getStatus()),
-                    '$' . number_format($budgetDollars, 2),
+                    '$'.number_format($budgetDollars, 2),
                 ];
             }
+
             return $rows;
         } catch (\Exception $e) {
-            $this->warn("  Could not list campaigns: " . $e->getMessage());
+            $this->warn('  Could not list campaigns: '.$e->getMessage());
+
             return [];
         }
     }
@@ -842,11 +856,11 @@ class TestAllCampaignTypes extends Command
             $client = $clientProp->getValue($service);
 
             // Positive keywords
-            $query = "SELECT ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, "
-                   . "ad_group.name, ad_group_criterion.status "
-                   . "FROM ad_group_criterion "
-                   . "WHERE ad_group_criterion.type = 'KEYWORD' "
-                   . "ORDER BY ad_group_criterion.keyword.text";
+            $query = 'SELECT ad_group_criterion.keyword.text, ad_group_criterion.keyword.match_type, '
+                   .'ad_group.name, ad_group_criterion.status '
+                   .'FROM ad_group_criterion '
+                   ."WHERE ad_group_criterion.type = 'KEYWORD' "
+                   .'ORDER BY ad_group_criterion.keyword.text';
 
             $response = $client->getGoogleAdsServiceClient()->search(
                 new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -868,12 +882,12 @@ class TestAllCampaignTypes extends Command
             $result['count'] = count($result['keywords']);
 
             // Negative keywords (campaign-level)
-            $negQuery = "SELECT campaign_criterion.keyword.text, campaign_criterion.keyword.match_type, "
-                      . "campaign.name "
-                      . "FROM campaign_criterion "
-                      . "WHERE campaign_criterion.negative = true "
-                      . "AND campaign_criterion.type = 'KEYWORD' "
-                      . "ORDER BY campaign_criterion.keyword.text";
+            $negQuery = 'SELECT campaign_criterion.keyword.text, campaign_criterion.keyword.match_type, '
+                      .'campaign.name '
+                      .'FROM campaign_criterion '
+                      .'WHERE campaign_criterion.negative = true '
+                      ."AND campaign_criterion.type = 'KEYWORD' "
+                      .'ORDER BY campaign_criterion.keyword.text';
 
             $negResponse = $client->getGoogleAdsServiceClient()->search(
                 new \Google\Ads\GoogleAds\V22\Services\SearchGoogleAdsRequest([
@@ -893,7 +907,7 @@ class TestAllCampaignTypes extends Command
             }
 
         } catch (\Exception $e) {
-            $this->warn("  Could not list keywords: " . $e->getMessage());
+            $this->warn('  Could not list keywords: '.$e->getMessage());
         }
 
         return $result;
@@ -919,6 +933,7 @@ class TestAllCampaignTypes extends Command
         if (preg_match('/"(\w+Error)":\s*"(\w+)"/', $msg, $m)) {
             return "{$m[1]}: {$m[2]}";
         }
+
         return substr($msg, 0, 300);
     }
 }

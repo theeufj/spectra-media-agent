@@ -4,7 +4,7 @@ namespace App\Prompts;
 
 /**
  * CompetitorDiscoveryPrompt
- * 
+ *
  * Generates prompts for AI-powered competitor discovery using Google Search grounding.
  * The agent analyzes the customer's website content and uses real-time search to find
  * actual competitors in the market.
@@ -16,7 +16,7 @@ class CompetitorDiscoveryPrompt
      */
     public static function getSystemInstruction(): string
     {
-        return <<<INSTRUCTION
+        return <<<'INSTRUCTION'
 You are an expert competitive intelligence analyst with deep expertise in market research and competitor identification. 
 
 Your task is to discover and analyze competitors for a business based on their website content, industry, and product/service offerings.
@@ -36,11 +36,11 @@ INSTRUCTION;
     /**
      * Build the competitor discovery prompt.
      *
-     * @param string $businessName The customer's business name
-     * @param string $websiteUrl The customer's website URL
-     * @param string $knowledgeBaseContent Summarized content from the customer's website
-     * @param string|null $industry The industry/vertical if known
-     * @param array $existingCompetitors Already tracked competitor domains to exclude
+     * @param  string  $businessName  The customer's business name
+     * @param  string  $websiteUrl  The customer's website URL
+     * @param  string  $knowledgeBaseContent  Summarized content from the customer's website
+     * @param  string|null  $industry  The industry/vertical if known
+     * @param  array  $existingCompetitors  Already tracked competitor domains to exclude
      * @return string The formatted prompt
      */
     public static function build(
@@ -50,9 +50,9 @@ INSTRUCTION;
         ?string $industry = null,
         array $existingCompetitors = []
     ): string {
-        $existingList = !empty($existingCompetitors) 
-            ? "EXCLUDE these already tracked competitors:\n- " . implode("\n- ", $existingCompetitors)
-            : "No existing competitors tracked yet.";
+        $existingList = ! empty($existingCompetitors)
+            ? "EXCLUDE these already tracked competitors:\n- ".implode("\n- ", $existingCompetitors)
+            : 'No existing competitors tracked yet.';
 
         return <<<PROMPT
 **COMPETITOR DISCOVERY REQUEST**

@@ -24,6 +24,7 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
     {
         // Only send if something actually changed
         $total = array_sum(array_column($this->changeSummary, 'total_changes'));
+
         return $total > 0 ? ['mail'] : [];
     }
 
@@ -31,7 +32,7 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
     {
         $mail = (new MailMessage)
             ->subject('Your Campaign Optimisation Summary')
-            ->greeting('Hi ' . $notifiable->name . ',')
+            ->greeting('Hi '.$notifiable->name.',')
             ->line("Our agents completed their daily optimisation run across {$this->campaignsProcessed} campaign(s). Here's what changed:");
 
         foreach ($this->changeSummary as $campaignName => $results) {
@@ -41,23 +42,23 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
 
             $mail->line("**{$campaignName}**");
 
-            if (!empty($results['healed'])) {
-                $mail->line('- Resolved ' . $results['healed'] . ' delivery issue(s)');
+            if (! empty($results['healed'])) {
+                $mail->line('- Resolved '.$results['healed'].' delivery issue(s)');
             }
-            if (!empty($results['keywords_added'])) {
-                $mail->line('- Added ' . $results['keywords_added'] . ' new keyword(s) from search term data');
+            if (! empty($results['keywords_added'])) {
+                $mail->line('- Added '.$results['keywords_added'].' new keyword(s) from search term data');
             }
-            if (!empty($results['negatives_added'])) {
-                $mail->line('- Added ' . $results['negatives_added'] . ' negative keyword(s) to reduce wasted spend');
+            if (! empty($results['negatives_added'])) {
+                $mail->line('- Added '.$results['negatives_added'].' negative keyword(s) to reduce wasted spend');
             }
-            if (!empty($results['budget_adjustments'])) {
-                $mail->line('- Made ' . $results['budget_adjustments'] . ' budget adjustment(s)');
+            if (! empty($results['budget_adjustments'])) {
+                $mail->line('- Made '.$results['budget_adjustments'].' budget adjustment(s)');
             }
-            if (!empty($results['creative_adjustments'])) {
-                $mail->line('- Generated ' . $results['creative_adjustments'] . ' new ad creative variation(s)');
+            if (! empty($results['creative_adjustments'])) {
+                $mail->line('- Generated '.$results['creative_adjustments'].' new ad creative variation(s)');
             }
-            if (!empty($results['strategy_graduated'])) {
-                $mail->line('- Upgraded bidding strategy: ' . $results['strategy_graduated']);
+            if (! empty($results['strategy_graduated'])) {
+                $mail->line('- Upgraded bidding strategy: '.$results['strategy_graduated']);
             }
         }
 
@@ -69,9 +70,9 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
     public function toArray(object $notifiable): array
     {
         return [
-            'type'                => 'maintenance_summary',
+            'type' => 'maintenance_summary',
             'campaigns_processed' => $this->campaignsProcessed,
-            'changes'             => $this->changeSummary,
+            'changes' => $this->changeSummary,
         ];
     }
 }

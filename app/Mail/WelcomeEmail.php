@@ -2,9 +2,7 @@
 
 namespace App\Mail;
 
-use App\Mail\AppMailable;
 use Illuminate\Bus\Queueable;
-use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -29,6 +27,7 @@ class WelcomeEmail extends AppMailable
     public function envelope(): Envelope
     {
         $tenantName = $this->tenantViewData($this->tenantKey)['tenantName'];
+
         return new Envelope(
             subject: "Welcome to {$tenantName}",
         );

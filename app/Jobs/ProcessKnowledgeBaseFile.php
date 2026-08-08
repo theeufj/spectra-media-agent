@@ -5,12 +5,12 @@ namespace App\Jobs;
 use App\Models\KnowledgeBase;
 use App\Prompts\ChunkingPrompt;
 use App\Services\GeminiService;
+use App\Services\StorageHelper;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use App\Services\StorageHelper;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Smalot\PdfParser\Parser;
@@ -39,17 +39,18 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
     {
         try {
             $filePath = $this->knowledgeBase->file_path;
-            
-            Log::info("Starting file processing job", [
+
+            Log::info('Starting file processing job', [
                 'kb_id' => $this->knowledgeBase->id,
                 'user_id' => $this->knowledgeBase->user_id,
                 'file_path' => $filePath,
                 'source_type' => $this->knowledgeBase->source_type,
                 'url' => $this->knowledgeBase->url,
             ]);
-            
-            if (!$filePath) {
+
+            if (! $filePath) {
                 Log::warning("No file path found for knowledge base {$this->knowledgeBase->id}");
+
                 return;
             }
 
@@ -64,7 +65,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
 
             if ($content) {
                 // Initialize Gemini Service
-                $geminiService = new GeminiService();
+                $geminiService = new GeminiService;
 
                 // Step 3: Use Gemini's Generative Content API to break content into semantically meaningful chunks.
                 $chunkingPrompt = (new ChunkingPrompt($content))->getPrompt();
@@ -72,6 +73,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
 
                 if (is_null($generatedResponse)) {
                     Log::error("Failed to get chunks from Gemini for KB ID {$this->knowledgeBase->id}: Generated text was null.");
+
                     return;
                 }
 
@@ -79,9 +81,10 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                 $generatedText = $generatedResponse['text'] ?? null;
                 if (is_null($generatedText)) {
                     Log::error("Failed to get chunks from Gemini for KB ID {$this->knowledgeBase->id}: No text field in response.");
+
                     return;
                 }
-                
+
                 $chunks = [];
                 try {
                     // Clean the JSON string by removing markdown fences and trimming whitespace
@@ -91,21 +94,23 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                     $chunks = json_decode($cleanedJson, true);
 
                     if (json_last_error() !== JSON_ERROR_NONE) {
-                        throw new \Exception("JSON decode error: " . json_last_error_msg());
+                        throw new \Exception('JSON decode error: '.json_last_error_msg());
                     }
 
-                    if (!is_array($chunks)) {
-                        throw new \Exception("Gemini did not return a valid JSON array of chunks.");
+                    if (! is_array($chunks)) {
+                        throw new \Exception('Gemini did not return a valid JSON array of chunks.');
                     }
                 } catch (\Exception $e) {
-                    Log::error("Failed to parse Gemini's chunking response for KB ID {$this->knowledgeBase->id}: " . $e->getMessage(), [
+                    Log::error("Failed to parse Gemini's chunking response for KB ID {$this->knowledgeBase->id}: ".$e->getMessage(), [
                         'generated_text' => $generatedText,
                     ]);
+
                     return;
                 }
 
                 if (empty($chunks)) {
                     Log::info("Gemini returned no chunks for KB ID {$this->knowledgeBase->id}");
+
                     return;
                 }
 
@@ -122,8 +127,9 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
 
                     if (is_null($embedding)) {
                         Log::warning("Failed to get embedding for a chunk from KB ID {$this->knowledgeBase->id}. Skipping chunk.", [
-                            'chunk' => substr($chunk, 0, 100) . '...',
+                            'chunk' => substr($chunk, 0, 100).'...',
                         ]);
+
                         continue;
                     }
 
@@ -133,6 +139,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
 
                 if (empty($allEmbeddings)) {
                     Log::warning("No embeddings generated for any chunks from KB ID {$this->knowledgeBase->id}");
+
                     return;
                 }
 
@@ -150,7 +157,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                 Log::warning("No content extracted from {$sourceType} file for knowledge base {$this->knowledgeBase->id}");
             }
         } catch (\Exception $e) {
-            Log::error("Error processing knowledge base file {$this->knowledgeBase->id}: " . $e->getMessage(), [
+            Log::error("Error processing knowledge base file {$this->knowledgeBase->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
         }
@@ -162,49 +169,52 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
     private function extractPdfContent(string $filePath): string
     {
         try {
-            Log::info("Extracting PDF content", [
+            Log::info('Extracting PDF content', [
                 'file_path' => $filePath,
             ]);
 
             // Get the file content from storage
-            if (!StorageHelper::exists($filePath)) {
-                Log::error("File not found in storage", [
+            if (! StorageHelper::exists($filePath)) {
+                Log::error('File not found in storage', [
                     'file_path' => $filePath,
                     'kb_id' => $this->knowledgeBase->id,
                 ]);
+
                 return '';
             }
 
             $fileContent = StorageHelper::get($filePath);
-            
+
             if (empty($fileContent)) {
-                Log::warning("Retrieved empty content from storage for PDF", [
+                Log::warning('Retrieved empty content from storage for PDF', [
                     'file_path' => $filePath,
                     'kb_id' => $this->knowledgeBase->id,
                 ]);
+
                 return '';
             }
 
-            Log::info("Successfully retrieved PDF content from storage", [
+            Log::info('Successfully retrieved PDF content from storage', [
                 'file_path' => $filePath,
                 'content_size' => strlen($fileContent),
             ]);
 
-            $parser = new Parser();
+            $parser = new Parser;
             $pdf = $parser->parseContent($fileContent);
             $text = $pdf->getText();
 
-            Log::info("PDF content parsed successfully", [
+            Log::info('PDF content parsed successfully', [
                 'file_path' => $filePath,
                 'extracted_text_length' => strlen($text),
             ]);
 
             return $text;
         } catch (\Exception $e) {
-            Log::error("Error extracting PDF content for {$filePath}: " . $e->getMessage(), [
+            Log::error("Error extracting PDF content for {$filePath}: ".$e->getMessage(), [
                 'exception' => $e,
                 'kb_id' => $this->knowledgeBase->id,
             ]);
+
             return '';
         }
     }
@@ -215,31 +225,32 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
     private function extractTextContent(string $filePath): string
     {
         try {
-            Log::info("Extracting text file content", [
+            Log::info('Extracting text file content', [
                 'file_path' => $filePath,
             ]);
 
             // Get the file from S3 using CloudFront URL
             $cloudfrontDomain = config('filesystems.cloudfront_domain') ?: env('CLOUDFRONT_DOMAIN');
             $cloudfrontUrl = "{$cloudfrontDomain}/{$filePath}";
-            
-            Log::info("Attempting to fetch text file from CloudFront", [
+
+            Log::info('Attempting to fetch text file from CloudFront', [
                 'cloudfront_domain' => $cloudfrontDomain,
                 'cloudfront_url' => $cloudfrontUrl,
             ]);
-            
+
             $content = file_get_contents($cloudfrontUrl);
-            
-            Log::info("Text file content fetched successfully", [
+
+            Log::info('Text file content fetched successfully', [
                 'content_size_bytes' => strlen($content),
             ]);
-            
+
             return $content;
         } catch (\Exception $e) {
-            Log::error("Error extracting text file content: " . $e->getMessage(), [
+            Log::error('Error extracting text file content: '.$e->getMessage(), [
                 'file_path' => $filePath,
                 'exception' => $e,
             ]);
+
             return '';
         }
     }
@@ -249,7 +260,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('ProcessKnowledgeBaseFile failed: ' . $exception->getMessage(), [
+        Log::error('ProcessKnowledgeBaseFile failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

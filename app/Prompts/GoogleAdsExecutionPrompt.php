@@ -6,7 +6,7 @@ use App\Services\Agents\ExecutionContext;
 
 /**
  * Google Ads Execution Prompt
- * 
+ *
  * Generates AI prompts for creating Google Ads deployment execution plans.
  * Uses Google Search grounding for real-time API documentation access.
  */
@@ -18,12 +18,12 @@ class GoogleAdsExecutionPrompt
      */
     private static function getVerticalGuidance(?string $industry): string
     {
-        if (!$industry) {
+        if (! $industry) {
             return '';
         }
 
         $vertical = config("verticals.{$industry}");
-        if (!$vertical || empty($vertical['ad_copy_guidance'])) {
+        if (! $vertical || empty($vertical['ad_copy_guidance'])) {
             return '';
         }
 
@@ -35,11 +35,11 @@ class GoogleAdsExecutionPrompt
             $sitelinkLines .= "\n  - \"{$sl['text']}\" | {$sl['description1']} | {$sl['description2']}";
         }
 
-        $callouts = !empty($vertical['callout_suggestions'])
-            ? '"' . implode('", "', $vertical['callout_suggestions']) . '"'
+        $callouts = ! empty($vertical['callout_suggestions'])
+            ? '"'.implode('", "', $vertical['callout_suggestions']).'"'
             : '';
 
-        $negatives = !empty($vertical['negative_keywords'])
+        $negatives = ! empty($vertical['negative_keywords'])
             ? implode(', ', $vertical['negative_keywords'])
             : '';
 
@@ -76,7 +76,7 @@ GUIDANCE;
      */
     public static function getSystemInstruction(): string
     {
-        return <<<INSTRUCTION
+        return <<<'INSTRUCTION'
 You are an expert Google Ads campaign strategist and technical implementation specialist with deep knowledge of the Google Ads API v22.
 
 Your expertise includes:
@@ -95,7 +95,7 @@ Use your extended thinking capabilities to reason through campaign structure dec
 Use Google Search to access current Google Ads API documentation, best practices, and feature updates when needed.
 INSTRUCTION;
     }
-    
+
     /**
      * Generate execution planning prompt from context
      */
@@ -105,17 +105,17 @@ INSTRUCTION;
         $strategy = $context->strategy;
         $customer = $context->customer;
         $contextData = $context->toArray();
-        
+
         // Calculate budget information
         $totalBudget = $campaign->total_budget ?? 0;
         $dailyBudget = $context->calculateDailyBudget();
         $monthlyBudget = $dailyBudget * 30;
-        
+
         // Asset inventory
         $imageCount = $contextData['available_assets']['images'] ?? 0;
         $videoCount = $contextData['available_assets']['videos'] ?? 0;
         $adCopyCount = $contextData['available_assets']['ad_copy'] ?? 0;
-        
+
         // Strategy insights from Strategy Agent
         $adCopyStrategy = $strategy->ad_copy_strategy ?? 'Not provided';
         $imageryStrategy = $strategy->imagery_strategy ?? 'Not provided';
@@ -134,41 +134,41 @@ INSTRUCTION;
         // Prior performance section (only shown when data exists)
         $priorPerformance = $context->metadata['prior_performance'] ?? [];
         $priorSection = '';
-        if (!empty($priorPerformance)) {
+        if (! empty($priorPerformance)) {
             $lines = [];
             foreach ($priorPerformance as $platform => $stats) {
-                $lines[] = "**" . ucfirst($platform) . "** ({$stats['days_of_data']} days): "
-                    . "CTR {$stats['avg_ctr']}%, CPC \${$stats['avg_cpc']}, CPA \${$stats['avg_cpa']}, "
-                    . "{$stats['total_conversions']} conversions, \${$stats['total_spend']} spend";
+                $lines[] = '**'.ucfirst($platform)."** ({$stats['days_of_data']} days): "
+                    ."CTR {$stats['avg_ctr']}%, CPC \${$stats['avg_cpc']}, CPA \${$stats['avg_cpa']}, "
+                    ."{$stats['total_conversions']} conversions, \${$stats['total_spend']} spend";
             }
             $priorSection = "\n# PRIOR CAMPAIGN PERFORMANCE (last 30 days)\n\n"
-                . "This campaign has run before. Use this data to avoid repeating past mistakes and set realistic bid targets:\n\n"
-                . implode("\n", $lines) . "\n\n---\n";
+                ."This campaign has run before. Use this data to avoid repeating past mistakes and set realistic bid targets:\n\n"
+                .implode("\n", $lines)."\n\n---\n";
         }
 
         $qsContext = $context->metadata['quality_score'] ?? null;
         $qsSection = '';
-        if ($qsContext && (!empty($qsContext['flagged']) || !empty($qsContext['actions']))) {
-            $flaggedList = !empty($qsContext['flagged'])
-                ? implode(', ', array_map(fn($k) => "\"{$k['keyword']}\"", $qsContext['flagged']))
+        if ($qsContext && (! empty($qsContext['flagged']) || ! empty($qsContext['actions']))) {
+            $flaggedList = ! empty($qsContext['flagged'])
+                ? implode(', ', array_map(fn ($k) => "\"{$k['keyword']}\"", $qsContext['flagged']))
                 : 'None';
-            $actionList = !empty($qsContext['actions'])
-                ? implode('; ', array_map(fn($a) => $a['action'] ?? json_encode($a), $qsContext['actions']))
+            $actionList = ! empty($qsContext['actions'])
+                ? implode('; ', array_map(fn ($a) => $a['action'] ?? json_encode($a), $qsContext['actions']))
                 : 'None';
             $qsSection = "\n# QUALITY SCORE HISTORY (as of {$qsContext['recorded_at']})\n\n"
-                . "Previous QS improvements were applied to this campaign. Use these as starting points:\n\n"
-                . "**Low-QS keywords flagged for pausing:** {$flaggedList}\n"
-                . "**Actions taken previously:** {$actionList}\n\n"
-                . "Avoid these keywords in the new plan unless you have a specific justification. "
-                . "Use tighter match types and more specific ad groups to improve relevance.\n\n---\n";
+                ."Previous QS improvements were applied to this campaign. Use these as starting points:\n\n"
+                ."**Low-QS keywords flagged for pausing:** {$flaggedList}\n"
+                ."**Actions taken previously:** {$actionList}\n\n"
+                .'Avoid these keywords in the new plan unless you have a specific justification. '
+                ."Use tighter match types and more specific ad groups to improve relevance.\n\n---\n";
         }
 
         $brandSection = '';
         if ($context->brandGuideline) {
             $bg = $context->brandGuideline;
-            $doNotUse = !empty($bg->do_not_use) ? implode(', ', $bg->do_not_use) : 'None specified';
+            $doNotUse = ! empty($bg->do_not_use) ? implode(', ', $bg->do_not_use) : 'None specified';
             $tone = $bg->brand_voice['primary_tone'] ?? 'professional';
-            $usps = !empty($bg->unique_selling_propositions)
+            $usps = ! empty($bg->unique_selling_propositions)
                 ? implode("\n- ", $bg->unique_selling_propositions)
                 : 'Not specified';
             $brandSection = <<<BRAND

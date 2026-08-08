@@ -11,8 +11,7 @@ use Inertia\Inertia;
 
 class AttributionController extends Controller
 {
-    public function __construct(protected AttributionService $attributionService)
-    {}
+    public function __construct(protected AttributionService $attributionService) {}
 
     /**
      * Show attribution dashboard for a campaign.
@@ -20,14 +19,12 @@ class AttributionController extends Controller
     public function show(Request $request, Campaign $campaign)
     {
         $user = $request->user();
-        if (!$user->customers()->where('customers.id', $campaign->customer_id)->exists()) {
-            abort(403);
-        }
+        $this->authorize('view', $campaign);
 
         $customerId = $campaign->customer_id;
 
         // Get conversions attributed to this campaign (via utm_campaign = spectra_{id})
-        $campaignTag = 'spectra_' . $campaign->id;
+        $campaignTag = 'spectra_'.$campaign->id;
 
         // Fetch recent conversions for the customer and match the campaign tag in PHP.
         // Avoids DB-specific JSON-path SQL (prod is Postgres, tests are sqlite) — the
@@ -61,7 +58,7 @@ class AttributionController extends Controller
         $totalConversions = count($conversions);
         $totalValue = array_sum(array_column($conversions, 'conversion_value'));
         $avgTouchpoints = $totalConversions > 0
-            ? array_sum(array_map(fn($c) => count($c['touchpoints'] ?? []), $conversions)) / $totalConversions
+            ? array_sum(array_map(fn ($c) => count($c['touchpoints'] ?? []), $conversions)) / $totalConversions
             : 0;
 
         return Inertia::render('Campaigns/Attribution', [

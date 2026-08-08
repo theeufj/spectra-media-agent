@@ -2,13 +2,14 @@
 
 namespace App\Services\Agents;
 
+use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Models\Customer;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
-use App\Models\MicrosoftAdsPerformanceData;
-use App\Models\LinkedInAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\KeywordQualityScore;
+use App\Models\LinkedInAdsPerformanceData;
+use App\Models\MicrosoftAdsPerformanceData;
 use App\Notifications\CriticalAgentAlert;
 use App\Services\GeminiService;
 use App\Services\Health\BillingHealthChecker;
@@ -42,12 +43,12 @@ class HealthCheckAgent
         Log::info("HealthCheckAgent: Starting health check for customer {$customer->id}");
 
         $results = [
-            'customer_id'    => $customer->id,
-            'checked_at'     => now()->toIso8601String(),
+            'customer_id' => $customer->id,
+            'checked_at' => now()->toIso8601String(),
             'overall_health' => 'healthy',
-            'issues'         => [],
-            'warnings'       => [],
-            'metrics'        => [],
+            'issues' => [],
+            'warnings' => [],
+            'metrics' => [],
             'recommendations' => [],
         ];
 
@@ -79,7 +80,7 @@ class HealthCheckAgent
 
         $results['overall_health'] = $this->calculateOverallHealth($results);
 
-        if (!empty($results['issues']) || !empty($results['warnings'])) {
+        if (! empty($results['issues']) || ! empty($results['warnings'])) {
             $results['recommendations'] = $this->generateRecommendations($results);
         }
 
@@ -88,7 +89,7 @@ class HealthCheckAgent
         // Compute and persist customer-level health score (0-100)
         $score = $this->computeHealthScore($customer, $results);
         $customer->update([
-            'account_health_score'   => $score,
+            'account_health_score' => $score,
             'health_score_updated_at' => now(),
         ]);
         $results['account_health_score'] = $score;
@@ -96,10 +97,9 @@ class HealthCheckAgent
         // Monthly budget pacing alerts (per campaign)
         $this->checkAllMonthlyPacing($customer);
 
-
         Log::info("HealthCheckAgent: Completed health check for customer {$customer->id}", [
             'overall_health' => $results['overall_health'],
-            'issues_count'   => count($results['issues']),
+            'issues_count' => count($results['issues']),
             'warnings_count' => count($results['warnings']),
         ]);
 
@@ -129,7 +129,7 @@ class HealthCheckAgent
 
         // Quality score (-25 max): average QS below 7 triggers penalty
         try {
-            $avgQs = KeywordQualityScore::whereHas('customer', fn($q) => $q->where('id', $customer->id))
+            $avgQs = KeywordQualityScore::whereHas('customer', fn ($q) => $q->where('id', $customer->id))
                 ->where('recorded_at', '>=', now()->subDays(14))
                 ->avg('quality_score');
 
@@ -141,14 +141,14 @@ class HealthCheckAgent
                 }
             }
         } catch (\Exception $e) {
-            Log::debug("HealthCheckAgent: Could not fetch QS for score: " . $e->getMessage());
+            Log::debug('HealthCheckAgent: Could not fetch QS for score: '.$e->getMessage());
         }
 
         // Conversion tracking (-10 max): missing pixel/action
-        if ($customer->google_ads_customer_id && !$customer->conversion_action_id) {
+        if ($customer->google_ads_customer_id && ! $customer->conversion_action_id) {
             $score -= 10;
         }
-        if ($customer->facebook_ads_account_id && !$customer->facebook_pixel_id) {
+        if ($customer->facebook_ads_account_id && ! $customer->facebook_pixel_id) {
             $score -= 5;
         }
 
@@ -160,25 +160,25 @@ class HealthCheckAgent
      */
     public function checkAllMonthlyPacing(Customer $customer): void
     {
-        $campaigns = $customer->campaigns()->where('status', 'active')->get();
+        $campaigns = $customer->campaigns()->where('status', CampaignStatus::Active)->get();
 
         foreach ($campaigns as $campaign) {
             try {
                 $this->checkMonthlyPacing($campaign);
             } catch (\Exception $e) {
-                Log::warning("HealthCheckAgent: Monthly pacing check failed for campaign {$campaign->id}: " . $e->getMessage());
+                Log::warning("HealthCheckAgent: Monthly pacing check failed for campaign {$campaign->id}: ".$e->getMessage());
             }
         }
     }
 
     public function checkMonthlyPacing(Campaign $campaign): void
     {
-        if (!$campaign->daily_budget) {
+        if (! $campaign->daily_budget) {
             return;
         }
 
         // Don't alert on campaigns that are intentionally paused, in draft, or pending admin deployment
-        if (in_array(strtolower($campaign->status), ['paused', 'draft', 'ended', 'pending_admin_deployment'], true)) {
+        if (in_array($campaign->status, CampaignStatus::nonDelivering(), true)) {
             return;
         }
 
@@ -188,10 +188,10 @@ class HealthCheckAgent
             return;
         }
 
-        $monthStart   = now()->startOfMonth()->toDateString();
-        $today        = now()->toDateString();
-        $daysElapsed  = now()->day;
-        $daysInMonth  = now()->daysInMonth;
+        $monthStart = now()->startOfMonth()->toDateString();
+        $today = now()->toDateString();
+        $daysElapsed = now()->day;
+        $daysInMonth = now()->daysInMonth;
         $monthlyBudget = $campaign->daily_budget * $daysInMonth;
         $expectedSpend = $campaign->daily_budget * $daysElapsed;
 
@@ -229,9 +229,9 @@ class HealthCheckAgent
             return; // On track
         }
 
-        $direction    = $pacingRatio < 0.7 ? 'underpacing' : 'overpacing';
-        $projected    = $daysInMonth > 0 ? round(($actualSpend / max($daysElapsed, 1)) * $daysInMonth, 2) : 0;
-        $cacheKey     = "monthly_pacing_alert:{$campaign->id}:{$direction}";
+        $direction = $pacingRatio < 0.7 ? 'underpacing' : 'overpacing';
+        $projected = $daysInMonth > 0 ? round(($actualSpend / max($daysElapsed, 1)) * $daysInMonth, 2) : 0;
+        $cacheKey = "monthly_pacing_alert:{$campaign->id}:{$direction}";
 
         if (Cache::has($cacheKey)) {
             return;
@@ -239,7 +239,7 @@ class HealthCheckAgent
         Cache::put($cacheKey, true, now()->addHours(24));
 
         $pacingPct = round($pacingRatio * 100);
-        $message   = $direction === 'underpacing'
+        $message = $direction === 'underpacing'
             ? "Campaign \"{$campaign->name}\" is only at {$pacingPct}% of expected monthly spend. Projected month-end: \${$projected} vs \${$monthlyBudget} budget."
             : "Campaign \"{$campaign->name}\" is at {$pacingPct}% of expected spend — will exhaust budget early. Projected: \${$projected} vs \${$monthlyBudget} budget.";
 
@@ -251,10 +251,10 @@ class HealthCheckAgent
                 'Budget Pacing Alert',
                 $message,
                 [
-                    'campaign_id'    => $campaign->id,
-                    'campaign_name'  => $campaign->name,
-                    'pacing_pct'     => $pacingPct,
-                    'actual_spend'   => $actualSpend,
+                    'campaign_id' => $campaign->id,
+                    'campaign_name' => $campaign->name,
+                    'pacing_pct' => $pacingPct,
+                    'actual_spend' => $actualSpend,
                     'expected_spend' => $expectedSpend,
                     'projected_spend' => $projected,
                     'monthly_budget' => $monthlyBudget,
@@ -270,14 +270,15 @@ class HealthCheckAgent
         $health = ['status' => 'healthy', 'issues' => [], 'warnings' => [], 'metrics' => []];
 
         try {
-            if (!config('microsoftads.refresh_token')) {
+            if (! config('microsoftads.refresh_token')) {
                 $health['issues'][] = [
-                    'type'     => 'token',
+                    'type' => 'token',
                     'severity' => 'critical',
-                    'message'  => 'No Microsoft Ads management credential configured',
-                    'details'  => 'Set MICROSOFT_ADS_REFRESH_TOKEN in .env',
+                    'message' => 'No Microsoft Ads management credential configured',
+                    'details' => 'Set MICROSOFT_ADS_REFRESH_TOKEN in .env',
                 ];
                 $health['status'] = 'critical';
+
                 return $health;
             }
 
@@ -285,19 +286,20 @@ class HealthCheckAgent
                 $q->where('customer_id', $customer->id);
             })->where('date', '>=', now()->subDays(3)->toDateString())->exists();
 
-            if (!$recentData && $customer->campaigns()->whereNotNull('microsoft_ads_campaign_id')->where('status', 'active')->exists()) {
+            if (! $recentData && $customer->campaigns()->whereNotNull('microsoft_ads_campaign_id')->where('status', CampaignStatus::Active)->exists()) {
                 $health['warnings'][] = [
-                    'type'     => 'no_recent_data',
+                    'type' => 'no_recent_data',
                     'severity' => 'medium',
-                    'message'  => 'No recent Microsoft Ads performance data',
-                    'details'  => 'Performance data has not been received in the last 3 days',
+                    'message' => 'No recent Microsoft Ads performance data',
+                    'details' => 'Performance data has not been received in the last 3 days',
                 ];
             }
         } catch (\Exception $e) {
-            Log::error("HealthCheckAgent: Error checking Microsoft Ads health", ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
+            Log::error('HealthCheckAgent: Error checking Microsoft Ads health', ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
         }
 
         $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+
         return $health;
     }
 
@@ -306,14 +308,15 @@ class HealthCheckAgent
         $health = ['status' => 'healthy', 'issues' => [], 'warnings' => [], 'metrics' => []];
 
         try {
-            if (!config('linkedinads.refresh_token')) {
+            if (! config('linkedinads.refresh_token')) {
                 $health['issues'][] = [
-                    'type'     => 'token',
+                    'type' => 'token',
                     'severity' => 'critical',
-                    'message'  => 'No LinkedIn Ads management credential configured',
-                    'details'  => 'Set LINKEDIN_ADS_REFRESH_TOKEN in .env',
+                    'message' => 'No LinkedIn Ads management credential configured',
+                    'details' => 'Set LINKEDIN_ADS_REFRESH_TOKEN in .env',
                 ];
                 $health['status'] = 'critical';
+
                 return $health;
             }
 
@@ -321,28 +324,29 @@ class HealthCheckAgent
                 $q->where('customer_id', $customer->id);
             })->where('date', '>=', now()->subDays(3)->toDateString())->exists();
 
-            if (!$recentData && $customer->campaigns()->whereNotNull('linkedin_campaign_id')->where('status', 'active')->exists()) {
+            if (! $recentData && $customer->campaigns()->whereNotNull('linkedin_campaign_id')->where('status', CampaignStatus::Active)->exists()) {
                 $health['warnings'][] = [
-                    'type'     => 'no_recent_data',
+                    'type' => 'no_recent_data',
                     'severity' => 'medium',
-                    'message'  => 'No recent LinkedIn Ads performance data',
-                    'details'  => 'Performance data has not been received in the last 3 days',
+                    'message' => 'No recent LinkedIn Ads performance data',
+                    'details' => 'Performance data has not been received in the last 3 days',
                 ];
             }
         } catch (\Exception $e) {
-            Log::error("HealthCheckAgent: Error checking LinkedIn Ads health", ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
+            Log::error('HealthCheckAgent: Error checking LinkedIn Ads health', ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
         }
 
         $health['status'] = $this->determineHealthStatus($health['issues'], $health['warnings']);
+
         return $health;
     }
 
     private function mergeIssues(array &$results, array $componentHealth): void
     {
-        if (!empty($componentHealth['issues'])) {
+        if (! empty($componentHealth['issues'])) {
             $results['issues'] = array_merge($results['issues'], $componentHealth['issues']);
         }
-        if (!empty($componentHealth['warnings'])) {
+        if (! empty($componentHealth['warnings'])) {
             $results['warnings'] = array_merge($results['warnings'], $componentHealth['warnings']);
         }
     }
@@ -350,33 +354,47 @@ class HealthCheckAgent
     private function determineHealthStatus(array $issues, array $warnings): string
     {
         foreach ($issues as $issue) {
-            if (($issue['severity'] ?? '') === 'critical') return 'critical';
+            if (($issue['severity'] ?? '') === 'critical') {
+                return 'critical';
+            }
         }
-        if (!empty($issues)) return 'unhealthy';
-        if (!empty($warnings)) return 'warning';
+        if (! empty($issues)) {
+            return 'unhealthy';
+        }
+        if (! empty($warnings)) {
+            return 'warning';
+        }
+
         return 'healthy';
     }
 
     private function calculateOverallHealth(array $results): string
     {
         $statuses = array_filter([
-            $results['google_ads']['status']   ?? null,
+            $results['google_ads']['status'] ?? null,
             $results['facebook_ads']['status'] ?? null,
-            $results['billing']['status']      ?? null,
-            $results['campaigns']['status']    ?? null,
+            $results['billing']['status'] ?? null,
+            $results['campaigns']['status'] ?? null,
             $results['microsoft_ads']['status'] ?? null,
-            $results['linkedin_ads']['status']  ?? null,
+            $results['linkedin_ads']['status'] ?? null,
         ]);
 
-        if (in_array('critical', $statuses))  return 'critical';
-        if (in_array('unhealthy', $statuses)) return 'unhealthy';
-        if (in_array('warning', $statuses))   return 'warning';
+        if (in_array('critical', $statuses)) {
+            return 'critical';
+        }
+        if (in_array('unhealthy', $statuses)) {
+            return 'unhealthy';
+        }
+        if (in_array('warning', $statuses)) {
+            return 'warning';
+        }
+
         return 'healthy';
     }
 
     private function generateRecommendations(array $results): array
     {
-        $issuesJson   = json_encode($results['issues'],   JSON_PRETTY_PRINT);
+        $issuesJson = json_encode($results['issues'], JSON_PRETTY_PRINT);
         $warningsJson = json_encode($results['warnings'], JSON_PRETTY_PRINT);
 
         $prompt = <<<PROMPT
@@ -409,9 +427,9 @@ PROMPT;
                 prompt: $prompt,
                 config: ['maxOutputTokens' => 2048],
                 context: [
-                    'task_type'   => 'analytical',
+                    'task_type' => 'analytical',
                     'customer_id' => $results['customer_id'] ?? null,
-                    'operation'   => 'health_check_recommendations',
+                    'operation' => 'health_check_recommendations',
                 ],
             );
 
@@ -424,7 +442,7 @@ PROMPT;
                 }
             }
         } catch (\Exception $e) {
-            Log::error("HealthCheckAgent: Failed to generate recommendations", ['error' => $e->getMessage()]);
+            Log::error('HealthCheckAgent: Failed to generate recommendations', ['error' => $e->getMessage()]);
         }
 
         return [];

@@ -10,7 +10,7 @@ class LandingController extends Controller
     public function index(Request $request)
     {
         $plans = Plan::active()->ordered()->where('is_free', false)->get();
-        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
+        $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
         $page = ($tenant['key'] ?? '') === 'realpropertyads' ? 'RealEstateLanding' : 'Landing';
 
@@ -26,7 +26,7 @@ class LandingController extends Controller
 
     public function howItWorks(Request $request)
     {
-        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
+        $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
         $page = ($tenant['key'] ?? '') === 'realpropertyads' ? 'RealEstateHowItWorks' : 'HowItWorks';
 
@@ -35,7 +35,7 @@ class LandingController extends Controller
 
     public function pricing(Request $request)
     {
-        $tenant = $request->attributes->get('tenant', config('tenants.' . config('tenants.default')));
+        $tenant = $request->attributes->get('tenant', config('tenants.'.config('tenants.default')));
 
         if (($tenant['key'] ?? '') === 'realpropertyads') {
             return \Inertia\Inertia::render('RealEstatePricing');

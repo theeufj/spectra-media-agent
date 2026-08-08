@@ -2,8 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Support\HelpArticles;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
 
 class GenerateLlmsFull extends Command

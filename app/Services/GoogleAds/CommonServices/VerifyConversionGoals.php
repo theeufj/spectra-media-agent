@@ -27,7 +27,7 @@ class VerifyConversionGoals extends BaseGoogleAdsService
         $actions = [];
         $warnings = [];
         $customerId = $this->customer->google_ads_customer_id;
-        if (!$customerId) {
+        if (! $customerId) {
             return ['actions' => $actions, 'warnings' => $warnings];
         }
 
@@ -37,11 +37,11 @@ class VerifyConversionGoals extends BaseGoogleAdsService
             $defaults = [];       // stray Google default primaries
             $realPrimaries = [];  // legitimate primaries
 
-            $q = "SELECT conversion_action.resource_name, conversion_action.name, conversion_action.primary_for_goal "
-                . "FROM conversion_action WHERE conversion_action.status = 'ENABLED'";
+            $q = 'SELECT conversion_action.resource_name, conversion_action.name, conversion_action.primary_for_goal '
+                ."FROM conversion_action WHERE conversion_action.status = 'ENABLED'";
             foreach ($this->searchQuery($customerId, $q)->iterateAllElements() as $row) {
                 $ca = $row->getConversionAction();
-                if (!$ca->getPrimaryForGoal()) {
+                if (! $ca->getPrimaryForGoal()) {
                     continue;
                 }
                 if (preg_match('/^Default\b/i', (string) $ca->getName())) {
@@ -53,7 +53,7 @@ class VerifyConversionGoals extends BaseGoogleAdsService
 
             // Only demote stray defaults if a real primary goal remains — never
             // leave the account with zero primary conversion goals.
-            if (!empty($defaults) && !empty($realPrimaries)) {
+            if (! empty($defaults) && ! empty($realPrimaries)) {
                 foreach ($defaults as $d) {
                     if ($this->demote($customerId, $d['res'])) {
                         $actions[] = "Demoted stray default conversion goal '{$d['name']}' from primary (it never fires on a lead-gen account)";
@@ -64,10 +64,10 @@ class VerifyConversionGoals extends BaseGoogleAdsService
             if (empty($realPrimaries)) {
                 $warnings[] = 'No non-default primary conversion action is set — bidding has no real goal to optimize toward.';
             } elseif (count($realPrimaries) > 5) {
-                $warnings[] = count($realPrimaries) . ' primary conversion goals are set — consider consolidating to the few that matter for cleaner optimization.';
+                $warnings[] = count($realPrimaries).' primary conversion goals are set — consider consolidating to the few that matter for cleaner optimization.';
             }
         } catch (\Throwable $e) {
-            $this->logError('VerifyConversionGoals: failed: ' . $e->getMessage());
+            $this->logError('VerifyConversionGoals: failed: '.$e->getMessage());
         }
 
         return ['actions' => $actions, 'warnings' => $warnings];
@@ -77,15 +77,17 @@ class VerifyConversionGoals extends BaseGoogleAdsService
     {
         try {
             $ca = new ConversionAction(['resource_name' => $resourceName, 'primary_for_goal' => false]);
-            $op = new ConversionActionOperation();
+            $op = new ConversionActionOperation;
             $op->setUpdate($ca);
             $op->setUpdateMask(new FieldMask(['paths' => ['primary_for_goal']]));
             $this->client->getConversionActionServiceClient()->mutateConversionActions(
                 new MutateConversionActionsRequest(['customer_id' => $customerId, 'operations' => [$op]])
             );
+
             return true;
         } catch (\Throwable $e) {
-            $this->logError('VerifyConversionGoals: failed to demote ' . $resourceName . ': ' . $e->getMessage());
+            $this->logError('VerifyConversionGoals: failed to demote '.$resourceName.': '.$e->getMessage());
+
             return false;
         }
     }

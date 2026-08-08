@@ -16,13 +16,13 @@ class FirecrawlService
 
     public function isConfigured(): bool
     {
-        return !empty($this->apiKey);
+        return ! empty($this->apiKey);
     }
 
     /**
      * Scrape a URL and return markdown content + metadata.
      *
-     * @param string $url The URL to scrape
+     * @param  string  $url  The URL to scrape
      * @return array{markdown: ?string, title: ?string, meta_description: ?string, success: bool}
      */
     public function scrape(string $url): array
@@ -34,25 +34,27 @@ class FirecrawlService
             'success' => false,
         ];
 
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             Log::debug('FirecrawlService: API key not configured, skipping');
+
             return $result;
         }
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
             ])->timeout(30)->post('https://api.firecrawl.dev/v1/scrape', [
                 'url' => $url,
                 'formats' => ['markdown'],
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('FirecrawlService: API error', [
                     'url' => $url,
                     'status' => $response->status(),
                     'body' => $response->body(),
                 ]);
+
                 return $result;
             }
 
@@ -62,7 +64,7 @@ class FirecrawlService
             $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
             $result['title'] = is_string($metadata['title'] ?? null) ? $metadata['title'] : null;
             $result['meta_description'] = is_string($metadata['description'] ?? null) ? $metadata['description'] : null;
-            $result['success'] = !empty($result['markdown']);
+            $result['success'] = ! empty($result['markdown']);
 
             Log::info('FirecrawlService: Scraped successfully', [
                 'url' => $url,
@@ -84,30 +86,32 @@ class FirecrawlService
      *
      * Supports query operators: "", -, site:, -site:, inurl:, intitle:, filetype:
      *
-     * @param string $query The search query (max 500 chars)
-     * @param int $limit Max results (1-100, default 10)
+     * @param  string  $query  The search query (max 500 chars)
+     * @param  int  $limit  Max results (1-100, default 10)
      * @return array{results: array, success: bool}
      */
     public function search(string $query, int $limit = 10): array
     {
-        if (!$this->isConfigured()) {
+        if (! $this->isConfigured()) {
             Log::debug('FirecrawlService: API key not configured, skipping search');
+
             return ['results' => [], 'success' => false];
         }
 
         try {
             $response = Http::withHeaders([
-                'Authorization' => 'Bearer ' . $this->apiKey,
+                'Authorization' => 'Bearer '.$this->apiKey,
             ])->timeout(60)->post('https://api.firecrawl.dev/v2/search', [
                 'query' => substr($query, 0, 500),
                 'limit' => min(max($limit, 1), 100),
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('FirecrawlService: Search API error', [
                     'query' => $query,
                     'status' => $response->status(),
                 ]);
+
                 return ['results' => [], 'success' => false];
             }
 
@@ -125,6 +129,7 @@ class FirecrawlService
                 'query' => $query,
                 'error' => $e->getMessage(),
             ]);
+
             return ['results' => [], 'success' => false];
         }
     }

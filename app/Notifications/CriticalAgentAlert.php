@@ -28,17 +28,23 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
 {
     use Queueable;
 
-    public const RECIPIENTS_ADMINS    = NotificationTemplate::RECIPIENTS_ADMINS;
+    public const RECIPIENTS_ADMINS = NotificationTemplate::RECIPIENTS_ADMINS;
+
     public const RECIPIENTS_CUSTOMERS = NotificationTemplate::RECIPIENTS_CUSTOMERS;
-    public const RECIPIENTS_BOTH      = NotificationTemplate::RECIPIENTS_BOTH;
+
+    public const RECIPIENTS_BOTH = NotificationTemplate::RECIPIENTS_BOTH;
 
     public string $alertType;
+
     public string $title;
+
     public string $message;
+
     public array $details;
 
     /** Copy resolved by deliver() from the admin template (null = use title/message). */
     public ?string $resolvedSubject = null;
+
     public ?string $resolvedBody = null;
 
     public function __construct(string $alertType, string $title, string $message, array $details = [])
@@ -57,9 +63,9 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
      * Resolve template copy + recipients + on/off, then send to the right users.
      * This is the canonical way to raise a CriticalAgentAlert.
      *
-     * @param  string       $defaultRecipients  Code fallback policy when no template row exists:
-     *                                           NotificationTemplate::RECIPIENTS_ADMINS|CUSTOMERS|BOTH.
-     * @param  ?Customer     $customer           Needed to resolve the 'customers'/'both' audience.
+     * @param  string  $defaultRecipients  Code fallback policy when no template row exists:
+     *                                     NotificationTemplate::RECIPIENTS_ADMINS|CUSTOMERS|BOTH.
+     * @param  ?Customer  $customer  Needed to resolve the 'customers'/'both' audience.
      */
     public static function deliver(
         string $alertType,
@@ -70,7 +76,7 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         ?Customer $customer = null
     ): void {
         $svc = app(NotificationTemplateService::class);
-        $key = 'critical_agent_alert.' . $alertType;
+        $key = 'critical_agent_alert.'.$alertType;
 
         // Scalars from details are exposed as {{placeholders}} for admin-authored copy.
         $vars = array_merge(
@@ -79,8 +85,8 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         );
 
         $resolved = $svc->resolve($key, [
-            'subject'    => "✨ {$title}",
-            'body'       => $message,
+            'subject' => "✨ {$title}",
+            'body' => $message,
             'recipients' => $defaultRecipients,
         ], $vars);
 
@@ -103,13 +109,13 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
     public function via(object $notifiable): array
     {
         // Admin "send test" previews always deliver — never deduped.
-        if (!empty($this->details['test_preview'])) {
+        if (! empty($this->details['test_preview'])) {
             return ['mail'];
         }
 
         // Deduplicate: same alert type + campaign within 24 hours sends only once per user
         $campaignId = $this->details['campaign_id'] ?? 'global';
-        $cacheKey   = "notif:critical:{$this->alertType}:{$campaignId}:{$notifiable->id}";
+        $cacheKey = "notif:critical:{$this->alertType}:{$campaignId}:{$notifiable->id}";
         if (Cache::has($cacheKey)) {
             return [];
         }
@@ -122,33 +128,33 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
     {
         $mail = (new MailMessage)
             ->subject($this->resolvedSubject ?: "✨ {$this->title}")
-            ->greeting('Hi ' . $notifiable->name . ',')
+            ->greeting('Hi '.$notifiable->name.',')
             ->line($this->resolvedBody ?: $this->message);
 
-        if (!empty($this->details['campaign_name'])) {
+        if (! empty($this->details['campaign_name'])) {
             $mail->line("Campaign: {$this->details['campaign_name']}");
         }
 
-        if (!empty($this->details['issues'])) {
-            $mail->line("Here is what we fixed:");
+        if (! empty($this->details['issues'])) {
+            $mail->line('Here is what we fixed:');
             foreach ($this->details['issues'] as $issue) {
                 $issueText = is_array($issue) ? ($issue['message'] ?? json_encode($issue)) : $issue;
                 $mail->line("- {$issueText}");
             }
         }
 
-        if (!empty($this->details['action_required'])) {
+        if (! empty($this->details['action_required'])) {
             $mail->line("Action Required: {$this->details['action_required']}");
-        } elseif (!empty($this->details['auto_resolved'])) {
+        } elseif (! empty($this->details['auto_resolved'])) {
             // Only claim we resolved something when the alert genuinely represents a
             // completed auto-fix. Previously this reassurance was the default for ANY
             // alert without an action_required, so admin/health alerts about crashing
             // jobs falsely told the reader everything was handled.
-            $mail->line("You do not need to take any action — our agents automatically resolved this for you.");
+            $mail->line('You do not need to take any action — our agents automatically resolved this for you.');
         }
 
-        if (!empty($this->details['campaign_id'])) {
-            $mail->action('View Campaign', url('/campaigns/' . $this->details['campaign_id']));
+        if (! empty($this->details['campaign_id'])) {
+            $mail->action('View Campaign', url('/campaigns/'.$this->details['campaign_id']));
         }
 
         return $mail->salutation('— Site to Spend');

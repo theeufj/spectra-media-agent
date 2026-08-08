@@ -17,9 +17,8 @@ use Illuminate\Support\Facades\Log;
 class GetBidSimulations extends BaseGoogleAdsService
 {
     /**
-     * @param  string $customerId
-     * @param  string $campaignResourceName   e.g. "customers/123/campaigns/456"
-     * @param  string $simulationType         'TARGET_CPA' or 'BUDGET'
+     * @param  string  $campaignResourceName  e.g. "customers/123/campaigns/456"
+     * @param  string  $simulationType  'TARGET_CPA' or 'BUDGET'
      * @return array{type: string, method: string, start_date: string, end_date: string, points: array}
      */
     public function __invoke(
@@ -43,11 +42,11 @@ WHERE campaign.resource_name = '{$campaignResourceName}'
   AND campaign_simulation.type = '{$simulationType}'";
 
         $result = [
-            'type'       => $simulationType,
-            'method'     => '',
+            'type' => $simulationType,
+            'method' => '',
             'start_date' => '',
-            'end_date'   => '',
-            'points'     => [],
+            'end_date' => '',
+            'points' => [],
         ];
 
         try {
@@ -56,21 +55,21 @@ WHERE campaign.resource_name = '{$campaignResourceName}'
             foreach ($response->getIterator() as $row) {
                 $simulation = $row->getCampaignSimulation();
 
-                $result['method']     = $this->formatModificationMethod($simulation->getModificationMethod());
+                $result['method'] = $this->formatModificationMethod($simulation->getModificationMethod());
                 $result['start_date'] = $simulation->getStartDate();
-                $result['end_date']   = $simulation->getEndDate();
+                $result['end_date'] = $simulation->getEndDate();
 
                 // Parse TARGET_CPA points
                 $cpaPontList = $simulation->getTargetCpaPointList();
                 if ($cpaPontList && $simulationType === 'TARGET_CPA') {
                     foreach ($cpaPontList->getPoints() as $point) {
                         $result['points'][] = [
-                            'target_cpa'             => $point->getTargetCpaMicros() / 1_000_000,
-                            'budget'                 => null,
-                            'projected_conversions'  => (float) $point->getBiddableConversions(),
-                            'projected_clicks'       => (int) $point->getClicks(),
-                            'projected_cost'         => $point->getCostMicros() / 1_000_000,
-                            'projected_impressions'  => (int) $point->getImpressions(),
+                            'target_cpa' => $point->getTargetCpaMicros() / 1_000_000,
+                            'budget' => null,
+                            'projected_conversions' => (float) $point->getBiddableConversions(),
+                            'projected_clicks' => (int) $point->getClicks(),
+                            'projected_cost' => $point->getCostMicros() / 1_000_000,
+                            'projected_impressions' => (int) $point->getImpressions(),
                         ];
                     }
                 }
@@ -80,12 +79,12 @@ WHERE campaign.resource_name = '{$campaignResourceName}'
                 if ($budgetPointList && $simulationType === 'BUDGET') {
                     foreach ($budgetPointList->getPoints() as $point) {
                         $result['points'][] = [
-                            'target_cpa'             => null,
-                            'budget'                 => $point->getBudgetAmountMicros() / 1_000_000,
-                            'projected_conversions'  => (float) $point->getBiddableConversions(),
-                            'projected_clicks'       => (int) $point->getClicks(),
-                            'projected_cost'         => $point->getCostMicros() / 1_000_000,
-                            'projected_impressions'  => (int) $point->getImpressions(),
+                            'target_cpa' => null,
+                            'budget' => $point->getBudgetAmountMicros() / 1_000_000,
+                            'projected_conversions' => (float) $point->getBiddableConversions(),
+                            'projected_clicks' => (int) $point->getClicks(),
+                            'projected_cost' => $point->getCostMicros() / 1_000_000,
+                            'projected_impressions' => (int) $point->getImpressions(),
                         ];
                     }
                 }
@@ -95,17 +94,17 @@ WHERE campaign.resource_name = '{$campaignResourceName}'
             }
         } catch (GoogleAdsException $e) {
             Log::error('GetBidSimulations: Query failed', [
-                'customer_id'     => $customerId,
-                'campaign'        => $campaignResourceName,
+                'customer_id' => $customerId,
+                'campaign' => $campaignResourceName,
                 'simulation_type' => $simulationType,
-                'error'           => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         } catch (\Exception $e) {
             Log::error('GetBidSimulations: Unexpected error', [
-                'customer_id'     => $customerId,
-                'campaign'        => $campaignResourceName,
+                'customer_id' => $customerId,
+                'campaign' => $campaignResourceName,
                 'simulation_type' => $simulationType,
-                'error'           => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
 

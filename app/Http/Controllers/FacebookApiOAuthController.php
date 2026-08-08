@@ -31,9 +31,9 @@ class FacebookApiOAuthController extends Controller
         return Inertia::render('Settings/FacebookApiConnect', [
             'connection' => $existing ? [
                 'connected_at' => $existing->updated_at->toISOString(),
-                'scopes'       => $existing->scopes ?? [],
+                'scopes' => $existing->scopes ?? [],
                 'account_name' => $existing->account_name,
-                'expires_at'   => $existing->expires_at?->toISOString(),
+                'expires_at' => $existing->expires_at?->toISOString(),
             ] : null,
         ]);
     }
@@ -64,12 +64,12 @@ class FacebookApiOAuthController extends Controller
         Connection::updateOrCreate(
             ['user_id' => Auth::id(), 'platform' => 'facebook_api'],
             [
-                'access_token'  => $accessToken,
+                'access_token' => $accessToken,
                 'refresh_token' => null,
-                'expires_at'    => $expiresAt,
-                'account_id'    => $fbUser->getId(),
-                'account_name'  => $fbUser->getName(),
-                'scopes'        => self::SCOPES,
+                'expires_at' => $expiresAt,
+                'account_id' => $fbUser->getId(),
+                'account_name' => $fbUser->getName(),
+                'scopes' => self::SCOPES,
             ]
         );
 
@@ -82,16 +82,16 @@ class FacebookApiOAuthController extends Controller
             ->where('platform', 'facebook_api')
             ->first();
 
-        if (!$connection) {
+        if (! $connection) {
             return redirect()->route('facebook-api.show');
         }
 
         return Inertia::render('Settings/FacebookApiSuccess', [
             'account_name' => $connection->account_name,
-            'account_id'   => $connection->account_id,
-            'scopes'       => $connection->scopes ?? [],
+            'account_id' => $connection->account_id,
+            'scopes' => $connection->scopes ?? [],
             'connected_at' => $connection->updated_at->toISOString(),
-            'expires_at'   => $connection->expires_at?->toISOString(),
+            'expires_at' => $connection->expires_at?->toISOString(),
         ]);
     }
 
@@ -101,7 +101,7 @@ class FacebookApiOAuthController extends Controller
             ->where('platform', 'facebook_api')
             ->first();
 
-        if (!$connection) {
+        if (! $connection) {
             return redirect()->route('facebook-api.show');
         }
 
@@ -110,13 +110,13 @@ class FacebookApiOAuthController extends Controller
 
         if ($tokenExpired) {
             return Inertia::render('Settings/FacebookApiVerify', [
-                'account_name'  => $connection->account_name,
+                'account_name' => $connection->account_name,
                 'token_expired' => true,
-                'identity'      => ['error' => 'Token expired.'],
-                'adAccounts'    => ['error' => 'Token expired.', 'accounts' => []],
-                'adInsights'    => ['error' => 'Token expired.'],
-                'businesses'    => ['error' => 'Token expired.', 'accounts' => []],
-                'managedPages'  => ['error' => 'Token expired.', 'pages' => []],
+                'identity' => ['error' => 'Token expired.'],
+                'adAccounts' => ['error' => 'Token expired.', 'accounts' => []],
+                'adInsights' => ['error' => 'Token expired.'],
+                'businesses' => ['error' => 'Token expired.', 'accounts' => []],
+                'managedPages' => ['error' => 'Token expired.', 'pages' => []],
             ]);
         }
 
@@ -139,16 +139,16 @@ class FacebookApiOAuthController extends Controller
         $businessAssets = $firstBusinessId ? $this->fetchBusinessPages($token, $firstBusinessId, $businesses['accounts'][0]['name'] ?? '') : ['error' => 'No businesses found.', 'pages' => []];
 
         return Inertia::render('Settings/FacebookApiVerify', [
-            'account_name'      => $connection->account_name,
-            'token_expired'     => false,
-            'identity'          => $this->fetchIdentity($token),
-            'grantedPermissions'=> $this->fetchGrantedPermissions($token),
-            'adAccounts'        => $adAccounts,
-            'adInsights'        => $adInsights,
-            'businesses'        => $businesses,
-            'businessAssets'    => $businessAssets,
-            'managedPages'      => $managedPages,
-            'pagePosts'         => $pagePosts,
+            'account_name' => $connection->account_name,
+            'token_expired' => false,
+            'identity' => $this->fetchIdentity($token),
+            'grantedPermissions' => $this->fetchGrantedPermissions($token),
+            'adAccounts' => $adAccounts,
+            'adInsights' => $adInsights,
+            'businesses' => $businesses,
+            'businessAssets' => $businessAssets,
+            'managedPages' => $managedPages,
+            'pagePosts' => $pagePosts,
         ]);
     }
 
@@ -158,12 +158,12 @@ class FacebookApiOAuthController extends Controller
             ->where('platform', 'facebook_api')
             ->first();
 
-        if (!$connection) {
+        if (! $connection) {
             return response()->json(['error' => 'Not connected'], 401);
         }
 
         $adAccountId = $request->input('ad_account_id');
-        if (!$adAccountId) {
+        if (! $adAccountId) {
             return response()->json(['error' => 'No ad account specified'], 422);
         }
 
@@ -171,35 +171,37 @@ class FacebookApiOAuthController extends Controller
             // Graph API requires form-encoded body (not JSON). Empty PHP arrays
             // are dropped by form encoding, so special_ad_categories must be the
             // string '[]' which Facebook deserialises as an empty JSON array.
-            $response = Http::post(self::GRAPH . '/' . $adAccountId . '/campaigns', [
-                'name'                        => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
-                'objective'                   => 'OUTCOME_AWARENESS',
-                'status'                      => 'PAUSED',
-                'special_ad_categories'       => '[]',
+            $response = Http::post(self::GRAPH.'/'.$adAccountId.'/campaigns', [
+                'name' => 'SiteToSpend Demo Campaign - '.now()->format('d M Y H:i'),
+                'objective' => 'OUTCOME_AWARENESS',
+                'status' => 'PAUSED',
+                'special_ad_categories' => '[]',
                 'is_adset_budget_sharing_enabled' => 0,
-                'access_token'                => $connection->access_token,
+                'access_token' => $connection->access_token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('FacebookApiOAuth: campaign creation failed', [
                     'ad_account_id' => $adAccountId,
-                    'status'        => $response->status(),
-                    'body'          => $response->json(),
+                    'status' => $response->status(),
+                    'body' => $response->json(),
                 ]);
+
                 return response()->json([
-                    'error'  => $response->json('error.message') ?? 'Campaign creation failed',
+                    'error' => $response->json('error.message') ?? 'Campaign creation failed',
                     'detail' => $response->json('error.error_user_msg') ?? null,
                     'status' => $response->status(),
                 ]);
             }
 
             $data = $response->json();
+
             return response()->json([
-                'success'     => true,
+                'success' => true,
                 'campaign_id' => $data['id'] ?? null,
-                'name'        => 'SiteToSpend Demo Campaign - ' . now()->format('d M Y H:i'),
-                'status'      => 'PAUSED',
-                'objective'   => 'OUTCOME_AWARENESS',
+                'name' => 'SiteToSpend Demo Campaign - '.now()->format('d M Y H:i'),
+                'status' => 'PAUSED',
+                'objective' => 'OUTCOME_AWARENESS',
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()]);
@@ -222,24 +224,26 @@ class FacebookApiOAuthController extends Controller
     {
         try {
             $response = Http::get('https://graph.facebook.com/oauth/access_token', [
-                'grant_type'        => 'fb_exchange_token',
-                'client_id'         => config('services.facebook.client_id'),
-                'client_secret'     => config('services.facebook.client_secret'),
+                'grant_type' => 'fb_exchange_token',
+                'client_id' => config('services.facebook.client_id'),
+                'client_secret' => config('services.facebook.client_secret'),
                 'fb_exchange_token' => $shortToken,
             ]);
 
             $data = $response->json();
-            if (!$response->successful() || empty($data['access_token'])) {
+            if (! $response->successful() || empty($data['access_token'])) {
                 Log::warning('FacebookApiOAuth: long-lived token exchange failed', [
                     'status' => $response->status(),
-                    'body'   => $data,
+                    'body' => $data,
                 ]);
+
                 return null;
             }
 
             return $data;
         } catch (\Exception $e) {
             Log::error('FacebookApiOAuth: token exchange exception', ['message' => $e->getMessage()]);
+
             return null;
         }
     }
@@ -247,30 +251,31 @@ class FacebookApiOAuthController extends Controller
     private function fetchAdInsights(string $token, string $adAccountId): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/' . $adAccountId . '/insights', [
-                'fields'      => 'impressions,clicks,spend,reach,cpc,cpm,actions',
+            $response = Http::get(self::GRAPH.'/'.$adAccountId.'/insights', [
+                'fields' => 'impressions,clicks,spend,reach,cpc,cpm,actions',
                 'date_preset' => 'last_30d',
-                'level'       => 'account',
+                'level' => 'account',
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'Insights fetch failed', 'status' => $response->status()];
             }
 
             $data = $response->json('data') ?? [];
             $row = $data[0] ?? [];
+
             return [
-                'error'       => null,
-                'account_id'  => $adAccountId,
-                'period'      => 'Last 30 days',
+                'error' => null,
+                'account_id' => $adAccountId,
+                'period' => 'Last 30 days',
                 'impressions' => $row['impressions'] ?? '0',
-                'clicks'      => $row['clicks'] ?? '0',
-                'spend'       => $row['spend'] ?? '0.00',
-                'reach'       => $row['reach'] ?? '0',
-                'cpc'         => $row['cpc'] ?? null,
-                'cpm'         => $row['cpm'] ?? null,
-                'actions'     => $row['actions'] ?? [],
+                'clicks' => $row['clicks'] ?? '0',
+                'spend' => $row['spend'] ?? '0.00',
+                'reach' => $row['reach'] ?? '0',
+                'cpc' => $row['cpc'] ?? null,
+                'cpm' => $row['cpm'] ?? null,
+                'actions' => $row['actions'] ?? [],
             ];
         } catch (\Exception $e) {
             return ['error' => $e->getMessage()];
@@ -280,31 +285,32 @@ class FacebookApiOAuthController extends Controller
     private function fetchManagedPages(string $token): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/me/accounts', [
-                'fields'       => 'id,name,category,fan_count,followers_count,link,access_token',
+            $response = Http::get(self::GRAPH.'/me/accounts', [
+                'fields' => 'id,name,category,fan_count,followers_count,link,access_token',
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'Pages fetch failed', 'pages' => [], 'status' => $response->status()];
             }
 
             $pages = $response->json('data') ?? [];
             Log::info('FacebookApiOAuth: managed pages', [
-                'count'              => count($pages),
-                'first_page_id'      => $pages[0]['id'] ?? null,
-                'has_page_token'     => isset($pages[0]['access_token']),
-                'page_token_length'  => strlen($pages[0]['access_token'] ?? ''),
+                'count' => count($pages),
+                'first_page_id' => $pages[0]['id'] ?? null,
+                'has_page_token' => isset($pages[0]['access_token']),
+                'page_token_length' => strlen($pages[0]['access_token'] ?? ''),
             ]);
+
             return [
                 'error' => null,
-                'pages' => array_map(fn($p) => [
-                    'id'         => $p['id'] ?? '',
-                    'name'       => $p['name'] ?? '',
-                    'category'   => $p['category'] ?? '',
-                    'fans'       => $p['fan_count'] ?? 0,
-                    'followers'  => $p['followers_count'] ?? 0,
-                    'link'       => $p['link'] ?? null,
+                'pages' => array_map(fn ($p) => [
+                    'id' => $p['id'] ?? '',
+                    'name' => $p['name'] ?? '',
+                    'category' => $p['category'] ?? '',
+                    'fans' => $p['fan_count'] ?? 0,
+                    'followers' => $p['followers_count'] ?? 0,
+                    'link' => $p['link'] ?? null,
                     'page_token' => $p['access_token'] ?? null,
                 ], $pages),
                 'count' => count($pages),
@@ -317,35 +323,37 @@ class FacebookApiOAuthController extends Controller
     private function fetchPagePosts(string $token, string $pageId, string $pageName): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/' . $pageId . '/feed', [
-                'fields'       => 'id,message,story,created_time,likes.summary(true),comments.summary(true)',
-                'limit'        => 5,
+            $response = Http::get(self::GRAPH.'/'.$pageId.'/feed', [
+                'fields' => 'id,message,story,created_time,likes.summary(true),comments.summary(true)',
+                'limit' => 5,
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 Log::warning('FacebookApiOAuth: page feed failed', [
-                    'page_id'          => $pageId,
-                    'status'           => $response->status(),
-                    'error_code'       => $response->json('error.code'),
-                    'error_subcode'    => $response->json('error.error_subcode'),
-                    'error_message'    => $response->json('error.message'),
-                    'token_is_user'    => strlen($token) < 200,
+                    'page_id' => $pageId,
+                    'status' => $response->status(),
+                    'error_code' => $response->json('error.code'),
+                    'error_subcode' => $response->json('error.error_subcode'),
+                    'error_message' => $response->json('error.message'),
+                    'token_is_user' => strlen($token) < 200,
                 ]);
+
                 return ['error' => $response->json('error.message') ?? 'Posts fetch failed', 'posts' => [], 'status' => $response->status()];
             }
 
             $posts = $response->json('data') ?? [];
+
             return [
-                'error'     => null,
-                'page_id'   => $pageId,
+                'error' => null,
+                'page_id' => $pageId,
                 'page_name' => $pageName,
-                'posts'     => array_map(fn($p) => [
-                    'id'           => $p['id'] ?? '',
-                    'message'      => $p['message'] ?? ($p['story'] ?? ''),
+                'posts' => array_map(fn ($p) => [
+                    'id' => $p['id'] ?? '',
+                    'message' => $p['message'] ?? ($p['story'] ?? ''),
                     'created_time' => $p['created_time'] ?? '',
-                    'likes'        => $p['likes']['summary']['total_count'] ?? 0,
-                    'comments'     => $p['comments']['summary']['total_count'] ?? 0,
+                    'likes' => $p['likes']['summary']['total_count'] ?? 0,
+                    'comments' => $p['comments']['summary']['total_count'] ?? 0,
                 ], $posts),
                 'count' => count($posts),
             ];
@@ -357,25 +365,26 @@ class FacebookApiOAuthController extends Controller
     private function fetchBusinessPages(string $token, string $businessId, string $businessName): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/' . $businessId . '/owned_pages', [
-                'fields'       => 'id,name,category,fan_count',
+            $response = Http::get(self::GRAPH.'/'.$businessId.'/owned_pages', [
+                'fields' => 'id,name,category,fan_count',
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'Business pages fetch failed', 'pages' => [], 'status' => $response->status()];
             }
 
             $pages = $response->json('data') ?? [];
+
             return [
-                'error'         => null,
-                'business_id'   => $businessId,
+                'error' => null,
+                'business_id' => $businessId,
                 'business_name' => $businessName,
-                'pages'         => array_map(fn($p) => [
-                    'id'       => $p['id'] ?? '',
-                    'name'     => $p['name'] ?? '',
+                'pages' => array_map(fn ($p) => [
+                    'id' => $p['id'] ?? '',
+                    'name' => $p['name'] ?? '',
                     'category' => $p['category'] ?? '',
-                    'fans'     => $p['fan_count'] ?? 0,
+                    'fans' => $p['fan_count'] ?? 0,
                 ], $pages),
                 'count' => count($pages),
             ];
@@ -387,12 +396,12 @@ class FacebookApiOAuthController extends Controller
     private function fetchIdentity(string $token): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/me', [
-                'fields'       => 'id,name,email',
+            $response = Http::get(self::GRAPH.'/me', [
+                'fields' => 'id,name,email',
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'API call failed'];
             }
 
@@ -405,21 +414,22 @@ class FacebookApiOAuthController extends Controller
     private function fetchAdAccounts(string $token): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/me/adaccounts', [
-                'fields'       => 'id,name,account_status',
+            $response = Http::get(self::GRAPH.'/me/adaccounts', [
+                'fields' => 'id,name,account_status',
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'API call failed', 'accounts' => [], 'status' => $response->status()];
             }
 
             $accounts = $response->json('data') ?? [];
+
             return [
-                'error'    => null,
-                'accounts' => array_map(fn($a) => [
-                    'id'     => $a['id'] ?? '',
-                    'name'   => $a['name'] ?? '',
+                'error' => null,
+                'accounts' => array_map(fn ($a) => [
+                    'id' => $a['id'] ?? '',
+                    'name' => $a['name'] ?? '',
                     'status' => $a['account_status'] ?? null,
                 ], $accounts),
                 'count' => count($accounts),
@@ -432,20 +442,21 @@ class FacebookApiOAuthController extends Controller
     private function fetchBusinesses(string $token): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/me/businesses', [
-                'fields'       => 'id,name',
+            $response = Http::get(self::GRAPH.'/me/businesses', [
+                'fields' => 'id,name',
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'API call failed', 'accounts' => [], 'status' => $response->status()];
             }
 
             $businesses = $response->json('data') ?? [];
+
             return [
-                'error'    => null,
-                'accounts' => array_map(fn($b) => [
-                    'id'   => $b['id'] ?? '',
+                'error' => null,
+                'accounts' => array_map(fn ($b) => [
+                    'id' => $b['id'] ?? '',
                     'name' => $b['name'] ?? '',
                 ], $businesses),
                 'count' => count($businesses),
@@ -458,20 +469,21 @@ class FacebookApiOAuthController extends Controller
     private function fetchGrantedPermissions(string $token): array
     {
         try {
-            $response = Http::get(self::GRAPH . '/me/permissions', [
+            $response = Http::get(self::GRAPH.'/me/permissions', [
                 'access_token' => $token,
             ]);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 return ['error' => $response->json('error.message') ?? 'Permissions fetch failed', 'permissions' => []];
             }
 
             $data = $response->json('data') ?? [];
+
             return [
-                'error'       => null,
-                'permissions' => array_map(fn($p) => [
+                'error' => null,
+                'permissions' => array_map(fn ($p) => [
                     'permission' => $p['permission'] ?? '',
-                    'status'     => $p['status'] ?? '',
+                    'status' => $p['status'] ?? '',
                 ], $data),
             ];
         } catch (\Exception $e) {

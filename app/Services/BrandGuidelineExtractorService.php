@@ -29,7 +29,7 @@ class BrandGuidelineExtractorService
     {
         $user = $customer->users()->first();
 
-        if (!$user) {
+        if (! $user) {
             return false;
         }
 
@@ -61,10 +61,11 @@ class BrandGuidelineExtractorService
             Log::info("Starting brand guideline extraction for customer {$customer->id}");
 
             // Check subscription limits
-            if (!$this->canExtractGuidelines($customer)) {
-                Log::info("Brand guideline extraction skipped - limit reached for free users", [
+            if (! $this->canExtractGuidelines($customer)) {
+                Log::info('Brand guideline extraction skipped - limit reached for free users', [
                     'customer_id' => $customer->id,
                 ]);
+
                 return null;
             }
 
@@ -81,6 +82,7 @@ class BrandGuidelineExtractorService
 
             $customerPageContent = $pages->map(function ($page) {
                 $typeLabel = strtoupper($page->page_type ?? 'UNKNOWN');
+
                 return "--- PAGE TYPE: {$typeLabel} | URL: {$page->url} ---\n\n{$page->content}";
             })->implode("\n\n---PAGE BREAK---\n\n");
 
@@ -96,6 +98,7 @@ class BrandGuidelineExtractorService
 
             if (empty($websiteContent)) {
                 Log::warning("No knowledge base content found for customer {$customer->id}");
+
                 return null;
             }
 
@@ -109,7 +112,7 @@ class BrandGuidelineExtractorService
                 $customer->industry ?? 'general'
             ))->getPrompt();
 
-            Log::info("Calling Gemini for brand guideline extraction", [
+            Log::info('Calling Gemini for brand guideline extraction', [
                 'customer_id' => $customer->id,
                 'content_length' => strlen($websiteContent),
             ]);
@@ -117,10 +120,11 @@ class BrandGuidelineExtractorService
             // Step 4: Call Gemini with extended thinking for deep analysis
             $response = $this->geminiService->generateContent(config('ai.models.default'), $prompt);
 
-            if (!$response || !isset($response['text'])) {
-                Log::error("Failed to generate brand guidelines from Gemini", [
+            if (! $response || ! isset($response['text'])) {
+                Log::error('Failed to generate brand guidelines from Gemini', [
                     'customer_id' => $customer->id,
                 ]);
+
                 return null;
             }
 
@@ -129,20 +133,22 @@ class BrandGuidelineExtractorService
             $guidelines = json_decode($cleanedJson, true);
 
             if (json_last_error() !== JSON_ERROR_NONE) {
-                Log::error("Failed to parse brand guidelines JSON", [
+                Log::error('Failed to parse brand guidelines JSON', [
                     'customer_id' => $customer->id,
                     'error' => json_last_error_msg(),
                     'response_preview' => substr($response['text'], 0, 500),
                 ]);
+
                 return null;
             }
 
             // Step 6: Validate required fields
-            if (!$this->validateGuidelines($guidelines)) {
-                Log::error("Brand guidelines missing required fields", [
+            if (! $this->validateGuidelines($guidelines)) {
+                Log::error('Brand guidelines missing required fields', [
                     'customer_id' => $customer->id,
                     'guidelines' => $guidelines,
                 ]);
+
                 return null;
             }
 
@@ -168,7 +174,7 @@ class BrandGuidelineExtractorService
                 ]
             );
 
-            Log::info("Successfully extracted brand guidelines", [
+            Log::info('Successfully extracted brand guidelines', [
                 'customer_id' => $customer->id,
                 'brand_guideline_id' => $brandGuideline->id,
                 'quality_score' => $brandGuideline->extraction_quality_score,
@@ -177,11 +183,12 @@ class BrandGuidelineExtractorService
             return $brandGuideline;
 
         } catch (\Exception $e) {
-            Log::error("Error extracting brand guidelines", [
+            Log::error('Error extracting brand guidelines', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
+
             return null;
         }
     }
@@ -197,28 +204,30 @@ class BrandGuidelineExtractorService
             // Implement Robots.txt check before ethical scraping
             try {
                 $parsedUrl = parse_url($websiteUrl);
-                $baseUrl = ($parsedUrl['scheme'] ?? 'https') . '://' . ($parsedUrl['host'] ?? '');
-                $robotsUrl = $baseUrl . '/robots.txt';
+                $baseUrl = ($parsedUrl['scheme'] ?? 'https').'://'.($parsedUrl['host'] ?? '');
+                $robotsUrl = $baseUrl.'/robots.txt';
 
                 $robotsTxtContent = \Illuminate\Support\Facades\Cache::remember("robots.txt.{$baseUrl}", 3600, function () use ($robotsUrl) {
                     try {
                         $response = Http::timeout(5)->get($robotsUrl);
+
                         return $response->successful() ? $response->body() : '';
                     } catch (\Exception $e) {
                         return '';
                     }
                 });
 
-                if (!empty($robotsTxtContent)) {
+                if (! empty($robotsTxtContent)) {
                     $robots = new \Spatie\Robots\RobotsTxt($robotsTxtContent);
                     $userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36';
-                    if (!$robots->allows($websiteUrl, $userAgent)) {
-                        Log::warning("Robots.txt disallowed scraping for visual style analysis", ['url' => $websiteUrl]);
+                    if (! $robots->allows($websiteUrl, $userAgent)) {
+                        Log::warning('Robots.txt disallowed scraping for visual style analysis', ['url' => $websiteUrl]);
+
                         return $this->getDefaultVisualAnalysis();
                     }
                 }
             } catch (\Exception $e) {
-                Log::notice("Could not parse robots.txt, proceeding cautiously", ['error' => $e->getMessage()]);
+                Log::notice('Could not parse robots.txt, proceeding cautiously', ['error' => $e->getMessage()]);
             }
 
             // Try Browsershot with Screenshot for Vision AI
@@ -231,7 +240,7 @@ class BrandGuidelineExtractorService
                     ->timeout(30)
                     ->base64Screenshot();
 
-                Log::info("Screenshot captured, sending to Gemini Vision AI");
+                Log::info('Screenshot captured, sending to Gemini Vision AI');
 
                 // Call Gemini Vision
                 $prompt = "Analyze this website screenshot. Extract the visual brand identity. Return a JSON object with these keys: 'primary_colors' (array of hex codes), 'fonts' (array of font descriptions or names), 'image_style' (string description), 'layout_style' (string description).";
@@ -249,15 +258,16 @@ class BrandGuidelineExtractorService
                 );
 
                 if ($response && isset($response['text'])) {
-                     $analysis = json_decode($this->cleanJsonResponse($response['text']), true);
-                     if ($analysis) {
-                         Log::info("Visual analysis completed via Vision AI");
-                         return $analysis;
-                     }
+                    $analysis = json_decode($this->cleanJsonResponse($response['text']), true);
+                    if ($analysis) {
+                        Log::info('Visual analysis completed via Vision AI');
+
+                        return $analysis;
+                    }
                 }
 
             } catch (\Exception $e) {
-                Log::warning("Vision AI analysis failed, falling back to HTML scraping", [
+                Log::warning('Vision AI analysis failed, falling back to HTML scraping', [
                     'error' => $e->getMessage(),
                 ]);
             }
@@ -271,7 +281,7 @@ class BrandGuidelineExtractorService
                     ->timeout(20)
                     ->bodyHtml();
             } catch (\Exception $e) {
-                Log::warning("Browsershot HTML fetch failed, falling back to HTTP", [
+                Log::warning('Browsershot HTML fetch failed, falling back to HTTP', [
                     'error' => $e->getMessage(),
                 ]);
                 // Fallback to simple HTTP request
@@ -280,7 +290,8 @@ class BrandGuidelineExtractorService
             }
 
             if (empty($html)) {
-                Log::warning("Failed to fetch HTML for visual analysis");
+                Log::warning('Failed to fetch HTML for visual analysis');
+
                 return $this->getDefaultVisualAnalysis();
             }
 
@@ -292,7 +303,8 @@ class BrandGuidelineExtractorService
             ];
 
         } catch (\Exception $e) {
-            Log::error("Error analyzing visual style: " . $e->getMessage());
+            Log::error('Error analyzing visual style: '.$e->getMessage());
+
             return $this->getDefaultVisualAnalysis();
         }
     }
@@ -307,14 +319,15 @@ class BrandGuidelineExtractorService
         // Extract hex colors from inline styles and style tags
         preg_match_all('/#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})/', $html, $matches);
 
-        if (!empty($matches[0])) {
+        if (! empty($matches[0])) {
             // Normalize 3-digit hex to 6-digit
-            $hexColors = array_map(function($color) {
+            $hexColors = array_map(function ($color) {
                 $color = strtoupper(ltrim($color, '#'));
                 if (strlen($color) === 3) {
                     $color = $color[0].$color[0].$color[1].$color[1].$color[2].$color[2];
                 }
-                return '#' . $color;
+
+                return '#'.$color;
             }, $matches[0]);
 
             // Count occurrences and get most common colors
@@ -322,15 +335,15 @@ class BrandGuidelineExtractorService
             arsort($colorCounts);
 
             // Filter out near-white and near-black (usually backgrounds)
-            $filteredColors = array_filter(array_keys($colorCounts), function($color) {
+            $filteredColors = array_filter(array_keys($colorCounts), function ($color) {
                 // Skip #FFFFFF, #000000, and very close variants
-                return !in_array($color, ['#FFFFFF', '#000000', '#FAFAFA', '#F5F5F5', '#111111']);
+                return ! in_array($color, ['#FFFFFF', '#000000', '#FAFAFA', '#F5F5F5', '#111111']);
             });
 
             $colors = array_slice($filteredColors, 0, 6); // Top 6 colors
         }
 
-        return !empty($colors) ? $colors : ['#0066CC', '#333333']; // Default fallback
+        return ! empty($colors) ? $colors : ['#0066CC', '#333333']; // Default fallback
     }
 
     /**
@@ -343,14 +356,14 @@ class BrandGuidelineExtractorService
         // Look for font-family declarations
         preg_match_all('/font-family:\s*([^;}"]+)/i', $html, $matches);
 
-        if (!empty($matches[1])) {
+        if (! empty($matches[1])) {
             foreach ($matches[1] as $fontDeclaration) {
                 // Split by comma and clean up
                 $fontList = explode(',', $fontDeclaration);
                 foreach ($fontList as $font) {
                     $font = trim($font, " '\"");
                     // Skip generic font families
-                    if (!in_array(strtolower($font), ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui'])) {
+                    if (! in_array(strtolower($font), ['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui'])) {
                         $fonts[] = $font;
                     }
                 }
@@ -361,7 +374,7 @@ class BrandGuidelineExtractorService
             $fonts = array_slice($fonts, 0, 5); // Top 5 fonts
         }
 
-        return !empty($fonts) ? $fonts : ['Arial', 'Helvetica']; // Default fallback
+        return ! empty($fonts) ? $fonts : ['Arial', 'Helvetica']; // Default fallback
     }
 
     /**
@@ -447,8 +460,9 @@ class BrandGuidelineExtractorService
         ];
 
         foreach ($requiredFields as $field) {
-            if (!isset($guidelines[$field]) || empty($guidelines[$field])) {
+            if (! isset($guidelines[$field]) || empty($guidelines[$field])) {
                 Log::warning("Missing required field in brand guidelines: {$field}");
+
                 return false;
             }
         }

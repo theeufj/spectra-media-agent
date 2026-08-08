@@ -2,6 +2,7 @@
 
 namespace App\Services\Campaigns;
 
+use App\Enums\CampaignStatus;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Recommendation;
@@ -10,18 +11,20 @@ use Illuminate\Support\Facades\Log;
 class PortfolioOptimizationService
 {
     private const ROAS_PAUSE_THRESHOLD = 0.8;
+
     private const ROAS_INCREASE_BUDGET_THRESHOLD = 2.5;
 
     public function __invoke(Customer $customer): bool
     {
         try {
             $campaigns = $customer->campaigns()
-                ->where('status', 'ACTIVE')
+                ->where('status', CampaignStatus::Active)
                 ->with('strategies.performanceData')
                 ->get();
 
             if ($campaigns->isEmpty()) {
                 Log::info("No active campaigns to optimize for customer {$customer->id}.");
+
                 return true;
             }
 
@@ -36,12 +39,14 @@ class PortfolioOptimizationService
             }
 
             Log::info("Portfolio optimization check completed for customer {$customer->id}.");
+
             return true;
 
         } catch (\Exception $e) {
-            Log::error("Error optimizing portfolio for customer {$customer->id}: " . $e->getMessage(), [
+            Log::error("Error optimizing portfolio for customer {$customer->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return false;
         }
     }
@@ -80,7 +85,7 @@ class PortfolioOptimizationService
             [
                 'target_entity' => ['campaign_id' => $campaign->id],
                 'parameters' => ['new_status' => 'PAUSED'],
-                'rationale' => "Campaign has a low ROAS of " . round($roas, 2) . ". Consider pausing to re-evaluate.",
+                'rationale' => 'Campaign has a low ROAS of '.round($roas, 2).'. Consider pausing to re-evaluate.',
                 'requires_approval' => true,
             ]
         );
@@ -98,7 +103,7 @@ class PortfolioOptimizationService
             [
                 'target_entity' => ['campaign_id' => $campaign->id],
                 'parameters' => ['increase_percentage' => 20],
-                'rationale' => "Campaign is performing well with a high ROAS of " . round($roas, 2) . ". Consider increasing the budget to scale.",
+                'rationale' => 'Campaign is performing well with a high ROAS of '.round($roas, 2).'. Consider increasing the budget to scale.',
                 'requires_approval' => true,
             ]
         );

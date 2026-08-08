@@ -26,6 +26,7 @@ class FeatureFlagController extends Controller
                 foreach ($features as $feature) {
                     $flags[$feature['class']] = Feature::for($user)->active($feature['class']);
                 }
+
                 return [
                     'id' => $user->id,
                     'name' => $user->name,
@@ -54,7 +55,7 @@ class FeatureFlagController extends Controller
 
         $featureClass = $this->resolveFeatureClass($feature);
 
-        if (!$featureClass) {
+        if (! $featureClass) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => "Feature '{$feature}' not found.",
@@ -111,7 +112,7 @@ class FeatureFlagController extends Controller
     {
         $path = app_path('Features');
 
-        if (!File::isDirectory($path)) {
+        if (! File::isDirectory($path)) {
             return [];
         }
 
@@ -121,7 +122,7 @@ class FeatureFlagController extends Controller
                 continue;
             }
 
-            $className = 'App\\Features\\' . $file->getFilenameWithoutExtension();
+            $className = 'App\\Features\\'.$file->getFilenameWithoutExtension();
             if (class_exists($className)) {
                 $features[] = [
                     'name' => $file->getFilenameWithoutExtension(),
@@ -138,7 +139,8 @@ class FeatureFlagController extends Controller
      */
     private function resolveFeatureClass(string $slug): ?string
     {
-        $class = 'App\\Features\\' . $slug;
+        $class = 'App\\Features\\'.$slug;
+
         return class_exists($class) ? $class : null;
     }
 }

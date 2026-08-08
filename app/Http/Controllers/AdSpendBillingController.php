@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ActivityLog;
-use App\Models\Customer;
 use App\Http\Requests\AddAdSpendCreditRequest;
 use App\Http\Requests\SetupAdSpendBillingRequest;
+use App\Models\ActivityLog;
+use App\Models\Customer;
 use App\Services\AdSpendBillingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -28,7 +28,7 @@ class AdSpendBillingController extends Controller
         $user = $request->user();
         $customer = $this->getActiveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return Inertia::render('Billing/AdSpend', [
                 'credit' => null,
                 'transactions' => [],
@@ -54,7 +54,7 @@ class AdSpendBillingController extends Controller
                 'grace_period_ends_at' => $credit->grace_period_ends_at,
                 'campaigns_paused_at' => $credit->campaigns_paused_at,
                 'average_daily_spend' => $credit->getAverageDailySpend(),
-                'days_remaining' => $credit->getAverageDailySpend() > 0 
+                'days_remaining' => $credit->getAverageDailySpend() > 0
                     ? round($credit->current_balance / $credit->getAverageDailySpend(), 1)
                     : null,
                 'budget_multiplier' => $credit->getBudgetMultiplier(),
@@ -64,7 +64,7 @@ class AdSpendBillingController extends Controller
                 ->latest()
                 ->take(50)
                 ->get()
-                ->map(fn($t) => [
+                ->map(fn ($t) => [
                     'id' => $t->id,
                     'type' => $t->type,
                     'amount' => $t->amount,
@@ -84,7 +84,7 @@ class AdSpendBillingController extends Controller
         $user = $request->user();
         $customer = $this->getActiveCustomer($request);
 
-        if (!$customer || !$customer->adSpendCredit) {
+        if (! $customer || ! $customer->adSpendCredit) {
             return response()->json([
                 'success' => false,
                 'error' => 'No ad spend credit account found',
@@ -101,8 +101,8 @@ class AdSpendBillingController extends Controller
             'can_run_campaigns' => $credit->canRunCampaigns(),
             'budget_multiplier' => $credit->getBudgetMultiplier(),
             'average_daily_spend' => $credit->getAverageDailySpend(),
-            'days_remaining' => $credit->getAverageDailySpend() > 0 
-                ? $credit->current_balance / $credit->getAverageDailySpend() 
+            'days_remaining' => $credit->getAverageDailySpend() > 0
+                ? $credit->current_balance / $credit->getAverageDailySpend()
                 : null,
         ]);
     }
@@ -115,7 +115,7 @@ class AdSpendBillingController extends Controller
         $user = $request->user();
         $customer = $this->getActiveCustomer($request);
 
-        if (!$customer || !$customer->adSpendCredit) {
+        if (! $customer || ! $customer->adSpendCredit) {
             return response()->json([
                 'success' => false,
                 'error' => 'No ad spend credit account found',
@@ -141,7 +141,7 @@ class AdSpendBillingController extends Controller
         $user = $request->user();
         $customer = $this->getActiveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return response()->json([
                 'success' => false,
                 'error' => 'No customer account found',
@@ -182,7 +182,7 @@ class AdSpendBillingController extends Controller
         $user = $request->user();
         $customer = $this->getActiveCustomer($request);
 
-        if (!$customer || !$customer->adSpendCredit) {
+        if (! $customer || ! $customer->adSpendCredit) {
             return response()->json([
                 'success' => false,
                 'error' => 'No ad spend credit account found',
@@ -248,7 +248,7 @@ class AdSpendBillingController extends Controller
             // If retry payment flag is set, also retry the failed payment
             if ($request->retry_payment) {
                 $customer = $this->getActiveCustomer($request);
-                
+
                 if ($customer && $customer->adSpendCredit) {
                     $credit = $customer->adSpendCredit;
                     $avgDailySpend = $credit->getAverageDailySpend();
@@ -272,7 +272,7 @@ class AdSpendBillingController extends Controller
                     } else {
                         return response()->json([
                             'success' => false,
-                            'error' => 'Payment method updated but payment still failed: ' . ($result['error'] ?? 'Unknown error'),
+                            'error' => 'Payment method updated but payment still failed: '.($result['error'] ?? 'Unknown error'),
                         ], 400);
                     }
                 }
@@ -290,7 +290,7 @@ class AdSpendBillingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to update payment method: ' . $e->getMessage(),
+                'error' => 'Failed to update payment method: '.$e->getMessage(),
             ], 400);
         }
     }
@@ -305,7 +305,7 @@ class AdSpendBillingController extends Controller
         $user = $request->user();
         $customer = $this->getActiveCustomer($request);
 
-        if (!$customer) {
+        if (! $customer) {
             return response()->json([
                 'success' => false,
                 'error' => 'No customer account found',
@@ -316,14 +316,14 @@ class AdSpendBillingController extends Controller
             // Save payment method to the customer's owner so recurring charges work for all team members
             $billingUser = $customer->users()->wherePivot('role', 'owner')->first() ?? $user;
 
-            if (!$billingUser->stripe_id) {
+            if (! $billingUser->stripe_id) {
                 $billingUser->createAsStripeCustomer();
             }
 
             // Update payment method if a new one was provided; otherwise use the existing one
             if ($request->payment_method_id) {
                 $billingUser->updateDefaultPaymentMethod($request->payment_method_id);
-            } elseif (!$billingUser->hasDefaultPaymentMethod()) {
+            } elseif (! $billingUser->hasDefaultPaymentMethod()) {
                 return response()->json([
                     'success' => false,
                     'error' => 'No payment method on file. Please add a payment method.',
@@ -361,7 +361,7 @@ class AdSpendBillingController extends Controller
                         "Campaign ad spend top-up ({$daysToCharge} days @ \${$dailyBudget}/day — shortfall)"
                     );
 
-                    if (!$result['success']) {
+                    if (! $result['success']) {
                         throw new \Exception($result['error'] ?? 'Payment failed');
                     }
 
@@ -407,7 +407,7 @@ class AdSpendBillingController extends Controller
 
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to set up ad spend billing: ' . $e->getMessage(),
+                'error' => 'Failed to set up ad spend billing: '.$e->getMessage(),
             ], 400);
         }
     }

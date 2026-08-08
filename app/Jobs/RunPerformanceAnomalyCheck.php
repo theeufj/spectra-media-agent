@@ -21,17 +21,18 @@ use Illuminate\Support\Facades\Log;
  */
 class RunPerformanceAnomalyCheck implements ShouldQueue
 {
-    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels, \App\Jobs\Concerns\RecordsAgentRun;
+    use \App\Jobs\Concerns\RecordsAgentRun, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries   = 2;
+    public int $tries = 2;
+
     public int $timeout = 600; // 10 minutes
 
     public function handle(PerformanceAnomalyAlertAgent $agent): void
     {
-        Log::info("RunPerformanceAnomalyCheck: Starting anomaly check");
+        Log::info('RunPerformanceAnomalyCheck: Starting anomaly check');
         $runStart = $this->startRun();
 
-        $customers = Customer::whereHas('campaigns', fn($q) => $q->withDeployedPlatforms())->get();
+        $customers = Customer::whereHas('campaigns', fn ($q) => $q->withDeployedPlatforms())->get();
 
         $totalAlerts = 0;
         $errors = 0;
@@ -42,21 +43,21 @@ class RunPerformanceAnomalyCheck implements ShouldQueue
                 $totalAlerts += count($alerts);
             } catch (\Exception $e) {
                 $errors++;
-                Log::error("RunPerformanceAnomalyCheck: Error for customer {$customer->id}: " . $e->getMessage());
+                Log::error("RunPerformanceAnomalyCheck: Error for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
-        Log::info("RunPerformanceAnomalyCheck: Completed", [
+        Log::info('RunPerformanceAnomalyCheck: Completed', [
             'customers_checked' => $customers->count(),
-            'alerts_sent'       => $totalAlerts,
+            'alerts_sent' => $totalAlerts,
         ]);
 
-        $this->finishRun($runStart, actions: $totalAlerts, errors: $errors, scope: $customers->count() . ' customers');
+        $this->finishRun($runStart, actions: $totalAlerts, errors: $errors, scope: $customers->count().' customers');
     }
 
     public function failed(\Throwable $e): void
     {
-        Log::error("RunPerformanceAnomalyCheck: Job failed: " . $e->getMessage());
+        Log::error('RunPerformanceAnomalyCheck: Job failed: '.$e->getMessage());
         $this->recordRunFailure($e);
     }
 }

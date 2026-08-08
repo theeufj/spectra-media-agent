@@ -4,20 +4,28 @@ namespace App\Services\Agents;
 
 /**
  * Represents the result of executing a deployment plan.
- * 
+ *
  * Contains success/failure status, errors, warnings, created platform IDs,
  * and execution timing information.
  */
 class ExecutionResult
 {
     public bool $success;
+
     public array $errors;
+
     public array $warnings;
+
     public array $platformIds;
+
     public float $executionTime;
+
     public ?ExecutionPlan $plan;
+
     public array $metadata;
+
     public string $message;
+
     public array $data;
 
     public function __construct(
@@ -44,15 +52,14 @@ class ExecutionResult
 
     /**
      * Create a failed execution result.
-     * 
-     * @param array|string $errors Error message(s)
-     * @param array $context Additional context
-     * @return self
+     *
+     * @param  array|string  $errors  Error message(s)
+     * @param  array  $context  Additional context
      */
     public static function failure($errors, array $context = []): self
     {
         $errorArray = is_array($errors) ? $errors : [$errors];
-        
+
         return new self(
             success: false,
             errors: $errorArray,
@@ -62,12 +69,11 @@ class ExecutionResult
 
     /**
      * Create a successful execution result.
-     * 
-     * @param array $platformIds Created platform resource IDs
-     * @param float $executionTime Time taken to execute
-     * @param ExecutionPlan|null $plan The executed plan
-     * @param array $warnings Any warnings during execution
-     * @return self
+     *
+     * @param  array  $platformIds  Created platform resource IDs
+     * @param  float  $executionTime  Time taken to execute
+     * @param  ExecutionPlan|null  $plan  The executed plan
+     * @param  array  $warnings  Any warnings during execution
      */
     public static function success(
         array $platformIds = [],
@@ -87,17 +93,17 @@ class ExecutionResult
 
     /**
      * Check if the execution failed.
-     * 
+     *
      * @return bool True if execution failed
      */
     public function failed(): bool
     {
-        return !$this->success;
+        return ! $this->success;
     }
 
     /**
      * Check if the execution succeeded.
-     * 
+     *
      * @return bool True if execution succeeded
      */
     public function isSuccessful(): bool
@@ -107,66 +113,76 @@ class ExecutionResult
 
     /**
      * Check if there are any errors.
-     * 
+     *
      * @return bool True if errors exist
      */
     public function hasErrors(): bool
     {
-        return !empty($this->errors);
+        return ! empty($this->errors);
     }
 
     /**
      * Check if there are any warnings.
-     * 
+     *
      * @return bool True if warnings exist
      */
     public function hasWarnings(): bool
     {
-        return !empty($this->warnings);
+        return ! empty($this->warnings);
     }
 
     /**
      * Add an error to the result.
-     * 
-     * @param string $error Error message
-     * @return self
+     *
+     * @param  string  $error  Error message
      */
     public function addError(string $error): self
     {
         $this->errors[] = $error;
         $this->success = false;
+
         return $this;
     }
 
     /**
      * Add a warning to the result.
-     * 
-     * @param string $warning Warning message
-     * @return self
+     *
+     * @param  string  $warning  Warning message
      */
-    public function addWarning(string $warning): self
+    /**
+     * Record a warning.
+     *
+     * Most callers pass (code, message) — matching ValidationResult::addWarning,
+     * which stores a keyed array. This method only ever accepted one argument, so
+     * PHP silently discarded the second and users were shown the slug
+     * ("no_conversion_tracking") instead of the explanation. The message now wins
+     * when supplied; the flat array-of-strings shape that DeploymentService
+     * consumes is unchanged.
+     */
+    public function addWarning(string $warning, ?string $message = null): self
     {
-        $this->warnings[] = $warning;
+        $this->warnings[] = $message ?? $warning;
+
         return $this;
     }
 
     /**
      * Add a platform resource ID.
-     * 
-     * @param string $type Resource type (e.g., 'campaign_id', 'ad_group_id')
-     * @param string $id Resource ID from platform
-     * @return self
+     *
+     * @param  string  $type  Resource type (e.g., 'campaign_id', 'ad_group_id')
+     * @param  string  $id  Resource ID from platform
      */
     public function addPlatformId(string $type, string $id): self
     {
         $this->platformIds[$type] = $id;
+
         return $this;
     }
 
     /**
      * Get a specific platform ID.
-     * 
-     * @param string $type Resource type
+     *
+     * @param  string  $type  Resource type
      * @return string|null Resource ID or null if not found
      */
     public function getPlatformId(string $type): ?string
@@ -176,20 +192,20 @@ class ExecutionResult
 
     /**
      * Add metadata to the result.
-     * 
-     * @param string $key Metadata key
-     * @param mixed $value Metadata value
-     * @return self
+     *
+     * @param  string  $key  Metadata key
+     * @param  mixed  $value  Metadata value
      */
     public function addMetadata(string $key, $value): self
     {
         $this->metadata[$key] = $value;
+
         return $this;
     }
 
     /**
      * Convert result to array for storage or logging.
-     * 
+     *
      * @return array Result as array
      */
     public function toArray(): array
@@ -210,22 +226,23 @@ class ExecutionResult
 
     /**
      * Get a summary message of the execution result.
-     * 
+     *
      * @return string Summary message
      */
     public function getSummary(): string
     {
         if ($this->success) {
-            $message = "Execution succeeded";
+            $message = 'Execution succeeded';
             if ($this->executionTime > 0) {
-                $message .= sprintf(" in %.2f seconds", $this->executionTime);
+                $message .= sprintf(' in %.2f seconds', $this->executionTime);
             }
             if ($this->hasWarnings()) {
-                $message .= sprintf(" with %d warning(s)", count($this->warnings));
+                $message .= sprintf(' with %d warning(s)', count($this->warnings));
             }
+
             return $message;
         } else {
-            return sprintf("Execution failed with %d error(s)", count($this->errors));
+            return sprintf('Execution failed with %d error(s)', count($this->errors));
         }
     }
 }

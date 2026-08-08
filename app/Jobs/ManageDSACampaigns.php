@@ -21,7 +21,8 @@ class ManageDSACampaigns implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public $tries   = 2;
+    public $tries = 2;
+
     public $timeout = 600;
 
     public function handle(DSAManagementAgent $agent): void
@@ -46,14 +47,14 @@ class ManageDSACampaigns implements ShouldQueue
                 }
             } catch (\Exception $e) {
                 $summary['errors']++;
-                Log::error("ManageDSACampaigns: Error for customer {$customer->id}: " . $e->getMessage());
+                Log::error("ManageDSACampaigns: Error for customer {$customer->id}: ".$e->getMessage());
             }
 
             // Promote high-performing DSA search terms to regular campaigns (independent of setup result)
             try {
                 $agent->promoteHighPerformingTerms($customer);
             } catch (\Exception $e) {
-                Log::error("ManageDSACampaigns: Promotion error for customer {$customer->id}: " . $e->getMessage());
+                Log::error("ManageDSACampaigns: Promotion error for customer {$customer->id}: ".$e->getMessage());
             }
         }
 
@@ -62,6 +63,6 @@ class ManageDSACampaigns implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        Log::error('ManageDSACampaigns failed: ' . $exception->getMessage());
+        Log::error('ManageDSACampaigns failed: '.$exception->getMessage());
     }
 }

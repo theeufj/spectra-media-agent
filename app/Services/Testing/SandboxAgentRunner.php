@@ -6,12 +6,12 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
-use App\Models\GoogleAdsPerformanceData;
 use App\Models\FacebookAdsPerformanceData;
-use App\Models\MicrosoftAdsPerformanceData;
-use App\Models\LinkedInAdsPerformanceData;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\Keyword;
 use App\Models\KeywordQualityScore;
+use App\Models\LinkedInAdsPerformanceData;
+use App\Models\MicrosoftAdsPerformanceData;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -77,10 +77,18 @@ class SandboxAgentRunner
                 $perf = $this->getCampaignPerformance($campaign, $platform);
 
                 $health = 'healthy';
-                if ($perf['conv_rate'] < 0.01) $health = 'warning';
-                if ($perf['cpa'] > 100) $health = 'warning';
-                if ($perf['cost'] > 0 && $perf['conversions'] == 0) $health = 'critical';
-                if ($perf['trend_direction'] === 'declining') $health = 'warning';
+                if ($perf['conv_rate'] < 0.01) {
+                    $health = 'warning';
+                }
+                if ($perf['cpa'] > 100) {
+                    $health = 'warning';
+                }
+                if ($perf['cost'] > 0 && $perf['conversions'] == 0) {
+                    $health = 'critical';
+                }
+                if ($perf['trend_direction'] === 'declining') {
+                    $health = 'warning';
+                }
 
                 $campaignSummaries[] = [
                     'campaign' => $campaign->name,
@@ -148,6 +156,7 @@ class SandboxAgentRunner
                 $recs[] = "✅ {$s['campaign']}: Performing well at \${$s['cpa']} CPA and {$s['roas']}x ROAS.";
             }
         }
+
         return $recs;
     }
 
@@ -178,7 +187,7 @@ class SandboxAgentRunner
                 $alerts[] = [
                     'type' => 'low_ctr',
                     'severity' => 'medium',
-                    'message' => "CTR is " . round($perf['ctr'] * 100, 2) . "% — ad relevance may be poor. Test new creative.",
+                    'message' => 'CTR is '.round($perf['ctr'] * 100, 2).'% — ad relevance may be poor. Test new creative.',
                 ];
             }
 
@@ -186,7 +195,7 @@ class SandboxAgentRunner
                 $alerts[] = [
                     'type' => 'declining_performance',
                     'severity' => 'high',
-                    'message' => "Performance declining over last 7 days. Investigate audience fatigue or market shifts.",
+                    'message' => 'Performance declining over last 7 days. Investigate audience fatigue or market shifts.',
                 ];
             }
 
@@ -204,7 +213,7 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'CampaignAlertService',
                 'sandbox_alert_check',
-                'Sandbox: Found ' . count($alerts) . " alerts for {$campaign->name}",
+                'Sandbox: Found '.count($alerts)." alerts for {$campaign->name}",
                 $customer->id,
                 $campaign->id,
                 $alerts,
@@ -233,7 +242,7 @@ class SandboxAgentRunner
                 $recommendations[] = [
                     'area' => 'ad_relevance',
                     'priority' => 'high',
-                    'action' => 'Rewrite ad copy — CTR is ' . round($perf['ctr'] * 100, 2) . "% vs industry avg " . round($avgCtr * 100, 1) . "%.",
+                    'action' => 'Rewrite ad copy — CTR is '.round($perf['ctr'] * 100, 2).'% vs industry avg '.round($avgCtr * 100, 1).'%.',
                     'expected_impact' => '+20-40% CTR improvement',
                 ];
                 $score -= 15;
@@ -297,11 +306,11 @@ class SandboxAgentRunner
                 'optimization_score' => max(10, min(100, $score)),
                 'recommendations' => $recommendations,
                 'metrics_analyzed' => [
-                    'ctr' => round($perf['ctr'] * 100, 2) . '%',
-                    'cpc' => '$' . round($perf['cpc'], 2),
-                    'cpa' => '$' . round($perf['cpa'], 2),
-                    'roas' => round($perf['roas'], 2) . 'x',
-                    'budget_utilization' => round($perf['budget_utilization']) . '%',
+                    'ctr' => round($perf['ctr'] * 100, 2).'%',
+                    'cpc' => '$'.round($perf['cpc'], 2),
+                    'cpa' => '$'.round($perf['cpa'], 2),
+                    'roas' => round($perf['roas'], 2).'x',
+                    'budget_utilization' => round($perf['budget_utilization']).'%',
                 ],
             ];
 
@@ -311,7 +320,7 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'CampaignOptimizationAgent',
                 'sandbox_optimization',
-                "Sandbox: Optimization score {$result['optimization_score']}/100 for {$campaign->name} — " . count($recommendations) . ' recommendations',
+                "Sandbox: Optimization score {$result['optimization_score']}/100 for {$campaign->name} — ".count($recommendations).' recommendations',
                 $customer->id,
                 $campaign->id,
                 $result,
@@ -335,7 +344,7 @@ class SandboxAgentRunner
 
             // Find peak and trough hours
             $hourlyAgg = $hourlyData->groupBy('hour')
-                ->map(fn($rows) => [
+                ->map(fn ($rows) => [
                     'avg_spend' => $rows->avg('spend'),
                     'avg_conversions' => $rows->avg('conversions'),
                     'avg_cpa' => $rows->sum('spend') > 0 && $rows->sum('conversions') > 0
@@ -363,15 +372,15 @@ class SandboxAgentRunner
             $result = [
                 'current_daily_budget' => $campaign->daily_budget,
                 'actual_daily_spend' => round($perf['cost'] / 30, 2),
-                'budget_utilization' => round($utilization) . '%',
+                'budget_utilization' => round($utilization).'%',
                 'recommended_action' => $recommendedAction,
                 'multiplier_suggested' => $multiplierSuggested,
                 'peak_hours' => $peakHours,
                 'trough_hours' => $troughHours,
                 'recommendation' => match ($recommendedAction) {
-                    'reduce_budget' => "Overspending at {$utilization}%. Reduce bids during off-peak hours (" . implode(', ', $troughHours) . "h) and concentrate budget on peak conversion hours (" . implode(', ', $peakHours) . "h).",
+                    'reduce_budget' => "Overspending at {$utilization}%. Reduce bids during off-peak hours (".implode(', ', $troughHours).'h) and concentrate budget on peak conversion hours ('.implode(', ', $peakHours).'h).',
                     'increase_budget' => "Only using {$utilization}% of budget. Increase daily budget or broaden targeting to capture more impressions during peak hours.",
-                    'reallocate_to_peaks' => "Slightly over budget. Use ad scheduling to shift spend from low-conversion hours to peak hours (" . implode(', ', $peakHours) . "h).",
+                    'reallocate_to_peaks' => 'Slightly over budget. Use ad scheduling to shift spend from low-conversion hours to peak hours ('.implode(', ', $peakHours).'h).',
                     default => "Budget utilization is healthy at {$utilization}%. Continue monitoring hourly performance.",
                 },
             ];
@@ -480,21 +489,21 @@ class SandboxAgentRunner
                 $insights[] = [
                     'type' => 'creative_fatigue',
                     'severity' => 'high',
-                    'finding' => "CTR is " . round($perf['ctr'] * 100, 2) . "%, significantly below {$platform} average of " . round($platformAvgCtr * 100, 1) . "%.",
+                    'finding' => 'CTR is '.round($perf['ctr'] * 100, 2)."%, significantly below {$platform} average of ".round($platformAvgCtr * 100, 1).'%.',
                     'recommendation' => 'Test 3-5 new ad variations with different headlines, descriptions, and calls-to-action. Rotate creative every 2 weeks.',
                 ];
             } elseif ($ctrPerformance < 0.9) {
                 $insights[] = [
                     'type' => 'optimization_opportunity',
                     'severity' => 'medium',
-                    'finding' => "CTR is slightly below average. Small improvements can compound over time.",
+                    'finding' => 'CTR is slightly below average. Small improvements can compound over time.',
                     'recommendation' => 'A/B test headlines focusing on urgency, social proof, and unique value props.',
                 ];
             } else {
                 $insights[] = [
                     'type' => 'strong_creative',
                     'severity' => 'info',
-                    'finding' => "CTR of " . round($perf['ctr'] * 100, 2) . "% is at or above {$platform} benchmarks.",
+                    'finding' => 'CTR of '.round($perf['ctr'] * 100, 2)."% is at or above {$platform} benchmarks.",
                     'recommendation' => 'Creative performing well. Test incremental variations to prevent future fatigue.',
                 ];
             }
@@ -514,7 +523,7 @@ class SandboxAgentRunner
                 $insights[] = [
                     'type' => 'audience_creative_mismatch',
                     'severity' => 'medium',
-                    'finding' => "High CPA on Facebook often indicates audience-creative mismatch or retargeting saturation.",
+                    'finding' => 'High CPA on Facebook often indicates audience-creative mismatch or retargeting saturation.',
                     'recommendation' => 'Refresh creative assets, expand lookalike audiences, and check frequency caps. Consider UGC-style video ads.',
                 ];
             }
@@ -532,9 +541,9 @@ class SandboxAgentRunner
                 'creative_health_score' => round(min(100, max(10, $ctrPerformance * 70 + ($perf['conv_rate'] > 0.02 ? 20 : 0)))),
                 'insights' => $insights,
                 'metrics_reviewed' => [
-                    'ctr' => round($perf['ctr'] * 100, 2) . '%',
-                    'conv_rate' => round($perf['conv_rate'] * 100, 2) . '%',
-                    'cpa' => '$' . round($perf['cpa'], 2),
+                    'ctr' => round($perf['ctr'] * 100, 2).'%',
+                    'conv_rate' => round($perf['conv_rate'] * 100, 2).'%',
+                    'cpa' => '$'.round($perf['cpa'], 2),
                 ],
             ];
 
@@ -544,7 +553,7 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'CreativeIntelligenceAgent',
                 'sandbox_creative_analysis',
-                "Sandbox: Creative score {$result['creative_health_score']}/100 — " . count($insights) . " insights for {$campaign->name}",
+                "Sandbox: Creative score {$result['creative_health_score']}/100 — ".count($insights)." insights for {$campaign->name}",
                 $customer->id,
                 $campaign->id,
                 $result,
@@ -602,7 +611,7 @@ class SandboxAgentRunner
                 $actions[] = [
                     'issue' => 'cpc_spike',
                     'severity' => 'medium',
-                    'detected' => "CPC of \${$perf['cpc']} is " . round($perf['cpc'] / $avgCpc, 1) . "x the platform average.",
+                    'detected' => "CPC of \${$perf['cpc']} is ".round($perf['cpc'] / $avgCpc, 1).'x the platform average.',
                     'action_taken' => 'RECOMMENDED: Check for competitor bidding activity. Consider switching to Target CPA or Maximize Conversions bid strategy.',
                     'would_auto_fix' => 'In live mode, agent would adjust bid strategy and set CPC caps.',
                 ];
@@ -620,7 +629,7 @@ class SandboxAgentRunner
                     $actions[] = [
                         'issue' => 'low_quality_scores',
                         'severity' => 'high',
-                        'detected' => "Average quality score is " . round($avgQs, 1) . "/10 — this inflates CPCs by 20-50%.",
+                        'detected' => 'Average quality score is '.round($avgQs, 1).'/10 — this inflates CPCs by 20-50%.',
                         'action_taken' => 'RECOMMENDED: Improve ad relevance (tighter ad group themes), landing page quality (speed, mobile, content match), and expected CTR (better headlines).',
                         'would_auto_fix' => 'In live mode, agent would generate new responsive search ads with improved keyword-to-ad alignment.',
                     ];
@@ -649,7 +658,7 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'SelfHealingAgent',
                 'sandbox_self_healing',
-                "Sandbox: {$issuesDetected} issues detected for {$campaign->name} — " . ($issuesDetected === 0 ? 'all clear' : $actions[0]['issue']),
+                "Sandbox: {$issuesDetected} issues detected for {$campaign->name} — ".($issuesDetected === 0 ? 'all clear' : $actions[0]['issue']),
                 $customer->id,
                 $campaign->id,
                 $result,
@@ -664,10 +673,19 @@ class SandboxAgentRunner
 
     protected function detectPlatform(Campaign $campaign): string
     {
-        if ($campaign->google_ads_campaign_id) return 'google';
-        if ($campaign->facebook_ads_campaign_id) return 'facebook';
-        if ($campaign->microsoft_ads_campaign_id) return 'microsoft';
-        if ($campaign->linkedin_campaign_id) return 'linkedin';
+        if ($campaign->google_ads_campaign_id) {
+            return 'google';
+        }
+        if ($campaign->facebook_ads_campaign_id) {
+            return 'facebook';
+        }
+        if ($campaign->microsoft_ads_campaign_id) {
+            return 'microsoft';
+        }
+        if ($campaign->linkedin_campaign_id) {
+            return 'linkedin';
+        }
+
         return 'google';
     }
 
@@ -710,8 +728,12 @@ class SandboxAgentRunner
             ->sum('conversions');
 
         $trendDirection = $recent >= $prior ? 'stable' : 'declining';
-        if ($prior > 0 && $recent < $prior * 0.7) $trendDirection = 'declining';
-        if ($prior > 0 && $recent > $prior * 1.15) $trendDirection = 'improving';
+        if ($prior > 0 && $recent < $prior * 0.7) {
+            $trendDirection = 'declining';
+        }
+        if ($prior > 0 && $recent > $prior * 1.15) {
+            $trendDirection = 'improving';
+        }
 
         return compact(
             'impressions', 'clicks', 'cost', 'conversions', 'revenue',
@@ -756,7 +778,7 @@ class SandboxAgentRunner
         AgentActivity::record(
             $agentType,
             'sandbox_error',
-            "Sandbox: {$agentType} encountered an error — " . $e->getMessage(),
+            "Sandbox: {$agentType} encountered an error — ".$e->getMessage(),
             $customerId,
             $campaignId,
             ['error' => $e->getMessage()],

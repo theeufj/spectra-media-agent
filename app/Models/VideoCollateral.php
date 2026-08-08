@@ -64,8 +64,8 @@ class VideoCollateral extends Model
 
     public function canBeExtended(): bool
     {
-        return $this->status === 'completed' 
-            && !empty($this->gemini_video_uri) 
+        return $this->status === 'completed'
+            && ! empty($this->gemini_video_uri)
             && ($this->extension_count ?? 0) < 20;
     }
 }

@@ -2,17 +2,16 @@
 
 namespace App\Services\GoogleAds\SearchServices;
 
+use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Resources\Ad;
-use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
-use Google\Ads\GoogleAds\V22\Common\ResponsiveSearchAdInfo;
 use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdService;
-use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
-use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
+use Google\Ads\GoogleAds\V22\Common\ResponsiveSearchAdInfo;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
-use App\Models\Customer;
+use Google\Ads\GoogleAds\V22\Resources\Ad;
+use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
+use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;
+use Google\Ads\GoogleAds\V22\Services\MutateAdGroupAdsRequest;
 
 class CreateResponsiveSearchAd extends BaseGoogleAdsService
 {
@@ -24,9 +23,9 @@ class CreateResponsiveSearchAd extends BaseGoogleAdsService
     /**
      * Creates a Responsive Search Ad within a Search Ad Group.
      *
-     * @param string $customerId The Google Ads customer ID.
-     * @param string $adGroupResourceName The resource name of the parent Search Ad Group.
-     * @param array $adData Ad details including finalUrls, headlines, descriptions, etc.
+     * @param  string  $customerId  The Google Ads customer ID.
+     * @param  string  $adGroupResourceName  The resource name of the parent Search Ad Group.
+     * @param  array  $adData  Ad details including finalUrls, headlines, descriptions, etc.
      * @return string|null The resource name of the created Responsive Search Ad, or null on failure.
      */
     public function __invoke(string $customerId, string $adGroupResourceName, array $adData): ?string
@@ -74,7 +73,7 @@ class CreateResponsiveSearchAd extends BaseGoogleAdsService
             'status' => AdGroupAdStatus::ENABLED,
         ]);
 
-        $adGroupAdOperation = new AdGroupAdOperation();
+        $adGroupAdOperation = new AdGroupAdOperation;
         $adGroupAdOperation->setCreate($adGroupAd);
 
         try {
@@ -85,10 +84,12 @@ class CreateResponsiveSearchAd extends BaseGoogleAdsService
             ]);
             $response = $adGroupAdServiceClient->mutateAdGroupAds($request);
             $newAdGroupAdResourceName = $response->getResults()[0]->getResourceName();
-            $this->logInfo("Successfully created Responsive Search Ad: " . $newAdGroupAdResourceName);
+            $this->logInfo('Successfully created Responsive Search Ad: '.$newAdGroupAdResourceName);
+
             return $newAdGroupAdResourceName;
         } catch (GoogleAdsException $e) {
-            $this->logError("Error creating Responsive Search Ad for customer $customerId: " . $e->getMessage(), $e);
+            $this->logError("Error creating Responsive Search Ad for customer $customerId: ".$e->getMessage(), $e);
+
             return null;
         }
     }

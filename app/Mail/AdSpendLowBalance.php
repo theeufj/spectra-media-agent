@@ -26,7 +26,7 @@ class AdSpendLowBalance extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '⚠️ Low Ad Spend Balance - ' . number_format($this->daysRemaining, 1) . ' Days Remaining',
+            subject: '⚠️ Low Ad Spend Balance - '.number_format($this->daysRemaining, 1).' Days Remaining',
         );
     }
 

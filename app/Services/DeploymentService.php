@@ -6,11 +6,10 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
-use App\Services\Agents\ExecutionResult;
-use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\FacebookAdsExecutionAgent;
-use App\Services\Agents\MicrosoftAdsExecutionAgent;
+use App\Services\Agents\GoogleAdsExecutionAgent;
 use App\Services\Agents\LinkedInAdsExecutionAgent;
+use App\Services\Agents\MicrosoftAdsExecutionAgent;
 use App\Services\Deployment\DeploymentStrategy;
 use App\Services\Deployment\FacebookAdsDeploymentStrategy;
 use App\Services\Deployment\GoogleAdsDeploymentStrategy;
@@ -20,66 +19,67 @@ class DeploymentService
 {
     /**
      * Deploy a campaign strategy using either execution agents (new) or deployment strategies (legacy).
-     * 
-     * @param Campaign $campaign The campaign to deploy
-     * @param Strategy $strategy The strategy to deploy
-     * @param Customer $customer The customer/account owner
-     * @param bool $useAgents Whether to use new execution agents (default: true)
+     *
+     * @param  Campaign  $campaign  The campaign to deploy
+     * @param  Strategy  $strategy  The strategy to deploy
+     * @param  Customer  $customer  The customer/account owner
+     * @param  bool  $useAgents  Whether to use new execution agents (default: true)
      * @return array Result array with 'success' boolean and optional 'result' or 'error'
      */
     public static function deploy(
-        Campaign $campaign, 
-        Strategy $strategy, 
+        Campaign $campaign,
+        Strategy $strategy,
         Customer $customer,
         bool $useAgents = true
     ): array {
         // Check feature flag from environment
         $useAgentsFlag = config('app.use_execution_agents', true);
         $useAgents = $useAgents && $useAgentsFlag;
-        
-        Log::info("DeploymentService: Deploying strategy", [
+
+        Log::info('DeploymentService: Deploying strategy', [
             'campaign_id' => $campaign->id,
             'strategy_id' => $strategy->id,
             'platform' => $strategy->platform,
-            'use_agents' => $useAgents
+            'use_agents' => $useAgents,
         ]);
-        
+
         if ($useAgents) {
             return self::deployWithAgent($campaign, $strategy, $customer);
         } else {
             return self::deployWithStrategy($campaign, $strategy, $customer);
         }
     }
-    
+
     /**
      * Deploy using new AI-powered execution agents.
      */
     protected static function deployWithAgent(
-        Campaign $campaign, 
-        Strategy $strategy, 
+        Campaign $campaign,
+        Strategy $strategy,
         Customer $customer
     ): array {
         try {
             $agent = self::getAgent($strategy->platform, $customer);
-            
-            if (!$agent) {
+
+            if (! $agent) {
                 Log::warning("No execution agent found for platform: {$strategy->platform}");
+
                 return [
                     'success' => false,
-                    'error' => "No execution agent available for platform: {$strategy->platform}"
+                    'error' => "No execution agent available for platform: {$strategy->platform}",
                 ];
             }
-            
+
             // Create execution context
             $context = ExecutionContext::create($strategy, $campaign, $customer);
-            
+
             // Mark strategy as deploying
             $strategy->deployment_status = 'deploying';
             $strategy->save();
 
             // Execute with agent
             $result = $agent->execute($context);
-            
+
             // Store execution results in strategy
             $strategy->execution_plan = $result->plan ? $result->plan->toArray() : null;
             $strategy->execution_result = [
@@ -88,130 +88,132 @@ class DeploymentService
                 'execution_time' => $result->executionTime,
                 'errors' => $result->errors,
                 'warnings' => $result->warnings,
-                'executed_at' => now()->toIso8601String()
+                'executed_at' => now()->toIso8601String(),
             ];
             $strategy->execution_time = $result->executionTime;
             $strategy->execution_errors = $result->errors;
             $strategy->deployment_status = $result->success ? 'deployed' : 'failed';
-            $strategy->deployment_error = $result->success ? null : implode('; ', array_map(fn($e) => is_string($e) ? $e : json_encode($e), $result->errors));
+            $strategy->deployment_error = $result->success ? null : implode('; ', array_map(fn ($e) => is_string($e) ? $e : json_encode($e), $result->errors));
             $strategy->deployed_at = $result->success ? now() : null;
             $strategy->save();
-            
+
             if ($result->success) {
-                Log::info("DeploymentService: Successfully deployed with agent", [
+                Log::info('DeploymentService: Successfully deployed with agent', [
                     'campaign_id' => $campaign->id,
                     'strategy_id' => $strategy->id,
                     'platform' => $strategy->platform,
                     'execution_time' => $result->executionTime,
-                    'platform_ids' => count($result->platformIds)
+                    'platform_ids' => count($result->platformIds),
                 ]);
-                
+
                 return [
                     'success' => true,
-                    'result' => $result
+                    'result' => $result,
                 ];
             } else {
-                Log::error("DeploymentService: Agent deployment failed", [
+                Log::error('DeploymentService: Agent deployment failed', [
                     'campaign_id' => $campaign->id,
                     'strategy_id' => $strategy->id,
                     'platform' => $strategy->platform,
-                    'errors' => $result->errors
+                    'errors' => $result->errors,
                 ]);
-                
-                $errorMessages = array_map(function($error) {
+
+                $errorMessages = array_map(function ($error) {
                     if (is_array($error)) {
                         return $error['message'] ?? json_encode($error);
                     }
                     if (is_object($error)) {
-                        return method_exists($error, '__toString') ? (string)$error : get_class($error);
+                        return method_exists($error, '__toString') ? (string) $error : get_class($error);
                     }
-                    return (string)$error;
+
+                    return (string) $error;
                 }, $result->errors);
-                
+
                 return [
                     'success' => false,
                     'error' => implode(', ', $errorMessages),
-                    'result' => $result
+                    'result' => $result,
                 ];
             }
-            
+
         } catch (\Exception $e) {
-            Log::error("DeploymentService: Exception during agent deployment: " . $e->getMessage(), [
+            Log::error('DeploymentService: Exception during agent deployment: '.$e->getMessage(), [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,
                 'platform' => $strategy->platform,
-                'exception' => $e
+                'exception' => $e,
             ]);
-            
+
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
-    
+
     /**
      * Deploy using legacy deployment strategies.
      */
     protected static function deployWithStrategy(
-        Campaign $campaign, 
-        Strategy $strategy, 
+        Campaign $campaign,
+        Strategy $strategy,
         Customer $customer
     ): array {
         try {
             $deploymentStrategy = self::getStrategy($strategy->platform, $customer);
-            
-            if (!$deploymentStrategy) {
+
+            if (! $deploymentStrategy) {
                 Log::warning("No deployment strategy found for platform: {$strategy->platform}");
+
                 return [
                     'success' => false,
-                    'error' => "No deployment strategy available for platform: {$strategy->platform}"
+                    'error' => "No deployment strategy available for platform: {$strategy->platform}",
                 ];
             }
-            
+
             $success = $deploymentStrategy->deploy($campaign, $strategy);
-            
+
             if ($success) {
-                Log::info("DeploymentService: Successfully deployed with legacy strategy", [
+                Log::info('DeploymentService: Successfully deployed with legacy strategy', [
                     'campaign_id' => $campaign->id,
                     'strategy_id' => $strategy->id,
-                    'platform' => $strategy->platform
+                    'platform' => $strategy->platform,
                 ]);
-                
+
                 return ['success' => true];
             } else {
-                Log::error("DeploymentService: Legacy strategy deployment failed", [
+                Log::error('DeploymentService: Legacy strategy deployment failed', [
                     'campaign_id' => $campaign->id,
                     'strategy_id' => $strategy->id,
-                    'platform' => $strategy->platform
+                    'platform' => $strategy->platform,
                 ]);
-                
+
                 return [
                     'success' => false,
-                    'error' => "Deployment failed for {$strategy->platform}"
+                    'error' => "Deployment failed for {$strategy->platform}",
                 ];
             }
-            
+
         } catch (\Exception $e) {
-            Log::error("DeploymentService: Exception during legacy deployment: " . $e->getMessage(), [
+            Log::error('DeploymentService: Exception during legacy deployment: '.$e->getMessage(), [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,
                 'platform' => $strategy->platform,
-                'exception' => $e
+                'exception' => $e,
             ]);
-            
+
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ];
         }
     }
-    
+
     /**
      * Get execution agent for platform.
-     * 
-     * @param string $platform Platform name
-     * @param Customer $customer Customer/account owner
+     *
+     * @param  string  $platform  Platform name
+     * @param  Customer  $customer  Customer/account owner
      * @return GoogleAdsExecutionAgent|FacebookAdsExecutionAgent|null
      */
     protected static function getAgent(string $platform, Customer $customer): mixed
@@ -224,13 +226,12 @@ class DeploymentService
             default => null
         };
     }
-    
+
     /**
      * Factory method to get the correct deployment strategy for a given platform (legacy).
      *
-     * @param string $platform The name of the platform (e.g., 'Google Ads (SEM)', 'Facebook Ads').
-     * @param Customer $customer The customer object containing the necessary credentials.
-     * @return DeploymentStrategy|null
+     * @param  string  $platform  The name of the platform (e.g., 'Google Ads (SEM)', 'Facebook Ads').
+     * @param  Customer  $customer  The customer object containing the necessary credentials.
      */
     protected static function getStrategy(string $platform, Customer $customer): ?DeploymentStrategy
     {

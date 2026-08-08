@@ -14,8 +14,8 @@ class StatisticalSignificanceService
         $performanceA = $strategyA->performanceData->first();
         $performanceB = $strategyB->performanceData->first();
 
-        if (!$performanceA || !$performanceB) {
-            throw new InvalidArgumentException("Both strategies must have performance data to compare.");
+        if (! $performanceA || ! $performanceB) {
+            throw new InvalidArgumentException('Both strategies must have performance data to compare.');
         }
 
         $conversionsA = $performanceA->conversions;
@@ -25,9 +25,9 @@ class StatisticalSignificanceService
 
         // Handle edge case where impressions are zero to avoid division by zero
         if ($impressionsA == 0 || $impressionsB == 0) {
-            return $this->formatResult(false, 1.0, "Cannot calculate significance with zero impressions.");
+            return $this->formatResult(false, 1.0, 'Cannot calculate significance with zero impressions.');
         }
-        
+
         $convRateA = $conversionsA / $impressionsA;
         $convRateB = $conversionsB / $impressionsB;
 
@@ -38,7 +38,7 @@ class StatisticalSignificanceService
         if ($isSignificant) {
             $winner = $convRateA > $convRateB ? 'A' : 'B';
         }
-        
+
         $summary = $this->generateSummary($isSignificant, $pValue, $winner, $convRateA, $convRateB);
 
         return $this->formatResult($isSignificant, $pValue, $summary, $winner);
@@ -50,19 +50,19 @@ class StatisticalSignificanceService
         $p2 = $convB / $impB;
 
         $p_pooled = ($convA + $convB) / ($impA + $impB);
-        
+
         if ($p_pooled == 0 || $p_pooled == 1) {
             return 1.0; // No variance, cannot determine significance
         }
 
-        $se = sqrt($p_pooled * (1 - $p_pooled) * (1/$impA + 1/$impB));
-        
+        $se = sqrt($p_pooled * (1 - $p_pooled) * (1 / $impA + 1 / $impB));
+
         if ($se == 0) {
             return 1.0; // Cannot calculate Z-score
         }
 
         $z_score = ($p1 - $p2) / $se;
-        
+
         // Convert Z-score to p-value (two-tailed test)
         return 2 * (1 - $this->cumulativeDistribution(abs($z_score)));
     }
@@ -80,10 +80,12 @@ class StatisticalSignificanceService
 
         if ($z >= 0.0) {
             $t = 1.0 / (1.0 + $p * $z);
-            return (1.0 - $c2 * exp(-$z * $z / 2.0) * $t * ($t * ($t * ($t * ($t * $b5 + $b4) + $b3) + $b2) + $b1));
+
+            return 1.0 - $c2 * exp(-$z * $z / 2.0) * $t * ($t * ($t * ($t * ($t * $b5 + $b4) + $b3) + $b2) + $b1);
         } else {
             $t = 1.0 / (1.0 - $p * $z);
-            return ($c2 * exp(-$z * $z / 2.0) * $t * ($t * ($t * ($t * ($t * $b5 + $b4) + $b3) + $b2) + $b1));
+
+            return $c2 * exp(-$z * $z / 2.0) * $t * ($t * ($t * ($t * ($t * $b5 + $b4) + $b3) + $b2) + $b1);
         }
     }
 
@@ -94,14 +96,17 @@ class StatisticalSignificanceService
             $improvement = 0;
             if ($winner === 'A' && $rateB > 0) {
                 $improvement = (($rateA - $rateB) / $rateB) * 100;
-                return "The results are statistically significant. Strategy A outperformed Strategy B with a " . round($improvement, 2) . "% higher conversion rate. We are {$confidencePercentage}% confident in this result.";
+
+                return 'The results are statistically significant. Strategy A outperformed Strategy B with a '.round($improvement, 2)."% higher conversion rate. We are {$confidencePercentage}% confident in this result.";
             } elseif ($winner === 'B' && $rateA > 0) {
                 $improvement = (($rateB - $rateA) / $rateA) * 100;
-                return "The results are statistically significant. Strategy B outperformed Strategy A with a " . round($improvement, 2) . "% higher conversion rate. We are {$confidencePercentage}% confident in this result.";
+
+                return 'The results are statistically significant. Strategy B outperformed Strategy A with a '.round($improvement, 2)."% higher conversion rate. We are {$confidencePercentage}% confident in this result.";
             }
-            return "The difference in performance is statistically significant.";
+
+            return 'The difference in performance is statistically significant.';
         } else {
-            return "The difference in performance is not statistically significant (p-value: " . round($pValue, 4) . "). There is not enough evidence to declare a winner.";
+            return 'The difference in performance is not statistically significant (p-value: '.round($pValue, 4).'). There is not enough evidence to declare a winner.';
         }
     }
 

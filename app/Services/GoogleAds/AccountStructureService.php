@@ -2,9 +2,8 @@
 
 namespace App\Services\GoogleAds;
 
-use Google\Ads\GoogleAds\V22\Services\GoogleAdsServiceClient;
-use Illuminate\Support\Facades\Log;
 use App\Models\Customer;
+use Illuminate\Support\Facades\Log;
 
 class AccountStructureService extends BaseGoogleAdsService
 {
@@ -16,11 +15,11 @@ class AccountStructureService extends BaseGoogleAdsService
     public function getAccountStructureLimits(string $customerId): array
     {
         try {
-            $campaignQuery = "SELECT campaign.id FROM campaign";
+            $campaignQuery = 'SELECT campaign.id FROM campaign';
             $campaignResponse = $this->searchQuery($customerId, $campaignQuery);
             $campaignCount = count(iterator_to_array($campaignResponse->getIterator()));
 
-            $adGroupQuery = "SELECT ad_group.id FROM ad_group";
+            $adGroupQuery = 'SELECT ad_group.id FROM ad_group';
             $adGroupResponse = $this->searchQuery($customerId, $adGroupQuery);
             $adGroupCount = count(iterator_to_array($adGroupResponse->getIterator()));
 
@@ -29,9 +28,10 @@ class AccountStructureService extends BaseGoogleAdsService
                 'ad_groups' => $adGroupCount,
             ];
         } catch (\Exception $e) {
-            Log::error("Error fetching account structure limits for customer {$customerId}: " . $e->getMessage(), [
+            Log::error("Error fetching account structure limits for customer {$customerId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
+
             return [
                 'campaigns' => 0,
                 'ad_groups' => 0,

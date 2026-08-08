@@ -29,7 +29,7 @@ class GoogleAdsExecutionAgentTest extends TestCase
             'name' => 'Test Company',
             'google_ads_customer_id' => '1234567890',
         ]);
-        if (!$customer->id) {
+        if (! $customer->id) {
             $customer->id = 1;
         }
 

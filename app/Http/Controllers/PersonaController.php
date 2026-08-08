@@ -12,7 +12,9 @@ class PersonaController extends Controller
     public function index(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         $personas = Persona::where('customer_id', $customer->id)
             ->orderByDesc('is_active')
@@ -30,7 +32,9 @@ class PersonaController extends Controller
     public function generate(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         $validated = $request->validate([
             'campaign_id' => 'nullable|exists:campaigns,id',
@@ -48,13 +52,15 @@ class PersonaController extends Controller
             return back()->with('error', 'Failed to generate personas. Please try again.');
         }
 
-        return back()->with('success', count($personas) . ' personas generated.');
+        return back()->with('success', count($personas).' personas generated.');
     }
 
     public function store(Request $request)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer) return redirect()->route('dashboard');
+        if (! $customer) {
+            return redirect()->route('dashboard');
+        }
 
         $validated = $request->validate([
             'campaign_id' => 'nullable|exists:campaigns,id',
@@ -79,7 +85,7 @@ class PersonaController extends Controller
     public function update(Request $request, Persona $persona)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $persona->customer_id !== $customer->id) {
+        if (! $customer || $persona->customer_id !== $customer->id) {
             return redirect()->route('dashboard');
         }
 
@@ -92,17 +98,19 @@ class PersonaController extends Controller
         ]);
 
         $persona->update($validated);
+
         return back()->with('success', 'Persona updated.');
     }
 
     public function destroy(Request $request, Persona $persona)
     {
         $customer = $this->getActiveCustomer($request);
-        if (!$customer || $persona->customer_id !== $customer->id) {
+        if (! $customer || $persona->customer_id !== $customer->id) {
             return redirect()->route('dashboard');
         }
 
         $persona->delete();
+
         return back()->with('success', 'Persona deleted.');
     }
 }

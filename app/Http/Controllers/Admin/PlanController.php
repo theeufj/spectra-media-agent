@@ -55,7 +55,7 @@ class PlanController extends Controller
     {
         $validated = $request->validate([
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:plans,slug,' . $plan->id,
+            'slug' => 'required|string|max:255|unique:plans,slug,'.$plan->id,
             'description' => 'nullable|string|max:1000',
             'price_cents' => 'required|integer|min:0',
             'billing_interval' => 'required|in:month,year',

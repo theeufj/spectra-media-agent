@@ -14,10 +14,10 @@ use Google\Ads\GoogleAds\V22\Enums\UserListFlexibleRuleOperatorEnum\UserListFlex
 use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
 use Google\Ads\GoogleAds\V22\Enums\UserListPrepopulationStatusEnum\UserListPrepopulationStatus;
 use Google\Ads\GoogleAds\V22\Enums\UserListStringRuleItemOperatorEnum\UserListStringRuleItemOperator;
+use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\UserList;
 use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
 use Google\Ads\GoogleAds\V22\Services\UserListOperation;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\ApiCore\ApiException;
 
 class CreateRemarketingAudience extends BaseGoogleAdsService
@@ -25,10 +25,8 @@ class CreateRemarketingAudience extends BaseGoogleAdsService
     /**
      * Create a rule-based remarketing audience from website visitors.
      *
-     * @param string $customerId
-     * @param string $listName
-     * @param string $urlContains URL substring to match (e.g. '/products', '/checkout')
-     * @param int $membershipLifeSpanDays How long users stay in the list
+     * @param  string  $urlContains  URL substring to match (e.g. '/products', '/checkout')
+     * @param  int  $membershipLifeSpanDays  How long users stay in the list
      * @return string|null Resource name of the created UserList
      */
     public function __invoke(
@@ -72,14 +70,14 @@ class CreateRemarketingAudience extends BaseGoogleAdsService
         ]);
 
         $userList = new UserList([
-            'name' => $listName . ' - ' . now()->format('Y-m-d'),
+            'name' => $listName.' - '.now()->format('Y-m-d'),
             'description' => "Remarketing: visitors matching '{$urlContains}'",
             'membership_status' => UserListMembershipStatus::OPEN,
             'membership_life_span' => $membershipLifeSpanDays,
             'rule_based_user_list' => $ruleBasedUserList,
         ]);
 
-        $operation = new UserListOperation();
+        $operation = new UserListOperation;
         $operation->setCreate($userList);
 
         try {
@@ -90,9 +88,11 @@ class CreateRemarketingAudience extends BaseGoogleAdsService
 
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Created Remarketing Audience '{$listName}' (url contains '{$urlContains}'): {$resourceName}");
+
             return $resourceName;
         } catch (GoogleAdsException|ApiException $e) {
-            $this->logError("Failed to create Remarketing Audience: " . $e->getMessage());
+            $this->logError('Failed to create Remarketing Audience: '.$e->getMessage());
+
             return null;
         }
     }

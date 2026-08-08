@@ -15,7 +15,7 @@ class StoreCampaignRequest extends FormRequest
     {
         $customerId = session('active_customer_id');
 
-        if (!$customerId) {
+        if (! $customerId) {
             return false;
         }
 
@@ -71,17 +71,16 @@ class StoreCampaignRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'name.unique'                     => 'A campaign with this name already exists for your account.',
-            'name.required'                   => 'Please provide a campaign name.',
-            'total_budget.max'                => 'Total budget cannot exceed $9,999,999.',
-            'daily_budget.max'                => 'Daily budget cannot exceed $999,999.',
-            'platforms.required'              => 'Select at least one advertising platform.',
-            'platforms.min'                   => 'Select at least one advertising platform.',
-            'start_date.required'             => 'A campaign start date is required.',
-            'end_date.after_or_equal'         => 'End date must be on or after the start date.',
-            'keywords.*.text.required_with'   => 'Each keyword must have text.',
-            'keywords.*.match_type.in'        => 'Keyword match type must be BROAD, PHRASE, or EXACT.',
+            'name.unique' => 'A campaign with this name already exists for your account.',
+            'name.required' => 'Please provide a campaign name.',
+            'total_budget.max' => 'Total budget cannot exceed $9,999,999.',
+            'daily_budget.max' => 'Daily budget cannot exceed $999,999.',
+            'platforms.required' => 'Select at least one advertising platform.',
+            'platforms.min' => 'Select at least one advertising platform.',
+            'start_date.required' => 'A campaign start date is required.',
+            'end_date.after_or_equal' => 'End date must be on or after the start date.',
+            'keywords.*.text.required_with' => 'Each keyword must have text.',
+            'keywords.*.match_type.in' => 'Keyword match type must be BROAD, PHRASE, or EXACT.',
         ];
     }
-
 }

@@ -4,11 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 
 class SystemHealthController extends Controller
@@ -77,9 +76,9 @@ class SystemHealthController extends Controller
     private function checkGoogleAds(): array
     {
         try {
-            $hasCredentials = !empty(config('services.google.client_id')) && 
-                              !empty(config('services.google.client_secret'));
-            
+            $hasCredentials = ! empty(config('services.google.client_id')) &&
+                              ! empty(config('services.google.client_secret'));
+
             return [
                 'name' => 'Google Ads',
                 'status' => $hasCredentials ? 'configured' : 'not_configured',
@@ -102,9 +101,9 @@ class SystemHealthController extends Controller
     private function checkFacebook(): array
     {
         try {
-            $hasCredentials = !empty(config('services.facebook.client_id')) && 
-                              !empty(config('services.facebook.client_secret'));
-            
+            $hasCredentials = ! empty(config('services.facebook.client_id')) &&
+                              ! empty(config('services.facebook.client_secret'));
+
             return [
                 'name' => 'Facebook/Meta',
                 'status' => $hasCredentials ? 'configured' : 'not_configured',
@@ -128,8 +127,8 @@ class SystemHealthController extends Controller
     {
         try {
             $apiKey = config('services.gemini_api_key') ?: config('services.google.gemini_api_key');
-            
-            if (!$apiKey) {
+
+            if (! $apiKey) {
                 return [
                     'name' => 'Gemini AI',
                     'status' => 'not_configured',
@@ -140,7 +139,7 @@ class SystemHealthController extends Controller
 
             // Quick connectivity test
             $response = Http::timeout(5)->get("https://generativelanguage.googleapis.com/v1beta/models?key={$apiKey}");
-            
+
             return [
                 'name' => 'Gemini AI',
                 'status' => $response->successful() ? 'healthy' : 'error',
@@ -163,9 +162,9 @@ class SystemHealthController extends Controller
     private function checkStripe(): array
     {
         try {
-            $hasCredentials = !empty(config('services.stripe.secret'));
-            
-            if (!$hasCredentials) {
+            $hasCredentials = ! empty(config('services.stripe.secret'));
+
+            if (! $hasCredentials) {
                 return [
                     'name' => 'Stripe',
                     'status' => 'not_configured',
@@ -177,7 +176,7 @@ class SystemHealthController extends Controller
             // Quick balance check to verify connectivity
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
             $balance = \Stripe\Balance::retrieve();
-            
+
             return [
                 'name' => 'Stripe',
                 'status' => 'healthy',
@@ -188,7 +187,7 @@ class SystemHealthController extends Controller
             return [
                 'name' => 'Stripe',
                 'status' => 'error',
-                'message' => 'Connection error: ' . substr($e->getMessage(), 0, 50),
+                'message' => 'Connection error: '.substr($e->getMessage(), 0, 50),
                 'icon' => 'credit-card',
             ];
         }
@@ -200,10 +199,10 @@ class SystemHealthController extends Controller
     private function checkS3(): array
     {
         try {
-            $hasCredentials = !empty(config('filesystems.disks.s3.key')) && 
-                              !empty(config('filesystems.disks.s3.secret'));
-            
-            if (!$hasCredentials) {
+            $hasCredentials = ! empty(config('filesystems.disks.s3.key')) &&
+                              ! empty(config('filesystems.disks.s3.secret'));
+
+            if (! $hasCredentials) {
                 return [
                     'name' => 'AWS S3',
                     'status' => 'not_configured',
@@ -215,7 +214,7 @@ class SystemHealthController extends Controller
             // Try to list a few objects
             $disk = \Illuminate\Support\Facades\Storage::disk('s3');
             $disk->files('/', 1);
-            
+
             return [
                 'name' => 'AWS S3',
                 'status' => 'healthy',
@@ -241,12 +240,12 @@ class SystemHealthController extends Controller
             $start = microtime(true);
             DB::connection()->getPdo();
             $latency = round((microtime(true) - $start) * 1000, 2);
-            
+
             // Get some stats
             $userCount = DB::table('users')->count();
             $campaignCount = DB::table('campaigns')->count();
             $customerCount = DB::table('customers')->count();
-            
+
             return [
                 'status' => 'healthy',
                 'latency' => $latency,
@@ -275,13 +274,13 @@ class SystemHealthController extends Controller
         try {
             // Get failed jobs count
             $failedJobs = DB::table('failed_jobs')->count();
-            
+
             // Get pending jobs (if using database queue)
             $pendingJobs = 0;
             if (config('queue.default') === 'database') {
                 $pendingJobs = DB::table('jobs')->count();
             }
-            
+
             // Get recent failed jobs
             $recentFailed = DB::table('failed_jobs')
                 ->orderBy('failed_at', 'desc')
@@ -289,6 +288,7 @@ class SystemHealthController extends Controller
                 ->get()
                 ->map(function ($job) {
                     $payload = json_decode($job->payload, true);
+
                     return [
                         'id' => $job->id,
                         'uuid' => $job->uuid,
@@ -327,7 +327,7 @@ class SystemHealthController extends Controller
             $freeSpace = disk_free_space(storage_path());
             $usedSpace = $totalSpace - $freeSpace;
             $usedPercent = round(($usedSpace / $totalSpace) * 100, 1);
-            
+
             return [
                 'status' => $usedPercent > 90 ? 'warning' : 'healthy',
                 'total' => $this->formatBytes($totalSpace),
@@ -349,11 +349,11 @@ class SystemHealthController extends Controller
     private function checkCache(): array
     {
         try {
-            $key = 'health_check_' . time();
+            $key = 'health_check_'.time();
             Cache::put($key, 'test', 10);
             $value = Cache::get($key);
             Cache::forget($key);
-            
+
             return [
                 'status' => $value === 'test' ? 'healthy' : 'error',
                 'driver' => config('cache.default'),
@@ -363,7 +363,7 @@ class SystemHealthController extends Controller
             return [
                 'status' => 'error',
                 'driver' => config('cache.default'),
-                'message' => 'Cache error: ' . $e->getMessage(),
+                'message' => 'Cache error: '.$e->getMessage(),
             ];
         }
     }
@@ -374,12 +374,12 @@ class SystemHealthController extends Controller
     private function formatBytes($bytes, $precision = 2): string
     {
         $units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        
+
         for ($i = 0; $bytes > 1024 && $i < count($units) - 1; $i++) {
             $bytes /= 1024;
         }
-        
-        return round($bytes, $precision) . ' ' . $units[$i];
+
+        return round($bytes, $precision).' '.$units[$i];
     }
 
     /**
@@ -389,7 +389,7 @@ class SystemHealthController extends Controller
     {
         try {
             \Illuminate\Support\Facades\Artisan::call('queue:retry', ['id' => [$id]]);
-            
+
             return redirect()->back()->with('flash', [
                 'type' => 'success',
                 'message' => 'Job queued for retry.',
@@ -397,7 +397,7 @@ class SystemHealthController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Failed to retry job: ' . $e->getMessage(),
+                'message' => 'Failed to retry job: '.$e->getMessage(),
             ]);
         }
     }
@@ -409,7 +409,7 @@ class SystemHealthController extends Controller
     {
         try {
             DB::table('failed_jobs')->where('id', $id)->delete();
-            
+
             return redirect()->back()->with('flash', [
                 'type' => 'success',
                 'message' => 'Failed job deleted.',
@@ -417,7 +417,7 @@ class SystemHealthController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Failed to delete job: ' . $e->getMessage(),
+                'message' => 'Failed to delete job: '.$e->getMessage(),
             ]);
         }
     }
@@ -429,7 +429,7 @@ class SystemHealthController extends Controller
     {
         try {
             \Illuminate\Support\Facades\Artisan::call('queue:flush');
-            
+
             return redirect()->back()->with('flash', [
                 'type' => 'success',
                 'message' => 'All failed jobs cleared.',
@@ -437,7 +437,7 @@ class SystemHealthController extends Controller
         } catch (\Exception $e) {
             return redirect()->back()->with('flash', [
                 'type' => 'error',
-                'message' => 'Failed to flush jobs: ' . $e->getMessage(),
+                'message' => 'Failed to flush jobs: '.$e->getMessage(),
             ]);
         }
     }

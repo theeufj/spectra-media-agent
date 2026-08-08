@@ -16,10 +16,10 @@ return new class extends Migration
             $table->enum('campaign_type', ['display', 'search', 'video', 'shopping', 'app'])
                 ->default('display')
                 ->after('platform');
-            
+
             // Google Ads deployment tracking
             $table->string('google_ads_ad_group_id')->nullable()->after('status');
-            
+
             // Facebook Ads deployment tracking
             $table->string('facebook_campaign_id')->nullable()->after('google_ads_ad_group_id');
             $table->string('facebook_adset_id')->nullable()->after('facebook_campaign_id');
