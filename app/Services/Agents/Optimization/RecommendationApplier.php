@@ -580,6 +580,15 @@ class RecommendationApplier
                     $rec['retention_days'] ?? 30,
                     $rec['pixel_rule'] ?? []
                 );
+
+                // sub_type comes from an AI-generated recommendation and is not
+                // constrained. audiences.type has a CHECK allowing only
+                // customer_match / remarketing / combined / lookalike, so writing
+                // the raw value threw a constraint violation *after* the audience
+                // had already been created on Facebook — orphaning it there with
+                // no local record. This branch always builds a website audience,
+                // which is a remarketing audience.
+                $subType = 'remarketing';
             }
 
             if (! $result || empty($result['id'])) {

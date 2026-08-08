@@ -6,6 +6,9 @@ use App\Models\Customer;
 use App\Models\ProductFeed;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
+/**
+ * @extends Factory<\App\Models\Product>
+ */
 class ProductFactory extends Factory
 {
     public function definition(): array

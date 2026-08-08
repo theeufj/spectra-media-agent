@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Strategy>
  */
+/**
+ * @extends Factory<\App\Models\Strategy>
+ */
 class StrategyFactory extends Factory
 {
     public function definition(): array

@@ -757,12 +757,6 @@ parameters:
 			path: app/Http/Controllers/SubscriptionController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Customer\>\:\:\$tracking_signing_secret\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/TrackingController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\VideoCollateral\:\:\$campaign\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1625,12 +1619,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Models/User.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$tracking_signing_secret\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Observers/CustomerObserver.php
 
 		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
@@ -4177,12 +4165,6 @@ parameters:
 			path: tests/Feature/DeployCampaignTest.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 10
-			path: tests/Feature/Ecommerce/ProductControllerTest.php
-
-		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 2
@@ -5045,78 +5027,6 @@ parameters:
 			identifier: assign.propertyType
 			count: 1
 			path: tests/Unit/Agents/SelfHealingAgentTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/ProductFeedModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/ProductFeedModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$health_score\.$#'
-			identifier: property.notFound
-			count: 3
-			path: tests/Unit/Ecommerce/ProductFeedModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/ProductFeedModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$products\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/ProductFeedModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/ProductModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
-			identifier: property.notFound
-			count: 4
-			path: tests/Unit/Ecommerce/ProductModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$disapproval_reasons\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/ProductModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 8
-			path: tests/Unit/Ecommerce/ProductModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$productFeed\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/ProductModelTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
-			identifier: property.notFound
-			count: 2
-			path: tests/Unit/Ecommerce/SyncProductFeedJobTest.php
-
-		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$status\.$#'
-			identifier: property.notFound
-			count: 1
-			path: tests/Unit/Ecommerce/SyncProductFeedJobTest.php
 
 		-
 			message: '#^Call to method PHPUnit\\Framework\\Assert\:\:assertTrue\(\) with true will always evaluate to true\.$#'

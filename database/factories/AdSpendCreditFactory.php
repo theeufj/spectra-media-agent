@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\AdSpendCredit>
  */
+/**
+ * @extends Factory<\App\Models\AdSpendCredit>
+ */
 class AdSpendCreditFactory extends Factory
 {
     public function definition(): array
