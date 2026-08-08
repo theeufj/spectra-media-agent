@@ -2,34 +2,35 @@
 
 namespace App\Services\Agents;
 
+use App\Enums\CampaignStatus;
+use App\Features\AutoHealing;
 use App\Models\Campaign;
 use App\Models\Customer;
-use App\Services\GeminiService;
-use App\Services\GoogleAds\CommonServices\GetAdStatus;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
-use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
+use App\Prompts\AdCompliancePrompt;
+use App\Services\Agents\Concerns\ParsesLlmJson;
+use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\FacebookAds\AdService as FacebookAdService;
 use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\FacebookAds\CreativeService as FacebookCreativeService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
-use App\Services\Agents\Traits\RetryableApiOperation;
-use App\Prompts\AdCompliancePrompt;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Cache;
-use App\Features\AutoHealing;
-use Laravel\Pennant\Feature;
+use App\Services\GeminiService;
+use App\Services\GoogleAds\CommonServices\GetAdStatus;
+use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
+use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Laravel\Pennant\Feature;
 
 /**
  * SelfHealingAgent
- * 
+ *
  * Automated agent for detecting and fixing ad issues across platforms.
- * 
+ *
  * Supported Platforms:
  * - Google Ads: Disapproved ads, budget issues, delivery problems
  * - Facebook Ads: Ad disapprovals, account restrictions, creative issues
- * 
+ *
  * Features:
  * - AI-powered ad copy regeneration for policy violations
  * - Automatic budget reallocation
@@ -39,10 +40,13 @@ use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus
  */
 class SelfHealingAgent
 {
+    use ParsesLlmJson;
     use RetryableApiOperation;
 
     protected GeminiService $gemini;
+
     protected array $config;
+
     protected string $platform = 'self_healing';
 
     public function __construct(GeminiService $gemini)
@@ -55,7 +59,6 @@ class SelfHealingAgent
      * Run self-healing checks on a campaign.
      * Automatically detects platform and runs appropriate healing.
      *
-     * @param Campaign $campaign
      * @return array Results of healing actions
      */
     public function heal(Campaign $campaign): array
@@ -69,8 +72,9 @@ class SelfHealingAgent
             'healed_at' => now()->toIso8601String(),
         ];
 
-        if (!$campaign->customer) {
+        if (! $campaign->customer) {
             $results['errors'][] = 'Campaign has no associated customer';
+
             return $results;
         }
 
@@ -78,7 +82,7 @@ class SelfHealingAgent
 
         // Check feature flag - if disabled, only run diagnostics (no mutations)
         $autoHealingEnabled = Feature::for($customer)->active(AutoHealing::class);
-        if (!$autoHealingEnabled) {
+        if (! $autoHealingEnabled) {
             $results['feature_flag'] = 'auto_healing disabled - diagnostics only';
             Log::info("SelfHealingAgent: auto_healing feature disabled for customer {$customer->id}, running diagnostics only");
         }
@@ -92,8 +96,8 @@ class SelfHealingAgent
 
         // Heal Facebook Ads campaign
         if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
-            $results['platform'] = $results['platform'] 
-                ? 'multi_platform' 
+            $results['platform'] = $results['platform']
+                ? 'multi_platform'
                 : 'facebook_ads';
             $this->healFacebookAdsCampaign($campaign, $customer, $results);
         }
@@ -139,7 +143,7 @@ class SelfHealingAgent
         $customerId = $customer->google_ads_customer_id;
         $campaignResourceName = $campaign->google_ads_campaign_id;
 
-        if (!str_starts_with($campaignResourceName, 'customers/')) {
+        if (! str_starts_with($campaignResourceName, 'customers/')) {
             $campaignResourceName = "customers/{$customerId}/campaigns/{$campaignResourceName}";
         }
 
@@ -179,6 +183,7 @@ class SelfHealingAgent
             $ads = $this->executeWithRetry(
                 operation: function () use ($customer, $customerId, $campaignResourceName) {
                     $getAdStatus = new GetAdStatus($customer, true);
+
                     return ($getAdStatus)($customerId, $campaignResourceName);
                 },
                 operationName: 'get_google_ad_status',
@@ -192,8 +197,8 @@ class SelfHealingAgent
                 }
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Failed to check Google ad status: " . $e->getMessage();
-            Log::error("SelfHealingAgent: Failed to check Google ad status", [
+            $results['errors'][] = 'Failed to check Google ad status: '.$e->getMessage();
+            Log::error('SelfHealingAgent: Failed to check Google ad status', [
                 'campaign' => $campaignResourceName,
                 'error' => $e->getMessage(),
             ]);
@@ -209,7 +214,7 @@ class SelfHealingAgent
 
         // Get the policy violation reason
         $policyTopics = $ad['policy_topics'] ?? [];
-        $violationReason = !empty($policyTopics)
+        $violationReason = ! empty($policyTopics)
             ? implode(', ', array_column($policyTopics, 'topic'))
             : 'Unknown policy violation';
 
@@ -218,19 +223,18 @@ class SelfHealingAgent
         $campaign = $customer->campaigns()->whereNotNull('google_ads_campaign_id')->latest()->first();
         if ($campaign) {
             $healingActions = $campaign->healing_actions ?? [];
-            $recentSameViolation = array_filter($healingActions, fn ($a) =>
-                ($a['platform'] ?? '') === 'google_ads' &&
+            $recentSameViolation = array_filter($healingActions, fn ($a) => ($a['platform'] ?? '') === 'google_ads' &&
                 str_contains($a['reason'] ?? '', explode(',', $violationReason)[0])
             );
             if (count($recentSameViolation) >= 3) {
-                Log::warning("SelfHealingAgent: Recurring violation detected — escalating instead of regenerating", [
-                    'violation'  => $violationReason,
+                Log::warning('SelfHealingAgent: Recurring violation detected — escalating instead of regenerating', [
+                    'violation' => $violationReason,
                     'past_count' => count($recentSameViolation),
                 ]);
                 $results['actions_taken'][] = [
-                    'type'    => 'escalated_recurring_violation',
+                    'type' => 'escalated_recurring_violation',
                     'platform' => 'google_ads',
-                    'reason'  => $violationReason,
+                    'reason' => $violationReason,
                     'message' => 'Same violation appeared 3+ times. Manual review required.',
                 ];
                 $customer->users()->each(fn ($user) => $user->notify(
@@ -240,11 +244,12 @@ class SelfHealingAgent
                         ['ad' => $ad['resource_name'], 'customer_id' => $customer->id]
                     )
                 ));
+
                 return;
             }
         }
 
-        Log::info("SelfHealingAgent: Attempting to fix disapproved Google ad", [
+        Log::info('SelfHealingAgent: Attempting to fix disapproved Google ad', [
             'ad_resource_name' => $ad['resource_name'],
             'violation' => $violationReason,
         ]);
@@ -262,16 +267,17 @@ class SelfHealingAgent
                 prompt: $prompt,
                 config: ['temperature' => 0.7]
             );
-            
+
             // Extract JSON from response
             if ($response && isset($response['text']) && preg_match('/\{.*\}/s', $response['text'], $matches)) {
                 $newAdData = json_decode($matches[0], true);
-                
+
                 if ($newAdData && isset($newAdData['headlines'], $newAdData['descriptions'])) {
                     // Create new ad with compliant copy using retry logic
                     $newAdResourceName = $this->executeWithRetry(
                         operation: function () use ($customer, $customerId, $ad, $newAdData) {
                             $createAdService = new CreateResponsiveSearchAd($customer, true);
+
                             return ($createAdService)(
                                 $customerId,
                                 $ad['ad_group_resource_name'],
@@ -294,7 +300,7 @@ class SelfHealingAgent
                             'changes' => $newAdData['changes_made'] ?? 'Ad copy modified for compliance',
                         ];
 
-                        Log::info("SelfHealingAgent: Created compliant Google ad", [
+                        Log::info('SelfHealingAgent: Created compliant Google ad', [
                             'original' => $ad['resource_name'],
                             'new' => $newAdResourceName,
                         ]);
@@ -306,8 +312,8 @@ class SelfHealingAgent
                 }
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Failed to create compliant Google ad: " . $e->getMessage();
-            Log::error("SelfHealingAgent: Failed to create compliant Google ad", [
+            $results['errors'][] = 'Failed to create compliant Google ad: '.$e->getMessage();
+            Log::error('SelfHealingAgent: Failed to create compliant Google ad', [
                 'ad' => $ad['resource_name'],
                 'error' => $e->getMessage(),
             ]);
@@ -323,13 +329,14 @@ class SelfHealingAgent
             $metrics = $this->executeWithRetry(
                 operation: function () use ($customer, $customerId, $campaignResourceName) {
                     $getPerformance = new GetCampaignPerformance($customer, true);
+
                     return ($getPerformance)($customerId, $campaignResourceName, 'TODAY');
                 },
                 operationName: 'get_google_campaign_performance',
                 context: ['campaign' => $campaignResourceName]
             );
 
-            if (!$metrics) {
+            if (! $metrics) {
                 return;
             }
 
@@ -339,7 +346,7 @@ class SelfHealingAgent
 
             // If we've spent more than 80% of budget before noon, we might be pacing too fast
             if ($hourOfDay < 12 && $spentToday > ($dailyBudget * 0.8)) {
-                Log::warning("SelfHealingAgent: Google campaign is pacing fast", [
+                Log::warning('SelfHealingAgent: Google campaign is pacing fast', [
                     'campaign_id' => $campaign->id,
                     'spent' => $spentToday,
                     'budget' => $dailyBudget,
@@ -359,13 +366,13 @@ class SelfHealingAgent
                 $results['warnings'][] = [
                     'type' => 'no_impressions',
                     'platform' => 'google_ads',
-                    'message' => "Campaign has 0 impressions today despite being enabled",
+                    'message' => 'Campaign has 0 impressions today despite being enabled',
                     'severity' => 'high',
                 ];
             }
 
         } catch (\Exception $e) {
-            $results['errors'][] = "Failed to check Google budget health: " . $e->getMessage();
+            $results['errors'][] = 'Failed to check Google budget health: '.$e->getMessage();
         }
     }
 
@@ -375,24 +382,26 @@ class SelfHealingAgent
     protected function checkGoogleDeliveryHealth(Customer $customer, Campaign $campaign, string $customerId, string $campaignResourceName, array &$results): void
     {
         try {
-            $service = new class($customer) extends \App\Services\GoogleAds\BaseGoogleAdsService {
+            $service = new class($customer) extends \App\Services\GoogleAds\BaseGoogleAdsService
+            {
                 public function getCampaignDeliveryStatus(string $customerId, string $campaignId): ?array
                 {
                     $this->ensureClient();
 
-                    $query = "SELECT " .
-                        "campaign.id, " .
-                        "campaign.status, " .
-                        "campaign.serving_status, " .
-                        "campaign.bidding_strategy_type, " .
-                        "campaign.primary_status, " .
-                        "campaign.primary_status_reasons " .
-                        "FROM campaign " .
+                    $query = 'SELECT '.
+                        'campaign.id, '.
+                        'campaign.status, '.
+                        'campaign.serving_status, '.
+                        'campaign.bidding_strategy_type, '.
+                        'campaign.primary_status, '.
+                        'campaign.primary_status_reasons '.
+                        'FROM campaign '.
                         "WHERE campaign.id = {$campaignId}";
 
                     $response = $this->searchQuery($customerId, $query);
                     foreach ($response->getIterator() as $row) {
                         $c = $row->getCampaign();
+
                         return [
                             'status' => $c->getStatus(),
                             'serving_status' => $c->getServingStatus(),
@@ -401,13 +410,14 @@ class SelfHealingAgent
                             'primary_status_reasons' => iterator_to_array($c->getPrimaryStatusReasons()),
                         ];
                     }
+
                     return null;
                 }
             };
 
             $status = $service->getCampaignDeliveryStatus($customerId, $campaign->google_ads_campaign_id);
 
-            if (!$status) {
+            if (! $status) {
                 return;
             }
 
@@ -450,7 +460,7 @@ class SelfHealingAgent
             }
 
         } catch (\Exception $e) {
-            Log::debug("SelfHealingAgent: Could not check Google delivery health", [
+            Log::debug('SelfHealingAgent: Could not check Google delivery health', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -464,7 +474,7 @@ class SelfHealingAgent
     {
         try {
             $adService = new FacebookAdService($customer);
-            
+
             // Get all ad sets for this campaign
             $response = $this->executeWithRetry(
                 operation: function () use ($adService, $campaign) {
@@ -474,7 +484,7 @@ class SelfHealingAgent
                 context: ['campaign_id' => $campaign->facebook_ads_campaign_id]
             );
 
-            if (!$response) {
+            if (! $response) {
                 return;
             }
 
@@ -482,14 +492,14 @@ class SelfHealingAgent
                 // Check for disapproved/rejected status
                 $effectiveStatus = $ad['effective_status'] ?? '';
                 $reviewStatus = $ad['review_feedback'] ?? [];
-                
-                if ($effectiveStatus === 'DISAPPROVED' || !empty($reviewStatus)) {
+
+                if ($effectiveStatus === 'DISAPPROVED' || ! empty($reviewStatus)) {
                     $this->handleFacebookDisapprovedAd($campaign, $customer, $ad, $results);
                 }
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Failed to check Facebook ad status: " . $e->getMessage();
-            Log::error("SelfHealingAgent: Failed to check Facebook ad status", [
+            $results['errors'][] = 'Failed to check Facebook ad status: '.$e->getMessage();
+            Log::error('SelfHealingAgent: Failed to check Facebook ad status', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -512,7 +522,7 @@ class SelfHealingAgent
         $allAds = [];
         foreach ($adSets['data'] as $adSet) {
             $ads = $adService->listAds($adSet['id']);
-            if (!empty($ads['data'])) {
+            if (! empty($ads['data'])) {
                 foreach ($ads['data'] as $ad) {
                     $ad['adset_id'] = $adSet['id'];
                     $allAds[] = $ad;
@@ -530,11 +540,11 @@ class SelfHealingAgent
     {
         // Extract rejection reason
         $reviewFeedback = $ad['review_feedback'] ?? [];
-        $violationReason = is_array($reviewFeedback) 
+        $violationReason = is_array($reviewFeedback)
             ? implode(', ', array_values($reviewFeedback))
             : ($reviewFeedback ?: 'Unknown policy violation');
 
-        Log::info("SelfHealingAgent: Attempting to fix disapproved Facebook ad", [
+        Log::info('SelfHealingAgent: Attempting to fix disapproved Facebook ad', [
             'ad_id' => $ad['id'] ?? 'unknown',
             'violation' => $violationReason,
         ]);
@@ -565,15 +575,15 @@ class SelfHealingAgent
 
             if ($response && isset($response['text']) && preg_match('/\{.*\}/s', $response['text'], $matches)) {
                 $newAdData = json_decode($matches[0], true);
-                
+
                 if ($newAdData) {
                     // Create new creative with compliant copy
                     $creativeService = new FacebookCreativeService($customer);
-                    
+
                     // Build new creative data
                     // Note: This would need to be expanded based on the creative type
                     $newCreativeData = [
-                        'name' => ($ad['name'] ?? 'Ad') . ' - Compliant Version',
+                        'name' => ($ad['name'] ?? 'Ad').' - Compliant Version',
                         'title' => $newAdData['headline'] ?? $currentCopy['headline'],
                         'body' => $newAdData['primary_text'] ?? $currentCopy['primary_text'],
                         'link_description' => $newAdData['description'] ?? $currentCopy['description'],
@@ -598,7 +608,7 @@ class SelfHealingAgent
                             );
                             $newCreativeId = $newCreative['id'] ?? null;
                         } catch (\Exception $e) {
-                            Log::warning("SelfHealingAgent: Could not create Facebook creative", [
+                            Log::warning('SelfHealingAgent: Could not create Facebook creative', [
                                 'error' => $e->getMessage(),
                             ]);
                         }
@@ -617,7 +627,7 @@ class SelfHealingAgent
                             );
 
                             // Pause the original disapproved ad
-                            if (!empty($ad['id'])) {
+                            if (! empty($ad['id'])) {
                                 $replacementAdService->pauseAd($ad['id']);
                             }
 
@@ -631,7 +641,7 @@ class SelfHealingAgent
                                 'changes' => $newCreativeData,
                             ];
                         } catch (\Exception $e) {
-                            Log::warning("SelfHealingAgent: Could not deploy replacement Facebook ad", [
+                            Log::warning('SelfHealingAgent: Could not deploy replacement Facebook ad', [
                                 'error' => $e->getMessage(),
                             ]);
                             $results['actions_taken'][] = [
@@ -654,15 +664,15 @@ class SelfHealingAgent
                         ];
                     }
 
-                    Log::info("SelfHealingAgent: Prepared compliant Facebook ad copy", [
+                    Log::info('SelfHealingAgent: Prepared compliant Facebook ad copy', [
                         'original_ad' => $ad['id'] ?? 'unknown',
                         'changes' => $newAdData['changes_made'] ?? 'Ad copy modified',
                     ]);
                 }
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Failed to generate compliant Facebook ad: " . $e->getMessage();
-            Log::error("SelfHealingAgent: Failed to generate compliant Facebook ad", [
+            $results['errors'][] = 'Failed to generate compliant Facebook ad: '.$e->getMessage();
+            Log::error('SelfHealingAgent: Failed to generate compliant Facebook ad', [
                 'ad' => $ad['id'] ?? 'unknown',
                 'error' => $e->getMessage(),
             ]);
@@ -676,7 +686,7 @@ class SelfHealingAgent
     {
         try {
             $insightService = new FacebookInsightService($customer);
-            
+
             // Get today's insights
             $dateToday = now()->format('Y-m-d');
             $insights = $insightService->getCampaignInsights(
@@ -694,11 +704,11 @@ class SelfHealingAgent
             $hourOfDay = (int) now()->format('H');
 
             // No impressions by mid-day
-            if ($hourOfDay > 12 && $impressions == 0 && $campaign->status === 'active') {
+            if ($hourOfDay > 12 && $impressions == 0 && $campaign->status === CampaignStatus::Active) {
                 $results['warnings'][] = [
                     'type' => 'no_delivery',
                     'platform' => 'facebook_ads',
-                    'message' => "Campaign has 0 impressions today despite being active",
+                    'message' => 'Campaign has 0 impressions today despite being active',
                     'severity' => 'high',
                 ];
             }
@@ -715,7 +725,7 @@ class SelfHealingAgent
 
         } catch (\Exception $e) {
             // Silently log - insights might not be available
-            Log::debug("SelfHealingAgent: Could not check Facebook delivery health", [
+            Log::debug('SelfHealingAgent: Could not check Facebook delivery health', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -730,10 +740,10 @@ class SelfHealingAgent
         try {
             // Check for frequency fatigue (high frequency = creative fatigue)
             $insightService = new FacebookInsightService($customer);
-            
+
             $dateEnd = now()->format('Y-m-d');
             $dateStart = now()->subDays(7)->format('Y-m-d');
-            
+
             $insights = $insightService->getCampaignInsights(
                 $campaign->facebook_ads_campaign_id,
                 $dateStart,
@@ -767,7 +777,7 @@ class SelfHealingAgent
             }
 
         } catch (\Exception $e) {
-            Log::debug("SelfHealingAgent: Could not check Facebook creative health", [
+            Log::debug('SelfHealingAgent: Could not check Facebook creative health', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
@@ -794,8 +804,8 @@ class SelfHealingAgent
         foreach ($campaigns as $campaign) {
             $result = $this->heal($campaign);
             $allResults['results'][$campaign->id] = $result;
-            
-            if (!empty($result['actions_taken'])) {
+
+            if (! empty($result['actions_taken'])) {
                 $allResults['campaigns_healed']++;
                 $allResults['total_actions'] += count($result['actions_taken']);
             }
@@ -838,7 +848,7 @@ class SelfHealingAgent
 
                 // Try to check and fix campaign status
                 try {
-                    $service = new \App\Services\MicrosoftAds\CampaignManagementService($customer);
+                    $service = new \App\Services\MicrosoftAds\CampaignService($customer);
                     $status = $service->getCampaignStatus($campaign->microsoft_ads_campaign_id);
 
                     if ($status && strtolower($status) === 'budgetpaused') {
@@ -846,7 +856,7 @@ class SelfHealingAgent
                         $currentBudget = $campaign->daily_budget ?? 0;
                         if ($currentBudget > 0) {
                             $newBudget = round($currentBudget * 1.2, 2);
-                            $updated = $service->updateCampaignBudget($campaign->microsoft_ads_campaign_id, $newBudget);
+                            $updated = $service->updateBudget($campaign->microsoft_ads_campaign_id, $newBudget);
                             if ($updated) {
                                 $results['actions_taken'][] = [
                                     'type' => 'budget_increase',
@@ -874,7 +884,7 @@ class SelfHealingAgent
                         }
                     }
                 } catch (\Exception $e) {
-                    Log::debug("SelfHealingAgent: Could not remediate Microsoft campaign: " . $e->getMessage());
+                    Log::debug('SelfHealingAgent: Could not remediate Microsoft campaign: '.$e->getMessage());
                 }
             }
 
@@ -898,23 +908,24 @@ class SelfHealingAgent
                 // Use Gemini to suggest ad copy improvements
                 try {
                     $gemini = app(\App\Services\GeminiService::class);
-                    $suggestion = $gemini->generateText(
-                        "A Microsoft Ads campaign for '{$customer->name}' ({$customer->business_type}) experienced a >50% click drop. " .
-                        "Previous week: {$prev7Days} clicks, this week: {$last7Days} clicks. " .
+                    $response = $gemini->generateContent(
+                        config('ai.models.default'),
+                        "A Microsoft Ads campaign for '{$customer->name}' ({$customer->business_type}) experienced a >50% click drop. ".
+                        "Previous week: {$prev7Days} clicks, this week: {$last7Days} clicks. ".
                         "Suggest 3 specific, actionable fixes (targeting, bid strategy, ad copy) in a JSON array with 'action' and 'reason' keys."
                     );
                     $results['ai_suggestions'][] = [
                         'type' => 'performance_recovery',
                         'platform' => 'microsoft_ads',
-                        'suggestions' => $suggestion,
+                        'suggestions' => $this->parseJson($response['text'] ?? ''),
                     ];
                 } catch (\Exception $e) {
-                    Log::debug("SelfHealingAgent: Gemini suggestion failed: " . $e->getMessage());
+                    Log::debug('SelfHealingAgent: Gemini suggestion failed: '.$e->getMessage());
                 }
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "Microsoft Ads healing failed: " . $e->getMessage();
-            Log::error("SelfHealingAgent: Microsoft Ads healing error", ['error' => $e->getMessage()]);
+            $results['errors'][] = 'Microsoft Ads healing failed: '.$e->getMessage();
+            Log::error('SelfHealingAgent: Microsoft Ads healing error', ['error' => $e->getMessage()]);
         }
     }
 
@@ -940,7 +951,7 @@ class SelfHealingAgent
 
                 // Try to check and fix campaign status
                 try {
-                    $service = new \App\Services\LinkedInAds\CampaignManagementService($customer);
+                    $service = new \App\Services\LinkedInAds\CampaignService($customer);
                     $linkedInCampaignId = $campaign->linkedin_ads_campaign_id;
 
                     if ($linkedInCampaignId) {
@@ -948,7 +959,7 @@ class SelfHealingAgent
                         $status = $campaignData['status'] ?? null;
 
                         if ($status === 'PAUSED') {
-                            $activated = $service->updateCampaignStatus($linkedInCampaignId, 'ACTIVE');
+                            $activated = $service->updateStatus($linkedInCampaignId, 'ACTIVE');
                             if ($activated) {
                                 $results['actions_taken'][] = [
                                     'type' => 'campaign_resumed',
@@ -979,7 +990,7 @@ class SelfHealingAgent
                         }
                     }
                 } catch (\Exception $e) {
-                    Log::debug("SelfHealingAgent: Could not remediate LinkedIn campaign: " . $e->getMessage());
+                    Log::debug('SelfHealingAgent: Could not remediate LinkedIn campaign: '.$e->getMessage());
                 }
             }
 
@@ -1003,23 +1014,24 @@ class SelfHealingAgent
                 // Use Gemini to suggest recovery actions
                 try {
                     $gemini = app(\App\Services\GeminiService::class);
-                    $suggestion = $gemini->generateText(
-                        "A LinkedIn Ads campaign for '{$customer->name}' ({$customer->business_type}) experienced a >50% click drop. " .
-                        "Previous week: {$prev7Days} clicks, this week: {$last7Days} clicks. " .
+                    $response = $gemini->generateContent(
+                        config('ai.models.default'),
+                        "A LinkedIn Ads campaign for '{$customer->name}' ({$customer->business_type}) experienced a >50% click drop. ".
+                        "Previous week: {$prev7Days} clicks, this week: {$last7Days} clicks. ".
                         "Suggest 3 specific, actionable fixes (audience targeting, bid strategy, ad creative) in a JSON array with 'action' and 'reason' keys."
                     );
                     $results['ai_suggestions'][] = [
                         'type' => 'performance_recovery',
                         'platform' => 'linkedin_ads',
-                        'suggestions' => $suggestion,
+                        'suggestions' => $this->parseJson($response['text'] ?? ''),
                     ];
                 } catch (\Exception $e) {
-                    Log::debug("SelfHealingAgent: Gemini suggestion failed: " . $e->getMessage());
+                    Log::debug('SelfHealingAgent: Gemini suggestion failed: '.$e->getMessage());
                 }
             }
         } catch (\Exception $e) {
-            $results['errors'][] = "LinkedIn Ads healing failed: " . $e->getMessage();
-            Log::error("SelfHealingAgent: LinkedIn Ads healing error", ['error' => $e->getMessage()]);
+            $results['errors'][] = 'LinkedIn Ads healing failed: '.$e->getMessage();
+            Log::error('SelfHealingAgent: LinkedIn Ads healing error', ['error' => $e->getMessage()]);
         }
     }
 }

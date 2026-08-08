@@ -3,7 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\RuntimeException;
+use App\Models\ExceptionLog;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -11,15 +11,15 @@ class RuntimeExceptionController extends Controller
 {
     public function index(Request $request)
     {
-        $query = RuntimeException::query()->latest();
+        $query = ExceptionLog::query()->latest();
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('message', 'ilike', "%{$search}%")
-                  ->orWhere('type', 'ilike', "%{$search}%")
-                  ->orWhere('file', 'ilike', "%{$search}%")
-                  ->orWhere('job_class', 'ilike', "%{$search}%")
-                  ->orWhere('url', 'ilike', "%{$search}%");
+                    ->orWhere('type', 'ilike', "%{$search}%")
+                    ->orWhere('file', 'ilike', "%{$search}%")
+                    ->orWhere('job_class', 'ilike', "%{$search}%")
+                    ->orWhere('url', 'ilike', "%{$search}%");
             });
         }
 
@@ -35,16 +35,16 @@ class RuntimeExceptionController extends Controller
 
         // Get summary stats
         $stats = [
-            'total' => RuntimeException::count(),
-            'today' => RuntimeException::whereDate('created_at', today())->count(),
-            'this_week' => RuntimeException::where('created_at', '>=', now()->subWeek())->count(),
-            'http' => RuntimeException::where('source', 'http')->whereDate('created_at', today())->count(),
-            'queue' => RuntimeException::where('source', 'queue')->whereDate('created_at', today())->count(),
-            'console' => RuntimeException::where('source', 'console')->whereDate('created_at', today())->count(),
+            'total' => ExceptionLog::count(),
+            'today' => ExceptionLog::whereDate('created_at', today())->count(),
+            'this_week' => ExceptionLog::where('created_at', '>=', now()->subWeek())->count(),
+            'http' => ExceptionLog::where('source', 'http')->whereDate('created_at', today())->count(),
+            'queue' => ExceptionLog::where('source', 'queue')->whereDate('created_at', today())->count(),
+            'console' => ExceptionLog::where('source', 'console')->whereDate('created_at', today())->count(),
         ];
 
         // Get distinct exception types for the filter dropdown
-        $types = RuntimeException::distinct()->pluck('type')->sort()->values();
+        $types = ExceptionLog::distinct()->pluck('type')->sort()->values();
 
         return Inertia::render('Admin/RuntimeExceptions', [
             'exceptions' => $exceptions,
@@ -73,7 +73,7 @@ class RuntimeExceptionController extends Controller
     public function flush(Request $request)
     {
         $days = $request->input('days', 30);
-        $deleted = RuntimeException::where('created_at', '<', now()->subDays($days))->delete();
+        $deleted = ExceptionLog::where('created_at', '<', now()->subDays($days))->delete();
 
         return back()->with('success', "Cleared {$deleted} exceptions older than {$days} days.");
     }

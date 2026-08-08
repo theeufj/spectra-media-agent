@@ -19,13 +19,13 @@ use App\Policies\ProposalPolicy;
 use App\Policies\StrategyPolicy;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Vite;
 use Illuminate\Support\ServiceProvider;
-use Illuminate\Queue\Events\JobFailed;
-use Illuminate\Support\Facades\Queue;
 use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
@@ -92,7 +92,7 @@ class AppServiceProvider extends ServiceProvider
         Queue::failing(function (JobFailed $event) {
             try {
                 $e = $event->exception;
-                \App\Models\RuntimeException::create([
+                \App\Models\ExceptionLog::create([
                     'type' => get_class($e),
                     'source' => 'queue',
                     'file' => $e->getFile(),
@@ -107,9 +107,8 @@ class AppServiceProvider extends ServiceProvider
                     ],
                 ]);
             } catch (\Throwable $logException) {
-                \Illuminate\Support\Facades\Log::warning('Failed to write queue failure to runtime_exceptions: ' . $logException->getMessage());
+                \Illuminate\Support\Facades\Log::warning('Failed to write queue failure to runtime_exceptions: '.$logException->getMessage());
             }
         });
     }
 }
-
