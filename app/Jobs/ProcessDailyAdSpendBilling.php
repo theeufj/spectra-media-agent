@@ -15,13 +15,13 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * ProcessDailyAdSpendBilling
- * 
+ *
  * Scheduled job that runs daily to:
  * 1. Calculate actual ad spend from yesterday for each customer
  * 2. Deduct from their credit balance
  * 3. Auto-replenish if balance is low
  * 4. Handle failed payments with grace period → pause flow
- * 
+ *
  * Schedule: Daily at 6 AM (after ad networks finalize yesterday's spend)
  */
 class ProcessDailyAdSpendBilling implements ShouldQueue
@@ -29,6 +29,7 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 3;
+
     public int $backoff = 300; // 5 minutes between retries
 
     /**
@@ -59,8 +60,8 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         $customers = Customer::whereHas('adSpendCredit')
             ->where(function ($query) use ($recoverableStatuses) {
                 $query->whereHas('campaigns', function ($q) {
-                        $q->where('status', 'active');
-                    })
+                    $q->where('status', 'active');
+                })
                     ->orWhereHas('adSpendCredit', function ($q) use ($recoverableStatuses) {
                         $q->whereIn('payment_status', $recoverableStatuses);
                     });
@@ -77,12 +78,13 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         foreach ($customers as $customer) {
             $marker = "adspend_billed:{$customer->id}:{$billingDate}";
 
-            if (!Cache::add($marker, true, now()->addHours(47))) {
+            if (! Cache::add($marker, true, now()->addHours(47))) {
                 $results['skipped']++;
                 Log::info('ProcessDailyAdSpendBilling: Skipping already-billed customer', [
                     'customer_id' => $customer->id,
                     'billing_date' => $billingDate,
                 ]);
+
                 continue;
             }
 
@@ -106,6 +108,8 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
                 ]);
 
             } catch (\Exception $e) {
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
                 $results['failed']++;
 
                 // Unexpected failure — release the marker so a retry reprocesses this customer.
@@ -132,7 +136,7 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('ProcessDailyAdSpendBilling failed: ' . $exception->getMessage(), [
+        Log::error('ProcessDailyAdSpendBilling failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }

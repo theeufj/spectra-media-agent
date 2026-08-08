@@ -7,10 +7,10 @@ use App\Models\Campaign;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Prompts\SeasonalStrategyPrompt;
-use App\Services\GeminiService;
-use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
-use App\Services\GoogleAds\CommonServices\CreateSeasonalityAdjustment;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
+use App\Services\GeminiService;
+use App\Services\GoogleAds\CommonServices\CreateSeasonalityAdjustment;
+use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -24,6 +24,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $campaignId;
+
     protected $season;
 
     /**
@@ -52,16 +53,16 @@ class ApplySeasonalStrategyShift implements ShouldQueue
 
             // Fetch real campaign data from database
             $currentStrategy = $campaign->strategies()->latest()->first();
-            
+
             // Extract bidding strategy name from JSON if it exists
             $biddingStrategyName = 'MAXIMIZE_CONVERSIONS'; // Default fallback
             if ($currentStrategy && $currentStrategy->bidding_strategy) {
-                $biddingData = is_string($currentStrategy->bidding_strategy) 
-                    ? json_decode($currentStrategy->bidding_strategy, true) 
+                $biddingData = is_string($currentStrategy->bidding_strategy)
+                    ? json_decode($currentStrategy->bidding_strategy, true)
                     : $currentStrategy->bidding_strategy;
                 $biddingStrategyName = $biddingData['name'] ?? 'MAXIMIZE_CONVERSIONS';
             }
-            
+
             // Fetch top performing keywords from ad copies
             $topKeywords = $campaign->adCopies()
                 ->where('status', 'approved')
@@ -72,7 +73,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                 ->take(5)
                 ->values()
                 ->toArray();
-            
+
             if (empty($topKeywords)) {
                 $topKeywords = ['brand', 'product', 'service']; // Generic fallback
             }
@@ -86,8 +87,9 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             $prompt = (new SeasonalStrategyPrompt($campaignData, $this->season, $baselineStrategy))->getPrompt();
             $generatedResponse = $geminiService->generateContent(config('ai.models.default'), $prompt);
 
-            if (is_null($generatedResponse) || !isset($generatedResponse['text'])) {
-                Log::error("LLM failed to generate a seasonal strategy shift.");
+            if (is_null($generatedResponse) || ! isset($generatedResponse['text'])) {
+                Log::error('LLM failed to generate a seasonal strategy shift.');
+
                 return;
             }
 
@@ -97,10 +99,11 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                 Log::error("Failed to parse LLM's seasonal strategy response.", [
                     'generated_text' => $generatedResponse['text'],
                 ]);
+
                 return;
             }
 
-            Log::info("Generated seasonal strategy shift:", $strategyShift);
+            Log::info('Generated seasonal strategy shift:', $strategyShift);
 
             $this->applyBudgetAdjustment($campaign, $strategyShift, $baselineStrategy);
 
@@ -117,7 +120,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             $this->applySeasonalityAdjustment($campaign);
 
         } catch (\Exception $e) {
-            Log::error("Error applying seasonal strategy shift to campaign {$this->campaignId}: " . $e->getMessage(), [
+            Log::error("Error applying seasonal strategy shift to campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
             // Rethrow so the queue marks this failed (retry + failed() + health monitor)
@@ -139,11 +142,11 @@ class ApplySeasonalStrategyShift implements ShouldQueue
         // Map season names to approximate date ranges (MM-DD format)
         $seasonRanges = [
             'black_friday' => ['11-01', '11-30'],
-            'summer_sale'  => ['06-01', '08-31'],
-            'default'      => null,
+            'summer_sale' => ['06-01', '08-31'],
+            'default' => null,
         ];
 
-        if (!isset($seasonRanges[$season]) || $seasonRanges[$season] === null) {
+        if (! isset($seasonRanges[$season]) || $seasonRanges[$season] === null) {
             return $globalMultiplier;
         }
 
@@ -153,14 +156,14 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             ? GoogleAdsPerformanceData::class
             : ($campaign->facebook_ads_campaign_id ? FacebookAdsPerformanceData::class : null);
 
-        if (!$model) {
+        if (! $model) {
             return $globalMultiplier;
         }
 
         $year = (int) now()->format('Y') - 1;
 
-        $seasonStart = "{$year}-" . str_replace('-', '-', $startMD);
-        $seasonEnd   = "{$year}-" . str_replace('-', '-', $endMD);
+        $seasonStart = "{$year}-".str_replace('-', '-', $startMD);
+        $seasonEnd = "{$year}-".str_replace('-', '-', $endMD);
 
         $seasonSpend = $model::where('campaign_id', $campaign->id)
             ->whereBetween('date', [$seasonStart, $seasonEnd])
@@ -175,7 +178,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
         $seasonDailyAvg = $seasonSpend / $seasonDays;
 
         // 4-week pre-season baseline (same year, prior to season start)
-        $baselineEnd   = date('Y-m-d', strtotime("{$year}-{$startMD} -1 day"));
+        $baselineEnd = date('Y-m-d', strtotime("{$year}-{$startMD} -1 day"));
         $baselineStart = date('Y-m-d', strtotime("{$baselineEnd} -27 days"));
 
         $baselineSpend = $model::where('campaign_id', $campaign->id)
@@ -210,7 +213,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
         $absoluteCap = (float) config('ai.seasonal.max_daily_budget', 2000.0);
         if ($currentBudget > 0) {
             $floor = round($currentBudget * 0.5, 2);
-            $ceil  = round($currentBudget * 2.0, 2);
+            $ceil = round($currentBudget * 2.0, 2);
             $newDailyBudget = max($floor, min($candidateBudget, $ceil));
         } else {
             // No baseline to bound against — fall back to a conservative absolute cap.
@@ -221,13 +224,14 @@ class ApplySeasonalStrategyShift implements ShouldQueue
         if ($newDailyBudget !== $candidateBudget) {
             Log::warning("Seasonal budget clamped for campaign {$campaign->id}", [
                 'requested' => $candidateBudget,
-                'applied'   => $newDailyBudget,
-                'baseline'  => $currentBudget,
+                'applied' => $newDailyBudget,
+                'baseline' => $currentBudget,
             ]);
         }
 
         if ($newDailyBudget <= 0) {
             Log::warning("Skipping budget adjustment — calculated budget is zero for campaign {$campaign->id}");
+
             return;
         }
 
@@ -244,7 +248,9 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                 $updateBudget($customerId, $resourceName, $budgetMicros);
                 Log::info("Applied seasonal budget to Google campaign {$campaign->id}: \${$newDailyBudget}/day");
             } catch (\Exception $e) {
-                Log::error("Failed to apply seasonal budget to Google campaign {$campaign->id}: " . $e->getMessage());
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
+                Log::error("Failed to apply seasonal budget to Google campaign {$campaign->id}: ".$e->getMessage());
             }
         }
 
@@ -259,7 +265,9 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                 ]);
                 Log::info("Applied seasonal budget to Facebook campaign {$campaign->id}: \${$newDailyBudget}/day");
             } catch (\Exception $e) {
-                Log::error("Failed to apply seasonal budget to Facebook campaign {$campaign->id}: " . $e->getMessage());
+                // Surface in the admin exception dashboard; the batch continues.
+                report($e);
+                Log::error("Failed to apply seasonal budget to Facebook campaign {$campaign->id}: ".$e->getMessage());
             }
         }
 
@@ -273,24 +281,24 @@ class ApplySeasonalStrategyShift implements ShouldQueue
      */
     private function applySeasonalityAdjustment(Campaign $campaign): void
     {
-        if (!$campaign->google_ads_campaign_id) {
+        if (! $campaign->google_ads_campaign_id) {
             return;
         }
 
         $customer = $campaign->customer;
-        if (!$customer || !$customer->google_ads_customer_id) {
+        if (! $customer || ! $customer->google_ads_customer_id) {
             return;
         }
 
         try {
             // Map season names to date windows and conversion rate modifiers
             $season = strtolower($this->season);
-            $year   = (int) now()->format('Y');
+            $year = (int) now()->format('Y');
 
             [$startDateTime, $endDateTime, $modifier] = match (true) {
                 in_array($season, ['holiday', 'christmas'], true) => [
                     "{$year}-12-20 00:00:00",
-                    ($year + 1) . '-01-01 23:59:59',
+                    ($year + 1).'-01-01 23:59:59',
                     1.40,
                 ],
                 $season === 'black_friday' => [
@@ -304,33 +312,35 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                     0.90,
                 ],
                 default => [
-                    now()->format('Y-m-d') . ' 00:00:00',
-                    now()->addDays(14)->format('Y-m-d') . ' 23:59:59',
+                    now()->format('Y-m-d').' 00:00:00',
+                    now()->addDays(14)->format('Y-m-d').' 23:59:59',
                     1.10,
                 ],
             };
 
             $createAdjustment = new CreateSeasonalityAdjustment($customer);
             $resourceName = ($createAdjustment)($customer->google_ads_customer_id, [
-                'name'                     => ucfirst($this->season) . ' ' . $year . ' - ' . $campaign->name,
-                'scope'                    => 'CAMPAIGN',
-                'start_date_time'          => $startDateTime,
-                'end_date_time'            => $endDateTime,
+                'name' => ucfirst($this->season).' '.$year.' - '.$campaign->name,
+                'scope' => 'CAMPAIGN',
+                'start_date_time' => $startDateTime,
+                'end_date_time' => $endDateTime,
                 'conversion_rate_modifier' => $modifier,
-                'campaign_resource'        => $campaign->google_ads_campaign_id,
+                'campaign_resource' => $campaign->google_ads_campaign_id,
             ]);
 
             if ($resourceName) {
                 Log::info("ApplySeasonalStrategyShift: Created seasonality adjustment for campaign {$campaign->id}", [
-                    'resource'  => $resourceName,
-                    'season'    => $this->season,
-                    'modifier'  => $modifier,
+                    'resource' => $resourceName,
+                    'season' => $this->season,
+                    'modifier' => $modifier,
                 ]);
             }
         } catch (\Exception $e) {
+            // Surface in the admin exception dashboard; the batch continues.
+            report($e);
             Log::warning("ApplySeasonalStrategyShift: Seasonality adjustment failed for campaign {$campaign->id} — skipping", [
                 'season' => $this->season,
-                'error'  => $e->getMessage(),
+                'error' => $e->getMessage(),
             ]);
         }
     }
@@ -340,7 +350,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
      */
     public function failed(\Throwable $exception): void
     {
-        Log::error('ApplySeasonalStrategyShift failed: ' . $exception->getMessage(), [
+        Log::error('ApplySeasonalStrategyShift failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
     }
