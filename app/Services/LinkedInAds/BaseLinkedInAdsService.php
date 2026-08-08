@@ -3,6 +3,7 @@
 namespace App\Services\LinkedInAds;
 
 use App\Models\Customer;
+use App\Models\EnabledPlatform;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -33,6 +34,16 @@ abstract class BaseLinkedInAdsService
     {
         $this->customer = $customer;
         $this->config = config('linkedinads', []);
+
+        // Single kill switch for the platform — see BaseMicrosoftAdsService.
+        if (! EnabledPlatform::isEnabled('linkedin')) {
+            Log::info('LinkedInAds: platform disabled — skipping authentication', [
+                'customer_id' => $customer->id,
+            ]);
+
+            return;
+        }
+
         $this->authenticate();
     }
 

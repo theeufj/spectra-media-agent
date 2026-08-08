@@ -3,6 +3,7 @@
 namespace App\Services\MicrosoftAds;
 
 use App\Models\Customer;
+use App\Models\EnabledPlatform;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -38,6 +39,19 @@ abstract class BaseMicrosoftAdsService
     {
         $this->customer = $customer;
         $this->config = config('microsoftads', []);
+
+        // Single kill switch for the platform. Leaving accessToken null makes
+        // ensureAuthenticated() false, which every apiCall() already checks and
+        // callers already handle — so a disabled platform degrades to "no data"
+        // rather than erroring, and we skip the auth round-trip entirely.
+        if (! EnabledPlatform::isEnabled('microsoft')) {
+            Log::info('MicrosoftAds: platform disabled — skipping authentication', [
+                'customer_id' => $customer->id,
+            ]);
+
+            return;
+        }
+
         $this->authenticate();
     }
 
