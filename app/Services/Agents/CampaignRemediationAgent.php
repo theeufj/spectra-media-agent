@@ -293,13 +293,16 @@ class CampaignRemediationAgent
             return;
         }
 
-        $wastedSpend = array_sum(array_column($wasteful, 'cost'));
+        // Impressions, not spend: performance_max_placement_view exposes no cost
+        // metric, so per-placement spend is genuinely unavailable rather than
+        // merely unreported. Don't imply a precision the API cannot give.
+        $wastedImpressions = array_sum(array_column($wasteful, 'impressions'));
 
         $results['actions_taken'][] = [
             'type' => 'placements_excluded',
             'platform' => 'google_ads',
-            'message' => "Excluded {$outcome['excluded']} non-converting placement(s) consuming "
-                .number_format($wastedSpend, 2).' in spend',
+            'message' => "Excluded {$outcome['excluded']} low-value placement(s) accounting for "
+                .number_format($wastedImpressions).' impressions',
             'placements' => array_slice($outcome['names'], 0, 20),
             'skipped' => $outcome['skipped'],
             'failed' => $outcome['failed'],
@@ -308,11 +311,11 @@ class CampaignRemediationAgent
         CriticalAgentAlert::deliver(
             'placements_excluded',
             'Auto-Fixed: Wasteful Placements Excluded on "'.$campaign->name.'"',
-            'Performance Max was spending your budget on placements that never convert — typically mobile games and in-app banners rather than search intent. '
-            ."Spectra excluded {$outcome['excluded']} placement(s) responsible for ".number_format($wastedSpend, 2).' in spend. '
+            'Performance Max was showing your ads inside mobile apps — typically games and utilities rather than anywhere with buying intent. '
+            ."Spectra excluded {$outcome['excluded']} placement(s) accounting for ".number_format($wastedImpressions).' impressions. '
             .'Examples: '.implode(', ', array_slice($outcome['names'], 0, 5)).(count($outcome['names']) > 5 ? '...' : '').'. '
             .'Exclusions are applied at account level, which is the only way to reach Performance Max inventory.',
-            ['campaign_id' => $campaign->id, 'excluded' => $outcome['excluded'], 'wasted_spend' => $wastedSpend, 'auto_resolved' => true],
+            ['campaign_id' => $campaign->id, 'excluded' => $outcome['excluded'], 'impressions' => $wastedImpressions, 'auto_resolved' => true],
             CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
             $customer
         );
