@@ -12,6 +12,8 @@ use App\Services\FacebookAds\CreativeService as FacebookCreativeService;
 use App\Services\GeminiService;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use App\Services\GoogleAds\CommonServices\SearchAudience;
+use App\Services\GoogleAds\Exclusions\ExcludePlacements;
+use App\Services\GoogleAds\Exclusions\FindWastefulPlacements;
 use App\Services\GoogleAds\PerformanceMaxServices\AddAudienceSignals;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateImageAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
@@ -35,11 +37,15 @@ use Illuminate\Support\Facades\Log;
  * Auto-fixable findings:
  *   conversion_starvation     → refreshes PMax copy + images with conversion-focused variants
  *   conversion_labels_missing → runs conversions:provision to restore labels
+ *   display_only_traffic      → excludes the non-converting placements eating the budget
  *
  * Alert-only findings:
  *   pmax_no_audience_signals  → notifies user with specific setup instructions
  *   pmax_bad_landing_page     → notifies user with URL fix instructions
- *   display_only_traffic      → notifies user to add a Search campaign
+ *
+ * Every finding produces one of three outcomes: an action, an alert, or a
+ * recorded `unresolved_finding` that escalates once it has recurred. A handler
+ * must never return having done none of them — see remediate().
  */
 class CampaignRemediationAgent
 {
@@ -51,24 +57,56 @@ class CampaignRemediationAgent
     public function remediate(Campaign $campaign, array $findings): array
     {
         if (empty($findings)) {
-            return ['campaign_id' => $campaign->id, 'actions_taken' => [], 'alerts_sent' => [], 'errors' => []];
+            return ['campaign_id' => $campaign->id, 'actions_taken' => [], 'alerts_sent' => [], 'unresolved' => [], 'escalated' => [], 'errors' => []];
         }
 
         $results = [
             'campaign_id' => $campaign->id,
             'actions_taken' => [],
             'alerts_sent' => [],
+            'unresolved' => [],
+            'escalated' => [],
             'errors' => [],
         ];
 
         foreach ($findings as $finding) {
             try {
+                $actionsBefore = count($results['actions_taken']);
+                $alertsBefore = count($results['alerts_sent']);
+
                 if ($finding['can_auto_fix'] ?? false) {
                     $this->autoFix($campaign, $finding, $results);
                 } else {
                     $this->alertCustomer($campaign, $finding, $results);
                 }
-            } catch (\Exception $e) {
+
+                $acted = count($results['actions_taken']) > $actionsBefore;
+                $alerted = count($results['alerts_sent']) > $alertsBefore;
+
+                // A handler that neither acted nor alerted has silently given up.
+                // display_only_traffic did exactly this 221 times over three weeks:
+                // its remedy (add audience signals) had already been applied, so
+                // addAudienceSignals() hit a bare `return` and nobody was told
+                // while the campaign kept burning budget on mobile-app inventory.
+                // alertCustomer can fall silent the same way — on its 24h dedup
+                // cache, or a customer with no users.
+                //
+                // Enforced here rather than in each handler so the guarantee holds
+                // for every finding type, including ones added later.
+                if (! $acted && ! $alerted) {
+                    $this->recordUnresolved($campaign, $finding, $results);
+                }
+
+                // Escalation keys off whether the problem was actually FIXED, not
+                // whether something happened. Telling the customer the same thing
+                // every hour for three weeks is not resolution either.
+                if (! $acted) {
+                    $this->considerEscalation($campaign, $finding, $results);
+                }
+            } catch (\Throwable $e) {
+                // Throwable, not Exception: a TypeError in a remediation handler
+                // must not abort the batch or vanish from the dashboard.
+                report($e);
                 $results['errors'][] = "[{$finding['type']}] ".$e->getMessage();
                 Log::error('CampaignRemediationAgent: Remediation failed', [
                     'campaign_id' => $campaign->id,
@@ -92,6 +130,106 @@ class CampaignRemediationAgent
         return $results;
     }
 
+    // ─── Unresolved findings ─────────────────────────────────────────────────
+
+    /**
+     * How many times the same finding may recur on a campaign before a human is
+     * told. Repetition is itself the signal: a fix that has run three times and
+     * not cleared the finding is the wrong fix.
+     */
+    private const ESCALATE_AFTER_OCCURRENCES = 3;
+
+    /** Don't re-escalate the same finding more often than this. */
+    private const ESCALATION_COOLDOWN_HOURS = 24;
+
+    /**
+     * A finding the remediation pass could not action.
+     *
+     * Always leaves a trace, so "we tried and nothing happened" is visible
+     * instead of indistinguishable from "nothing was wrong". Escalates to a
+     * human once the same finding has recurred past the threshold.
+     */
+    private function recordUnresolved(Campaign $campaign, array $finding, array &$results): void
+    {
+        $type = $finding['type'] ?? 'unknown';
+
+        $results['unresolved'][] = [
+            'type' => $type,
+            'message' => $finding['message'] ?? null,
+        ];
+
+        AgentActivity::record(
+            'campaign_remediation',
+            'unresolved_finding',
+            'No remediation available for "'.$type.'" on "'.$campaign->name.'"',
+            $campaign->customer_id,
+            $campaign->id,
+            ['finding' => $type, 'severity' => $finding['severity'] ?? null]
+        );
+
+        Log::warning('CampaignRemediationAgent: finding could not be remediated', [
+            'campaign_id' => $campaign->id,
+            'finding' => $type,
+        ]);
+    }
+
+    /**
+     * Tell an admin when the automation keeps failing to fix the same thing.
+     *
+     * Goes to admins rather than customers: "our remediation cannot solve this"
+     * is an internal signal, and the customer has already been alerted by
+     * whatever path ran before this.
+     */
+    private function considerEscalation(Campaign $campaign, array $finding, array &$results): void
+    {
+        $type = $finding['type'] ?? 'unknown';
+        $occurrences = $this->recentOccurrences($campaign, $type);
+
+        if ($occurrences < self::ESCALATE_AFTER_OCCURRENCES) {
+            return;
+        }
+
+        $cacheKey = "remediation_escalated:{$campaign->id}:{$type}";
+        if (Cache::has($cacheKey)) {
+            return;
+        }
+        Cache::put($cacheKey, true, now()->addHours(self::ESCALATION_COOLDOWN_HOURS));
+
+        AgentActivity::record(
+            'campaign_remediation',
+            'finding_escalated',
+            'Escalated recurring issue "'.$type.'" on "'.$campaign->name.'" after '.$occurrences.' unresolved detections',
+            $campaign->customer_id,
+            $campaign->id,
+            ['finding' => $type, 'occurrences' => $occurrences]
+        );
+
+        CriticalAgentAlert::deliver(
+            'remediation_stalled',
+            'Automation cannot fix "'.$type.'" on "'.$campaign->name.'"',
+            "Spectra has diagnosed \"{$type}\" {$occurrences} times in the last 14 days and automatic remediation has not resolved it. "
+            .'A repeating unresolved finding usually means the prescribed fix does not address the actual cause. This needs a human.'
+            .(! empty($finding['message']) ? "\n\nFinding: ".$finding['message'] : ''),
+            ['campaign_id' => $campaign->id, 'finding' => $type, 'occurrences' => $occurrences],
+            CriticalAgentAlert::RECIPIENTS_ADMINS,
+            $campaign->customer
+        );
+
+        $results['escalated'][] = ['type' => $type, 'occurrences' => $occurrences];
+    }
+
+    /**
+     * How often this finding has been diagnosed for this campaign recently.
+     */
+    private function recentOccurrences(Campaign $campaign, string $type): int
+    {
+        return AgentActivity::where('campaign_id', $campaign->id)
+            ->where('agent_type', 'strategic_diagnosis')
+            ->where('created_at', '>=', now()->subDays(14))
+            ->where('details', 'like', '%"'.$type.'"%')
+            ->count();
+    }
+
     // ─── Routing ─────────────────────────────────────────────────────────────
 
     private function autoFix(Campaign $campaign, array $finding, array &$results): void
@@ -99,11 +237,111 @@ class CampaignRemediationAgent
         match ($finding['auto_fix_action'] ?? '') {
             'refresh_creative' => $this->refreshCreative($campaign, $finding, $results),
             'add_audience_signals' => $this->addAudienceSignals($campaign, $finding, $results),
+            'exclude_wasteful_placements' => $this->excludeWastefulPlacements($campaign, $finding, $results),
             'fix_landing_page' => $this->fixLandingPage($campaign, $finding, $results),
             'provision_conversions' => $this->provisionConversions($finding, $results),
             'refresh_meta_creative' => $this->refreshMetaCreative($campaign, $finding, $results),
             default => $this->alertCustomer($campaign, $finding, $results),
         };
+    }
+
+    // ─── Placement exclusions ────────────────────────────────────────────────
+
+    /**
+     * Stop the campaign paying for inventory that never converts.
+     *
+     * This is the real remedy for display_only_traffic. The finding was
+     * previously routed to add_audience_signals, which cannot fix it: audience
+     * signals tell PMax *who* to look for, and do nothing to stop it serving
+     * inside mobile games. That mismatch is why the finding recurred 221 times
+     * while the "fix" reported success and the traffic never changed.
+     */
+    private function excludeWastefulPlacements(Campaign $campaign, array $finding, array &$results): void
+    {
+        $customer = $campaign->customer;
+        if (! $customer?->google_ads_customer_id) {
+            $this->alertCustomer($campaign, $finding, $results);
+
+            return;
+        }
+
+        $customerId = $customer->cleanGoogleCustomerId();
+
+        $wasteful = (new FindWastefulPlacements($customer))->find($customerId);
+
+        // Anything the customer has explicitly listed is excluded too, whether
+        // or not it has spent yet. This column existed on TargetingConfig but
+        // was never sent to Google by any code path.
+        foreach ($this->configuredExclusions($campaign) as $url) {
+            $wasteful[] = ['kind' => 'website', 'identifier' => $url, 'name' => $url];
+        }
+
+        if ($wasteful === []) {
+            // Nothing actionable found — say so rather than returning silently.
+            $this->alertCustomer($campaign, $finding, $results);
+
+            return;
+        }
+
+        $outcome = (new ExcludePlacements($customer))->apply($customerId, $wasteful);
+
+        if ($outcome['excluded'] < 1) {
+            // Everything was already excluded, or every write failed. Either way
+            // the finding stands and a human should hear about it.
+            $this->alertCustomer($campaign, $finding, $results);
+
+            return;
+        }
+
+        $wastedSpend = array_sum(array_column($wasteful, 'cost'));
+
+        $results['actions_taken'][] = [
+            'type' => 'placements_excluded',
+            'platform' => 'google_ads',
+            'message' => "Excluded {$outcome['excluded']} non-converting placement(s) consuming "
+                .number_format($wastedSpend, 2).' in spend',
+            'placements' => array_slice($outcome['names'], 0, 20),
+            'skipped' => $outcome['skipped'],
+            'failed' => $outcome['failed'],
+        ];
+
+        CriticalAgentAlert::deliver(
+            'placements_excluded',
+            'Auto-Fixed: Wasteful Placements Excluded on "'.$campaign->name.'"',
+            'Performance Max was spending your budget on placements that never convert — typically mobile games and in-app banners rather than search intent. '
+            ."Spectra excluded {$outcome['excluded']} placement(s) responsible for ".number_format($wastedSpend, 2).' in spend. '
+            .'Examples: '.implode(', ', array_slice($outcome['names'], 0, 5)).(count($outcome['names']) > 5 ? '...' : '').'. '
+            .'Exclusions are applied at account level, which is the only way to reach Performance Max inventory.',
+            ['campaign_id' => $campaign->id, 'excluded' => $outcome['excluded'], 'wasted_spend' => $wastedSpend, 'auto_resolved' => true],
+            CriticalAgentAlert::RECIPIENTS_CUSTOMERS,
+            $customer
+        );
+    }
+
+    /**
+     * Placements the customer has explicitly excluded via TargetingConfig.
+     *
+     * @return list<string>
+     */
+    private function configuredExclusions(Campaign $campaign): array
+    {
+        // TargetingConfig hangs off Strategy, not Campaign, so collect across
+        // every strategy on the campaign.
+        $configured = $campaign->strategies()
+            ->with('targetingConfig')
+            ->get()
+            ->flatMap(function ($strategy) {
+                $config = $strategy->targetingConfig;
+
+                return $config ? ($config->excluded_placements ?? []) : [];
+            });
+
+        return $configured
+            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->map(fn ($value) => trim($value))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     // ─── Audience signals ─────────────────────────────────────────────────────
@@ -1060,7 +1298,12 @@ PROMPT;
     private function alertCustomer(Campaign $campaign, array $finding, array &$results): void
     {
         $customer = $campaign->customer;
-        if (! $customer?->users) {
+
+        // `! $customer?->users` looked like an empty check but never fired: an
+        // empty Eloquent Collection is an object, and therefore truthy. So a
+        // customer with no users fell through, "delivered" an alert to nobody,
+        // and recorded it in alerts_sent as a success.
+        if (! $customer || $customer->users->isEmpty()) {
             return;
         }
 

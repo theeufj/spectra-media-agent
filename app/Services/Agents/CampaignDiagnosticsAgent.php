@@ -516,13 +516,19 @@ class CampaignDiagnosticsAgent
 
                 return [
                     'type' => 'display_only_traffic',
-                    'severity' => 'medium',
+                    // Raised from medium: this is budget going nowhere, not a
+                    // tuning opportunity. It ran undetected-by-anyone for three
+                    // weeks while 89% of impressions went to mobile app inventory.
+                    'severity' => 'high',
                     'platform' => 'google_ads',
                     'message' => number_format($perf['impressions']).' impressions with zero search-intent traffic — all clicks are from Display/Discovery, not Search',
                     'details' => ['impressions' => $perf['impressions'], 'clicks' => $perf['clicks'], 'asset_groups' => $assetGroups],
                     'can_auto_fix' => true,
-                    'auto_fix_action' => 'add_audience_signals',
-                    'recommended_action' => 'Add search-theme signals to guide PMax towards search-intent traffic; consider a companion Search campaign for sustained coverage',
+                    // Was add_audience_signals, which cannot fix this: signals
+                    // tell PMax who to target, not where to serve, so the finding
+                    // recurred 221 times while the "fix" reported success.
+                    'auto_fix_action' => 'exclude_wasteful_placements',
+                    'recommended_action' => 'Exclude non-converting app/display placements at account level; consider a companion Search campaign for sustained intent coverage',
                 ];
             }
         } catch (\Exception $e) {
