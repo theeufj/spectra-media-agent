@@ -41,6 +41,7 @@ class CreateVideoAdGroup extends BaseGoogleAdsService
         try {
             $adGroupServiceClient = $this->client->getAdGroupServiceClient();
             $request = new MutateAdGroupsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$adGroupOperation],
             ]);

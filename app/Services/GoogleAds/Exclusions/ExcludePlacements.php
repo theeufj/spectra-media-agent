@@ -98,6 +98,7 @@ class ExcludePlacements extends BaseGoogleAdsService
             try {
                 $this->getClient()->getCustomerNegativeCriterionServiceClient()
                     ->mutateCustomerNegativeCriteria(new MutateCustomerNegativeCriteriaRequest([
+                        'validate_only' => $this->dryRun,
                         'customer_id' => $customerId,
                         'operations' => [$operation],
                     ]));

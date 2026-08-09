@@ -40,6 +40,7 @@ class CreateStructuredSnippetAsset extends BaseGoogleAdsService
 
         try {
             $response = $this->client->getAssetServiceClient()->mutateAssets(new MutateAssetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]));

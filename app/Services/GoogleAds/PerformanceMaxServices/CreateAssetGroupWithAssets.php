@@ -62,6 +62,7 @@ class CreateAssetGroupWithAssets extends BaseGoogleAdsService
         try {
             $googleAdsServiceClient = $this->client->getGoogleAdsServiceClient();
             $response = $googleAdsServiceClient->mutate(new MutateGoogleAdsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'mutate_operations' => $operations,
             ]));

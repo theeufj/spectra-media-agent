@@ -172,6 +172,7 @@ class AddAdGroupCriterion extends BaseGoogleAdsService
         try {
             $adGroupCriterionServiceClient = $this->client->getAdGroupCriterionServiceClient();
             $request = new MutateAdGroupCriteriaRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$adGroupCriterionOperation],
             ]);

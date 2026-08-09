@@ -54,6 +54,7 @@ class GetAndLinkLocationAssets extends BaseGoogleAdsService
 
                     $this->client->getCampaignAssetServiceClient()->mutateCampaignAssets(
                         new MutateCampaignAssetsRequest([
+                            'validate_only' => $this->dryRun,
                             'customer_id' => $customerId,
                             'operations' => [$operation],
                         ])

@@ -74,6 +74,7 @@ class CreatePerformanceMaxCampaign extends BaseGoogleAdsService
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
             $response = $campaignServiceClient->mutateCampaigns(new MutateCampaignsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignOperation],
             ]));

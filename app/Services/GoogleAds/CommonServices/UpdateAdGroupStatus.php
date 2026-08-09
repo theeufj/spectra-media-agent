@@ -44,6 +44,7 @@ class UpdateAdGroupStatus extends BaseGoogleAdsService
 
             $this->client->getAdGroupServiceClient()->mutateAdGroups(
                 new MutateAdGroupsRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$operation],
                 ])

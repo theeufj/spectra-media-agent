@@ -44,6 +44,7 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
 
             $this->client->getCampaignServiceClient()->mutateCampaigns(
                 new MutateCampaignsRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$operation],
                 ])

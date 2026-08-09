@@ -85,6 +85,7 @@ class UpdateCampaignNetworkSettings extends BaseGoogleAdsService
 
             $client = $this->client->getCampaignServiceClient();
             $result = $client->mutateCampaigns(new MutateCampaignsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]));

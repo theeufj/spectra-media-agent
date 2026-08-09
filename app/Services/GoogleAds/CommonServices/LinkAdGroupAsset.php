@@ -39,6 +39,7 @@ class LinkAdGroupAsset extends BaseGoogleAdsService
         try {
             $adGroupAssetServiceClient = $this->client->getAdGroupAssetServiceClient();
             $request = new MutateAdGroupAssetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]);

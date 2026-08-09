@@ -66,7 +66,7 @@ class AddDSATarget extends BaseGoogleAdsService
 
         try {
             $response = $this->client->getAdGroupCriterionServiceClient()->mutateAdGroupCriteria(
-                new MutateAdGroupCriteriaRequest(['customer_id' => $customerId, 'operations' => [$operation]])
+                new MutateAdGroupCriteriaRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$operation]])
             );
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Added DSA target ({$mode}={$value}): {$resourceName}");

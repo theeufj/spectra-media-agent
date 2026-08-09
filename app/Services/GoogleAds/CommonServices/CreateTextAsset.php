@@ -36,6 +36,7 @@ class CreateTextAsset extends BaseGoogleAdsService
         try {
             $service = $this->client->getAssetServiceClient();
             $response = $service->mutateAssets(new MutateAssetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]));

@@ -59,6 +59,7 @@ class AddAudienceSignals extends BaseGoogleAdsService
         try {
             $response = $this->client->getAssetGroupSignalServiceClient()->mutateAssetGroupSignals(
                 new MutateAssetGroupSignalsRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => $operations,
                 ])
@@ -108,6 +109,7 @@ class AddAudienceSignals extends BaseGoogleAdsService
         try {
             $response = $this->client->getAssetGroupSignalServiceClient()->mutateAssetGroupSignals(
                 new MutateAssetGroupSignalsRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => $operations,
                 ])

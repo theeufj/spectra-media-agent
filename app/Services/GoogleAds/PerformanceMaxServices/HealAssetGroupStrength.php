@@ -261,7 +261,7 @@ class HealAssetGroupStrength extends BaseGoogleAdsService
         for ($attempt = 1; $attempt <= 3; $attempt++) {
             try {
                 $this->client->getAssetGroupAssetServiceClient()->mutateAssetGroupAssets(
-                    new MutateAssetGroupAssetsRequest(['customer_id' => $customerId, 'operations' => $ops])
+                    new MutateAssetGroupAssetsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => $ops])
                 );
 
                 return true;

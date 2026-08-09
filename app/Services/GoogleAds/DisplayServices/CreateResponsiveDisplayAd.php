@@ -116,6 +116,7 @@ class CreateResponsiveDisplayAd extends BaseGoogleAdsService
         try {
             $adGroupAdServiceClient = $this->client->getAdGroupAdServiceClient();
             $request = new MutateAdGroupAdsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$adGroupAdOperation],
             ]);

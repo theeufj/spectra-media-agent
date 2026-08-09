@@ -33,6 +33,7 @@ class LinkCampaignAsset extends BaseGoogleAdsService
         try {
             $campaignAssetServiceClient = $this->client->getCampaignAssetServiceClient();
             $response = $campaignAssetServiceClient->mutateCampaignAssets(new MutateCampaignAssetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]));
