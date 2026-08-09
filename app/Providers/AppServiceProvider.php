@@ -35,6 +35,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Routes agents to live or synthetic platform services per customer, so
+        // the real agents can be run against sandbox data without touching an
+        // ad account. Singleton so a sandbox run can retrieve the same recorder
+        // afterwards and report what the agent actually decided.
+        $this->app->singleton(
+            \App\Contracts\Ads\AdsServiceFactory::class,
+            \App\Services\Ads\CustomerRoutedAdsServiceFactory::class
+        );
+
         $this->app->singleton(StripeClient::class, function () {
             $secret = config('services.stripe.secret');
 

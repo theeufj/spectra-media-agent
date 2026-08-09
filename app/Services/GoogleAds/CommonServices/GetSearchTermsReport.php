@@ -2,10 +2,11 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Contracts\Ads\SearchTermSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
-class GetSearchTermsReport extends BaseGoogleAdsService
+class GetSearchTermsReport extends BaseGoogleAdsService implements SearchTermSource
 {
     /**
      * Get the Search Terms Report for a campaign.

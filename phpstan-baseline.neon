@@ -2089,24 +2089,6 @@ parameters:
 			path: app/Services/Agents/PreLaunchComplianceAgent.php
 
 		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\AddKeyword constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/SearchTermMiningAgent.php
-
-		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\AddNegativeKeyword constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/SearchTermMiningAgent.php
-
-		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetSearchTermsReport constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/SearchTermMiningAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$linkedin_ads_campaign_id\.$#'
 			identifier: property.notFound
 			count: 1

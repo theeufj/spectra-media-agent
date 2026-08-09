@@ -2,16 +2,17 @@
 
 namespace App\Services\Testing;
 
+use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
-use App\Models\Keyword;
 use App\Models\KeywordQualityScore;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
+use App\Services\Agents\SearchTermMiningAgent;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -404,52 +405,26 @@ class SandboxAgentRunner
 
     // ── Search Term Mining ─────────────────────────────────────────
 
+    /**
+     * Runs the REAL SearchTermMiningAgent against synthetic data.
+     *
+     * This method previously reimplemented the agent: it derived its own
+     * recommendations from KeywordQualityScore rows and recorded them as
+     * AgentActivity under the name "SearchTermMiningAgent". The real agent was
+     * never invoked, so a green sandbox run was evidence of nothing — worse, it
+     * manufactured activity records implying an agent had worked when it had
+     * never executed once in production.
+     *
+     * The agent now resolves its platform services through AdsServiceFactory,
+     * which returns synthetic ones for sandbox customers, so the genuine
+     * thresholds, match-type selection and safety rules all execute here.
+     */
     protected function runSearchTermMining(Campaign $campaign, Customer $customer): void
     {
         try {
-            $keywords = Keyword::where('campaign_id', $campaign->id)->get();
-            $qualityScores = KeywordQualityScore::where('customer_id', $customer->id)
-                ->where('campaign_google_id', $campaign->google_ads_campaign_id ?? $campaign->microsoft_ads_campaign_id)
-                ->where('recorded_at', '>=', now()->subDays(7))
-                ->get();
+            $result = app(SearchTermMiningAgent::class)->mine($campaign);
 
-            $avgQs = $qualityScores->avg('quality_score') ?? 0;
-            $lowQsKeywords = $qualityScores->where('quality_score', '<', 5)->unique('keyword_text');
-            $highQsKeywords = $qualityScores->where('quality_score', '>=', 7)->unique('keyword_text');
-
-            $negativeRecommendations = [];
-            foreach ($lowQsKeywords->take(5) as $kw) {
-                if ($kw->quality_score <= 3 && $kw->conversions == 0) {
-                    $negativeRecommendations[] = [
-                        'keyword' => $kw->keyword_text,
-                        'quality_score' => $kw->quality_score,
-                        'reason' => 'Low quality score with zero conversions — consider adding as negative keyword.',
-                    ];
-                }
-            }
-
-            $expansionRecommendations = [];
-            foreach ($highQsKeywords->take(5) as $kw) {
-                $expansionRecommendations[] = [
-                    'keyword' => $kw->keyword_text,
-                    'quality_score' => $kw->quality_score,
-                    'reason' => 'High quality score — consider creating exact match variant or dedicated ad group.',
-                ];
-            }
-
-            $result = [
-                'terms_analyzed' => $keywords->count(),
-                'average_quality_score' => round($avgQs, 1),
-                'low_qs_count' => $lowQsKeywords->count(),
-                'high_qs_count' => $highQsKeywords->count(),
-                'negative_keyword_recommendations' => $negativeRecommendations,
-                'expansion_recommendations' => $expansionRecommendations,
-                'summary' => $avgQs < 5
-                    ? "Average quality score is {$avgQs}/10 — ads and landing pages need significant improvement for these keywords."
-                    : ($avgQs < 7
-                        ? "Average quality score is {$avgQs}/10 — there's room to improve ad relevance and landing page quality."
-                        : "Average quality score is {$avgQs}/10 — keywords are well-optimized. Focus on scale."),
-            ];
+            $result['decisions'] = app(AdsServiceFactory::class)->recordedDecisions($customer);
 
             $key = "SearchTermMiningAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
@@ -457,7 +432,13 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'SearchTermMiningAgent',
                 'sandbox_search_mining',
-                "Sandbox: {$keywords->count()} terms, avg QS {$avgQs}/10 — {$lowQsKeywords->count()} low, {$highQsKeywords->count()} high for {$campaign->name}",
+                sprintf(
+                    'Sandbox: analysed %d search terms — %d keyword(s) promoted, %d negative(s) added for %s',
+                    $result['terms_analyzed'] ?? 0,
+                    count($result['keywords_added'] ?? []),
+                    count($result['negatives_added'] ?? []),
+                    $campaign->name
+                ),
                 $customer->id,
                 $campaign->id,
                 $result,
