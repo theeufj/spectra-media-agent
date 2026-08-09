@@ -66,11 +66,11 @@ class GoogleController extends Controller
             // platform — no click ID stored, no conversion reported.
             $clickIds = CaptureClickIds::all();
             if (! empty($clickIds)) {
-                $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'fbclid', 'msclid'])));
+                $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclid'])));
                 $user->refresh();
             }
 
-            if (! empty($user->gclid)) {
+            if ($user->hasGoogleClickId()) {
                 RecordSiteGoogleConversion::dispatch($user, 'signup');
             }
             if (! empty($user->fbclid)) {

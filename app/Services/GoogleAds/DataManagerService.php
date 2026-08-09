@@ -41,6 +41,9 @@ class DataManagerService
      * Ingest a single gclid-keyed offline conversion into a Google Ads
      * conversion action.
      *
+     * Convenience wrapper for the common case. Prefer ingestConversion() where
+     * the identifier may be gbraid or wbraid instead — on iOS it usually is.
+     *
      * @param  string  $operatingAccountId  Ad account id (digits only, no dashes)
      * @param  string  $conversionActionId  Numeric conversion action id (productDestinationId)
      * @param  string  $gclid  Google click id
@@ -62,8 +65,52 @@ class DataManagerService
         bool $validateOnly = false,
         string $eventSource = 'WEB',
     ): array {
+        return $this->ingestConversion(
+            operatingAccountId: $operatingAccountId,
+            conversionActionId: $conversionActionId,
+            adIdentifiers: ['gclid' => $gclid],
+            value: $value,
+            currency: $currency,
+            occurredAt: $occurredAt,
+            email: $email,
+            validateOnly: $validateOnly,
+            eventSource: $eventSource,
+        );
+    }
+
+    /**
+     * Ingest a conversion keyed by whichever Google click identifier we hold.
+     *
+     * Google sends gclid normally, but wbraid (web-to-web) or gbraid (app-to-web)
+     * where iOS ATT prevents it. They are mutually exclusive and equally valid
+     * for attribution — accepting only gclid discards every iOS conversion.
+     *
+     * @param  array<string, string>  $adIdentifiers  One of gclid / gbraid / wbraid
+     * @return array{success:bool, requestId?:string, error?:string}
+     */
+    public function ingestConversion(
+        string $operatingAccountId,
+        string $conversionActionId,
+        array $adIdentifiers,
+        float $value,
+        string $currency,
+        \DateTimeInterface $occurredAt,
+        ?string $email = null,
+        bool $validateOnly = false,
+        string $eventSource = 'WEB',
+    ): array {
         if (! $this->mcc) {
             return ['success' => false, 'error' => 'No active MCC account'];
+        }
+
+        $adIdentifiers = array_filter(
+            $adIdentifiers,
+            fn ($v, $k) => in_array($k, ['gclid', 'gbraid', 'wbraid'], true) && ! empty($v),
+            ARRAY_FILTER_USE_BOTH
+        );
+
+        if ($adIdentifiers === []) {
+            return ['success' => false, 'error' => 'No usable Google click identifier (gclid/gbraid/wbraid)'];
         }
 
         $token = $this->accessToken();
@@ -75,7 +122,7 @@ class DataManagerService
             'destinationReferences' => ['google_ads'],
             'eventSource' => $eventSource, // required: WEB | APP | IN_STORE | PHONE | ...
             'eventTimestamp' => Carbon::instance(Carbon::parse($occurredAt))->utc()->toIso8601ZuluString(),
-            'adIdentifiers' => ['gclid' => $gclid],
+            'adIdentifiers' => $adIdentifiers,
             'currency' => $currency,
             'conversionValue' => $value,
             // DMA consent. These are our own funnel conversions where the visitor

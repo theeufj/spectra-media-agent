@@ -81,7 +81,7 @@ class RegisteredUserController extends Controller
         // Capture any ad click IDs stored by CaptureClickIds middleware
         $clickIds = \App\Http\Middleware\CaptureClickIds::all();
         if (! empty($clickIds)) {
-            $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'fbclid', 'msclid'])));
+            $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclid'])));
         }
 
         // Server-side conversion signals — fire for each platform the user arrived from.
@@ -90,7 +90,7 @@ class RegisteredUserController extends Controller
         // integrations). This previously relied on a client-side gtag signup event
         // that no page ever fired, so Google saw none of these registrations.
         $freshUser = $user->fresh();
-        if (! empty($freshUser->gclid)) {
+        if ($freshUser->hasGoogleClickId()) {
             RecordSiteGoogleConversion::dispatch($freshUser, 'signup');
         }
         if (! empty($freshUser->fbclid)) {

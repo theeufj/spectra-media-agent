@@ -58,7 +58,11 @@ class RecordSiteGoogleConversion implements ShouldQueue
 
     public function handle(DataManagerService $dataManager): void
     {
-        if (! $this->user->gclid) {
+        // gclid, or gbraid/wbraid where iOS ATT replaced it. Checking gclid alone
+        // silently dropped every iOS conversion — and 99% of clicks here are
+        // mobile or tablet.
+        $adIdentifiers = $this->user->googleAdIdentifiers();
+        if (! $adIdentifiers) {
             return;
         }
 
@@ -88,10 +92,10 @@ class RecordSiteGoogleConversion implements ShouldQueue
 
         $config = config("conversions.events.{$this->event}", []);
 
-        $result = $dataManager->ingestGclidConversion(
+        $result = $dataManager->ingestConversion(
             operatingAccountId: (string) $operatingAccountId,
             conversionActionId: (string) $conversionActionId,
-            gclid: $this->user->gclid,
+            adIdentifiers: $adIdentifiers,
             value: (float) ($config['value'] ?? 0),
             currency: $config['currency'] ?? 'USD',
             // The click, not "now" — Google attributes on the conversion
@@ -100,17 +104,22 @@ class RecordSiteGoogleConversion implements ShouldQueue
             email: $this->user->email,
         );
 
+        $idType = array_key_first($adIdentifiers);
+
         SpectraConversionEvent::record($this->event, $this->user->id, [
-            'gclid' => $this->user->gclid,
+            // Column is named gclid for history; it holds whichever Google click
+            // identifier was actually used, and $idType records which.
+            'gclid' => $adIdentifiers[$idType],
             'mode' => 'server_google',
             'uploaded' => $result['success'],
         ]);
 
         if ($result['success']) {
-            Log::info("RecordSiteGoogleConversion: uploaded '{$this->event}' for user {$this->user->id} (request ".($result['requestId'] ?? 'n/a').')');
+            Log::info("RecordSiteGoogleConversion: uploaded '{$this->event}' for user {$this->user->id} via {$idType} (request ".($result['requestId'] ?? 'n/a').')');
         } else {
             Log::warning("RecordSiteGoogleConversion: upload failed for '{$this->event}': ".($result['error'] ?? 'unknown'), [
                 'user_id' => $this->user->id,
+                'identifier' => $idType,
             ]);
         }
     }

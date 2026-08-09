@@ -11,13 +11,19 @@ use Illuminate\Http\Request;
  *
  * Supported click IDs:
  *   gclid  — Google Ads
+ *   gbraid — Google Ads, app-to-web on iOS (no gclid available)
+ *   wbraid — Google Ads, web-to-web on iOS (no gclid available)
  *   fbclid — Meta / Facebook Ads
  *   msclid — Microsoft Ads
  *   ttclid — TikTok Ads
+ *
+ * gbraid/wbraid are not optional extras: where ATT applies, Google sends one of
+ * them *instead of* gclid. Capturing only gclid silently discards that traffic,
+ * and on this account 99% of clicks are mobile or tablet.
  */
 class CaptureClickIds
 {
-    private const PARAMS = ['gclid', 'fbclid', 'msclid', 'ttclid'];
+    private const PARAMS = ['gclid', 'gbraid', 'wbraid', 'fbclid', 'msclid', 'ttclid'];
 
     private const SESSION_KEY = 'click_ids';
 
