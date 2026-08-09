@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\RecordSiteFacebookConversion;
+use App\Jobs\RecordSiteGoogleConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Models\Customer;
 use App\Models\User;
@@ -84,11 +85,14 @@ class RegisteredUserController extends Controller
         }
 
         // Server-side conversion signals — fire for each platform the user arrived from.
-        // NOTE: Google signup is tracked client-side via gtag, not here. Google has
-        // restricted the legacy ConversionUploadService.UploadClickConversions endpoint
-        // to existing users (new integrations must use the Data Manager API), so
-        // server-side click uploads are rejected for this account.
+        // Google runs through the Data Manager API (the legacy
+        // ConversionUploadService.UploadClickConversions endpoint is closed to new
+        // integrations). This previously relied on a client-side gtag signup event
+        // that no page ever fired, so Google saw none of these registrations.
         $freshUser = $user->fresh();
+        if (! empty($freshUser->gclid)) {
+            RecordSiteGoogleConversion::dispatch($freshUser, 'signup');
+        }
         if (! empty($freshUser->fbclid)) {
             RecordSiteFacebookConversion::dispatch($freshUser, 'signup');
         }

@@ -39,13 +39,24 @@ class ProvisionConversionActions extends Command
     protected $description = 'Provision Google Ads conversion actions for sitetospend.com and store labels in settings.';
 
     private array $actions = [
-        // Client-side (gtag/WEBPAGE) conversion fired after email verification.
-        // Not uploaded server-side: Google restricted the legacy click-upload
-        // endpoint (ConversionUploadService) to existing users; new server-side
-        // uploads require the Data Manager API.
+        // WEBPAGE twin of signup_import. Kept provisioned so the tag exists, but
+        // nothing fires it: registration completes on the server, where the
+        // gclid is known for certain and no ad blocker can intervene. Signups
+        // are uploaded to 'signup_import' instead. Leaving BOTH counted as
+        // primary would double-count every registration.
         'signup' => [
             'name' => 'Spectra — Signup',
             'type' => ConversionActionType::WEBPAGE,
+            'category' => ConversionActionCategory::SIGNUP,
+            'value' => 99.0,
+        ],
+        // The real signup conversion. UPLOAD_CLICKS because it arrives via the
+        // Data Manager API (the legacy ConversionUploadService click-upload
+        // endpoint is closed to new integrations). Dispatched by
+        // RecordSiteGoogleConversion on registration.
+        'signup_import' => [
+            'name' => 'Spectra — Signup (Import)',
+            'type' => ConversionActionType::UPLOAD_CLICKS,
             'category' => ConversionActionCategory::SIGNUP,
             'value' => 99.0,
         ],
@@ -116,12 +127,13 @@ class ProvisionConversionActions extends Command
             Setting::set($settingKey, $resourceName);
 
             if ($def['type'] === ConversionActionType::WEBPAGE) {
-                $label = $this->extractLabel($client, $customerId, $resourceName);
-                if ($label) {
-                    Setting::set("conversion_label.{$event}", $label);
-                    $this->line("  <info>done</info>      {$event} → <comment>{$label}</comment>");
+                $target = $this->extractTarget($client, $customerId, $resourceName);
+                if ($target) {
+                    Setting::set("conversion_label.{$event}", $target['label']);
+                    Setting::set("conversion_aw_id.{$event}", $target['aw_id']);
+                    $this->line("  <info>done</info>      {$event} → <comment>{$target['aw_id']}/{$target['label']}</comment>");
                 } else {
-                    $this->warn("  done      {$event} → label extraction failed — tag snippet may not be ready yet, retry in a minute");
+                    $this->warn("  done      {$event} → tag extraction failed — snippet may not be ready yet, retry in a minute");
                 }
             } else {
                 $this->line("  <info>done</info>      {$event} → server-side only ({$resourceName})");
@@ -190,7 +202,17 @@ class ProvisionConversionActions extends Command
         }
     }
 
-    private function extractLabel($client, string $customerId, string $resourceName): ?string
+    /**
+     * Pull BOTH halves of the tag's send_to ("AW-XXXXXXXXX/label").
+     *
+     * This used to return only the label and throw the account id away, leaving
+     * the frontend to pair it with a hardcoded constant. When that constant did
+     * not match the account owning the label, gtag fired but Google discarded
+     * every conversion — with no error anywhere to show for it.
+     *
+     * @return array{aw_id: string, label: string}|null
+     */
+    private function extractTarget($client, string $customerId, string $resourceName): ?array
     {
         try {
             $response = $client->getGoogleAdsServiceClient()->search(
@@ -207,13 +229,13 @@ class ProvisionConversionActions extends Command
                     if ($snippet->getType() !== TrackingCodeType::WEBPAGE) {
                         continue;
                     }
-                    if (preg_match("/'send_to':\s*'[^\/]+\/([^']+)'/", $snippet->getEventSnippet(), $m)) {
-                        return $m[1];
+                    if (preg_match("/'send_to':\s*'([^\/']+)\/([^']+)'/", $snippet->getEventSnippet(), $m)) {
+                        return ['aw_id' => $m[1], 'label' => $m[2]];
                     }
                 }
             }
         } catch (\Exception $e) {
-            $this->warn('    Label extraction error: '.$e->getMessage());
+            $this->warn('    Tag extraction error: '.$e->getMessage());
         }
 
         return null;

@@ -68,13 +68,12 @@ class HandleInertiaRequests extends Middleware
             'impersonation' => \App\Http\Controllers\Admin\ImpersonationController::getImpersonationInfo(),
             'turnstileSiteKey' => config('services.cloudflare.turnstile_site_key'),
             'tenant' => $request->attributes->get('tenant', config('tenants.'.config('tenants.default'))),
-            // Client-side (gtag) conversion labels served to the frontend.
-            'conversionLabels' => fn () => [
-                'signup' => \App\Models\Setting::get('conversion_label.signup', config('conversions.events.signup.label')),
-                'try_now' => \App\Models\Setting::get('conversion_label.try_now'),
-                'pricing_visit' => \App\Models\Setting::get('conversion_label.pricing_visit'),
-                'sandbox_launched' => \App\Models\Setting::get('conversion_label.sandbox_launched'),
-            ],
+            // Client-side (gtag) conversion targets served to the frontend.
+            // Ships the complete "AW-XXXX/label" send_to rather than the bare
+            // label: the frontend used to pair these labels with a hardcoded
+            // account id that did not own them, so every conversion was
+            // silently discarded by Google.
+            'conversionTargets' => fn () => \App\Support\ConversionTargets::forClient(),
         ];
     }
 }
