@@ -3,6 +3,10 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Middleware\CaptureClickIds;
+use App\Jobs\RecordSiteFacebookConversion;
+use App\Jobs\RecordSiteGoogleConversion;
+use App\Jobs\RecordSiteMicrosoftConversion;
 use App\Mail\WelcomeEmail;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -56,6 +60,26 @@ class GoogleController extends Controller
         Auth::login($user, true);
 
         if ($user->wasRecentlyCreated) {
+            // Persist the click IDs captured on the landing page and report the
+            // signup, exactly as the email/password path does. Without this,
+            // anyone who chose "Continue with Google" was invisible to every ad
+            // platform — no click ID stored, no conversion reported.
+            $clickIds = CaptureClickIds::all();
+            if (! empty($clickIds)) {
+                $user->update(array_intersect_key($clickIds, array_flip(['gclid', 'fbclid', 'msclid'])));
+                $user->refresh();
+            }
+
+            if (! empty($user->gclid)) {
+                RecordSiteGoogleConversion::dispatch($user, 'signup');
+            }
+            if (! empty($user->fbclid)) {
+                RecordSiteFacebookConversion::dispatch($user, 'signup');
+            }
+            if (! empty($user->msclid)) {
+                RecordSiteMicrosoftConversion::dispatch($user, 'signup');
+            }
+
             Mail::to($user->email)->send(new WelcomeEmail($user->name));
             Mail::raw(
                 "New registration on SiteToSpend (Google OAuth)\n\nName: {$user->name}\nEmail: {$user->email}\nTime: ".now()->format('d M Y H:i T'),

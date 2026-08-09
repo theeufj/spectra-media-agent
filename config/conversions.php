@@ -7,7 +7,15 @@ return [
      */
     'google_ads_customer_id' => env('SPECTRA_GOOGLE_ADS_CUSTOMER_ID'),
 
-    'aw_id' => 'AW-16797144138',
+    /*
+     * Default Google Ads conversion tracking ID. This is NOT the same number as
+     * google_ads_customer_id above — it is the AW- id that owns the conversion
+     * labels, and gtag drops any conversion whose account and label disagree.
+     *
+     * Treated as a fallback only: conversions:provision reads the real value out
+     * of each action's tag snippet into conversion_aw_id.{event}, which wins.
+     */
+    'aw_id' => 'AW-18115663500',
 
     /*
      * Conversion event definitions.
@@ -30,14 +38,22 @@ return [
      *   5. For server mode: dispatch RecordSiteConversion::dispatch($customer, 'event_name').
      */
     'events' => [
+        // Uploaded server-side by RecordSiteGoogleConversion on registration, so
+        // it carries no gtag label. The WEBPAGE twin ("Spectra — Signup") stays
+        // provisioned but unfired — counting both would double every signup.
         'signup' => [
-            // Sign-up conversion lives in a separate Google Ads account (AW-18115663500),
-            // so it carries a per-event aw_id override rather than the global one.
-            'aw_id' => 'AW-18115663500',
-            'label' => 'P4yoCNWvnNMcEIytnL5D',
+            'label' => null,
             'value' => 99.00,
             'currency' => 'USD',
-            'mode' => 'client',
+            'mode' => 'server',
+        ],
+        // Target of the signup upload; see RecordSiteGoogleConversion::UPLOAD_ACTIONS.
+        'signup_import' => [
+            'label' => null,
+            'value' => 99.00,
+            'currency' => 'USD',
+            'mode' => 'server',
+            'resource_name' => null,
         ],
         'try_now' => [
             'label' => null,

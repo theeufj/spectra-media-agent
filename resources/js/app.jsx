@@ -27,7 +27,7 @@ createInertiaApp({
             import.meta.glob('./Pages/**/*.jsx'),
         ),
     setup({ el, App, props }) {
-        initConversions(props.initialPage.props.conversionLabels);
+        initConversions(props.initialPage.props.conversionTargets);
         const root = createRoot(el);
 
         root.render(

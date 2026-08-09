@@ -308,8 +308,14 @@ Route::post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
         return response()->json(['ok' => false], 422);
     }
     $user = $r->user();
+    // Click IDs come from the session first, then the user record. These events
+    // fire mostly for anonymous visitors (pricing_visit, try_now), so reading
+    // only $user->gclid stored null on every one of them and left us unable to
+    // tell ad-driven conversions from organic ones.
+    $clickIds = \App\Http\Middleware\CaptureClickIds::all();
     \App\Models\SpectraConversionEvent::record($event, $user?->id, [
-        'gclid' => $user?->gclid,
+        'gclid' => $clickIds['gclid'] ?? $user?->gclid,
+        'fbclid' => $clickIds['fbclid'] ?? $user?->fbclid,
     ]);
 
     return response()->json(['ok' => true]);
