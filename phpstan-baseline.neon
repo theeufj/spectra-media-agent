@@ -1735,18 +1735,6 @@ parameters:
 			path: app/Services/Agents/BidAdjustmentAgent.php
 
 		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/BudgetIntelligenceAgent.php
-
-		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\UpdateCampaignBudget constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 2
-			path: app/Services/Agents/BudgetIntelligenceAgent.php
-
-		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.expr
 			count: 1

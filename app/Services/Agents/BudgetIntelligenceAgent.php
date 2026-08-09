@@ -2,6 +2,7 @@
 
 namespace App\Services\Agents;
 
+use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Campaign;
 use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
@@ -9,8 +10,6 @@ use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
 use App\Services\FacebookAds\InsightService as FacebookInsightService;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
-use App\Services\GoogleAds\CommonServices\UpdateCampaignBudget;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -23,8 +22,17 @@ class BudgetIntelligenceAgent
 
     protected ?array $learnedDayMultipliers = null;
 
-    public function __construct()
+    /**
+     * Declared rather than constructor-promoted, with a default: existing tests
+     * build this agent through partial mocks that bypass the constructor, and a
+     * promoted property would then be uninitialised rather than null.
+     */
+    private ?AdsServiceFactory $ads = null;
+
+    public function __construct(?AdsServiceFactory $ads = null)
     {
+        $this->ads = $ads;
+
         $this->config = config('budget_rules', []);
     }
 
@@ -34,6 +42,15 @@ class BudgetIntelligenceAgent
      *
      * @return array Results of budget actions
      */
+    /**
+     * Platform services for this run — synthetic for sandbox customers.
+     * Resolved on first use so bypassed constructors still work.
+     */
+    private function ads(): AdsServiceFactory
+    {
+        return $this->ads ??= app(AdsServiceFactory::class);
+    }
+
     public function optimize(Campaign $campaign): array
     {
         $results = [
@@ -189,8 +206,8 @@ class BudgetIntelligenceAgent
         $campaignResourceName = $campaign->googleAdsResourceName();
 
         try {
-            $updateBudget = new UpdateCampaignBudget($customer, true);
-            $success = ($updateBudget)($customerId, $campaignResourceName, $adjustedBudgetMicros);
+            $success = $this->ads()->budgets($customer)
+                ->updateDailyBudget($customerId, $campaignResourceName, $adjustedBudgetMicros);
 
             if ($success) {
                 $results['adjustments'][] = [
@@ -442,8 +459,8 @@ class BudgetIntelligenceAgent
                 $resourceName = $campaign->googleAdsResourceName();
 
                 try {
-                    $getPerformance = new GetCampaignPerformance($customer, true);
-                    $metrics = ($getPerformance)($customerId, $resourceName, 'LAST_30_DAYS');
+                    $getPerformance = $this->ads()->campaignPerformance($customer);
+                    $metrics = $getPerformance($customerId, $resourceName, 'LAST_30_DAYS');
                 } catch (\Exception $e) {
                     Log::warning('BudgetIntelligenceAgent: Could not analyze Google campaign', [
                         'campaign_id' => $campaign->id,
@@ -760,9 +777,9 @@ class BudgetIntelligenceAgent
         if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
             $customerId = $customer->google_ads_customer_id;
             $resourceName = $campaign->googleAdsResourceName();
-            $updateBudget = new UpdateCampaignBudget($customer, true);
 
-            return (bool) ($updateBudget)($customerId, $resourceName, $newDailyBudget * 1000000);
+            return $this->ads()->budgets($customer)
+                ->updateDailyBudget($customerId, $resourceName, $newDailyBudget * 1000000);
         }
 
         if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {

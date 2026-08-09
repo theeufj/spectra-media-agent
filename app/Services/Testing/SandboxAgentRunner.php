@@ -5,13 +5,13 @@ namespace App\Services\Testing;
 use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
-use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\KeywordQualityScore;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
+use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\SearchTermMiningAgent;
 use Illuminate\Support\Facades\Log;
 
@@ -334,65 +334,31 @@ class SandboxAgentRunner
 
     // ── Budget Intelligence ────────────────────────────────────────
 
+    /**
+     * Runs the REAL BudgetIntelligenceAgent against synthetic data.
+     *
+     * Reads the seeded GoogleAdsPerformanceData rows through the sandbox
+     * performance source and records any budget change instead of sending it,
+     * so pacing and reallocation decisions are visible without real money
+     * being able to move.
+     */
     protected function runBudgetIntelligence(Campaign $campaign, Customer $customer, array $perf): void
     {
         try {
-            $hourlyData = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
-                ->where('date', '>=', now()->subDays(7)->toDateString())
-                ->orderBy('date')
-                ->orderBy('hour')
-                ->get();
-
-            // Find peak and trough hours
-            $hourlyAgg = $hourlyData->groupBy('hour')
-                ->map(fn ($rows) => [
-                    'avg_spend' => $rows->avg('spend'),
-                    'avg_conversions' => $rows->avg('conversions'),
-                    'avg_cpa' => $rows->sum('spend') > 0 && $rows->sum('conversions') > 0
-                        ? round($rows->sum('spend') / $rows->sum('conversions'), 2) : null,
-                ])->sortByDesc('avg_conversions');
-
-            $peakHours = $hourlyAgg->take(4)->keys()->toArray();
-            $troughHours = $hourlyAgg->sortBy('avg_conversions')->take(4)->keys()->toArray();
-
-            $utilization = $perf['budget_utilization'];
-
-            $recommendedAction = match (true) {
-                $utilization > 120 => 'reduce_budget',
-                $utilization > 100 => 'reallocate_to_peaks',
-                $utilization < 60 => 'increase_budget',
-                default => 'maintain',
-            };
-
-            $multiplierSuggested = match ($recommendedAction) {
-                'reduce_budget' => 0.85,
-                'increase_budget' => 1.20,
-                default => 1.00,
-            };
-
-            $result = [
-                'current_daily_budget' => $campaign->daily_budget,
-                'actual_daily_spend' => round($perf['cost'] / 30, 2),
-                'budget_utilization' => round($utilization).'%',
-                'recommended_action' => $recommendedAction,
-                'multiplier_suggested' => $multiplierSuggested,
-                'peak_hours' => $peakHours,
-                'trough_hours' => $troughHours,
-                'recommendation' => match ($recommendedAction) {
-                    'reduce_budget' => "Overspending at {$utilization}%. Reduce bids during off-peak hours (".implode(', ', $troughHours).'h) and concentrate budget on peak conversion hours ('.implode(', ', $peakHours).'h).',
-                    'increase_budget' => "Only using {$utilization}% of budget. Increase daily budget or broaden targeting to capture more impressions during peak hours.",
-                    'reallocate_to_peaks' => 'Slightly over budget. Use ad scheduling to shift spend from low-conversion hours to peak hours ('.implode(', ', $peakHours).'h).',
-                    default => "Budget utilization is healthy at {$utilization}%. Continue monitoring hourly performance.",
-                },
-            ];
+            $result = app(BudgetIntelligenceAgent::class)->optimize($campaign);
+            $result['budget_changes'] = app(AdsServiceFactory::class)->recordedBudgetChanges($customer);
 
             $key = "BudgetIntelligenceAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
 
             AgentActivity::record(
                 'BudgetIntelligenceAgent',
-                'sandbox_budget_optimization',
-                "Sandbox: Budget {$recommendedAction} (×{$multiplierSuggested}) for {$campaign->name} — {$utilization}% utilization",
+                'sandbox_budget_intelligence',
+                sprintf(
+                    'Sandbox: budget analysis for %s — %d change(s) proposed',
+                    $campaign->name,
+                    count($result['budget_changes'])
+                ),
                 $customer->id,
                 $campaign->id,
                 $result,

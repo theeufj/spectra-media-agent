@@ -13,12 +13,15 @@ class SearchTermMiningAgent
 {
     protected array $config;
 
-    public function __construct(private ?AdsServiceFactory $ads = null)
+    /**
+     * Declared rather than promoted, with a default, so partial mocks that
+     * bypass the constructor leave it null instead of uninitialised.
+     */
+    private ?AdsServiceFactory $ads = null;
+
+    public function __construct(?AdsServiceFactory $ads = null)
     {
-        // Resolved rather than constructed so the sandbox can substitute
-        // synthetic data sources; see AdsServiceFactory. Nullable default keeps
-        // the ~dozen existing `new SearchTermMiningAgent` call sites working.
-        $this->ads ??= app(AdsServiceFactory::class);
+        $this->ads = $ads;
 
         // Merge legacy budget_rules config with new optimization config (optimization takes precedence)
         $this->config = array_merge(
@@ -32,6 +35,14 @@ class SearchTermMiningAgent
      *
      * @return array Results of mining actions
      */
+    /**
+     * Platform services for this run — synthetic for sandbox customers.
+     */
+    private function ads(): AdsServiceFactory
+    {
+        return $this->ads ??= app(AdsServiceFactory::class);
+    }
+
     public function mine(Campaign $campaign): array
     {
         $results = [
@@ -67,7 +78,7 @@ class SearchTermMiningAgent
         $campaignResourceName = $campaign->googleAdsResourceName();
 
         try {
-            $getSearchTerms = $this->ads->searchTerms($customer);
+            $getSearchTerms = $this->ads()->searchTerms($customer);
             $searchTerms = $getSearchTerms($customerId, $campaignResourceName, 'LAST_30_DAYS');
 
             $results['terms_analyzed'] += count($searchTerms);
@@ -218,7 +229,7 @@ class SearchTermMiningAgent
     protected function addAsKeyword(Customer $customer, string $customerId, string $adGroupResourceName, string $keyword, int $matchType, array &$results): void
     {
         try {
-            $resourceName = $this->ads->keywords($customer)
+            $resourceName = $this->ads()->keywords($customer)
                 ->addKeyword($customerId, $adGroupResourceName, $keyword, $matchType);
 
             $matchTypeName = match ($matchType) {
@@ -337,7 +348,7 @@ class SearchTermMiningAgent
         };
 
         try {
-            $resourceName = $this->ads->keywords($customer)
+            $resourceName = $this->ads()->keywords($customer)
                 ->addNegativeKeyword($customerId, $campaignResourceName, $keyword, $matchType);
 
             if ($resourceName) {

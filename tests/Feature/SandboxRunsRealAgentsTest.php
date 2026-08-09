@@ -5,8 +5,11 @@ namespace Tests\Feature;
 use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\GoogleAdsPerformanceData;
 use App\Services\Agents\SearchTermMiningAgent;
+use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
+use App\Services\GoogleAds\CommonServices\GoogleBudgetMutator;
 use App\Services\GoogleAds\CommonServices\GoogleKeywordMutator;
 use App\Services\Testing\Sandbox\SandboxKeywordMutator;
 use App\Services\Testing\Sandbox\SandboxSearchTermSource;
@@ -119,6 +122,69 @@ class SandboxRunsRealAgentsTest extends TestCase
             $this->assertContains($decision['action'], ['add_keyword', 'add_negative']);
             $this->assertNotEmpty($decision['keyword']);
         }
+    }
+
+    public function test_budget_agent_reads_seeded_performance_and_records_changes(): void
+    {
+        $campaign = $this->sandboxCampaign();
+
+        // Seed the performance the sandbox source aggregates. The agent sees
+        // real rows, not invented numbers, so a scenario configured to look
+        // like heavy spend with no return actually presents that way.
+        foreach (range(1, 14) as $day) {
+            GoogleAdsPerformanceData::create([
+                'campaign_id' => $campaign->id,
+                'date' => now()->subDays($day)->toDateString(),
+                'impressions' => 1000,
+                'clicks' => 40,
+                'cost' => 50.00,
+                'conversions' => 0,
+                'ctr' => 0.04,
+                'cpc' => 1.25,
+                'cpa' => 0,
+            ]);
+        }
+
+        $metrics = app(AdsServiceFactory::class)
+            ->campaignPerformance($campaign->customer)
+            ->__invoke('1234567890', $campaign->google_ads_campaign_id, 'LAST_30_DAYS');
+
+        $this->assertSame(14000, $metrics['impressions']);
+        $this->assertSame(560, $metrics['clicks']);
+        // Derived, not summed — averaging daily averages would be wrong, and
+        // these are the exact fields agents threshold on.
+        $this->assertEqualsWithDelta(0.04, $metrics['ctr'], 0.0001);
+        $this->assertEqualsWithDelta(1.25, $metrics['average_cpc'], 0.0001);
+    }
+
+    public function test_a_sandbox_budget_change_never_reaches_the_platform(): void
+    {
+        $campaign = $this->sandboxCampaign();
+        $factory = app(AdsServiceFactory::class);
+
+        $applied = $factory->budgets($campaign->customer)
+            ->updateDailyBudget('1234567890', $campaign->google_ads_campaign_id, 25_000_000);
+
+        // Reports success so the agent's success path runs exactly as it would
+        // live, while nothing was sent and no real money can move.
+        $this->assertTrue($applied);
+
+        $recorded = $factory->recordedBudgetChanges($campaign->customer);
+        $this->assertCount(1, $recorded);
+        $this->assertSame(25_000_000.0, (float) $recorded[0]['daily_budget_micros']);
+    }
+
+    public function test_live_customers_get_live_budget_and_performance_services(): void
+    {
+        $customer = Customer::factory()->create([
+            'is_sandbox' => false,
+            'google_ads_customer_id' => '1234567890',
+        ]);
+        $factory = app(AdsServiceFactory::class);
+
+        $this->assertInstanceOf(GetCampaignPerformance::class, $factory->campaignPerformance($customer));
+        $this->assertInstanceOf(GoogleBudgetMutator::class, $factory->budgets($customer));
+        $this->assertSame([], $factory->recordedBudgetChanges($customer));
     }
 
     public function test_live_customers_record_no_decisions(): void

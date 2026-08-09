@@ -19,6 +19,10 @@ interface AdsServiceFactory
 
     public function keywords(Customer $customer): KeywordMutator;
 
+    public function campaignPerformance(Customer $customer): CampaignPerformanceSource;
+
+    public function budgets(Customer $customer): BudgetMutator;
+
     /**
      * Keyword changes the agent decided on but did not send, for sandbox runs.
      * Always empty for live customers, where changes are actually applied.
@@ -26,4 +30,11 @@ interface AdsServiceFactory
      * @return list<array{action: string, keyword: string, match_type: int, target: string}>
      */
     public function recordedDecisions(Customer $customer): array;
+
+    /**
+     * Budget changes decided but not sent, for sandbox runs. Empty when live.
+     *
+     * @return list<array{campaign: string, daily_budget_micros: float}>
+     */
+    public function recordedBudgetChanges(Customer $customer): array;
 }
