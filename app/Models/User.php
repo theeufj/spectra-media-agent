@@ -26,6 +26,8 @@ class User extends Authenticatable implements MustVerifyEmail
         'customer_id',
         'notification_preferences',
         'gclid',
+        'gbraid',
+        'wbraid',
         'fbclid',
         'msclid',
         'demo_url',
@@ -72,6 +74,47 @@ class User extends Authenticatable implements MustVerifyEmail
     /**
      * The customers that the user belongs to.
      */
+    /**
+     * The Google Ads click identifier this user arrived with, if any.
+     *
+     * Google sends exactly one of these per click: gclid normally, or wbraid /
+     * gbraid where iOS ATT prevents it. They are mutually exclusive, so the
+     * first one present is the one to use — and code that checks only gclid
+     * silently drops every iOS visitor.
+     *
+     * Shaped for the Data Manager API's adIdentifiers field.
+     *
+     * @return array{gclid: string}|array{gbraid: string}|array{wbraid: string}|null
+     */
+    public function googleAdIdentifiers(): ?array
+    {
+        foreach (['gclid', 'gbraid', 'wbraid'] as $type) {
+            if (! empty($this->{$type})) {
+                return [$type => $this->{$type}];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Did this user arrive from a Google Ad by any identifier?
+     */
+    public function hasGoogleClickId(): bool
+    {
+        return $this->googleAdIdentifiers() !== null;
+    }
+
+    /**
+     * The raw value of that identifier, whichever type it is.
+     */
+    public function googleClickId(): ?string
+    {
+        $identifiers = $this->googleAdIdentifiers();
+
+        return $identifiers ? reset($identifiers) : null;
+    }
+
     public function customers()
     {
         return $this->belongsToMany(Customer::class)->withPivot('role');

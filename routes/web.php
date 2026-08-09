@@ -313,8 +313,10 @@ Route::post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
     // only $user->gclid stored null on every one of them and left us unable to
     // tell ad-driven conversions from organic ones.
     $clickIds = \App\Http\Middleware\CaptureClickIds::all();
+    // Any Google identifier counts — on iOS it is gbraid/wbraid, not gclid.
+    $googleClickId = $clickIds['gclid'] ?? $clickIds['gbraid'] ?? $clickIds['wbraid'] ?? null;
     \App\Models\SpectraConversionEvent::record($event, $user?->id, [
-        'gclid' => $clickIds['gclid'] ?? $user?->gclid,
+        'gclid' => $googleClickId ?? $user?->googleClickId(),
         'fbclid' => $clickIds['fbclid'] ?? $user?->fbclid,
     ]);
 
