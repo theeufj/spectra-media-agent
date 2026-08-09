@@ -2,10 +2,10 @@
 
 namespace App\Services\Agents\Optimization;
 
+use App\Contracts\Ads\CampaignPerformanceSource;
 use App\Models\Campaign;
 use App\Models\GoogleAdsPerformanceData;
 use App\Services\FacebookAds\InsightService;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -14,8 +14,13 @@ use Illuminate\Support\Facades\Log;
  */
 class MetricsFetcher
 {
+    /**
+     * Typed to the contract rather than GetCampaignPerformance so a sandbox run
+     * can supply synthetic performance without touching the API. The live
+     * binding still resolves to GetCampaignPerformance.
+     */
     public function __construct(
-        private GetCampaignPerformance $getGooglePerformance
+        private CampaignPerformanceSource $getGooglePerformance
     ) {}
 
     public function fetchCurrent(Campaign $campaign): ?array

@@ -12,7 +12,13 @@ use App\Models\KeywordQualityScore;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Services\Agents\BudgetIntelligenceAgent;
+use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\Optimization\MetricsFetcher;
+use App\Services\Agents\Optimization\RecommendationApplier;
+use App\Services\Agents\Optimization\RecommendationScorer;
 use App\Services\Agents\SearchTermMiningAgent;
+use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
+use App\Services\Testing\Sandbox\SandboxGeminiService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -227,93 +233,29 @@ class SandboxAgentRunner
 
     // ── Optimization ───────────────────────────────────────────────
 
+    /**
+     * Runs the REAL CampaignOptimizationAgent against synthetic data.
+     *
+     * Dependencies are passed explicitly rather than rebinding the container:
+     * a global override can leak past the run that set it, and this used to be
+     * a reimplementation precisely because nobody wanted that risk. Building the
+     * agent by hand keeps the substitution scoped to this call.
+     *
+     * Gemini is stubbed for determinism — a real model call would return
+     * something different every run, so a changed sandbox result would tell you
+     * nothing about whether behaviour changed.
+     */
     protected function runOptimization(Campaign $campaign, Customer $customer, array $perf, string $platform): void
     {
         try {
-            $recommendations = [];
-            $score = 70; // baseline
+            $agent = new CampaignOptimizationAgent(
+                new SandboxGeminiService,
+                new MetricsFetcher(new SandboxCampaignPerformanceSource($customer)),
+                app(RecommendationScorer::class),
+                app(RecommendationApplier::class),
+            );
 
-            // CTR analysis
-            $avgCtr = match ($platform) {
-                'facebook' => 0.02,
-                'linkedin' => 0.005,
-                default => 0.05,
-            };
-            if ($perf['ctr'] < $avgCtr * 0.6) {
-                $recommendations[] = [
-                    'area' => 'ad_relevance',
-                    'priority' => 'high',
-                    'action' => 'Rewrite ad copy — CTR is '.round($perf['ctr'] * 100, 2).'% vs industry avg '.round($avgCtr * 100, 1).'%.',
-                    'expected_impact' => '+20-40% CTR improvement',
-                ];
-                $score -= 15;
-            }
-
-            // CPA analysis
-            if ($perf['cpa'] > 80) {
-                $recommendations[] = [
-                    'area' => 'conversion_efficiency',
-                    'priority' => 'high',
-                    'action' => "CPA of \${$perf['cpa']} is high. Review landing page experience and ensure conversion tracking is accurate.",
-                    'expected_impact' => '-15-30% CPA reduction',
-                ];
-                $score -= 10;
-            }
-
-            // ROAS
-            if ($perf['roas'] < 2.0 && $perf['roas'] > 0) {
-                $recommendations[] = [
-                    'area' => 'roas_improvement',
-                    'priority' => 'medium',
-                    'action' => "ROAS of {$perf['roas']}x is below 2x target. Shift budget to highest-converting audiences.",
-                    'expected_impact' => '+0.5-1.0x ROAS improvement',
-                ];
-                $score -= 10;
-            }
-
-            // Trend
-            if ($perf['trend_direction'] === 'declining') {
-                $recommendations[] = [
-                    'area' => 'trend_reversal',
-                    'priority' => 'high',
-                    'action' => 'Performance in decline — refresh creatives, expand audiences, or test new bid strategies.',
-                    'expected_impact' => 'Stabilise declining metrics within 5-7 days',
-                ];
-                $score -= 10;
-            }
-
-            // Budget utilization
-            if ($perf['budget_utilization'] > 110) {
-                $recommendations[] = [
-                    'area' => 'budget_management',
-                    'priority' => 'medium',
-                    'action' => "Campaign overspending at {$perf['budget_utilization']}% utilization. Set stricter bid caps or reduce target CPA.",
-                    'expected_impact' => 'Bring spend in line with budget allocation',
-                ];
-                $score -= 5;
-            }
-
-            if (empty($recommendations)) {
-                $recommendations[] = [
-                    'area' => 'maintain',
-                    'priority' => 'low',
-                    'action' => 'Campaign performing well. Continue monitoring and consider scaling budget by 10-15%.',
-                    'expected_impact' => 'Incremental growth while maintaining efficiency',
-                ];
-                $score = min(95, $score + 10);
-            }
-
-            $result = [
-                'optimization_score' => max(10, min(100, $score)),
-                'recommendations' => $recommendations,
-                'metrics_analyzed' => [
-                    'ctr' => round($perf['ctr'] * 100, 2).'%',
-                    'cpc' => '$'.round($perf['cpc'], 2),
-                    'cpa' => '$'.round($perf['cpa'], 2),
-                    'roas' => round($perf['roas'], 2).'x',
-                    'budget_utilization' => round($perf['budget_utilization']).'%',
-                ],
-            ];
+            $result = $agent->analyze($campaign) ?? ['recommendations' => []];
 
             $key = "CampaignOptimizationAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
@@ -321,7 +263,11 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'CampaignOptimizationAgent',
                 'sandbox_optimization',
-                "Sandbox: Optimization score {$result['optimization_score']}/100 for {$campaign->name} — ".count($recommendations).' recommendations',
+                sprintf(
+                    'Sandbox: %d recommendation(s) generated for %s',
+                    count($result['recommendations'] ?? []),
+                    $campaign->name
+                ),
                 $customer->id,
                 $campaign->id,
                 $result,

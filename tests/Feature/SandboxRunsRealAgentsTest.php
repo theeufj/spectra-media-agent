@@ -6,11 +6,17 @@ use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\GoogleAdsPerformanceData;
+use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\Optimization\MetricsFetcher;
+use App\Services\Agents\Optimization\RecommendationApplier;
+use App\Services\Agents\Optimization\RecommendationScorer;
 use App\Services\Agents\SearchTermMiningAgent;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\CommonServices\GoogleBudgetMutator;
 use App\Services\GoogleAds\CommonServices\GoogleKeywordMutator;
+use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
+use App\Services\Testing\Sandbox\SandboxGeminiService;
 use App\Services\Testing\Sandbox\SandboxKeywordMutator;
 use App\Services\Testing\Sandbox\SandboxSearchTermSource;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -185,6 +191,71 @@ class SandboxRunsRealAgentsTest extends TestCase
         $this->assertInstanceOf(GetCampaignPerformance::class, $factory->campaignPerformance($customer));
         $this->assertInstanceOf(GoogleBudgetMutator::class, $factory->budgets($customer));
         $this->assertSame([], $factory->recordedBudgetChanges($customer));
+    }
+
+    public function test_the_gemini_stub_is_deterministic_and_free(): void
+    {
+        // Determinism is the point, not cost: a sandbox that makes real model
+        // calls returns something different every run, so you cannot tell a
+        // behaviour change from a different sampling.
+        $stub = new SandboxGeminiService;
+
+        $a = $stub->generateContent('gemini-x', 'Recommend optimisations for this campaign');
+        $b = $stub->generateContent('gemini-x', 'Recommend optimisations for this campaign');
+
+        $this->assertSame($a['text'], $b['text']);
+        $this->assertSame(0.0, $a['cost']);
+        $this->assertTrue($a['sandbox']);
+        $this->assertCount(2, $stub->calls());
+    }
+
+    public function test_the_stub_returns_json_the_agents_can_actually_parse(): void
+    {
+        // A stub returning something simpler than the real shape would let an
+        // agent's parsing bug pass unnoticed — the exact failure this exercise
+        // exists to remove.
+        $response = (new SandboxGeminiService)->generateContent('gemini-x', 'Recommend optimisations');
+
+        $this->assertArrayHasKey('text', $response);
+
+        $decoded = json_decode($response['text'], true);
+        $this->assertIsArray($decoded);
+        $this->assertArrayHasKey('recommendations', $decoded);
+        $this->assertNotEmpty($decoded['recommendations']);
+        $this->assertArrayHasKey('confidence', $decoded['recommendations'][0]);
+    }
+
+    public function test_the_real_optimisation_agent_runs_on_synthetic_metrics(): void
+    {
+        $campaign = $this->sandboxCampaign();
+
+        foreach (range(1, 40) as $day) {
+            GoogleAdsPerformanceData::create([
+                'campaign_id' => $campaign->id,
+                'date' => now()->subDays($day)->toDateString(),
+                'impressions' => 900,
+                'clicks' => 45,
+                'cost' => 60.00,
+                'conversions' => 3,
+                'ctr' => 0.05,
+                'cpc' => 1.33,
+                'cpa' => 20.00,
+            ]);
+        }
+
+        $agent = new CampaignOptimizationAgent(
+            new SandboxGeminiService,
+            new MetricsFetcher(new SandboxCampaignPerformanceSource($campaign->customer)),
+            app(RecommendationScorer::class),
+            app(RecommendationApplier::class),
+        );
+
+        $result = $agent->analyze($campaign);
+
+        // The real agent fetched synthetic metrics, called the stub, and parsed
+        // the response through its own scoring pipeline.
+        $this->assertIsArray($result);
+        $this->assertArrayHasKey('recommendations', $result);
     }
 
     public function test_live_customers_record_no_decisions(): void

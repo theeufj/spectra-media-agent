@@ -44,6 +44,14 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\Ads\CustomerRoutedAdsServiceFactory::class
         );
 
+        // Default binding for anything type-hinting the contract directly
+        // (MetricsFetcher). Sandbox runs inject their own instance explicitly
+        // rather than rebinding this, so no global state is ever mutated.
+        $this->app->bind(
+            \App\Contracts\Ads\CampaignPerformanceSource::class,
+            \App\Services\GoogleAds\CommonServices\GetCampaignPerformance::class
+        );
+
         $this->app->singleton(StripeClient::class, function () {
             $secret = config('services.stripe.secret');
 
