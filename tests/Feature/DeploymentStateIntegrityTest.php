@@ -53,10 +53,11 @@ class DeploymentStateIntegrityTest extends TestCase
         return $strategy->refresh();
     }
 
-    private function runReconcilerWithVerdict(bool $exists): void
+    private function runReconcilerWithVerdict(bool $exists, bool $supported = true): void
     {
         /** @var DeploymentVerifier&\Mockery\MockInterface $verifier */
         $verifier = Mockery::mock(DeploymentVerifier::class);
+        $verifier->shouldReceive('supports')->andReturn($supported);
         $verifier->shouldReceive('verify')->andReturn($exists);
 
         (new ReconcileStuckDeployments)->handle($verifier);
@@ -84,6 +85,19 @@ class DeploymentStateIntegrityTest extends TestCase
         // the idempotency guard and lets the campaign be redeployed.
         $this->assertSame('failed', $strategy->fresh()->deployment_status);
         $this->assertNotNull($strategy->fresh()->deployment_error);
+    }
+
+    public function test_an_unverifiable_platform_is_not_declared_failed(): void
+    {
+        // Microsoft and LinkedIn have no verification path. Marking them failed
+        // would assert something we never checked — the deployment may well have
+        // reached the platform.
+        $strategy = $this->stuckStrategy();
+
+        $this->runReconcilerWithVerdict(false, supported: false);
+
+        $this->assertSame('deploy_unverified', $strategy->fresh()->deployment_status);
+        $this->assertStringContainsString('unknown', $strategy->fresh()->deployment_error);
     }
 
     public function test_a_deployment_still_in_flight_is_left_alone(): void

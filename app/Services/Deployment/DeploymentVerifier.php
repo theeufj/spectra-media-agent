@@ -16,6 +16,21 @@ use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
  */
 class DeploymentVerifier
 {
+    /**
+     * Can this platform be verified at all?
+     *
+     * Only Google and Facebook have a verification path. For anything else
+     * verify() returns false meaning "not proven", which is not the same as
+     * "proven absent" — callers must check this before treating a false as
+     * evidence that a deployment failed.
+     */
+    public function supports(?string $platform): bool
+    {
+        $platform = strtolower($platform ?? '');
+
+        return str_contains($platform, 'google') || str_contains($platform, 'facebook');
+    }
+
     public function verify(Strategy $strategy, ?Customer $customer): bool
     {
         if (! $customer) {
