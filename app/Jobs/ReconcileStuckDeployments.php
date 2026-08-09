@@ -56,6 +56,21 @@ class ReconcileStuckDeployments implements ShouldQueue
         foreach ($stuck as $strategy) {
             try {
                 $customer = $strategy->campaign?->customer;
+
+                // Microsoft and LinkedIn have no verification path, so a false
+                // from verify() means "unknown", not "absent". Calling those
+                // failed would assert something we never checked.
+                if (! $verifier->supports($strategy->platform)) {
+                    $strategy->update([
+                        'deployment_status' => 'deploy_unverified',
+                        'deployment_error' => 'Deployment did not complete and '.$strategy->platform.' has no verification path, so whether it reached the platform is unknown. Check the platform directly before redeploying.',
+                    ]);
+                    Log::warning("ReconcileStuckDeployments: strategy {$strategy->id} ({$strategy->platform}) cannot be verified — marked deploy_unverified");
+                    $resolved++;
+
+                    continue;
+                }
+
                 $exists = $verifier->verify($strategy, $customer);
 
                 if ($exists) {
