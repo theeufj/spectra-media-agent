@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Enums\CampaignStatus;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Notifications\CampaignStatusUpdated;
@@ -112,6 +113,8 @@ class MonitorCampaignStatus implements ShouldQueue
             'last_checked_at' => now(),
         ]);
 
+        $this->syncLifecycleStatus($campaign, $worstPlatformStatus);
+
         $this->notifyIfBecameActive($campaign, $oldStatus, 'ELIGIBLE');
 
         // Only alert on unexpected problem states — not intentional pause/end.
@@ -119,6 +122,69 @@ class MonitorCampaignStatus implements ShouldQueue
         if (! in_array($campaign->primary_status, $silentStatuses, true)) {
             $this->notifyIfStatusChanged($campaign, $oldStatus, $campaign->primary_status);
         }
+    }
+
+    /**
+     * Reconcile Spectra's own `status` with what the platform reports.
+     *
+     * This job wrote platform_status and primary_status but never `status`, so
+     * the two could only agree while every pause and resume went through our own
+     * UI. A change made directly in the Google Ads UI never reached us, and
+     * `status` drifted stale indefinitely — the drift behind BILL-8, and the
+     * reason credit replenishment sized itself off a fallback rolling average
+     * instead of the real budget sum (AdSpendBillingService::checkAndReplenish).
+     *
+     * Only `platform_status` is used here — it is the campaign's own ENABLED /
+     * PAUSED / REMOVED state. `primary_status` is a serving state that includes
+     * transient conditions like LIMITED or PENDING, which say nothing about
+     * whether the campaign is meant to be running.
+     *
+     * Billing is deliberately unaffected: it bills on recorded spend, never on
+     * this field (see AdSpendBillingService, BILL-8).
+     */
+    private function syncLifecycleStatus(Campaign $campaign, string $platformStatus): void
+    {
+        $target = match ($platformStatus) {
+            'ENABLED' => CampaignStatus::Active,
+            'PAUSED' => CampaignStatus::Paused,
+            'REMOVED' => CampaignStatus::Ended,
+            default => null, // UNKNOWN tells us nothing — leave the record alone.
+        };
+
+        if (! $target) {
+            return;
+        }
+
+        // Already a CampaignStatus — the model casts this column.
+        $current = $campaign->status;
+
+        if ($current === $target) {
+            return;
+        }
+
+        // Never resurrect a campaign the customer has not finished setting up:
+        // a draft that somehow carries a platform id is a data problem to
+        // investigate, not one to paper over by flipping it live.
+        if (in_array($current, [CampaignStatus::Draft, CampaignStatus::PendingAdminDeployment], true)) {
+            Log::warning("MonitorCampaignStatus: campaign {$campaign->id} is {$current->value} locally but {$platformStatus} on the platform — leaving status untouched", [
+                'campaign_id' => $campaign->id,
+            ]);
+
+            return;
+        }
+
+        $campaign->update(['status' => $target]);
+
+        Log::info("MonitorCampaignStatus: campaign {$campaign->id} status {$current?->value} → {$target->value} (platform says {$platformStatus})");
+
+        AgentActivity::record(
+            'monitoring',
+            'status_reconciled',
+            "Campaign \"{$campaign->name}\" changed on the platform — status updated to {$target->label()}",
+            $campaign->customer_id,
+            $campaign->id,
+            ['from' => $current?->value, 'to' => $target->value, 'platform_status' => $platformStatus]
+        );
     }
 
     private function getStatusSeverity(string $status): int

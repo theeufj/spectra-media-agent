@@ -43,19 +43,7 @@ parameters:
 			path: app/Console/Commands/CheckMccAccountCreationEligibility.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/CheckPMaxAssets.php
-
-		-
 			message: '#^Relation ''campaigns'' is not found in App\\Models\\Customer model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Console/Commands/CheckPMaxAssets.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Console/Commands/CheckPMaxAssets.php
@@ -65,12 +53,6 @@ parameters:
 			identifier: arguments.count
 			count: 1
 			path: app/Console/Commands/CreateGoogleAdsSubAccount.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Console/Commands/DisableCampaignPurchaseGoal.php
 
 		-
 			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withOAuth2Credential\(\)\.$#'
@@ -199,12 +181,6 @@ parameters:
 			path: app/Http/Controllers/Admin/AiCostController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Http/Controllers/Admin/CampaignController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
 			identifier: property.notFound
 			count: 2
@@ -331,12 +307,6 @@ parameters:
 			path: app/Http/Controllers/Api/DemoController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/AttributionController.php
-
-		-
 			message: '#^Call to an undefined method Laravel\\Socialite\\Contracts\\Provider\:\:with\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -347,12 +317,6 @@ parameters:
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/BrandGuidelineController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/CampaignController.php
 
 		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 3 parameters, 1 required\.$#'
@@ -385,7 +349,7 @@ parameters:
 			path: app/Http/Controllers/CampaignCopilotController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Http/Controllers/CollateralController.php
@@ -793,12 +757,6 @@ parameters:
 			path: app/Http/Middleware/HandleInertiaRequests.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Jobs/ApplySeasonalStrategyShift.php
-
-		-
 			message: '#^Call to an undefined method App\\Models\\Campaign\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Campaign\>\:\:adCopies\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -871,18 +829,6 @@ parameters:
 			path: app/Jobs/AutomatedCampaignMaintenance.php
 
 		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/AutomatedCampaignMaintenance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Jobs/CheckCampaignPolicyViolations.php
-
-		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetAdStatus constructor invoked with 2 parameters, 1 required\.$#'
 			identifier: arguments.count
 			count: 1
@@ -937,9 +883,15 @@ parameters:
 			path: app/Jobs/CrawlSitemap.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
 			identifier: property.notFound
-			count: 5
+			count: 1
+			path: app/Jobs/DeployCampaign.php
+
+		-
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
+			identifier: property.notFound
+			count: 2
 			path: app/Jobs/DeployCampaign.php
 
 		-
@@ -959,18 +911,6 @@ parameters:
 			identifier: property.notFound
 			count: 3
 			path: app/Jobs/EvaluateABTests.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/EvaluateBiddingStrategyProgression.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/ExpandBroadMatchKeywords.php
 
 		-
 			message: '#^If condition is always false\.$#'
@@ -1027,46 +967,10 @@ parameters:
 			path: app/Jobs/ExtractBrandGuidelines.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Jobs/FetchFacebookAdsPerformanceData.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/FetchGoogleAdsPerformanceData.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/FetchLinkedInAdsPerformanceData.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/FetchMicrosoftAdsPerformanceData.php
-
-		-
 			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
 			path: app/Jobs/FetchMicrosoftAdsPerformanceData.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Campaign\>\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Jobs/FindUnderperformingKeywords.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/GenerateAdCopy.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
@@ -1093,13 +997,13 @@ parameters:
 			path: app/Jobs/GenerateExecutiveReport.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
+			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Jobs/GenerateImage.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$subscription_status\.$#'
 			identifier: property.notFound
 			count: 1
 			path: app/Jobs/GenerateImage.php
@@ -1123,9 +1027,9 @@ parameters:
 			path: app/Jobs/GenerateMonthlyReport.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
 			identifier: property.notFound
-			count: 4
+			count: 1
 			path: app/Jobs/GenerateStrategy.php
 
 		-
@@ -1141,26 +1045,8 @@ parameters:
 			path: app/Jobs/GenerateVideo.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Campaign\>\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Jobs/GetKeywordQualityScore.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/HourlyBudgetOptimization.php
-
-		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 2 parameters, 1 required\.$#'
 			identifier: arguments.count
-			count: 1
-			path: app/Jobs/HourlyBudgetOptimization.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
 			count: 1
 			path: app/Jobs/HourlyBudgetOptimization.php
 
@@ -1177,40 +1063,28 @@ parameters:
 			path: app/Jobs/ManageDSACampaigns.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
 			identifier: property.notFound
-			count: 6
+			count: 2
 			path: app/Jobs/MonitorCampaignStatus.php
 
 		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
+			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Jobs/MonitorCampaignStatus.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/OptimizeCampaigns.php
+			message: '#^Using nullsafe property access on non\-nullable type App\\Enums\\CampaignStatus\. Use \-\> instead\.$#'
+			identifier: nullsafe.neverNull
+			count: 2
+			path: app/Jobs/MonitorCampaignStatus.php
 
 		-
 			message: '#^Using nullsafe property access "\?\-\>slug" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Jobs/OptimizeCampaigns.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/PauseWastefulAdGroups.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/PauseWastefulAdGroups.php
 
 		-
 			message: '#^Relation ''adSpendCredit'' is not found in App\\Models\\Customer model\.$#'
@@ -1259,6 +1133,12 @@ parameters:
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Jobs/ReconcileAdSpend.php
+
+		-
+			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Jobs/ReconcileStuckDeployments.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\ImageCollateral\:\:\$campaign\.$#'
@@ -1357,12 +1237,6 @@ parameters:
 			path: app/Jobs/RunPerformanceAnomalyCheck.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 4
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
 			message: '#^Offset ''actions'' on array\{actions\: array\<string\>, warnings\: array\<string\>\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -1385,18 +1259,6 @@ parameters:
 			identifier: nullCoalesce.offset
 			count: 1
 			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/RunSelfHealingChecks.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/RunStrategicDiagnosis.php
 
 		-
 			message: '#^Variable \$findings in empty\(\) always exists and is not falsy\.$#'
@@ -1471,12 +1333,6 @@ parameters:
 			path: app/Jobs/VerifyConversionTracking.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/VerifyDeployment.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1507,8 +1363,8 @@ parameters:
 			path: app/Models/AdSpendCredit.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
+			message: '#^Method App\\Models\\Campaign\:\:customer\(\) should return Illuminate\\Database\\Eloquent\\Relations\\BelongsTo\<App\\Models\\Customer, App\\Models\\Campaign\> but returns Illuminate\\Database\\Eloquent\\Relations\\BelongsTo\<App\\Models\\Customer, \$this\(App\\Models\\Campaign\)\>\.$#'
+			identifier: return.type
 			count: 1
 			path: app/Models/Campaign.php
 
@@ -1535,12 +1391,6 @@ parameters:
 			identifier: property.notFound
 			count: 2
 			path: app/Models/CampaignHourlyPerformance.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Models/ImageCollateral.php
 
 		-
 			message: '#^PHPDoc type array\<int, string\> of property App\\Models\\ImageCollateral\:\:\$fillable is not covariant with PHPDoc type list\<string\> of overridden property Illuminate\\Database\\Eloquent\\Model\:\:\$fillable\.$#'
@@ -1741,12 +1591,6 @@ parameters:
 			path: app/Services/AdminMonitorService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/ABTestingAgent.php
-
-		-
 			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1793,12 +1637,6 @@ parameters:
 			identifier: argument.type
 			count: 1
 			path: app/Services/Agents/ABTestingAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/AdExtensionAgent.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\CampaignHourlyPerformance\:\:\$avg_hourly_spend\.$#'
@@ -1891,28 +1729,10 @@ parameters:
 			path: app/Services/Agents/AudienceIntelligenceAgent.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/BidAdjustmentAgent.php
-
-		-
 			message: '#^Using nullsafe property access on non\-nullable type object\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Agents/BidAdjustmentAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Agents/BiddingStrategyProgressionAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 5
-			path: app/Services/Agents/BudgetIntelligenceAgent.php
 
 		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 2 parameters, 1 required\.$#'
@@ -1927,27 +1747,15 @@ parameters:
 			path: app/Services/Agents/BudgetIntelligenceAgent.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/CampaignAlertService.php
-
-		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.expr
 			count: 1
 			path: app/Services/Agents/CampaignAlertService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
 			identifier: property.notFound
-			count: 10
-			path: app/Services/Agents/CampaignDiagnosticsAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 5
+			count: 1
 			path: app/Services/Agents/CampaignRemediationAgent.php
 
 		-
@@ -1999,20 +1807,20 @@ parameters:
 			path: app/Services/Agents/CompetitorIntelligenceAgent.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 6
-			path: app/Services/Agents/CreativeIntelligenceAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$brandGuideline\.$#'
 			identifier: property.notFound
-			count: 2
+			count: 5
 			path: app/Services/Agents/CreativeIntelligenceAgent.php
 
 		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetAdPerformanceByAsset constructor invoked with 2 parameters, 1 required\.$#'
 			identifier: arguments.count
+			count: 1
+			path: app/Services/Agents/CreativeIntelligenceAgent.php
+
+		-
+			message: '#^If condition is always true\.$#'
+			identifier: if.alwaysTrue
 			count: 1
 			path: app/Services/Agents/CreativeIntelligenceAgent.php
 
@@ -2033,12 +1841,6 @@ parameters:
 			identifier: return.type
 			count: 1
 			path: app/Services/Agents/ExecutionContext.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/FacebookAdRelevanceDiagnosticsAgent.php
 
 		-
 			message: '#^Access to an undefined property App\\Services\\Agents\\FacebookAdsExecutionAgent\:\:\$geminiService\.$#'
@@ -2093,12 +1895,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/FacebookLearningPhaseAgent.php
 
 		-
 			message: '#^Parameter \#2 \$days of method App\\Services\\Agents\\FacebookLearningPhaseAgent\:\:notifyStalled\(\) expects int, float given\.$#'
@@ -2173,12 +1969,6 @@ parameters:
 			path: app/Services/Agents/GoogleAdsExecutionAgent.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/HealthCheckAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$target_audience\.$#'
 			identifier: property.notFound
 			count: 1
@@ -2219,18 +2009,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Agents/LinkedInAdsExecutionAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/LinkedInCampaignOptimizationAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/MicrosoftAdsCampaignOptimizationAgent.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\MicrosoftAdsPerformanceData\:\:\$total_cost\.$#'
@@ -2305,46 +2083,10 @@ parameters:
 			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 8
-			path: app/Services/Agents/Optimization/MetricsFetcher.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 11
-			path: app/Services/Agents/Optimization/RecommendationApplier.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/PerformanceAnomalyAlertAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/PreLaunchComplianceAgent.php
-
-		-
 			message: '#^Using nullsafe property access "\?\-\>industry" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/Agents/PreLaunchComplianceAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Agents/QualityScoreImprovementAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 3
-			path: app/Services/Agents/SearchTermMiningAgent.php
 
 		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\AddKeyword constructor invoked with 2 parameters, 1 required\.$#'
@@ -2363,12 +2105,6 @@ parameters:
 			identifier: arguments.count
 			count: 1
 			path: app/Services/Agents/SearchTermMiningAgent.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Services/Agents/SelfHealingAgent.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$linkedin_ads_campaign_id\.$#'
@@ -2465,12 +2201,6 @@ parameters:
 			identifier: property.notFound
 			count: 1
 			path: app/Services/CompetitorGapAnalysisService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/CopilotContextService.php
 
 		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'
@@ -2909,12 +2639,6 @@ parameters:
 			identifier: class.notFound
 			count: 1
 			path: app/Services/GoogleAds/CommonServices/CreateSitelinkAsset.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateSitelinkAssets.php
 
 		-
 			message: '#^Call to method getMessage\(\) on an unknown class Google\\Ads\\GoogleAds\\V22\\Errors\\GoogleAdsException\.$#'
@@ -3871,12 +3595,6 @@ parameters:
 			path: app/Services/Health/BillingHealthChecker.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 6
-			path: app/Services/Health/CampaignHealthChecker.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$started_at\.$#'
 			identifier: property.notFound
 			count: 1
@@ -3919,9 +3637,9 @@ parameters:
 			path: app/Services/MicrosoftAds/BaseMicrosoftAdsService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
+			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$user\.$#'
 			identifier: property.notFound
-			count: 10
+			count: 5
 			path: app/Services/NotificationService.php
 
 		-
@@ -4099,12 +3817,6 @@ parameters:
 			path: tests/Feature/Agents/CampaignDiagnosticsIntegrationTest.php
 
 		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 6
-			path: tests/Feature/Agents/CampaignDiagnosticsIntegrationTest.php
-
-		-
 			message: '#^Call to an undefined static method App\\Models\\AgentActivity\:\:factory\(\)\.$#'
 			identifier: staticMethod.notFound
 			count: 2
@@ -4177,21 +3889,9 @@ parameters:
 			path: tests/Feature/Jobs/FetchFacebookAdsPerformanceDataTest.php
 
 		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
-			path: tests/Feature/Jobs/FetchFacebookAdsPerformanceDataTest.php
-
-		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
-			path: tests/Feature/Jobs/FetchGoogleAdsPerformanceDataTest.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
 			path: tests/Feature/Jobs/FetchGoogleAdsPerformanceDataTest.php
 
 		-
@@ -4228,12 +3928,6 @@ parameters:
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
-			path: tests/Feature/Jobs/RunStrategicDiagnosisTest.php
-
-		-
-			message: '#^Relation ''customer'' is not found in App\\Models\\Campaign model\.$#'
-			identifier: larastan.relationExistence
-			count: 2
 			path: tests/Feature/Jobs/RunStrategicDiagnosisTest.php
 
 		-
@@ -4805,12 +4499,6 @@ parameters:
 			identifier: assign.propertyType
 			count: 1
 			path: tests/Unit/Agents/CompetitorIntelligenceAgentTest.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 2
-			path: tests/Unit/Agents/CreativeIntelligenceAgentTest.php
 
 		-
 			message: '#^Call to an undefined method Mockery\\ExpectationInterface\|Mockery\\HigherOrderMessage\:\:once\(\)\.$#'

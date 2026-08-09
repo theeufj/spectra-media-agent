@@ -17,6 +17,7 @@ use App\Jobs\HourlyBudgetOptimization;
 use App\Jobs\MonitorCampaignStatus;
 use App\Jobs\OptimizeCampaigns;
 use App\Jobs\ProcessDailyAdSpendBilling;
+use App\Jobs\ReconcileStuckDeployments;
 use App\Jobs\RecordSiteConversion;
 use App\Jobs\ReviewGoogleAdsRecommendations;
 use App\Jobs\RunCompetitorIntelligence;
@@ -73,6 +74,10 @@ Schedule::call(function () {
 
 // Campaign status monitoring - checks if campaigns are approved/live
 Schedule::job(new MonitorCampaignStatus)->hourly()->withoutOverlapping();
+
+// Rescues strategies stranded in 'deploying' by a worker that died mid-run.
+// Nothing else reconciles that state, so it is terminal without this.
+Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 
 // Hourly budget optimization - applies learned per-account multipliers and snapshots performance
 Schedule::job(new HourlyBudgetOptimization)->hourly()->withoutOverlapping();
