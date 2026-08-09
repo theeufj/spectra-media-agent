@@ -136,7 +136,23 @@ class DeploymentService
                 ];
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Catch Throwable, not Exception: a TypeError or ArgumentCountError in
+            // an execution agent is exactly the kind of fault that used to sail
+            // past this handler and strand the row.
+            //
+            // The strategy is already marked 'deploying' by this point. Leaving it
+            // there makes the state terminal — VerifyDeployment only looks at
+            // 'deployed', and the idempotency guard refuses to redeploy anything
+            // still 'deploying'. Mark it failed so it can be retried.
+            //
+            // This cannot cover a worker killed mid-execute (no catch runs at all);
+            // ReconcileStuckDeployments sweeps up that case.
+            $strategy->deployment_status = 'failed';
+            $strategy->deployment_error = $e->getMessage();
+            $strategy->save();
+
+            report($e);
             Log::error('DeploymentService: Exception during agent deployment: '.$e->getMessage(), [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,

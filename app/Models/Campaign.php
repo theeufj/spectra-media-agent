@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\CampaignStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Campaign extends Model
@@ -134,7 +135,10 @@ class Campaign extends Model
     /**
      * Get the customer that owns the campaign.
      */
-    public function customer()
+    /**
+     * @return BelongsTo<Customer, Campaign>
+     */
+    public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
     }
