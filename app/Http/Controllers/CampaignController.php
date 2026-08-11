@@ -56,7 +56,7 @@ class CampaignController extends Controller
         // If no customer_pages exist, backfill from knowledge_bases
         if (empty($pages)) {
             $userIds = $customer->users()->pluck('users.id');
-            $kbEntries = \App\Models\KnowledgeBase::whereIn('user_id', $userIds)
+            $kbEntries = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
                 ->whereNotNull('url')
                 ->select('url')
                 ->distinct()

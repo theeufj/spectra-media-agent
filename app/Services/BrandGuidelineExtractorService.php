@@ -91,7 +91,7 @@ class BrandGuidelineExtractorService
             // Fallback to KnowledgeBase if no CustomerPage data
             if (empty($websiteContent)) {
                 $userIds = $customer->users()->pluck('users.id');
-                $websiteContent = \App\Models\KnowledgeBase::whereIn('user_id', $userIds)
+                $websiteContent = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
                     ->pluck('content')
                     ->implode("\n\n---PAGE BREAK---\n\n");
             }

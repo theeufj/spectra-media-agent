@@ -16,12 +16,11 @@ class KnowledgeBaseSearchService
      * Search the customer's website content and knowledge base for a query.
      * Uses vector similarity search when embeddings are available, falls back to ILIKE.
      *
-     * @param  array  $userIds  User IDs associated with the customer (for knowledge_bases lookup)
      * @param  string  $query  Natural-language search query
      * @param  int  $limit  Max results per source
      * @return string Formatted text suitable for returning as a tool response
      */
-    public function search(int $customerId, array $userIds, string $query, int $limit = 5): string
+    public function search(int $customerId, string $query, int $limit = 5): string
     {
         $embedding = $this->gemini->embedContent(
             config('ai.models.embedding', 'gemini-embedding-2-preview'),
@@ -31,12 +30,12 @@ class KnowledgeBaseSearchService
         $results = [];
 
         if ($embedding) {
-            $results = $this->vectorSearch($customerId, $userIds, $embedding, $limit);
+            $results = $this->vectorSearch($customerId, $embedding, $limit);
         }
 
         // Fall back to keyword search if vector search returned nothing
         if (empty($results)) {
-            $results = $this->keywordSearch($customerId, $userIds, $query, $limit);
+            $results = $this->keywordSearch($customerId, $query, $limit);
         }
 
         if (empty($results)) {
@@ -48,7 +47,7 @@ class KnowledgeBaseSearchService
         return implode("\n\n---\n\n", $results);
     }
 
-    private function vectorSearch(int $customerId, array $userIds, array $embedding, int $limit): array
+    private function vectorSearch(int $customerId, array $embedding, int $limit): array
     {
         $results = [];
 
@@ -64,25 +63,22 @@ class KnowledgeBaseSearchService
                 $results[] = "[{$label}: {$page->title} — {$page->url}]\n{$snippet}";
             }
         }
+        $kbs = KnowledgeBase::where('customer_id', $customerId)
+            ->nearestNeighbors('embedding', $embedding, Distance::Cosine)
+            ->take($limit)
+            ->get(['url', 'content']);
 
-        if (! empty($userIds)) {
-            $kbs = KnowledgeBase::whereIn('user_id', $userIds)
-                ->nearestNeighbors('embedding', $embedding, Distance::Cosine)
-                ->take($limit)
-                ->get(['url', 'content']);
-
-            foreach ($kbs as $kb) {
-                $snippet = mb_substr(trim($kb->content ?? ''), 0, 2000);
-                if ($snippet) {
-                    $results[] = "[Knowledge Base: {$kb->url}]\n{$snippet}";
-                }
+        foreach ($kbs as $kb) {
+            $snippet = mb_substr(trim($kb->content ?? ''), 0, 2000);
+            if ($snippet) {
+                $results[] = "[Knowledge Base: {$kb->url}]\n{$snippet}";
             }
         }
 
         return $results;
     }
 
-    private function keywordSearch(int $customerId, array $userIds, string $query, int $limit): array
+    private function keywordSearch(int $customerId, string $query, int $limit): array
     {
         $results = [];
         $like = '%'.$query.'%';
@@ -103,18 +99,15 @@ class KnowledgeBaseSearchService
                 $results[] = "[{$label}: {$page->title} — {$page->url}]\n{$snippet}";
             }
         }
+        $kbs = KnowledgeBase::where('customer_id', $customerId)
+            ->where('content', 'ilike', $like)
+            ->take($limit)
+            ->get(['url', 'content']);
 
-        if (! empty($userIds)) {
-            $kbs = KnowledgeBase::whereIn('user_id', $userIds)
-                ->where('content', 'ilike', $like)
-                ->take($limit)
-                ->get(['url', 'content']);
-
-            foreach ($kbs as $kb) {
-                $snippet = mb_substr(trim($kb->content ?? ''), 0, 2000);
-                if ($snippet) {
-                    $results[] = "[Knowledge Base: {$kb->url}]\n{$snippet}";
-                }
+        foreach ($kbs as $kb) {
+            $snippet = mb_substr(trim($kb->content ?? ''), 0, 2000);
+            if ($snippet) {
+                $results[] = "[Knowledge Base: {$kb->url}]\n{$snippet}";
             }
         }
 

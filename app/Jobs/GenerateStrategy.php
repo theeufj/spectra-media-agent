@@ -63,7 +63,7 @@ class GenerateStrategy implements ShouldQueue
             Log::info('Found '.count($customerUserIds)." users for customer {$this->campaign->customer_id}");
 
             // Verify that knowledge base / customer pages exist so we can give a useful error early
-            $hasKb = KnowledgeBase::whereIn('user_id', $customerUserIds)->exists();
+            $hasKb = KnowledgeBase::where('customer_id', $this->campaign->customer_id)->exists();
             $hasPages = CustomerPage::where('customer_id', $this->campaign->customer_id)->exists();
             if (! $hasKb && ! $hasPages) {
                 Log::warning("No knowledge base or customer pages found for customer {$this->campaign->customer_id}");
@@ -216,12 +216,12 @@ class GenerateStrategy implements ShouldQueue
                 StrategyPrompt::getSystemInstruction(),
                 $prompt,
                 $toolDeclarations,
-                function (string $name, array $args) use ($searchService, $campaignCustomerId, $userIds) {
+                function (string $name, array $args) use ($searchService, $campaignCustomerId) {
                     if ($name === 'search_knowledge_base') {
                         $query = trim($args['query'] ?? '');
                         Log::info("GenerateStrategy: KB search: \"{$query}\" for customer {$campaignCustomerId}");
 
-                        return $searchService->search($campaignCustomerId, $userIds, $query);
+                        return $searchService->search($campaignCustomerId, $query);
                     }
 
                     return "Unknown tool: {$name}";

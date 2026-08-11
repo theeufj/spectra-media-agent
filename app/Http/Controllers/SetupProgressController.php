@@ -42,7 +42,10 @@ class SetupProgressController extends Controller
 
             // Calculate setup progress
             // Knowledge base is tied to user, not customer
-            $hasKnowledgeBase = \App\Models\KnowledgeBase::where('user_id', $user->id)->count() > 0;
+            // Scoped through the user's customers, matching how the knowledge base
+            // is retrieved everywhere else. A user-wide count would report setup
+            // complete for a customer whose own site had never been crawled.
+            $hasKnowledgeBase = \App\Models\KnowledgeBase::whereIn('customer_id', $user->customers()->pluck('customers.id'))->exists();
             $hasBrandGuidelines = $customer->brandGuideline?->user_verified ?? false;
             $hasCampaign = $customer->campaigns()->count() > 0;
             $hasConversionTracking = ! empty($customer->conversion_action_id);
