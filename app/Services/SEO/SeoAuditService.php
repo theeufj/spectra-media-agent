@@ -164,21 +164,71 @@ class SeoAuditService
         return $audit;
     }
 
+    /**
+     * Fetch the page as a search engine would see it after rendering.
+     *
+     * A plain HTTP GET returns whatever the server sends, which for any
+     * client-rendered site is a shell: meta tags in the head and an empty root
+     * element. Auditing that produced a report claiming sitetospend.com had no
+     * H1, no headings, no images, no internal links and zero words — none of
+     * which is true of the page a visitor or a modern crawler sees. Every issue
+     * it raised was an artefact of not executing JavaScript.
+     *
+     * Browsershot renders with real Chrome and is already used elsewhere in the
+     * app, so this needs no new dependency. The HTTP fetch remains as a fallback
+     * for hosts where Chrome cannot run.
+     */
     protected function fetchPage(string $url): ?string
     {
         return Cache::remember('seo_page:'.md5($url), now()->addHour(), function () use ($url) {
+            $rendered = $this->renderWithBrowser($url);
+
+            if ($rendered !== null) {
+                return $rendered;
+            }
+
             try {
                 $response = Http::timeout(30)
                     ->withHeaders(['User-Agent' => 'SpectraMediaBot/1.0 (SEO Audit)'])
                     ->get($url);
 
-                return $response->successful() ? $response->body() : null;
+                if (! $response->successful()) {
+                    return null;
+                }
+
+                Log::info('SEO Audit: fell back to unrendered HTML', ['url' => $url]);
+
+                return $response->body();
             } catch (\Exception $e) {
                 Log::warning('SEO Audit: Failed to fetch page', ['url' => $url, 'error' => $e->getMessage()]);
 
                 return null;
             }
         });
+    }
+
+    /**
+     * Render the page with headless Chrome, or null if that is not possible.
+     */
+    protected function renderWithBrowser(string $url): ?string
+    {
+        try {
+            return \Spatie\Browsershot\Browsershot::url($url)
+                ->setOption('args', ['--no-sandbox', '--disable-setuid-sandbox'])
+                ->userAgent('SpectraMediaBot/1.0 (SEO Audit)')
+                // Client-rendered pages need the JS to run and settle before the
+                // DOM is worth reading.
+                ->waitUntilNetworkIdle()
+                ->timeout(60)
+                ->bodyHtml();
+        } catch (\Throwable $e) {
+            Log::warning('SEO Audit: browser render failed, falling back to raw HTML', [
+                'url' => $url,
+                'error' => mb_substr($e->getMessage(), 0, 200),
+            ]);
+
+            return null;
+        }
     }
 
     protected function analyzeMeta(string $html, string $url): array
@@ -351,10 +401,37 @@ class SeoAuditService
         ];
     }
 
+    /**
+     * Security posture, measured rather than assumed.
+     *
+     * HSTS and CSP were reported to customers as failing crosses while never
+     * being checked at all — the audit only ever returned is_https. Telling a
+     * customer their site fails a control nobody looked at is worse than
+     * omitting it, so both are now read from the real response headers.
+     */
     protected function analyzeSecurity(string $url): array
     {
+        $headers = [];
+
+        try {
+            $response = Http::timeout(15)
+                ->withHeaders(['User-Agent' => 'SpectraMediaBot/1.0 (SEO Audit)'])
+                ->get($url);
+
+            // Header names are case-insensitive; Laravel preserves the server's
+            // casing, so normalise before looking anything up.
+            $headers = array_change_key_case($response->headers(), CASE_LOWER);
+        } catch (\Throwable $e) {
+            Log::warning('SEO Audit: could not read security headers', ['url' => $url, 'error' => $e->getMessage()]);
+
+            return ['is_https' => str_starts_with($url, 'https://'), 'hsts' => null, 'csp' => null];
+        }
+
         return [
             'is_https' => str_starts_with($url, 'https://'),
+            'hsts' => ! empty($headers['strict-transport-security']),
+            'csp' => ! empty($headers['content-security-policy'])
+                || ! empty($headers['content-security-policy-report-only']),
         ];
     }
 
@@ -362,14 +439,17 @@ class SeoAuditService
     {
         try {
             $start = microtime(true);
-            Http::timeout(10)->get($url);
+            $response = Http::timeout(10)->get($url);
             $loadTime = (microtime(true) - $start) * 1000;
 
             return [
                 'load_time_ms' => round($loadTime),
+                // Displayed in the report, so it has to be measured. It was
+                // rendered as an em dash because nothing ever produced it.
+                'page_size_kb' => round(strlen($response->body()) / 1024),
             ];
         } catch (\Exception $e) {
-            return ['load_time_ms' => null];
+            return ['load_time_ms' => null, 'page_size_kb' => null];
         }
     }
 
