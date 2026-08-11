@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Jobs\ScrapeCustomerWebsite;
+use App\Jobs\SetupConversionTracking;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -30,6 +31,8 @@ class CustomerObserver
             ]);
 
             dispatch(new ScrapeCustomerWebsite($customer));
+
+            $this->ensureConversionTracking($customer);
         }
     }
 
@@ -51,7 +54,42 @@ class CustomerObserver
             ]);
 
             dispatch(new ScrapeCustomerWebsite($customer));
+
+            $this->ensureConversionTracking($customer);
         }
+    }
+
+    /**
+     * Provision conversion tracking as soon as we know the customer's website.
+     *
+     * This used to happen only two ways: an admin clicking a button, or
+     * AutomatedCampaignMaintenance — whose digest loop only covers campaigns
+     * already ELIGIBLE or LEARNING with a platform ID. So tracking was set up
+     * only for customers who *already had a live campaign*, which is backwards:
+     * Smart Bidding needs conversions from the first impression, and the
+     * optimisation agents cannot decide anything without conversion data. Every
+     * customer's first campaign therefore launched blind and bid on zero
+     * conversions — the exact failure that cost this account three weeks of
+     * spend on mobile-game inventory.
+     *
+     * Delayed so ScrapeCustomerWebsite runs first: it detects whether the site
+     * already carries a container, which the setup path can then take into
+     * account rather than provisioning over the top of it.
+     *
+     * The job self-skips when conversion_action_id is set, so a second dispatch
+     * is harmless.
+     */
+    private function ensureConversionTracking(Customer $customer): void
+    {
+        if ($customer->conversion_action_id) {
+            return;
+        }
+
+        Log::info('Dispatching conversion tracking setup for customer', [
+            'customer_id' => $customer->id,
+        ]);
+
+        SetupConversionTracking::dispatch($customer)->delay(now()->addMinutes(2));
     }
 
     /**

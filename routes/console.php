@@ -26,6 +26,7 @@ use App\Jobs\RunPerformanceAnomalyCheck;
 use App\Jobs\RunSelfHealingChecks;
 use App\Jobs\RunStrategicDiagnosis;
 use App\Jobs\SendDailyPerformanceReports;
+use App\Jobs\VerifyGtmInstallation;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
@@ -74,6 +75,11 @@ Schedule::call(function () {
 
 // Campaign status monitoring - checks if campaigns are approved/live
 Schedule::job(new MonitorCampaignStatus)->hourly()->withoutOverlapping();
+
+// Checks whether customers actually installed their GTM snippet. Provisioning a
+// container is the half we control; installing it is the half they do, and until
+// then no conversion is recorded at all.
+Schedule::job(new VerifyGtmInstallation)->dailyAt('05:15')->withoutOverlapping();
 
 // Rescues strategies stranded in 'deploying' by a worker that died mid-run.
 // Nothing else reconciles that state, so it is terminal without this.
