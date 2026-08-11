@@ -2,6 +2,7 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Contracts\Ads\AssetPerformanceSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Illuminate\Support\Facades\Log;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\Log;
  * Fetches performance metrics broken down by ad asset (headline, description, image).
  * Used for A/B test analysis and creative optimization.
  */
-class GetAdPerformanceByAsset extends BaseGoogleAdsService
+class GetAdPerformanceByAsset extends BaseGoogleAdsService implements AssetPerformanceSource
 {
     /**
      * Get performance metrics for Responsive Search Ad assets.

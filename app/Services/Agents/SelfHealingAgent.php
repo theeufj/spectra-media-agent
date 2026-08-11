@@ -2,6 +2,8 @@
 
 namespace App\Services\Agents;
 
+use App\Contracts\Ads\AdsServiceFactory;
+use App\Contracts\Ads\FacebookAdManager;
 use App\Enums\CampaignStatus;
 use App\Features\AutoHealing;
 use App\Models\Campaign;
@@ -10,12 +12,7 @@ use App\Models\EnabledPlatform;
 use App\Prompts\AdCompliancePrompt;
 use App\Services\Agents\Concerns\ParsesLlmJson;
 use App\Services\Agents\Traits\RetryableApiOperation;
-use App\Services\FacebookAds\AdService as FacebookAdService;
-use App\Services\FacebookAds\AdSetService as FacebookAdSetService;
-use App\Services\FacebookAds\CreativeService as FacebookCreativeService;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
-use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\SearchServices\CreateResponsiveSearchAd;
 use Google\Ads\GoogleAds\V22\Enums\PolicyApprovalStatusEnum\PolicyApprovalStatus;
@@ -50,10 +47,23 @@ class SelfHealingAgent
 
     protected string $platform = 'self_healing';
 
-    public function __construct(GeminiService $gemini)
+    public function __construct(GeminiService $gemini, ?AdsServiceFactory $ads = null)
     {
         $this->gemini = $gemini;
+        $this->ads = $ads;
         $this->config = config('budget_rules.self_healing', []);
+    }
+
+    /**
+     * Declared rather than promoted, with a default, so partial mocks that
+     * bypass the constructor leave it null instead of uninitialised.
+     */
+    private ?AdsServiceFactory $ads = null;
+
+    /** Platform services for this run — synthetic for sandbox customers. */
+    private function ads(): AdsServiceFactory
+    {
+        return $this->ads ??= app(AdsServiceFactory::class);
     }
 
     /**
@@ -183,7 +193,7 @@ class SelfHealingAgent
         try {
             $ads = $this->executeWithRetry(
                 operation: function () use ($customer, $customerId, $campaignResourceName) {
-                    $getAdStatus = new GetAdStatus($customer, true);
+                    $getAdStatus = $this->ads()->adStatus($customer);
 
                     return ($getAdStatus)($customerId, $campaignResourceName);
                 },
@@ -474,7 +484,7 @@ class SelfHealingAgent
     protected function healFacebookDisapprovedAds(Campaign $campaign, Customer $customer, array &$results): void
     {
         try {
-            $adService = new FacebookAdService($customer);
+            $adService = $this->ads()->facebookAds($customer);
 
             // Get all ad sets for this campaign
             $response = $this->executeWithRetry(
@@ -510,10 +520,10 @@ class SelfHealingAgent
     /**
      * Get all ads for a Facebook campaign by fetching ad sets then ads.
      */
-    protected function getFacebookAdsForCampaign(FacebookAdService $adService, Campaign $campaign): array
+    protected function getFacebookAdsForCampaign(FacebookAdManager $adService, Campaign $campaign): array
     {
         $customer = $campaign->customer;
-        $adSetService = new FacebookAdSetService($customer);
+        $adSetService = $this->ads()->facebookAds($customer);
 
         $adSets = $adSetService->listAdSets($campaign->facebook_ads_campaign_id);
         if (empty($adSets['data'])) {
@@ -579,7 +589,7 @@ class SelfHealingAgent
 
                 if ($newAdData) {
                     // Create new creative with compliant copy
-                    $creativeService = new FacebookCreativeService($customer);
+                    $creativeService = $this->ads()->facebookAds($customer);
 
                     // Build new creative data
                     // Note: This would need to be expanded based on the creative type
@@ -618,7 +628,7 @@ class SelfHealingAgent
                     if ($newCreativeId) {
                         // Create a new ad with the compliant creative
                         try {
-                            $replacementAdService = new FacebookAdService($customer);
+                            $replacementAdService = $this->ads()->facebookAds($customer);
                             $newAd = $replacementAdService->createAd(
                                 $accountId,
                                 $ad['adset_id'] ?? '',
@@ -686,7 +696,7 @@ class SelfHealingAgent
     protected function checkFacebookDeliveryHealth(Campaign $campaign, Customer $customer, array &$results): void
     {
         try {
-            $insightService = new FacebookInsightService($customer);
+            $insightService = $this->ads()->facebookInsights($customer);
 
             // Get today's insights
             $dateToday = now()->format('Y-m-d');
@@ -740,7 +750,7 @@ class SelfHealingAgent
     {
         try {
             // Check for frequency fatigue (high frequency = creative fatigue)
-            $insightService = new FacebookInsightService($customer);
+            $insightService = $this->ads()->facebookInsights($customer);
 
             $dateEnd = now()->format('Y-m-d');
             $dateStart = now()->subDays(7)->format('Y-m-d');

@@ -25,6 +25,14 @@ interface AdsServiceFactory
 
     public function accountStatus(Customer $customer): AccountStatusSource;
 
+    public function adStatus(Customer $customer): AdStatusSource;
+
+    public function assetPerformance(Customer $customer): AssetPerformanceSource;
+
+    public function facebookInsights(Customer $customer): FacebookInsightSource;
+
+    public function facebookAds(Customer $customer): FacebookAdManager;
+
     /**
      * Keyword changes the agent decided on but did not send, for sandbox runs.
      * Always empty for live customers, where changes are actually applied.
@@ -39,4 +47,11 @@ interface AdsServiceFactory
      * @return list<array{campaign: string, daily_budget_micros: float}>
      */
     public function recordedBudgetChanges(Customer $customer): array;
+
+    /**
+     * Meta ad/creative changes decided but not sent, for sandbox runs.
+     *
+     * @return list<array{action: string, target: string, detail: string}>
+     */
+    public function recordedFacebookChanges(Customer $customer): array;
 }

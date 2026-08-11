@@ -1801,12 +1801,6 @@ parameters:
 			path: app/Services/Agents/CreativeIntelligenceAgent.php
 
 		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetAdPerformanceByAsset constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/CreativeIntelligenceAgent.php
-
-		-
 			message: '#^If condition is always true\.$#'
 			identifier: if.alwaysTrue
 			count: 1
@@ -2096,12 +2090,6 @@ parameters:
 
 		-
 			message: '#^Callable App\\Services\\GoogleAds\\SearchServices\\CreateResponsiveSearchAd invoked with 5 parameters, 3 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/SelfHealingAgent.php
-
-		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetAdStatus constructor invoked with 2 parameters, 1 required\.$#'
 			identifier: arguments.count
 			count: 1
 			path: app/Services/Agents/SelfHealingAgent.php
