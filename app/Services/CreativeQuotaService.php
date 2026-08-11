@@ -14,12 +14,38 @@ class CreativeQuotaService
     /**
      * Get or create the usage record for the current billing period.
      */
+    /**
+     * Quota is held by the customer, not the person using the tool.
+     *
+     * Keyed on user_id previously, so a customer with three users received
+     * three separate quotas. Generation allowance is sold per account.
+     *
+     * The customer is resolved from the user's current selection; user_id is
+     * still recorded so usage remains attributable to a person.
+     */
     public function getOrCreateUsage(User $user): CreativeUsage
     {
         $period = $this->getCurrentPeriod();
+        $customerId = $this->customerIdFor($user);
+
+        if (! $customerId) {
+            // No customer yet (mid-onboarding). Fall back to per-user so the
+            // tool still works rather than failing closed.
+            return CreativeUsage::firstOrCreate(
+                ['user_id' => $user->id, 'customer_id' => null, 'period' => $period],
+                [
+                    'image_generations_used' => 0,
+                    'video_generations_used' => 0,
+                    'refinements_used' => 0,
+                    'bonus_image_generations' => 0,
+                    'bonus_video_generations' => 0,
+                    'bonus_refinements' => 0,
+                ]
+            );
+        }
 
         return CreativeUsage::firstOrCreate(
-            ['user_id' => $user->id, 'period' => $period],
+            ['customer_id' => $customerId, 'period' => $period],
             [
                 'image_generations_used' => 0,
                 'video_generations_used' => 0,
@@ -27,8 +53,28 @@ class CreativeQuotaService
                 'bonus_image_generations' => 0,
                 'bonus_video_generations' => 0,
                 'bonus_refinements' => 0,
+                'user_id' => $user->id,
             ]
         );
+    }
+
+    /**
+     * The customer this user's usage should count against.
+     *
+     * The active customer lives in the session (set by CustomerController::switch),
+     * not on the user, so it is only available in a web request — a queued job
+     * has none. Ownership is re-checked rather than trusted: a stale session
+     * value must not let usage be booked against someone else's quota.
+     */
+    private function customerIdFor(User $user): ?int
+    {
+        $active = session('active_customer_id');
+
+        if ($active && $user->customers()->where('customers.id', $active)->exists()) {
+            return (int) $active;
+        }
+
+        return $user->customers()->value('customers.id');
     }
 
     /**

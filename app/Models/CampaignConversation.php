@@ -12,6 +12,7 @@ class CampaignConversation extends Model
 
     protected $fillable = [
         'campaign_id',
+        'customer_id',
         'user_id',
         'messages',
     ];
@@ -57,11 +58,28 @@ class CampaignConversation extends Model
     /**
      * Get or create a conversation for a campaign + user pair.
      */
-    public static function getOrCreate(int $campaignId, int $userId): static
+    /**
+     * One thread per campaign, shared by everyone at that customer.
+     *
+     * Previously keyed on (campaign_id, user_id), so two colleagues discussing
+     * the same campaign each got their own thread and neither saw the other's
+     * context. The campaign belongs to a customer, not to whoever opened the
+     * chat first.
+     *
+     * $userId is recorded as the most recent participant — that part genuinely
+     * is per-person.
+     */
+    public static function getOrCreate(int $campaignId, int $customerId, ?int $userId = null): static
     {
-        return static::firstOrCreate(
-            ['campaign_id' => $campaignId, 'user_id' => $userId],
-            ['messages' => []]
+        $conversation = static::firstOrCreate(
+            ['campaign_id' => $campaignId, 'customer_id' => $customerId],
+            ['messages' => [], 'user_id' => $userId]
         );
+
+        if ($userId && $conversation->user_id !== $userId) {
+            $conversation->update(['user_id' => $userId]);
+        }
+
+        return $conversation;
     }
 }

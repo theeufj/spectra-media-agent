@@ -35,7 +35,7 @@ class CampaignCopilotController extends Controller
         $userMessage = $request->input('message');
 
         // Get or create conversation
-        $conversation = CampaignConversation::getOrCreate($campaign->id, $user->id);
+        $conversation = CampaignConversation::getOrCreate($campaign->id, $campaign->customer_id, $user->id);
 
         // Record user message
         $conversation->addMessage('user', $userMessage);
@@ -93,8 +93,10 @@ class CampaignCopilotController extends Controller
 
         $this->authorize('view', $campaign);
 
+        // Scoped to the campaign's customer: colleagues share one thread, so
+        // history must not be filtered to whoever happens to be asking.
         $conversation = CampaignConversation::where('campaign_id', $campaign->id)
-            ->where('user_id', $user->id)
+            ->where('customer_id', $campaign->customer_id)
             ->first();
 
         return response()->json([
@@ -112,7 +114,7 @@ class CampaignCopilotController extends Controller
         $this->authorize('view', $campaign);
 
         CampaignConversation::where('campaign_id', $campaign->id)
-            ->where('user_id', $user->id)
+            ->where('customer_id', $campaign->customer_id)
             ->delete();
 
         return response()->json(['cleared' => true]);

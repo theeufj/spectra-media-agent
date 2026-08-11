@@ -8,6 +8,7 @@ class CreativeUsage extends Model
 {
     protected $fillable = [
         'user_id',
+        'customer_id',
         'period',
         'image_generations_used',
         'video_generations_used',
