@@ -49,6 +49,7 @@ class CreateCampaign extends BaseGoogleAdsService
         /** @var CampaignServiceClient $campaignServiceClient */
         $campaignServiceClient = $this->googleAdsClient->getCampaignServiceClient();
         $request = new MutateCampaignsRequest([
+            'validate_only' => $this->dryRun,
             'customer_id' => $customerId,
             'operations' => [$campaignOperation],
         ]);

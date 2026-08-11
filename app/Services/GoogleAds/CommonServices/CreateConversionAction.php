@@ -52,6 +52,7 @@ class CreateConversionAction extends BaseGoogleAdsService
         try {
             $conversionActionServiceClient = $this->client->getConversionActionServiceClient();
             $response = $conversionActionServiceClient->mutateConversionActions(new MutateConversionActionsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]));

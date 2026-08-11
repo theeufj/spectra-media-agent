@@ -56,7 +56,7 @@ class CreateDSACampaign extends BaseGoogleAdsService
 
         try {
             $budgetResponse = $this->client->getCampaignBudgetServiceClient()->mutateCampaignBudgets(
-                new MutateCampaignBudgetsRequest(['customer_id' => $customerId, 'operations' => [$budgetOp]])
+                new MutateCampaignBudgetsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$budgetOp]])
             );
             $budgetResource = $budgetResponse->getResults()[0]->getResourceName();
         } catch (GoogleAdsException|ApiException $e) {
@@ -86,7 +86,7 @@ class CreateDSACampaign extends BaseGoogleAdsService
 
         try {
             $campaignResponse = $this->client->getCampaignServiceClient()->mutateCampaigns(
-                new MutateCampaignsRequest(['customer_id' => $customerId, 'operations' => [$campaignOp]])
+                new MutateCampaignsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$campaignOp]])
             );
             $resourceName = $campaignResponse->getResults()[0]->getResourceName();
             $this->logInfo("Created DSA campaign: {$resourceName}");

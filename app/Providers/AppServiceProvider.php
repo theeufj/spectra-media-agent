@@ -35,6 +35,23 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // Routes agents to live or synthetic platform services per customer, so
+        // the real agents can be run against sandbox data without touching an
+        // ad account. Singleton so a sandbox run can retrieve the same recorder
+        // afterwards and report what the agent actually decided.
+        $this->app->singleton(
+            \App\Contracts\Ads\AdsServiceFactory::class,
+            \App\Services\Ads\CustomerRoutedAdsServiceFactory::class
+        );
+
+        // Default binding for anything type-hinting the contract directly
+        // (MetricsFetcher). Sandbox runs inject their own instance explicitly
+        // rather than rebinding this, so no global state is ever mutated.
+        $this->app->bind(
+            \App\Contracts\Ads\CampaignPerformanceSource::class,
+            \App\Services\GoogleAds\CommonServices\GetCampaignPerformance::class
+        );
+
         $this->app->singleton(StripeClient::class, function () {
             $secret = config('services.stripe.secret');
 

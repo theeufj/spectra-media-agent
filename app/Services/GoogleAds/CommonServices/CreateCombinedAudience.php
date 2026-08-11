@@ -67,6 +67,7 @@ class CreateCombinedAudience extends BaseGoogleAdsService
 
         try {
             $response = $this->client->getUserListServiceClient()->mutateUserLists(new MutateUserListsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]));

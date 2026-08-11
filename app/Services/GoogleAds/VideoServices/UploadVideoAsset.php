@@ -46,6 +46,7 @@ class UploadVideoAsset extends BaseGoogleAdsService
         try {
             $assetServiceClient = $this->client->getAssetServiceClient();
             $request = new MutateAssetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$assetOperation],
             ]);

@@ -81,7 +81,7 @@ class VerifyConversionGoals extends BaseGoogleAdsService
             $op->setUpdate($ca);
             $op->setUpdateMask(new FieldMask(['paths' => ['primary_for_goal']]));
             $this->client->getConversionActionServiceClient()->mutateConversionActions(
-                new MutateConversionActionsRequest(['customer_id' => $customerId, 'operations' => [$op]])
+                new MutateConversionActionsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$op]])
             );
 
             return true;

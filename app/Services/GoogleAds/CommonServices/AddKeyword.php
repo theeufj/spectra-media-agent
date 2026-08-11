@@ -46,6 +46,7 @@ class AddKeyword extends BaseGoogleAdsService
             $adGroupCriterionServiceClient = $this->client->getAdGroupCriterionServiceClient();
             $response = $adGroupCriterionServiceClient->mutateAdGroupCriteria(
                 new MutateAdGroupCriteriaRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$operation],
                 ])

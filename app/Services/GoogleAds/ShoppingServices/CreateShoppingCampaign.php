@@ -100,6 +100,7 @@ class CreateShoppingCampaign extends BaseGoogleAdsService
         try {
             $campaignServiceClient = $this->client->getCampaignServiceClient();
             $request = new MutateCampaignsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignOperation],
             ]);
@@ -130,6 +131,7 @@ class CreateShoppingCampaign extends BaseGoogleAdsService
         try {
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
             $request = new MutateCampaignBudgetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignBudgetOperation],
             ]);

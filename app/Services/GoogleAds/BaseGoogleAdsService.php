@@ -21,11 +21,46 @@ abstract class BaseGoogleAdsService
 
     protected ?Customer $customer = null;
 
+    /**
+     * When true, every mutate this service issues is sent with validate_only.
+     *
+     * Google fully validates the request — required fields, policy, budget
+     * shape, resource references — and applies nothing. It is the cheapest way
+     * to prove a mutation is well-formed against a real account, needing no test
+     * account and no second set of credentials.
+     *
+     * Per-instance and opt-in rather than a global mode: a mode flag can be left
+     * on, set by one request and read by another, or inherited by a queue
+     * worker, and a dry run that silently became live would be far worse than
+     * no dry run at all.
+     *
+     * It cannot validate multi-step chains — nothing is created, so a later
+     * operation has no ID to reference. That case needs a Google test account.
+     */
+    protected bool $dryRun = false;
+
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
         $this->client = $this->buildClient();
         $this->maybeUseUserCredentials();
+    }
+
+    /**
+     * Validate mutations against Google without applying them.
+     *
+     * Fluent and per-instance: (new AddKeyword($customer))->dryRun()->__invoke(...)
+     */
+    public function dryRun(bool $enabled = true): static
+    {
+        $this->dryRun = $enabled;
+
+        return $this;
+    }
+
+    public function isDryRun(): bool
+    {
+        return $this->dryRun;
     }
 
     /**

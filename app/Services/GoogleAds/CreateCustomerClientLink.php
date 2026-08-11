@@ -30,6 +30,7 @@ class CreateCustomerClientLink extends BaseGoogleAdsService
         /** @var CustomerClientLinkServiceClient $customerClientLinkServiceClient */
         $customerClientLinkServiceClient = $this->googleAdsClient->getCustomerClientLinkServiceClient();
         $request = new MutateCustomerClientLinksRequest([
+            'validate_only' => $this->dryRun,
             'customer_id' => $managerAccountId,
             'operations' => [$customerClientLinkOperation],
         ]);

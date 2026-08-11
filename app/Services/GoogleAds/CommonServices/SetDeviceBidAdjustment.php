@@ -39,6 +39,7 @@ class SetDeviceBidAdjustment extends BaseGoogleAdsService
         try {
             $response = $this->client->getCampaignCriterionServiceClient()->mutateCampaignCriteria(
                 new MutateCampaignCriteriaRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$operation],
                 ])

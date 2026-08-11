@@ -91,6 +91,7 @@ class CreateSitelinkAssets extends BaseGoogleAdsService
 
         try {
             $resp = $this->client->getAssetServiceClient()->mutateAssets(new MutateAssetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$operation],
             ]));

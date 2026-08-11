@@ -82,6 +82,7 @@ class UpdateCampaignBiddingStrategy extends BaseGoogleAdsService
         try {
             $this->client->getCampaignServiceClient()->mutateCampaigns(
                 new MutateCampaignsRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$operation],
                 ])

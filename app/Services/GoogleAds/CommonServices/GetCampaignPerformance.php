@@ -2,11 +2,12 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Contracts\Ads\CampaignPerformanceSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Services\GoogleAdsRow;
 
-class GetCampaignPerformance extends BaseGoogleAdsService
+class GetCampaignPerformance extends BaseGoogleAdsService implements CampaignPerformanceSource
 {
     /**
      * Get performance metrics for a campaign.

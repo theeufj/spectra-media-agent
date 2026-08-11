@@ -50,7 +50,7 @@ class CreateExpandedDynamicSearchAd extends BaseGoogleAdsService
 
         try {
             $response = $this->client->getAdGroupAdServiceClient()->mutateAdGroupAds(
-                new MutateAdGroupAdsRequest(['customer_id' => $customerId, 'operations' => [$operation]])
+                new MutateAdGroupAdsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$operation]])
             );
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Created DSA ad: {$resourceName}");

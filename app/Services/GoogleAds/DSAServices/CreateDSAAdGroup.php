@@ -40,7 +40,7 @@ class CreateDSAAdGroup extends BaseGoogleAdsService
 
         try {
             $response = $this->client->getAdGroupServiceClient()->mutateAdGroups(
-                new MutateAdGroupsRequest(['customer_id' => $customerId, 'operations' => [$operation]])
+                new MutateAdGroupsRequest(['validate_only' => $this->dryRun, 'customer_id' => $customerId, 'operations' => [$operation]])
             );
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("Created DSA ad group: {$resourceName}");

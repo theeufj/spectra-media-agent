@@ -114,6 +114,7 @@ class UpdateResponsiveSearchAd extends BaseGoogleAdsService
         try {
             $this->client->getAdServiceClient()->mutateAds(
                 new MutateAdsRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$operation],
                 ])

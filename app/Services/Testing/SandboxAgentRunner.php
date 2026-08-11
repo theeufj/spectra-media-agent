@@ -2,16 +2,24 @@
 
 namespace App\Services\Testing;
 
+use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
-use App\Models\CampaignHourlyPerformance;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
-use App\Models\Keyword;
 use App\Models\KeywordQualityScore;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
+use App\Services\Agents\BudgetIntelligenceAgent;
+use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\HealthCheckAgent;
+use App\Services\Agents\Optimization\MetricsFetcher;
+use App\Services\Agents\Optimization\RecommendationApplier;
+use App\Services\Agents\Optimization\RecommendationScorer;
+use App\Services\Agents\SearchTermMiningAgent;
+use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
+use App\Services\Testing\Sandbox\SandboxGeminiService;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -66,69 +74,33 @@ class SandboxAgentRunner
 
     // ── Health Check ───────────────────────────────────────────────
 
+    /**
+     * Runs the REAL HealthCheckAgent against synthetic data.
+     *
+     * Its connectivity probe and account-status lookup were the last live API
+     * calls in this path; both now resolve through AdsServiceFactory, so a
+     * sandbox customer reaches the DB-driven checks that make up the bulk of
+     * the agent instead of failing at the first step.
+     *
+     * Gemini is stubbed so the run is reproducible.
+     */
     protected function runHealthCheck(Customer $customer, $campaigns): void
     {
         try {
-            $issues = [];
-            $campaignSummaries = [];
-
-            foreach ($campaigns as $campaign) {
-                $platform = $this->detectPlatform($campaign);
-                $perf = $this->getCampaignPerformance($campaign, $platform);
-
-                $health = 'healthy';
-                if ($perf['conv_rate'] < 0.01) {
-                    $health = 'warning';
-                }
-                if ($perf['cpa'] > 100) {
-                    $health = 'warning';
-                }
-                if ($perf['cost'] > 0 && $perf['conversions'] == 0) {
-                    $health = 'critical';
-                }
-                if ($perf['trend_direction'] === 'declining') {
-                    $health = 'warning';
-                }
-
-                $campaignSummaries[] = [
-                    'campaign' => $campaign->name,
-                    'platform' => $platform,
-                    'health' => $health,
-                    'spend' => round($perf['cost'], 2),
-                    'conversions' => $perf['conversions'],
-                    'cpa' => round($perf['cpa'], 2),
-                    'roas' => round($perf['roas'], 2),
-                ];
-
-                if ($health !== 'healthy') {
-                    $issues[] = "{$campaign->name}: {$health} — CPA \${$perf['cpa']}, ROAS {$perf['roas']}x";
-                }
-            }
-
-            $healthyCampaigns = collect($campaignSummaries)->where('health', 'healthy')->count();
-            $warningCampaigns = collect($campaignSummaries)->where('health', 'warning')->count();
-            $criticalCampaigns = collect($campaignSummaries)->where('health', 'critical')->count();
-
-            $overallHealth = $criticalCampaigns > 0 ? 'critical'
-                : ($warningCampaigns > $healthyCampaigns ? 'warning' : 'healthy');
-
-            $result = [
-                'overall_health' => $overallHealth,
-                'healthy' => $healthyCampaigns,
-                'warning' => $warningCampaigns,
-                'critical' => $criticalCampaigns,
-                'total_campaigns' => $campaigns->count(),
-                'campaigns' => $campaignSummaries,
-                'issues' => $issues,
-                'recommendations' => $this->getHealthRecommendations($campaignSummaries),
-            ];
+            $agent = app()->makeWith(HealthCheckAgent::class, ['gemini' => new SandboxGeminiService]);
+            $result = $agent->checkCustomerHealth($customer);
 
             $this->results['HealthCheckAgent'] = ['status' => 'completed', 'data' => $result];
 
             AgentActivity::record(
                 'HealthCheckAgent',
                 'sandbox_health_check',
-                "Sandbox: Overall health — {$overallHealth} ({$healthyCampaigns} healthy, {$warningCampaigns} warnings, {$criticalCampaigns} critical)",
+                sprintf(
+                    'Sandbox: health %s — %d issue(s), %d warning(s)',
+                    $result['overall_health'] ?? 'unknown',
+                    count($result['issues'] ?? []),
+                    count($result['warnings'] ?? [])
+                ),
                 $customer->id,
                 null,
                 $result,
@@ -226,93 +198,29 @@ class SandboxAgentRunner
 
     // ── Optimization ───────────────────────────────────────────────
 
+    /**
+     * Runs the REAL CampaignOptimizationAgent against synthetic data.
+     *
+     * Dependencies are passed explicitly rather than rebinding the container:
+     * a global override can leak past the run that set it, and this used to be
+     * a reimplementation precisely because nobody wanted that risk. Building the
+     * agent by hand keeps the substitution scoped to this call.
+     *
+     * Gemini is stubbed for determinism — a real model call would return
+     * something different every run, so a changed sandbox result would tell you
+     * nothing about whether behaviour changed.
+     */
     protected function runOptimization(Campaign $campaign, Customer $customer, array $perf, string $platform): void
     {
         try {
-            $recommendations = [];
-            $score = 70; // baseline
+            $agent = new CampaignOptimizationAgent(
+                new SandboxGeminiService,
+                new MetricsFetcher(new SandboxCampaignPerformanceSource($customer)),
+                app(RecommendationScorer::class),
+                app(RecommendationApplier::class),
+            );
 
-            // CTR analysis
-            $avgCtr = match ($platform) {
-                'facebook' => 0.02,
-                'linkedin' => 0.005,
-                default => 0.05,
-            };
-            if ($perf['ctr'] < $avgCtr * 0.6) {
-                $recommendations[] = [
-                    'area' => 'ad_relevance',
-                    'priority' => 'high',
-                    'action' => 'Rewrite ad copy — CTR is '.round($perf['ctr'] * 100, 2).'% vs industry avg '.round($avgCtr * 100, 1).'%.',
-                    'expected_impact' => '+20-40% CTR improvement',
-                ];
-                $score -= 15;
-            }
-
-            // CPA analysis
-            if ($perf['cpa'] > 80) {
-                $recommendations[] = [
-                    'area' => 'conversion_efficiency',
-                    'priority' => 'high',
-                    'action' => "CPA of \${$perf['cpa']} is high. Review landing page experience and ensure conversion tracking is accurate.",
-                    'expected_impact' => '-15-30% CPA reduction',
-                ];
-                $score -= 10;
-            }
-
-            // ROAS
-            if ($perf['roas'] < 2.0 && $perf['roas'] > 0) {
-                $recommendations[] = [
-                    'area' => 'roas_improvement',
-                    'priority' => 'medium',
-                    'action' => "ROAS of {$perf['roas']}x is below 2x target. Shift budget to highest-converting audiences.",
-                    'expected_impact' => '+0.5-1.0x ROAS improvement',
-                ];
-                $score -= 10;
-            }
-
-            // Trend
-            if ($perf['trend_direction'] === 'declining') {
-                $recommendations[] = [
-                    'area' => 'trend_reversal',
-                    'priority' => 'high',
-                    'action' => 'Performance in decline — refresh creatives, expand audiences, or test new bid strategies.',
-                    'expected_impact' => 'Stabilise declining metrics within 5-7 days',
-                ];
-                $score -= 10;
-            }
-
-            // Budget utilization
-            if ($perf['budget_utilization'] > 110) {
-                $recommendations[] = [
-                    'area' => 'budget_management',
-                    'priority' => 'medium',
-                    'action' => "Campaign overspending at {$perf['budget_utilization']}% utilization. Set stricter bid caps or reduce target CPA.",
-                    'expected_impact' => 'Bring spend in line with budget allocation',
-                ];
-                $score -= 5;
-            }
-
-            if (empty($recommendations)) {
-                $recommendations[] = [
-                    'area' => 'maintain',
-                    'priority' => 'low',
-                    'action' => 'Campaign performing well. Continue monitoring and consider scaling budget by 10-15%.',
-                    'expected_impact' => 'Incremental growth while maintaining efficiency',
-                ];
-                $score = min(95, $score + 10);
-            }
-
-            $result = [
-                'optimization_score' => max(10, min(100, $score)),
-                'recommendations' => $recommendations,
-                'metrics_analyzed' => [
-                    'ctr' => round($perf['ctr'] * 100, 2).'%',
-                    'cpc' => '$'.round($perf['cpc'], 2),
-                    'cpa' => '$'.round($perf['cpa'], 2),
-                    'roas' => round($perf['roas'], 2).'x',
-                    'budget_utilization' => round($perf['budget_utilization']).'%',
-                ],
-            ];
+            $result = $agent->analyze($campaign) ?? ['recommendations' => []];
 
             $key = "CampaignOptimizationAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
@@ -320,7 +228,11 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'CampaignOptimizationAgent',
                 'sandbox_optimization',
-                "Sandbox: Optimization score {$result['optimization_score']}/100 for {$campaign->name} — ".count($recommendations).' recommendations',
+                sprintf(
+                    'Sandbox: %d recommendation(s) generated for %s',
+                    count($result['recommendations'] ?? []),
+                    $campaign->name
+                ),
                 $customer->id,
                 $campaign->id,
                 $result,
@@ -333,65 +245,31 @@ class SandboxAgentRunner
 
     // ── Budget Intelligence ────────────────────────────────────────
 
+    /**
+     * Runs the REAL BudgetIntelligenceAgent against synthetic data.
+     *
+     * Reads the seeded GoogleAdsPerformanceData rows through the sandbox
+     * performance source and records any budget change instead of sending it,
+     * so pacing and reallocation decisions are visible without real money
+     * being able to move.
+     */
     protected function runBudgetIntelligence(Campaign $campaign, Customer $customer, array $perf): void
     {
         try {
-            $hourlyData = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
-                ->where('date', '>=', now()->subDays(7)->toDateString())
-                ->orderBy('date')
-                ->orderBy('hour')
-                ->get();
-
-            // Find peak and trough hours
-            $hourlyAgg = $hourlyData->groupBy('hour')
-                ->map(fn ($rows) => [
-                    'avg_spend' => $rows->avg('spend'),
-                    'avg_conversions' => $rows->avg('conversions'),
-                    'avg_cpa' => $rows->sum('spend') > 0 && $rows->sum('conversions') > 0
-                        ? round($rows->sum('spend') / $rows->sum('conversions'), 2) : null,
-                ])->sortByDesc('avg_conversions');
-
-            $peakHours = $hourlyAgg->take(4)->keys()->toArray();
-            $troughHours = $hourlyAgg->sortBy('avg_conversions')->take(4)->keys()->toArray();
-
-            $utilization = $perf['budget_utilization'];
-
-            $recommendedAction = match (true) {
-                $utilization > 120 => 'reduce_budget',
-                $utilization > 100 => 'reallocate_to_peaks',
-                $utilization < 60 => 'increase_budget',
-                default => 'maintain',
-            };
-
-            $multiplierSuggested = match ($recommendedAction) {
-                'reduce_budget' => 0.85,
-                'increase_budget' => 1.20,
-                default => 1.00,
-            };
-
-            $result = [
-                'current_daily_budget' => $campaign->daily_budget,
-                'actual_daily_spend' => round($perf['cost'] / 30, 2),
-                'budget_utilization' => round($utilization).'%',
-                'recommended_action' => $recommendedAction,
-                'multiplier_suggested' => $multiplierSuggested,
-                'peak_hours' => $peakHours,
-                'trough_hours' => $troughHours,
-                'recommendation' => match ($recommendedAction) {
-                    'reduce_budget' => "Overspending at {$utilization}%. Reduce bids during off-peak hours (".implode(', ', $troughHours).'h) and concentrate budget on peak conversion hours ('.implode(', ', $peakHours).'h).',
-                    'increase_budget' => "Only using {$utilization}% of budget. Increase daily budget or broaden targeting to capture more impressions during peak hours.",
-                    'reallocate_to_peaks' => 'Slightly over budget. Use ad scheduling to shift spend from low-conversion hours to peak hours ('.implode(', ', $peakHours).'h).',
-                    default => "Budget utilization is healthy at {$utilization}%. Continue monitoring hourly performance.",
-                },
-            ];
+            $result = app(BudgetIntelligenceAgent::class)->optimize($campaign);
+            $result['budget_changes'] = app(AdsServiceFactory::class)->recordedBudgetChanges($customer);
 
             $key = "BudgetIntelligenceAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
 
             AgentActivity::record(
                 'BudgetIntelligenceAgent',
-                'sandbox_budget_optimization',
-                "Sandbox: Budget {$recommendedAction} (×{$multiplierSuggested}) for {$campaign->name} — {$utilization}% utilization",
+                'sandbox_budget_intelligence',
+                sprintf(
+                    'Sandbox: budget analysis for %s — %d change(s) proposed',
+                    $campaign->name,
+                    count($result['budget_changes'])
+                ),
                 $customer->id,
                 $campaign->id,
                 $result,
@@ -404,52 +282,26 @@ class SandboxAgentRunner
 
     // ── Search Term Mining ─────────────────────────────────────────
 
+    /**
+     * Runs the REAL SearchTermMiningAgent against synthetic data.
+     *
+     * This method previously reimplemented the agent: it derived its own
+     * recommendations from KeywordQualityScore rows and recorded them as
+     * AgentActivity under the name "SearchTermMiningAgent". The real agent was
+     * never invoked, so a green sandbox run was evidence of nothing — worse, it
+     * manufactured activity records implying an agent had worked when it had
+     * never executed once in production.
+     *
+     * The agent now resolves its platform services through AdsServiceFactory,
+     * which returns synthetic ones for sandbox customers, so the genuine
+     * thresholds, match-type selection and safety rules all execute here.
+     */
     protected function runSearchTermMining(Campaign $campaign, Customer $customer): void
     {
         try {
-            $keywords = Keyword::where('campaign_id', $campaign->id)->get();
-            $qualityScores = KeywordQualityScore::where('customer_id', $customer->id)
-                ->where('campaign_google_id', $campaign->google_ads_campaign_id ?? $campaign->microsoft_ads_campaign_id)
-                ->where('recorded_at', '>=', now()->subDays(7))
-                ->get();
+            $result = app(SearchTermMiningAgent::class)->mine($campaign);
 
-            $avgQs = $qualityScores->avg('quality_score') ?? 0;
-            $lowQsKeywords = $qualityScores->where('quality_score', '<', 5)->unique('keyword_text');
-            $highQsKeywords = $qualityScores->where('quality_score', '>=', 7)->unique('keyword_text');
-
-            $negativeRecommendations = [];
-            foreach ($lowQsKeywords->take(5) as $kw) {
-                if ($kw->quality_score <= 3 && $kw->conversions == 0) {
-                    $negativeRecommendations[] = [
-                        'keyword' => $kw->keyword_text,
-                        'quality_score' => $kw->quality_score,
-                        'reason' => 'Low quality score with zero conversions — consider adding as negative keyword.',
-                    ];
-                }
-            }
-
-            $expansionRecommendations = [];
-            foreach ($highQsKeywords->take(5) as $kw) {
-                $expansionRecommendations[] = [
-                    'keyword' => $kw->keyword_text,
-                    'quality_score' => $kw->quality_score,
-                    'reason' => 'High quality score — consider creating exact match variant or dedicated ad group.',
-                ];
-            }
-
-            $result = [
-                'terms_analyzed' => $keywords->count(),
-                'average_quality_score' => round($avgQs, 1),
-                'low_qs_count' => $lowQsKeywords->count(),
-                'high_qs_count' => $highQsKeywords->count(),
-                'negative_keyword_recommendations' => $negativeRecommendations,
-                'expansion_recommendations' => $expansionRecommendations,
-                'summary' => $avgQs < 5
-                    ? "Average quality score is {$avgQs}/10 — ads and landing pages need significant improvement for these keywords."
-                    : ($avgQs < 7
-                        ? "Average quality score is {$avgQs}/10 — there's room to improve ad relevance and landing page quality."
-                        : "Average quality score is {$avgQs}/10 — keywords are well-optimized. Focus on scale."),
-            ];
+            $result['decisions'] = app(AdsServiceFactory::class)->recordedDecisions($customer);
 
             $key = "SearchTermMiningAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
@@ -457,7 +309,13 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'SearchTermMiningAgent',
                 'sandbox_search_mining',
-                "Sandbox: {$keywords->count()} terms, avg QS {$avgQs}/10 — {$lowQsKeywords->count()} low, {$highQsKeywords->count()} high for {$campaign->name}",
+                sprintf(
+                    'Sandbox: analysed %d search terms — %d keyword(s) promoted, %d negative(s) added for %s',
+                    $result['terms_analyzed'] ?? 0,
+                    count($result['keywords_added'] ?? []),
+                    count($result['negatives_added'] ?? []),
+                    $campaign->name
+                ),
                 $customer->id,
                 $campaign->id,
                 $result,

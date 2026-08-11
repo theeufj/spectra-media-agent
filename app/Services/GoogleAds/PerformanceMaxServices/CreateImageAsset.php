@@ -60,6 +60,7 @@ class CreateImageAsset extends BaseGoogleAdsService
         try {
             $assetServiceClient = $this->client->getAssetServiceClient();
             $response = $assetServiceClient->mutateAssets(new MutateAssetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$assetOperation],
             ]));

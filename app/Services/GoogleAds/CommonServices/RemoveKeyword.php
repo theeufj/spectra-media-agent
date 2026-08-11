@@ -20,6 +20,7 @@ class RemoveKeyword extends BaseGoogleAdsService
         try {
             $this->client->getAdGroupCriterionServiceClient()->mutateAdGroupCriteria(
                 new MutateAdGroupCriteriaRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$operation],
                 ])
