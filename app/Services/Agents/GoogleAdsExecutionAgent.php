@@ -3,8 +3,10 @@
 namespace App\Services\Agents;
 
 use App\Mail\GoogleAdsVerificationRequired;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\GoogleAdsPerformanceData;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Notifications\ConversionTrackingReady;
@@ -403,15 +405,36 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             $campaignStructure = $plan->getCampaignStructure();
             $campaignType = $campaignStructure['type'] ?? 'search';
 
-            // Prefer Performance Max over plain Search when assets are ready.
-            // PMax runs across all Google surfaces (Search, Display, YouTube, Gmail, Maps)
-            // from day one — more efficient than a Search-only campaign for new accounts.
+            // Prefer Performance Max over plain Search when assets are ready AND
+            // the account has enough conversion history for PMax to bid sensibly.
+            //
+            // This gate used to test only whether PMax was possible — three
+            // correctly-sized images and A$10/day. It never asked whether it was
+            // wise. PMax chooses its own inventory and needs conversion volume to
+            // choose well; with none it reliably chases the cheapest impressions
+            // available, which is how a B2B advertiser ended up spending 89% of
+            // its impressions inside mobile games while Maximize Conversions bid
+            // on a history of zero.
             if (in_array($campaignType, ['search', 'display'], true)) {
                 $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
-                $minBudget = ($strategy->daily_budget ?: ($campaign->daily_budget ?: 0)) >= 10;
+                $minBudget = ($strategy->daily_budget ?: ($campaign->daily_budget ?: 0))
+                    >= config('optimization.pmax_upgrade.min_daily_budget', 10);
+                $hasConversionSignal = $this->hasConversionSignalForPmax($campaign);
+
+                if (! $hasConversionSignal) {
+                    $required = config('optimization.pmax_upgrade.min_conversions', 30);
+                    Log::info("GoogleAdsExecutionAgent: Keeping {$campaignType} — account has too little conversion history for Performance Max", [
+                        'campaign_id' => $campaign->id,
+                        'required_conversions' => $required,
+                    ]);
+                    $result->addWarning(
+                        'pmax_upgrade_declined',
+                        "Kept this as a {$campaignType} campaign. Performance Max needs about {$required} conversions a month to choose where to show your ads well; below that it tends to spend on cheap, low-intent placements. It becomes available automatically once the account has that history."
+                    );
+                }
 
                 $validPmaxImages = 0;
-                if ($hasAdCopy && $minBudget) {
+                if ($hasAdCopy && $minBudget && $hasConversionSignal) {
                     $images = $strategy->imageCollaterals()
                         ->where('is_active', true)
                         ->where('should_deploy', true)
@@ -440,13 +463,29 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                     }
                 }
 
-                if ($validPmaxImages >= 3 && $hasAdCopy && $minBudget) {
+                if ($validPmaxImages >= config('optimization.pmax_upgrade.min_images', 3) && $hasAdCopy && $minBudget && $hasConversionSignal) {
                     Log::info("GoogleAdsExecutionAgent: Upgrading {$campaignType} → performance_max (assets ready)", [
                         'campaign_id' => $campaign->id,
                         'valid_pmax_images' => $validPmaxImages,
                     ]);
                     $campaignType = 'performance_max';
                     $result->addWarning('campaign_type_upgraded', 'Campaign type upgraded to Performance Max — all Google surfaces will be targeted using your uploaded assets.');
+
+                    // Persist it. The upgrade previously lived only in this
+                    // warning and a log line, so a worker that died before
+                    // returning left the strategy claiming a type it had not
+                    // deployed — which is exactly what happened to strategy 736,
+                    // recorded as 'display' while running as PMax.
+                    $strategy->forceFill(['campaign_type' => 'performance_max'])->save();
+
+                    AgentActivity::record(
+                        'deployment',
+                        'campaign_type_upgraded',
+                        'Deployed "'.$campaign->name.'" as Performance Max rather than '.$campaignStructure['type'].' — assets and conversion history both met the threshold',
+                        $campaign->customer_id,
+                        $campaign->id,
+                        ['from' => $campaignStructure['type'] ?? null, 'to' => 'performance_max', 'strategy_id' => $strategy->id]
+                    );
                 } else {
                     Log::info("GoogleAdsExecutionAgent: Keeping {$campaignType} campaign type (PMax requires ≥3 valid-ratio images, found {$validPmaxImages})", [
                         'campaign_id' => $campaign->id,
@@ -476,6 +515,39 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
             return $result;
         }
+    }
+
+    /**
+     * Does this account have enough conversion history for Performance Max to
+     * bid sensibly?
+     *
+     * Measured across the whole customer, not this campaign: a campaign being
+     * deployed has no history of its own, and PMax bids on account-level signal
+     * anyway. Reads the synced performance table rather than calling the API —
+     * this runs inside deployment, where an extra round trip is a failure point
+     * and the data is already local.
+     *
+     * A missing threshold config, or one set to 0, restores the old behaviour of
+     * upgrading whenever the assets allow it.
+     */
+    protected function hasConversionSignalForPmax(Campaign $campaign): bool
+    {
+        $required = (int) config('optimization.pmax_upgrade.min_conversions', 30);
+
+        if ($required <= 0) {
+            return true;
+        }
+
+        $days = (int) config('optimization.pmax_upgrade.lookback_days', 30);
+
+        $conversions = GoogleAdsPerformanceData::whereIn(
+            'campaign_id',
+            Campaign::where('customer_id', $campaign->customer_id)->select('id')
+        )
+            ->where('date', '>=', now()->subDays($days)->toDateString())
+            ->sum('conversions');
+
+        return $conversions >= $required;
     }
 
     /**
