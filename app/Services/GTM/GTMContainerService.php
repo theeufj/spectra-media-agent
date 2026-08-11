@@ -79,6 +79,30 @@ class GTMContainerService
                 return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
             }
 
+            // Reuse an existing container rather than creating a second one.
+            //
+            // This method previously POSTed unconditionally. SetupConversionTracking
+            // retries three times, and its own guard is on conversion_action_id —
+            // which is set *after* the container. So any failure downstream of
+            // provisioning (a Google Ads conversion action error, a Meta pixel
+            // error) meant the next attempt minted another container, up to three
+            // per customer, each with its own snippet the customer would have to
+            // install for tracking to work.
+            if ($customer->gtm_container_id && ! empty($customer->gtm_config['container_path'])) {
+                Log::info('GTMContainerService: Container already provisioned, reusing', [
+                    'customer_id' => $customer->id,
+                    'container_id' => $customer->gtm_container_id,
+                ]);
+
+                return [
+                    'success' => true,
+                    'container_id' => $customer->gtm_container_id,
+                    'container_path' => $customer->gtm_config['container_path'],
+                    'workspace_id' => $customer->gtm_workspace_id,
+                    'reused' => true,
+                ];
+            }
+
             $containerName = $customer->name.' — Site to Spend';
             $response = $this->makeApiCall('POST', "/accounts/{$accountId}/containers", $accessToken, [
                 'name' => $containerName,
