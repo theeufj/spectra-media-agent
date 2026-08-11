@@ -216,15 +216,25 @@ class RankTrackingService
             ->whereDate('date', now()->toDateString())
             ->get();
 
-        $top3 = $latest->where('position', '<=', 3)->count();
-        $top10 = $latest->where('position', '<=', 10)->count();
-        $top30 = $latest->where('position', '<=', 30)->count();
+        // Only rows that actually have a position may count towards a bucket.
+        //
+        // These previously filtered $latest directly, and in PHP `null <= 10` is
+        // true — so every keyword we failed to measure was counted as a page-one
+        // ranking. With Firecrawl returning 402 and all 50 positions null, the
+        // dashboard reported "Top 10 Rankings: 50" while the true figure, since
+        // confirmed against Search Console, was zero.
+        $ranked = $latest->whereNotNull('position');
+
+        $top3 = $ranked->where('position', '<=', 3)->count();
+        $top10 = $ranked->where('position', '<=', 10)->count();
+        $top30 = $ranked->where('position', '<=', 30)->count();
         $improved = $latest->where('change', '>', 0)->count();
         $declined = $latest->where('change', '<', 0)->count();
-        $avgPosition = $latest->whereNotNull('position')->avg('position');
+        $avgPosition = $ranked->avg('position');
 
         return [
             'total_keywords' => $latest->count(),
+            'ranked_keywords' => $ranked->count(),
             'top_3' => $top3,
             'top_3_count' => $top3,
             'top_10' => $top10,
