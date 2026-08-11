@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\KeywordResearch;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\V22\Common\DateRange;
 use Google\Ads\GoogleAds\V22\Common\KeywordInfo;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Google\Ads\GoogleAds\V22\Enums\KeywordPlanNetworkEnum\KeywordPlanNetwork;
@@ -36,13 +37,14 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
      *
      * @param  list<string>  $keywords
      * @param  float  $maxCpc  Max CPC bid in account currency
+     * @param  int  $days  Length of the forecast window, max 365
      * @return array{
      *     success: bool,
      *     impressions?: float, clicks?: float, cost?: float, conversions?: float,
      *     average_cpc?: float, ctr?: float, error?: string
      * }
      */
-    public function __invoke(string $customerId, array $keywords, float $maxCpc, ?float $conversionRate = null): array
+    public function __invoke(string $customerId, array $keywords, float $maxCpc, ?float $conversionRate = null, int $days = 30): array
     {
         $this->ensureClient();
 
@@ -86,10 +88,21 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                 $campaign->setConversionRate($conversionRate);
             }
 
+            // forecast_period is required and lives on the request, not the
+            // campaign. Google rejects the call outright without it, and the
+            // window must start in the future — a forecast is a projection, so
+            // starting today asks Google to predict a day already under way.
+            $start = now()->addDay();
+            $end = $start->copy()->addDays($days - 1);
+
             $response = $this->client->getKeywordPlanIdeaServiceClient()
                 ->generateKeywordForecastMetrics(new GenerateKeywordForecastMetricsRequest([
                     'customer_id' => $customerId,
                     'campaign' => $campaign,
+                    'forecast_period' => new DateRange([
+                        'start_date' => $start->format('Y-m-d'),
+                        'end_date' => $end->format('Y-m-d'),
+                    ]),
                 ]));
 
             $m = $response->getCampaignForecastMetrics();
