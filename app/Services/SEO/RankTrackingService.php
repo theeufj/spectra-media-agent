@@ -19,10 +19,16 @@ class RankTrackingService
 
     protected FirecrawlService $firecrawl;
 
+    protected SearchConsoleService $searchConsole;
+
+    /** Cached Search Console rows for this run, keyed by query. */
+    private ?array $searchConsoleRows = null;
+
     public function __construct(Customer $customer)
     {
         $this->customer = $customer;
         $this->firecrawl = app(FirecrawlService::class);
+        $this->searchConsole = app(SearchConsoleService::class);
     }
 
     /**
@@ -100,6 +106,16 @@ class RankTrackingService
      */
     protected function searchForPosition(string $keyword, string $domain): array
     {
+        // Search Console first: it is first-party, free, and reports the average
+        // position across every real impression rather than one scraped
+        // snapshot. Scraping is kept only as a fallback for domains we are not
+        // verified on — competitors, mainly.
+        $fromSearchConsole = $this->positionFromSearchConsole($keyword);
+
+        if ($fromSearchConsole !== null) {
+            return $fromSearchConsole;
+        }
+
         try {
             if (! $this->firecrawl->isConfigured()) {
                 Log::debug('RankTracking: Firecrawl not configured');
@@ -130,6 +146,47 @@ class RankTrackingService
 
             return ['position' => null, 'url' => null];
         }
+    }
+
+    /**
+     * Average position for a keyword from Search Console, if the site is
+     * verified and the keyword actually drew impressions.
+     *
+     * Returns null — meaning "no answer here" — rather than a null position,
+     * so the caller can fall through to scraping instead of recording a miss.
+     * The whole point of this change is that "we could not measure" and "the
+     * site does not rank" stop looking identical, which is how 4,264 rows of
+     * nulls went unnoticed for three months.
+     *
+     * @return array{position: int|null, url: string|null}|null
+     */
+    private function positionFromSearchConsole(string $keyword): ?array
+    {
+        if ($this->searchConsoleRows === null) {
+            if (! $this->searchConsole->isVerified($this->customer)) {
+                $this->searchConsoleRows = [];
+            } else {
+                $result = $this->searchConsole->performance($this->customer, 'query', 28, 500);
+
+                $this->searchConsoleRows = $result['success']
+                    ? collect($result['rows'] ?? [])
+                        ->filter(fn ($r) => filled($r['key']))
+                        ->keyBy(fn ($r) => mb_strtolower($r['key']))
+                        ->all()
+                    : [];
+            }
+        }
+
+        $row = $this->searchConsoleRows[mb_strtolower($keyword)] ?? null;
+
+        if (! $row) {
+            return null;
+        }
+
+        return [
+            'position' => (int) round($row['position']),
+            'url' => null,
+        ];
     }
 
     /**
