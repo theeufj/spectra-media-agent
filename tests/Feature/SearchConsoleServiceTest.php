@@ -62,6 +62,20 @@ class SearchConsoleServiceTest extends TestCase
         $this->assertTrue(app(SearchConsoleService::class)->isVerified($customer));
     }
 
+    public function test_a_domain_property_is_matched(): void
+    {
+        // Search Console has two property kinds. A Domain property
+        // (sc-domain:example.com) covers every subdomain and scheme; URL-prefix
+        // properties do not. sitetospend.com is registered as a Domain property,
+        // so matching only the https:// forms reported it unverified and skipped
+        // Search Console altogether.
+        $this->fakeAuth(sites: [['siteUrl' => 'sc-domain:example.com', 'permissionLevel' => 'siteOwner']]);
+
+        $customer = Customer::factory()->create(['website' => 'https://www.example.com/pricing']);
+
+        $this->assertTrue(app(SearchConsoleService::class)->isVerified($customer));
+    }
+
     public function test_sites_we_cannot_query_are_not_treated_as_verified(): void
     {
         // Search Console lists sites the account can see but not read.

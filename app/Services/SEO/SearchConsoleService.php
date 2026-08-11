@@ -258,7 +258,14 @@ class SearchConsoleService
 
         $bare = preg_replace('/^www\./i', '', strtolower($host));
 
+        // Domain properties come first. Search Console offers two property
+        // kinds: a Domain property (sc-domain:example.com), which covers every
+        // subdomain and scheme, and URL-prefix properties, which do not.
+        // sitetospend.com is registered as a Domain property, so matching only
+        // the URL-prefix forms reported it as unverified and skipped Search
+        // Console entirely.
         return array_values(array_unique([
+            'sc-domain:'.$bare,
             'https://'.$bare.'/',
             'https://www.'.$bare.'/',
         ]));
