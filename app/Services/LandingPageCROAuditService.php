@@ -339,19 +339,27 @@ class LandingPageCROAuditService
                 }
             }
 
-            // Fallback if AI response is not JSON
+            // The model answered but not in the requested shape. That is an
+            // unusable answer, not a low score — returning 50 made every failure
+            // look like a mediocre page.
+            Log::warning('CRO: message match response was not JSON', ['url_h1' => $h1]);
+
             return [
-                'score' => 50,
-                'analysis' => $text ?: 'Analysis unavailable',
+                'score' => null,
+                'analysis' => 'Message match could not be assessed — the model response could not be read.',
                 'keywords' => $this->extractKeywords($h1.' '.$metaDescription),
             ];
 
         } catch (\Exception $e) {
             Log::warning('Message match analysis failed', ['error' => $e->getMessage()]);
 
+            // Null, not 50. A score of 50 tripped the "< 60" check below, so an
+            // unreachable model produced a fabricated high-severity "Weak
+            // Message Match" finding on every page it touched — which is exactly
+            // what happened while GCP billing was disabled.
             return [
-                'score' => 50,
-                'analysis' => 'AI analysis unavailable',
+                'score' => null,
+                'analysis' => 'Message match could not be assessed — AI analysis was unavailable.',
                 'keywords' => [],
             ];
         }
@@ -427,12 +435,15 @@ class LandingPageCROAuditService
         }
 
         // Message Match Issues
-        if (($messageAnalysis['score'] ?? 50) < 60) {
+        // Only judge the messaging when it was actually judged. Defaulting a
+        // missing score to 50 raised this issue every time the model was
+        // unreachable.
+        if (isset($messageAnalysis['score']) && $messageAnalysis['score'] < 60) {
             $issues[] = [
                 'category' => 'messaging',
                 'severity' => 'high',
                 'title' => 'Weak Message Match',
-                'description' => 'The page messaging lacks clarity or persuasiveness. Score: '.($messageAnalysis['score'] ?? 'N/A'),
+                'description' => 'The page messaging lacks clarity or persuasiveness. Score: '.$messageAnalysis['score'],
             ];
         }
 
@@ -506,12 +517,18 @@ class LandingPageCROAuditService
             $score -= 10;
         }
 
-        // Message match scoring (-30 max)
-        $messageScore = $messageAnalysis['score'] ?? 50;
-        if ($messageScore < 60) {
-            $score -= 30;
-        } elseif ($messageScore < 75) {
-            $score -= 15;
+        // Message match scoring (-30 max). Skipped entirely when unassessed —
+        // deducting for a check that did not run reports a worse page than was
+        // measured.
+        // Guarded, because null < 60 is true in PHP — the same trap that made
+        // the ranking dashboard report 50 top-ten positions it did not have.
+        $messageScore = $messageAnalysis['score'] ?? null;
+        if ($messageScore !== null) {
+            if ($messageScore < 60) {
+                $score -= 30;
+            } elseif ($messageScore < 75) {
+                $score -= 15;
+            }
         }
 
         return max(0, min(100, $score));

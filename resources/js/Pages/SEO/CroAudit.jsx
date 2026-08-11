@@ -184,8 +184,8 @@ export default function CroAudit({ audit }) {
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between">
                                     <span className="text-xs text-gray-500">Message Score</span>
-                                    <span className={`text-lg font-bold ${audit.message_match_score >= 60 ? 'text-green-600' : 'text-red-600'}`}>
-                                        {audit.message_match_score ?? '—'}/100
+                                    <span className={`text-lg font-bold ${audit.message_match_score == null ? 'text-gray-400' : audit.message_match_score >= 60 ? 'text-green-600' : 'text-red-600'}`}>
+                                        {audit.message_match_score == null ? 'Not assessed' : `${audit.message_match_score}/100`}
                                     </span>
                                 </div>
                                 {audit.message_analysis && (
