@@ -223,15 +223,15 @@ export default function Audit({ audit }) {
                         <Section title="Security">
                             <div className="grid grid-cols-3 gap-4 text-sm">
                                 <div className="flex items-center gap-2">
-                                    <span className={audit.security_analysis.https ? 'text-green-500' : 'text-red-500'}>{audit.security_analysis.https ? '✓' : '✗'}</span>
+                                    <span className={audit.security_analysis.is_https ? 'text-green-500' : 'text-red-500'}>{audit.security_analysis.is_https ? '✓' : '✗'}</span>
                                     <span>HTTPS</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className={audit.security_analysis.hsts ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.hsts ? '✓' : '✗'}</span>
+                                    <span className={audit.security_analysis.hsts == null ? 'text-gray-400' : audit.security_analysis.hsts ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.hsts == null ? '—' : audit.security_analysis.hsts ? '✓' : '✗'}</span>
                                     <span>HSTS</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className={audit.security_analysis.csp ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.csp ? '✓' : '✗'}</span>
+                                    <span className={audit.security_analysis.csp == null ? 'text-gray-400' : audit.security_analysis.csp ? 'text-green-500' : 'text-yellow-500'}>{audit.security_analysis.csp == null ? '—' : audit.security_analysis.csp ? '✓' : '✗'}</span>
                                     <span>CSP</span>
                                 </div>
                             </div>
@@ -264,8 +264,8 @@ export default function Audit({ audit }) {
                     {audit.performance_analysis && (
                         <Section title="Performance">
                             <div className="grid grid-cols-2 gap-4 text-sm">
-                                <div><span className="text-gray-500">Load Time:</span> <span className="font-medium">{audit.performance_analysis.load_time ?? '—'}s</span></div>
-                                <div><span className="text-gray-500">Page Size:</span> <span className="font-medium">{audit.performance_analysis.page_size ?? '—'}</span></div>
+                                <div><span className="text-gray-500">Load Time:</span> <span className="font-medium">{audit.performance_analysis.load_time_ms != null ? (audit.performance_analysis.load_time_ms / 1000).toFixed(2) : '—'}s</span></div>
+                                <div><span className="text-gray-500">Page Size:</span> <span className="font-medium">{audit.performance_analysis.page_size_kb != null ? `${audit.performance_analysis.page_size_kb} KB` : '—'}</span></div>
                             </div>
                         </Section>
                     )}
