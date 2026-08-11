@@ -48,14 +48,17 @@
         @inertiaHead
 
         <!-- Google Ads tag (ensures window.gtag is always available for conversion tracking) -->
-        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-16797144138"></script>
+        {{-- AW-18115663500 owns every conversion action in this account — all seven,
+             verified against conversion_action.tag_snippets. AW-16797144138 owned
+             none, and loading it here is what made it look like the conversion
+             account: utils/conversions.js hardcoded it and Google silently
+             discarded every hit, because a label paired with an account that does
+             not own it fails without an error. --}}
+        <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18115663500"></script>
         <script>
             window.dataLayer = window.dataLayer || [];
             function gtag(){dataLayer.push(arguments);}
             gtag('js', new Date());
-            gtag('config', 'AW-16797144138');
-            // Second Google Ads account that owns the sign-up conversion, plus its GA4 property.
-            // Both must be configured here or their conversions/events silently never fire.
             gtag('config', 'AW-18115663500');
             gtag('config', 'G-WKHRP9NJPD');
         </script>

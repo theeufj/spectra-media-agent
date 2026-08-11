@@ -17,7 +17,11 @@ class ConversionTrackingController extends Controller
 {
     public function conversionTrackingIndex()
     {
-        $awId = config('conversions.aw_id', 'AW-16797144138');
+        // Fallback matches config/conversions.php. It previously defaulted to
+        // AW-16797144138, which owns none of this account's conversion actions —
+        // so an unset config would have silently reintroduced the mismatch that
+        // discarded every conversion.
+        $awId = config('conversions.aw_id', 'AW-18115663500');
         $events = config('conversions.events', []);
 
         $actions = collect($events)->map(function ($def, $key) use ($awId) {
