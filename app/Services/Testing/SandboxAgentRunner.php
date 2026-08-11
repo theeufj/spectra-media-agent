@@ -13,6 +13,7 @@ use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\HealthCheckAgent;
 use App\Services\Agents\Optimization\MetricsFetcher;
 use App\Services\Agents\Optimization\RecommendationApplier;
 use App\Services\Agents\Optimization\RecommendationScorer;
@@ -73,69 +74,33 @@ class SandboxAgentRunner
 
     // ── Health Check ───────────────────────────────────────────────
 
+    /**
+     * Runs the REAL HealthCheckAgent against synthetic data.
+     *
+     * Its connectivity probe and account-status lookup were the last live API
+     * calls in this path; both now resolve through AdsServiceFactory, so a
+     * sandbox customer reaches the DB-driven checks that make up the bulk of
+     * the agent instead of failing at the first step.
+     *
+     * Gemini is stubbed so the run is reproducible.
+     */
     protected function runHealthCheck(Customer $customer, $campaigns): void
     {
         try {
-            $issues = [];
-            $campaignSummaries = [];
-
-            foreach ($campaigns as $campaign) {
-                $platform = $this->detectPlatform($campaign);
-                $perf = $this->getCampaignPerformance($campaign, $platform);
-
-                $health = 'healthy';
-                if ($perf['conv_rate'] < 0.01) {
-                    $health = 'warning';
-                }
-                if ($perf['cpa'] > 100) {
-                    $health = 'warning';
-                }
-                if ($perf['cost'] > 0 && $perf['conversions'] == 0) {
-                    $health = 'critical';
-                }
-                if ($perf['trend_direction'] === 'declining') {
-                    $health = 'warning';
-                }
-
-                $campaignSummaries[] = [
-                    'campaign' => $campaign->name,
-                    'platform' => $platform,
-                    'health' => $health,
-                    'spend' => round($perf['cost'], 2),
-                    'conversions' => $perf['conversions'],
-                    'cpa' => round($perf['cpa'], 2),
-                    'roas' => round($perf['roas'], 2),
-                ];
-
-                if ($health !== 'healthy') {
-                    $issues[] = "{$campaign->name}: {$health} — CPA \${$perf['cpa']}, ROAS {$perf['roas']}x";
-                }
-            }
-
-            $healthyCampaigns = collect($campaignSummaries)->where('health', 'healthy')->count();
-            $warningCampaigns = collect($campaignSummaries)->where('health', 'warning')->count();
-            $criticalCampaigns = collect($campaignSummaries)->where('health', 'critical')->count();
-
-            $overallHealth = $criticalCampaigns > 0 ? 'critical'
-                : ($warningCampaigns > $healthyCampaigns ? 'warning' : 'healthy');
-
-            $result = [
-                'overall_health' => $overallHealth,
-                'healthy' => $healthyCampaigns,
-                'warning' => $warningCampaigns,
-                'critical' => $criticalCampaigns,
-                'total_campaigns' => $campaigns->count(),
-                'campaigns' => $campaignSummaries,
-                'issues' => $issues,
-                'recommendations' => $this->getHealthRecommendations($campaignSummaries),
-            ];
+            $agent = app()->makeWith(HealthCheckAgent::class, ['gemini' => new SandboxGeminiService]);
+            $result = $agent->checkCustomerHealth($customer);
 
             $this->results['HealthCheckAgent'] = ['status' => 'completed', 'data' => $result];
 
             AgentActivity::record(
                 'HealthCheckAgent',
                 'sandbox_health_check',
-                "Sandbox: Overall health — {$overallHealth} ({$healthyCampaigns} healthy, {$warningCampaigns} warnings, {$criticalCampaigns} critical)",
+                sprintf(
+                    'Sandbox: health %s — %d issue(s), %d warning(s)',
+                    $result['overall_health'] ?? 'unknown',
+                    count($result['issues'] ?? []),
+                    count($result['warnings'] ?? [])
+                ),
                 $customer->id,
                 null,
                 $result,

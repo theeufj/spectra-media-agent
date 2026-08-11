@@ -23,6 +23,8 @@ interface AdsServiceFactory
 
     public function budgets(Customer $customer): BudgetMutator;
 
+    public function accountStatus(Customer $customer): AccountStatusSource;
+
     /**
      * Keyword changes the agent decided on but did not send, for sandbox runs.
      * Always empty for live customers, where changes are actually applied.

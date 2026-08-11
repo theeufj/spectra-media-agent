@@ -3589,12 +3589,6 @@ parameters:
 			path: app/Services/Health/CampaignHealthChecker.php
 
 		-
-			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Health/GoogleAdsHealthChecker.php
-
-		-
 			message: '#^Property App\\Services\\LinkedInAds\\BaseLinkedInAdsService\:\:\$platform \(string\) on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.property
 			count: 1

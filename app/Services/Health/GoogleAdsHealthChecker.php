@@ -2,9 +2,8 @@
 
 namespace App\Services\Health;
 
+use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Customer;
-use App\Services\GoogleAds\CommonServices\GetAccountStatus;
-use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -72,7 +71,12 @@ class GoogleAdsHealthChecker
         }
 
         try {
-            new GetCampaignPerformance($customer, true);
+            // Resolving the service is itself the probe — building the client
+            // is what fails when credentials are wrong. The result was always
+            // discarded; going through the factory means a sandbox customer
+            // gets a synthetic source and does not fail here before reaching
+            // the DB-driven checks that follow.
+            app(AdsServiceFactory::class)->campaignPerformance($customer);
             $result = ['connected' => true];
             Cache::put($cacheKey, $result, now()->addMinutes(30));
 
@@ -113,9 +117,9 @@ class GoogleAdsHealthChecker
         $health = ['issues' => []];
 
         try {
-            $service = new GetAccountStatus($customer);
+            $service = app(AdsServiceFactory::class)->accountStatus($customer);
             $customerId = $customer->cleanGoogleCustomerId();
-            $status = ($service)($customerId);
+            $status = $service($customerId);
 
             if ($status) {
                 // Status enum: 2=ENABLED, 3=CANCELED, 4=SUSPENDED, 5=CLOSED

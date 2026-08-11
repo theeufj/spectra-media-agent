@@ -2,16 +2,19 @@
 
 namespace App\Services\Ads;
 
+use App\Contracts\Ads\AccountStatusSource;
 use App\Contracts\Ads\AdsServiceFactory;
 use App\Contracts\Ads\BudgetMutator;
 use App\Contracts\Ads\CampaignPerformanceSource;
 use App\Contracts\Ads\KeywordMutator;
 use App\Contracts\Ads\SearchTermSource;
 use App\Models\Customer;
+use App\Services\GoogleAds\CommonServices\GetAccountStatus;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\CommonServices\GoogleBudgetMutator;
 use App\Services\GoogleAds\CommonServices\GoogleKeywordMutator;
+use App\Services\Testing\Sandbox\SandboxAccountStatusSource;
 use App\Services\Testing\Sandbox\SandboxBudgetMutator;
 use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
 use App\Services\Testing\Sandbox\SandboxKeywordMutator;
@@ -67,6 +70,13 @@ class CustomerRoutedAdsServiceFactory implements AdsServiceFactory
         }
 
         return new GoogleBudgetMutator($customer);
+    }
+
+    public function accountStatus(Customer $customer): AccountStatusSource
+    {
+        return $customer->is_sandbox
+            ? new SandboxAccountStatusSource($customer)
+            : new GetAccountStatus($customer);
     }
 
     /**

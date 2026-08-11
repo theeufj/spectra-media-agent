@@ -7,14 +7,17 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\GoogleAdsPerformanceData;
 use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\HealthCheckAgent;
 use App\Services\Agents\Optimization\MetricsFetcher;
 use App\Services\Agents\Optimization\RecommendationApplier;
 use App\Services\Agents\Optimization\RecommendationScorer;
 use App\Services\Agents\SearchTermMiningAgent;
+use App\Services\GoogleAds\CommonServices\GetAccountStatus;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\CommonServices\GoogleBudgetMutator;
 use App\Services\GoogleAds\CommonServices\GoogleKeywordMutator;
+use App\Services\Testing\Sandbox\SandboxAccountStatusSource;
 use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
 use App\Services\Testing\Sandbox\SandboxGeminiService;
 use App\Services\Testing\Sandbox\SandboxKeywordMutator;
@@ -256,6 +259,44 @@ class SandboxRunsRealAgentsTest extends TestCase
         // the response through its own scoring pipeline.
         $this->assertIsArray($result);
         $this->assertArrayHasKey('recommendations', $result);
+    }
+
+    public function test_account_status_is_routed_per_customer(): void
+    {
+        // Distinct IDs — google_ads_customer_id is unique on customers.
+        $sandbox = Customer::factory()->create(['is_sandbox' => true, 'google_ads_customer_id' => '1111111111']);
+        $live = Customer::factory()->create(['is_sandbox' => false, 'google_ads_customer_id' => '2222222222']);
+        $factory = app(AdsServiceFactory::class);
+
+        $this->assertInstanceOf(SandboxAccountStatusSource::class, $factory->accountStatus($sandbox));
+        $this->assertInstanceOf(GetAccountStatus::class, $factory->accountStatus($live));
+    }
+
+    public function test_the_sandbox_account_always_reports_healthy(): void
+    {
+        // Deliberately not randomised: a sandbox that intermittently claimed
+        // suspension would train people to ignore a genuinely critical alert.
+        $customer = Customer::factory()->create(['is_sandbox' => true]);
+
+        $status = app(AdsServiceFactory::class)->accountStatus($customer)->__invoke('1234567890');
+
+        $this->assertSame(2, $status['status']); // 2 = ENABLED
+        $this->assertFalse($status['is_manager']);
+    }
+
+    public function test_the_real_health_agent_runs_without_touching_the_api(): void
+    {
+        $campaign = $this->sandboxCampaign();
+
+        $agent = app()->makeWith(HealthCheckAgent::class, ['gemini' => new SandboxGeminiService]);
+        $result = $agent->checkCustomerHealth($campaign->customer);
+
+        // Keys come from HealthCheckAgent::checkCustomerHealth itself — proof
+        // the real agent ran rather than a sandbox stand-in.
+        $this->assertArrayHasKey('overall_health', $result);
+        $this->assertArrayHasKey('issues', $result);
+        $this->assertArrayHasKey('warnings', $result);
+        $this->assertSame($campaign->customer->id, $result['customer_id']);
     }
 
     public function test_live_customers_record_no_decisions(): void

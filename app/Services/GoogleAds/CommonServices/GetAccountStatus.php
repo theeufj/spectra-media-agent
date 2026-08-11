@@ -2,9 +2,10 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Contracts\Ads\AccountStatusSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 
-class GetAccountStatus extends BaseGoogleAdsService
+class GetAccountStatus extends BaseGoogleAdsService implements AccountStatusSource
 {
     public function __invoke(string $customerId): ?array
     {
