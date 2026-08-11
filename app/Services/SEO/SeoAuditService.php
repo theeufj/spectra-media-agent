@@ -323,13 +323,23 @@ class SeoAuditService
         foreach ($images as $img) {
             $alt = $img->getAttribute('alt');
             $src = $img->getAttribute('src');
-            if (empty($alt)) {
+
+            // alt="" is the correct, spec-compliant way to mark a decorative
+            // image (tracking pixels, spacers, icons already labelled by adjacent
+            // text) — screen readers skip it, which is the intended outcome.
+            // Counting it as "missing" reported a violation for markup that is
+            // right, and told customers to add alt text where none belongs. Only
+            // a genuinely absent attribute is a failure.
+            $hasAlt = $img->hasAttribute('alt');
+            if (! $hasAlt) {
                 $missingAlt++;
             }
+
             $imageDetails[] = [
                 'src' => substr($src, 0, 200),
-                'alt' => $alt ?: null,
-                'has_alt' => ! empty($alt),
+                'alt' => $alt !== '' ? $alt : null,
+                'has_alt' => $hasAlt,
+                'decorative' => $hasAlt && $alt === '',
             ];
         }
 

@@ -18,7 +18,9 @@ class LandingController extends Controller
             'plans' => $plans,
             'meta' => $this->meta(
                 'Automated Google Ads Management | sitetospend',
-                'Launch and optimise Google and Meta ad campaigns automatically. AI agents handle keywords, bids, budgets and conversion tracking for you.'
+                'Launch and optimise Google and Meta ad campaigns automatically. AI agents handle keywords, bids, budgets and conversion tracking for you.',
+                'sitetospend — Your AI Marketing Team',
+                'Ads that run themselves. Agency-level results without the agency retainer. No credit card required.'
             ),
         ]);
     }
@@ -85,12 +87,17 @@ class LandingController extends Controller
      *
      * @return array<string, string>
      */
-    private function meta(string $title, string $description): array
+    private function meta(string $title, string $description, ?string $ogTitle = null, ?string $ogDescription = null): array
     {
-        return [
+        return array_filter([
             'title' => $title,
             'description' => $description,
             'canonical' => str_replace('http://', 'https://', url()->current()),
-        ];
+            // Social previews want punchier copy than a search result does, but
+            // it has to be server-rendered to be seen at all — Facebook, LinkedIn
+            // and Slack never run the JavaScript that sets the client-side tags.
+            'og_title' => $ogTitle,
+            'og_description' => $ogDescription,
+        ]);
     }
 }

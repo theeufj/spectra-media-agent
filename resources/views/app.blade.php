@@ -5,8 +5,6 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
 
-        <title inertia>Site to Spend - Agentic Digital Marketing</title>
-
         <!-- Favicons -->
         <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
         <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png?v=2">
@@ -35,7 +33,14 @@
             $metaType = $meta['type'] ?? 'website';
         @endphp
 
-        <title>{{ $metaTitle }}</title>
+        {{--
+            One title element, not two. A second hard-coded <title inertia> used to
+            sit above the favicons, so every page shipped two of them: browsers and
+            crawlers take the first, which meant the per-page title below was never
+            the one that counted. The `inertia` attribute stays here so client-side
+            navigation still updates it.
+        --}}
+        <title inertia>{{ $metaTitle }}</title>
 
         <!-- Canonical URL -->
         <link rel="canonical" href="{{ $metaCanonical }}" />
@@ -105,7 +110,8 @@
 @if(config('microsoftads.uet_tag_id'))
         <!-- Microsoft Ads UET Tag -->
         <script>(function(w,d,t,r,u){var f,n,i;w[u]=w[u]||[],f=function(){var o={ti:"{{ config('microsoftads.uet_tag_id') }}"};o.q=w[u],w[u]=new UET(o),w[u].push("pageLoad")},n=d.createElement(t),n.src=r,n.async=1,n.onload=n.onreadystatechange=function(){var s=this.readyState;s&&s!=="loaded"&&s!=="complete"||(f(),n.onload=n.onreadystatechange=null)},i=d.getElementsByTagName(t)[0],i.parentNode.insertBefore(n,i)})(window,document,"script","//bat.bing.com/bat.js","uetq");</script>
-        <noscript><img src="//bat.bing.com/action/0?ti={{ config('microsoftads.uet_tag_id') }}&Ver=2" height="0" width="0" style="display:none; visibility:hidden;" /></noscript>
+        {{-- alt="" marks this as decorative: it is a tracking pixel, not content. --}}
+        <noscript><img src="//bat.bing.com/action/0?ti={{ config('microsoftads.uet_tag_id') }}&Ver=2" height="0" width="0" alt="" style="display:none; visibility:hidden;" /></noscript>
         <!-- End Microsoft Ads UET Tag -->
         @endif
     </head>

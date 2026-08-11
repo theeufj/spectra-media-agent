@@ -19,8 +19,14 @@ router.on('invalid', (event) => {
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
+// Public marketing pages ship complete, length-tuned <title> tags that already
+// carry the brand. Appending the app name a second time pushed the home page to
+// 63 characters, past the ~60 Google renders before truncating. Only bare in-app
+// titles ("Dashboard", "Quick Start") get the brand appended.
+const brands = ['sitetospend', 'Site to Spend', 'Real Property Ads'];
+
 createInertiaApp({
-    title: (title) => `${title} - ${appName}`,
+    title: (title) => (brands.some((brand) => title.includes(brand)) ? title : `${title} - ${appName}`),
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.jsx`,

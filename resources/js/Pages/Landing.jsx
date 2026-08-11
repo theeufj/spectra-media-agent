@@ -5,7 +5,55 @@ import Footer from '@/Components/Footer';
 import DemoResultsPanel from '@/Components/DemoResultsPanel';
 import { trackConversion } from '@/utils/conversions';
 
-export default function Landing({ auth, plans = [] }) {
+/*
+ * The home page previously carried a FAQPage schema whose questions appeared
+ * nowhere on the page. Google's structured data policy requires the answer text
+ * to be visible to the visitor, so the markup was both ineligible for rich
+ * results and no help to anyone reading the page. One array now feeds the JSON-LD
+ * and the rendered section, which keeps them from drifting apart again.
+ */
+const faqs = [
+    {
+        question: 'How does sitetospend work?',
+        answer: 'You enter your website address and nothing else. Our vision AI reads the site to pick up your colours, fonts, tone of voice and what you actually sell, then researches who else is bidding on your keywords and how they position themselves. From there it builds the campaign structure, writes the ad copy, sets the initial bids and pushes everything live in your own ad accounts. Six agents keep working on the campaigns from that point on.',
+    },
+    {
+        question: 'Which ad platforms does sitetospend support?',
+        answer: 'Google Ads, Meta across Facebook and Instagram, Microsoft Ads on Bing, and LinkedIn Ads, all managed from a single dashboard. You connect accounts you already own rather than handing budget to a reseller, so your spend history, your conversion data and your audience lists stay with you if you ever decide to leave.',
+    },
+    {
+        question: 'Do I need a credit card to start?',
+        answer: 'No. You can connect your site and see the brand extraction, the competitor research and the full campaign we would build for you before paying anything at all. A card is only required at the point you decide to push those campaigns live and start spending on ads.',
+    },
+    {
+        question: 'Will I still own my ad accounts and data?',
+        answer: 'Yes. Everything is built inside your own Google Ads and Meta accounts, under your billing, with your name on it. There is no lock-in contract and no thirty-day notice period to serve. If you cancel, the campaigns, keyword research and conversion tracking we built stay exactly where they are, running or paused as you prefer.',
+    },
+    {
+        question: 'How is this different from hiring an agency?',
+        answer: 'A traditional agency charges a monthly retainer plus a percentage of whatever you spend, and in practice a junior account manager reviews your campaigns perhaps once a week. Our agents check performance every day, act on what they find within hours rather than at the next reporting cycle, and charge a flat fee that does not climb as your ad budget grows.',
+    },
+    {
+        question: 'What happens when an ad gets disapproved?',
+        answer: 'The self-optimising agent spots the disapproval, works out which advertising policy was triggered, rewrites the offending headline or description and resubmits it for review. Most disapprovals are cleared before you would have noticed them, which matters more than it sounds: a disapproved ad serves nobody and quietly costs you every impression it should have won.',
+    },
+    {
+        question: 'How quickly will I see results?',
+        answer: 'Campaigns are usually live within minutes of connecting your website. Meaningful optimisation needs data to work with, so expect the first week to be largely about learning which searches and audiences respond, and the second to be where budget starts shifting decisively toward the keywords and creatives that actually convert.',
+    },
+    {
+        question: 'Do I need to know anything about Google Ads?',
+        answer: 'Not a thing. The dashboard is written in plain language rather than platform jargon, and every change an agent makes is logged alongside the reason it made it. If you want to understand the detail it is all there to read; if you would rather never open it, the campaigns carry on without you.',
+    },
+];
+
+const DEFAULT_META = {
+    title: 'Automated Google Ads Management | sitetospend',
+    description: 'Launch and optimise Google and Meta ad campaigns automatically. AI agents handle keywords, bids, budgets and conversion tracking for you.',
+};
+
+export default function Landing({ auth, plans = [], meta = {} }) {
+    const pageMeta = { ...DEFAULT_META, ...meta };
     const paidPlans = plans.filter(p => p.price_cents > 0 && !p.is_free);
     const lowestPrice = paidPlans.length > 0 ? Math.round(Math.min(...paidPlans.map(p => p.price_cents)) / 100) : 149;
 
@@ -76,14 +124,21 @@ export default function Landing({ auth, plans = [] }) {
     return (
         <>
             <Head>
-                <title>AI-Powered Ad Campaign Management | sitetospend</title>
-                <meta name="description" content={`Your own AI marketing team. Runs your Google Ads & Facebook Ads 24/7—spots your competitors, fixes broken ads, shifts budget to what's working, and keeps testing. From $${lowestPrice}/mo.`} />
-                <meta property="og:title" content="sitetospend — Your AI Marketing Team" />
-                <meta property="og:description" content={`Ads that run themselves. Agency-level results from $${lowestPrice}/mo. No credit card required.`} />
-                <meta property="og:image" content="https://sitetospend.com/og-image.png?v=2" />
-                <meta property="og:type" content="website" />
-                <meta name="twitter:title" content="sitetospend — AI-Powered Ad Campaign Management" />
-                <meta name="twitter:description" content={`6 autonomous AI agents optimize your ad campaigns 24/7. Agency-level results from $${lowestPrice}/mo.`} />
+                {/*
+                    Title and description come from LandingController so the server
+                    HTML and the client-side head cannot disagree. They used to be
+                    written twice — once here and once in the controller — and the
+                    copy here was the one crawlers ended up with: 63 characters of
+                    title after Inertia appended the app name, and a 175-character
+                    description. Both were truncated in search results.
+
+                    Open Graph and Twitter tags are rendered server-side in
+                    app.blade.php, because the crawlers that read them do not run
+                    JavaScript. Repeating them here only created a second copy to
+                    keep in sync.
+                */}
+                <title>{pageMeta.title}</title>
+                <meta name="description" content={pageMeta.description} />
                 <script type="application/ld+json">{JSON.stringify({
                     "@context": "https://schema.org",
                     "@graph": [
@@ -122,32 +177,14 @@ export default function Landing({ auth, plans = [] }) {
                         },
                         {
                             "@type": "FAQPage",
-                            "mainEntity": [
-                                {
-                                    "@type": "Question",
-                                    "name": "How does sitetospend work?",
-                                    "acceptedAnswer": {
-                                        "@type": "Answer",
-                                        "text": "Enter your website URL. Our Vision AI extracts your brand identity, competitive intelligence discovers your rivals, and 6 autonomous agents optimize your campaigns 24/7."
-                                    }
-                                },
-                                {
-                                    "@type": "Question",
-                                    "name": "Which ad platforms does sitetospend support?",
-                                    "acceptedAnswer": {
-                                        "@type": "Answer",
-                                        "text": "sitetospend manages campaigns across Google Ads, Facebook Ads, Microsoft Ads (Bing), and LinkedIn Ads from a single dashboard."
-                                    }
-                                },
-                                {
-                                    "@type": "Question",
-                                    "name": "Do I need a credit card to start?",
-                                    "acceptedAnswer": {
-                                        "@type": "Answer",
-                                        "text": "No. sitetospend offers a generous free tier with no credit card required. You can upgrade to a paid plan at any time."
-                                    }
+                            "mainEntity": faqs.map((faq) => ({
+                                "@type": "Question",
+                                "name": faq.question,
+                                "acceptedAnswer": {
+                                    "@type": "Answer",
+                                    "text": faq.answer
                                 }
-                            ]
+                            }))
                         }
                     ]
                 })}</script>
@@ -338,6 +375,59 @@ export default function Landing({ auth, plans = [] }) {
                                     Compare Plans & Start Free Trial
                                 </Link>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Why It Works */}
+                    <div className="bg-white py-16 sm:py-24">
+                        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
+                                Advertising that doesn't need managing
+                            </h2>
+                            <div className="mt-6 space-y-5 text-lg leading-relaxed text-gray-600">
+                                <p>
+                                    Most small advertisers lose money in the gaps rather than the strategy. A headline gets
+                                    disapproved on a Friday and nobody notices until Monday. A keyword that converted well in
+                                    March quietly stops working in June. Budget sits in an ad group that has not produced a
+                                    lead in weeks, because moving it means opening the account and nobody has the time.
+                                </p>
+                                <p>
+                                    Those gaps are exactly what an agency retainer is meant to cover, and exactly what a
+                                    retainer is worst at covering — a person reviewing your account once a week will always be
+                                    six days behind the auction. Our agents work the other way round. They look at every
+                                    campaign, ad group, keyword and creative every single day, and when something needs
+                                    changing they change it rather than adding it to a report you will read next month.
+                                </p>
+                                <p>
+                                    The result is not magic, it is attention. Disapprovals get fixed within hours. Budget moves
+                                    toward the searches that convert while the intent is still there. Losing creative gets
+                                    replaced before it has drained a week of spend. That is most of what good ad management
+                                    actually is, and it turns out to be something software does more reliably than a calendar
+                                    reminder.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* FAQ */}
+                    <div className="bg-gray-50 py-16 sm:py-24 border-t border-gray-200">
+                        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
+                            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900 text-center">
+                                Common questions
+                            </h2>
+                            <p className="mt-4 text-lg text-gray-600 text-center">
+                                The things people ask before they sign up, answered properly.
+                            </p>
+                            <dl className="mt-12 space-y-10">
+                                {faqs.map((faq) => (
+                                    <div key={faq.question}>
+                                        <dt>
+                                            <h3 className="text-xl font-semibold text-gray-900">{faq.question}</h3>
+                                        </dt>
+                                        <dd className="mt-3 text-base leading-relaxed text-gray-600">{faq.answer}</dd>
+                                    </div>
+                                ))}
+                            </dl>
                         </div>
                     </div>
 
