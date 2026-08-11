@@ -26,21 +26,31 @@ class UpdateCampaignStatus extends BaseGoogleAdsService
         $this->ensureClient();
 
         try {
-            $statusEnum = match (strtoupper($status)) {
-                'ENABLED' => CampaignStatus::ENABLED,
-                'PAUSED' => CampaignStatus::PAUSED,
-                'REMOVED' => CampaignStatus::REMOVED,
-                default => throw new \InvalidArgumentException("Invalid status: {$status}. Must be ENABLED, PAUSED, or REMOVED."),
-            };
-
-            $campaign = new Campaign([
-                'resource_name' => $campaignResourceName,
-                'status' => $statusEnum,
-            ]);
-
             $operation = new CampaignOperation;
-            $operation->setUpdate($campaign);
-            $operation->setUpdateMask(new FieldMask(['paths' => ['status']]));
+
+            if (strtoupper($status) === 'REMOVED') {
+                // Google deletes a campaign with a remove operation. Sending an
+                // update that sets status = REMOVED is rejected outright with
+                // INVALID_ARGUMENT, so this branch never worked — and because
+                // the method reports failure by return value rather than by
+                // throwing, callers that only guarded against exceptions
+                // reported success while the campaign stayed put.
+                $operation->setRemove($campaignResourceName);
+            } else {
+                $statusEnum = match (strtoupper($status)) {
+                    'ENABLED' => CampaignStatus::ENABLED,
+                    'PAUSED' => CampaignStatus::PAUSED,
+                    default => throw new \InvalidArgumentException("Invalid status: {$status}. Must be ENABLED, PAUSED, or REMOVED."),
+                };
+
+                $campaign = new Campaign([
+                    'resource_name' => $campaignResourceName,
+                    'status' => $statusEnum,
+                ]);
+
+                $operation->setUpdate($campaign);
+                $operation->setUpdateMask(new FieldMask(['paths' => ['status']]));
+            }
 
             $this->client->getCampaignServiceClient()->mutateCampaigns(
                 new MutateCampaignsRequest([

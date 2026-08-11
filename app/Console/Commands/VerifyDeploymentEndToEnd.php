@@ -190,11 +190,10 @@ class VerifyDeploymentEndToEnd extends Command
         }
 
         // Removing the campaign removes its ad groups, keywords and ads with it.
-        try {
-            (new UpdateCampaignStatus($customer))->execute($customerId, $this->campaignResource, 'REMOVED');
+        if ($this->remove($customer, $customerId, $this->campaignResource)) {
             $this->line("  <info>cleaned</info>   removed {$this->campaignResource}");
-        } catch (\Throwable $e) {
-            $this->error('  CLEANUP FAILED — run with --sweep to remove it: '.$this->firstLine($e->getMessage()));
+        } else {
+            $this->error('  CLEANUP FAILED — the campaign is still in the account. Run with --sweep to remove it.');
         }
     }
 
@@ -215,18 +214,44 @@ class VerifyDeploymentEndToEnd extends Command
                 continue; // belt and braces — the query already filters
             }
 
-            try {
-                (new UpdateCampaignStatus($customer))->execute($customerId, $row['resource_name'], 'REMOVED');
+            if ($this->remove($customer, $customerId, $row['resource_name'])) {
                 $this->line("  <info>removed</info>   {$row['name']}");
                 $found++;
-            } catch (\Throwable $e) {
-                $this->error("  failed to remove {$row['name']}: ".$this->firstLine($e->getMessage()));
+            } else {
+                $this->error("  failed to remove {$row['name']} — it is still in the account");
             }
         }
 
         $this->info($found === 0 ? 'Nothing to sweep.' : "Removed {$found} orphan(s).");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Remove a campaign and confirm with Google that it is actually gone.
+     *
+     * UpdateCampaignStatus reports failure by return value, not by throwing, so
+     * a caller guarding only against exceptions will happily report success on a
+     * rejected request — which is exactly what this command did on its first
+     * run, printing "cleaned" while the campaign stayed in the account. Trusting
+     * the response is not enough either: the only proof of deletion is that the
+     * campaign no longer comes back from a query.
+     */
+    private function remove(Customer $customer, string $customerId, string $resourceName): bool
+    {
+        $result = (new UpdateCampaignStatus($customer))->execute($customerId, $resourceName, 'REMOVED');
+
+        if (! $result['success']) {
+            return false;
+        }
+
+        foreach ($this->findOwnCampaigns($customer, $customerId) as $row) {
+            if ($row['resource_name'] === $resourceName) {
+                return false; // still there — the API accepted it but it did not take
+            }
+        }
+
+        return true;
     }
 
     /**
