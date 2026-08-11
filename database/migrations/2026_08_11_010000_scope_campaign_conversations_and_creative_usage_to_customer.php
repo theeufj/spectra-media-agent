@@ -62,6 +62,57 @@ return new class extends Migration
             WHERE cu.user_id = sole.user_id
         ');
 
+        // Merge rows that now collide.
+        //
+        // The backfill only attributes users who own exactly one customer, but
+        // several such users can own the SAME customer — customer 8 has both
+        // theeufj and josh@sitetospend — so one customer ends up with two rows
+        // for the same period. Guarding ambiguity on the user side did nothing
+        // about collision on the customer side, and creating the unique index
+        // failed on exactly that.
+        //
+        // Counters are summed rather than one row being picked: quota is now
+        // held by the account, so if two people each generated five images the
+        // account has used ten. Keeping one row's figures would hand back
+        // someone else's allowance.
+        DB::statement('
+            WITH agg AS (
+                SELECT customer_id, period, MIN(id) AS keep_id,
+                       SUM(image_generations_used)  AS img,
+                       SUM(video_generations_used)  AS vid,
+                       SUM(refinements_used)        AS ref,
+                       SUM(bonus_image_generations) AS bimg,
+                       SUM(bonus_video_generations) AS bvid,
+                       SUM(bonus_refinements)       AS bref
+                FROM creative_usages
+                WHERE customer_id IS NOT NULL
+                GROUP BY customer_id, period
+                HAVING COUNT(*) > 1
+            )
+            UPDATE creative_usages cu
+            SET image_generations_used  = agg.img,
+                video_generations_used  = agg.vid,
+                refinements_used        = agg.ref,
+                bonus_image_generations = agg.bimg,
+                bonus_video_generations = agg.bvid,
+                bonus_refinements       = agg.bref
+            FROM agg
+            WHERE cu.id = agg.keep_id
+        ');
+
+        DB::statement('
+            DELETE FROM creative_usages cu
+            USING (
+                SELECT customer_id, period, MIN(id) AS keep_id
+                FROM creative_usages
+                WHERE customer_id IS NOT NULL
+                GROUP BY customer_id, period
+            ) k
+            WHERE cu.customer_id = k.customer_id
+              AND cu.period      = k.period
+              AND cu.id         <> k.keep_id
+        ');
+
         // The old key was per-seat and has to go, or a customer could still only
         // ever hold one row per user per period.
         DB::statement('ALTER TABLE creative_usages DROP CONSTRAINT IF EXISTS creative_usages_user_id_period_unique');
