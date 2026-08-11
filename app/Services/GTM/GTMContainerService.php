@@ -218,8 +218,21 @@ HTML;
             $workspacePath = $this->getWorkspacePath($customer);
 
             // Resolve trigger: caller-supplied > existing form-submit trigger > newly created one
-            $triggerId = $config['firing_trigger_id']
-                ?? $this->getOrCreateFormSubmitTrigger($workspacePath, $accessToken);
+            // Conversions happen two ways on most sites: a form is submitted in
+            // place, or the visitor lands on a thank-you page. Firing only on
+            // form submission misses every site that redirects after submit,
+            // which is the more common pattern — so both are attached unless the
+            // caller names a specific trigger.
+            $explicitTrigger = $config['firing_trigger_id'] ?? null;
+
+            $triggerIds = $explicitTrigger
+                ? [$explicitTrigger]
+                : array_values(array_filter([
+                    $this->getOrCreateFormSubmitTrigger($workspacePath, $accessToken),
+                    $this->getOrCreateThankYouPageTrigger($workspacePath, $accessToken),
+                ]));
+
+            $triggerId = $triggerIds[0] ?? null;
 
             // awct tag type requires a bare numeric ID — strip the "AW-" prefix if present
             $numericConversionId = preg_replace('/^AW-/i', '', $conversionId);
@@ -231,7 +244,7 @@ HTML;
                     ['key' => 'conversionId',    'type' => 'template', 'value' => $numericConversionId],
                     ['key' => 'conversionLabel', 'type' => 'template', 'value' => $config['conversion_label'] ?? ''],
                 ],
-                'firingTriggerId' => $triggerId ? [$triggerId] : [],
+                'firingTriggerId' => $triggerIds,
             ];
 
             $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
@@ -242,8 +255,8 @@ HTML;
                     $existing = $this->findTagByName($workspacePath, $tagName, $accessToken);
                     if ($existing) {
                         $tagId = $existing['tagId'];
-                        if ($triggerId && empty($existing['firingTriggerId'])) {
-                            $existing['firingTriggerId'] = [$triggerId];
+                        if ($triggerIds && empty($existing['firingTriggerId'])) {
+                            $existing['firingTriggerId'] = $triggerIds;
                             $this->makeApiCall('PUT', "/{$workspacePath}/tags/{$tagId}", $accessToken, $existing);
                         }
 
@@ -293,6 +306,45 @@ HTML;
     /**
      * Find a tag in the workspace by name. Returns the tag array or null.
      */
+    /**
+     * A page-view trigger matching the usual post-conversion destinations.
+     *
+     * Form submission alone only catches sites that submit in place. Anything
+     * that redirects to a confirmation page — most lead-gen and every checkout —
+     * converts without ever firing a formSubmission event.
+     *
+     * Deliberately never matches on "/" alone: a pattern loose enough to hit the
+     * home page would record every visit as a conversion, which is exactly the
+     * All Pages mistake that had to be undone on the Spectra container.
+     */
+    private function getOrCreateThankYouPageTrigger(string $workspacePath, string $accessToken): ?string
+    {
+        $name = 'Spectra — Conversion Page View';
+
+        $listResponse = $this->makeApiCall('GET', "/{$workspacePath}/triggers", $accessToken);
+        if ($listResponse['success']) {
+            foreach ($listResponse['data']['trigger'] ?? [] as $trigger) {
+                if (($trigger['name'] ?? '') === $name) {
+                    return $trigger['triggerId'];
+                }
+            }
+        }
+
+        $response = $this->makeApiCall('POST', "/{$workspacePath}/triggers", $accessToken, [
+            'name' => $name,
+            'type' => 'pageview',
+            'filter' => [[
+                'type' => 'matchRegex',
+                'parameter' => [
+                    ['type' => 'template', 'key' => 'arg0', 'value' => '{{Page URL}}'],
+                    ['type' => 'template', 'key' => 'arg1', 'value' => '(thank[-_]?you|/success|/confirmation|order[-_]?complete|/welcome)'],
+                ],
+            ]],
+        ]);
+
+        return $response['data']['triggerId'] ?? null;
+    }
+
     private function findTagByName(string $workspacePath, string $tagName, string $accessToken): ?array
     {
         $response = $this->makeApiCall('GET', "/{$workspacePath}/tags", $accessToken);
