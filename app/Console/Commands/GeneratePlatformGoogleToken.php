@@ -36,7 +36,18 @@ class GeneratePlatformGoogleToken extends Command
 
     protected $description = 'Mint or inspect the platform Google refresh token (Ads, Tag Manager, Search Console).';
 
-    private const REDIRECT_URI = 'https://localhost';
+    /**
+     * Must match one of the client's Authorized redirect URIs exactly — scheme,
+     * host and port included. http://localhost:8088 is already registered on
+     * this OAuth client, which is why it is the default here; https://localhost
+     * is not, and Google rejects the request outright with
+     * Error 400: redirect_uri_mismatch.
+     *
+     * Nothing needs to be listening on the port. The browser will fail to
+     * connect after consent, and the authorization code is read out of the
+     * address bar.
+     */
+    private const REDIRECT_URI = 'http://localhost:8088';
 
     /**
      * Every scope the platform account needs.
@@ -102,7 +113,8 @@ class GeneratePlatformGoogleToken extends Command
         $this->newLine();
         $this->line('https://accounts.google.com/o/oauth2/v2/auth?'.$params);
         $this->newLine();
-        $this->warn('The browser will fail to load https://localhost/?code=... — that is expected.');
+        $this->warn('The browser will fail to connect to '.self::REDIRECT_URI.'/?code=... — that is expected;');
+        $this->warn('nothing is listening on that port, and it does not need to be.');
         $this->warn('Copy the code value out of the address bar, then run:');
         $this->line('  php artisan google:platform-token --code=PASTE_CODE_HERE');
 
