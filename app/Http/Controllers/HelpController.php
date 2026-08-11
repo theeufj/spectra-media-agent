@@ -12,6 +12,11 @@ class HelpController extends Controller
     {
         return Inertia::render('Blog/Index', [
             'articles' => HelpArticles::index(),
+            'meta' => [
+                'title' => 'Google Ads Guides — Plain English | sitetospend',
+                'description' => 'Practical guides to Google Ads: conversion tracking, budget pacing, ad rank, negative keywords and match types. Written without the jargon.',
+                'canonical' => str_replace('http://', 'https://', url()->current()),
+            ],
         ]);
     }
 
@@ -23,6 +28,14 @@ class HelpController extends Controller
 
         return Inertia::render('Blog/Article', [
             'article' => $article,
+            // Each article already carries its own description; it simply never
+            // reached the server HTML, so every article shared the site-wide one.
+            'meta' => [
+                'title' => $article['title'].' | sitetospend',
+                'description' => $article['description'],
+                'canonical' => str_replace('http://', 'https://', url()->current()),
+                'type' => 'article',
+            ],
             'relatedArticles' => collect(HelpArticles::index())
                 ->where('slug', '!=', $slug)
                 ->take(3)

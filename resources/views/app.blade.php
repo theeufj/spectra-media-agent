@@ -15,20 +15,42 @@
         <link rel="icon" type="image/png" sizes="192x192" href="/favicon-192.png?v=2">
         <link rel="icon" type="image/png" sizes="512x512" href="/favicon-512.png?v=2">
 
+        {{--
+            Per-page metadata, rendered server-side.
+
+            The React pages already set <Head> tags, but Inertia applies those in
+            the browser. Google runs JavaScript so it eventually sees them;
+            Facebook, LinkedIn, Slack and X do not, so every shared link showed
+            the same generic title and description no matter which page it
+            pointed at — and the server HTML carried no <title> at all.
+
+            Controllers pass a `meta` prop; anything they omit falls back to the
+            site defaults below.
+        --}}
+        @php
+            $meta = data_get($page ?? [], 'props.meta', []);
+            $metaTitle = $meta['title'] ?? 'sitetospend — AI-Powered Ad Campaign Management';
+            $metaDescription = $meta['description'] ?? 'AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.';
+            $metaCanonical = $meta['canonical'] ?? str_replace('http://', 'https://', url()->current());
+            $metaType = $meta['type'] ?? 'website';
+        @endphp
+
+        <title>{{ $metaTitle }}</title>
+
         <!-- Canonical URL -->
-        <link rel="canonical" href="{{ str_replace('http://', 'https://', url()->current()) }}" />
+        <link rel="canonical" href="{{ $metaCanonical }}" />
 
         <!-- SEO Meta Tags -->
-        <meta name="description" content="AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.">
+        <meta name="description" content="{{ $metaDescription }}">
         <meta name="keywords" content="AI ad management, AI marketing platform, Google Ads automation, Facebook Ads AI, automated ad campaigns, digital advertising AI, campaign optimization, ad spend management">
         <meta name="author" content="sitetospend">
 
         <!-- Open Graph Meta Tags (for social sharing) -->
-        <meta property="og:title" content="sitetospend — AI-Powered Ad Campaign Management">
-        <meta property="og:description" content="6 autonomous AI agents create, manage, and optimize your digital ad campaigns across Google, Facebook, Microsoft, and LinkedIn 24/7.">
+        <meta property="og:title" content="{{ $meta['og_title'] ?? $metaTitle }}">
+        <meta property="og:description" content="{{ $meta['og_description'] ?? $metaDescription }}">
         <meta property="og:image" content="{{ url('/og-image.png?v=2') }}">
         <meta property="og:url" content="{{ url()->current() }}">
-        <meta property="og:type" content="website">
+        <meta property="og:type" content="{{ $metaType }}">
         <meta property="og:site_name" content="sitetospend">
 
         <!-- Twitter Card Meta Tags -->
