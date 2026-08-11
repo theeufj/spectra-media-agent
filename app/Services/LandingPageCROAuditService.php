@@ -453,17 +453,24 @@ class LandingPageCROAuditService
                 'title' => 'Fix: '.$issue['title'],
             ];
 
-            switch ($issue['category']) {
-                case 'performance':
-                    $recommendation['action'] = 'Optimize images with compression, enable lazy loading, and minify CSS/JS files.';
-                    break;
-                case 'cta':
-                    $recommendation['action'] = 'Add a prominent, action-oriented button above the fold (e.g., "Get Started Free", "Buy Now").';
-                    break;
-                case 'messaging':
-                    $recommendation['action'] = 'Clarify your value proposition in the H1. Focus on benefits, not features. Test different headlines.';
-                    break;
-            }
+            // Keyed on the issue, not its category. Switching on category alone
+            // meant "Too Many CTAs" and "No Above-the-Fold CTA" — opposite
+            // problems — both returned "add a prominent button", so a page with
+            // nine CTAs was advised to add a tenth.
+            $recommendation['action'] = match ($issue['title']) {
+                'Large Page Size' => 'Compress images, enable lazy loading below the fold, and minify CSS and JS.',
+                'Too Many DOM Elements' => 'Simplify the markup: fewer wrapper elements, and defer rendering anything below the fold.',
+                'No Above-the-Fold CTA' => 'Add one prominent, action-oriented button above the fold, for example "Get Started Free".',
+                'Missing Call-to-Action' => 'Add a clear call-to-action button. Without one there is nothing for a visitor to do.',
+                'Too Many CTAs' => 'Reduce to one primary action, with at most one secondary. Demote the rest to text links so the main action stands out.',
+                'Weak Message Match' => 'State the outcome in the H1 in the visitor\'s own words, and make it match the ad that brought them.',
+                default => match ($issue['category']) {
+                    'performance' => 'Reduce page weight and rendering work.',
+                    'cta' => 'Review the calls to action on this page.',
+                    'messaging' => 'Clarify the value proposition in the H1.',
+                    default => 'Review this issue.',
+                },
+            };
 
             $recommendations[] = $recommendation;
         }
