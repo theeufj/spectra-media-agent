@@ -4,19 +4,31 @@ namespace App\Services\Ads;
 
 use App\Contracts\Ads\AccountStatusSource;
 use App\Contracts\Ads\AdsServiceFactory;
+use App\Contracts\Ads\AdStatusSource;
+use App\Contracts\Ads\AssetPerformanceSource;
 use App\Contracts\Ads\BudgetMutator;
 use App\Contracts\Ads\CampaignPerformanceSource;
+use App\Contracts\Ads\FacebookAdManager;
+use App\Contracts\Ads\FacebookInsightSource;
 use App\Contracts\Ads\KeywordMutator;
 use App\Contracts\Ads\SearchTermSource;
 use App\Models\Customer;
+use App\Services\FacebookAds\Adapters\LiveFacebookAdManager;
+use App\Services\FacebookAds\Adapters\LiveFacebookInsightSource;
 use App\Services\GoogleAds\CommonServices\GetAccountStatus;
+use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
+use App\Services\GoogleAds\CommonServices\GetAdStatus;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
 use App\Services\GoogleAds\CommonServices\GoogleBudgetMutator;
 use App\Services\GoogleAds\CommonServices\GoogleKeywordMutator;
 use App\Services\Testing\Sandbox\SandboxAccountStatusSource;
+use App\Services\Testing\Sandbox\SandboxAdStatusSource;
+use App\Services\Testing\Sandbox\SandboxAssetPerformanceSource;
 use App\Services\Testing\Sandbox\SandboxBudgetMutator;
 use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
+use App\Services\Testing\Sandbox\SandboxFacebookAdManager;
+use App\Services\Testing\Sandbox\SandboxFacebookInsightSource;
 use App\Services\Testing\Sandbox\SandboxKeywordMutator;
 use App\Services\Testing\Sandbox\SandboxSearchTermSource;
 
@@ -39,6 +51,9 @@ class CustomerRoutedAdsServiceFactory implements AdsServiceFactory
 
     /** @var array<int, BudgetMutator> */
     private array $budgetMutators = [];
+
+    /** @var array<int, FacebookAdManager> */
+    private array $facebookManagers = [];
 
     public function searchTerms(Customer $customer): SearchTermSource
     {
@@ -77,6 +92,46 @@ class CustomerRoutedAdsServiceFactory implements AdsServiceFactory
         return $customer->is_sandbox
             ? new SandboxAccountStatusSource($customer)
             : new GetAccountStatus($customer);
+    }
+
+    public function adStatus(Customer $customer): AdStatusSource
+    {
+        return $customer->is_sandbox
+            ? new SandboxAdStatusSource($customer)
+            : new GetAdStatus($customer);
+    }
+
+    public function assetPerformance(Customer $customer): AssetPerformanceSource
+    {
+        return $customer->is_sandbox
+            ? new SandboxAssetPerformanceSource($customer)
+            : new GetAdPerformanceByAsset($customer);
+    }
+
+    public function facebookInsights(Customer $customer): FacebookInsightSource
+    {
+        return $customer->is_sandbox
+            ? new SandboxFacebookInsightSource($customer)
+            : new LiveFacebookInsightSource($customer);
+    }
+
+    public function facebookAds(Customer $customer): FacebookAdManager
+    {
+        if ($customer->is_sandbox) {
+            return $this->facebookManagers[$customer->id] ??= new SandboxFacebookAdManager($customer);
+        }
+
+        return new LiveFacebookAdManager($customer);
+    }
+
+    /**
+     * @return list<array{action: string, target: string, detail: string}>
+     */
+    public function recordedFacebookChanges(Customer $customer): array
+    {
+        $manager = $this->facebookManagers[$customer->id] ?? null;
+
+        return $manager instanceof SandboxFacebookAdManager ? $manager->recorded() : [];
     }
 
     /**

@@ -12,6 +12,8 @@ use App\Services\Agents\Optimization\MetricsFetcher;
 use App\Services\Agents\Optimization\RecommendationApplier;
 use App\Services\Agents\Optimization\RecommendationScorer;
 use App\Services\Agents\SearchTermMiningAgent;
+use App\Services\FacebookAds\Adapters\LiveFacebookAdManager;
+use App\Services\FacebookAds\Adapters\LiveFacebookInsightSource;
 use App\Services\GoogleAds\CommonServices\GetAccountStatus;
 use App\Services\GoogleAds\CommonServices\GetCampaignPerformance;
 use App\Services\GoogleAds\CommonServices\GetSearchTermsReport;
@@ -19,6 +21,8 @@ use App\Services\GoogleAds\CommonServices\GoogleBudgetMutator;
 use App\Services\GoogleAds\CommonServices\GoogleKeywordMutator;
 use App\Services\Testing\Sandbox\SandboxAccountStatusSource;
 use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
+use App\Services\Testing\Sandbox\SandboxFacebookAdManager;
+use App\Services\Testing\Sandbox\SandboxFacebookInsightSource;
 use App\Services\Testing\Sandbox\SandboxGeminiService;
 use App\Services\Testing\Sandbox\SandboxKeywordMutator;
 use App\Services\Testing\Sandbox\SandboxSearchTermSource;
@@ -297,6 +301,64 @@ class SandboxRunsRealAgentsTest extends TestCase
         $this->assertArrayHasKey('issues', $result);
         $this->assertArrayHasKey('warnings', $result);
         $this->assertSame($campaign->customer->id, $result['customer_id']);
+    }
+
+    public function test_facebook_services_are_routed_per_customer(): void
+    {
+        $sandbox = Customer::factory()->create(['is_sandbox' => true, 'facebook_ads_account_id' => 'act_111']);
+        $live = Customer::factory()->create(['is_sandbox' => false, 'facebook_ads_account_id' => 'act_222']);
+        $factory = app(AdsServiceFactory::class);
+
+        $this->assertInstanceOf(SandboxFacebookInsightSource::class, $factory->facebookInsights($sandbox));
+        $this->assertInstanceOf(SandboxFacebookAdManager::class, $factory->facebookAds($sandbox));
+
+        $this->assertInstanceOf(LiveFacebookInsightSource::class, $factory->facebookInsights($live));
+        $this->assertInstanceOf(LiveFacebookAdManager::class, $factory->facebookAds($live));
+    }
+
+    public function test_meta_writes_are_recorded_not_sent(): void
+    {
+        $customer = Customer::factory()->create(['is_sandbox' => true]);
+        $factory = app(AdsServiceFactory::class);
+        $meta = $factory->facebookAds($customer);
+
+        $this->assertTrue($meta->pauseAd('sandbox-ad-disapproved'));
+        $this->assertNotNull($meta->createImageCreative('act_1', 'New creative', 'https://x/i.png', 'Headline', 'Description'));
+
+        $recorded = $factory->recordedFacebookChanges($customer);
+
+        $this->assertCount(2, $recorded);
+        $this->assertSame(['pause_ad', 'create_creative'], array_column($recorded, 'action'));
+    }
+
+    public function test_the_ad_fixtures_include_a_disapproved_ad_to_heal(): void
+    {
+        // SelfHealingAgent exists to fix disapproved ads. A fixture where
+        // everything is healthy would exercise none of its healing paths.
+        $customer = Customer::factory()->create(['is_sandbox' => true]);
+
+        $ads = app(AdsServiceFactory::class)->facebookAds($customer)->listAds('sandbox-adset-1');
+
+        $statuses = array_column($ads, 'effective_status');
+        $this->assertContains('DISAPPROVED', $statuses);
+        $this->assertContains('ACTIVE', $statuses);
+    }
+
+    public function test_asset_performance_returns_the_keyed_shape_the_agent_expects(): void
+    {
+        // The real service returns ['headlines' => [...], 'descriptions' => [...]],
+        // and CreativeIntelligenceAgent indexes those keys directly. A list would
+        // silently yield empty categories.
+        $customer = Customer::factory()->create(['is_sandbox' => true]);
+
+        $assets = app(AdsServiceFactory::class)
+            ->assetPerformance($customer)
+            ->getResponsiveSearchAdAssets('123', 'customers/123/campaigns/1');
+
+        $this->assertArrayHasKey('headlines', $assets);
+        $this->assertArrayHasKey('descriptions', $assets);
+        $this->assertContains('LOW', array_column($assets['headlines'], 'performance_label'));
+        $this->assertContains('BEST', array_column($assets['headlines'], 'performance_label'));
     }
 
     public function test_live_customers_record_no_decisions(): void

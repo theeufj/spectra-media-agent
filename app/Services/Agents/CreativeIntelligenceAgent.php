@@ -2,13 +2,11 @@
 
 namespace App\Services\Agents;
 
+use App\Contracts\Ads\AdsServiceFactory;
 use App\Models\Campaign;
 use App\Models\CreativeBrief;
 use App\Models\Customer;
-use App\Services\FacebookAds\AdService as FacebookAdService;
-use App\Services\FacebookAds\InsightService as FacebookInsightService;
 use App\Services\GeminiService;
-use App\Services\GoogleAds\CommonServices\GetAdPerformanceByAsset;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -41,9 +39,22 @@ class CreativeIntelligenceAgent
         'auto_pause_max_ctr' => 0.005, // CTR below 0.5% with enough impressions = auto-pause candidate
     ];
 
-    public function __construct(GeminiService $gemini)
+    public function __construct(GeminiService $gemini, ?AdsServiceFactory $ads = null)
     {
         $this->gemini = $gemini;
+        $this->ads = $ads;
+    }
+
+    /**
+     * Declared rather than promoted, with a default, so partial mocks that
+     * bypass the constructor leave it null instead of uninitialised.
+     */
+    private ?AdsServiceFactory $ads = null;
+
+    /** Platform services for this run — synthetic for sandbox customers. */
+    private function ads(): AdsServiceFactory
+    {
+        return $this->ads ??= app(AdsServiceFactory::class);
     }
 
     /**
@@ -341,7 +352,7 @@ PROMPT;
         $campaignResourceName = $campaign->googleAdsResourceName();
 
         try {
-            $assetService = new GetAdPerformanceByAsset($customer, true);
+            $assetService = $this->ads()->assetPerformance($customer);
             $textAssets = $assetService->getResponsiveSearchAdAssets($customerId, $campaignResourceName);
             $imageAssets = $assetService->getImageAssetPerformance($customerId, $campaignResourceName);
 
@@ -394,8 +405,8 @@ PROMPT;
         $customer = $campaign->customer;
 
         try {
-            $insightService = new FacebookInsightService($customer);
-            $adService = new FacebookAdService($customer);
+            $insightService = $this->ads()->facebookInsights($customer);
+            $adService = $this->ads()->facebookAds($customer);
 
             // Get ad-level insights for the last 30 days
             $dateEnd = now()->format('Y-m-d');

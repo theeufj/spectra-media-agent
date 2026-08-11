@@ -2,10 +2,11 @@
 
 namespace App\Services\GoogleAds\CommonServices;
 
+use App\Contracts\Ads\AdStatusSource;
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 
-class GetAdStatus extends BaseGoogleAdsService
+class GetAdStatus extends BaseGoogleAdsService implements AdStatusSource
 {
     /**
      * Get the status and policy details of ads in a campaign or ad group.

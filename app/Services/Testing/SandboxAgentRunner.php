@@ -13,11 +13,13 @@ use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Services\Agents\BudgetIntelligenceAgent;
 use App\Services\Agents\CampaignOptimizationAgent;
+use App\Services\Agents\CreativeIntelligenceAgent;
 use App\Services\Agents\HealthCheckAgent;
 use App\Services\Agents\Optimization\MetricsFetcher;
 use App\Services\Agents\Optimization\RecommendationApplier;
 use App\Services\Agents\Optimization\RecommendationScorer;
 use App\Services\Agents\SearchTermMiningAgent;
+use App\Services\Agents\SelfHealingAgent;
 use App\Services\Testing\Sandbox\SandboxCampaignPerformanceSource;
 use App\Services\Testing\Sandbox\SandboxGeminiService;
 use Illuminate\Support\Facades\Log;
@@ -328,90 +330,27 @@ class SandboxAgentRunner
 
     // ── Creative Intelligence ──────────────────────────────────────
 
+    /**
+     * Runs the REAL CreativeIntelligenceAgent against synthetic data.
+     *
+     * Its Google asset-performance read and both Meta calls now resolve through
+     * AdsServiceFactory, so the agent's own asset categorisation and pause
+     * decisions execute rather than being approximated.
+     */
     protected function runCreativeIntelligence(Campaign $campaign, Customer $customer, array $perf, string $platform): void
     {
         try {
-            $insights = [];
-
-            // CTR-based creative assessment
-            $platformAvgCtr = match ($platform) {
-                'facebook' => 0.015,
-                'linkedin' => 0.005,
-                'microsoft' => 0.04,
-                default => 0.05,
-            };
-
-            $ctrPerformance = $perf['ctr'] / max($platformAvgCtr, 0.001);
-
-            if ($ctrPerformance < 0.6) {
-                $insights[] = [
-                    'type' => 'creative_fatigue',
-                    'severity' => 'high',
-                    'finding' => 'CTR is '.round($perf['ctr'] * 100, 2)."%, significantly below {$platform} average of ".round($platformAvgCtr * 100, 1).'%.',
-                    'recommendation' => 'Test 3-5 new ad variations with different headlines, descriptions, and calls-to-action. Rotate creative every 2 weeks.',
-                ];
-            } elseif ($ctrPerformance < 0.9) {
-                $insights[] = [
-                    'type' => 'optimization_opportunity',
-                    'severity' => 'medium',
-                    'finding' => 'CTR is slightly below average. Small improvements can compound over time.',
-                    'recommendation' => 'A/B test headlines focusing on urgency, social proof, and unique value props.',
-                ];
-            } else {
-                $insights[] = [
-                    'type' => 'strong_creative',
-                    'severity' => 'info',
-                    'finding' => 'CTR of '.round($perf['ctr'] * 100, 2)."% is at or above {$platform} benchmarks.",
-                    'recommendation' => 'Creative performing well. Test incremental variations to prevent future fatigue.',
-                ];
-            }
-
-            // Conversion rate vs CTR gap
-            if ($perf['ctr'] > 0.03 && $perf['conv_rate'] < 0.01) {
-                $insights[] = [
-                    'type' => 'landing_page_disconnect',
-                    'severity' => 'high',
-                    'finding' => 'High CTR but low conversion rate suggests a disconnect between ad promise and landing page experience.',
-                    'recommendation' => 'Review landing page messaging alignment, load speed, and mobile experience. Consider dedicated landing pages per ad group.',
-                ];
-            }
-
-            // Platform-specific insights
-            if ($platform === 'facebook' && $perf['cpa'] > 50) {
-                $insights[] = [
-                    'type' => 'audience_creative_mismatch',
-                    'severity' => 'medium',
-                    'finding' => 'High CPA on Facebook often indicates audience-creative mismatch or retargeting saturation.',
-                    'recommendation' => 'Refresh creative assets, expand lookalike audiences, and check frequency caps. Consider UGC-style video ads.',
-                ];
-            }
-
-            if ($platform === 'linkedin' && $perf['ctr'] < 0.005) {
-                $insights[] = [
-                    'type' => 'b2b_creative_strategy',
-                    'severity' => 'medium',
-                    'finding' => 'LinkedIn CTR is competitive but could benefit from thought leadership approach.',
-                    'recommendation' => 'Test document ads, carousel formats, and single-image ads with strong industry statistics. Lead with insight, not product.',
-                ];
-            }
-
-            $result = [
-                'creative_health_score' => round(min(100, max(10, $ctrPerformance * 70 + ($perf['conv_rate'] > 0.02 ? 20 : 0)))),
-                'insights' => $insights,
-                'metrics_reviewed' => [
-                    'ctr' => round($perf['ctr'] * 100, 2).'%',
-                    'conv_rate' => round($perf['conv_rate'] * 100, 2).'%',
-                    'cpa' => '$'.round($perf['cpa'], 2),
-                ],
-            ];
+            $agent = new CreativeIntelligenceAgent(new SandboxGeminiService, app(AdsServiceFactory::class));
+            $result = $agent->analyze($campaign);
+            $result['changes'] = app(AdsServiceFactory::class)->recordedFacebookChanges($customer);
 
             $key = "CreativeIntelligenceAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
 
             AgentActivity::record(
                 'CreativeIntelligenceAgent',
-                'sandbox_creative_analysis',
-                "Sandbox: Creative score {$result['creative_health_score']}/100 — ".count($insights)." insights for {$campaign->name}",
+                'sandbox_creative_intelligence',
+                sprintf('Sandbox: creative analysis for %s — %d change(s) proposed', $campaign->name, count($result['changes'])),
                 $customer->id,
                 $campaign->id,
                 $result,
@@ -424,91 +363,26 @@ class SandboxAgentRunner
 
     // ── Self-Healing ───────────────────────────────────────────────
 
+    /**
+     * Runs the REAL SelfHealingAgent against synthetic data.
+     *
+     * The heaviest of the agents to seam: it reads Google ad status and Meta
+     * insights, lists ad sets and ads, then creates a replacement creative and
+     * pauses the original as one sequence. All of it now resolves through
+     * AdsServiceFactory, so the whole healing sequence executes while every
+     * write is recorded instead of sent.
+     *
+     * The sandbox ad fixtures include a disapproved ad on purpose — that is the
+     * condition this agent exists to fix, and a set where everything is healthy
+     * would exercise none of its healing paths.
+     */
     protected function runSelfHealing(Campaign $campaign, Customer $customer, array $perf, string $platform): void
     {
         try {
-            $actions = [];
-            $issuesDetected = 0;
+            $agent = new SelfHealingAgent(new SandboxGeminiService, app(AdsServiceFactory::class));
+            $result = $agent->heal($campaign);
 
-            // Check for zero conversion periods
-            $recentDays = $this->getRecentDailyPerformance($campaign, $platform, 7);
-            $zeroDays = $recentDays->where('conversions', 0)->count();
-
-            if ($zeroDays >= 3) {
-                $issuesDetected++;
-                $actions[] = [
-                    'issue' => 'conversion_dead_zone',
-                    'severity' => 'critical',
-                    'detected' => "{$zeroDays} of last 7 days had zero conversions.",
-                    'action_taken' => 'RECOMMENDED: Check conversion tracking tag is firing. Verify thank-you page URL matches goal. Inspect for pixel/tag errors.',
-                    'would_auto_fix' => 'In live mode, agent would verify tag status and re-enable if disabled.',
-                ];
-            }
-
-            // Spend without results
-            if ($perf['cost'] > 500 && $perf['conversions'] < 3) {
-                $issuesDetected++;
-                $actions[] = [
-                    'issue' => 'budget_waste',
-                    'severity' => 'high',
-                    'detected' => "Spent \${$perf['cost']} with only {$perf['conversions']} conversions.",
-                    'action_taken' => 'RECOMMENDED: Pause lowest-performing ad groups. Reallocate budget to converting segments.',
-                    'would_auto_fix' => 'In live mode, agent would automatically pause underperforming ad groups.',
-                ];
-            }
-
-            // CPC spike detection
-            $avgCpc = match ($platform) {
-                'linkedin' => 8.0,
-                'facebook' => 1.5,
-                default => 2.0,
-            };
-
-            if ($perf['cpc'] > $avgCpc * 2) {
-                $issuesDetected++;
-                $actions[] = [
-                    'issue' => 'cpc_spike',
-                    'severity' => 'medium',
-                    'detected' => "CPC of \${$perf['cpc']} is ".round($perf['cpc'] / $avgCpc, 1).'x the platform average.',
-                    'action_taken' => 'RECOMMENDED: Check for competitor bidding activity. Consider switching to Target CPA or Maximize Conversions bid strategy.',
-                    'would_auto_fix' => 'In live mode, agent would adjust bid strategy and set CPC caps.',
-                ];
-            }
-
-            // Quality score issues (search platforms only)
-            if (in_array($platform, ['google', 'microsoft'])) {
-                $avgQs = KeywordQualityScore::where('customer_id', $customer->id)
-                    ->where('campaign_google_id', $campaign->google_ads_campaign_id ?? $campaign->microsoft_ads_campaign_id)
-                    ->where('recorded_at', '>=', now()->subDays(7))
-                    ->avg('quality_score');
-
-                if ($avgQs && $avgQs < 5) {
-                    $issuesDetected++;
-                    $actions[] = [
-                        'issue' => 'low_quality_scores',
-                        'severity' => 'high',
-                        'detected' => 'Average quality score is '.round($avgQs, 1).'/10 — this inflates CPCs by 20-50%.',
-                        'action_taken' => 'RECOMMENDED: Improve ad relevance (tighter ad group themes), landing page quality (speed, mobile, content match), and expected CTR (better headlines).',
-                        'would_auto_fix' => 'In live mode, agent would generate new responsive search ads with improved keyword-to-ad alignment.',
-                    ];
-                }
-            }
-
-            if (empty($actions)) {
-                $actions[] = [
-                    'issue' => 'none',
-                    'severity' => 'info',
-                    'detected' => 'No critical issues detected in this campaign.',
-                    'action_taken' => 'Campaign is running normally. Self-healing agent continues to monitor.',
-                    'would_auto_fix' => null,
-                ];
-            }
-
-            $result = [
-                'issues_detected' => $issuesDetected,
-                'actions' => $actions,
-                'campaign_status' => $issuesDetected === 0 ? 'healthy' : ($issuesDetected <= 2 ? 'needs_attention' : 'critical'),
-            ];
+            $result['changes'] = app(AdsServiceFactory::class)->recordedFacebookChanges($customer);
 
             $key = "SelfHealingAgent_{$campaign->id}";
             $this->results[$key] = ['status' => 'completed', 'campaign' => $campaign->name, 'data' => $result];
@@ -516,7 +390,7 @@ class SandboxAgentRunner
             AgentActivity::record(
                 'SelfHealingAgent',
                 'sandbox_self_healing',
-                "Sandbox: {$issuesDetected} issues detected for {$campaign->name} — ".($issuesDetected === 0 ? 'all clear' : $actions[0]['issue']),
+                sprintf('Sandbox: healing pass for %s — %d change(s) proposed', $campaign->name, count($result['changes'])),
                 $customer->id,
                 $campaign->id,
                 $result,
