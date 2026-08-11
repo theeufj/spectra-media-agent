@@ -201,11 +201,15 @@ class CrawlPage implements ShouldQueue
 
                 // Also store to KnowledgeBase for brand guideline extraction
                 KnowledgeBase::updateOrCreate(
+                    // Matched on user + url, not customer: existing rows predate
+                    // the customer_id column, and adding it to the match keys
+                    // would create a duplicate instead of attributing the row.
                     [
                         'user_id' => $this->user->id,
                         'url' => $this->url,
                     ],
                     [
+                        'customer_id' => $this->customerId,
                         'content' => $cleanedContent,
                         'css_content' => '',
                         'embedding' => $embedding ? new Vector($embedding) : null,
@@ -377,6 +381,7 @@ class CrawlPage implements ShouldQueue
                     'url' => $this->url,
                 ],
                 [
+                    'customer_id' => $this->customerId,
                     'content' => $cleanedContent,
                     'css_content' => $cssContent, // Save the combined CSS content.
                     'embedding' => new Vector($embedding), // The pgvector package provides this handy Vector class.

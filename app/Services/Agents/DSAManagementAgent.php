@@ -40,7 +40,7 @@ class DSAManagementAgent
         $domain = parse_url($customer->website, PHP_URL_HOST) ?? $customer->website;
         $language = 'en';
 
-        $pages = KnowledgeBase::where('user_id', $customer->users()->value('id'))
+        $pages = KnowledgeBase::where('customer_id', $customer->id)
             ->whereNotNull('url')
             ->get();
 

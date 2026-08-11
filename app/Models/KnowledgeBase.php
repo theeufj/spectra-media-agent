@@ -22,6 +22,7 @@ class KnowledgeBase extends Model
      */
     protected $fillable = [
         'user_id',
+        'customer_id',
         'url',
         'content',
         'css_content',
