@@ -13,6 +13,29 @@ return [
         'roas_target_multiplier' => 0.9,
     ],
 
+    /*
+     * Gate on auto-upgrading a Search or Display campaign to Performance Max.
+     *
+     * The executor previously upgraded whenever three correctly-sized images and
+     * A$10/day existed — a test of whether PMax was *possible*, not whether it
+     * was *wise*. PMax picks its own inventory and needs conversion volume to
+     * choose well; with none it reliably chases the cheapest impressions it can
+     * find. That is how a B2B advertiser ended up spending 89% of its
+     * impressions inside mobile games.
+     *
+     * 30/month is Google's own rule of thumb for Smart Bidding to leave the
+     * learning phase. Below it, a Search campaign with explicit keywords is the
+     * safer default, and PMax becomes available once the account has signal.
+     *
+     * Set min_conversions to 0 to restore the previous behaviour.
+     */
+    'pmax_upgrade' => [
+        'min_conversions' => 30,
+        'lookback_days' => 30,
+        'min_images' => 3,
+        'min_daily_budget' => 10,
+    ],
+
     'bid_adjustment' => [
         'device_min_conversions' => 50,
         'device_min_clicks' => 200,
