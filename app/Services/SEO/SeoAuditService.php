@@ -318,6 +318,7 @@ class SeoAuditService
 
         $totalImages = $images->length;
         $missingAlt = 0;
+        $trackingPixels = 0;
         $imageDetails = [];
 
         foreach ($images as $img) {
@@ -331,7 +332,19 @@ class SeoAuditService
             // right, and told customers to add alt text where none belongs. Only
             // a genuinely absent attribute is a failure.
             $hasAlt = $img->hasAttribute('alt');
-            if (! $hasAlt) {
+
+            // Tag managers inject tracking beacons into the DOM at runtime, so a
+            // rendered audit sees them even though they appear nowhere in the
+            // site's source. They are invisible, carry no meaning, and belong to
+            // a third party — the customer cannot add an alt attribute to
+            // Meta's facebook.com/tr pixel by editing their own page. Counting
+            // them produced a permanent warning with no available fix, which is
+            // worse than not raising it. They stay in the detail list so the
+            // number is auditable rather than quietly dropped.
+            $isTracking = $this->isTrackingPixel($img, $src);
+            if ($isTracking) {
+                $trackingPixels++;
+            } elseif (! $hasAlt) {
                 $missingAlt++;
             }
 
@@ -340,14 +353,50 @@ class SeoAuditService
                 'alt' => $alt !== '' ? $alt : null,
                 'has_alt' => $hasAlt,
                 'decorative' => $hasAlt && $alt === '',
+                'tracking_pixel' => $isTracking,
             ];
         }
 
         return [
             'total_images' => $totalImages,
             'missing_alt_count' => $missingAlt,
+            'tracking_pixel_count' => $trackingPixels,
             'images' => array_slice($imageDetails, 0, 50),
         ];
+    }
+
+    /**
+     * Is this an analytics beacon rather than page content?
+     *
+     * Matched two ways because either alone misses cases: by host, which catches
+     * the well-known networks whatever size they declare, and by dimensions,
+     * which catches everyone else's 1x1 GIF.
+     */
+    protected function isTrackingPixel(\DOMElement $img, string $src): bool
+    {
+        $trackingHosts = [
+            'facebook.com/tr',
+            'bat.bing.com',
+            'google-analytics.com',
+            'googletagmanager.com',
+            'doubleclick.net',
+            'px.ads.linkedin.com',
+            'analytics.tiktok.com',
+            'ct.pinterest.com',
+            't.co/i/adsct',
+        ];
+
+        foreach ($trackingHosts as $host) {
+            if (str_contains($src, $host)) {
+                return true;
+            }
+        }
+
+        $width = $img->getAttribute('width');
+        $height = $img->getAttribute('height');
+
+        return is_numeric($width) && is_numeric($height)
+            && (int) $width <= 1 && (int) $height <= 1;
     }
 
     protected function analyzeLinks(string $html, string $url): array
@@ -521,16 +570,39 @@ Rules:
 - Return ONLY valid JSON
 PROMPT;
 
+            // 2048 was not enough, and the shortfall was invisible. The model
+            // spends part of its budget on thinking tokens before emitting any
+            // text, and this prompt asks for 5-8 recommendations each carrying
+            // copy-paste markup — so the JSON array was cut off mid-string at
+            // around 670 characters, json_decode failed, and the `?? []` below
+            // turned that into "no recommendations" on every single audit. The
+            // AI half of the report had never worked. The same prompt completes
+            // in full at 8192.
             $result = $this->gemini->generateContent(config('ai.models.default'), $prompt, [
                 'temperature' => 0.3,
-                'maxOutputTokens' => 2048,
+                'maxOutputTokens' => 8192,
             ]);
 
             $text = $result['text'] ?? '';
             $text = preg_replace('/```json\s*/', '', $text);
             $text = preg_replace('/```\s*$/', '', $text);
 
-            return json_decode(trim($text), true) ?? [];
+            $decoded = json_decode(trim($text), true);
+
+            // "The model had nothing to add" and "we could not read what it
+            // said" produced an identical empty report. Only one of those is
+            // worth investigating, so say which happened.
+            if (! is_array($decoded)) {
+                Log::warning('SEO Audit: could not parse AI recommendations', [
+                    'url' => $url,
+                    'json_error' => json_last_error_msg(),
+                    'text_length' => strlen((string) $text),
+                ]);
+
+                return [];
+            }
+
+            return $decoded;
         } catch (\Exception $e) {
             Log::debug('SEO Audit: AI recommendations failed', ['error' => $e->getMessage()]);
 
