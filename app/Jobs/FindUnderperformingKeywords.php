@@ -36,8 +36,19 @@ class FindUnderperformingKeywords implements ShouldQueue
             $campaign = Campaign::findOrFail($this->campaignId);
 
             // PMax campaigns don't have keywords — skip entirely.
+            //
+            // `platform` is a free-text label written when the strategy is
+            // generated, and it drifts: campaign 31 was stored as
+            // "Google Ads (SEM)" for a campaign Google reports as
+            // PERFORMANCE_MAX. `campaign_type` is the structured field and was
+            // correct in that case, so match on either. A PMax campaign that
+            // slips past this guard queries keyword_view, which cannot return
+            // anything for PMax — wasted API calls dressed up as a clean run.
             $isPMax = $campaign->strategies()
-                ->where('platform', 'LIKE', '%Performance Max%')
+                ->where(function ($query) {
+                    $query->where('platform', 'LIKE', '%Performance Max%')
+                        ->orWhere('campaign_type', 'performance_max');
+                })
                 ->exists();
             if ($isPMax) {
                 Log::info("FindUnderperformingKeywords: skipping PMax campaign {$this->campaignId}");

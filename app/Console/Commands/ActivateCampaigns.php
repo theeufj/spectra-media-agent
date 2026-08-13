@@ -102,18 +102,32 @@ class ActivateCampaigns extends Command
 
     private function activateGoogleAds(Strategy $strategy, Campaign $campaign, $customer): bool
     {
-        $googleCampaignId = $strategy->execution_result['platform_ids']['campaign_id']
-            ?? $campaign->google_ads_campaign_id
-            ?? null;
-
-        if (! $googleCampaignId || ! $customer->google_ads_customer_id) {
-            $this->warn('    Missing Google Ads campaign ID or customer ID.');
+        if (! $customer->google_ads_customer_id) {
+            $this->warn('    Missing Google Ads customer ID.');
 
             return false;
         }
 
         $customerId = $customer->cleanGoogleCustomerId();
-        $resourceName = "customers/{$customerId}/campaigns/{$googleCampaignId}";
+
+        // Both sources have been seen holding a bare numeric ID *and* a full
+        // resource name. Interpolating a resource name into the template built
+        // customers/X/campaigns/customers/X/campaigns/Y, which Google rejects —
+        // so activation failed for every campaign whose strategy carried no
+        // platform_ids.campaign_id and fell back to the campaign's own column.
+        $googleCampaignId = $strategy->execution_result['platform_ids']['campaign_id'] ?? null;
+
+        $resourceName = match (true) {
+            $googleCampaignId === null => $campaign->googleAdsResourceName(),
+            str_starts_with((string) $googleCampaignId, 'customers/') => (string) $googleCampaignId,
+            default => "customers/{$customerId}/campaigns/{$googleCampaignId}",
+        };
+
+        if (! $resourceName) {
+            $this->warn('    Missing Google Ads campaign ID.');
+
+            return false;
+        }
 
         $service = new UpdateCampaignStatus($customer);
         $result = $service->enable($customerId, $resourceName);
