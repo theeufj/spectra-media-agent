@@ -204,7 +204,11 @@ class CampaignController extends Controller
             $result = $service->pause($customer->cleanGoogleCustomerId(), $resourceName);
 
             if ($result['success']) {
-                $campaign->update(['platform_status' => 'PAUSED']);
+                // Both fields, deliberately. AdSpendBillingService filters on
+                // `status`, so writing only `platform_status` stops the ads on
+                // Google while billing carries on treating the campaign as
+                // active — the BILL-8 leak.
+                $campaign->update(['status' => 'paused', 'platform_status' => 'PAUSED']);
                 Log::info("Admin paused campaign {$campaign->id} (Google: {$campaign->google_ads_campaign_id})");
 
                 return redirect()->back()->with('flash', [
@@ -218,7 +222,12 @@ class CampaignController extends Controller
                 'message' => 'Failed to pause campaign: '.($result['error'] ?? 'Unknown error'),
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not \Exception: a TypeError or missing class in the
+            // Google service would sail past the narrower catch. report() so a
+            // failed pause reaches the admin exception dashboard rather than
+            // only the log — a campaign that silently stayed live is spend.
+            report($e);
             Log::error("Admin failed to pause campaign {$campaign->id}: ".$e->getMessage());
 
             return redirect()->back()->with('flash', [
@@ -257,7 +266,9 @@ class CampaignController extends Controller
             $result = $service->enable($customer->cleanGoogleCustomerId(), $resourceName);
 
             if ($result['success']) {
-                $campaign->update(['platform_status' => 'ENABLED']);
+                // Mirror of pauseCampaign(): billing reads `status`, so resuming
+                // without it would run ads that are never charged for.
+                $campaign->update(['status' => 'active', 'platform_status' => 'ENABLED']);
                 Log::info("Admin started campaign {$campaign->id} (Google: {$campaign->google_ads_campaign_id})");
 
                 return redirect()->back()->with('flash', [
@@ -271,7 +282,12 @@ class CampaignController extends Controller
                 'message' => 'Failed to start campaign: '.($result['error'] ?? 'Unknown error'),
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not \Exception: a TypeError or missing class in the
+            // Google service would sail past the narrower catch. report() so a
+            // failed pause reaches the admin exception dashboard rather than
+            // only the log — a campaign that silently stayed live is spend.
+            report($e);
             Log::error("Admin failed to start campaign {$campaign->id}: ".$e->getMessage());
 
             return redirect()->back()->with('flash', [
