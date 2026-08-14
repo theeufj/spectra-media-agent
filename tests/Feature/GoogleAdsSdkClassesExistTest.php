@@ -25,7 +25,29 @@ class GoogleAdsSdkClassesExistTest extends TestCase
             'manager link status' => [\Google\Ads\GoogleAds\V22\Enums\ManagerLinkStatusEnum\ManagerLinkStatus::class],
             'customer client link' => [\Google\Ads\GoogleAds\V22\Resources\CustomerClientLink::class],
             'customer client link operation' => [\Google\Ads\GoogleAds\V22\Services\CustomerClientLinkOperation::class],
+
+            // Singular. The link service takes one operation, unlike most Google
+            // Ads services — MutateCustomerClientLinksRequest does not exist.
+            'mutate request (singular)' => [\Google\Ads\GoogleAds\V22\Services\MutateCustomerClientLinkRequest::class],
+
+            // Service clients live under Services\Client, not Services.
+            'link service client' => [\Google\Ads\GoogleAds\V22\Services\Client\CustomerClientLinkServiceClient::class],
+            'campaign service client' => [\Google\Ads\GoogleAds\V22\Services\Client\CampaignServiceClient::class],
         ];
+    }
+
+    public function test_the_link_service_takes_a_single_operation(): void
+    {
+        // Every plural spelling of this call names something the SDK does not
+        // define, and PHP only finds out at the moment of the call.
+        $client = \Google\Ads\GoogleAds\V22\Services\Client\CustomerClientLinkServiceClient::class;
+
+        $this->assertTrue(method_exists($client, 'mutateCustomerClientLink'));
+        $this->assertFalse(method_exists($client, 'mutateCustomerClientLinks'), 'the plural method does not exist');
+
+        $request = \Google\Ads\GoogleAds\V22\Services\MutateCustomerClientLinkRequest::class;
+        $this->assertTrue(method_exists($request, 'setOperation'));
+        $this->assertFalse(method_exists($request, 'setOperations'));
     }
 
     /** @dataProvider sdkClasses */

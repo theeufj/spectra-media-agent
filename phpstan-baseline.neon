@@ -3001,24 +3001,6 @@ parameters:
 			path: app/Services/GoogleAds/CommonServices/UpdateResponsiveSearchAd.php
 
 		-
-			message: '#^Access to an undefined property App\\Services\\GoogleAds\\CreateCampaign\:\:\$googleAdsClient\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCampaign.php
-
-		-
-			message: '#^Call to method mutateCampaigns\(\) on an unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CampaignServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCampaign.php
-
-		-
-			message: '#^PHPDoc tag @var for variable \$campaignServiceClient contains unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CampaignServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCampaign.php
-
-		-
 			message: '#^PHPDoc tag @var for variable \$campaignBudgetServiceClient contains unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CampaignBudgetServiceClient\.$#'
 			identifier: class.notFound
 			count: 1
@@ -3035,30 +3017,6 @@ parameters:
 			identifier: varTag.variableNotFound
 			count: 1
 			path: app/Services/GoogleAds/CreateCampaignBudget.php
-
-		-
-			message: '#^Access to an undefined property App\\Services\\GoogleAds\\CreateCustomerClientLink\:\:\$googleAdsClient\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCustomerClientLink.php
-
-		-
-			message: '#^Call to method mutateCustomerClientLinks\(\) on an unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerClientLinkServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCustomerClientLink.php
-
-		-
-			message: '#^Instantiated class Google\\Ads\\GoogleAds\\V22\\Services\\MutateCustomerClientLinksRequest not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCustomerClientLink.php
-
-		-
-			message: '#^PHPDoc tag @var for variable \$customerClientLinkServiceClient contains unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerClientLinkServiceClient\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCustomerClientLink.php
 
 		-
 			message: '#^Call to method createCustomerClient\(\) on an unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerServiceClient\.$#'

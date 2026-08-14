@@ -6,7 +6,7 @@ use App\Models\Customer;
 use App\Services\CampaignStatusHelper;
 use Google\Ads\GoogleAds\V22\Resources\Campaign;
 use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
-use Google\Ads\GoogleAds\V22\Services\CampaignServiceClient;
+use Google\Ads\GoogleAds\V22\Services\Client\CampaignServiceClient;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest;
 use Illuminate\Support\Facades\Log;
 
@@ -22,6 +22,11 @@ class CreateCampaign extends BaseGoogleAdsService
 
     public function __invoke(string $customerId, array $campaignData): ?array
     {
+        // Builds $this->client. The budget service below is a separate instance
+        // with its own client, so a budget succeeding says nothing about whether
+        // this instance can reach the API.
+        $this->ensureClient();
+
         // 1. Create the Campaign Budget
         $budgetResourceName = ($this->createCampaignBudget)(
             $customerId,
@@ -47,7 +52,7 @@ class CreateCampaign extends BaseGoogleAdsService
         $campaignOperation->setCreate($campaign);
 
         /** @var CampaignServiceClient $campaignServiceClient */
-        $campaignServiceClient = $this->googleAdsClient->getCampaignServiceClient();
+        $campaignServiceClient = $this->client->getCampaignServiceClient();
         $request = new MutateCampaignsRequest([
             'validate_only' => $this->dryRun,
             'customer_id' => $customerId,
@@ -55,6 +60,11 @@ class CreateCampaign extends BaseGoogleAdsService
         ]);
         $response = $campaignServiceClient->mutateCampaigns($request);
 
-        return $response->getResults() ? $response->getResults()[0]->getResourceName() : null;
+        // getResults() returns a RepeatedField, which is an object and therefore
+        // always truthy — the guard it used to sit behind never fired, so an
+        // empty response would index [0] on nothing. Count the entries instead.
+        $results = $response->getResults();
+
+        return count($results) > 0 ? $results[0]->getResourceName() : null;
     }
 }
