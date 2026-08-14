@@ -27,7 +27,15 @@ class CustomerController extends Controller
             'website' => 'nullable|url|max:255',
             'phone' => 'nullable|string|max:20',
             'facebook_page_url' => 'nullable|string|max:500',
+
+            // Optional: customers who already advertise on Google. Supplying it
+            // triggers a manager-link invitation instead of waiting for the
+            // account-creation gate to clear. Google displays ids as
+            // 123-456-7890, so dashes and spaces are accepted and stripped.
+            'google_ads_customer_id' => ['nullable', 'string', 'max:20', 'regex:/^[\s\d-]+$/'],
         ]);
+
+        $this->normaliseGoogleAdsCustomerId($validated);
 
         $facebookPageUrl = $validated['facebook_page_url'] ?? null;
         unset($validated['facebook_page_url']);
@@ -111,6 +119,41 @@ class CustomerController extends Controller
     /**
      * Update the customer profile.
      */
+    /**
+     * Reduce a supplied Google Ads account id to its ten digits, in place.
+     *
+     * Google displays ids as 123-456-7890 and that is how customers copy them,
+     * so dashes and spaces have to be accepted and stripped. An empty value is
+     * removed entirely rather than written as null: blanking the field should
+     * not clear an id that is already set.
+     *
+     * @param  array<string, mixed>  $validated
+     *
+     * @throws \Illuminate\Validation\ValidationException
+     */
+    private function normaliseGoogleAdsCustomerId(array &$validated): void
+    {
+        if (! array_key_exists('google_ads_customer_id', $validated)) {
+            return;
+        }
+
+        if (empty($validated['google_ads_customer_id'])) {
+            unset($validated['google_ads_customer_id']);
+
+            return;
+        }
+
+        $digits = preg_replace('/[^0-9]/', '', (string) $validated['google_ads_customer_id']);
+
+        if (strlen($digits) !== 10) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'google_ads_customer_id' => 'A Google Ads account ID is 10 digits, like 123-456-7890.',
+            ]);
+        }
+
+        $validated['google_ads_customer_id'] = $digits;
+    }
+
     public function update(Request $request, Customer $customer)
     {
         $user = Auth::user();
@@ -129,7 +172,29 @@ class CustomerController extends Controller
             'currency_code' => 'nullable|string|size:3|uppercase', // ISO 4217 currency code
             'website' => 'nullable|url|max:255',
             'phone' => 'nullable|string|max:20',
+
+            // Most customers do not have this to hand at sign-up, so it has to
+            // be addable later. CustomerObserver sends the link invitation the
+            // moment it lands, whichever path set it.
+            'google_ads_customer_id' => ['nullable', 'string', 'max:20', 'regex:/^[\s\d-]+$/'],
         ]);
+
+        $this->normaliseGoogleAdsCustomerId($validated);
+
+        // Repointing a customer at a different account while a link is live
+        // would leave campaigns referring to an account we no longer manage.
+        // Unlinking is a deliberate act and should not happen as a side effect
+        // of editing a profile.
+        if (
+            $customer->google_ads_link_status === 'active'
+            && isset($validated['google_ads_customer_id'])
+            && $validated['google_ads_customer_id'] !== $customer->google_ads_customer_id
+        ) {
+            return redirect()->back()->withErrors([
+                'google_ads_customer_id' => 'This customer is already linked to Google Ads account '
+                    .$customer->google_ads_customer_id.'. Contact support to move to a different account.',
+            ])->withInput();
+        }
 
         $customer->update($validated);
 

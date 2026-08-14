@@ -101,6 +101,7 @@ export default function Create({ auth }) {
         website: '',
         phone: '',
         facebook_page_url: '',
+        google_ads_customer_id: '',
     });
 
     const submit = (e) => {
@@ -223,6 +224,26 @@ export default function Create({ auth }) {
                                             <InputError message={errors.facebook_page_url} className="mt-2" />
                                             <p className="mt-1 text-sm text-gray-500">
                                                 Required for Facebook Ads. Paste your business's Facebook Page link — we'll connect it automatically.
+                                            </p>
+                                        </div>
+
+                                        <div className="md:col-span-2">
+                                            <InputLabel htmlFor="google_ads_customer_id" value="Google Ads account ID (optional)" />
+                                            <TextInput
+                                                id="google_ads_customer_id"
+                                                name="google_ads_customer_id"
+                                                type="text"
+                                                value={data.google_ads_customer_id}
+                                                className="mt-1 block w-full"
+                                                placeholder="123-456-7890"
+                                                onChange={(e) => setData('google_ads_customer_id', e.target.value)}
+                                            />
+                                            <InputError message={errors.google_ads_customer_id} className="mt-2" />
+                                            <p className="mt-1 text-sm text-gray-500">
+                                                Already advertising on Google? Enter your account ID (top right of your Google Ads screen) and
+                                                we'll send a request to manage it. You approve it inside your own account, your billing stays
+                                                with Google, and you can revoke access at any time. Leave blank and we'll set up a new account
+                                                for you.
                                             </p>
                                         </div>
                                     </div>

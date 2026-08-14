@@ -40,14 +40,18 @@ class GoogleAdsSdkClassesExistTest extends TestCase
     {
         // Every plural spelling of this call names something the SDK does not
         // define, and PHP only finds out at the moment of the call.
-        $client = \Google\Ads\GoogleAds\V22\Services\Client\CustomerClientLinkServiceClient::class;
+        // get_class_methods() rather than method_exists(): the latter folds to a
+        // constant at analysis time, so the assertion would stop describing the
+        // installed SDK and start describing what PHPStan already believes.
+        $clientMethods = get_class_methods(\Google\Ads\GoogleAds\V22\Services\Client\CustomerClientLinkServiceClient::class);
 
-        $this->assertTrue(method_exists($client, 'mutateCustomerClientLink'));
-        $this->assertFalse(method_exists($client, 'mutateCustomerClientLinks'), 'the plural method does not exist');
+        $this->assertContains('mutateCustomerClientLink', $clientMethods);
+        $this->assertNotContains('mutateCustomerClientLinks', $clientMethods, 'the plural method does not exist');
 
-        $request = \Google\Ads\GoogleAds\V22\Services\MutateCustomerClientLinkRequest::class;
-        $this->assertTrue(method_exists($request, 'setOperation'));
-        $this->assertFalse(method_exists($request, 'setOperations'));
+        $requestMethods = get_class_methods(\Google\Ads\GoogleAds\V22\Services\MutateCustomerClientLinkRequest::class);
+
+        $this->assertContains('setOperation', $requestMethods);
+        $this->assertNotContains('setOperations', $requestMethods);
     }
 
     /** @dataProvider sdkClasses */

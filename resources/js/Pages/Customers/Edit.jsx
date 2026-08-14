@@ -103,6 +103,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
         currency_code: initialCustomer.currency_code || '',
         website: initialCustomer.website || '',
         phone: initialCustomer.phone || '',
+        google_ads_customer_id: initialCustomer.google_ads_customer_id || '',
     });
 
     const submit = (e) => {
@@ -293,16 +294,48 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                 </div>
 
                                 {/* Account IDs */}
-                                {(initialCustomer.google_ads_customer_id || initialCustomer.facebook_ads_account_id || initialCustomer.gtm_container_id || auth.user.isAdmin) && (
-                                    <div className="pt-6 border-t border-gray-200">
-                                        <h3 className="text-lg font-medium text-gray-900 mb-4">Connected Accounts</h3>
+                                <div className="pt-6 border-t border-gray-200">
+                                    <h3 className="text-lg font-medium text-gray-900 mb-4">Connected Accounts</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                            {initialCustomer.google_ads_customer_id && (
+                                            {/* Editable until a link is live. Once Google has confirmed
+                                                the link, changing the id would leave campaigns pointing at
+                                                an account we no longer manage, so it becomes read-only. */}
+                                            {initialCustomer.google_ads_link_status === 'active' ? (
                                                 <div>
                                                     <InputLabel value="Google Ads Customer ID" />
-                                                    <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono">
-                                                        {initialCustomer.google_ads_customer_id}
+                                                    <div className="mt-1 px-3 py-2 bg-gray-50 border border-gray-300 rounded-md text-sm text-gray-700 font-mono flex items-center gap-2">
+                                                        <span>{initialCustomer.google_ads_customer_id}</span>
+                                                        <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-sans font-medium">Linked</span>
                                                     </div>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    <InputLabel htmlFor="google_ads_customer_id" value="Google Ads account ID" />
+                                                    <TextInput
+                                                        id="google_ads_customer_id"
+                                                        name="google_ads_customer_id"
+                                                        type="text"
+                                                        value={data.google_ads_customer_id}
+                                                        className="mt-1 block w-full font-mono"
+                                                        placeholder="123-456-7890"
+                                                        onChange={(e) => setData('google_ads_customer_id', e.target.value)}
+                                                    />
+                                                    <InputError message={errors.google_ads_customer_id} className="mt-2" />
+                                                    {initialCustomer.google_ads_link_status === 'pending' ? (
+                                                        <p className="mt-1 text-sm text-amber-700">
+                                                            Waiting for approval. Sign in to Google Ads and accept the request under
+                                                            Admin → Access and security → Managers.
+                                                        </p>
+                                                    ) : initialCustomer.google_ads_link_status === 'refused' || initialCustomer.google_ads_link_status === 'cancelled' ? (
+                                                        <p className="mt-1 text-sm text-red-700">
+                                                            The last request was declined. Save the ID again to send a new one.
+                                                        </p>
+                                                    ) : (
+                                                        <p className="mt-1 text-sm text-gray-500">
+                                                            Already advertising on Google? Enter your account ID and we'll request access.
+                                                            You approve it in your own account and can revoke it at any time.
+                                                        </p>
+                                                    )}
                                                 </div>
                                             )}
 
@@ -328,8 +361,7 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
-                                )}
+                                </div>
 
                                 {/* Form Actions */}
                                 <div className="flex items-center gap-4 pt-6 border-t border-gray-200">
