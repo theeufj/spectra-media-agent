@@ -17,8 +17,8 @@ class LandingController extends Controller
         return \Inertia\Inertia::render($page, [
             'plans' => $plans,
             'meta' => $this->meta(
-                'Automated Google Ads Management | sitetospend',
-                'Launch and optimise Google and Meta ad campaigns automatically. AI agents handle keywords, bids, budgets and conversion tracking for you.',
+                'AI Google & Meta Ads Automation Software | sitetospend',
+                'Automate your Google and Meta PPC campaigns with AI. Let intelligent agents handle keyword research, bidding, budgets, and tracking to maximize your ROI.',
                 'sitetospend — Your AI Marketing Team',
                 'Ads that run themselves. Agency-level results without the agency retainer. No credit card required.'
             ),

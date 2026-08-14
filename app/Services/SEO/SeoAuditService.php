@@ -567,6 +567,17 @@ class SeoAuditService
             $topKeywords = implode(', ', array_slice($content['detected_keywords'] ?? [], 0, 10));
             $headingTexts = collect($content['heading_texts'] ?? [])->take(10)->implode(', ');
 
+            // These were interpolated as raw booleans, which PHP renders as "1"
+            // or an empty string — so the model was reading "Has Schema Markup: "
+            // and guessing. Worse, it was never told *which* schema types were
+            // present, so it kept recommending SoftwareApplication and FAQPage
+            // markup for a page that already had both, complete with invented
+            // prices. Name what exists and the advice stops duplicating it.
+            $existingSchema = ! empty($content['schema_types'])
+                ? implode(', ', $content['schema_types'])
+                : '(none)';
+            $hasOg = ! empty($meta['has_og']) ? 'Yes' : 'No';
+
             $prompt = <<<PROMPT
 You are an expert SEO consultant performing a deep analysis of this webpage. Provide SPECIFIC, COPY-PASTE READY recommendations.
 
@@ -577,8 +588,8 @@ H1 Tags: {$headings['h1_count']}
 Heading Text Samples: {$headingTexts}
 Word Count: {$content['word_count']}
 Top Keywords Detected: {$topKeywords}
-Has Schema Markup: {$content['has_schema']}
-Has Open Graph: {$meta['has_og']}
+Existing Schema Types (already on the page): {$existingSchema}
+Has Open Graph: {$hasOg}
 
 Current Issues:
 - {$issueList}
@@ -615,6 +626,8 @@ Rules:
 - For schema: provide the exact JSON-LD markup to add
 - For social: provide exact og:title, og:description values
 - Be specific to THIS page — no generic advice
+- Do NOT recommend adding any schema type already listed above as on the page, and do NOT recommend adding Open Graph tags when Has Open Graph is Yes. Suggest improving what exists, or something genuinely missing.
+- Never invent prices, plan names, product features or statistics. If you do not know a real value, leave it out rather than filling it with an example.
 - Return ONLY valid JSON
 PROMPT;
 
@@ -722,6 +735,8 @@ PROMPT;
         // Extract heading texts
         $headingTexts = collect($headings['headings'] ?? [])->pluck('text')->toArray();
 
+        $schemaTypes = $this->analyzeSchema($html)['types'];
+
         return [
             'word_count' => $wordCount,
             'detected_keywords' => $topKeywords,
@@ -732,7 +747,10 @@ PROMPT;
             'keywords_missing_from_title' => array_values($keywordsMissingFromTitle),
             'keywords_missing_from_description' => array_values($keywordsMissingFromDesc),
             'heading_texts' => $headingTexts,
-            'has_schema' => ! empty($this->analyzeSchema($html)['types']),
+            // Carried through so the AI prompt can name what is already on the
+            // page instead of being told only that *something* is.
+            'schema_types' => $schemaTypes,
+            'has_schema' => ! empty($schemaTypes),
         ];
     }
 

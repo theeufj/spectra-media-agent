@@ -47,9 +47,11 @@ const faqs = [
     },
 ];
 
+// Fallback only — LandingController is the source of truth. Kept in sync so a
+// render without the meta prop does not silently serve different copy.
 const DEFAULT_META = {
-    title: 'Automated Google Ads Management | sitetospend',
-    description: 'Launch and optimise Google and Meta ad campaigns automatically. AI agents handle keywords, bids, budgets and conversion tracking for you.',
+    title: 'AI Google & Meta Ads Automation Software | sitetospend',
+    description: 'Automate your Google and Meta PPC campaigns with AI. Let intelligent agents handle keyword research, bidding, budgets, and tracking to maximize your ROI.',
 };
 
 export default function Landing({ auth, plans = [], meta = {} }) {
@@ -204,8 +206,8 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                     <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
                                         <p className="text-xs sm:text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">AI-Powered Ad Campaign Management</p>
                                         <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
-                                            <span className="block whitespace-normal">The results of a top-tier agency.</span>
-                                            <span className="block text-flame-orange-600 whitespace-normal">The cost of a utility bill.</span>
+                                            <span className="block whitespace-normal">Automated Google &amp; Meta Ads Management</span>
+                                            <span className="block text-flame-orange-600 whitespace-normal">with the Power of AI</span>
                                         </h1>
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
                                             Stop paying agency retainer fees. Our AI spots your competitors, fixes broken ads, moves budget to what's working, and keeps testing new ideas—every single day, without you lifting a finger.
@@ -321,7 +323,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     <div className="bg-gradient-to-br from-flame-orange-900 via-flame-orange-800 to-purple-900 py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
                             <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
-                            <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 Marketing Team</h2>
+                            <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 AI PPC Campaign Manager</h2>
                             <p className="mt-4 max-w-2xl mx-auto text-lg text-flame-orange-200">
                                 Six AI specialists, each focused on a different part of your advertising. Running around the clock, whether you're in a meeting or fast asleep.
                             </p>
@@ -382,7 +384,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     <div className="bg-white py-16 sm:py-24">
                         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
                             <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-gray-900">
-                                Advertising that doesn't need managing
+                                Automated Ad Management That Drives ROI
                             </h2>
                             <div className="mt-6 space-y-5 text-lg leading-relaxed text-gray-600">
                                 <p>
