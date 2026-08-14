@@ -3043,12 +3043,6 @@ parameters:
 			path: app/Services/GoogleAds/CreateCustomerClientLink.php
 
 		-
-			message: '#^Access to constant PENDING on an unknown class Google\\Ads\\GoogleAds\\V22\\Enums\\CustomerClientLinkStatusEnum\\CustomerClientLinkStatus\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/GoogleAds/CreateCustomerClientLink.php
-
-		-
 			message: '#^Call to method mutateCustomerClientLinks\(\) on an unknown class Google\\Ads\\GoogleAds\\V22\\Services\\CustomerClientLinkServiceClient\.$#'
 			identifier: class.notFound
 			count: 1

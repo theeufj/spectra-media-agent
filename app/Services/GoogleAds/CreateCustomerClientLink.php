@@ -3,7 +3,7 @@
 namespace App\Services\GoogleAds;
 
 use App\Models\Customer;
-use Google\Ads\GoogleAds\V22\Enums\CustomerClientLinkStatusEnum\CustomerClientLinkStatus;
+use Google\Ads\GoogleAds\V22\Enums\ManagerLinkStatusEnum\ManagerLinkStatus;
 use Google\Ads\GoogleAds\V22\Resources\CustomerClientLink;
 use Google\Ads\GoogleAds\V22\Services\CustomerClientLinkOperation;
 use Google\Ads\GoogleAds\V22\Services\CustomerClientLinkServiceClient;
@@ -21,7 +21,10 @@ class CreateCustomerClientLink extends BaseGoogleAdsService
     {
         $customerClientLink = new CustomerClientLink([
             'client_customer' => "customers/{$clientAccountId}",
-            'status' => CustomerClientLinkStatus::PENDING,
+            // ManagerLinkStatus, not CustomerClientLinkStatus — the latter does
+            // not exist in the SDK, so this service raised a fatal "class not
+            // found" on every call and had never successfully run.
+            'status' => ManagerLinkStatus::PENDING,
         ]);
 
         $customerClientLinkOperation = new CustomerClientLinkOperation;
