@@ -3,6 +3,7 @@
 use App\Jobs\AutomatedCampaignMaintenance;
 use App\Jobs\AutoStartABTests;
 use App\Jobs\CheckCampaignPolicyViolations;
+use App\Jobs\CheckPendingGoogleAdsLinks;
 use App\Jobs\DetectKeywordCannibalization;
 use App\Jobs\DetectNegativeKeywordConflicts;
 use App\Jobs\ExpandBroadMatchKeywords;
@@ -75,6 +76,11 @@ Schedule::call(function () {
 
 // Campaign status monitoring - checks if campaigns are approved/live
 Schedule::job(new MonitorCampaignStatus)->hourly()->withoutOverlapping();
+
+// Google sends no webhook when a manager link is accepted, so the only way to
+// notice is to ask. Hourly: a customer who has just approved access should not
+// wait a day to be onboarded.
+Schedule::job(new CheckPendingGoogleAdsLinks)->hourly()->withoutOverlapping();
 
 // Checks whether customers actually installed their GTM snippet. Provisioning a
 // container is the half we control; installing it is the half they do, and until

@@ -193,7 +193,7 @@ parameters:
 			path: app/Http/Controllers/Admin/CustomerController.php
 
 		-
-			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
+			message: '#^Relation ''assignedPlan'' is not found in App\\Models\\User model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Http/Controllers/Admin/CustomerController.php
@@ -359,12 +359,6 @@ parameters:
 			identifier: return.type
 			count: 1
 			path: app/Http/Controllers/CollateralController.php
-
-		-
-			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Http/Controllers/Controller.php
 
 		-
 			message: '#^Parameter \#1 \$params of method Stripe\\Service\\Checkout\\SessionService\:\:create\(\) expects array\{adaptive_pricing\?\: array\{enabled\?\: bool\}, after_expiration\?\: array\{recovery\?\: array\{allow_promotion_codes\?\: bool, enabled\: bool\}\}, allow_promotion_codes\?\: bool, automatic_tax\?\: array\{enabled\: bool, liability\?\: array\{account\?\: string, type\: string\}\}, billing_address_collection\?\: string, cancel_url\?\: string, client_reference_id\?\: string, consent_collection\?\: array\{payment_method_reuse_agreement\?\: array\{position\: string\}, promotions\?\: string, terms_of_service\?\: string\}, \.\.\.\}\|null, array\{customer\: string\|null, mode\: ''payment'', line_items\: array\{array\{price_data\: array\{currency\: ''usd'', product_data\: array\{name\: ''Creative Boost Pack'', description\: non\-falsy\-string\}, unit_amount\: int\}, quantity\: 1\}\}, metadata\: array\{type\: ''creative_boost'', purchase_id\: int, user_id\: int, period\: string\}, success_url\: non\-falsy\-string, cancel_url\: non\-falsy\-string\} given\.$#'
@@ -649,12 +643,6 @@ parameters:
 			path: app/Http/Controllers/SandboxController.php
 
 		-
-			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Http/Controllers/SandboxController.php
-
-		-
 			message: '#^Comparison operation "\>" between 4 and 0 is always true\.$#'
 			identifier: greater.alwaysTrue
 			count: 1
@@ -767,12 +755,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: app/Jobs/ApplySeasonalStrategyShift.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/AutomatedCampaignMaintenance.php
 
 		-
 			message: '#^Comparison operation "\>" between int\<1, max\> and 0 is always true\.$#'
@@ -889,12 +871,6 @@ parameters:
 			path: app/Jobs/DeployCampaign.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Jobs/DeployCampaign.php
-
-		-
 			message: '#^Relation ''campaigns'' is not found in App\\Models\\Customer model\.$#'
 			identifier: larastan.relationExistence
 			count: 2
@@ -961,12 +937,6 @@ parameters:
 			path: app/Jobs/ExtendVideo.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/ExtractBrandGuidelines.php
-
-		-
 			message: '#^Call to function is_array\(\) with array will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
@@ -991,8 +961,14 @@ parameters:
 			path: app/Jobs/GenerateCampaignCollateral.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
+			message: '#^Offset ''performance_reports'' on array\{\}\|string in isset\(\) does not exist\.$#'
+			identifier: isset.offset
+			count: 1
+			path: app/Jobs/GenerateExecutiveReport.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
 			count: 1
 			path: app/Jobs/GenerateExecutiveReport.php
 
@@ -1021,16 +997,16 @@ parameters:
 			path: app/Jobs/GenerateImage.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
+			message: '#^Offset ''performance_reports'' on array\{\}\|string in isset\(\) does not exist\.$#'
+			identifier: isset.offset
 			count: 1
 			path: app/Jobs/GenerateMonthlyReport.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
 			count: 1
-			path: app/Jobs/GenerateStrategy.php
+			path: app/Jobs/GenerateMonthlyReport.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\FacebookAdsPerformanceData\|App\\Models\\GoogleAdsPerformanceData\:\:\$total_cost\.$#'
@@ -1057,21 +1033,9 @@ parameters:
 			path: app/Jobs/ManageDSACampaigns.php
 
 		-
-			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Jobs/ManageDSACampaigns.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
+			message: '#^Right side of && is always true\.$#'
+			identifier: booleanAnd.rightAlwaysTrue
 			count: 2
-			path: app/Jobs/MonitorCampaignStatus.php
-
-		-
-			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
 			path: app/Jobs/MonitorCampaignStatus.php
 
 		-
@@ -1171,22 +1135,10 @@ parameters:
 			path: app/Jobs/RunAudienceIntelligence.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/RunCompetitorIntelligence.php
-
-		-
 			message: '#^Comparison operation "\>" between 0 and 0 is always false\.$#'
 			identifier: greater.alwaysFalse
 			count: 2
 			path: app/Jobs/RunCompetitorIntelligence.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/RunHealthChecks.php
 
 		-
 			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<Illuminate\\Database\\Eloquent\\Model\>\:\:withDeployedPlatforms\(\)\.$#'
@@ -1267,14 +1219,20 @@ parameters:
 			path: app/Jobs/RunStrategicDiagnosis.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
+			message: '#^Offset ''performance_reports'' on array\{\}\|string in isset\(\) does not exist\.$#'
+			identifier: isset.offset
 			count: 1
 			path: app/Jobs/SendDailyPerformanceReports.php
 
 		-
 			message: '#^Relation ''campaigns'' is not found in App\\Models\\Customer model\.$#'
 			identifier: larastan.relationExistence
+			count: 1
+			path: app/Jobs/SendDailyPerformanceReports.php
+
+		-
+			message: '#^Result of && is always false\.$#'
+			identifier: booleanAnd.alwaysFalse
 			count: 1
 			path: app/Jobs/SendDailyPerformanceReports.php
 
@@ -1567,6 +1525,12 @@ parameters:
 			path: app/Services/AdSpendBillingService.php
 
 		-
+			message: '#^Access to an undefined property Laravel\\Cashier\\Payment\:\:\$id\.$#'
+			identifier: property.notFound
+			count: 1
+			path: app/Services/AdSpendBillingService.php
+
+		-
 			message: '#^Call to an undefined method App\\Services\\LinkedInAds\\CampaignService\:\:updateCampaignStatus\(\)\.$#'
 			identifier: method.notFound
 			count: 2
@@ -1741,12 +1705,6 @@ parameters:
 			path: app/Services/Agents/CampaignAlertService.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/CampaignRemediationAgent.php
-
-		-
 			message: '#^Method App\\Services\\Agents\\CampaignRemediationAgent\:\:selectBestLandingPage\(\) never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1
@@ -1913,12 +1871,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 3
 			path: app/Services/Agents/Google/SearchKeywordBuilder.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$users\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/GoogleAdsExecutionAgent.php
 
 		-
 			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\ConversionActionCategoryEnum\\ConversionActionCategory\:\:LEAD\.$#'
@@ -3679,12 +3631,6 @@ parameters:
 			path: app/Services/Testing/SyntheticDataService.php
 
 		-
-			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: app/Services/Testing/SyntheticDataService.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Strategy\:\:\$performanceData\.$#'
 			identifier: property.notFound
 			count: 2
@@ -3734,12 +3680,6 @@ parameters:
 
 		-
 			message: '#^Relation ''roles'' is not found in App\\Models\\User model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: routes/console.php
-
-		-
-			message: '#^Relation ''users'' is not found in App\\Models\\Customer model\.$#'
 			identifier: larastan.relationExistence
 			count: 1
 			path: routes/console.php

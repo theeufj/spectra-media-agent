@@ -6,6 +6,7 @@ use App\Models\Concerns\HasEncryptedAttributes;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends Model
@@ -29,6 +30,10 @@ class Customer extends Model
         'website',
         'phone',
         'google_ads_customer_id',
+        'google_ads_link_status',
+        'google_ads_link_requested_at',
+        'google_ads_link_confirmed_at',
+        'google_ads_link_resource_name',
         'google_ads_manager_customer_id',
         'google_ads_customer_is_manager',
         'google_my_business_account_id',
@@ -177,7 +182,10 @@ class Customer extends Model
     /**
      * The users that belong to the customer.
      */
-    public function users()
+    /**
+     * @return BelongsToMany<User, $this>
+     */
+    public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withPivot('role');
     }

@@ -3,6 +3,7 @@
 namespace App\Observers;
 
 use App\Jobs\ScrapeCustomerWebsite;
+use App\Jobs\SendGoogleAdsLinkInvitation;
 use App\Jobs\SetupConversionTracking;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
@@ -34,6 +35,10 @@ class CustomerObserver
 
             $this->ensureConversionTracking($customer);
         }
+
+        // Outside the website check on purpose: a customer can arrive with an
+        // existing Google Ads account before we know their site.
+        $this->ensureGoogleAdsLink($customer);
     }
 
     /**
@@ -57,6 +62,8 @@ class CustomerObserver
 
             $this->ensureConversionTracking($customer);
         }
+
+        $this->ensureGoogleAdsLink($customer);
     }
 
     /**
@@ -90,6 +97,35 @@ class CustomerObserver
         ]);
 
         SetupConversionTracking::dispatch($customer)->delay(now()->addMinutes(2));
+    }
+
+    /**
+     * Ask to manage the customer's existing Google Ads account.
+     *
+     * Google will not let a manager account create client accounts through the
+     * API until it has managed roughly US$1,000 of spend. Linking an account the
+     * customer already owns carries no such threshold, so customers who arrive
+     * with one can be onboarded now instead of waiting for that gate to clear.
+     *
+     * Fires on creation and whenever the account id is added later, which is the
+     * common case — customers rarely have it to hand at sign-up. The job
+     * re-checks state before sending, so a second dispatch is harmless.
+     */
+    private function ensureGoogleAdsLink(Customer $customer): void
+    {
+        if ($customer->is_sandbox || ! $customer->google_ads_customer_id) {
+            return;
+        }
+
+        if (in_array($customer->google_ads_link_status, ['active', 'pending'], true)) {
+            return;
+        }
+
+        Log::info('Requesting Google Ads account link for customer', [
+            'customer_id' => $customer->id,
+        ]);
+
+        SendGoogleAdsLinkInvitation::dispatch($customer);
     }
 
     /**
