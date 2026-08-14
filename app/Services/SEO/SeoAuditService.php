@@ -446,18 +446,66 @@ class SeoAuditService
 
         foreach ($matches[1] ?? [] as $json) {
             $decoded = json_decode(trim($json), true);
-            if ($decoded) {
-                $type = $decoded['@type'] ?? 'Unknown';
-                $types[] = $type;
-                $schemas[] = $decoded;
+            if (! is_array($decoded)) {
+                continue;
             }
+
+            $types = array_merge($types, $this->schemaTypesIn($decoded));
+            $schemas[] = $decoded;
         }
+
+        $types = array_values(array_unique($types));
 
         return [
             'has_schema' => ! empty($types),
             'types' => $types,
             'schemas' => $schemas,
         ];
+    }
+
+    /**
+     * Collect the @type values declared in one JSON-LD block.
+     *
+     * Reading $decoded['@type'] directly only handles the simplest shape. Our
+     * own home page wraps its Organization, SoftwareApplication and FAQPage
+     * nodes in an @graph, which carries no @type of its own — so the entire
+     * block was reported as one "Unknown", understating markup that Google
+     * reads perfectly well and prompting a recommendation to add structured
+     * data that was already there. A top-level array of nodes, and a
+     * multi-valued @type, are equally legal and failed the same way.
+     *
+     * @return list<string>
+     */
+    protected function schemaTypesIn(array $node): array
+    {
+        if (isset($node['@graph']) && is_array($node['@graph'])) {
+            return $this->schemaTypesIn($node['@graph']);
+        }
+
+        // A bare list of nodes rather than a single one.
+        if (array_is_list($node)) {
+            $types = [];
+            foreach ($node as $child) {
+                if (is_array($child)) {
+                    $types = array_merge($types, $this->schemaTypesIn($child));
+                }
+            }
+
+            return $types;
+        }
+
+        $type = $node['@type'] ?? null;
+
+        if (is_string($type)) {
+            return [$type];
+        }
+
+        // "@type": ["Organization", "LocalBusiness"] declares both.
+        if (is_array($type)) {
+            return array_values(array_filter($type, 'is_string'));
+        }
+
+        return ['Unknown'];
     }
 
     /**
