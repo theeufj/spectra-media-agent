@@ -206,7 +206,13 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                     <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
                                         <p className="text-xs sm:text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">AI-Powered Ad Campaign Management</p>
                                         <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
-                                            <span className="block whitespace-normal">Automated Google &amp; Meta Ads Management</span>
+                                            {/*
+                                                The trailing space is deliberate and must stay inside a JSX
+                                                expression to survive. These are block spans so it is invisible,
+                                                but textContent concatenates them — without it the H1 reads
+                                                "Managementwith the Power of AI" to crawlers and screen readers.
+                                            */}
+                                            <span className="block whitespace-normal">{'Automated Google & Meta Ads Management '}</span>
                                             <span className="block text-flame-orange-600 whitespace-normal">with the Power of AI</span>
                                         </h1>
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
