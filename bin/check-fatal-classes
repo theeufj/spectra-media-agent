@@ -1,0 +1,84 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Fail on references to classes and methods that do not exist.
+ *
+ * These are the errors PHP cannot catch early: a name is resolved only when the
+ * line executes, so the file parses, lints, passes the test suite and then dies
+ * the first time that path is reached in production. Every instance found in
+ * this codebase had been written into phpstan-baseline.neon as a known finding
+ * rather than fixed — including 79 services whose entire error handling was a
+ * catch clause for a class the SDK does not define.
+ *
+ * Run against phpstan-strict.neon, which excludes the baseline, so these two
+ * identifiers cannot be silenced by regenerating it.
+ */
+$fatalIdentifiers = ['class.notFound', 'method.notFound'];
+
+/** Mockery's expectation API, called on variables PHPStan types as the real class. */
+$mockeryMethods = [
+    'shouldReceive', 'shouldNotReceive', 'shouldAllowMockingProtectedMethods',
+    'allows', 'expects', 'andReturn', 'makePartial', 'shouldIgnoreMissing',
+];
+
+$command = 'vendor/bin/phpstan analyse --configuration=phpstan-strict.neon '
+    .'--error-format=json --no-progress --memory-limit=2G 2>/dev/null';
+
+exec($command, $output);
+
+$decoded = json_decode(implode('', $output), true);
+
+if (! is_array($decoded) || ! isset($decoded['files'])) {
+    fwrite(STDERR, "check-fatal-classes: could not parse PHPStan output\n");
+    exit(2);
+}
+
+$found = [];
+
+foreach ($decoded['files'] as $file => $data) {
+    foreach ($data['messages'] ?? [] as $message) {
+        if (! in_array($message['identifier'] ?? '', $fatalIdentifiers, true)) {
+            continue;
+        }
+
+        // Only our own namespace. PHPStan cannot see through the fluent builders
+        // and magic accessors that Mockery, Socialite, Eloquent and the Google
+        // Ads SDK rely on, so those reports are noise — the methods do resolve at
+        // runtime. A missing App\ class or method never resolves and is always a
+        // real defect, which makes it the one thing worth failing a build over.
+        if (! preg_match('/\b(?:class|method|type) (App\\\\[A-Za-z0-9_\\\\]+)/', $message['message'])) {
+            continue;
+        }
+
+        // Mockery::mock(SomeService::class) returns a MockInterface, but PHPStan
+        // types the variable as the concrete class, so every expectation reads as
+        // a call to a method the class does not have. The calls are real; the
+        // report is an artefact of how the mock is typed.
+        if (preg_match('/::(?:'.implode('|', $mockeryMethods).')\(\)/', $message['message'])) {
+            continue;
+        }
+
+        $found[] = sprintf(
+            '%s:%d  %s',
+            str_replace(getcwd().'/', '', $file),
+            $message['line'] ?? 0,
+            $message['message']
+        );
+    }
+}
+
+if ($found === []) {
+    echo "check-fatal-classes: no references to missing classes or methods\n";
+    exit(0);
+}
+
+fwrite(STDERR, "\ncheck-fatal-classes: found ".count($found)." reference(s) to something that does not exist.\n");
+fwrite(STDERR, "These fail at runtime, not at parse time. Fix them — do not baseline them.\n\n");
+
+foreach ($found as $line) {
+    fwrite(STDERR, "  {$line}\n");
+}
+
+fwrite(STDERR, "\n");
+exit(1);

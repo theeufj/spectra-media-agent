@@ -54,7 +54,13 @@ class RuntimeExceptionController extends Controller
         ]);
     }
 
-    public function show(RuntimeException $runtimeException)
+    // Typed ExceptionLog, not RuntimeException. The route parameter is named
+    // {runtimeException}, and an unqualified `RuntimeException` type-hint here
+    // resolved to App\Http\Controllers\Admin\RuntimeException — a class that
+    // does not exist — so implicit binding fatalled and the exception detail
+    // page could never open. Binding still works: it keys off the parameter
+    // name, not the class name.
+    public function show(ExceptionLog $runtimeException)
     {
         $runtimeException->load(['user', 'customer']);
 
@@ -63,7 +69,7 @@ class RuntimeExceptionController extends Controller
         ]);
     }
 
-    public function destroy(RuntimeException $runtimeException)
+    public function destroy(ExceptionLog $runtimeException)
     {
         $runtimeException->delete();
 

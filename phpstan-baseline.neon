@@ -235,30 +235,6 @@ parameters:
 			path: app/Http/Controllers/Admin/NotificationController.php
 
 		-
-			message: '#^Call to method delete\(\) on an unknown class App\\Http\\Controllers\\Admin\\RuntimeException\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/Admin/RuntimeExceptionController.php
-
-		-
-			message: '#^Call to method load\(\) on an unknown class App\\Http\\Controllers\\Admin\\RuntimeException\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/Admin/RuntimeExceptionController.php
-
-		-
-			message: '#^Parameter \$runtimeException of method App\\Http\\Controllers\\Admin\\RuntimeExceptionController\:\:destroy\(\) has invalid type App\\Http\\Controllers\\Admin\\RuntimeException\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/Admin/RuntimeExceptionController.php
-
-		-
-			message: '#^Parameter \$runtimeException of method App\\Http\\Controllers\\Admin\\RuntimeExceptionController\:\:show\(\) has invalid type App\\Http\\Controllers\\Admin\\RuntimeException\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Http/Controllers/Admin/RuntimeExceptionController.php
-
-		-
 			message: '#^Parameter \#2 \$recursive of method Illuminate\\Filesystem\\FilesystemAdapter\:\:files\(\) expects bool, int given\.$#'
 			identifier: argument.type
 			count: 1
@@ -745,12 +721,6 @@ parameters:
 			path: app/Http/Middleware/HandleInertiaRequests.php
 
 		-
-			message: '#^Call to an undefined method App\\Models\\Campaign\|Illuminate\\Database\\Eloquent\\Collection\<int, App\\Models\\Campaign\>\:\:adCopies\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Jobs/ApplySeasonalStrategyShift.php
-
-		-
 			message: '#^Strict comparison using \=\=\= between array\{''06\-01'', ''08\-31''\}\|array\{''11\-01'', ''11\-30''\} and null will always evaluate to false\.$#'
 			identifier: identical.alwaysFalse
 			count: 1
@@ -1075,12 +1045,6 @@ parameters:
 			path: app/Jobs/ProcessKnowledgeBaseFile.php
 
 		-
-			message: '#^Instantiated class App\\Jobs\\Vector not found\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Jobs/ProcessKnowledgeBaseFile.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$adSpendCredit\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1393,32 +1357,8 @@ parameters:
 			path: app/Models/User.php
 
 		-
-			message: '#^Call to method date\(\) on an unknown class App\\Models\\Invoice\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Models/User.php
-
-		-
-			message: '#^Call to method total\(\) on an unknown class App\\Models\\Invoice\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Models/User.php
-
-		-
-			message: '#^Call to static method to\(\) on an unknown class App\\Models\\Mail\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Models/User.php
-
-		-
 			message: '#^Method App\\Models\\User\:\:assignedPlan\(\) should return string but returns Illuminate\\Database\\Eloquent\\Relations\\BelongsTo\<App\\Models\\Plan, \$this\(App\\Models\\User\)\>\.$#'
 			identifier: return.type
-			count: 1
-			path: app/Models/User.php
-
-		-
-			message: '#^Parameter \$invoice of method App\\Models\\User\:\:sendInvoice\(\) has invalid type App\\Models\\Invoice\.$#'
-			identifier: class.notFound
 			count: 1
 			path: app/Models/User.php
 
@@ -1528,12 +1468,6 @@ parameters:
 			message: '#^Access to an undefined property Laravel\\Cashier\\Payment\:\:\$id\.$#'
 			identifier: property.notFound
 			count: 1
-			path: app/Services/AdSpendBillingService.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\LinkedInAds\\CampaignService\:\:updateCampaignStatus\(\)\.$#'
-			identifier: method.notFound
-			count: 2
 			path: app/Services/AdSpendBillingService.php
 
 		-
@@ -2029,18 +1963,6 @@ parameters:
 			path: app/Services/Agents/SelfHealingAgent.php
 
 		-
-			message: '#^Call to an undefined method App\\Services\\LinkedInAds\\CampaignService\:\:updateCampaignBudget\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/Agents/SelfHealingAgent.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\MicrosoftAds\\CampaignService\:\:updateCampaignStatus\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/Agents/SelfHealingAgent.php
-
-		-
 			message: '#^Callable App\\Services\\GoogleAds\\SearchServices\\CreateResponsiveSearchAd invoked with 5 parameters, 3 required\.$#'
 			identifier: arguments.count
 			count: 1
@@ -2099,12 +2021,6 @@ parameters:
 			identifier: constant.notFound
 			count: 1
 			path: app/Services/Campaigns/RollbackCampaignService.php
-
-		-
-			message: '#^Call to an undefined method App\\Models\\Campaign\:\:versions\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/Campaigns/SummarizeCampaignHistoryService.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$brandGuideline\.$#'
@@ -2461,12 +2377,6 @@ parameters:
 			path: app/Services/GoogleAds/ListAccessibleCustomers.php
 
 		-
-			message: '#^Call to an undefined method App\\Models\\NegativeKeywordList\:\:keywords\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Services/GoogleAds/NegativeKeywords/AddNegativeKeywordService.php
-
-		-
 			message: '#^Parameter \#3 \$dailyBudgetMicros of callable App\\Services\\GoogleAds\\CreateCampaignBudget expects int, float given\.$#'
 			identifier: argument.type
 			count: 1
@@ -2621,12 +2531,6 @@ parameters:
 			identifier: method.notFound
 			count: 2
 			path: app/Services/StorageHelper.php
-
-		-
-			message: '#^Call to static method where\(\) on an unknown class App\\Models\\PromptVersion\.$#'
-			identifier: class.notFound
-			count: 1
-			path: app/Services/Testing/PromptTestingService.php
 
 		-
 			message: '#^Match expression does not handle remaining value\: mixed$#'
@@ -2863,46 +2767,10 @@ parameters:
 			path: tests/Feature/Services/FacebookAds/PixelAndConversionsIntegrationTest.php
 
 		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\GetAdStatus\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: tests/Feature/Services/GoogleAds/CommonServices/CommonServicesIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\GetCampaignKeywords\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/CommonServices/CommonServicesIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\GetGoogleAdsRecommendations\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/CommonServices/CommonServicesIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\GetSearchTermsReport\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/CommonServices/CommonServicesIntegrationTest.php
-
-		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
 			path: tests/Feature/Services/GoogleAds/CommonServices/CommonServicesIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\CreateConversionAction\:\:create\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/CommonServices/ConversionActionsIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\GetConversionActionDetails\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/CommonServices/ConversionActionsIntegrationTest.php
 
 		-
 			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
@@ -2929,30 +2797,6 @@ parameters:
 			path: tests/Feature/Services/GoogleAds/GoogleAdsDeploymentIntegrationTest.php
 
 		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\PerformanceMaxServices\\CreateAssetGroup\:\:create\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: tests/Feature/Services/GoogleAds/PerformanceMax/PerformanceMaxIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\PerformanceMaxServices\\CreatePerformanceMaxCampaign\:\:create\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: tests/Feature/Services/GoogleAds/PerformanceMax/PerformanceMaxIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\PerformanceMaxServices\\CreateTextAsset\:\:create\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: tests/Feature/Services/GoogleAds/PerformanceMax/PerformanceMaxIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\PerformanceMaxServices\\LinkAssetGroupAsset\:\:link\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/PerformanceMax/PerformanceMaxIntegrationTest.php
-
-		-
 			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withOAuth2Credential\(\)\.$#'
 			identifier: method.notFound
 			count: 1
@@ -2963,54 +2807,6 @@ parameters:
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 2
 			path: tests/Feature/Services/GoogleAds/PerformanceMax/PerformanceMaxIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\AddKeyword\:\:add\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\GetCampaignStatus\:\:get\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\UpdateCampaignBudget\:\:update\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\CommonServices\\UpdateCampaignStatus\:\:update\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\SearchServices\\CreateResponsiveSearchAd\:\:create\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\SearchServices\\CreateSearchAdGroup\:\:create\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
-
-		-
-			message: '#^Call to an undefined method App\\Services\\GoogleAds\\SearchServices\\CreateSearchCampaign\:\:create\(\)\.$#'
-			identifier: method.notFound
-			count: 2
-			path: tests/Feature/Services/GoogleAds/SearchCampaignIntegrationTest.php
 
 		-
 			message: '#^Call to an undefined method Google\\Ads\\GoogleAds\\Lib\\AbstractGoogleAdsBuilder\:\:withOAuth2Credential\(\)\.$#'

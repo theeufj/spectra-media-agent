@@ -7,6 +7,7 @@ use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Mail;
 use Laravel\Cashier\Billable;
 
 class User extends Authenticatable implements MustVerifyEmail
@@ -238,7 +239,13 @@ class User extends Authenticatable implements MustVerifyEmail
         return Plan::where('slug', 'free')->first();
     }
 
-    public function sendInvoice(Invoice $invoice)
+    /**
+     * Cashier's Invoice, not an App\Models\Invoice — no such model exists, so
+     * the unqualified hint resolved to a missing class and this would have
+     * fatalled on the first call. It has no callers yet, which is why nobody
+     * found out.
+     */
+    public function sendInvoice(\Laravel\Cashier\Invoice $invoice)
     {
         Mail::to($this->email)->send(new InvoiceCreated($this, $invoice->total(), $invoice->date()->toFormattedDateString()));
     }

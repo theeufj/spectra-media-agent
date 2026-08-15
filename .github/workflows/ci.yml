@@ -1,0 +1,75 @@
+name: CI
+
+# Push to master auto-deploys via Forge, so until now nothing stood between a
+# commit and production. The checks below are the ones CLAUDE.md already asks
+# for before committing; this runs them whether or not anyone remembered.
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: testing
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # check-baseline-growth compares against the merge base, which needs
+          # more than a shallow clone.
+          fetch-depth: 0
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pgsql, pdo_pgsql, grpc, bcmath, intl
+          coverage: none
+
+      - name: Cache composer
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+
+      - run: composer install --prefer-dist --no-interaction --no-progress
+
+      - name: Formatting
+        run: vendor/bin/pint --test
+
+      - name: Static analysis
+        run: vendor/bin/phpstan analyse --no-progress --memory-limit=2G
+
+      # The two checks that would have caught every runtime-fatal bug this
+      # codebase has shipped.
+      - name: No references to missing classes or methods
+        run: ./bin/check-fatal-classes
+
+      - name: Baseline has not grown
+        run: ./bin/check-baseline-growth origin/master
+
+      - name: Tests
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_DATABASE: testing
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+        run: |
+          cp .env.example .env || true
+          php artisan key:generate --force
+          php artisan test

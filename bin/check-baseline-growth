@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# Fail if phpstan-baseline.neon has grown.
+#
+# The baseline exists to freeze existing debt, and CLAUDE.md already forbids
+# adding to it — but nothing enforced that, so it grew, and what it accumulated
+# was not only noise. Every runtime-fatal bug found in this codebase had first
+# been reported by PHPStan and then written into the baseline: a catch clause for
+# a class the SDK never defined, an enum constant on a missing class, a service
+# client property that was never declared, models that did not exist for tables
+# that did.
+#
+# Comparing against the merge base rather than the previous commit means a branch
+# is judged on what it added, not on where it started.
+set -euo pipefail
+
+BASELINE="phpstan-baseline.neon"
+BASE_REF="${1:-origin/master}"
+
+count() { grep -c "message:" "$1" 2>/dev/null || echo 0; }
+
+current=$(count "$BASELINE")
+
+if ! git rev-parse --verify --quiet "$BASE_REF" >/dev/null; then
+    echo "check-baseline-growth: $BASE_REF not available, skipping comparison (current: $current)"
+    exit 0
+fi
+
+merge_base=$(git merge-base HEAD "$BASE_REF" 2>/dev/null || echo "$BASE_REF")
+
+previous=$(git show "$merge_base:$BASELINE" 2>/dev/null | grep -c "message:" || echo 0)
+
+echo "check-baseline-growth: $previous at ${merge_base:0:8} -> $current now"
+
+if [ "$current" -gt "$previous" ]; then
+    added=$((current - previous))
+    cat >&2 <<EOF
+
+check-baseline-growth: the baseline grew by $added entr(y/ies).
+
+The baseline freezes existing debt; it is not a place to put new findings.
+Fix the error, or if it is genuinely a false positive, add a narrow ignoreErrors
+rule in phpstan.neon with a comment saying why.
+
+EOF
+    exit 1
+fi
+
+if [ "$current" -lt "$previous" ]; then
+    echo "check-baseline-growth: down $((previous - current)). Good."
+fi
+
+exit 0

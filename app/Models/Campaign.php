@@ -154,6 +154,19 @@ class Campaign extends Model
     }
 
     /**
+     * Strategy snapshots, oldest first when ordered by version_number.
+     *
+     * SummarizeCampaignHistoryService has read this since 2025; the relation
+     * was never defined, so the call fatalled.
+     *
+     * @return HasMany<CampaignVersion, $this>
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(CampaignVersion::class);
+    }
+
+    /**
      * Scope campaigns that have been deployed to at least one ad platform.
      */
     public function scopeWithDeployedPlatforms($query)

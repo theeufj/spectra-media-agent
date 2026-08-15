@@ -885,7 +885,7 @@ class SelfHealingAgent
                         }
                     } elseif ($status && strtolower($status) === 'paused') {
                         // Re-enable paused campaign
-                        $resumed = $service->updateCampaignStatus($campaign->microsoft_ads_campaign_id, 'Active');
+                        $resumed = $service->updateStatus($campaign->microsoft_ads_campaign_id, 'Active');
                         if ($resumed) {
                             $results['actions_taken'][] = [
                                 'type' => 'campaign_resumed',
@@ -990,7 +990,7 @@ class SelfHealingAgent
                         $dailyBudget = $campaignData['dailyBudget']['amount'] ?? null;
                         if ($dailyBudget && floatval($dailyBudget) < 10) {
                             $newBudget = round(floatval($dailyBudget) * 1.5, 2);
-                            $updated = $service->updateCampaignBudget($linkedInCampaignId, $newBudget);
+                            $updated = $service->updateBudget($linkedInCampaignId, $newBudget);
                             if ($updated) {
                                 $results['actions_taken'][] = [
                                     'type' => 'budget_increase',

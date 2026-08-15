@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\AdCopy;
 use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\FacebookAdsPerformanceData;
@@ -62,8 +63,10 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                 $biddingStrategyName = $currentStrategy->bidding_strategy['name'] ?? 'MAXIMIZE_CONVERSIONS';
             }
 
-            // Fetch top performing keywords from ad copies
-            $topKeywords = $campaign->adCopies()
+            // Ad copies hang off Strategy, not Campaign — $campaign->adCopies()
+            // is not a relation and raised "call to undefined method" every time
+            // this job ran, before any seasonal shift was applied.
+            $topKeywords = AdCopy::whereIn('strategy_id', $campaign->strategies()->select('id'))
                 ->where('status', 'approved')
                 ->limit(10)
                 ->pluck('headlines')

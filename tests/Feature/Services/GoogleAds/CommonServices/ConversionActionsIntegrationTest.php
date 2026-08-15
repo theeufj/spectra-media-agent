@@ -5,6 +5,7 @@ namespace Tests\Feature\Services\GoogleAds\CommonServices;
 use App\Models\Customer;
 use App\Services\GoogleAds\CommonServices\CreateConversionAction;
 use App\Services\GoogleAds\CommonServices\GetConversionActionDetails;
+use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Artisan;
 use Tests\TestCase;
@@ -36,12 +37,13 @@ class ConversionActionsIntegrationTest extends TestCase
     public function test_creates_conversion_action_and_returns_resource_name(): void
     {
         $service = new CreateConversionAction($this->customer);
-        $resource = $service->create(
-            customerId: $this->customerId,
-            name: 'PHPUnit Test Conversion '.now()->timestamp,
-            type: 'WEBPAGE',
-            category: 'SUBMIT_LEAD_FORM',
-            value: 10.0,
+
+        // Takes a name and a ConversionActionCategory enum value. There are no
+        // type or value parameters.
+        $resource = $service(
+            $this->customerId,
+            'PHPUnit Test Conversion '.now()->timestamp,
+            ConversionActionCategory::SUBMIT_LEAD_FORM,
         );
 
         $this->assertNotNull($resource);
@@ -50,14 +52,23 @@ class ConversionActionsIntegrationTest extends TestCase
 
     public function test_gets_conversion_action_details(): void
     {
+        // Details are fetched for one conversion action, so create one first
+        // rather than listing the account.
+        $created = (new CreateConversionAction($this->customer))(
+            $this->customerId,
+            'PHPUnit Details Probe '.now()->timestamp,
+            ConversionActionCategory::SUBMIT_LEAD_FORM,
+        );
+
+        $this->assertNotNull($created);
+
         $service = new GetConversionActionDetails($this->customer);
-        $actions = $service->get($this->customerId);
+        $actions = $service($this->customerId, $created);
 
         $this->assertIsArray($actions);
-        // Account should have at least one conversion action
         $this->assertNotEmpty($actions);
 
-        $first = reset($actions);
+        $first = $actions;
         $this->assertArrayHasKey('name', $first);
         $this->assertArrayHasKey('category', $first);
     }

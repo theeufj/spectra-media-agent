@@ -1,0 +1,34 @@
+# Analysis that deliberately does NOT include phpstan-baseline.neon.
+#
+# The baseline exists to freeze pre-existing debt, and most of what it holds is
+# harmless — Eloquent magic properties, Mockery calls in tests. But two error
+# identifiers are never harmless:
+#
+#   class.notFound   a named class does not exist
+#   method.notFound  a called method does not exist
+#
+# PHP resolves both only at the moment the line runs, so the file parses, lints,
+# passes CI and dies in production the first time that path is reached. Every
+# such bug found in this codebase had been recorded in the baseline rather than
+# fixed: a catch clause for a class the SDK never defined (79 services), an enum
+# constant on a non-existent class, a plural request class, an undefined client
+# property.
+#
+# bin/check-fatal-classes runs this config and fails on those identifiers alone,
+# so they cannot be silenced by regenerating the baseline.
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 5
+
+    paths:
+        - app
+        - config
+        - database
+        - routes
+        - tests
+
+    excludePaths:
+        analyse:
+            - app/Console/Commands/Test*.php

@@ -645,8 +645,13 @@ class AdSpendBillingService
                 if (! empty($campaign->linkedin_campaign_id) && ! empty($customer->linkedin_ads_account_id)) {
                     try {
                         $liService = new \App\Services\LinkedInAds\CampaignService($customer);
-                        $liService->updateCampaignStatus($campaign->linkedin_campaign_id, 'PAUSED');
-                    } catch (\Exception $e) {
+                        $liService->updateStatus($campaign->linkedin_campaign_id, 'PAUSED');
+                    } catch (\Throwable $e) {
+                        // \Throwable: a wrong method name is an \Error, which
+                        // \Exception does not catch, so one bad platform call
+                        // aborted the entire pause loop and left every campaign
+                        // after it running on exhausted credit.
+                        report($e);
                         Log::warning('AdSpendBilling: Failed to pause LinkedIn campaign', ['error' => $e->getMessage()]);
                     }
                 }
@@ -710,8 +715,9 @@ class AdSpendBillingService
                 if (! empty($campaign->linkedin_campaign_id) && ! empty($customer->linkedin_ads_account_id)) {
                     try {
                         $liService = new \App\Services\LinkedInAds\CampaignService($customer);
-                        $liService->updateCampaignStatus($campaign->linkedin_campaign_id, 'ACTIVE');
-                    } catch (\Exception $e) {
+                        $liService->updateStatus($campaign->linkedin_campaign_id, 'ACTIVE');
+                    } catch (\Throwable $e) {
+                        report($e);
                         Log::warning('AdSpendBilling: Failed to resume LinkedIn campaign', ['error' => $e->getMessage()]);
                     }
                 }

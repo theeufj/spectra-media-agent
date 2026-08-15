@@ -11,6 +11,7 @@ use App\Services\GoogleAds\PerformanceMaxServices\CreateTextAsset;
 use App\Services\GoogleAds\PerformanceMaxServices\LinkAssetGroupAsset;
 use Google\Ads\GoogleAds\Lib\OAuth2TokenBuilder;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsClientBuilder;
+use Google\Ads\GoogleAds\V22\Enums\AssetFieldTypeEnum\AssetFieldType;
 use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus;
 use Google\Ads\GoogleAds\V22\Resources\Campaign as GoogleCampaign;
 use Google\Ads\GoogleAds\V22\Services\CampaignOperation;
@@ -55,12 +56,13 @@ class PerformanceMaxIntegrationTest extends TestCase
     public function test_creates_pmax_campaign_and_returns_resource_name(): void
     {
         $service = new CreatePerformanceMaxCampaign($this->customer);
-        $campaign = Campaign::factory()->make([
-            'name' => 'PHPUnit PMax Test '.now()->timestamp,
-            'daily_budget' => 5.00,
-        ]);
 
-        $resource = $service->create($this->customerId, $campaign);
+        // An array of the keys the service reads — it was previously handed a
+        // Campaign model, via a ->create() method that does not exist.
+        $resource = $service($this->customerId, [
+            'businessName' => 'PHPUnit PMax Test '.now()->timestamp,
+            'budget' => 5.00,
+        ]);
 
         $this->assertNotNull($resource);
         $this->assertStringContainsString('customers/'.$this->customerId, $resource);
@@ -74,11 +76,12 @@ class PerformanceMaxIntegrationTest extends TestCase
         $campaignResource = $this->createTestPMaxCampaign();
 
         $service = new CreateAssetGroup($this->customer);
-        $resource = $service->create(
-            customerId: $this->customerId,
-            campaignResource: $campaignResource,
-            name: 'PHPUnit Asset Group',
-            finalUrl: 'https://sitetospend.com',
+        $resource = $service(
+            $this->customerId,
+            $campaignResource,
+            'PHPUnit Asset Group',
+            // finalUrls, plural — the service takes a list.
+            ['https://sitetospend.com'],
         );
 
         $this->assertNotNull($resource);
@@ -88,7 +91,7 @@ class PerformanceMaxIntegrationTest extends TestCase
     public function test_creates_text_asset_headline(): void
     {
         $service = new CreateTextAsset($this->customer);
-        $resource = $service->create($this->customerId, 'Grow Your Business');
+        $resource = $service($this->customerId, 'Grow Your Business');
 
         $this->assertNotNull($resource);
         $this->assertStringContainsString('/assets/', $resource);
@@ -97,7 +100,7 @@ class PerformanceMaxIntegrationTest extends TestCase
     public function test_creates_text_asset_description(): void
     {
         $service = new CreateTextAsset($this->customer);
-        $resource = $service->create($this->customerId, 'Reach more customers with AI-powered advertising.');
+        $resource = $service($this->customerId, 'Reach more customers with AI-powered advertising.');
 
         $this->assertNotNull($resource);
         $this->assertStringContainsString('/assets/', $resource);
@@ -107,11 +110,11 @@ class PerformanceMaxIntegrationTest extends TestCase
     {
         $campaignResource = $this->createTestPMaxCampaign();
         $assetGroupService = new CreateAssetGroup($this->customer);
-        $assetGroupResource = $assetGroupService->create(
+        $assetGroupResource = $assetGroupService(
             $this->customerId,
             $campaignResource,
             'PHPUnit Asset Group',
-            'https://sitetospend.com',
+            ['https://sitetospend.com'],
         );
 
         $service = new AddAudienceSignals($this->customer);
@@ -128,25 +131,27 @@ class PerformanceMaxIntegrationTest extends TestCase
     {
         $campaignResource = $this->createTestPMaxCampaign();
         $assetGroupService = new CreateAssetGroup($this->customer);
-        $assetGroupResource = $assetGroupService->create(
+        $assetGroupResource = $assetGroupService(
             $this->customerId,
             $campaignResource,
             'PHPUnit Asset Group',
-            'https://sitetospend.com',
+            ['https://sitetospend.com'],
         );
 
         $textService = new CreateTextAsset($this->customer);
-        $assetResource = $textService->create($this->customerId, 'PHPUnit Headline');
+        $assetResource = $textService($this->customerId, 'PHPUnit Headline');
 
         $linkService = new LinkAssetGroupAsset($this->customer);
-        $result = $linkService->link(
+        // Takes an AssetFieldType enum value, not the string 'HEADLINE', and
+        // returns the new link's resource name rather than a boolean.
+        $result = $linkService(
             $this->customerId,
             $assetGroupResource,
             $assetResource,
-            'HEADLINE',
+            AssetFieldType::HEADLINE,
         );
 
-        $this->assertTrue($result);
+        $this->assertNotNull($result);
     }
 
     // ─── Helpers ─────────────────────────────────────────────────────────────
@@ -154,12 +159,11 @@ class PerformanceMaxIntegrationTest extends TestCase
     private function createTestPMaxCampaign(): string
     {
         $service = new CreatePerformanceMaxCampaign($this->customer);
-        $campaign = Campaign::factory()->make([
-            'name' => 'PHPUnit PMax '.now()->timestamp.'-'.rand(100, 999),
-            'daily_budget' => 5.00,
-        ]);
 
-        $resource = $service->create($this->customerId, $campaign);
+        $resource = $service($this->customerId, [
+            'businessName' => 'PHPUnit PMax '.now()->timestamp.'-'.rand(100, 999),
+            'budget' => 5.00,
+        ]);
         $this->createdCampaignResources[] = $resource;
 
         return $resource;

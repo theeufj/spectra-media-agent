@@ -50,10 +50,11 @@ class CommonServicesIntegrationTest extends TestCase
     public function test_get_ad_status_returns_array_for_campaign(): void
     {
         $service = new GetAdStatus($this->customer);
-        $result = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
+        $result = $service($this->customerId, $this->liveCampaign->googleAdsResourceName());
 
-        $this->assertIsArray($result);
-        // Each entry should have status and approval_status
+        // These services declare an array return, so asserting the type proves
+        // nothing. What is under test is that the live call completes and the
+        // rows are shaped as expected.
         foreach ($result as $ad) {
             $this->assertArrayHasKey('ad_id', $ad);
             $this->assertArrayHasKey('status', $ad);
@@ -63,37 +64,42 @@ class CommonServicesIntegrationTest extends TestCase
     public function test_get_search_terms_report_returns_array(): void
     {
         $service = new GetSearchTermsReport($this->customer);
-        $result = $service->get(
+
+        // A named date range, not a start/end pair.
+        $result = $service(
             $this->customerId,
-            $this->liveCampaign->google_ads_campaign_id,
-            now()->subDays(30)->toDateString(),
-            now()->toDateString(),
+            $this->liveCampaign->googleAdsResourceName(),
+            'LAST_30_DAYS',
         );
 
-        $this->assertIsArray($result);
-        // May be empty if no search terms yet — that's valid
+        // May legitimately be empty if the campaign has no search terms yet, so
+        // completing without throwing is the assertion.
+        $this->addToAssertionCount(1);
     }
 
     public function test_get_campaign_keywords_returns_array(): void
     {
         $service = new GetCampaignKeywords($this->customer);
-        $result = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
+        $result = $service($this->customerId, $this->liveCampaign->googleAdsResourceName());
 
-        $this->assertIsArray($result);
+        // Empty is valid for a campaign with no keywords; reaching here without
+        // an exception is what matters.
+        $this->addToAssertionCount(1);
     }
 
     public function test_get_google_ads_recommendations_returns_array(): void
     {
         $service = new GetGoogleAdsRecommendations($this->customer);
-        $result = $service->get($this->customerId);
+        $result = $service($this->customerId);
 
-        $this->assertIsArray($result);
+        // Google may have no recommendations to offer; that is not a failure.
+        $this->addToAssertionCount(1);
     }
 
     public function test_get_ad_status_returns_approval_status_field(): void
     {
         $service = new GetAdStatus($this->customer);
-        $result = $service->get($this->customerId, $this->liveCampaign->google_ads_campaign_id);
+        $result = $service($this->customerId, $this->liveCampaign->googleAdsResourceName());
 
         foreach ($result as $ad) {
             $this->assertArrayHasKey('approval_status', $ad);
