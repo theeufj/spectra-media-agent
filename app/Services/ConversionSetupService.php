@@ -132,6 +132,15 @@ class ConversionSetupService
                     if (! ($fbResult['success'] ?? false)) {
                         $errors[] = 'GTM Meta Pixel tag failed: '.($fbResult['error'] ?? 'unknown');
                     }
+
+                    // The base tag only reports PageView. Without this, a Meta
+                    // campaign optimising for conversions has no conversion to
+                    // optimise towards — the Google tag alongside it has fired
+                    // on form submit all along.
+                    $fbConversion = $this->gtm->addFacebookConversionTag($customer, $pixelId);
+                    if (! $fbConversion['success']) {
+                        $errors[] = 'GTM Meta conversion tag failed: '.($fbConversion['error'] ?? 'unknown');
+                    }
                 }
             } catch (\Exception $e) {
                 $errors[] = 'GTM Meta Pixel error: '.$e->getMessage();

@@ -415,6 +415,142 @@ JS;
     }
 
     /**
+     * Fire a Meta conversion event when a visitor converts.
+     *
+     * The base pixel tag above only tracks PageView, so until now Meta learned
+     * that people visited a customer's site and nothing else. A campaign
+     * optimising for conversions with no conversion events does not
+     * underperform slightly — Meta's delivery is almost entirely signal-driven,
+     * so it optimises for whatever it can measure, which was page views.
+     *
+     * Fires on the same triggers as the Google Ads conversion tag: forms
+     * submitted in place, and thank-you pages for sites that redirect.
+     *
+     * @param  array{event_name?: string, value?: float, currency?: string, firing_trigger_id?: string}  $config
+     * @return array{success: bool, tag_id?: string|null, tag_name?: string, existing?: bool, error?: string}
+     */
+    public function addFacebookConversionTag(Customer $customer, string $pixelId, array $config = []): array
+    {
+        try {
+            if (! $customer->gtm_container_id || ! $customer->gtm_account_id || ! $customer->gtm_workspace_id) {
+                return ['success' => false, 'error' => 'Customer does not have a provisioned GTM container'];
+            }
+
+            $accessToken = $this->getPlatformAccessToken();
+
+            if (! $accessToken) {
+                return ['success' => false, 'error' => 'Unable to authenticate with GTM platform account'];
+            }
+
+            $workspacePath = $this->getWorkspacePath($customer);
+
+            // Lead is the right default: most customers here are service
+            // businesses whose conversion is an enquiry, not a checkout.
+            $eventName = $config['event_name'] ?? 'Lead';
+            $tagName = 'Spectra — Meta Pixel '.$eventName;
+
+            $explicitTrigger = $config['firing_trigger_id'] ?? null;
+
+            $triggerIds = $explicitTrigger
+                ? [$explicitTrigger]
+                : array_values(array_filter([
+                    $this->getOrCreateFormSubmitTrigger($workspacePath, $accessToken),
+                    $this->getOrCreateThankYouPageTrigger($workspacePath, $accessToken),
+                ]));
+
+            $script = $this->getFacebookConversionScript($eventName, $config);
+
+            $tagData = [
+                'name' => $tagName,
+                'type' => 'html',
+                'parameter' => [
+                    ['key' => 'html', 'type' => 'template', 'value' => $script],
+                    ['key' => 'supportDocumentWrite', 'type' => 'boolean', 'value' => 'false'],
+                ],
+                'firingTriggerId' => $triggerIds,
+            ];
+
+            $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+
+            if (! $response['success']) {
+                // Same recovery as the Google tag: a container that already has
+                // the tag but no trigger fires nothing, and that is the state a
+                // half-finished earlier setup leaves behind.
+                if (str_contains($response['error'] ?? '', 'duplicate name')) {
+                    $existing = $this->findTagByName($workspacePath, $tagName, $accessToken);
+
+                    if ($existing) {
+                        $tagId = $existing['tagId'];
+
+                        if ($triggerIds && empty($existing['firingTriggerId'])) {
+                            $existing['firingTriggerId'] = $triggerIds;
+                            $this->makeApiCall('PUT', "/{$workspacePath}/tags/{$tagId}", $accessToken, $existing);
+                        }
+
+                        return ['success' => true, 'tag_id' => $tagId, 'tag_name' => $tagName, 'existing' => true];
+                    }
+                }
+
+                return ['success' => false, 'error' => 'Failed to create Meta conversion tag: '.($response['error'] ?? 'Unknown error')];
+            }
+
+            return [
+                'success' => true,
+                'tag_id' => $response['data']['tagId'] ?? null,
+                'tag_name' => $tagName,
+            ];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * The browser-side conversion event.
+     *
+     * Carries an eventID, which is what lets Meta recognise a browser event and
+     * a Conversions API event as the same conversion rather than two. Nothing
+     * currently sends the website conversion server-side as well, but offline
+     * uploads already go through the CAPI for these pixels, and the day a
+     * server-side duplicate of this event appears, an event without an ID is
+     * counted twice — inflating reported conversions and feeding the
+     * optimisation agents doubled data.
+     *
+     * The ID is also pushed to the dataLayer so a server-side sender can pick up
+     * the same value rather than inventing its own.
+     *
+     * @param  array{value?: float, currency?: string}  $config
+     */
+    private function getFacebookConversionScript(string $eventName, array $config = []): string
+    {
+        $payload = [];
+
+        if (isset($config['value'])) {
+            $payload[] = 'value: '.(float) $config['value'];
+            $payload[] = "currency: '".($config['currency'] ?? 'AUD')."'";
+        }
+
+        $customData = $payload ? '{'.implode(', ', $payload).'}' : '{}';
+
+        return <<<JAVASCRIPT
+<script>
+(function () {
+  // The base pixel fires on All Pages, so fbq exists by the time a visitor can
+  // submit anything. Guard anyway: a customer who removes the base tag should
+  // lose conversion tracking, not get a JavaScript error on every submit.
+  if (typeof fbq !== 'function') { return; }
+
+  var eventId = '{$eventName}.' + Date.now() + '.' + Math.random().toString(36).slice(2, 10);
+
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({ event: 'spectra_meta_conversion', spectraMetaEventId: eventId, spectraMetaEventName: '{$eventName}' });
+
+  fbq('track', '{$eventName}', {$customData}, { eventID: eventId });
+})();
+</script>
+JAVASCRIPT;
+    }
+
+    /**
      * Add a Microsoft UET base code tag to the customer's GTM container.
      * Fires on all pages.
      */
