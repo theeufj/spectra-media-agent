@@ -3,10 +3,10 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\LogicalUserListInfo;
 use Google\Ads\GoogleAds\V22\Common\LogicalUserListOperandInfo;
 use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\UserList;
 use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
 use Google\Ads\GoogleAds\V22\Services\UserListOperation;

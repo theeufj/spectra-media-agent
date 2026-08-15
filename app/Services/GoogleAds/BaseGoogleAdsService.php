@@ -189,12 +189,24 @@ abstract class BaseGoogleAdsService
     protected function logError(string $message, $exception = null): void
     {
         $context = [];
-        if ($exception instanceof \Exception) {
+
+        // \Throwable, not \Exception: an \Error (TypeError, undefined method,
+        // missing class) would otherwise be logged with no detail attached —
+        // exactly the failures hardest to diagnose from a bare message.
+        if ($exception instanceof \Throwable) {
             $context = [
                 'error' => $exception->getMessage(),
                 'trace' => $exception->getTraceAsString(),
             ];
+
+            // Log::error() alone does not reach the admin exception dashboard;
+            // runtime_exceptions is fed by Queue::failing and the report
+            // handler. Without this, a caught Google Ads error is invisible
+            // there — and every catch block in these services returns null and
+            // carries on, so nothing else would surface it either.
+            report($exception);
         }
+
         Log::error('[GoogleAds] '.$message, $context);
     }
 

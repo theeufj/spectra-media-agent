@@ -4,10 +4,10 @@ namespace App\Services\GoogleAds\SearchServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\AdTextAsset;
 use Google\Ads\GoogleAds\V22\Common\ResponsiveSearchAdInfo;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupAdStatusEnum\AdGroupAdStatus;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Ad;
 use Google\Ads\GoogleAds\V22\Resources\AdGroupAd;
 use Google\Ads\GoogleAds\V22\Services\AdGroupAdOperation;

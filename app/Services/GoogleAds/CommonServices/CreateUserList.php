@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\CrmBasedUserListInfo;
 use Google\Ads\GoogleAds\V22\Common\CustomerMatchUserListMetadata;
 use Google\Ads\GoogleAds\V22\Common\OfflineUserAddressInfo;
@@ -11,7 +12,6 @@ use Google\Ads\GoogleAds\V22\Common\UserIdentifier;
 use Google\Ads\GoogleAds\V22\Enums\CustomerMatchUploadKeyTypeEnum\CustomerMatchUploadKeyType;
 use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobTypeEnum\OfflineUserDataJobType;
 use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\OfflineUserDataJob;
 use Google\Ads\GoogleAds\V22\Resources\UserList;
 use Google\Ads\GoogleAds\V22\Services\AddOfflineUserDataJobOperationsRequest;

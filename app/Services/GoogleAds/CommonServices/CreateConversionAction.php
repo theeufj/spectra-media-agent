@@ -3,10 +3,10 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionCategoryEnum\ConversionActionCategory;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionStatusEnum\ConversionActionStatus;
 use Google\Ads\GoogleAds\V22\Enums\ConversionActionTypeEnum\ConversionActionType;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\ConversionAction;
 use Google\Ads\GoogleAds\V22\Services\ConversionActionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateConversionActionsRequest;

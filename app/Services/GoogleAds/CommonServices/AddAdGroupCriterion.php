@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\AgeRangeInfo;
 use Google\Ads\GoogleAds\V22\Common\AudienceInfo;
 use Google\Ads\GoogleAds\V22\Common\GenderInfo;
@@ -15,7 +16,6 @@ use Google\Ads\GoogleAds\V22\Common\TopicInfo;
 use Google\Ads\GoogleAds\V22\Common\UserInterestInfo;
 use Google\Ads\GoogleAds\V22\Enums\AdGroupCriterionStatusEnum\AdGroupCriterionStatus;
 use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\AdGroupCriterion;
 use Google\Ads\GoogleAds\V22\Services\AdGroupCriterionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAdGroupCriteriaRequest;

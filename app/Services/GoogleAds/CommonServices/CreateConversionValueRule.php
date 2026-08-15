@@ -3,12 +3,12 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleAction;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleAudienceCondition;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleDeviceCondition;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleGeoLocationCondition;
 use Google\Ads\GoogleAds\V22\Enums\ValueRuleDeviceTypeEnum\ValueRuleDeviceType;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\ConversionValueRule;
 use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleOperation;
 use Google\ApiCore\ApiException;

@@ -3,6 +3,7 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\FlexibleRuleOperandInfo;
 use Google\Ads\GoogleAds\V22\Common\FlexibleRuleUserListInfo;
 use Google\Ads\GoogleAds\V22\Common\RuleBasedUserListInfo;
@@ -14,7 +15,6 @@ use Google\Ads\GoogleAds\V22\Enums\UserListFlexibleRuleOperatorEnum\UserListFlex
 use Google\Ads\GoogleAds\V22\Enums\UserListMembershipStatusEnum\UserListMembershipStatus;
 use Google\Ads\GoogleAds\V22\Enums\UserListPrepopulationStatusEnum\UserListPrepopulationStatus;
 use Google\Ads\GoogleAds\V22\Enums\UserListStringRuleItemOperatorEnum\UserListStringRuleItemOperator;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\UserList;
 use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
 use Google\Ads\GoogleAds\V22\Services\UserListOperation;

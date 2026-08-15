@@ -3,7 +3,7 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Services\ApplyRecommendationOperation;
 use Google\Ads\GoogleAds\V22\Services\ApplyRecommendationRequest;
 use Google\ApiCore\ApiException;

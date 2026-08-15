@@ -3,8 +3,8 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\LocationInfo;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\CampaignCriterion;
 use Google\Ads\GoogleAds\V22\Services\CampaignCriterionOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateCampaignCriteriaRequest;

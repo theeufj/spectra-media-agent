@@ -3,10 +3,10 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
+use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\CallAsset;
 use Google\Ads\GoogleAds\V22\Enums\AssetTypeEnum\AssetType;
 use Google\Ads\GoogleAds\V22\Enums\CallConversionReportingStateEnum\CallConversionReportingState;
-use Google\Ads\GoogleAds\V22\Errors\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Resources\Asset;
 use Google\Ads\GoogleAds\V22\Services\AssetOperation;
 use Google\Ads\GoogleAds\V22\Services\MutateAssetsRequest;
