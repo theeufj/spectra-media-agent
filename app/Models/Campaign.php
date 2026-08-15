@@ -154,6 +154,50 @@ class Campaign extends Model
     }
 
     /**
+     * Record a platform status, keeping the lifecycle status in step.
+     *
+     * There are two status columns and they mean different things:
+     * `platform_status` is what Google, Facebook, Microsoft or LinkedIn say, and
+     * `status` is our lifecycle state. AdSpendBillingService filters on `status`
+     * — so a write that sets only `platform_status` stops the ads while billing
+     * carries on charging for a campaign it still believes is running.
+     *
+     * That has now been the cause of two separate billing leaks (BILL-8, and the
+     * admin pause path), which is reason enough for every write to go through
+     * one place rather than each caller remembering to set the pair.
+     *
+     * Returns true if the lifecycle status moved.
+     */
+    public function applyPlatformStatus(string $platformStatus): bool
+    {
+        $target = match (strtoupper($platformStatus)) {
+            'ENABLED' => CampaignStatus::Active,
+            'PAUSED' => CampaignStatus::Paused,
+            'REMOVED' => CampaignStatus::Ended,
+            // UNKNOWN tells us nothing; record what the platform said and leave
+            // the lifecycle state alone rather than guessing.
+            default => null,
+        };
+
+        $attributes = ['platform_status' => strtoupper($platformStatus)];
+
+        // Never resurrect a campaign the customer has not finished setting up. A
+        // draft carrying a platform id is a data problem to investigate, not one
+        // to paper over by flipping it live.
+        $unfinished = in_array($this->status, [CampaignStatus::Draft, CampaignStatus::PendingAdminDeployment], true);
+
+        if (! $target || $unfinished || $this->status === $target) {
+            $this->update($attributes);
+
+            return false;
+        }
+
+        $this->update($attributes + ['status' => $target]);
+
+        return true;
+    }
+
+    /**
      * Strategy snapshots, oldest first when ordered by version_number.
      *
      * SummarizeCampaignHistoryService has read this since 2025; the relation

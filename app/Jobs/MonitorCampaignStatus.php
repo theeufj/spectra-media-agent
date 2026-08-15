@@ -144,36 +144,16 @@ class MonitorCampaignStatus implements ShouldQueue
      */
     private function syncLifecycleStatus(Campaign $campaign, string $platformStatus): void
     {
-        $target = match ($platformStatus) {
-            'ENABLED' => CampaignStatus::Active,
-            'PAUSED' => CampaignStatus::Paused,
-            'REMOVED' => CampaignStatus::Ended,
-            default => null, // UNKNOWN tells us nothing — leave the record alone.
-        };
-
-        if (! $target) {
-            return;
-        }
-
         // Already a CampaignStatus — the model casts this column.
         $current = $campaign->status;
 
-        if ($current === $target) {
+        // The mapping, the draft guard and the paired write all live on the
+        // model, so every caller reconciles the two columns the same way.
+        if (! $campaign->applyPlatformStatus($platformStatus)) {
             return;
         }
 
-        // Never resurrect a campaign the customer has not finished setting up:
-        // a draft that somehow carries a platform id is a data problem to
-        // investigate, not one to paper over by flipping it live.
-        if (in_array($current, [CampaignStatus::Draft, CampaignStatus::PendingAdminDeployment], true)) {
-            Log::warning("MonitorCampaignStatus: campaign {$campaign->id} is {$current->value} locally but {$platformStatus} on the platform — leaving status untouched", [
-                'campaign_id' => $campaign->id,
-            ]);
-
-            return;
-        }
-
-        $campaign->update(['status' => $target]);
+        $target = $campaign->status;
 
         Log::info("MonitorCampaignStatus: campaign {$campaign->id} status {$current?->value} → {$target->value} (platform says {$platformStatus})");
 

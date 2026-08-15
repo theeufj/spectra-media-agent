@@ -204,11 +204,8 @@ class CampaignController extends Controller
             $result = $service->pause($customer->cleanGoogleCustomerId(), $resourceName);
 
             if ($result['success']) {
-                // Both fields, deliberately. AdSpendBillingService filters on
-                // `status`, so writing only `platform_status` stops the ads on
-                // Google while billing carries on treating the campaign as
-                // active — the BILL-8 leak.
-                $campaign->update(['status' => 'paused', 'platform_status' => 'PAUSED']);
+                // One call sets both columns; see Campaign::applyPlatformStatus.
+                $campaign->applyPlatformStatus('PAUSED');
                 Log::info("Admin paused campaign {$campaign->id} (Google: {$campaign->google_ads_campaign_id})");
 
                 return redirect()->back()->with('flash', [
@@ -266,9 +263,7 @@ class CampaignController extends Controller
             $result = $service->enable($customer->cleanGoogleCustomerId(), $resourceName);
 
             if ($result['success']) {
-                // Mirror of pauseCampaign(): billing reads `status`, so resuming
-                // without it would run ads that are never charged for.
-                $campaign->update(['status' => 'active', 'platform_status' => 'ENABLED']);
+                $campaign->applyPlatformStatus('ENABLED');
                 Log::info("Admin started campaign {$campaign->id} (Google: {$campaign->google_ads_campaign_id})");
 
                 return redirect()->back()->with('flash', [
