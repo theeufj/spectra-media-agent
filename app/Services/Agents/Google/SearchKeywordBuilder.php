@@ -2,6 +2,7 @@
 
 namespace App\Services\Agents\Google;
 
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\Strategy;
@@ -162,7 +163,11 @@ class SearchKeywordBuilder
                 'validated_count' => count($validated),
             ]);
 
-            return ! empty($validated) ? $validated : $keywords;
+            $final = ! empty($validated) ? $validated : $keywords;
+
+            $this->forecastViability($customerId, $final, $campaign, $ideaMap);
+
+            return $final;
         } catch (\Exception $e) {
             Log::warning('GoogleAdsExecutionAgent: Keyword validation failed, using original keywords', [
                 'error' => $e->getMessage(),
@@ -170,6 +175,135 @@ class SearchKeywordBuilder
 
             return $keywords;
         }
+    }
+
+    /**
+     * Ask Google what this keyword set would deliver at this budget, before it
+     * goes live.
+     *
+     * Step 2 of Google's own keyword-planning workflow, and the one this platform
+     * skipped. GenerateKeywordIdeas above supplies volume, competition and bid
+     * ranges, and the code filters on them — but nothing asked the question that
+     * decides whether a campaign can work: at this budget and this bid, how many
+     * clicks is that?
+     *
+     * A budget too small to win the auctions for its own keywords produces
+     * exactly what this account saw: spend, no conversions, and Smart Bidding
+     * left with nothing to learn from. Finding that out after a month of spend
+     * is expensive; finding it out here costs one read-only API call.
+     *
+     * Never throws and never blocks deployment. A forecast is advice, and being
+     * unable to get it is not a reason to refuse to launch.
+     *
+     * @param  array<int, mixed>  $keywords
+     * @param  array<string, mixed>  $ideaMap  Keyword Planner metrics, keyed lowercase
+     */
+    protected function forecastViability(string $customerId, array $keywords, Campaign $campaign, array $ideaMap = []): void
+    {
+        try {
+            $texts = array_values(array_filter(array_map(
+                fn ($kw) => is_array($kw) ? ($kw['text'] ?? $kw['keyword'] ?? '') : $kw,
+                $keywords
+            )));
+
+            $dailyBudget = (float) ($campaign->daily_budget ?? 0);
+
+            if ($texts === [] || $dailyBudget <= 0) {
+                return;
+            }
+
+            $maxCpc = $this->suggestedBid($texts, $ideaMap, $dailyBudget);
+
+            $forecast = (new \App\Services\GoogleAds\KeywordResearch\GenerateKeywordForecast($this->customer))(
+                $customerId,
+                array_slice($texts, 0, 50),
+                $maxCpc
+            );
+
+            if (! $forecast['success']) {
+                Log::info('SearchKeywordBuilder: forecast unavailable', ['error' => $forecast['error']]);
+
+                return;
+            }
+
+            $clicks = (float) ($forecast['clicks'] ?? 0);
+            $cost = (float) ($forecast['cost'] ?? 0);
+            $monthlyBudget = $dailyBudget * 30;
+
+            $concerns = [];
+
+            // Smart Bidding needs a signal to learn from. Well under a click a
+            // day will not produce one in any useful timeframe.
+            if ($clicks < 30) {
+                $concerns[] = sprintf('only %.0f clicks forecast over 30 days', $clicks);
+            }
+
+            // Wanting to spend more than the budget allows means the bid cannot
+            // be sustained: the campaign will run out of budget each day and
+            // show for a fraction of the searches it is targeting.
+            if ($cost > $monthlyBudget * 1.2) {
+                $concerns[] = sprintf('forecast spend %.2f exceeds the %.2f monthly budget at a %.2f bid', $cost, $monthlyBudget, $maxCpc);
+            }
+
+            Log::info('SearchKeywordBuilder: pre-launch forecast', [
+                'campaign_id' => $campaign->id,
+                'keywords' => count($texts),
+                'max_cpc' => $maxCpc,
+                'clicks' => $clicks,
+                'cost' => $cost,
+                'impressions' => $forecast['impressions'] ?? null,
+            ]);
+
+            // Recorded either way. A forecast nobody sees is the same as no
+            // forecast, and "we checked and it looks fine" is worth stating.
+            AgentActivity::record(
+                'deployment',
+                $concerns === [] ? 'forecast_ok' : 'forecast_warning',
+                $concerns === []
+                    ? sprintf('Forecast for "%s": %.0f clicks and %.2f spend over 30 days at a %.2f bid', $campaign->name, $clicks, $cost, $maxCpc)
+                    : sprintf('Budget concern for "%s": %s', $campaign->name, implode('; ', $concerns)),
+                $campaign->customer_id,
+                $campaign->id,
+                [
+                    'max_cpc' => $maxCpc,
+                    'daily_budget' => $dailyBudget,
+                    'forecast' => $forecast,
+                    'concerns' => $concerns,
+                ]
+            );
+        } catch (\Throwable $e) {
+            // Advisory only — never let a forecast stop a deployment.
+            Log::warning('SearchKeywordBuilder: forecast failed', ['error' => $e->getMessage()]);
+        }
+    }
+
+    /**
+     * A bid to forecast at.
+     *
+     * Google's own top-of-page estimates for these keywords are the best guide;
+     * without them, a tenth of the daily budget is a reasonable stand-in, since
+     * a campaign wants more than a handful of clicks a day.
+     *
+     * @param  list<string>  $texts
+     * @param  array<string, mixed>  $ideaMap
+     */
+    public function suggestedBid(array $texts, array $ideaMap, float $dailyBudget): float
+    {
+        $bids = [];
+
+        foreach ($texts as $text) {
+            $idea = $ideaMap[strtolower($text)] ?? null;
+
+            if ($idea && ! empty($idea['high_top_of_page_bid_micros'])) {
+                $bids[] = $idea['high_top_of_page_bid_micros'] / 1_000_000;
+            }
+        }
+
+        if ($bids !== []) {
+            return round(array_sum($bids) / count($bids), 2);
+        }
+
+        return max(0.5, round($dailyBudget / 10, 2));
     }
 
     /**
