@@ -1993,18 +1993,6 @@ parameters:
 			path: app/Services/FacebookAds/CreateFacebookAdsAccount.php
 
 		-
-			message: '#^Method App\\Services\\FacebookAds\\AdService\:\:createAd\(\) invoked with 3 parameters, 4\-5 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/FacebookAds/FacebookAdsOrchestrationService.php
-
-		-
-			message: '#^Parameter \#3 \$adSetName of method App\\Services\\FacebookAds\\AdSetService\:\:createAdSet\(\) expects string, int given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/FacebookAds/FacebookAdsOrchestrationService.php
-
-		-
 			message: '#^Call to function is_array\(\) with non\-empty\-array will always evaluate to true\.$#'
 			identifier: function.alreadyNarrowedType
 			count: 1
