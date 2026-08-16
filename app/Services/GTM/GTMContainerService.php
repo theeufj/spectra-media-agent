@@ -451,7 +451,9 @@ JS;
             ?? "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}";
 
         $response = $this->makeApiCall('POST', "/{$containerPath}/workspaces", $accessToken, [
-            'name' => 'Spectra '.now()->format('Y-m-d H:i:s'),
+            // No colons: GTM rejects them in workspace names, which is not
+            // obvious from a timestamp until the create fails.
+            'name' => 'Spectra '.now()->format('Y-m-d Hi'),
             'description' => 'Created automatically because the previous workspace had been published.',
         ]);
 
