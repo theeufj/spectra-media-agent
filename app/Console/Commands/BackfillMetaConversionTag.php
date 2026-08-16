@@ -75,11 +75,24 @@ class BackfillMetaConversionTag extends Command
                     continue;
                 }
 
+                // Both tags. A conversion event is useless without the base
+                // pixel that defines fbq, and a customer sharing a container
+                // with another brand has no base tag of their own — the one in
+                // the container belongs to whoever was set up first.
+                $base = $gtm->addFacebookPixelTag($customer, $pixelId);
+
+                if (! $base['success']) {
+                    $this->error("  fail  #{$customer->id} {$customer->name} — base pixel: ".($base['error'] ?? 'unknown'));
+                    $failed++;
+
+                    continue;
+                }
+
                 $result = $gtm->addFacebookConversionTag($customer, $pixelId);
 
                 if ($result['success']) {
                     $note = ($result['existing'] ?? false) ? 'already present' : 'created';
-                    $this->info("  ok    #{$customer->id} {$customer->name} — {$note}");
+                    $this->info("  ok    #{$customer->id} {$customer->name} — base + conversion {$note}");
                     $updated++;
                 } else {
                     $this->error("  fail  #{$customer->id} {$customer->name} — ".($result['error'] ?? 'unknown'));

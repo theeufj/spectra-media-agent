@@ -378,22 +378,34 @@ HTML;
 
             $workspacePath = $this->getWorkspacePath($customer);
 
+            $hostname = $this->customerHostname($customer);
+            $guard = $this->hostnameGuard($hostname);
+
+            // The noscript beacon cannot be host-guarded — it is markup, not
+            // script — so it is omitted entirely on a shared container rather
+            // than fire another brand's pixel for every no-JS visitor.
+            $noscript = $hostname === null
+                ? '<noscript><img height="1" width="1" style="display:none" '
+                    ."src=\"https://www.facebook.com/tr?id={$pixelId}&ev=PageView&noscript=1\"/></noscript>"
+                : '';
+
             $pixelScript = <<<JS
 <script>
-!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init','{$pixelId}');
-fbq('track','PageView');
+(function () {
+{$guard}  !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+  n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+  n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+  t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+  document,'script','https://connect.facebook.net/en_US/fbevents.js');
+  fbq('init','{$pixelId}');
+  fbq('track','PageView');
+})();
 </script>
-<noscript><img height="1" width="1" style="display:none"
-src="https://www.facebook.com/tr?id={$pixelId}&ev=PageView&noscript=1"/></noscript>
+{$noscript}
 JS;
 
             $tagData = [
-                'name' => 'Spectra — Meta Pixel Base Code',
+                'name' => 'Spectra — Meta Pixel Base Code'.($hostname ? ' — '.$hostname : ''),
                 'type' => 'html',
                 'parameter' => [
                     ['key' => 'html',        'type' => 'template', 'value' => $pixelScript],
@@ -412,6 +424,50 @@ JS;
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * The bare hostname a customer's site runs on, or null if unknown.
+     *
+     * Containers are normally one per customer, where this changes nothing. It
+     * matters when a container is shared — the vertical skins run the same
+     * application on their own domains off one container, and without a host
+     * check every brand's pixel fires on every other brand's traffic.
+     */
+    private function customerHostname(Customer $customer): ?string
+    {
+        if (! $customer->website) {
+            return null;
+        }
+
+        $host = parse_url($customer->website, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return null;
+        }
+
+        return preg_replace('/^www\\./', '', strtolower($host));
+    }
+
+    /**
+     * A guard that stops a tag firing on a domain it does not belong to.
+     *
+     * Matches the host itself and any subdomain of it, so www and staging
+     * subdomains keep working, and returns an empty string when the customer
+     * has no website recorded — a tag that cannot identify its own domain
+     * should still fire rather than silently do nothing.
+     */
+    private function hostnameGuard(?string $hostname): string
+    {
+        if (! $hostname) {
+            return '';
+        }
+
+        return <<<JS
+  var h = location.hostname.replace(/^www\\./, '').toLowerCase();
+  if (h !== '{$hostname}' && !h.endsWith('.{$hostname}')) { return; }
+
+JS;
     }
 
     /**
@@ -447,7 +503,13 @@ JS;
             // Lead is the right default: most customers here are service
             // businesses whose conversion is an enquiry, not a checkout.
             $eventName = $config['event_name'] ?? 'Lead';
-            $tagName = 'Spectra — Meta Pixel '.$eventName;
+            $hostname = $this->customerHostname($customer);
+
+            // The host is part of the name because the duplicate-name guard
+            // below would otherwise make a second brand on a shared container
+            // silently adopt the first brand's tag — and therefore report its
+            // conversions into the first brand's pixel.
+            $tagName = 'Spectra — Meta Pixel '.$eventName.($hostname ? ' — '.$hostname : '');
 
             $explicitTrigger = $config['firing_trigger_id'] ?? null;
 
@@ -458,7 +520,7 @@ JS;
                     $this->getOrCreateThankYouPageTrigger($workspacePath, $accessToken),
                 ]));
 
-            $script = $this->getFacebookConversionScript($eventName, $config);
+            $script = $this->getFacebookConversionScript($eventName, $config, $hostname);
 
             $tagData = [
                 'name' => $tagName,
@@ -520,7 +582,7 @@ JS;
      *
      * @param  array{value?: float, currency?: string}  $config
      */
-    private function getFacebookConversionScript(string $eventName, array $config = []): string
+    private function getFacebookConversionScript(string $eventName, array $config = [], ?string $hostname = null): string
     {
         $payload = [];
 
@@ -531,10 +593,12 @@ JS;
 
         $customData = $payload ? '{'.implode(', ', $payload).'}' : '{}';
 
+        $guard = $this->hostnameGuard($hostname);
+
         return <<<JAVASCRIPT
 <script>
 (function () {
-  // The base pixel fires on All Pages, so fbq exists by the time a visitor can
+{$guard}  // The base pixel fires on All Pages, so fbq exists by the time a visitor can
   // submit anything. Guard anyway: a customer who removes the base tag should
   // lose conversion tracking, not get a JavaScript error on every submit.
   if (typeof fbq !== 'function') { return; }

@@ -37,14 +37,20 @@ class MetaConversionTagTest extends TestCase
         ]);
     }
 
-    private function customer(): Customer
+    private function customer(array $attributes = []): Customer
     {
-        return Customer::factory()->create([
+        return Customer::factory()->create($attributes + [
+            'website' => 'https://sitetospend.com',
             'gtm_container_id' => 'GTM-TEST123',
             'gtm_account_id' => '6351790509',
             'gtm_workspace_id' => '1',
             'gtm_config' => ['container_path' => 'accounts/6351790509/containers/250472733'],
         ]);
+    }
+
+    private function tagName(array $captured): string
+    {
+        return $captured['tag']['name'] ?? '';
     }
 
     private function fakeGtm(array &$captured = []): void
@@ -172,5 +178,76 @@ class MetaConversionTagTest extends TestCase
 
         $this->assertFalse($result['success']);
         $this->assertNotEmpty($result['error']);
+    }
+
+    public function test_the_tag_only_fires_on_the_customers_own_domain(): void
+    {
+        // Vertical skins run the same application on their own domains off one
+        // shared container. Without a host check, every brand's pixel fires on
+        // every other brand's traffic — realpropertyads.com visitors were being
+        // reported into sitetospend's pixel.
+        $captured = [];
+        $this->fakeGtm($captured);
+
+        app(GTMContainerService::class)->addFacebookConversionTag(
+            $this->customer(['website' => 'https://realpropertyads.com/']),
+            '2832906810399934'
+        );
+
+        $html = $this->html($captured);
+
+        $this->assertStringContainsString("h !== 'realpropertyads.com'", $html);
+        $this->assertStringContainsString("endsWith('.realpropertyads.com')", $html);
+    }
+
+    public function test_the_tag_name_carries_the_domain_so_brands_do_not_collide(): void
+    {
+        // The duplicate-name guard would otherwise make a second brand adopt the
+        // first brand's tag, and report its conversions into the wrong pixel.
+        $captured = [];
+        $this->fakeGtm($captured);
+
+        app(GTMContainerService::class)->addFacebookConversionTag(
+            $this->customer(['website' => 'https://realpropertyads.com/']),
+            '2832906810399934'
+        );
+
+        $this->assertStringContainsString('realpropertyads.com', $this->tagName($captured));
+    }
+
+    public function test_www_and_subdomains_still_convert(): void
+    {
+        // A guard that only matched the bare host would drop every visitor who
+        // arrived on www.
+        $captured = [];
+        $this->fakeGtm($captured);
+
+        app(GTMContainerService::class)->addFacebookConversionTag(
+            $this->customer(['website' => 'https://www.sitetospend.com']),
+            '1234567890'
+        );
+
+        $html = $this->html($captured);
+
+        $this->assertStringContainsString("h !== 'sitetospend.com'", $html, 'www should be stripped from the expected host');
+        $this->assertStringContainsString('replace(/^www\\./', $html, 'the visitor hostname should be normalised too');
+    }
+
+    public function test_a_customer_without_a_website_still_gets_a_working_tag(): void
+    {
+        // A tag that cannot identify its own domain should fire, not silently
+        // do nothing.
+        $captured = [];
+        $this->fakeGtm($captured);
+
+        app(GTMContainerService::class)->addFacebookConversionTag(
+            $this->customer(['website' => null]),
+            '1234567890'
+        );
+
+        $html = $this->html($captured);
+
+        $this->assertStringNotContainsString('location.hostname', $html);
+        $this->assertStringContainsString("fbq('track', 'Lead'", $html);
     }
 }
