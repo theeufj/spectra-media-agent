@@ -677,8 +677,17 @@ JS;
                 ?? $createVersionResponse['data']['containerVersionId']
                 ?? null;
 
-            if ($versionPath) {
-                $this->makeApiCall('POST', "/{$versionPath}:publish", $accessToken);
+            if (! $versionPath) {
+                return ['success' => false, 'error' => 'Version created but the API returned no path to publish'];
+            }
+
+            // The publish response was previously discarded and success reported
+            // regardless, so a version that was created but never went live read
+            // as a successful publish.
+            $publishResponse = $this->makeApiCall('POST', "/{$versionPath}:publish", $accessToken);
+
+            if (! $publishResponse['success']) {
+                return ['success' => false, 'error' => 'Version '.$versionId.' created but publish failed: '.($publishResponse['error'] ?? 'Unknown error')];
             }
 
             return ['success' => true, 'version_id' => $versionId, 'published_at' => now()];
