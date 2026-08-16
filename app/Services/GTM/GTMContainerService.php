@@ -450,6 +450,30 @@ JS;
         $containerPath = $customer->gtm_config['container_path']
             ?? "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}";
 
+        // Reuse before creating. GTM caps workspaces per container and refuses
+        // further creates with "Resource exhausted", and the platform token has
+        // no delete scope to clean up after itself — so a strategy of always
+        // minting a new workspace runs the container into a wall it cannot dig
+        // out of. Publishing consumes the submitted workspace and GTM leaves a
+        // fresh Default Workspace behind, which is exactly what to pick up.
+        $existing = $this->makeApiCall('GET', "/{$containerPath}/workspaces", $accessToken);
+
+        $candidates = $existing['success'] ? ($existing['data']['workspace'] ?? []) : [];
+
+        usort($candidates, fn ($a, $b) => ($b['name'] ?? '') === 'Default Workspace' ? 1 : -1);
+
+        foreach ($candidates as $workspace) {
+            $id = $workspace['workspaceId'] ?? null;
+
+            if (! $id || (string) $id === (string) $customer->gtm_workspace_id) {
+                continue;
+            }
+
+            $this->rememberWorkspace($customer, $id);
+
+            return "{$containerPath}/workspaces/{$id}";
+        }
+
         $response = $this->makeApiCall('POST', "/{$containerPath}/workspaces", $accessToken, [
             // No colons: GTM rejects them in workspace names, which is not
             // obvious from a timestamp until the create fails.
@@ -472,17 +496,25 @@ JS;
             return null;
         }
 
+        $this->rememberWorkspace($customer, $workspaceId);
+
+        return "{$containerPath}/workspaces/{$workspaceId}";
+    }
+
+    /**
+     * Store the workspace the platform should write to from now on.
+     */
+    private function rememberWorkspace(Customer $customer, string $workspaceId): void
+    {
         $config = $customer->gtm_config ?? [];
         $config['workspace_id'] = $workspaceId;
 
         $customer->update(['gtm_workspace_id' => $workspaceId, 'gtm_config' => $config]);
 
-        Log::info('GTMContainerService: rotated to a new workspace', [
+        Log::info('GTMContainerService: switched to a writable workspace', [
             'customer_id' => $customer->id,
             'workspace_id' => $workspaceId,
         ]);
-
-        return "{$containerPath}/workspaces/{$workspaceId}";
     }
 
     /**
