@@ -921,10 +921,19 @@ JS;
                 $url = $this->baseUrl.$endpoint;
                 $request = Http::withToken($accessToken)->timeout(30);
 
+                // An empty $data array json-encodes to [], and GTM's RPC-style
+                // endpoints (:create_version, :publish) reject that with "Root
+                // element must be a message" — they want an object. Sending {}
+                // explicitly is the difference between a version publishing and
+                // sitting unpublished forever.
                 $response = match ($method) {
                     'GET' => $request->get($url),
-                    'POST' => $request->post($url, $data),
-                    'PUT' => $request->put($url, $data),
+                    'POST' => $data === []
+                        ? $request->withBody('{}', 'application/json')->post($url)
+                        : $request->post($url, $data),
+                    'PUT' => $data === []
+                        ? $request->withBody('{}', 'application/json')->put($url)
+                        : $request->put($url, $data),
                     'DELETE' => $request->delete($url),
                     default => null,
                 };
