@@ -24,7 +24,7 @@ use Tests\TestCase;
  */
 class DeploymentRecoveryTest extends TestCase
 {
-    /** @return list<array{class-string}> */
+    /** @return array<string, array{class-string}> */
     public static function agents(): array
     {
         return [
@@ -65,16 +65,18 @@ class DeploymentRecoveryTest extends TestCase
         // call to a method that does not exist, which is how several deployment
         // paths in this codebase have actually broken. A handler typed
         // \Exception cannot be handed one.
-        $parameter = (new ReflectionMethod($agent, 'handleExecutionError'))->getParameters()[0];
+        $type = (new ReflectionMethod($agent, 'handleExecutionError'))->getParameters()[0]->getType();
 
-        $this->assertSame('Throwable', $parameter->getType()?->getName());
+        $this->assertInstanceOf(\ReflectionNamedType::class, $type);
+        $this->assertSame('Throwable', $type->getName());
     }
 
     public function test_the_base_class_requires_a_throwable_handler(): void
     {
-        $parameter = (new ReflectionMethod(PlatformExecutionAgent::class, 'handleExecutionError'))->getParameters()[0];
+        $type = (new ReflectionMethod(PlatformExecutionAgent::class, 'handleExecutionError'))->getParameters()[0]->getType();
 
-        $this->assertSame('Throwable', $parameter->getType()?->getName());
+        $this->assertInstanceOf(\ReflectionNamedType::class, $type);
+        $this->assertSame('Throwable', $type->getName());
     }
 
     public function test_a_recovery_plan_can_be_built_from_an_error_not_only_an_exception(): void
