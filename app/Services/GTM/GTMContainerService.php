@@ -702,7 +702,10 @@ JS;
      */
     private function publishLatestVersion(string $containerPath, string $accessToken): array
     {
-        $versionsResponse = $this->makeApiCall('GET', "/{$containerPath}/versions", $accessToken);
+        // version_headers, not versions. GTM v2 has no /versions collection —
+        // it 404s — and the parsing below already expects the header shape this
+        // endpoint returns.
+        $versionsResponse = $this->makeApiCall('GET', "/{$containerPath}/version_headers", $accessToken);
         if (! $versionsResponse['success']) {
             return ['success' => false, 'error' => 'Workspace already submitted and could not list versions: '.($versionsResponse['error'] ?? '')];
         }
