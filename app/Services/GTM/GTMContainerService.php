@@ -414,9 +414,16 @@ JS;
                 'firingTriggerId' => ['2147479553'], // GTM built-in "All Pages" trigger ID
             ];
 
-            $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+            $attempt = $this->createTagInWritableWorkspace($customer, $tagData, $accessToken);
+            $response = $attempt['response'];
 
             if (! $response['success']) {
+                // An existing tag of the same name means this customer is
+                // already covered; there is nothing to add.
+                if (str_contains($response['error'] ?? '', 'duplicate name')) {
+                    return ['success' => true, 'existing' => true];
+                }
+
                 return ['success' => false, 'error' => 'Failed to create Meta Pixel tag: '.($response['error'] ?? 'Unknown error')];
             }
 
@@ -424,6 +431,79 @@ JS;
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
         }
+    }
+
+    /**
+     * A workspace that can still be written to.
+     *
+     * Publishing freezes a workspace: GTM marks it submitted and rejects every
+     * subsequent write with "Workspace is already submitted". Because the
+     * customer record stores one workspace id forever, the first publish left
+     * the platform permanently unable to add another tag — the container could
+     * be set up once and never touched again.
+     *
+     * Creating a new workspace is the documented way forward, so rotate to one
+     * and remember it.
+     */
+    private function rotateWorkspace(Customer $customer, string $accessToken): ?string
+    {
+        $containerPath = $customer->gtm_config['container_path']
+            ?? "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}";
+
+        $response = $this->makeApiCall('POST', "/{$containerPath}/workspaces", $accessToken, [
+            'name' => 'Spectra '.now()->format('Y-m-d H:i:s'),
+            'description' => 'Created automatically because the previous workspace had been published.',
+        ]);
+
+        if (! $response['success']) {
+            Log::error('GTMContainerService: could not create a replacement workspace', [
+                'customer_id' => $customer->id,
+                'error' => $response['error'] ?? 'unknown',
+            ]);
+
+            return null;
+        }
+
+        $workspaceId = $response['data']['workspaceId'] ?? null;
+
+        if (! $workspaceId) {
+            return null;
+        }
+
+        $config = $customer->gtm_config ?? [];
+        $config['workspace_id'] = $workspaceId;
+
+        $customer->update(['gtm_workspace_id' => $workspaceId, 'gtm_config' => $config]);
+
+        Log::info('GTMContainerService: rotated to a new workspace', [
+            'customer_id' => $customer->id,
+            'workspace_id' => $workspaceId,
+        ]);
+
+        return "{$containerPath}/workspaces/{$workspaceId}";
+    }
+
+    /**
+     * Create a tag, rotating to a fresh workspace if the current one is frozen.
+     *
+     * @param  array<string, mixed>  $tagData
+     * @return array{response: array<string, mixed>, workspace_path: string}
+     */
+    private function createTagInWritableWorkspace(Customer $customer, array $tagData, string $accessToken): array
+    {
+        $workspacePath = $this->getWorkspacePath($customer);
+        $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+
+        if (! $response['success'] && str_contains($response['error'] ?? '', 'already submitted')) {
+            $rotated = $this->rotateWorkspace($customer, $accessToken);
+
+            if ($rotated) {
+                $workspacePath = $rotated;
+                $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+            }
+        }
+
+        return ['response' => $response, 'workspace_path' => $workspacePath];
     }
 
     /**
@@ -532,7 +612,9 @@ JS;
                 'firingTriggerId' => $triggerIds,
             ];
 
-            $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
+            $attempt = $this->createTagInWritableWorkspace($customer, $tagData, $accessToken);
+            $response = $attempt['response'];
+            $workspacePath = $attempt['workspace_path'];
 
             if (! $response['success']) {
                 // Same recovery as the Google tag: a container that already has
