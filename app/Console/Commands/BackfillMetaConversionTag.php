@@ -33,8 +33,13 @@ class BackfillMetaConversionTag extends Command
 
     public function handle(GTMContainerService $gtm): int
     {
+        // All three, matching what addFacebookConversionTag requires. Filtering
+        // on the container id alone reported a half-provisioned customer as a
+        // failure rather than as one that was never set up.
         $customers = Customer::query()
             ->whereNotNull('gtm_container_id')
+            ->whereNotNull('gtm_account_id')
+            ->whereNotNull('gtm_workspace_id')
             ->when($this->option('customer'), fn ($q, $id) => $q->where('id', $id))
             ->get();
 
