@@ -5,6 +5,7 @@ namespace App\Prompts;
 use App\Models\BrandGuideline;
 use App\Models\Campaign;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -85,6 +86,12 @@ Based on recent performance data, the following recommendations have been genera
 ---
 PROMPT;
         }
+
+        // goals is cast to array on the model, though existing rows hold a plain
+        // string. Interpolating an array yields the literal text "Array", which
+        // would tell the model the campaign has no goals worth naming. Arr::wrap
+        // renders both shapes without a branch.
+        $goals = implode(', ', Arr::wrap($campaign->goals));
 
         $selectedPagesPrompt = '';
         if ($campaign->pages->isNotEmpty()) {
@@ -256,7 +263,7 @@ This is the specific goal for the marketing campaign.
 ---
 - **Campaign Name:** {$campaign->name}
 - **Reason for Campaign:** {$campaign->reason}
-- **Primary Goals:** {$campaign->goals}
+- **Primary Goals:** {$goals}
 - **Target Market:** {$campaign->target_market}
 - **Brand Voice:** {$campaign->voice}
 - **Budget:** \${$campaign->total_budget}

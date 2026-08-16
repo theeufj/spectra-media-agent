@@ -913,12 +913,6 @@ parameters:
 			path: app/Jobs/FetchMicrosoftAdsPerformanceData.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/GenerateAdCopy.php
-
-		-
 			message: '#^Call to function is_null\(\) with array will always evaluate to false\.$#'
 			identifier: function.impossibleType
 			count: 1
@@ -941,12 +935,6 @@ parameters:
 			identifier: booleanAnd.alwaysFalse
 			count: 1
 			path: app/Jobs/GenerateExecutiveReport.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/GenerateImage.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$subscription_status\.$#'
@@ -983,12 +971,6 @@ parameters:
 			identifier: property.notFound
 			count: 1
 			path: app/Jobs/GenerateStrategy.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Jobs/GenerateVideo.php
 
 		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 2 parameters, 1 required\.$#'
@@ -1387,60 +1369,6 @@ parameters:
 			path: app/Prompts/AdCopyPrompt.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$description\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Prompts/FacebookAdsExecutionPrompt.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$industry\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Prompts/FacebookAdsExecutionPrompt.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$description\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Prompts/GoogleAdsExecutionPrompt.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$industry\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Prompts/GoogleAdsExecutionPrompt.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$description\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Prompts/LinkedInAdsExecutionPrompt.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$industry\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Prompts/LinkedInAdsExecutionPrompt.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$description\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Prompts/MicrosoftAdsExecutionPrompt.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
-			identifier: property.notFound
-			count: 2
-			path: app/Prompts/StrategyPrompt.php
-
-		-
-			message: '#^Part \$campaign\-\>goals \(array\) of encapsed string cannot be cast to string\.$#'
-			identifier: encapsedStringPart.nonString
-			count: 1
-			path: app/Prompts/StrategyPrompt.php
-
-		-
 			message: '#^Using nullsafe method call on non\-nullable type Symfony\\Component\\Console\\Output\\OutputInterface\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
 			count: 1
@@ -1645,12 +1573,6 @@ parameters:
 			path: app/Services/Agents/CampaignRemediationAgent.php
 
 		-
-			message: '#^Parameter \$imageUrl of method App\\Services\\FacebookAds\\CreativeService\:\:createImageCreative\(\) expects string, array given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/CampaignRemediationAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$brandGuideline\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1717,50 +1639,14 @@ parameters:
 			path: app/Services/Agents/ExecutionContext.php
 
 		-
-			message: '#^Access to an undefined property App\\Services\\Agents\\FacebookAdsExecutionAgent\:\:\$geminiService\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
 			message: '#^Negated boolean expression is always true\.$#'
 			identifier: booleanNot.alwaysTrue
 			count: 1
 			path: app/Services/Agents/FacebookAdsExecutionAgent.php
 
 		-
-			message: '#^Parameter \#1 \$error of static method App\\Services\\Agents\\RecoveryPlan\:\:simple\(\) expects Exception, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
-			message: '#^Parameter \#1 \$errors of static method App\\Services\\Agents\\ExecutionResult\:\:failure\(\) expects array\|string, App\\Services\\Agents\\ExecutionPlan given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
-			message: '#^Parameter \#2 \$action of static method App\\Services\\Agents\\RecoveryPlan\:\:simple\(\) expects string, array\<int, string\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
 			message: '#^Property App\\Services\\Agents\\FacebookAdsExecutionAgent\:\:\$platform \(string\) on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.property
-			count: 1
-			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
-			message: '#^Static method App\\Services\\Agents\\RecoveryPlan\:\:fromJson\(\) invoked with 1 parameter, 2 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/FacebookAdsExecutionAgent.php
-
-		-
-			message: '#^Undefined variable\: \$creativeStrategy$#'
-			identifier: variable.undefined
 			count: 1
 			path: app/Services/Agents/FacebookAdsExecutionAgent.php
 
@@ -1807,32 +1693,8 @@ parameters:
 			path: app/Services/Agents/Google/SearchKeywordBuilder.php
 
 		-
-			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\ConversionActionCategoryEnum\\ConversionActionCategory\:\:LEAD\.$#'
-			identifier: classConstant.notFound
-			count: 1
-			path: app/Services/Agents/GoogleAdsExecutionAgent.php
-
-		-
-			message: '#^Parameter \#1 \$error of static method App\\Services\\Agents\\RecoveryPlan\:\:simple\(\) expects Exception, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/GoogleAdsExecutionAgent.php
-
-		-
-			message: '#^Parameter \#2 \$action of static method App\\Services\\Agents\\RecoveryPlan\:\:simple\(\) expects string, array\<int, string\> given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/Agents/GoogleAdsExecutionAgent.php
-
-		-
 			message: '#^Property App\\Services\\Agents\\GoogleAdsExecutionAgent\:\:\$platform \(string\) on left side of \?\? is not nullable\.$#'
 			identifier: nullCoalesce.property
-			count: 1
-			path: app/Services/Agents/GoogleAdsExecutionAgent.php
-
-		-
-			message: '#^Static method App\\Services\\Agents\\RecoveryPlan\:\:fromJson\(\) invoked with 1 parameter, 2 required\.$#'
-			identifier: arguments.count
 			count: 1
 			path: app/Services/Agents/GoogleAdsExecutionAgent.php
 
@@ -2471,12 +2333,6 @@ parameters:
 			identifier: larastan.relationExistence
 			count: 1
 			path: app/Services/NotificationTemplateService.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\Campaign\:\:\$pages\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Services/PersonaGeneratorService.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$brandGuideline\.$#'

@@ -63,37 +63,55 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             'strategy_id' => $context->strategy->id,
         ]);
 
-        // Validate prerequisites
-        $validation = $this->validatePrerequisites($context);
-        if (! $validation->passes()) {
-            Log::error('GoogleAdsExecutionAgent: Prerequisites validation failed', [
-                'errors' => $validation->errors,
+        try {
+            // Validate prerequisites
+            $validation = $this->validatePrerequisites($context);
+            if (! $validation->passes()) {
+                Log::error('GoogleAdsExecutionAgent: Prerequisites validation failed', [
+                    'errors' => $validation->errors,
+                ]);
+
+                return ExecutionResult::failure($validation->errors);
+            }
+
+            // NOTE: analyzeOptimizationOpportunities() used to be called here and its
+            // result discarded — it costs a Google Ads conversion query plus several
+            // collateral counts on every deploy for nothing. It is left in place
+            // because executePlan() independently re-derives PMax eligibility with a
+            // *different* rule set (>=3 valid-ratio images vs. images + video +
+            // conversion tracking + budget). Those two decisions should be unified and
+            // fed into generateExecutionPlan(); until then, don't pay for the analysis.
+
+            // Generate execution plan
+            $plan = $this->generateExecutionPlan($context);
+
+            // Execute the plan
+            $result = $this->executePlan($plan, $context);
+
+            Log::info('GoogleAdsExecutionAgent: Execution completed', [
+                'campaign_id' => $context->campaign->id,
+                'success' => $result->success,
+                'execution_time' => $result->executionTime,
             ]);
 
-            return ExecutionResult::failure($validation->errors);
+            return $result;
+        } catch (\Throwable $e) {
+            // Same omission as the Facebook agent: handleExecutionError was
+            // defined and never reached, so a failed deploy threw out of the
+            // agent with no recovery plan attached.
+            report($e);
+            Log::error('GoogleAdsExecutionAgent: Execution failed', [
+                'campaign_id' => $context->campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $recovery = $this->handleExecutionError($e, $context);
+
+            return ExecutionResult::failure(
+                ['Google Ads deployment failed: '.$e->getMessage()],
+                ['recovery_plan' => $recovery->toArray()]
+            );
         }
-
-        // NOTE: analyzeOptimizationOpportunities() used to be called here and its
-        // result discarded — it costs a Google Ads conversion query plus several
-        // collateral counts on every deploy for nothing. It is left in place
-        // because executePlan() independently re-derives PMax eligibility with a
-        // *different* rule set (>=3 valid-ratio images vs. images + video +
-        // conversion tracking + budget). Those two decisions should be unified and
-        // fed into generateExecutionPlan(); until then, don't pay for the analysis.
-
-        // Generate execution plan
-        $plan = $this->generateExecutionPlan($context);
-
-        // Execute the plan
-        $result = $this->executePlan($plan, $context);
-
-        Log::info('GoogleAdsExecutionAgent: Execution completed', [
-            'campaign_id' => $context->campaign->id,
-            'success' => $result->success,
-            'execution_time' => $result->executionTime,
-        ]);
-
-        return $result;
     }
 
     /**
@@ -581,7 +599,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         };
     }
 
-    protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
+    protected function handleExecutionError(\Throwable $error, ExecutionContext $context): RecoveryPlan
     {
         Log::error('GoogleAdsExecutionAgent: Execution error - '.$error->getMessage(), [
             'campaign_id' => $context->campaign->id,
@@ -600,26 +618,28 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             );
 
             if ($response && isset($response['text'])) {
-                return RecoveryPlan::fromJson($response['text']);
+                return RecoveryPlan::fromJson($error, $response['text']);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // This method is the last line of defence for a failed deployment,
+            // so it must not itself become the failure.
+            report($e);
             Log::error('GoogleAdsExecutionAgent: Failed to generate recovery plan: '.$e->getMessage());
         }
 
-        // Fallback to simple recovery plan
-        return RecoveryPlan::simple($error->getMessage(), [
-            'Check Google Ads account connection',
-            'Verify customer ID is correct',
-            'Ensure sufficient permissions',
-            'Review campaign budget and settings',
-            'Check for API quota limits',
-        ]);
+        // Fallback. simple() takes the throwable and one action string — it was
+        // being handed a message and an array, so this never ran.
+        return RecoveryPlan::simple(
+            $error,
+            'Check the Google Ads account connection, customer id, permissions, budget and API quota',
+            'Most Google Ads deployment failures come from account access or quota rather than the campaign itself.'
+        );
     }
 
     /**
      * Build recovery prompt for AI
      */
-    protected function buildRecoveryPrompt(\Exception $error, ExecutionContext $context): string
+    protected function buildRecoveryPrompt(\Throwable $error, ExecutionContext $context): string
     {
         return <<<PROMPT
 You are troubleshooting a Google Ads deployment error. Analyze the error and provide recovery actions.
@@ -721,10 +741,15 @@ PROMPT;
 
             // Pick category based on industry — SaaS/services use LEAD, e-commerce uses PURCHASE
             $ecommerceIndustries = ['ecommerce', 'retail', 'shopping'];
-            $industry = strtolower($campaign->industry ?? $this->customer->industry ?? '');
+            // industry is a Customer attribute; Campaign has no such column.
+            $industry = strtolower($this->customer->industry ?? '');
             $isEcommerce = in_array($industry, $ecommerceIndustries, true);
 
-            $conversionCategory = $isEcommerce ? ConversionActionCategory::PURCHASE : ConversionActionCategory::LEAD;
+            // SUBMIT_LEAD_FORM, not LEAD — the SDK defines no LEAD constant, so
+            // this line raised an Error for every non-ecommerce customer, which
+            // is most of them. SUBMIT_LEAD_FORM also matches how the conversion
+            // is actually measured: the GTM tag fires on form submit.
+            $conversionCategory = $isEcommerce ? ConversionActionCategory::PURCHASE : ConversionActionCategory::SUBMIT_LEAD_FORM;
             $conversionName = $isEcommerce ? 'Default Purchase Conversion' : 'Default Lead Conversion';
             $gtmTagLabel = $isEcommerce ? 'Google Ads Conversion - Purchase' : 'Google Ads Conversion - Lead';
 

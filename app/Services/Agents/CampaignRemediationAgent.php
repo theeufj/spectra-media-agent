@@ -1152,7 +1152,11 @@ PROMPT;
 
         // 3. Store image and get a public URL
         $filename = "meta-creative/{$campaign->id}-".now()->timestamp.'.jpg';
-        $imageUrl = StorageHelper::put($filename, base64_decode($imageResult['data']), $imageResult['mimeType'] ?? 'image/jpeg');
+        // put() returns [path, url]. Assigning the pair to $imageUrl passed an
+        // array into a string parameter — a TypeError every time Meta creative
+        // refresh ran — and made the guard below unreachable, since an array is
+        // always truthy.
+        [, $imageUrl] = StorageHelper::put($filename, base64_decode($imageResult['data']), $imageResult['mimeType'] ?? 'image/jpeg');
         if (! $imageUrl) {
             $this->alertCustomer($campaign, $finding, $results);
 

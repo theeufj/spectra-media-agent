@@ -52,7 +52,7 @@ class PlatformExecutionAgentTest extends TestCase
                 return Mockery::mock(OptimizationAnalysis::class);
             }
 
-            protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
+            protected function handleExecutionError(\Throwable $error, ExecutionContext $context): RecoveryPlan
             {
                 return Mockery::mock(RecoveryPlan::class);
             }
@@ -108,7 +108,7 @@ class PlatformExecutionAgentTest extends TestCase
                 return Mockery::mock(OptimizationAnalysis::class);
             }
 
-            protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
+            protected function handleExecutionError(\Throwable $error, ExecutionContext $context): RecoveryPlan
             {
                 return Mockery::mock(RecoveryPlan::class);
             }

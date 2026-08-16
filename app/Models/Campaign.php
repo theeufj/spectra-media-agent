@@ -6,6 +6,7 @@ use App\Enums\CampaignStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Campaign extends Model
@@ -229,8 +230,10 @@ class Campaign extends Model
 
     /**
      * The pages selected for this campaign.
+     *
+     * @return BelongsToMany<CustomerPage, $this>
      */
-    public function pages()
+    public function pages(): BelongsToMany
     {
         return $this->belongsToMany(CustomerPage::class, 'campaign_pages');
     }

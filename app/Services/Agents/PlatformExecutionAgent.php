@@ -100,12 +100,12 @@ abstract class PlatformExecutionAgent
      * - API quota issues
      * - Platform policy violations
      *
-     * @param  \Exception  $error  The error that occurred
+     * @param  \Throwable  $error  The error that occurred
      * @param  ExecutionContext  $context  Context about the failed execution
      * @return RecoveryPlan AI-generated recovery actions
      */
     abstract protected function handleExecutionError(
-        \Exception $error,
+        \Throwable $error,
         ExecutionContext $context
     ): RecoveryPlan;
 

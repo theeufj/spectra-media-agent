@@ -24,7 +24,11 @@ INSTRUCTION;
 
     public static function generate(ExecutionContext $context): string
     {
+        // description and industry live on Customer, not Campaign. Interpolating
+        // them off the campaign yielded empty strings, so every ad this prompt
+        // generated was written without knowing the business or its vertical.
         $campaign = $context->campaign;
+        $customer = $context->customer;
         $strategy = $context->strategy;
 
         $dailyBudget = $context->calculateDailyBudget();
@@ -34,8 +38,8 @@ Generate a comprehensive LinkedIn Ads execution plan focusing on B2B targeting. 
 
 # CAMPAIGN INFORMATION
 **Campaign Name:** {$campaign->name}
-**Campaign Description:** {$campaign->description}
-**Industry/Target Vertical:** {$campaign->industry}
+**Campaign Description:** {$customer->description}
+**Industry/Target Vertical:** {$customer->industry}
 
 **Total Campaign Budget:** \${$campaign->total_budget}
 **Recommended Daily Budget:** \${$dailyBudget}

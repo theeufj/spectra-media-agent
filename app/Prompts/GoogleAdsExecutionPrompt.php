@@ -103,6 +103,9 @@ INSTRUCTION;
     {
         $campaign = $context->campaign;
         $strategy = $context->strategy;
+        // description and industry live on Customer, not Campaign. Interpolating
+        // them off the campaign yielded empty strings, so every ad this prompt
+        // generated was written without knowing the business or its vertical.
         $customer = $context->customer;
         $contextData = $context->toArray();
 
@@ -196,9 +199,9 @@ Generate a comprehensive Google Ads execution plan for the following campaign.
 # CAMPAIGN INFORMATION
 
 **Campaign Name:** {$campaign->name}
-**Campaign Description:** {$campaign->description}
+**Campaign Description:** {$customer->description}
 **Landing Page:** {$landingPageUrl}
-**Industry/Vertical:** {$campaign->industry}
+**Industry/Vertical:** {$customer->industry}
 
 **Customer/Business:**
 - Name: {$customer->name}

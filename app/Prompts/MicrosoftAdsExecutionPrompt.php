@@ -28,6 +28,9 @@ INSTRUCTION;
     {
         $campaign = $context->campaign;
         $strategy = $context->strategy;
+        // description and industry live on Customer, not Campaign. Interpolating
+        // them off the campaign yielded empty strings, so every ad this prompt
+        // generated was written without knowing the business or its vertical.
         $customer = $context->customer;
 
         $dailyBudget = $context->calculateDailyBudget();
@@ -43,7 +46,7 @@ Generate a comprehensive Microsoft Ads execution plan for the following campaign
 
 # CAMPAIGN INFORMATION
 **Campaign Name:** {$campaign->name}
-**Campaign Description:** {$campaign->description}
+**Campaign Description:** {$customer->description}
 **Landing Page:** {$landingPageUrl}
 
 **Total Campaign Budget:** \${$campaign->total_budget}

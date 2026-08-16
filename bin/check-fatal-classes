@@ -14,7 +14,7 @@
  * Run against phpstan-strict.neon, which excludes the baseline, so these two
  * identifiers cannot be silenced by regenerating it.
  */
-$fatalIdentifiers = ['class.notFound', 'method.notFound'];
+$fatalIdentifiers = ['class.notFound', 'method.notFound', 'classConstant.notFound'];
 
 /** Mockery's expectation API, called on variables PHPStan types as the real class. */
 $mockeryMethods = [

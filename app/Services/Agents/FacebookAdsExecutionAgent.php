@@ -65,25 +65,44 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             'strategy_id' => $context->strategy->id,
         ]);
 
-        $this->initializeServices();
+        try {
+            $this->initializeServices();
 
-        // Validate prerequisites
-        $validation = $this->validatePrerequisites($context);
-        if (! $validation->isValid()) {
+            // Validate prerequisites
+            $validation = $this->validatePrerequisites($context);
+            if (! $validation->isValid()) {
+                return ExecutionResult::failure(
+                    $validation->getErrors(),
+                    $validation->getWarnings()
+                );
+            }
+
+            // Analyze optimization opportunities
+            $this->analyzeOptimizationOpportunities($context);
+
+            // Generate execution plan
+            $plan = $this->generateExecutionPlan($context);
+
+            // Execute the plan
+            return $this->executePlan($plan, $context);
+        } catch (\Throwable $e) {
+            // This agent defined handleExecutionError and never called it, so a
+            // failed Facebook deployment produced an uncaught throwable and no
+            // diagnosis — while Microsoft and LinkedIn, which have never
+            // deployed anything, both recovered properly.
+            report($e);
+            Log::error('FacebookAdsExecutionAgent: Execution failed', [
+                'campaign_id' => $context->campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            $recovery = $this->handleExecutionError($e, $context);
+
             return ExecutionResult::failure(
-                $validation->getErrors(),
-                $validation->getWarnings()
+                ['Facebook deployment failed: '.$e->getMessage()],
+                ['recovery_plan' => $recovery->toArray()]
             );
         }
-
-        // Analyze optimization opportunities
-        $optimization = $this->analyzeOptimizationOpportunities($context);
-
-        // Generate execution plan
-        $plan = $this->generateExecutionPlan($context);
-
-        // Execute the plan
-        return $this->executePlan($plan, $context);
     }
 
     /**
@@ -458,7 +477,9 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         } catch (\Exception $e) {
             Log::error('FacebookAdsExecutionAgent: Plan execution failed: '.$e->getMessage());
 
-            $result = ExecutionResult::failure($plan, [$e->getMessage()]);
+            // failure() takes the errors, then context — the plan was being
+            // passed as the error list.
+            $result = ExecutionResult::failure([$e->getMessage()], ['plan' => $plan->toArray()]);
             $result->executionTime = microtime(true) - $startTime;
 
             return $result;
@@ -786,8 +807,12 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             'custom_audiences' => $targeting['custom_audiences'] ?? [],
         ];
 
-        // Add placement targeting based on AI strategy
-        $placementStrategy = $this->determinePlacementStrategy($plan, $creativeStrategy);
+        // Add placement targeting based on AI strategy.
+        //
+        // $creativeStrategy was never defined in this scope — the variable is
+        // built inside other methods — so this passed null into a parameter
+        // typed array and every deployment died here before placements were set.
+        $placementStrategy = $this->determinePlacementStrategy($plan, $plan->getCreativeStrategy());
         if (! empty($placementStrategy)) {
             $targetingConfig['publisher_platforms'] = $placementStrategy['platforms'];
             if (! empty($placementStrategy['positions'])) {
@@ -914,7 +939,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     /**
      * Handle execution errors with AI-powered recovery
      */
-    protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
+    protected function handleExecutionError(\Throwable $error, ExecutionContext $context): RecoveryPlan
     {
         Log::error('FacebookAdsExecutionAgent: Execution error - '.$error->getMessage(), [
             'campaign_id' => $context->campaign->id,
@@ -925,7 +950,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $recoveryPrompt = $this->buildRecoveryPrompt($error, $context);
 
         try {
-            $response = $this->geminiService->generateContent(
+            $response = $this->gemini->generateContent(
                 model: config('ai.models.default'),
                 prompt: $recoveryPrompt,
                 config: ['temperature' => 0.3, 'maxOutputTokens' => 2048],
@@ -933,27 +958,28 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             );
 
             if ($response && isset($response['text'])) {
-                return RecoveryPlan::fromJson($response['text']);
+                return RecoveryPlan::fromJson($error, $response['text']);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // \Throwable: this method is the last line of defence for a failed
+            // deployment, so it must not itself become the failure.
+            report($e);
             Log::error('FacebookAdsExecutionAgent: Failed to generate recovery plan: '.$e->getMessage());
         }
 
-        // Fallback to simple recovery plan
-        return RecoveryPlan::simple($error->getMessage(), [
-            'Check Facebook Ads account connection',
-            'Verify Facebook Page is connected',
-            'Ensure access token has required permissions',
-            'Check payment method is valid',
-            'Review creative assets and ad copy',
-            'Verify targeting settings are valid',
-        ]);
+        // Fallback to a simple recovery plan. simple() takes the exception and a
+        // single action string — it was being handed a message and an array.
+        return RecoveryPlan::simple(
+            $error,
+            'Check the Facebook Ads account connection, Page link, token permissions and payment method',
+            'Most Facebook deployment failures come from an account or permission problem rather than the campaign itself.'
+        );
     }
 
     /**
      * Build recovery prompt for AI
      */
-    protected function buildRecoveryPrompt(\Exception $error, ExecutionContext $context): string
+    protected function buildRecoveryPrompt(\Throwable $error, ExecutionContext $context): string
     {
         return <<<PROMPT
 You are troubleshooting a Facebook/Meta Ads deployment error. Analyze the error and provide recovery actions.

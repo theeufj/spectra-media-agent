@@ -297,7 +297,7 @@ PROMPT;
         );
     }
 
-    protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
+    protected function handleExecutionError(\Throwable $error, ExecutionContext $context): RecoveryPlan
     {
         return new RecoveryPlan(
             actions: ['Review LinkedIn API error', 'Check account permissions', 'Verify OAuth token'],

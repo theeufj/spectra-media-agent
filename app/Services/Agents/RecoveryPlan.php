@@ -10,7 +10,11 @@ namespace App\Services\Agents;
  */
 class RecoveryPlan
 {
-    public ?\Exception $error;
+    // \Throwable, not \Exception: the failures worth recovering from
+    // include \Error — a TypeError or a call to a method that does not
+    // exist, which is how several deployment paths in this codebase have
+    // actually broken.
+    public ?\Throwable $error;
 
     public array $recoveryActions;
 
@@ -21,7 +25,7 @@ class RecoveryPlan
     public bool $canAutoRecover;
 
     public function __construct(
-        ?\Exception $error = null,
+        ?\Throwable $error = null,
         array $recoveryActions = [],
         string $reasoning = '',
         array $metadata = [],
@@ -51,12 +55,12 @@ class RecoveryPlan
      *   "reasoning": "..."
      * }
      *
-     * @param  \Exception  $error  The original error
+     * @param  \Throwable  $error  The original error
      * @param  string  $json  JSON response from AI
      *
      * @throws \Exception If JSON is invalid
      */
-    public static function fromJson(\Exception $error, string $json): self
+    public static function fromJson(\Throwable $error, string $json): self
     {
         $data = json_decode($json, true);
 
@@ -78,12 +82,12 @@ class RecoveryPlan
     /**
      * Create a simple recovery plan without AI.
      *
-     * @param  \Exception  $error  The error
+     * @param  \Throwable  $error  The error
      * @param  string  $action  Simple recovery action description
      * @param  string  $reasoning  Reasoning for the action
      */
     public static function simple(
-        \Exception $error,
+        \Throwable $error,
         string $action,
         string $reasoning = ''
     ): self {

@@ -189,7 +189,7 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
         );
     }
 
-    protected function handleExecutionError(\Exception $error, ExecutionContext $context): RecoveryPlan
+    protected function handleExecutionError(\Throwable $error, ExecutionContext $context): RecoveryPlan
     {
         $message = $error->getMessage();
         $this->logError('Analyzing execution error with AI', ['error' => $message]);
