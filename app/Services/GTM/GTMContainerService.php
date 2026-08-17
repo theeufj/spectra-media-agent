@@ -445,6 +445,30 @@ JS;
      * Creating a new workspace is the documented way forward, so rotate to one
      * and remember it.
      */
+    /**
+     * Is this failure the workspace's fault rather than the tag's?
+     *
+     * Two ways a stored workspace stops working, and only one was handled.
+     * Publishing freezes it — "Workspace is already submitted". But publishing
+     * can also consume it outright: GTM removes the workspace and leaves a fresh
+     * Default Workspace behind, so the id on the customer record now points at
+     * nothing and every write 404s.
+     *
+     * That second case stranded the sitetospend record: the workspace was gone,
+     * rotation never fired because the error did not say "already submitted",
+     * and the fix was to repoint the record by hand.
+     */
+    private function workspaceIsUnusable(array $response): bool
+    {
+        $error = $response['error'] ?? '';
+        $status = $response['status_code'] ?? null;
+
+        return str_contains($error, 'already submitted')
+            || $status === 404
+            || str_contains($error, 'not found')
+            || str_contains($error, 'Not Found');
+    }
+
     private function rotateWorkspace(Customer $customer, string $accessToken): ?string
     {
         $containerPath = $customer->gtm_config['container_path']
@@ -460,7 +484,11 @@ JS;
 
         $candidates = $existing['success'] ? ($existing['data']['workspace'] ?? []) : [];
 
-        usort($candidates, fn ($a, $b) => ($b['name'] ?? '') === 'Default Workspace' ? 1 : -1);
+        // Prefer the Default Workspace GTM leaves behind after a publish. The
+        // previous comparator never returned 0 and did not actually order the
+        // list — it only happened to work.
+        $isDefault = fn ($w) => ($w['name'] ?? '') === 'Default Workspace' ? 1 : 0;
+        usort($candidates, fn ($a, $b) => $isDefault($b) <=> $isDefault($a));
 
         foreach ($candidates as $workspace) {
             $id = $workspace['workspaceId'] ?? null;
@@ -528,7 +556,7 @@ JS;
         $workspacePath = $this->getWorkspacePath($customer);
         $response = $this->makeApiCall('POST', "/{$workspacePath}/tags", $accessToken, $tagData);
 
-        if (! $response['success'] && str_contains($response['error'] ?? '', 'already submitted')) {
+        if (! $response['success'] && $this->workspaceIsUnusable($response)) {
             $rotated = $this->rotateWorkspace($customer, $accessToken);
 
             if ($rotated) {
@@ -870,9 +898,51 @@ JS;
                 return ['success' => false, 'error' => 'Version '.$versionId.' created but publish failed: '.($publishResponse['error'] ?? 'Unknown error')];
             }
 
+            // Publishing consumes the workspace: GTM removes it and leaves a
+            // fresh Default Workspace behind, so the id on the customer record
+            // now points at nothing and every later write 404s. Recovering from
+            // that afterwards is possible; not stranding the record in the first
+            // place is better.
+            $this->refreshWorkspaceAfterPublish($customer, $accessToken);
+
             return ['success' => true, 'version_id' => $versionId, 'published_at' => now()];
         } catch (\Exception $e) {
             return ['success' => false, 'error' => $e->getMessage()];
+        }
+    }
+
+    /**
+     * Point the customer at a workspace that still exists.
+     *
+     * Best effort: a publish that succeeded must not be reported as a failure
+     * because the follow-up bookkeeping did not.
+     */
+    private function refreshWorkspaceAfterPublish(Customer $customer, string $accessToken): void
+    {
+        try {
+            $containerPath = $customer->gtm_config['container_path']
+                ?? "accounts/{$customer->gtm_account_id}/containers/{$customer->gtm_container_id}";
+
+            $response = $this->makeApiCall('GET', "/{$containerPath}/workspaces", $accessToken);
+
+            if (! $response['success']) {
+                return;
+            }
+
+            $workspaces = $response['data']['workspace'] ?? [];
+
+            $chosen = collect($workspaces)->firstWhere('name', 'Default Workspace')
+                ?? ($workspaces[0] ?? null);
+
+            if ($chosen && (string) $chosen['workspaceId'] !== (string) $customer->gtm_workspace_id) {
+                $this->rememberWorkspace($customer, (string) $chosen['workspaceId']);
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            Log::warning('GTMContainerService: could not refresh workspace after publish', [
+                'customer_id' => $customer->id,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 
