@@ -42,8 +42,15 @@ return Application::configure(basePath: dirname(__DIR__))
             headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO | \Illuminate\Http\Request::HEADER_X_FORWARDED_AWS_ELB
         );
 
+        // 'admin' is a group, not a single alias, so that every admin route is
+        // audited by virtue of being an admin route. Doing this per controller
+        // meant remembering nineteen times, and three of nineteen remembered.
+        $middleware->group('admin', [
+            \App\Http\Middleware\AdminMiddleware::class,
+            \App\Http\Middleware\LogAdminActions::class,
+        ]);
+
         $middleware->alias([
-            'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'ensureUserHasCustomer' => \App\Http\Middleware\EnsureUserHasCustomer::class,
             'subscribed' => \App\Http\Middleware\EnsureSubscribed::class,
         ]);
