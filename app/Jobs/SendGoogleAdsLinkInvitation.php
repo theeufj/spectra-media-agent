@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Mail\GoogleAdsLinkInvitation;
+use App\Models\AgentActivity;
 use App\Models\Customer;
 use App\Models\MccAccount;
 use App\Services\GoogleAds\CreateCustomerClientLink;
@@ -84,6 +85,43 @@ class SendGoogleAdsLinkInvitation implements ShouldQueue
         try {
             $result = (new CreateCustomerClientLink($customer))($managerId, $clientId);
         } catch (\Throwable $e) {
+            // An account already under this manager is not a failure — it is the
+            // answer the customer wanted. Google says ALREADY_MANAGED_IN_HIERARCHY
+            // and the old code treated it as an error, leaving link status null
+            // and the customer with no feedback at all: the one case where
+            // everything is fine looked identical to everything being broken.
+            if (str_contains($e->getMessage(), 'ALREADY_MANAGED_IN_HIERARCHY')) {
+                $customer->update([
+                    'google_ads_link_status' => 'active',
+                    'google_ads_link_confirmed_at' => now(),
+                    'google_ads_manager_customer_id' => $managerId,
+                ]);
+
+                AgentActivity::record(
+                    'onboarding',
+                    'google_ads_account_already_linked',
+                    'Google Ads account '.$clientId.' was already managed for "'.$customer->name.'"',
+                    $customer->id,
+                    null,
+                    ['client_account' => $clientId, 'manager_account' => $managerId]
+                );
+
+                Log::info('SendGoogleAdsLinkInvitation: account already managed, marked active', [
+                    'customer_id' => $customer->id,
+                    'client_account' => $clientId,
+                ]);
+
+                return;
+            }
+
+            // Anything else leaves a record the customer can be told about,
+            // rather than a status that stays null for reasons only the log
+            // knows.
+            $customer->update([
+                'google_ads_link_status' => 'failed',
+                'google_ads_link_requested_at' => now(),
+            ]);
+
             // Surface in the admin dashboard: a customer sitting unlinked is a
             // customer who cannot be advertised for.
             report($e);

@@ -322,9 +322,39 @@ export default function Edit({ auth, customer: initialCustomer }) {
                                                     />
                                                     <InputError message={errors.google_ads_customer_id} className="mt-2" />
                                                     {initialCustomer.google_ads_link_status === 'pending' ? (
-                                                        <p className="mt-1 text-sm text-amber-700">
-                                                            Waiting for approval. Sign in to Google Ads and accept the request under
-                                                            Admin → Access and security → Managers.
+                                                        <div className="mt-2 rounded-md border-l-4 border-amber-400 bg-amber-50 p-3">
+                                                            <p className="text-sm font-semibold text-amber-900">
+                                                                Waiting for you to approve it in Google Ads
+                                                            </p>
+                                                            <p className="mt-1 text-sm text-amber-800">
+                                                                The request only appears inside account{' '}
+                                                                <span className="font-mono font-semibold">
+                                                                    {initialCustomer.google_ads_customer_id}
+                                                                </span>
+                                                                . If you're signed in to a different account — or to a manager
+                                                                account — you won't see it.
+                                                            </p>
+                                                            <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm text-amber-800">
+                                                                <li>
+                                                                    Go to{' '}
+                                                                    <a href="https://ads.google.com" target="_blank" rel="noreferrer" className="underline">
+                                                                        ads.google.com
+                                                                    </a>{' '}
+                                                                    and sign in.
+                                                                </li>
+                                                                <li>Check the account number at the top right matches the one above.</li>
+                                                                <li>Open Admin → Access and security → Managers.</li>
+                                                                <li>Accept the pending request.</li>
+                                                            </ol>
+                                                            <p className="mt-2 text-xs text-amber-700">
+                                                                Google doesn't send its own notification for these, so the email we
+                                                                sent is the only prompt you'll get.
+                                                            </p>
+                                                        </div>
+                                                    ) : initialCustomer.google_ads_link_status === 'failed' ? (
+                                                        <p className="mt-1 text-sm text-red-700">
+                                                            We couldn't send the request. Check the ID is right and save again — if it
+                                                            keeps failing, reply to your welcome email and we'll sort it out.
                                                         </p>
                                                     ) : initialCustomer.google_ads_link_status === 'refused' || initialCustomer.google_ads_link_status === 'cancelled' ? (
                                                         <p className="mt-1 text-sm text-red-700">
