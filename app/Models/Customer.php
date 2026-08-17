@@ -181,6 +181,59 @@ class Customer extends Model
     }
 
     /**
+     * Do we merely manage this customer's ad account, rather than fund it?
+     *
+     * Two kinds of Google Ads account reach this platform. One we create as a
+     * sub-account under the MCC, where Spectra fronts the ad spend and bills it
+     * back — that is what the ad-spend credit system exists for. The other the
+     * customer already owned and simply granted us management of, via an
+     * accepted manager link. Their card is on the account; Google charges them
+     * directly and we never touch the money.
+     *
+     * Asking that second group to pre-pay ad credit bills them twice for the
+     * same clicks. They should be gated on their subscription and their media
+     * allowance, and on nothing else.
+     *
+     * A sub-account we create never sets google_ads_link_status, so its presence
+     * is a reliable marker of an account the customer brought with them.
+     */
+    public function isSelfFundedAds(): bool
+    {
+        return $this->google_ads_link_status === 'active';
+    }
+
+    /**
+     * Has this customer any media allowance left this period?
+     *
+     * Creative quota is tracked per user, and a customer is a team, so the
+     * customer has room if any of its members do — otherwise one person
+     * exhausting their own allowance would block everybody.
+     */
+    public function hasMediaCreditsRemaining(): bool
+    {
+        $quota = app(\App\Services\CreativeQuotaService::class);
+
+        foreach ($this->users as $user) {
+            $summary = $quota->getUsageSummary($user);
+
+            if ($summary['is_unlimited']) {
+                return true;
+            }
+
+            $remaining = ($summary['image_generations']['remaining'] ?? 0)
+                + ($summary['video_generations']['remaining'] ?? 0);
+
+            if ($remaining > 0) {
+                return true;
+            }
+        }
+
+        // No users at all means nothing to check against; refusing here would
+        // block deployment for a reason the customer cannot act on.
+        return $this->users->isEmpty();
+    }
+
+    /**
      * The users that belong to the customer.
      */
     /**

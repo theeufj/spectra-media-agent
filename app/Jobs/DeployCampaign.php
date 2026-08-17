@@ -121,8 +121,34 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             return;
         }
 
-        // Initialize ad spend credit if managed billing is enabled
-        $managedBillingEnabled = Setting::get('managed_billing_enabled', true);
+        // Ad spend credit applies only to accounts Spectra funds.
+        //
+        // Where the customer granted us management of an account they already
+        // owned, their own card is on it and Google charges them directly.
+        // Requiring prepaid ad credit there bills them twice for the same
+        // clicks. Those customers are gated on their subscription and their
+        // media allowance instead, both checked below.
+        $managedBillingEnabled = Setting::get('managed_billing_enabled', true) && ! $customer->isSelfFundedAds();
+
+        if ($customer->isSelfFundedAds()) {
+            if (! $customer->hasMediaCreditsRemaining()) {
+                Log::warning('DeployCampaign: self-funded customer has no media allowance left', [
+                    'customer_id' => $customer->id,
+                ]);
+
+                $this->notifyUsers(new \App\Notifications\DeploymentFailed(
+                    $this->campaign,
+                    'Your media allowance for this period is used up. Upgrade your plan or add a creative boost to publish more ads.'
+                ));
+
+                return;
+            }
+
+            Log::info('DeployCampaign: self-funded account, skipping ad spend credit', [
+                'customer_id' => $customer->id,
+                'google_ads_customer_id' => $customer->google_ads_customer_id,
+            ]);
+        }
 
         if ($managedBillingEnabled) {
             try {
