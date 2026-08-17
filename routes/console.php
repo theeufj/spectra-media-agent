@@ -418,3 +418,7 @@ Schedule::command('model:prune', [
         \App\Models\AgentActivity::class,
     ],
 ])->daily()->withoutOverlapping();
+
+// Admin audit logs: keep the recent window queryable, archive the rest.
+// Runs after midnight so a day is complete before it is archived.
+Schedule::job(new \App\Jobs\ArchiveActivityLogs)->dailyAt('02:30')->withoutOverlapping();
