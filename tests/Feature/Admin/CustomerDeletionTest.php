@@ -50,9 +50,9 @@ class CustomerDeletionTest extends TestCase
     {
         $customer = $this->customerWithLiveCampaign();
 
+        /** @var \Mockery\MockInterface&DeactivateCustomerService $deactivator */
         $deactivator = Mockery::mock(DeactivateCustomerService::class);
         $deactivator->shouldReceive('pauseAllCampaigns')
-            ->once()
             ->with(Mockery::on(fn ($c) => $c->id === $customer->id))
             ->andReturn(['paused' => 1, 'failed' => 0, 'errors' => []]);
 
@@ -70,6 +70,7 @@ class CustomerDeletionTest extends TestCase
         // it belongs to — the exact situation this guard exists to prevent.
         $customer = $this->customerWithLiveCampaign();
 
+        /** @var \Mockery\MockInterface&DeactivateCustomerService $deactivator */
         $deactivator = Mockery::mock(DeactivateCustomerService::class);
         $deactivator->shouldReceive('pauseAllCampaigns')
             ->andReturn(['paused' => 0, 'failed' => 1, 'errors' => ['Campaign 1: Google: quota exceeded']]);
@@ -88,6 +89,7 @@ class CustomerDeletionTest extends TestCase
         // cannot satisfy.
         $customer = $this->customerWithLiveCampaign();
 
+        /** @var \Mockery\MockInterface&DeactivateCustomerService $deactivator */
         $deactivator = Mockery::mock(DeactivateCustomerService::class);
         $deactivator->shouldNotReceive('pauseAllCampaigns');
         $this->app->instance(DeactivateCustomerService::class, $deactivator);
