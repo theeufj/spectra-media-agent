@@ -4,6 +4,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Require two-factor for admin access
+    |--------------------------------------------------------------------------
+    |
+    | When true, an admin without two-factor is redirected to enrol and cannot
+    | use the console until they have. Set false for the window between
+    | deploying this and everyone having set it up — those already enrolled are
+    | still challenged either way.
+    |
+    */
+
+    'admin_require_2fa' => env('ADMIN_REQUIRE_2FA', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Authentication Defaults
     |--------------------------------------------------------------------------
     |

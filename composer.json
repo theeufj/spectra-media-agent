@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.2",
         "aws/aws-sdk-php": "^3.0",
+        "bacon/bacon-qr-code": "^3.1",
         "google/auth": "^1.49",
         "googleads/google-ads-php": "^31.1",
         "guzzlehttp/guzzle": "^7.10",
@@ -28,6 +29,7 @@
         "league/flysystem-aws-s3-v3": "^3.30",
         "microsoft/msads": "^13.0",
         "pgvector/pgvector": "^0.2.2",
+        "pragmarx/google2fa": "^9.1",
         "react/http": "^0.4.0",
         "resend/resend-laravel": "^1.3",
         "smalot/pdfparser": "^2.12",

@@ -20,6 +20,9 @@
     <php>
         <ini name="memory_limit" value="512M"/>
         <env name="APP_ENV" value="testing"/>
+        <!-- Existing admin tests exercise other things; the two-factor gate
+             is covered explicitly by TwoFactorTest, which sets it per test. -->
+        <env name="ADMIN_REQUIRE_2FA" value="false"/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
         <env name="BCRYPT_ROUNDS" value="4"/>
         <env name="BROADCAST_CONNECTION" value="null"/>

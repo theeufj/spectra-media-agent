@@ -56,6 +56,11 @@ class User extends Authenticatable implements MustVerifyEmail
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'notification_preferences' => 'array',
+            // Encrypted at rest: a database dump should not hand over the
+            // second factor along with the first.
+            'two_factor_secret' => 'encrypted',
+            'two_factor_recovery_codes' => 'encrypted:array',
+            'two_factor_confirmed_at' => 'datetime',
         ];
     }
 
@@ -291,6 +296,19 @@ class User extends Authenticatable implements MustVerifyEmail
      * give them the first without the second, because 'admin' was the only role
      * that existed.
      */
+    /**
+     * Has this user finished setting up a second factor?
+     *
+     * Enrolment is only complete once a code has been verified — a secret that
+     * was generated but never confirmed means the authenticator app may never
+     * have been set up, and locking someone out on the strength of it would be
+     * wrong.
+     */
+    public function hasTwoFactorEnabled(): bool
+    {
+        return $this->two_factor_secret !== null && $this->two_factor_confirmed_at !== null;
+    }
+
     public function canAccessAdmin(): bool
     {
         return $this->hasRole('admin') || $this->hasRole('support');

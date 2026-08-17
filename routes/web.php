@@ -544,6 +544,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('users/{user}/assign-plan', [App\Http\Controllers\Admin\UserController::class, 'assignPlan'])->name('admin.users.assign-plan');
 
     // Execution Metrics Dashboard (Admin Only)
+    // Two-factor. These stay reachable without having passed the challenge,
+    // or the requirement becomes a locked door with the key behind it.
+    Route::get('two-factor', [App\Http\Controllers\Admin\TwoFactorController::class, 'show'])->name('admin.two-factor.show');
+    Route::post('two-factor/enrol', [App\Http\Controllers\Admin\TwoFactorController::class, 'enrol'])->name('admin.two-factor.enrol');
+    Route::post('two-factor/confirm', [App\Http\Controllers\Admin\TwoFactorController::class, 'confirm'])->name('admin.two-factor.confirm');
+    Route::get('two-factor/challenge', [App\Http\Controllers\Admin\TwoFactorController::class, 'challenge'])->name('admin.two-factor.challenge');
+    Route::post('two-factor/verify', [App\Http\Controllers\Admin\TwoFactorController::class, 'verify'])->name('admin.two-factor.verify');
+    Route::post('two-factor/disable', [App\Http\Controllers\Admin\TwoFactorController::class, 'disable'])->name('admin.two-factor.disable');
+
     // Global search — the one thing 71 admin routes had no way to do.
     Route::get('search', App\Http\Controllers\Admin\SearchController::class)->name('admin.search');
 

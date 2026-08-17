@@ -52,6 +52,7 @@ return Application::configure(basePath: dirname(__DIR__))
             // public endpoints were held to 5 and 3 a minute.
             'throttle:120,1',
             \App\Http\Middleware\AdminMiddleware::class,
+            \App\Http\Middleware\RequireTwoFactor::class,
             \App\Http\Middleware\ConfirmDestructiveAction::class,
             \App\Http\Middleware\LogAdminActions::class,
         ]);

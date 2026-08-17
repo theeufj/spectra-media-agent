@@ -34,6 +34,14 @@ class AdminMiddleware
             abort(403, 'Unauthorized action.');
         }
 
+        // Managing your own second factor is not an admin action on the
+        // platform — it is how you secure your own account. Support staff would
+        // otherwise be unable to enrol, since every POST here requires a full
+        // admin.
+        if ($request->routeIs('admin.two-factor.*')) {
+            return $next($request);
+        }
+
         $isRead = in_array($request->method(), ['GET', 'HEAD', 'OPTIONS'], true);
 
         if (! $isRead && ! $user->isFullAdmin()) {
