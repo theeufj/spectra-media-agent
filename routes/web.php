@@ -89,6 +89,22 @@ require __DIR__.'/auth.php';
 | a middleware group in a Go router like Gin or Echo.
 |
 */
+// Stopping impersonation is deliberately NOT behind the admin middleware.
+//
+// ImpersonationMiddleware runs in the web group and swaps the authenticated user
+// to the person being impersonated — who is, by definition, not an admin. Any
+// admin-gated route therefore 403s the moment impersonation begins, and this one
+// is the way out, so an admin who started impersonating could never stop without
+// logging out entirely.
+//
+// It is safe on `auth` alone: the controller reads impersonate_admin_id from the
+// session and redirects to the dashboard when it is absent, so a user who has
+// never been impersonated gains nothing by calling it.
+Route::middleware(['auth'])->post(
+    'admin/impersonate/stop',
+    [App\Http\Controllers\Admin\ImpersonationController::class, 'stop']
+)->name('admin.impersonation.stop');
+
 Route::middleware(['auth'])->group(function () {
     // Route to display the pricing page.
     // GET /subscription/pricing
@@ -522,6 +538,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::put('customers/{customer}/microsoft', [App\Http\Controllers\Admin\CustomerController::class, 'updateCustomerMicrosoft'])->name('admin.customers.update-microsoft');
     Route::put('customers/{customer}/google', [App\Http\Controllers\Admin\CustomerController::class, 'updateCustomerGoogle'])->name('admin.customers.update-google');
     Route::delete('customers/{customer}', [App\Http\Controllers\Admin\CustomerController::class, 'deleteCustomer'])->name('admin.customers.delete');
+    Route::post('customers/{customer}/restore', [App\Http\Controllers\Admin\CustomerController::class, 'restoreCustomer'])->name('admin.customers.restore')->withTrashed();
     Route::post('users/{user}/ban', [App\Http\Controllers\Admin\UserController::class, 'banUser'])->name('admin.users.ban');
     Route::delete('users/{user}', [App\Http\Controllers\Admin\UserController::class, 'deleteUser'])->name('admin.users.delete');
     Route::post('users/{user}/assign-plan', [App\Http\Controllers\Admin\UserController::class, 'assignPlan'])->name('admin.users.assign-plan');
@@ -534,9 +551,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::delete('users/{user}/inbox', [App\Http\Controllers\Admin\UserController::class, 'removeInbox'])->name('admin.users.inbox.remove');
     Route::post('notification', [App\Http\Controllers\Admin\NotificationController::class, 'sendNotification'])->name('admin.notification.send');
 
-    // Impersonation
+    // Impersonation. Only start is admin-gated — see the stop route below.
     Route::post('impersonate/{user}', [App\Http\Controllers\Admin\ImpersonationController::class, 'start'])->name('admin.impersonation.start');
-    Route::post('impersonate/stop', [App\Http\Controllers\Admin\ImpersonationController::class, 'stop'])->name('admin.impersonation.stop');
 
     // System Health Dashboard
     Route::get('system-health', [App\Http\Controllers\Admin\SystemHealthController::class, 'index'])->name('admin.health.index');

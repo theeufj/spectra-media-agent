@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Services\ActivityLogger;
+use App\Services\Customers\DeactivateCustomerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -187,11 +188,73 @@ class CustomerController extends Controller
         return redirect()->back()->with('success', 'Google Ads account updated.');
     }
 
-    public function deleteCustomer(Customer $customer)
+    /**
+     * Delete a customer, after stopping everything they are spending.
+     *
+     * The order matters more than the deletion does. This used to be a hard
+     * delete with nothing behind it, so the campaigns on every platform kept
+     * running and kept charging while the records identifying them were
+     * destroyed — the action most likely to be taken *because* someone wanted
+     * the spending to stop was the one that removed the means to stop it.
+     *
+     * A customer whose campaigns could not all be paused is not deleted. Being
+     * told why is more useful than a tidy customer list and an unexplained bill.
+     */
+    public function deleteCustomer(Request $request, Customer $customer, DeactivateCustomerService $deactivator)
     {
+        // Typing the name is the confirmation. A UI dialog is advice; this is
+        // the part an accidental request cannot satisfy.
+        if ($request->input('confirm_name') !== $customer->name) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Type the customer name exactly to confirm deletion.',
+            ]);
+        }
+
+        $result = $deactivator->pauseAllCampaigns($customer);
+
+        if ($result['failed'] > 0) {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => "Not deleted — {$result['failed']} campaign(s) could not be paused and would keep spending: "
+                    .implode(' | ', array_slice($result['errors'], 0, 3)),
+            ]);
+        }
+
         ActivityLogger::customer('deleted', $customer);
+
+        Log::warning('Admin deleted customer', [
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+            'admin_id' => $request->user()?->id,
+            'campaigns_paused' => $result['paused'],
+        ]);
+
+        // Soft delete — the trail survives, and the customer can be restored.
         $customer->delete();
 
-        return redirect()->back();
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => "Deleted \"{$customer->name}\" after pausing {$result['paused']} campaign(s).",
+        ]);
+    }
+
+    /**
+     * Bring back a soft-deleted customer.
+     *
+     * Their campaigns stay paused: restoring the record should not restart
+     * spending on its own.
+     */
+    public function restoreCustomer(int $customerId)
+    {
+        $customer = Customer::withTrashed()->findOrFail($customerId);
+        $customer->restore();
+
+        ActivityLogger::customer('restored', $customer);
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => "Restored \"{$customer->name}\". Their campaigns remain paused.",
+        ]);
     }
 }

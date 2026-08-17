@@ -6,16 +6,35 @@ import ConfirmationModal from '@/Components/ConfirmationModal';
 const CustomerTable = ({ customers, plans = [] }) => {
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
-    const handleDeleteCustomer = (customerId) => {
-        setConfirmModal({
-            show: true,
-            title: 'Delete Customer',
-            message: 'Are you sure you want to delete this customer?',
-            isDestructive: true,
-            onConfirm: () => {
-                setConfirmModal(prev => ({ ...prev, show: false }));
-                router.delete(route('admin.customers.delete', customerId), { preserveScroll: true });
-            },
+    // The server requires the customer's name typed back exactly. A dialog is
+    // advice; the typed name is the part an accidental click cannot satisfy —
+    // and deletion pauses every live campaign first, so it is not reversible in
+    // the sense of the ads simply carrying on.
+    const handleDeleteCustomer = (customerId, customerName) => {
+        const typed = window.prompt(
+            `This pauses every live campaign for "${customerName}" and removes them from the console.\n\n`
+            + `Type the customer name exactly to confirm:`
+        );
+
+        if (typed === null) {
+            return;
+        }
+
+        if (typed !== customerName) {
+            setConfirmModal({
+                show: true,
+                title: 'Name did not match',
+                message: `Nothing was deleted. Expected "${customerName}".`,
+                isDestructive: false,
+                onConfirm: () => setConfirmModal(prev => ({ ...prev, show: false })),
+            });
+
+            return;
+        }
+
+        router.delete(route('admin.customers.delete', customerId), {
+            data: { confirm_name: typed },
+            preserveScroll: true,
         });
     };
 
@@ -64,7 +83,7 @@ const CustomerTable = ({ customers, plans = [] }) => {
                 Ledger
             </Link>
             <button
-                onClick={() => handleDeleteCustomer(customer.id)}
+                onClick={() => handleDeleteCustomer(customer.id, customer.business_name || customer.name)}
                 className="text-red-600 hover:text-red-900"
             >
                 Delete
