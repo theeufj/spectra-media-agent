@@ -283,6 +283,32 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * May this user reach the admin console at all?
+     *
+     * Support staff need to see customers and campaigns to answer questions.
+     * They do not need to delete customers, rotate the platform's MCC
+     * credentials or change plan pricing — and until now there was no way to
+     * give them the first without the second, because 'admin' was the only role
+     * that existed.
+     */
+    public function canAccessAdmin(): bool
+    {
+        return $this->hasRole('admin') || $this->hasRole('support');
+    }
+
+    /**
+     * Is this user a full admin, as opposed to support?
+     *
+     * The distinction guards destructive and credential-bearing actions. It is
+     * deliberately not "not support": a user with neither role should fail both
+     * checks rather than pass this one.
+     */
+    public function isFullAdmin(): bool
+    {
+        return $this->hasRole('admin');
+    }
+
+    /**
      * Check if the user is an owner of a specific customer.
      */
     public function isOwnerOf(Customer $customer): bool

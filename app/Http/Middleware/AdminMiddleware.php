@@ -13,10 +13,31 @@ class AdminMiddleware
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
+    /**
+     * Support can look; only a full admin can change anything.
+     *
+     * The split is on the HTTP method rather than on a per-route annotation,
+     * because a per-route list is a list somebody has to maintain — and the one
+     * thing this codebase has demonstrated repeatedly is that a rule enforced in
+     * one place holds, while a rule that must be remembered at every call site
+     * does not. Every admin GET is a view; every admin POST, PUT or DELETE
+     * changes something.
+     *
+     * Routes needing a narrower rule than "any full admin" should use a policy,
+     * not another middleware parameter.
+     */
     public function handle(Request $request, Closure $next): Response
     {
-        if (! $request->user() || ! $request->user()->hasRole('admin')) {
+        $user = $request->user();
+
+        if (! $user || ! $user->canAccessAdmin()) {
             abort(403, 'Unauthorized action.');
+        }
+
+        $isRead = in_array($request->method(), ['GET', 'HEAD', 'OPTIONS'], true);
+
+        if (! $isRead && ! $user->isFullAdmin()) {
+            abort(403, 'This action requires a full admin account.');
         }
 
         return $next($request);
