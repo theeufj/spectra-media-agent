@@ -1,4 +1,5 @@
 import { Link, usePage } from '@inertiajs/react';
+import AdminSearch from '@/Components/AdminSearch';
 
 const NavLink = ({ href, active, children }) => (
     <Link
@@ -27,6 +28,7 @@ export default function SideNav() {
             <div className="px-6 py-4">
                 <h2 className="text-lg font-semibold text-gray-800">Admin Menu</h2>
             </div>
+            <AdminSearch />
             <nav className="mt-4 px-4">
                 {/* Users & Customers */}
                 <SectionHeader>Users & Customers</SectionHeader>

@@ -544,6 +544,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('users/{user}/assign-plan', [App\Http\Controllers\Admin\UserController::class, 'assignPlan'])->name('admin.users.assign-plan');
 
     // Execution Metrics Dashboard (Admin Only)
+    // Global search — the one thing 71 admin routes had no way to do.
+    Route::get('search', App\Http\Controllers\Admin\SearchController::class)->name('admin.search');
+
     Route::get('execution-metrics', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'index'])->name('admin.execution.metrics');
     Route::get('execution-metrics/{strategy}', [App\Http\Controllers\Admin\ExecutionMetricsController::class, 'show'])->name('admin.execution.detail');
     Route::post('users/{user}/unban', [App\Http\Controllers\Admin\UserController::class, 'unbanUser'])->name('admin.users.unban');
