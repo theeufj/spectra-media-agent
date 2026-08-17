@@ -29,7 +29,7 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
     };
 
     const handlePurge = (featureName) => {
-        router.post(route('admin.feature-flags.purge', featureName), {}, { preserveScroll: true });
+        router.post(route('admin.feature-flags.purge', featureName), { confirmed: true }, { preserveScroll: true });
     };
 
     return (

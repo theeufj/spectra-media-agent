@@ -115,7 +115,7 @@ export default function SystemHealth({ health }) {
             isDestructive: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.post(route('admin.health.flush-jobs'), {}, { preserveScroll: true });
+                router.post(route('admin.health.flush-jobs'), { confirmed: true }, { preserveScroll: true });
             },
         });
     };

@@ -104,7 +104,7 @@ const UserTable = ({ users, plans = [] }) => {
             isDestructive: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.delete(route('admin.users.delete', userId), { preserveScroll: true });
+                router.delete(route('admin.users.delete', userId), { data: { confirmed: true }, preserveScroll: true });
             },
         });
     };

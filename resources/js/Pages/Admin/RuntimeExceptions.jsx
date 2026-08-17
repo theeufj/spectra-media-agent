@@ -23,7 +23,7 @@ export default function RuntimeExceptions({ auth, exceptions, stats, types, filt
 
     const handleFlush = (days) => {
         if (confirm(`Delete all exceptions older than ${days} days?`)) {
-            router.post(route('admin.runtime-exceptions.flush'), { days });
+            router.post(route('admin.runtime-exceptions.flush'), { days, confirmed: true });
         }
     };
 

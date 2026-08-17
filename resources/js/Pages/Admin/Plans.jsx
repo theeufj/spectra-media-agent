@@ -311,7 +311,7 @@ export default function Plans({ plans }) {
             planName: plan.name,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.delete(route('admin.plans.destroy', plan.id));
+                router.delete(route('admin.plans.destroy', plan.id), { data: { confirmed: true } });
             },
         });
     };

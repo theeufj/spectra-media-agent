@@ -116,7 +116,7 @@ export default function Revenue({ metrics, recentTransactions, subscriptionBreak
             show: true,
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                router.post(route('admin.revenue.refund', chargeId), {}, { preserveScroll: true });
+                router.post(route('admin.revenue.refund', chargeId), { confirmed: true }, { preserveScroll: true });
             },
         });
     };

@@ -133,13 +133,13 @@ export default function MccAccounts({ accounts, usingEnvFallback, envCustomerId 
 
     const doActivate = () => {
         if (confirmActivate.account) {
-            router.post(route('admin.mcc-accounts.activate', confirmActivate.account.id));
+            router.post(route('admin.mcc-accounts.activate', confirmActivate.account.id), { confirmed: true });
         }
         setConfirmActivate({ show: false, account: null });
     };
 
     const handleDelete = (account) => {
-        router.delete(route('admin.mcc-accounts.destroy', account.id));
+        router.delete(route('admin.mcc-accounts.destroy', account.id), { data: { confirmed: true } });
         setConfirmDelete(null);
     };
 

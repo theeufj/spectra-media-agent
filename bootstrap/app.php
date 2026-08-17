@@ -46,7 +46,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // audited by virtue of being an admin route. Doing this per controller
         // meant remembering nineteen times, and three of nineteen remembered.
         $middleware->group('admin', [
+            // Generous enough that no honest admin will notice, tight enough
+            // that a stolen session cannot enumerate or mass-delete at machine
+            // speed. Nothing under /admin was rate limited at all, while the
+            // public endpoints were held to 5 and 3 a minute.
+            'throttle:120,1',
             \App\Http\Middleware\AdminMiddleware::class,
+            \App\Http\Middleware\ConfirmDestructiveAction::class,
             \App\Http\Middleware\LogAdminActions::class,
         ]);
 
