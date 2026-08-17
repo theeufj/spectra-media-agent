@@ -30,11 +30,25 @@ class AdSpendReconciliationAlert extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        // Name the money in the subject line. The previous wording — "reconciliation
+        // discrepancies" — described the mechanism rather than the consequence, and a
+        // 100% billing miss arrived reading like a routine notice. It sat unactioned for
+        // a week.
+        $total = array_sum(array_column($this->discrepancies, 'discrepancy'));
+        $currency = $this->discrepancies[0]['currency'] ?? '';
+
         $mail = (new MailMessage)
-            ->subject('[Site to Spend] Ad spend reconciliation discrepancies ('.count($this->discrepancies).')')
+            ->subject(sprintf(
+                '[Site to Spend] ACTION NEEDED: %s%s of ad spend was not billed',
+                $currency,
+                number_format($total, 2)
+            ))
             ->error()
-            ->greeting('Ad Spend Reconciliation Alert')
-            ->line("The following accounts' platform spend and ledger deductions diverged over {$this->window}:");
+            ->greeting('Ad spend was not billed')
+            ->line(sprintf(
+                'Between %s, these accounts spent money on the ad platforms that was never deducted from their credit ledger. That is revenue not collected.',
+                $this->window
+            ));
 
         foreach ($this->discrepancies as $d) {
             $mail->line(sprintf(
@@ -48,7 +62,8 @@ class AdSpendReconciliationAlert extends Notification
         }
 
         return $mail
-            ->line('These are flagged for manual review — no automated correction has been applied.')
-            ->action('View Admin Billing', url('/admin'));
+            ->line('**Nothing has been corrected automatically.** Until someone deducts or writes off these amounts, the ledger does not reflect what was actually spent.')
+            ->line('If a customer appears here repeatedly, the daily billing run is not selecting them — check that their campaigns are recorded as active locally, not only on the platform.')
+            ->action('Review in Admin Billing', url('/admin'));
     }
 }

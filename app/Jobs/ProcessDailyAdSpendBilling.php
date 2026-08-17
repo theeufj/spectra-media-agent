@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AdSpendCredit;
 use App\Models\Customer;
+use App\Notifications\CriticalAgentAlert;
 use App\Services\AdSpendBillingService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -57,17 +58,14 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
             AdSpendCredit::PAYMENT_GRACE_PERIOD,
         ];
 
-        $customers = Customer::whereHas('adSpendCredit')
-            ->where(function ($query) use ($recoverableStatuses) {
-                $query->whereHas('campaigns', function ($q) {
-                    $q->where('status', 'active');
-                })
-                    ->orWhereHas('adSpendCredit', function ($q) use ($recoverableStatuses) {
-                        $q->whereIn('payment_status', $recoverableStatuses);
-                    });
-            })
-            ->with(['adSpendCredit', 'campaigns'])
-            ->get();
+        // Selection has to follow the platform, not our lifecycle field.
+        //
+        // A campaign spends money because Google says ENABLED, not because our
+        // `status` column says active. Those two drifted (BILL-8) and this query
+        // only looked at the local one, so a campaign live on the platform but
+        // not locally active spent without ever being billed — silently, because
+        // finding nobody to bill looks exactly like having nobody to bill.
+        $customers = $this->eligibleCustomers($recoverableStatuses);
 
         // Idempotency: bill each customer at most once per calendar day. On a mid-run
         // crash + retry (tries=3) this stops already-charged customers being re-deducted
@@ -129,6 +127,70 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         if ($results['failed'] > 0) {
             Log::error('ProcessDailyAdSpendBilling: Completed with failures', $results);
         }
+
+        // Billing nobody is only good news if there was nobody to bill.
+        //
+        // This job ran clean every morning for a week while spend accumulated
+        // unbilled, because a run that deducts nothing logs the same INFO line
+        // as a run that deducts everything. The weekly reconciliation eventually
+        // caught it; by then seven days had passed.
+        $this->alertIfIdleWhileSpending($results);
+    }
+
+    /**
+     * Customers whose ad spend should be deducted today.
+     *
+     * @param  list<string>  $recoverableStatuses
+     * @return \Illuminate\Database\Eloquent\Collection<int, Customer>
+     */
+    private function eligibleCustomers(array $recoverableStatuses): \Illuminate\Database\Eloquent\Collection
+    {
+        return Customer::whereHas('adSpendCredit')
+            ->where(function ($query) use ($recoverableStatuses) {
+                $query->whereHas('campaigns', function ($q) {
+                    $q->where('status', 'active')
+                        ->orWhere('platform_status', 'ENABLED');
+                })
+                    ->orWhereHas('adSpendCredit', function ($q) use ($recoverableStatuses) {
+                        $q->whereIn('payment_status', $recoverableStatuses);
+                    });
+            })
+            ->with(['adSpendCredit', 'campaigns'])
+            ->get();
+    }
+
+    /**
+     * Warn when the run billed nobody but campaigns were live enough to spend.
+     *
+     * @param  array<string, int|float>  $results
+     */
+    private function alertIfIdleWhileSpending(array $results): void
+    {
+        if ($results['processed'] > 0 || $results['skipped'] > 0) {
+            return;
+        }
+
+        $couldHaveSpent = Customer::whereHas('adSpendCredit')
+            ->whereHas('campaigns', fn ($q) => $q->where('platform_status', 'ENABLED'))
+            ->count();
+
+        if ($couldHaveSpent === 0) {
+            return;
+        }
+
+        Log::error('ProcessDailyAdSpendBilling: billed nobody while campaigns were live', [
+            'customers_with_live_campaigns' => $couldHaveSpent,
+            'results' => $results,
+        ]);
+
+        CriticalAgentAlert::deliver(
+            'billing',
+            'Daily ad spend billing deducted nothing while campaigns were live',
+            "The daily billing run processed no customers, but {$couldHaveSpent} customer(s) with a credit account "
+                .'have campaigns enabled on the platform. Spend is accruing that is not being deducted.',
+            ['results' => $results, 'customers_with_live_campaigns' => $couldHaveSpent],
+            \App\Models\NotificationTemplate::RECIPIENTS_ADMINS
+        );
     }
 
     /**

@@ -1005,13 +1005,13 @@ parameters:
 		-
 			message: '#^Relation ''adSpendCredit'' is not found in App\\Models\\Customer model\.$#'
 			identifier: larastan.relationExistence
-			count: 3
+			count: 4
 			path: app/Jobs/ProcessDailyAdSpendBilling.php
 
 		-
 			message: '#^Relation ''campaigns'' is not found in App\\Models\\Customer model\.$#'
 			identifier: larastan.relationExistence
-			count: 2
+			count: 3
 			path: app/Jobs/ProcessDailyAdSpendBilling.php
 
 		-
