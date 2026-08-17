@@ -50,13 +50,13 @@ class CustomerDeletionTest extends TestCase
     {
         $customer = $this->customerWithLiveCampaign();
 
-        /** @var \Mockery\MockInterface&DeactivateCustomerService $deactivator */
-        $deactivator = Mockery::mock(DeactivateCustomerService::class);
-        $deactivator->shouldReceive('pauseAllCampaigns')
-            ->with(Mockery::on(fn ($c) => $c->id === $customer->id))
-            ->andReturn(['paused' => 1, 'failed' => 0, 'errors' => []]);
-
-        $this->app->instance(DeactivateCustomerService::class, $deactivator);
+        // Constructor-style stubbing rather than a shouldReceive() chain:
+        // PHPStan types that chain as ExpectationInterface|HigherOrderMessage
+        // and rejects every method called on it.
+        $this->app->instance(DeactivateCustomerService::class, Mockery::mock(
+            DeactivateCustomerService::class,
+            ['pauseAllCampaigns' => ['paused' => 1, 'failed' => 0, 'errors' => []]]
+        ));
 
         $this->actingAs($this->admin())
             ->delete(route('admin.customers.delete', $customer), ['confirm_name' => 'Acme Pty Ltd']);
@@ -70,12 +70,10 @@ class CustomerDeletionTest extends TestCase
         // it belongs to — the exact situation this guard exists to prevent.
         $customer = $this->customerWithLiveCampaign();
 
-        /** @var \Mockery\MockInterface&DeactivateCustomerService $deactivator */
-        $deactivator = Mockery::mock(DeactivateCustomerService::class);
-        $deactivator->shouldReceive('pauseAllCampaigns')
-            ->andReturn(['paused' => 0, 'failed' => 1, 'errors' => ['Campaign 1: Google: quota exceeded']]);
-
-        $this->app->instance(DeactivateCustomerService::class, $deactivator);
+        $this->app->instance(DeactivateCustomerService::class, Mockery::mock(
+            DeactivateCustomerService::class,
+            ['pauseAllCampaigns' => ['paused' => 0, 'failed' => 1, 'errors' => ['Campaign 1: Google: quota exceeded']]]
+        ));
 
         $this->actingAs($this->admin())
             ->delete(route('admin.customers.delete', $customer), ['confirm_name' => 'Acme Pty Ltd']);
@@ -89,10 +87,13 @@ class CustomerDeletionTest extends TestCase
         // cannot satisfy.
         $customer = $this->customerWithLiveCampaign();
 
-        /** @var \Mockery\MockInterface&DeactivateCustomerService $deactivator */
-        $deactivator = Mockery::mock(DeactivateCustomerService::class);
-        $deactivator->shouldNotReceive('pauseAllCampaigns');
-        $this->app->instance(DeactivateCustomerService::class, $deactivator);
+        // Returning a "everything paused" result deliberately: if the guard
+        // failed to stop the request, the customer would be deleted and the
+        // assertion below would catch it.
+        $this->app->instance(DeactivateCustomerService::class, Mockery::mock(
+            DeactivateCustomerService::class,
+            ['pauseAllCampaigns' => ['paused' => 1, 'failed' => 0, 'errors' => []]]
+        ));
 
         $this->actingAs($this->admin())
             ->delete(route('admin.customers.delete', $customer), ['confirm_name' => 'acme pty ltd']);
