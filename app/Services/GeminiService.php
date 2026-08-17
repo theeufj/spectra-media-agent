@@ -526,7 +526,23 @@ class GeminiService
                 $this->recordCost($model, 'generateContent', $totalUsage, $durationMs, $context);
                 Log::info("GeminiService: Function-calling loop done. Tool calls: {$toolCallCount}, model: {$model}");
 
-                return ['text' => $textContent];
+                // A response cut off at the token ceiling looks exactly like a
+                // complete one to every caller — it is a string, it reads as
+                // prose, and it ends mid-sentence. On thinking models the budget
+                // is shared with reasoning, so a limit that used to be ample
+                // silently starts truncating. Say so rather than hand back a
+                // half-written sentence as though it were the answer.
+                $finishReason = $data['candidates'][0]['finishReason'] ?? null;
+
+                if ($finishReason === 'MAX_TOKENS') {
+                    Log::warning('GeminiService: response truncated at maxOutputTokens', [
+                        'model' => $model,
+                        'context' => $context,
+                        'characters_returned' => strlen($textContent),
+                    ]);
+                }
+
+                return ['text' => $textContent, 'truncated' => $finishReason === 'MAX_TOKENS'];
             }
 
             Log::error('GeminiService: No text or function call in generateContent response', [
@@ -1084,7 +1100,21 @@ class GeminiService
         // Array access required — model names contain dots which break Laravel's config dot-notation.
         $pricing = (config('ai.pricing') ?? [])[$model] ?? null;
         if (! $pricing) {
+            // Returning 0 silently is how a model swap turns the whole AI spend
+            // figure into zero without anyone noticing: every call still works,
+            // the dashboard just says the platform costs nothing to run.
+            Log::warning('GeminiService: no pricing configured, cost recorded as zero', ['model' => $model]);
+
             return 0.0;
+        }
+
+        // Introductory pricing, where a model has it, is resolved per call so
+        // that it stops applying on the day it expires — not on the day someone
+        // remembers to clear the config cache.
+        $introductory = $pricing['introductory'] ?? null;
+
+        if ($introductory && now()->lt($introductory['until'])) {
+            $pricing = $introductory;
         }
 
         return round(

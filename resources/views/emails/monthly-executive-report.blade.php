@@ -41,7 +41,7 @@
     @if(!empty($report['ai_executive_summary']))
         <div style="background: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px 20px; margin: 24px 0; border-radius: 0 6px 6px 0;">
             <div style="font-size: 13px; font-weight: 700; color: #92400e; margin-bottom: 8px; text-transform: uppercase;">AI Analysis</div>
-            <div style="font-size: 14px; color: #3d4852; line-height: 1.7;">{!! nl2br(e($report['ai_executive_summary'])) !!}</div>
+            <div style="font-size: 14px; color: #3d4852; line-height: 1.7;">{!! \App\Support\AiNarrative::toEmailHtml($report['ai_executive_summary']) !!}</div>
         </div>
     @endif
 

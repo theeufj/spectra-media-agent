@@ -290,9 +290,16 @@ class ExecutiveReportService
             $result = $this->gemini->generateContent(
                 config('ai.models.default'),
                 $prompt,
-                ['temperature' => 0.3, 'maxOutputTokens' => 1024],
+                // The default model is a thinking model, and reasoning tokens
+                // come out of this same budget — 1024 was being spent thinking,
+                // leaving a summary that stopped mid-sentence.
+                ['temperature' => 0.3, 'maxOutputTokens' => 4096],
                 'You are a professional digital marketing analyst writing executive reports for business stakeholders.'
             );
+
+            if ($result['truncated'] ?? false) {
+                Log::warning('Executive narrative was truncated', ['customer' => $report['customer_name'] ?? null]);
+            }
 
             return $result['text'] ?? null;
         } catch (\Exception $e) {

@@ -26,7 +26,7 @@ return [
          * Default model for all general-purpose AI tasks:
          * copy generation, analysis, recommendations, reporting, etc.
          */
-        'default' => env('AI_MODEL_DEFAULT', 'gemini-3.5-flash'),
+        'default' => env('AI_MODEL_DEFAULT', 'gemini-3.7-flash'),
 
         /*
          * Pro model for complex reasoning tasks (competitor strategy,
@@ -64,6 +64,7 @@ return [
      * will automatically try the next model in this chain before giving up.
      */
     'fallback_chain' => [
+        'gemini-3.7-flash' => 'gemini-3.5-flash',
         'gemini-3.1-pro-preview' => 'gemini-3.5-flash',
         'gemini-2.5-pro' => 'gemini-3.5-flash',
         'gemini-3.5-flash' => 'gemini-2.5-flash',
@@ -114,6 +115,15 @@ return [
     'pricing' => [
         'gemini-3.1-pro-preview' => ['input' => 2.00,   'output' => 12.00, 'cached' => 0.20],
         'gemini-2.5-pro' => ['input' => 1.25,   'output' => 10.00, 'cached' => 0.13],
+        // Standard rates, in force from 1 Jan 2027. The introductory rates that
+        // apply until then are declared alongside rather than in place of these:
+        // config is cached in production, so a date check evaluated here would
+        // freeze at whatever the date was when the cache was written, and every
+        // cost from January would read half what it should.
+        'gemini-3.7-flash' => [
+            'input' => 1.50, 'output' => 7.50, 'cached' => 0.15,
+            'introductory' => ['until' => '2027-01-01', 'input' => 0.75, 'output' => 3.75, 'cached' => 0.075],
+        ],
         'gemini-3.5-flash' => ['input' => 1.50,   'output' => 9.00,  'cached' => 0.15],
         'gemini-3-flash-preview' => ['input' => 0.50,   'output' => 3.00,  'cached' => 0.05],
         'gemini-2.5-flash' => ['input' => 0.30,   'output' => 2.50,  'cached' => 0.03],
