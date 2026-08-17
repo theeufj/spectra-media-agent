@@ -28,11 +28,11 @@ export default function Pricing({ auth, plans = [] }) {
         <>
             <Head>
                 <title>Pricing - Simple, Transparent Plans | sitetospend</title>
-                <meta name="description" content="sitetospend pricing: Starter at $149/mo, Growth at $249/mo, Agency custom pricing. All plans include AI agents, campaign automation, and a 7-day free trial. No credit card required." />
+                <meta name="description" content="sitetospend pricing: Starter at $149/mo, Growth at $249/mo, Agency priced on application. All plans include AI agents, campaign automation, and a 7-day free trial. No credit card required." />
                 <meta property="og:title" content="Pricing — AI Ad Management from $149/mo | sitetospend" />
-                <meta property="og:description" content="Starter $149/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial. No credit card required." />
+                <meta property="og:description" content="Starter $149/mo, Growth $249/mo, Agency on application. AI agents, campaign automation, and a free trial. No credit card required." />
                 <meta name="twitter:title" content="Pricing — AI Ad Management from $149/mo | sitetospend" />
-                <meta name="twitter:description" content="Starter $149/mo, Growth $249/mo, Agency custom. AI agents, campaign automation, and a free trial." />
+                <meta name="twitter:description" content="Starter $149/mo, Growth $249/mo, Agency on application. AI agents, campaign automation, and a free trial." />
                 <script type="application/ld+json">{JSON.stringify({
                     "@context": "https://schema.org",
                     "@type": "FAQPage",
@@ -127,7 +127,10 @@ export default function Pricing({ auth, plans = [] }) {
                                                     <span className="text-xl font-medium">/{plan.billing_interval === 'year' ? 'year' : 'mo'}</span>
                                                 </>
                                             ) : !plan.is_free ? (
-                                                <span className="text-4xl font-extrabold">Custom</span>
+                                                // Priced on application. "Contact us" states the next
+                                                // action; "Custom" only describes the pricing and leaves
+                                                // the reader to work out what to do about it.
+                                                <span className="text-3xl font-extrabold">Contact us</span>
                                             ) : (
                                                 <>
                                                     <span className="text-4xl font-extrabold">$0</span>
