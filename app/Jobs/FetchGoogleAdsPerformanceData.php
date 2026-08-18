@@ -128,10 +128,10 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
                     foreach ($recommendations as $rec) {
                         Recommendation::create([
                             'campaign_id' => $this->campaign->id,
-                            'type' => $rec['type'],
-                            'target_entity' => $rec['target_entity'],
-                            'parameters' => $rec['parameters'],
-                            'rationale' => $rec['rationale'],
+                            'type' => $rec['type'] ?? 'UNKNOWN',
+                            'target_entity' => $this->recommendationTarget($rec),
+                            'parameters' => $this->recommendationParameters($rec),
+                            'rationale' => $rec['rationale'] ?? '',
                             'status' => 'pending',
                         ]);
                     }
@@ -150,6 +150,51 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
             // Do not release — burning tries against a locked/open-circuit state is wasteful.
             // The scheduler will re-dispatch on the next run.
         }
+    }
+
+    /**
+     * What a recommendation acts on.
+     *
+     * RecommendationGenerationService emits target_campaign_id or keyword_text
+     * depending on the type, and the LLM path emits whatever the model returned.
+     * This job read 'target_entity' and 'parameters' — keys none of those shapes
+     * produce — so every fetch threw "Undefined array key", released, and burned
+     * all five retries. Fourteen failed jobs in a day, and no recommendation was
+     * ever stored from this path.
+     *
+     * @param  array<string, mixed>  $rec
+     * @return array<string, mixed>
+     */
+    private function recommendationTarget(array $rec): array
+    {
+        foreach (['target_entity', 'target_campaign_id', 'keyword_text', 'target'] as $key) {
+            if (! empty($rec[$key])) {
+                return is_array($rec[$key]) ? $rec[$key] : [$key => $rec[$key]];
+            }
+        }
+
+        return ['campaign_id' => $this->campaign->google_ads_campaign_id];
+    }
+
+    /**
+     * The action payload, which is everything that is not narrative.
+     *
+     * Keeping the unrecognised keys matters more than naming them: a shape this
+     * job does not know about is still worth storing, and dropping it silently
+     * is how the original assumption survived.
+     *
+     * @param  array<string, mixed>  $rec
+     * @return array<string, mixed>
+     */
+    private function recommendationParameters(array $rec): array
+    {
+        if (! empty($rec['parameters']) && is_array($rec['parameters'])) {
+            return $rec['parameters'];
+        }
+
+        return collect($rec)
+            ->except(['type', 'rationale', 'target_entity', 'parameters'])
+            ->all();
     }
 
     /**
