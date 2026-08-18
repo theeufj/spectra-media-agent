@@ -36,6 +36,26 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
 
     public function __construct(public Customer $customer) {}
 
+    /**
+     * Is this a currency Google will accept?
+     *
+     * Deliberately a real check rather than a length test: "DOL" is three
+     * characters and means nothing.
+     */
+    private function isValidCurrency(string $code): bool
+    {
+        if (! preg_match('/^[A-Z]{3}$/', $code)) {
+            return false;
+        }
+
+        return in_array($code, [
+            'AUD', 'CAD', 'CHF', 'CNY', 'DKK', 'EUR', 'GBP', 'HKD', 'IDR', 'ILS',
+            'INR', 'JPY', 'KRW', 'MXN', 'MYR', 'NOK', 'NZD', 'PHP', 'PLN', 'SEK',
+            'SGD', 'THB', 'TRY', 'TWD', 'USD', 'VND', 'ZAR', 'BRL', 'ARS', 'CLP',
+            'COP', 'CZK', 'HUF', 'NGN', 'AED', 'SAR', 'EGP', 'PKR', 'BDT', 'LKR',
+        ], true);
+    }
+
     public function handle(): void
     {
         $customer = $this->customer->fresh();
@@ -75,8 +95,30 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
         $managerId = preg_replace('/[^0-9]/', '', $mcc->google_customer_id);
 
         // Google requires both, and rejects the call rather than guessing.
-        $currency = $customer->currency_code ?: 'AUD';
+        $currency = strtoupper(trim((string) $customer->currency_code));
         $timezone = $customer->timezone ?: config('app.timezone');
+
+        // An account's currency cannot be changed after it is created, ever.
+        // Customer 11 carried "DOL", which is not an ISO 4217 code at all — so a
+        // bad value here does not produce a failed call to retry, it produces a
+        // permanently wrong account. Refuse and say so instead.
+        if (! $this->isValidCurrency($currency)) {
+            Log::error('ProvisionGoogleAdsAccount: refusing to create an account with an unusable currency', [
+                'customer_id' => $customer->id,
+                'currency_code' => $customer->currency_code,
+            ]);
+
+            AgentActivity::record(
+                'onboarding',
+                'google_ads_account_blocked',
+                'Cannot create a Google Ads account for "'.$customer->name.'": currency "'.$customer->currency_code.'" is not a valid ISO 4217 code, and an account\'s currency cannot be changed later.',
+                $customer->id,
+                null,
+                ['currency_code' => $customer->currency_code]
+            );
+
+            return;
+        }
 
         $result = app(CreateAndLinkManagedAccount::class)(
             $managerId,

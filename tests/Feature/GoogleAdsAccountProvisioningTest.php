@@ -90,6 +90,27 @@ class GoogleAdsAccountProvisioningTest extends TestCase
         $this->assertSame('9999999999', $customer->fresh()->google_ads_customer_id);
     }
 
+    public function test_an_invalid_currency_blocks_creation_rather_than_producing_a_wrong_account(): void
+    {
+        // A Google Ads account's currency can never be changed after creation.
+        // One customer carried "DOL", which is not an ISO 4217 code — so a bad
+        // value does not produce a failed call to retry, it produces a
+        // permanently wrong account.
+        $customer = Customer::factory()->create([
+            'google_ads_customer_id' => null,
+            'currency_code' => 'DOL',
+            'is_sandbox' => false,
+        ]);
+
+        (new ProvisionGoogleAdsAccount($customer))->handle();
+
+        $this->assertNull($customer->fresh()->google_ads_customer_id);
+        $this->assertDatabaseHas('agent_activities', [
+            'customer_id' => $customer->id,
+            'action' => 'google_ads_account_blocked',
+        ]);
+    }
+
     public function test_the_job_skips_a_customer_whose_link_became_pending(): void
     {
         $customer = Customer::factory()->create(['google_ads_customer_id' => null, 'is_sandbox' => false]);
