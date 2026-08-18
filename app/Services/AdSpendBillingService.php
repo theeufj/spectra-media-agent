@@ -148,7 +148,7 @@ class AdSpendBillingService
 
             // Deduct from credit balance
             if ($credit->current_balance >= $actualSpend) {
-                $credit->deduct($actualSpend, 'Daily ad spend - '.now()->subDay()->format('Y-m-d'));
+                $credit->deduct($actualSpend, 'Daily ad spend - '.$this->billingDate($customer));
                 $result['success'] = true;
                 $result['action_taken'] = 'Deducted from credit balance';
 
@@ -160,7 +160,7 @@ class AdSpendBillingService
 
                 // Deduct whatever is available
                 if ($credit->current_balance > 0) {
-                    $credit->deduct($credit->current_balance, 'Daily ad spend (partial) - '.now()->subDay()->format('Y-m-d'));
+                    $credit->deduct($credit->current_balance, 'Daily ad spend (partial) - '.$this->billingDate($customer));
                 }
 
                 // Try to charge the shortfall plus replenishment
@@ -174,7 +174,7 @@ class AdSpendBillingService
 
                 if ($chargeResult['success']) {
                     $credit->addCredit($totalToCharge, 'Credit replenishment', $chargeResult['charge_id']);
-                    $credit->deduct($shortfall, 'Daily ad spend (remaining) - '.now()->subDay()->format('Y-m-d'));
+                    $credit->deduct($shortfall, 'Daily ad spend (remaining) - '.$this->billingDate($customer));
                     $credit->restoreAccount();
                     $result['success'] = true;
                     $result['action_taken'] = 'Charged card and replenished credit';
@@ -400,6 +400,32 @@ class AdSpendBillingService
      * Uses campaign platform IDs directly — not strategy deployment status, which can be
      * missing for campaigns deployed outside the strategy wizard or still in 'deploying' state.
      */
+    /**
+     * The day being billed, in the advertising account's own timezone.
+     *
+     * Ad platforms report by their account's timezone; this application runs in
+     * UTC. For an Australian account that is ten hours apart, so now()->subDay()
+     * asks for 17 August while the account has already closed off the 18th —
+     * billing sat permanently a day behind, and every reconciliation compared
+     * mismatched windows and reported a divergence that was really an offset.
+     *
+     * Falls back to the app timezone when a customer has none recorded, which
+     * is the previous behaviour rather than a guess.
+     */
+    protected function billingDate(Customer $customer): string
+    {
+        $timezone = $customer->timezone ?: config('app.timezone');
+
+        try {
+            return now()->setTimezone($timezone)->subDay()->toDateString();
+        } catch (\Throwable $e) {
+            // An invalid timezone string must not stop billing entirely.
+            report($e);
+
+            return now()->subDay()->toDateString();
+        }
+    }
+
     protected function getActualAdSpend(Customer $customer): float
     {
         $totalSpend = 0;
@@ -456,7 +482,7 @@ class AdSpendBillingService
     {
         try {
             return (float) \App\Models\GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
-                ->where('date', now()->subDay()->toDateString())
+                ->where('date', $this->billingDate($customer))
                 ->sum('cost');
         } catch (\Exception $e) {
             Log::warning('AdSpendBilling: Failed to get Google Ads spend', [
@@ -487,7 +513,7 @@ class AdSpendBillingService
             $insightService = new \App\Services\FacebookAds\InsightService($customer);
 
             // Get yesterday's spend
-            $yesterday = now()->subDay()->format('Y-m-d');
+            $yesterday = $this->billingDate($customer);
 
             $insights = $insightService->getCampaignInsights(
                 $campaign->facebook_ads_campaign_id,
@@ -531,7 +557,7 @@ class AdSpendBillingService
         }
 
         try {
-            $yesterday = now()->subDay()->toDateString();
+            $yesterday = $this->billingDate($customer);
             $spend = \App\Models\MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
                 ->where('date', $yesterday)
                 ->sum('cost');
@@ -557,7 +583,7 @@ class AdSpendBillingService
         }
 
         try {
-            $yesterday = now()->subDay()->toDateString();
+            $yesterday = $this->billingDate($customer);
             $spend = \App\Models\LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
                 ->where('date', $yesterday)
                 ->sum('cost');
