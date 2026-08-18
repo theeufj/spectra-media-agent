@@ -52,8 +52,19 @@ class ApplyAdSpendReconciliation extends Command
             return self::FAILURE;
         }
 
-        $from = $this->option('from') ?: now()->subDays(14)->toDateString();
-        $to = $this->option('to') ?: now()->subDay()->toDateString();
+        $timezone = $customer->timezone ?: config('app.timezone');
+        $lastClosedDay = now()->setTimezone($timezone)->subDay()->toDateString();
+
+        $from = $this->option('from') ?: now()->setTimezone($timezone)->subDays(14)->toDateString();
+        $to = $this->option('to') ?: $lastClosedDay;
+
+        // Never reconcile a day still accruing. Posting a partial day and
+        // marking it done under-bills it permanently, because nothing revisits
+        // a day that already has a catch-up entry.
+        if ($to > $lastClosedDay) {
+            $this->warn("Ignoring dates after {$lastClosedDay} — that day has not closed in {$timezone} yet.");
+            $to = $lastClosedDay;
+        }
 
         $spend = $this->platformSpendByDay($customer, $from, $to);
 
@@ -84,11 +95,13 @@ class ApplyAdSpendReconciliation extends Command
                 continue;
             }
 
-            // What was already deducted that day, so a partial charge is topped
-            // up rather than charged again in full.
+            // Matched on the day the entry bills for, not the day it was
+            // written. Keying off created_at counted a catch-up posted on the
+            // 17th as covering the 17th's spend, which would skip a day as
+            // settled when it was not.
             $deducted = abs((float) AdSpendTransaction::where('ad_spend_credit_id', $credit->id)
                 ->where('type', 'deduction')
-                ->whereDate('created_at', $day)
+                ->where('description', 'like', '%'.$day)
                 ->sum('amount'));
 
             $owing = round($amount - $deducted, 2);
