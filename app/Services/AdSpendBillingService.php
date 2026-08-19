@@ -367,9 +367,18 @@ class AdSpendBillingService
     protected function chargeCustomer(Customer $customer, float $amount, string $description): array
     {
         try {
-            // Prefer the owner user; fall back to any user with a payment method
-            $user = $customer->users()->wherePivot('role', 'owner')->first()
-                ?? $customer->users()->get()->first(fn ($u) => $u->hasDefaultPaymentMethod());
+            // Prefer an owner who can actually pay, then anyone who can.
+            //
+            // This used to take the first owner and only fall back if there was
+            // no owner at all — so an owner without a card blocked the charge
+            // while a teammate's card sat unused. sitetospend has two owners;
+            // the one listed first has no payment method and the other has an
+            // Amex, so every charge failed with "No payment method on file"
+            // against an account that plainly had one.
+            $users = $customer->users()->get();
+
+            $user = $users->first(fn ($u) => ($u->pivot->role ?? null) === 'owner' && $u->hasDefaultPaymentMethod())
+                ?? $users->first(fn ($u) => $u->hasDefaultPaymentMethod());
 
             if (! $user || ! $user->hasDefaultPaymentMethod()) {
                 return [
