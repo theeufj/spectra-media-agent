@@ -139,6 +139,28 @@ class AdSpendBillingService
             $actualSpend = $this->getActualAdSpend($customer);
             $result['actual_spend'] = $actualSpend;
 
+            // Subtract anything already taken for that same day.
+            //
+            // The idempotency marker upstream is per customer per *run* date, so
+            // it does not stop a day being billed twice by two different paths.
+            // A reconciliation catch-up settled 18 August at 21:53, then the
+            // nightly run billed 18 August again the next morning — 246.56 taken
+            // for 207.70 of spend, balance to zero, account into grace period,
+            // while the campaign kept running.
+            $alreadyDeducted = $this->deductionsFor($credit, $this->billingDate($customer));
+
+            if ($alreadyDeducted > 0) {
+                $actualSpend = round($actualSpend - $alreadyDeducted, 2);
+                $result['actual_spend'] = $actualSpend;
+
+                Log::info('AdSpendBilling: part of this day was already deducted', [
+                    'customer_id' => $customer->id,
+                    'billing_date' => $this->billingDate($customer),
+                    'already_deducted' => $alreadyDeducted,
+                    'remaining' => $actualSpend,
+                ]);
+            }
+
             if ($actualSpend <= 0) {
                 $result['success'] = true;
                 $result['action_taken'] = 'No spend to bill';
@@ -412,6 +434,21 @@ class AdSpendBillingService
      * Falls back to the app timezone when a customer has none recorded, which
      * is the previous behaviour rather than a guess.
      */
+    /**
+     * What has already been taken for a given billing day.
+     *
+     * Matched on the day the entry bills for, which its description records —
+     * not on when the row was written, since a catch-up posted today may settle
+     * a day from last week.
+     */
+    protected function deductionsFor(AdSpendCredit $credit, string $billingDate): float
+    {
+        return abs((float) $credit->transactions()
+            ->where('type', 'deduction')
+            ->where('description', 'like', '%'.$billingDate)
+            ->sum('amount'));
+    }
+
     protected function billingDate(Customer $customer): string
     {
         $timezone = $customer->timezone ?: config('app.timezone');
