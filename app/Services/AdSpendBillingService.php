@@ -875,9 +875,15 @@ class AdSpendBillingService
         if ($chargeResult['success']) {
             $credit->addCredit($amount, $description ?? 'Manual credit top-up', $chargeResult['charge_id']);
 
+            // A successful charge is the answer to whatever the failure state was
+            // recording. Without this a manual top-up left the account in grace
+            // period, still counting up the failure ladder towards halved budgets
+            // and paused campaigns — with the money already taken.
+            $credit->restoreAccount();
+
             return [
                 'success' => true,
-                'new_balance' => $credit->current_balance,
+                'new_balance' => $credit->fresh()->current_balance,
                 'charge_id' => $chargeResult['charge_id'],
             ];
         }
