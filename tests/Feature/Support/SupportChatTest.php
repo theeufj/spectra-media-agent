@@ -311,6 +311,41 @@ class SupportChatTest extends TestCase
         $this->assertCount(4, SupportTicket::find($ticketId)->transcript);
     }
 
+    public function test_a_truncated_reply_is_tidied_rather_than_sent_mid_sentence(): void
+    {
+        $this->app->instance(GeminiService::class, new class extends GeminiService
+        {
+            public function __construct() {}
+
+            public function generateWithFunctionCalling(
+                string $model,
+                string $systemInstruction,
+                string $prompt,
+                array $tools,
+                callable $toolHandler,
+                array $config = [],
+                array $context = [],
+                int $maxToolCalls = 15
+            ): array {
+                return [
+                    'text' => 'You spent 1155.43 last month. Your CTR is 2.41 percent which is healthy. Next you should check whether your conv',
+                    'truncated' => true,
+                ];
+            }
+        });
+
+        $reply = $this->send(['message' => 'How are my ads doing?'])->json('reply');
+
+        // Cut back to the last complete sentence, with the handoff restored —
+        // it is what gets lost, since the prompt puts it last.
+        $this->assertStringNotContainsString('check whether your conv', $reply);
+        $this->assertStringContainsString('2.41 percent which is healthy.', $reply);
+        $this->assertStringContainsString('follow up by email', $reply);
+
+        $turn = collect(SupportTicket::latest('id')->first()->transcript)->firstWhere('role', 'assistant');
+        $this->assertTrue($turn['truncated']);
+    }
+
     // ── Abuse harness ────────────────────────────────────────────────────────
 
     public function test_a_ticket_belonging_to_someone_else_cannot_be_appended_to(): void

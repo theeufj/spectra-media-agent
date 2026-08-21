@@ -49,6 +49,7 @@ class MonitorSupportChatQuality implements ShouldQueue
         $answeredBlind = 0;      // should have consulted the account, did not
         $withUnsourced = 0;      // quoted a figure traceable to nothing
         $toolBacked = 0;
+        $truncated = 0;        // ran out of output budget mid-answer
         $flagged = [];
 
         SupportTicket::where('source', 'chatbot')
@@ -56,7 +57,7 @@ class MonitorSupportChatQuality implements ShouldQueue
             ->whereNotNull('transcript')
             ->chunkById(100, function ($tickets) use (
                 $audit, &$ticketsReviewed, &$repliesReviewed,
-                &$answeredBlind, &$withUnsourced, &$toolBacked, &$flagged
+                &$answeredBlind, &$withUnsourced, &$toolBacked, &$truncated, &$flagged
             ) {
                 foreach ($tickets as $ticket) {
                     // Per ticket, so one malformed transcript cannot abort the
@@ -79,6 +80,17 @@ class MonitorSupportChatQuality implements ShouldQueue
 
                             if ($toolsUsed !== []) {
                                 $toolBacked++;
+                            }
+
+                            // A reply cut off at the token ceiling still reads
+                            // as prose, so nothing downstream notices it. The
+                            // customer got half an answer.
+                            if ($turn['truncated'] ?? false) {
+                                $truncated++;
+                                $flagged[] = [
+                                    'ticket_id' => $ticket->id,
+                                    'issue' => 'reply_truncated_at_token_limit',
+                                ];
                             }
 
                             // Only meaningful for accounts that HAVE data to
@@ -125,9 +137,9 @@ class MonitorSupportChatQuality implements ShouldQueue
             // or stopped recording.
             actions: $repliesReviewed,
             errors: $answeredBlind,
-            warnings: $withUnsourced,
+            warnings: $withUnsourced + $truncated,
             scope: "{$ticketsReviewed} chat tickets, {$repliesReviewed} replies",
-            note: $this->summarise($repliesReviewed, $toolRate, $answeredBlind, $withUnsourced),
+            note: $this->summarise($repliesReviewed, $toolRate, $answeredBlind, $withUnsourced, $truncated),
             details: [
                 'tickets_reviewed' => $ticketsReviewed,
                 'replies_reviewed' => $repliesReviewed,
@@ -135,6 +147,7 @@ class MonitorSupportChatQuality implements ShouldQueue
                 'tool_use_rate_pct' => $toolRate,
                 'answered_without_consulting_account' => $answeredBlind,
                 'replies_with_unsourced_figures' => $withUnsourced,
+                'replies_truncated' => $truncated,
                 // Capped: this lands in a jsonb column read by a dashboard, not
                 // an archive. The counts above are the metric; these are leads.
                 'flagged' => array_slice($flagged, 0, 25),
@@ -142,7 +155,7 @@ class MonitorSupportChatQuality implements ShouldQueue
         );
     }
 
-    private function summarise(int $replies, float $toolRate, int $blind, int $unsourced): string
+    private function summarise(int $replies, float $toolRate, int $blind, int $unsourced, int $truncated): string
     {
         if ($replies === 0) {
             return 'No support chat replies in the window — nothing to review.';
@@ -150,8 +163,9 @@ class MonitorSupportChatQuality implements ShouldQueue
 
         return sprintf(
             '%d replies reviewed. %.1f%% consulted the account. %d answered an account question without '
-            .'looking. %d quoted figures not traceable to a tool (review, not necessarily wrong).',
-            $replies, $toolRate, $blind, $unsourced,
+            .'looking. %d quoted figures not traceable to a tool (review, not necessarily wrong). '
+            .'%d ran out of output budget mid-answer.',
+            $replies, $toolRate, $blind, $unsourced, $truncated,
         );
     }
 

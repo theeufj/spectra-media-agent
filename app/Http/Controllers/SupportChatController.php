@@ -43,6 +43,15 @@ class SupportChatController extends Controller
      */
     private ?SupportChatTools $tools = null;
 
+    /**
+     * Whether the model ran out of output budget mid-answer.
+     *
+     * Recorded on the turn because a truncated reply is a quality problem that
+     * is invisible afterwards — it is a string, it reads as prose, and it ends
+     * mid-sentence.
+     */
+    private bool $replyWasTruncated = false;
+
     public function __construct(
         private readonly GeminiService $gemini,
         private readonly SupportChatGuard $guard,
@@ -98,6 +107,7 @@ class SupportChatController extends Controller
         $this->appendToTranscript($ticket, 'assistant', $reply, [
             'tools_used' => $this->tools?->toolsUsed() ?? [],
             'tool_numbers' => $this->tools?->numbersReturned() ?? [],
+            'truncated' => $this->replyWasTruncated,
         ]);
 
         // Emailed once, when the conversation opens. Follow-up messages land on
@@ -179,7 +189,13 @@ class SupportChatController extends Controller
 
             $text = trim($response['text'] ?? '');
 
-            return $text !== '' ? $text : SupportChatPrompt::fallbackReply();
+            if ($text === '') {
+                return SupportChatPrompt::fallbackReply();
+            }
+
+            $this->replyWasTruncated = (bool) ($response['truncated'] ?? false);
+
+            return $this->replyWasTruncated ? SupportChatPrompt::tidyTruncated($text) : $text;
         } catch (\Throwable $e) {
             report($e);
             Log::error('Support chat AI reply failed; ticket was still raised', [
@@ -218,7 +234,11 @@ class SupportChatController extends Controller
             toolHandler: fn (string $name, array $args) => $tools->handle($name, $args),
             config: [
                 'temperature' => 0.4,   // support answers should be dull and repeatable
-                'maxOutputTokens' => 800,
+                // Shared with the model's reasoning across every tool turn, not
+                // just the final prose. At 800 a four-tool answer came back cut
+                // off mid-sentence, which reads as the assistant having a
+                // stroke rather than as a limit being hit.
+                'maxOutputTokens' => 2000,
             ],
             context: ['customer_id' => $customer->id, 'task_type' => 'conversational'],
             maxToolCalls: 4,

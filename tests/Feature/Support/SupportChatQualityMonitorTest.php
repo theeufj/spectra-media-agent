@@ -166,6 +166,23 @@ class SupportChatQualityMonitorTest extends TestCase
         $this->assertSame(0, $this->review()->warnings);
     }
 
+    public function test_a_truncated_reply_is_flagged(): void
+    {
+        // A reply cut at the token ceiling is still a string and still reads as
+        // prose, so nothing downstream notices the customer got half an answer.
+        $this->chatTicket([
+            ['role' => 'customer', 'text' => 'How are my ads doing?'],
+            ['role' => 'assistant', 'text' => 'You spent 1234.56 and your CTR is',
+                'tools_used' => ['get_performance_summary'], 'tool_numbers' => [1234.56], 'truncated' => true],
+        ]);
+
+        $run = $this->review();
+
+        $this->assertSame(1, $run->details['replies_truncated']);
+        $this->assertSame(1, $run->warnings);
+        $this->assertSame(0, $run->errors);
+    }
+
     // ── The run trace ────────────────────────────────────────────────────────
 
     public function test_an_empty_window_records_a_no_op_rather_than_silence(): void

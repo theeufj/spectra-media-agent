@@ -102,6 +102,38 @@ PROMPT;
     }
 
     /**
+     * Make a reply that ran out of output budget presentable.
+     *
+     * A response cut at the token ceiling is a string, reads as prose, and ends
+     * mid-sentence — so it reaches the customer looking like the assistant had
+     * a stroke. Trimming back to the last completed sentence and restoring the
+     * handoff (which is what gets cut, since it comes last) turns a broken
+     * answer into a short one.
+     *
+     * Deliberately not discarded in favour of the fallback: the part that did
+     * arrive is usually the substance, and throwing away a correct paragraph
+     * because the closing line was lost serves nobody.
+     */
+    public static function tidyTruncated(string $text): string
+    {
+        $lastBreak = max(
+            strrpos($text, '. ') !== false ? strrpos($text, '. ') + 1 : 0,
+            strrpos($text, ".\n") !== false ? strrpos($text, ".\n") + 1 : 0,
+            str_ends_with(rtrim($text), '.') ? strlen(rtrim($text)) : 0,
+        );
+
+        $trimmed = $lastBreak > 0 ? rtrim(substr($text, 0, $lastBreak)) : rtrim($text);
+
+        // Nothing survived a sentence boundary — the fallback is more use than
+        // a fragment.
+        if ($trimmed === '') {
+            return self::fallbackReply();
+        }
+
+        return $trimmed."\n\nI've sent this to the team as well — someone will follow up by email.";
+    }
+
+    /**
      * Shown when the model is unavailable or refuses.
      *
      * Deliberately not an error. The ticket has already been saved and the team
