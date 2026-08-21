@@ -6,6 +6,7 @@ import NotificationBell from '@/Components/NotificationBell';
 import ImpersonationBanner from '@/Components/ImpersonationBanner';
 import OnboardingTour, { startTour } from '@/Components/OnboardingTour';
 import TenantTheme from '@/Components/TenantTheme';
+import SupportChat from '@/Components/SupportChat';
 import { useToast } from '@/Components/Toast';
 import { Link, usePage, router } from '@inertiajs/react';
 import { useState, useEffect, useRef } from 'react';
@@ -703,6 +704,13 @@ export default function AuthenticatedLayout({ header, children }) {
 
             {/* Onboarding tour for new users */}
             <OnboardingTour />
+
+            {/*
+              Mounted on the layout rather than per page, so it is present on
+              every in-app screen — including the admin console, which uses this
+              same layout.
+            */}
+            <SupportChat />
         </div>
     );
 }

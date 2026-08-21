@@ -293,6 +293,13 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth'])->group(function () {
+    // In-app support chat. Throttled because each message costs an AI call and
+    // fans out an email to every admin — a stuck client retrying would otherwise
+    // spam the whole team.
+    Route::post('/api/support/chat', [App\Http\Controllers\SupportChatController::class, 'send'])
+        ->middleware('throttle:10,1')
+        ->name('support.chat.send');
+
     Route::get('/support-tickets', [App\Http\Controllers\SupportTicketController::class, 'index'])->name('support-tickets.index');
     Route::get('/support-tickets/create', [App\Http\Controllers\SupportTicketController::class, 'create'])->name('support-tickets.create');
     Route::post('/support-tickets', [App\Http\Controllers\SupportTicketController::class, 'store'])->name('support-tickets.store');
@@ -510,7 +517,10 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
-    Route::get('dashboard', [App\Http\Controllers\AdminController::class, 'index'])->name('admin.dashboard');
+    // The admin landing page. Also the post-2FA redirect target (see
+    // Admin\TwoFactorController) and both nav links in AuthenticatedLayout, so
+    // it must render rather than redirect.
+    Route::get('dashboard', [App\Http\Controllers\Admin\UsageDashboardController::class, 'index'])->name('admin.dashboard');
     Route::get('automation-health', [\App\Http\Controllers\AgentActivityController::class, 'healthPage'])->name('admin.automation-health');
     Route::get('help', fn () => \Inertia\Inertia::render('Admin/PlatformSetupGuide'))->name('admin.help');
     Route::get('users', [App\Http\Controllers\Admin\UserController::class, 'usersIndex'])->name('admin.users.index');

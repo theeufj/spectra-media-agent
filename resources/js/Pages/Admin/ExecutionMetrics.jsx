@@ -1,6 +1,7 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, usePage } from '@inertiajs/react';
 import SideNav from './SideNav';
+import MetricCard from '@/Components/MetricCard';
 import { useState } from 'react';
 import { Line, Bar, Doughnut } from 'react-chartjs-2';
 import {
@@ -29,35 +30,6 @@ ChartJS.register(
     Tooltip,
     Legend,
     Filler
-);
-
-const MetricCard = ({ title, value, subtitle, icon, trend }) => (
-    <div className="bg-white rounded-lg shadow p-6">
-        <div className="flex items-center justify-between">
-            <div>
-                <p className="text-sm font-medium text-gray-600">{title}</p>
-                <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
-                {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
-            </div>
-            {icon && (
-                <div className="text-flame-orange-600">
-                    {icon}
-                </div>
-            )}
-        </div>
-        {trend && (
-            <div className={`mt-4 flex items-center text-sm ${trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
-                    {trend > 0 ? (
-                        <path fillRule="evenodd" d="M5.293 9.707a1 1 0 010-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 01-1.414 1.414L11 7.414V15a1 1 0 11-2 0V7.414L6.707 9.707a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                    ) : (
-                        <path fillRule="evenodd" d="M14.707 10.293a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 111.414-1.414L9 12.586V5a1 1 0 012 0v7.586l2.293-2.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    )}
-                </svg>
-                {Math.abs(trend)}% vs last period
-            </div>
-        )}
-    </div>
 );
 
 const ErrorTable = ({ errors }) => (
@@ -345,6 +317,7 @@ export default function ExecutionMetrics({ auth }) {
                         {/* Overview Metrics */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                             <MetricCard
+                                variant="plain"
                                 title="Total Executions"
                                 value={metrics.overview?.total_executions || 0}
                                 subtitle={`${metrics.overview?.successful_executions || 0} successful, ${metrics.overview?.failed_executions || 0} failed`}
@@ -355,6 +328,7 @@ export default function ExecutionMetrics({ auth }) {
                                 }
                             />
                             <MetricCard
+                                variant="plain"
                                 title="Success Rate"
                                 value={`${metrics.overview?.success_rate || 0}%`}
                                 subtitle="Overall execution success"
@@ -365,6 +339,7 @@ export default function ExecutionMetrics({ auth }) {
                                 }
                             />
                             <MetricCard
+                                variant="plain"
                                 title="Avg Execution Time"
                                 value={`${metrics.overview?.avg_execution_time || 0}s`}
                                 subtitle="Average time per deployment"
@@ -375,6 +350,7 @@ export default function ExecutionMetrics({ auth }) {
                                 }
                             />
                             <MetricCard
+                                variant="plain"
                                 title="Error Recovery"
                                 value={metrics.overview?.error_recovery_attempts || 0}
                                 subtitle="AI recovery attempts made"
@@ -385,6 +361,7 @@ export default function ExecutionMetrics({ auth }) {
                                 }
                             />
                             <MetricCard
+                                variant="plain"
                                 title="Budget Accuracy"
                                 value={`${metrics.budget?.avg_accuracy || 0}%`}
                                 subtitle={`${metrics.budget?.total_campaigns || 0} campaigns analyzed`}
@@ -395,6 +372,7 @@ export default function ExecutionMetrics({ auth }) {
                                 }
                             />
                             <MetricCard
+                                variant="plain"
                                 title="AI Implementation Rate"
                                 value={`${metrics.ai_quality?.avg_implementation_rate || 0}%`}
                                 subtitle={`${metrics.ai_quality?.total_analyzed || 0} strategies analyzed`}

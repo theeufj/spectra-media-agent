@@ -117,6 +117,48 @@ export default function Show({ ticket }) {
                                         {ticket.description}
                                     </div>
                                 </div>
+
+                                {/*
+                                  The full chat, including everything the assistant said.
+                                  It answers customers with no human in the loop, so this is
+                                  the only place its replies can actually be reviewed — and
+                                  it is what stops a human reply contradicting the bot.
+                                */}
+                                {ticket.transcript?.length > 0 && (
+                                    <div>
+                                        <h4 className="text-sm font-medium text-gray-700 mb-1">Chat transcript</h4>
+                                        <p className="text-xs text-gray-500 mb-3">
+                                            The customer has already been shown the assistant's replies.
+                                        </p>
+                                        <div className="space-y-2">
+                                            {ticket.transcript.map((turn, i) => {
+                                                const isBot = turn.role === 'assistant';
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        className={`rounded-lg p-4 text-sm whitespace-pre-wrap ${
+                                                            isBot
+                                                                ? 'bg-flame-orange-50 border-l-4 border-flame-orange-500 text-gray-800'
+                                                                : 'bg-white border border-gray-200 text-gray-800'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+                                                                {isBot ? 'Assistant' : 'Customer'}
+                                                            </span>
+                                                            {turn.at && (
+                                                                <span className="text-xs text-gray-400">
+                                                                    {new Date(turn.at).toLocaleString()}
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        {turn.text}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

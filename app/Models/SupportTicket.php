@@ -18,6 +18,8 @@ class SupportTicket extends Model
         'priority',
         'status',
         'category',
+        'source',
+        'transcript',
         'admin_response',
         'assigned_to',
         'resolved_at',
@@ -25,18 +27,22 @@ class SupportTicket extends Model
 
     protected $casts = [
         'resolved_at' => 'datetime',
+        'transcript' => 'array',
     ];
 
+    /** @return BelongsTo<User, $this> */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
     }
 
+    /** @return BelongsTo<Customer, $this> */
     public function customer(): BelongsTo
     {
         return $this->belongsTo(Customer::class);
     }
 
+    /** @return BelongsTo<User, $this> */
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assigned_to');

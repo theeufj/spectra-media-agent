@@ -315,6 +315,28 @@ class User extends Authenticatable implements MustVerifyEmail
     }
 
     /**
+     * Everyone who should receive platform-wide admin alerts.
+     *
+     * Resolved from the admin role at send time rather than from a configured
+     * address list, so it cannot drift: promote someone and they start
+     * receiving support tickets, demote them and they stop. It replaces
+     * config('app.admin_email'), which was a single address — every ticket
+     * went to one inbox regardless of who was actually running support.
+     *
+     * 'support' is deliberately excluded: support staff work the admin queue
+     * directly, and the point of this is to page the people accountable for it.
+     *
+     * @return \Illuminate\Support\Collection<int, User>
+     */
+    public static function admins(): \Illuminate\Support\Collection
+    {
+        return static::whereHas('roles', fn ($q) => $q->where('name', 'admin'))
+            ->whereNull('banned_at')
+            ->whereNotNull('email')
+            ->get();
+    }
+
+    /**
      * Is this user a full admin, as opposed to support?
      *
      * The distinction guards destructive and credential-bearing actions. It is

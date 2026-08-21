@@ -3,37 +3,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import SideNav from './SideNav';
 import ConfirmationModal from '@/Components/ConfirmationModal';
-
-const MetricCard = ({ title, value, subtitle, icon, trend, color = 'flame' }) => {
-    const colors = {
-        flame: 'bg-flame-orange-500',
-        green: 'bg-green-500',
-        blue: 'bg-blue-500',
-        purple: 'bg-purple-500',
-        orange: 'bg-orange-500',
-        red: 'bg-red-500',
-    };
-
-    return (
-        <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-                <div className={`flex-shrink-0 p-3 rounded-lg ${colors[color]}`}>
-                    {icon}
-                </div>
-                <div className="ml-4 flex-1">
-                    <p className="text-sm font-medium text-gray-500">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{value}</p>
-                    {subtitle && <p className="text-xs text-gray-400">{subtitle}</p>}
-                </div>
-                {trend !== undefined && (
-                    <div className={`text-sm font-medium ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
+import MetricCard from '@/Components/MetricCard';
 
 const RevenueChart = ({ data }) => {
     const maxRevenue = Math.max(...data.map(d => d.revenue), 1);

@@ -14,6 +14,29 @@ class Campaign extends Model
     use HasFactory;
 
     /**
+     * `primary_status` values in which the ad platform reports the campaign as
+     * actually delivering.
+     *
+     * LIMITED and LEARNING count: both serve impressions, just constrained or
+     * still calibrating. PENDING does not — it is awaiting review. This is
+     * deliberately NOT the same question as `status === Active`; the two drift
+     * by design and conflating them caused BILL-8. See CampaignStatus.
+     */
+    public const SERVING_PRIMARY_STATUSES = ['ELIGIBLE', 'LIMITED', 'LEARNING'];
+
+    /** Campaigns the platform reports as delivering right now. */
+    public function scopeServing($query)
+    {
+        return $query->whereIn('primary_status', self::SERVING_PRIMARY_STATUSES);
+    }
+
+    /** Is the platform reporting this campaign as delivering? */
+    public function isServing(): bool
+    {
+        return in_array($this->primary_status, self::SERVING_PRIMARY_STATUSES, true);
+    }
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
@@ -209,6 +232,46 @@ class Campaign extends Model
     public function versions(): HasMany
     {
         return $this->hasMany(CampaignVersion::class);
+    }
+
+    /**
+     * Per-platform daily performance rows.
+     *
+     * These are the tables that are actually populated — FetchGoogleAdsPerformanceData,
+     * FetchFacebookAdsPerformanceData, MicrosoftAds\PerformanceService and
+     * LinkedInAds\PerformanceService each write one row per campaign per date.
+     * (Contrast Strategy::performanceData(), whose table has no writer at all.)
+     *
+     * Declared here because YesterdayPerformanceSummaryTest already queries
+     * `campaigns.googleAdsPerformanceData` through whereHas, which would have
+     * thrown the moment that test ran outside its RUN_INTEGRATION_TESTS guard.
+     *
+     * Money lives in `cost`, and there is one row per DATE — sum over a range
+     * rather than taking first().
+     *
+     * @return HasMany<GoogleAdsPerformanceData, $this>
+     */
+    public function googleAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(GoogleAdsPerformanceData::class);
+    }
+
+    /** @return HasMany<FacebookAdsPerformanceData, $this> */
+    public function facebookAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(FacebookAdsPerformanceData::class);
+    }
+
+    /** @return HasMany<MicrosoftAdsPerformanceData, $this> */
+    public function microsoftAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(MicrosoftAdsPerformanceData::class);
+    }
+
+    /** @return HasMany<LinkedInAdsPerformanceData, $this> */
+    public function linkedInAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(LinkedInAdsPerformanceData::class);
     }
 
     /**

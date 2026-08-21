@@ -963,7 +963,13 @@ class SelfHealingAgent
                 // Try to check and fix campaign status
                 try {
                     $service = new \App\Services\LinkedInAds\CampaignService($customer);
-                    $linkedInCampaignId = $campaign->linkedin_ads_campaign_id;
+                    // `linkedin_campaign_id`, not `linkedin_ads_campaign_id`:
+                    // LinkedIn is the one platform that does not carry the
+                    // `_ads_` infix. Reading the wrong name gave null, so the
+                    // healer silently gave up on every LinkedIn campaign
+                    // instead of restarting the paused ones it had just
+                    // diagnosed as serving zero impressions.
+                    $linkedInCampaignId = $campaign->linkedin_campaign_id;
 
                     if ($linkedInCampaignId) {
                         $campaignData = $service->getCampaign($linkedInCampaignId);
