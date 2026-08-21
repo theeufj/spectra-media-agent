@@ -422,6 +422,12 @@ Schedule::command('model:prune', [
     ],
 ])->daily()->withoutOverlapping();
 
+// Which accounts cannot yet run ads, and why. Nothing measured the gap between
+// signing up and advertising, so accounts sat blocked with no one seeing it.
+Schedule::job(new \App\Jobs\MonitorAccountReadiness)
+    ->dailyAt('07:00')
+    ->withoutOverlapping();
+
 // Review what the support assistant has been telling customers: did it consult
 // the account before answering account questions, and can the figures it quoted
 // be traced to a tool? Both are only checkable after the fact, from the stored

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\FeatureUsageDaily;
+use App\Services\Analytics\AccountReadiness;
 use App\Services\Analytics\AdoptionMetrics;
 use App\Services\Analytics\UsagePeriod;
 use App\Services\Analytics\UsageSummary;
@@ -37,7 +38,7 @@ use Inertia\Response;
 class UsageDashboardController extends Controller
 {
     /** Deliberately an allowlist: an unknown ?tab= shows the dashboard, not a 500. */
-    private const TABS = ['engagement', 'retention', 'accounts', 'economics'];
+    private const TABS = ['engagement', 'readiness', 'retention', 'accounts', 'economics'];
 
     private const DEFAULT_TAB = 'engagement';
 
@@ -79,6 +80,7 @@ class UsageDashboardController extends Controller
     {
         return match ($tab) {
             'engagement' => $this->engagement($period),
+            'readiness' => ['readiness' => Inertia::defer(fn () => (new AccountReadiness)->report(), 'readiness')],
             // Phases 2 and 3. The tabs are listed but disabled in the UI rather
             // than hidden, so it is obvious what is coming and obvious that its
             // absence is intentional.
@@ -114,6 +116,7 @@ class UsageDashboardController extends Controller
     {
         return [
             ['key' => 'engagement', 'label' => 'Engagement', 'enabled' => true],
+            ['key' => 'readiness', 'label' => 'Readiness', 'enabled' => true],
             ['key' => 'retention', 'label' => 'Retention', 'enabled' => false],
             ['key' => 'accounts', 'label' => 'Accounts', 'enabled' => false],
             ['key' => 'economics', 'label' => 'Unit economics', 'enabled' => false],

@@ -2,6 +2,7 @@ import { router, Link } from '@inertiajs/react';
 import AdminShell from './AdminShell';
 import MetricCard from '@/Components/MetricCard';
 import EngagementTab from './Usage/EngagementTab';
+import ReadinessTab from './Usage/ReadinessTab';
 import '@/Components/Charts/registerCharts';
 
 /**
@@ -23,6 +24,7 @@ export default function UsageDashboard({
     timeToValue,
     featureBreadth,
     breadthHistogram,
+    readiness,
 }) {
     const navigate = (params) =>
         router.get(route('admin.dashboard'), { tab, period: period.key, ...params }, {
@@ -112,6 +114,8 @@ export default function UsageDashboard({
                     })}
                 </nav>
             </div>
+
+            {tab === 'readiness' && <ReadinessTab readiness={readiness} />}
 
             {tab === 'engagement' && (
                 <EngagementTab
