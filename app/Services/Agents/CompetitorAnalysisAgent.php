@@ -289,16 +289,14 @@ class CompetitorAnalysisAgent
         $brandGuideline = $customer->brandGuideline;
         if ($brandGuideline) {
             if ($brandGuideline->unique_selling_propositions) {
-                $usps = is_array($brandGuideline->unique_selling_propositions)
-                    ? implode(', ', $brandGuideline->unique_selling_propositions)
-                    : $brandGuideline->unique_selling_propositions;
+                // These fields are cast to array on the model, so the
+                // is_array() guard that used to be here could never be false.
+                $usps = implode(', ', $brandGuideline->unique_selling_propositions);
                 $context .= "USPs: {$usps}\n";
             }
 
             if ($brandGuideline->target_audience) {
-                $audience = is_array($brandGuideline->target_audience)
-                    ? implode(', ', $brandGuideline->target_audience)
-                    : $brandGuideline->target_audience;
+                $audience = implode(', ', $brandGuideline->target_audience);
                 $context .= "Target Audience: {$audience}\n";
             }
         }

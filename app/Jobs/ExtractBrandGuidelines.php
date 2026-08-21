@@ -54,6 +54,23 @@ class ExtractBrandGuidelines implements ShouldQueue
 
                 $totalPages = CustomerPage::where('customer_id', $this->customer->id)->count();
 
+                // Everything needed to write their first campaign is now known:
+                // brand voice, audience, messaging, and every page they sell
+                // from. Asking them to describe that business back to us in a
+                // nine-step wizard is why sixteen accounts were crawled and
+                // none of them built anything.
+                //
+                // The job decides for itself whether this account qualifies and
+                // never throws — a failure costs the customer a bonus, not
+                // their onboarding. It sends its own email when it succeeds, so
+                // the crawl notice below is only for accounts that do not
+                // qualify.
+                if (GenerateFirstCampaign::qualifies($this->customer)) {
+                    GenerateFirstCampaign::dispatch($this->customer);
+
+                    return;
+                }
+
                 // Notify all users: brand extraction is complete and the knowledge base is ready
                 foreach ($this->customer->users as $user) {
                     Mail::to($user->email)->queue(new SitemapCrawlCompleted(

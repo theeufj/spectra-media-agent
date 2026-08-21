@@ -63,7 +63,7 @@ class DeploymentController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function deploy(Request $request)
+    public function deploy(Request $request): \Illuminate\Http\RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $user = $request->user();
 
@@ -151,6 +151,23 @@ class DeploymentController extends Controller
             'has_subscription' => $user->subscribed('default'),
             'has_payment_method' => $user->hasDefaultPaymentMethod(),
         ]);
+
+        // An auto-generated campaign carries a daily budget a language model
+        // proposed. That number is not cosmetic: deploying charges seven days
+        // of it up front. Nobody is billed against a figure a human has not
+        // looked at, so the confirmation is enforced here rather than trusted
+        // to the review screen — a form field can be bypassed, this cannot.
+        if ($campaign->auto_generated_at && ! $campaign->budget_confirmed_at) {
+            Log::info('Deployment blocked: auto-generated budget not confirmed', [
+                'campaign_id' => $campaign->id,
+                'suggested_daily_budget' => $campaign->daily_budget,
+            ]);
+
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Confirm your daily budget before deploying — we suggested one, but the first seven days are charged up front so we need you to approve it.',
+            ]);
+        }
 
         // Reset deployment_status on all signed-off strategies so an explicit
         // "Deploy All" always re-deploys, even if previously marked deployed/verified.

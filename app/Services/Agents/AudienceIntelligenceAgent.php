@@ -586,14 +586,14 @@ PROMPT;
             $bg = $customer->brandGuideline;
 
             if ($bg->target_audience) {
-                $context .= "Target Audience: {$bg->target_audience}\n";
+                // Cast to array on the model, so interpolating it directly put
+                // the literal word "Array" into the prompt where the audience
+                // should have been. The USP line below always did this right.
+                $context .= 'Target Audience: '.implode(', ', $bg->target_audience)."\n";
             }
 
             if ($bg->unique_selling_propositions) {
-                $usps = is_array($bg->unique_selling_propositions)
-                    ? implode(', ', $bg->unique_selling_propositions)
-                    : $bg->unique_selling_propositions;
-                $context .= "USPs: {$usps}\n";
+                $context .= 'USPs: '.implode(', ', $bg->unique_selling_propositions)."\n";
             }
         }
 

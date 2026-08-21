@@ -140,6 +140,40 @@ class CampaignController extends Controller
     /**
      * store is the handler for creating a new campaign.
      */
+    /**
+     * Accept (or change) the daily budget on an auto-generated campaign.
+     *
+     * This is what turns the model's suggestion into a figure the customer owns.
+     * Until it runs, budget_confirmed_at is null and DeploymentController
+     * refuses to deploy — because deployment charges seven days of this number
+     * up front.
+     */
+    public function confirmBudget(Request $request, Campaign $campaign)
+    {
+        $this->authorize('update', $campaign);
+
+        $validated = $request->validate([
+            'daily_budget' => 'required|numeric|min:1|max:10000',
+        ]);
+
+        $daily = round((float) $validated['daily_budget'], 2);
+
+        $campaign->update([
+            'daily_budget' => $daily,
+            // Kept in step with the daily figure, so the seven-day prepay and
+            // the campaign's own total cannot disagree.
+            'total_budget' => round($daily * 7, 2),
+            'budget_confirmed_at' => now(),
+        ]);
+
+        ActivityLogger::campaign('updated', $campaign, ['daily_budget' => $daily, 'budget_confirmed' => true]);
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => 'Budget confirmed. You can deploy whenever you\'re ready.',
+        ]);
+    }
+
     public function store(StoreCampaignRequest $request)
     {
         $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));

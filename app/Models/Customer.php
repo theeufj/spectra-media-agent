@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Customer extends Model
@@ -270,7 +271,8 @@ class Customer extends Model
     /**
      * Get the brand guideline for the customer.
      */
-    public function brandGuideline()
+    /** @return HasOne<BrandGuideline, $this> */
+    public function brandGuideline(): HasOne
     {
         return $this->hasOne(BrandGuideline::class);
     }

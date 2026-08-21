@@ -247,6 +247,11 @@ Route::middleware(['auth'])->group(function () {
     // POST /campaigns/{campaign}/sign-off-all
     Route::post('/campaigns/{campaign}/sign-off-all', [App\Http\Controllers\CampaignController::class, 'signOffAllStrategies'])->name('campaigns.sign-off-all');
 
+    // Accepting the suggested budget on an auto-generated campaign. Free,
+    // because it is part of deciding whether to pay at all.
+    // POST /campaigns/{campaign}/confirm-budget
+    Route::post('/campaigns/{campaign}/confirm-budget', [App\Http\Controllers\CampaignController::class, 'confirmBudget'])->name('campaigns.confirm-budget');
+
     // Route to delete a campaign.
     // DELETE /campaigns/{campaign}
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');
