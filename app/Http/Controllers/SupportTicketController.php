@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Mail\SupportTicketCreated;
 use App\Models\SupportTicket;
+use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 
@@ -55,7 +57,21 @@ class SupportTicketController extends Controller
 
         $ticket->load(['user', 'customer']);
 
-        Mail::to(config('app.admin_email', 'theeufj@gmail.com'))->send(new SupportTicketCreated($ticket));
+        // Every admin, resolved from the role at send time. This used to be
+        // config('app.admin_email') — a single address, so every ticket landed
+        // in one inbox no matter who was actually on support.
+        foreach (User::admins() as $admin) {
+            try {
+                Mail::to($admin->email)->queue(new SupportTicketCreated($ticket));
+            } catch (\Throwable $e) {
+                report($e);
+                Log::error('Failed to email an admin about a support ticket', [
+                    'ticket_id' => $ticket->id,
+                    'admin_id' => $admin->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
 
         // Confirmation to the submitting user
         if ($request->user()->email) {

@@ -293,6 +293,13 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth'])->group(function () {
+    // In-app support chat. Throttled because each message costs an AI call and
+    // fans out an email to every admin — a stuck client retrying would otherwise
+    // spam the whole team.
+    Route::post('/api/support/chat', [App\Http\Controllers\SupportChatController::class, 'send'])
+        ->middleware('throttle:10,1')
+        ->name('support.chat.send');
+
     Route::get('/support-tickets', [App\Http\Controllers\SupportTicketController::class, 'index'])->name('support-tickets.index');
     Route::get('/support-tickets/create', [App\Http\Controllers\SupportTicketController::class, 'create'])->name('support-tickets.create');
     Route::post('/support-tickets', [App\Http\Controllers\SupportTicketController::class, 'store'])->name('support-tickets.store');
