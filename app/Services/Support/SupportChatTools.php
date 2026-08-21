@@ -34,10 +34,65 @@ class SupportChatTools
 
     private const DEFAULT_DAYS = 30;
 
+    /**
+     * Tools invoked during this conversation turn, and every numeric value they
+     * returned.
+     *
+     * Recorded because the two things worth watching about this assistant are
+     * both unprovable from the reply text alone: whether it consulted the
+     * account at all, and whether the figures it quoted came from anywhere real.
+     * Both become answerable if the tool calls and their outputs are kept
+     * alongside the answer.
+     *
+     * @var list<string>
+     */
+    private array $toolsUsed = [];
+
+    /** @var list<float> */
+    private array $numbersReturned = [];
+
     public function __construct(
         private readonly Customer $customer,
         private readonly CrossPlatformAnalyticsService $analytics,
     ) {}
+
+    /** @return list<string> */
+    public function toolsUsed(): array
+    {
+        return array_values(array_unique($this->toolsUsed));
+    }
+
+    /**
+     * Every number any tool returned this turn, flattened.
+     *
+     * This is the evidence set a quoted figure has to be traceable to. Stored
+     * rather than recomputed so an audit reflects what the model was actually
+     * shown, not what the same query would return days later.
+     *
+     * @return list<float>
+     */
+    public function numbersReturned(): array
+    {
+        return array_values(array_unique($this->numbersReturned));
+    }
+
+    /**
+     * Walk a tool result and collect every numeric leaf.
+     */
+    private function collectNumbers(mixed $value): void
+    {
+        if (is_array($value)) {
+            foreach ($value as $item) {
+                $this->collectNumbers($item);
+            }
+
+            return;
+        }
+
+        if (is_int($value) || is_float($value)) {
+            $this->numbersReturned[] = (float) $value;
+        }
+    }
 
     /**
      * The schema advertised to the model.
@@ -109,7 +164,7 @@ class SupportChatTools
     public function handle(string $name, array $args): array
     {
         try {
-            return match ($name) {
+            $result = match ($name) {
                 'get_account_overview' => $this->accountOverview(),
                 'get_performance_summary' => $this->performanceSummary($this->days($args)),
                 'get_platform_breakdown' => $this->platformBreakdown($this->days($args)),
@@ -118,6 +173,13 @@ class SupportChatTools
                 // rather than returning something that looks like data.
                 default => ['error' => "Unknown tool: {$name}"],
             };
+
+            if (! isset($result['error'])) {
+                $this->toolsUsed[] = $name;
+                $this->collectNumbers($result);
+            }
+
+            return $result;
         } catch (\Throwable $e) {
             report($e);
             Log::error('Support chat tool failed', [

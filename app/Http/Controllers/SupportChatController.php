@@ -37,6 +37,12 @@ use Illuminate\Validation\Rule;
  */
 class SupportChatController extends Controller
 {
+    /**
+     * The toolkit used for this request, kept so its record of what was called
+     * can be written onto the transcript after the model has answered.
+     */
+    private ?SupportChatTools $tools = null;
+
     public function __construct(
         private readonly GeminiService $gemini,
         private readonly SupportChatGuard $guard,
@@ -86,7 +92,13 @@ class SupportChatController extends Controller
 
         $reply = $this->replyTo($user, $ticket, $message);
 
-        $this->appendToTranscript($ticket, 'assistant', $reply);
+        // Attach what the assistant consulted to its own turn, so the reply can
+        // be audited later without re-running anything. MonitorSupportChatQuality
+        // reads exactly this.
+        $this->appendToTranscript($ticket, 'assistant', $reply, [
+            'tools_used' => $this->tools?->toolsUsed() ?? [],
+            'tool_numbers' => $this->tools?->numbersReturned() ?? [],
+        ]);
 
         // Emailed once, when the conversation opens. Follow-up messages land on
         // the same ticket and are visible in the admin queue; re-emailing per
@@ -123,14 +135,17 @@ class SupportChatController extends Controller
      * Re-read inside the update so two messages sent in quick succession do not
      * overwrite each other's turn.
      */
-    private function appendToTranscript(SupportTicket $ticket, string $role, string $text): void
+    /**
+     * @param  array<string, mixed>  $meta
+     */
+    private function appendToTranscript(SupportTicket $ticket, string $role, string $text, array $meta = []): void
     {
         $ticket->refresh();
 
         $ticket->update([
             'transcript' => [
                 ...($ticket->transcript ?? []),
-                ['role' => $role, 'text' => $text, 'at' => now()->toIso8601String()],
+                ['role' => $role, 'text' => $text, 'at' => now()->toIso8601String(), ...$meta],
             ],
         ]);
     }
@@ -193,6 +208,7 @@ class SupportChatController extends Controller
     private function answerWithTools(Customer $customer, SupportTicket $ticket, string $message): ?array
     {
         $tools = new SupportChatTools($customer, app(CrossPlatformAnalyticsService::class));
+        $this->tools = $tools;
 
         return $this->gemini->generateWithFunctionCalling(
             model: config('ai.models.default'),

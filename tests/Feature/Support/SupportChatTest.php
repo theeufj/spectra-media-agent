@@ -224,6 +224,55 @@ class SupportChatTest extends TestCase
         $this->assertSame(3, $seen['overview']['campaigns_total']);
     }
 
+    public function test_the_assistant_turn_records_what_it_consulted(): void
+    {
+        \App\Models\Campaign::factory()->create(['customer_id' => $this->customer->id]);
+
+        $this->app->instance(GeminiService::class, new class extends GeminiService
+        {
+            public function __construct() {}
+
+            public function generateWithFunctionCalling(
+                string $model,
+                string $systemInstruction,
+                string $prompt,
+                array $tools,
+                callable $toolHandler,
+                array $config = [],
+                array $context = [],
+                int $maxToolCalls = 15
+            ): array {
+                $toolHandler('get_account_overview', []);
+
+                return ['text' => 'You have 1 campaign.'];
+            }
+        });
+
+        $this->send(['message' => 'How are my campaigns doing?'])->assertOk();
+
+        $turn = collect(SupportTicket::latest('id')->first()->transcript)
+            ->firstWhere('role', 'assistant');
+
+        // MonitorSupportChatQuality reads exactly these two keys. Without them
+        // it cannot tell a tool-backed answer from a guess, and the whole
+        // monitor silently measures nothing.
+        $this->assertSame(['get_account_overview'], $turn['tools_used']);
+        // jsonb round-trips 1.0 back as int 1, so compare by value.
+        $this->assertContainsEquals(1, $turn['tool_numbers']);
+    }
+
+    public function test_an_answer_given_without_tools_records_that_too(): void
+    {
+        $this->fakeAi('Generic advice.');
+
+        $this->send(['message' => 'Any tips?'])->assertOk();
+
+        $turn = collect(SupportTicket::latest('id')->first()->transcript)
+            ->firstWhere('role', 'assistant');
+
+        $this->assertSame([], $turn['tools_used']);
+    }
+
     // ── Admin notification ───────────────────────────────────────────────────
 
     public function test_every_admin_is_emailed_once_when_a_conversation_opens(): void

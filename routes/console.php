@@ -422,6 +422,14 @@ Schedule::command('model:prune', [
     ],
 ])->daily()->withoutOverlapping();
 
+// Review what the support assistant has been telling customers: did it consult
+// the account before answering account questions, and can the figures it quoted
+// be traced to a tool? Both are only checkable after the fact, from the stored
+// transcript. Shows up on /admin/automation-health with every other agent.
+Schedule::job(new \App\Jobs\MonitorSupportChatQuality)
+    ->dailyAt('07:30')
+    ->withoutOverlapping();
+
 // Keep the admin usage dashboard warm. It is the post-2FA redirect target, so
 // a cold cache is paid for by whoever just logged in. Fifteen minutes sits
 // inside the sections' own fresh windows, so warming never serves stale data
