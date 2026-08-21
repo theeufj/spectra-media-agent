@@ -473,8 +473,23 @@ class GeminiService
             foreach ($parts as $part) {
                 if (isset($part['functionCall'])) {
                     $functionCalls[] = $part['functionCall'];
+
+                    // A tool called with no arguments comes back as "args": {},
+                    // which json_decode turns into an empty PHP array — and
+                    // json_encode turns THAT back into [], a list. The proto
+                    // field is a Struct, so echoing it produces
+                    // "Unknown name \"args\" ... cannot start list" and the
+                    // whole loop 400s. Every parameterless tool hit this, which
+                    // is why it went unnoticed: GenerateStrategy's tools all
+                    // take arguments.
+                    $echoedCall = $part['functionCall'];
+
+                    if (($echoedCall['args'] ?? null) === []) {
+                        $echoedCall['args'] = new \stdClass;
+                    }
+
                     $functionCallParts[] = array_filter([
-                        'functionCall' => $part['functionCall'],
+                        'functionCall' => $echoedCall,
                         'thoughtSignature' => $part['thoughtSignature'] ?? null,
                     ], fn ($v) => $v !== null);
                 } elseif (isset($part['text'])) {
@@ -509,7 +524,9 @@ class GeminiService
                     $responseParts[] = [
                         'functionResponse' => [
                             'name' => $fnName,
-                            'response' => ['content' => $result],
+                            // Same list-vs-object trap on the way back: an empty
+                            // result would encode as [] and be rejected.
+                            'response' => ['content' => $result === [] ? new \stdClass : $result],
                         ],
                     ];
                 }
