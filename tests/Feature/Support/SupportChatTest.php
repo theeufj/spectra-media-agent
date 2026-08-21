@@ -60,6 +60,22 @@ class SupportChatTest extends TestCase
             ): array {   // narrower than the parent's ?array: this stub always answers
                 return ['text' => $this->reply];
             }
+
+            // With a customer in session the controller takes the tool-calling
+            // path, so a stub that only covers generateContent would silently
+            // fall through to the real HTTP client and look like an AI failure.
+            public function generateWithFunctionCalling(
+                string $model,
+                string $systemInstruction,
+                string $prompt,
+                array $tools,
+                callable $toolHandler,
+                array $config = [],
+                array $context = [],
+                int $maxToolCalls = 15
+            ): array {
+                return ['text' => $this->reply];
+            }
         });
     }
 
@@ -80,6 +96,19 @@ class SupportChatTest extends TestCase
                 ?string $imageBase64 = null,
                 string $imageMimeType = 'image/jpeg',
                 array $context = []
+            ): ?array {
+                throw new \RuntimeException('Gemini is down');
+            }
+
+            public function generateWithFunctionCalling(
+                string $model,
+                string $systemInstruction,
+                string $prompt,
+                array $tools,
+                callable $toolHandler,
+                array $config = [],
+                array $context = [],
+                int $maxToolCalls = 15
             ): ?array {
                 throw new \RuntimeException('Gemini is down');
             }
@@ -155,6 +184,44 @@ class SupportChatTest extends TestCase
         $this->assertSame('assistant', $transcript[1]['role']);
         $this->assertSame('Budgets live under Campaign settings.', $transcript[1]['text']);
         $this->assertArrayHasKey('at', $transcript[0]);
+    }
+
+    public function test_the_assistant_is_offered_account_tools_and_they_resolve(): void
+    {
+        \App\Models\Campaign::factory()->count(3)->create(['customer_id' => $this->customer->id]);
+
+        $seen = [];
+
+        // Capture what the controller actually hands the model, and prove the
+        // handler it wires up really reaches this customer's data — the tools
+        // being correct in isolation is worth nothing if they are not connected.
+        $this->app->instance(GeminiService::class, new class($seen) extends GeminiService
+        {
+            public function __construct(public array &$seen) {}
+
+            public function generateWithFunctionCalling(
+                string $model,
+                string $systemInstruction,
+                string $prompt,
+                array $tools,
+                callable $toolHandler,
+                array $config = [],
+                array $context = [],
+                int $maxToolCalls = 15
+            ): array {
+                $this->seen['tools'] = array_column($tools, 'name');
+                $this->seen['overview'] = $toolHandler('get_account_overview', []);
+
+                return ['text' => 'Based on your account, here is what I would look at.'];
+            }
+        });
+
+        $this->send(['message' => 'What could I do better with my ads?'])->assertOk();
+
+        $this->assertContains('get_performance_summary', $seen['tools']);
+        $this->assertContains('get_account_overview', $seen['tools']);
+        $this->assertSame($this->customer->name, $seen['overview']['account_name']);
+        $this->assertSame(3, $seen['overview']['campaigns_total']);
     }
 
     // ── Admin notification ───────────────────────────────────────────────────

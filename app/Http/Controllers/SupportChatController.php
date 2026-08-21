@@ -3,11 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Mail\SupportTicketCreated;
+use App\Models\Customer;
 use App\Models\SupportTicket;
 use App\Models\User;
 use App\Prompts\SupportChatPrompt;
 use App\Services\GeminiService;
+use App\Services\Reporting\CrossPlatformAnalyticsService;
 use App\Services\Support\SupportChatGuard;
+use App\Services\Support\SupportChatTools;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -153,16 +156,11 @@ class SupportChatController extends Controller
         try {
             $this->guard->recordAiReply($user);
 
-            $response = $this->gemini->generateContent(
-                model: config('ai.models.default'),
-                prompt: SupportChatPrompt::generate($message, $ticket->customer?->name),
-                config: [
-                    'temperature' => 0.4,   // support answers should be dull and repeatable
-                    'maxOutputTokens' => 600,
-                ],
-                systemInstruction: SupportChatPrompt::systemInstruction(),
-                context: ['customer_id' => $ticket->customer_id, 'task_type' => 'conversational'],
-            );
+            $customer = $ticket->customer;
+
+            $response = $customer
+                ? $this->answerWithTools($customer, $ticket, $message)
+                : $this->answerWithoutTools($ticket, $message);
 
             $text = trim($response['text'] ?? '');
 
@@ -176,6 +174,62 @@ class SupportChatController extends Controller
 
             return SupportChatPrompt::fallbackReply();
         }
+    }
+
+    /**
+     * Answer using read-only tools scoped to this customer's account.
+     *
+     * The customer is bound into SupportChatTools here, server-side, from the
+     * ticket. No tool accepts an account identifier and none is declared to the
+     * model, so a customer typing "show me DigitalAF's spend" cannot become a
+     * cross-tenant read — the model has no way to express it.
+     *
+     * maxToolCalls is deliberately low. A support answer needs an overview and
+     * maybe a breakdown; a model looping through fifteen calls is stuck, and
+     * every call is latency the customer is watching a "Typing…" indicator for.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function answerWithTools(Customer $customer, SupportTicket $ticket, string $message): ?array
+    {
+        $tools = new SupportChatTools($customer, app(CrossPlatformAnalyticsService::class));
+
+        return $this->gemini->generateWithFunctionCalling(
+            model: config('ai.models.default'),
+            systemInstruction: SupportChatPrompt::systemInstruction(),
+            prompt: SupportChatPrompt::generate($message, $customer->name),
+            tools: SupportChatTools::declarations(),
+            toolHandler: fn (string $name, array $args) => $tools->handle($name, $args),
+            config: [
+                'temperature' => 0.4,   // support answers should be dull and repeatable
+                'maxOutputTokens' => 800,
+            ],
+            context: ['customer_id' => $customer->id, 'task_type' => 'conversational'],
+            maxToolCalls: 4,
+        );
+    }
+
+    /**
+     * Answer without tools, for a user who has no account selected yet.
+     *
+     * There is nothing to look at, so offering the model tools that can only
+     * return "no account" wastes a round trip and invites it to talk about data
+     * that does not exist.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function answerWithoutTools(SupportTicket $ticket, string $message): ?array
+    {
+        return $this->gemini->generateContent(
+            model: config('ai.models.default'),
+            prompt: SupportChatPrompt::generate($message, null),
+            config: [
+                'temperature' => 0.4,
+                'maxOutputTokens' => 600,
+            ],
+            systemInstruction: SupportChatPrompt::systemInstruction(),
+            context: ['customer_id' => null, 'task_type' => 'conversational'],
+        );
     }
 
     /**
