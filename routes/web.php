@@ -195,7 +195,24 @@ Route::middleware(['auth'])->group(function () {
 | Routes for creating and managing marketing campaigns.
 |
 */
-Route::middleware(['auth', 'subscribed'])->group(function () {
+/*
+ * Build a campaign for free; pay to put it live.
+ *
+ * All of this used to sit behind the `subscribed` middleware, so a signed-up
+ * user was bounced to the pricing page before they could open the wizard —
+ * asked for a card before the product had shown them anything. Sixteen accounts
+ * reached "pasted their website" and exactly one ever subscribed.
+ *
+ * CampaignController@store already contained free-plan logic capping guests at
+ * one campaign. That code could never run, because the middleware redirected
+ * first. Moving these routes out is what makes the free tier real rather than
+ * theoretical.
+ *
+ * The subscription gate now sits exactly where money is: deploying. That is
+ * also where the ad-spend credit account is created and the first seven days
+ * are charged, so a customer meets one payment moment instead of two.
+ */
+Route::middleware(['auth'])->group(function () {
     // Route to display the campaign creation form.
     // GET /campaigns/create
     Route::get('/campaigns/create', [App\Http\Controllers\CampaignController::class, 'create'])->name('campaigns.create');
@@ -204,7 +221,9 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
     // GET /campaigns/wizard
     Route::get('/campaigns/wizard', [App\Http\Controllers\CampaignController::class, 'wizard'])->name('campaigns.wizard');
 
-    // Route to handle the form submission, create the campaign, and dispatch the strategy generation job.
+    // Creating a campaign dispatches GenerateStrategy, which spends real money
+    // on Gemini. The free-plan cap in store() is the cost ceiling — see the
+    // note there before loosening it.
     // POST /campaigns
     Route::post('/campaigns', [App\Http\Controllers\CampaignController::class, 'store'])->name('campaigns.store');
 
@@ -216,35 +235,46 @@ Route::middleware(['auth', 'subscribed'])->group(function () {
     // GET /campaigns/{campaign}/deployment-status
     Route::get('/campaigns/{campaign}/deployment-status', [App\Http\Controllers\CampaignController::class, 'deploymentStatus'])->name('campaigns.deployment-status');
 
-    // Multi-touch attribution dashboard
-    Route::get('/campaigns/{campaign}/attribution', [App\Http\Controllers\AttributionController::class, 'show'])->name('campaigns.attribution');
-
     // Route to display the collateral generation page for a specific campaign strategy.
     // GET /campaigns/{campaign}/{strategy}/collateral
     Route::get('/campaigns/{campaign}/{strategy}/collateral', [App\Http\Controllers\CollateralController::class, 'show'])->name('campaigns.collateral.show');
 
-    // Route to sign off a specific strategy.
+    // Reviewing and approving what the AI produced is part of deciding whether
+    // to pay, so it stays free.
     // POST /campaigns/{campaign}/strategies/{strategy}/sign-off
     Route::post('/campaigns/{campaign}/strategies/{strategy}/sign-off', [App\Http\Controllers\CampaignController::class, 'signOffStrategy'])->name('campaigns.strategies.sign-off');
 
-    // Route to sign off on all strategies for a campaign.
     // POST /campaigns/{campaign}/sign-off-all
     Route::post('/campaigns/{campaign}/sign-off-all', [App\Http\Controllers\CampaignController::class, 'signOffAllStrategies'])->name('campaigns.sign-off-all');
-
-    // Route to regenerate strategies for a campaign.
-    // POST /campaigns/{campaign}/regenerate-strategies
-    Route::post('/campaigns/{campaign}/regenerate-strategies', [App\Http\Controllers\CampaignController::class, 'regenerateStrategies'])->name('campaigns.regenerate-strategies');
 
     // Route to delete a campaign.
     // DELETE /campaigns/{campaign}
     Route::delete('/campaigns/{campaign}', [\App\Http\Controllers\CampaignController::class, 'destroy'])->name('campaigns.destroy');
+});
+
+/*
+ * Paid: everything that spends money or puts ads in front of people.
+ *
+ * Deployment is the gate. Regeneration and the copilot stay here because both
+ * are unmetered AI spend — a free account could otherwise loop them
+ * indefinitely, and neither is needed to judge whether the first strategy is
+ * any good.
+ */
+Route::middleware(['auth', 'subscribed'])->group(function () {
+    // Multi-touch attribution dashboard
+    Route::get('/campaigns/{campaign}/attribution', [App\Http\Controllers\AttributionController::class, 'show'])->name('campaigns.attribution');
+
+    // Route to regenerate strategies for a campaign.
+    // POST /campaigns/{campaign}/regenerate-strategies
+    Route::post('/campaigns/{campaign}/regenerate-strategies', [App\Http\Controllers\CampaignController::class, 'regenerateStrategies'])->name('campaigns.regenerate-strategies');
 
     // Campaign Copilot — conversational AI assistant per campaign
     Route::post('/api/campaigns/{campaign}/chat', [\App\Http\Controllers\CampaignCopilotController::class, 'chat'])->name('campaigns.copilot.chat');
     Route::get('/api/campaigns/{campaign}/chat/history', [\App\Http\Controllers\CampaignCopilotController::class, 'history'])->name('campaigns.copilot.history');
     Route::delete('/api/campaigns/{campaign}/chat', [\App\Http\Controllers\CampaignCopilotController::class, 'clear'])->name('campaigns.copilot.clear');
 
-    // Deployment routes
+    // Deployment routes — the paywall. Also where the ad-spend credit account
+    // is created and the first seven days are charged.
     Route::post('/deployment/toggle-collateral', [\App\Http\Controllers\DeploymentController::class, 'toggleCollateral'])
         ->name('deployment.toggle-collateral');
     Route::post('/deployment/deploy', [\App\Http\Controllers\DeploymentController::class, 'deploy'])

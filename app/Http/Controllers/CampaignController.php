@@ -144,7 +144,19 @@ class CampaignController extends Controller
     {
         $customer = $request->user()->customers()->findOrFail(session('active_customer_id'));
 
-        // Enforce campaign limit for Free plan (max 1)
+        // THE COST CEILING FOR FREE ACCOUNTS.
+        //
+        // This route used to sit behind the `subscribed` middleware, so this
+        // branch could never run — a guest was redirected to the pricing page
+        // before reaching it. Now that building a campaign is free, this is the
+        // only thing between an unsubscribed account and unbounded Gemini
+        // spend: creating a campaign dispatches GenerateStrategy, and that
+        // calls a paid model.
+        //
+        // One campaign is enough to see what the product produces for your own
+        // website, which is the whole point of letting it be free. Loosening
+        // this without another ceiling in front of GenerateStrategy would let
+        // one account run up a bill unattended.
         $user = $request->user();
         $plan = $user->resolveCurrentPlan();
         if (($plan?->slug ?? 'free') === 'free') {
@@ -152,7 +164,7 @@ class CampaignController extends Controller
             if ($existingCount >= 1) {
                 return redirect()->back()->with('flash', [
                     'type' => 'error',
-                    'message' => 'Free plan is limited to 1 campaign. Please upgrade to create more campaigns.',
+                    'message' => 'Your free campaign is ready to review. Subscribe to deploy it or create more.',
                 ]);
             }
         }
