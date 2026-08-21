@@ -257,11 +257,6 @@ class GenerateFirstCampaignTest extends TestCase
 
     public function test_an_auto_generated_campaign_does_not_render_video(): void
     {
-        // GenerateStrategy defaults generate_video to true, and
-        // GenerateCampaignCollateral then queues two Veo renders per strategy.
-        // Veo is billed per second of output, so a campaign nobody asked for
-        // must not trigger it — video stays a deliberate choice the customer
-        // makes once they have seen the campaign.
         Queue::fake();
         $this->crawlPages(12);
         $this->fakeAi($this->brief());
@@ -270,12 +265,21 @@ class GenerateFirstCampaignTest extends TestCase
 
         $campaign = Campaign::where('customer_id', $this->customer->id)->firstOrFail();
 
-        $this->assertNotNull($campaign->auto_generated_at);
-        // The flag GenerateStrategy reads to decide.
-        $this->assertTrue(
-            (bool) $campaign->auto_generated_at,
-            'GenerateStrategy keys the no-video rule off auto_generated_at',
-        );
+        // GenerateCampaignCollateral queues two Veo renders per strategy off
+        // this rule, and Veo is billed per second of output.
+        $this->assertFalse($campaign->allowsAutomaticVideo());
+    }
+
+    public function test_a_campaign_the_customer_built_still_allows_video(): void
+    {
+        $campaign = Campaign::factory()->create([
+            'customer_id' => $this->customer->id,
+            'auto_generated_at' => null,
+        ]);
+
+        // The rule is about who asked for the campaign, not about video being
+        // unwanted in general.
+        $this->assertTrue($campaign->allowsAutomaticVideo());
     }
 
     // ── Who qualifies ────────────────────────────────────────────────────────

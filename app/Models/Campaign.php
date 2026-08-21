@@ -30,6 +30,20 @@ class Campaign extends Model
         return $query->whereIn('primary_status', self::SERVING_PRIMARY_STATUSES);
     }
 
+    /**
+     * May collateral generation render video for this campaign unprompted?
+     *
+     * No, if we built the campaign for them. GenerateCampaignCollateral queues
+     * two Veo renders per strategy off the generate_video flag, and Veo is
+     * billed per second of output — real money spent on a signup that has not
+     * yet decided it wants us. Video stays a deliberate choice the customer
+     * makes on the collateral screen once they have seen what we built.
+     */
+    public function allowsAutomaticVideo(): bool
+    {
+        return $this->auto_generated_at === null;
+    }
+
     /** Is the platform reporting this campaign as delivering? */
     public function isServing(): bool
     {

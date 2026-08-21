@@ -301,16 +301,11 @@ class GenerateStrategy implements ShouldQueue
                         'bidding_strategy' => $strategy['bidding_strategy'],
                         'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
                         'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
-                        // Never for a campaign nobody asked for. An
-                        // auto-generated campaign queues two Veo renders per
-                        // strategy on this flag, and Veo is billed per second
-                        // of output — real money spent on a signup that has not
-                        // yet decided it wants us. Video stays a deliberate
-                        // choice the customer makes on the collateral screen
-                        // once they have seen the campaign.
-                        'generate_video' => $this->campaign->auto_generated_at
-                            ? false
-                            : ($strategy['generate_video'] ?? true),
+                        // Never for a campaign nobody asked for — see
+                        // Campaign::allowsAutomaticVideo().
+                        'generate_video' => $this->campaign->allowsAutomaticVideo()
+                            ? ($strategy['generate_video'] ?? true)
+                            : false,
                     ]);
 
                     // Create TargetingConfig if targeting data is present
