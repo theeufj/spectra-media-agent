@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\ProductFeature;
 use App\Models\AgentActivity;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
 use App\Models\LinkedInAdsPerformanceData;
 use App\Models\MicrosoftAdsPerformanceData;
 use App\Services\CreativeQuotaService;
+use App\Services\FeatureUsage\FeatureRecorder;
 use App\Services\Reporting\CrossPlatformAnalyticsService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -31,6 +33,12 @@ class DashboardController extends Controller
         }
 
         $activeCustomer = $user->customers()->findOrFail(session('active_customer_id'));
+
+        // The only proxy this app has for "has this account been seen lately".
+        // There is no users.last_login_at column, and activity_logs is archived
+        // away at 30 days, so without this row the answer past a month is
+        // simply unavailable. Never throws — see FeatureRecorder.
+        FeatureRecorder::record(ProductFeature::Dashboard, 'viewed', $activeCustomer->id, $user->id);
 
         $campaigns = $activeCustomer->campaigns()
             ->with(['strategies'])

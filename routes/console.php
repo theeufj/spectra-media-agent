@@ -406,7 +406,9 @@ Schedule::command('queue:prune-batches --hours=336')
     ->withoutOverlapping();
 
 // Retention windows live on each model's prunable(): ExceptionLog 90d,
-// AgentRun 90d, AgentActivity 180d.
+// AgentRun 90d, AgentActivity 180d, FeatureUsageDaily 400d
+// (config('feature_usage.retention_days') — 400 rather than 365 so a
+// year-over-year comparison still has both ends).
 //
 // Deliberately NOT pruned: ai_costs (spend history — the AI cost dashboard
 // reports over long periods and this is financial data), notifications and
@@ -416,8 +418,17 @@ Schedule::command('model:prune', [
         \App\Models\ExceptionLog::class,
         \App\Models\AgentRun::class,
         \App\Models\AgentActivity::class,
+        \App\Models\FeatureUsageDaily::class,
     ],
 ])->daily()->withoutOverlapping();
+
+// Keep the admin usage dashboard warm. It is the post-2FA redirect target, so
+// a cold cache is paid for by whoever just logged in. Fifteen minutes sits
+// inside the sections' own fresh windows, so warming never serves stale data
+// it just refreshed.
+Schedule::command('admin:warm-usage-dashboard')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping();
 
 // Admin audit logs: keep the recent window queryable, archive the rest.
 // Runs after midnight so a day is complete before it is archived.

@@ -510,7 +510,10 @@ Route::middleware(['auth'])->prefix('api')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
-    Route::get('dashboard', [App\Http\Controllers\AdminController::class, 'index'])->name('admin.dashboard');
+    // The admin landing page. Also the post-2FA redirect target (see
+    // Admin\TwoFactorController) and both nav links in AuthenticatedLayout, so
+    // it must render rather than redirect.
+    Route::get('dashboard', [App\Http\Controllers\Admin\UsageDashboardController::class, 'index'])->name('admin.dashboard');
     Route::get('automation-health', [\App\Http\Controllers\AgentActivityController::class, 'healthPage'])->name('admin.automation-health');
     Route::get('help', fn () => \Inertia\Inertia::render('Admin/PlatformSetupGuide'))->name('admin.help');
     Route::get('users', [App\Http\Controllers\Admin\UserController::class, 'usersIndex'])->name('admin.users.index');
