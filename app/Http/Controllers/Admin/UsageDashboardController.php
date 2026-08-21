@@ -80,7 +80,11 @@ class UsageDashboardController extends Controller
     {
         return match ($tab) {
             'engagement' => $this->engagement($period),
-            'readiness' => ['readiness' => Inertia::defer(fn () => (new AccountReadiness)->report(), 'readiness')],
+            // Eager, not deferred. The report is four aggregate queries and
+            // runs in milliseconds, so deferring it bought a round trip and a
+            // failure mode that only exists in the browser — the one part of
+            // the flow that cannot be verified from the server side.
+            'readiness' => ['readiness' => (new AccountReadiness)->report()],
             // Phases 2 and 3. The tabs are listed but disabled in the UI rather
             // than hidden, so it is obvious what is coming and obvious that its
             // absence is intentional.

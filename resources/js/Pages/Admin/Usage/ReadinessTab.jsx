@@ -1,4 +1,4 @@
-import { Deferred, Link } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import { STATUS, INK } from '@/Components/Charts/palette';
 
 /**
@@ -29,12 +29,6 @@ const Badge = ({ severity }) => {
         </span>
     );
 };
-
-const Loading = () => (
-    <div className="rounded-lg bg-white p-6 shadow">
-        <p className="text-sm text-gray-400">Working out where each account is stuck…</p>
-    </div>
-);
 
 function Readiness({ readiness }) {
     const { accounts, summary, blocker_counts: blockers } = readiness;
@@ -168,9 +162,18 @@ function Readiness({ readiness }) {
 }
 
 export default function ReadinessTab({ readiness }) {
-    return (
-        <Deferred data="readiness" fallback={<Loading />}>
-            {() => <Readiness readiness={readiness} />}
-        </Deferred>
-    );
+    // The prop arrives with the page now, so there is nothing to wait for. The
+    // guard is for the one case that would otherwise render a blank tab: a
+    // response that somehow omitted it.
+    if (!readiness?.summary) {
+        return (
+            <div className="rounded-lg bg-white p-6 shadow">
+                <p className="text-sm text-gray-500">
+                    Readiness data did not load. Reload the page; if it persists the report itself is failing.
+                </p>
+            </div>
+        );
+    }
+
+    return <Readiness readiness={readiness} />;
 }

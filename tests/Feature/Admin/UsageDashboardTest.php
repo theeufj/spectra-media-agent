@@ -136,26 +136,28 @@ class UsageDashboardTest extends TestCase
             ));
     }
 
-    public function test_the_readiness_data_loads_on_a_deferred_reload(): void
+    public function test_the_readiness_tab_carries_its_data_in_the_first_response(): void
     {
-        // The tab renders a Deferred block, so the initial response carries no
-        // readiness prop — it arrives on a follow-up partial request. If that
-        // request fails the tab sits on its loading message forever, which is
-        // indistinguishable from the tab not working.
-        $version = (new \App\Http\Middleware\HandleInertiaRequests)->version(request());
-
+        // Loaded eagerly rather than deferred, so the tab cannot depend on a
+        // follow-up request completing in the browser.
         $this->actingAs($this->admin)
-            ->withHeaders([
-                'X-Inertia' => 'true',
-                'X-Inertia-Version' => (string) $version,
-                'X-Inertia-Partial-Component' => 'Admin/UsageDashboard',
-                'X-Inertia-Partial-Data' => 'readiness',
-            ])
             ->get(route('admin.dashboard', ['tab' => 'readiness']))
             ->assertStatus(200)
-            ->assertJsonStructure([
-                'props' => ['readiness' => ['accounts', 'summary', 'blocker_counts']],
-            ]);
+            ->assertInertia(fn ($page) => $page
+                ->where('tab', 'readiness')
+                ->has('readiness.accounts')
+                ->has('readiness.summary')
+                ->has('readiness.blocker_counts')
+            );
+    }
+
+    public function test_the_engagement_tab_does_not_carry_readiness_data(): void
+    {
+        // Only the active tab's queries run; readiness must not be computed on
+        // every dashboard load.
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard'))
+            ->assertInertia(fn ($page) => $page->missing('readiness'));
     }
 
     public function test_the_summary_strip_and_coverage_note_are_always_present(): void
