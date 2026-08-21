@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, router } from '@inertiajs/react';
 import SideNav from './SideNav';
+import MetricCard from '@/Components/MetricCard';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -16,31 +17,18 @@ const fmt = {
 
 // ── Shared components ─────────────────────────────────────────────────────────
 
-const Card = ({ title, value, sub, icon, color = 'flame', trend }) => {
-    const bg = {
-        flame: 'bg-flame-orange-500', green: 'bg-green-500',
-        blue: 'bg-blue-500', purple: 'bg-purple-500', red: 'bg-red-500',
-    };
-    return (
-        <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex items-center">
-                <div className={`flex-shrink-0 p-3 rounded-lg ${bg[color]}`}>
-                    <span className="text-white text-xl">{icon}</span>
-                </div>
-                <div className="ml-4 flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-500 truncate">{title}</p>
-                    <p className="text-2xl font-bold text-gray-900">{value}</p>
-                    {sub && <p className="text-xs text-gray-400">{sub}</p>}
-                </div>
-                {trend != null && (
-                    <div className={`text-sm font-semibold ml-2 ${trend >= 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {trend >= 0 ? '↑' : '↓'} {Math.abs(trend)}%
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-};
+// Spend, not income: a rising trend is bad news, so the arrow colours invert.
+const Card = ({ title, value, sub, icon, color = 'flame', trend }) => (
+    <MetricCard
+        title={title}
+        value={value}
+        subtitle={sub}
+        icon={icon}
+        color={color}
+        trend={trend}
+        higherIsBetter={false}
+    />
+);
 
 const Section = ({ title, children }) => (
     <div className="bg-white rounded-lg shadow">
