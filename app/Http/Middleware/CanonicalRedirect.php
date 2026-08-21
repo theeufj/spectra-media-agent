@@ -9,10 +9,44 @@ use Symfony\Component\HttpFoundation\Response;
 class CanonicalRedirect
 {
     /**
+     * The crawlable marketing surface.
+     *
+     * Query-string stripping applies HERE AND NOWHERE ELSE. It is an SEO
+     * measure — it exists so `/pricing?$` and `/pricing?random=1` do not become
+     * duplicate indexed URLs — and it has no business running on the
+     * authenticated app.
+     *
+     * It used to run on every request, keeping an allowlist of "known good"
+     * parameters. That inverted the risk: any page using a parameter nobody had
+     * thought to add was silently 301'd to a stripped URL, in production only,
+     * where no test would ever see it. The admin dashboard's ?tab= and ?period=
+     * were broken exactly this way — clicking a tab appeared to do nothing,
+     * because the browser was being bounced straight back.
+     *
+     * The failure modes are not symmetrical. Missing an app parameter breaks a
+     * feature invisibly; missing a marketing page leaves a junk parameter on a
+     * page nobody crawls. So the list is of pages to canonicalise, not of
+     * parameters to permit.
+     *
+     * @var list<string>
+     */
+    private const CRAWLABLE_PATHS = [
+        '/',
+        'features',
+        'how-it-works',
+        'pricing',
+        'about',
+        'terms-of-service',
+        'privacy-policy',
+        'blog',
+        'blog/*',
+    ];
+
+    /**
      * Redirect non-canonical URLs to their canonical form:
      * - http → https
      * - www.sitetospend.com → sitetospend.com
-     * - Strip unexpected query strings on public pages
+     * - strip unexpected query strings, on crawlable marketing pages only
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -33,9 +67,15 @@ class CanonicalRedirect
                 $needsRedirect = true;
             }
 
-            // Strip junk query strings on GET requests (e.g. ?$, ?random=)
-            // Skip signed URL routes (email verification) and OAuth callbacks
-            if ($request->isMethod('GET') && $request->getQueryString() !== null && ! $request->is('auth/*/callback') && ! $request->is('settings/*/callback') && ! isset($request->query()['signature'])) {
+            // Strip junk query strings (e.g. ?$, ?random=) on crawlable pages.
+            // Signed URLs and OAuth callbacks are excluded even there, since a
+            // stripped signature or code is a broken flow rather than a tidier URL.
+            if ($request->isMethod('GET')
+                && $request->getQueryString() !== null
+                && $request->is(...self::CRAWLABLE_PATHS)
+                && ! $request->is('auth/*/callback')
+                && ! $request->is('settings/*/callback')
+                && ! isset($request->query()['signature'])) {
                 // Ad-click and campaign attribution params MUST survive: Google Ads
                 // auto-tagging (gclid/gbraid/wbraid), Meta (fbclid), Microsoft (msclid),
                 // TikTok (ttclid) and UTMs. Stripping them here breaks conversion
