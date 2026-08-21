@@ -10,6 +10,7 @@ use App\Models\Campaign;
 use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
+use App\Services\ActivityLogger;
 use App\Services\StorageHelper;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -174,6 +175,14 @@ class CampaignController extends Controller
         }
 
         $campaign = $customer->campaigns()->create($validated);
+
+        // The activity log knew 22 action types and only ever recorded two:
+        // login and logout. Everything a customer actually does was invisible,
+        // which is why the page read as a login history.
+        ActivityLogger::campaign('created', $campaign, [
+            'customer_id' => $customer->id,
+            'customer_name' => $customer->name,
+        ]);
 
         if ($request->has('selected_pages')) {
             $campaign->pages()->attach($request->input('selected_pages'));

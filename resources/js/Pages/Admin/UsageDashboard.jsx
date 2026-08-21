@@ -1,4 +1,4 @@
-import { router, Link } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import AdminShell from './AdminShell';
 import MetricCard from '@/Components/MetricCard';
 import EngagementTab from './Usage/EngagementTab';
@@ -26,19 +26,20 @@ export default function UsageDashboard({
     breadthHistogram,
     readiness,
 }) {
-    const navigate = (params) =>
-        router.get(route('admin.dashboard'), { tab, period: period.key, ...params }, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-        });
+    // A plain link, not router.get with preserveState. preserveState keeps the
+    // existing component instance, which is exactly wrong here: every tab
+    // renders different props, and there is no local state worth preserving.
+    // Links also give middle-click, open-in-new-tab and a real href for free.
+    const href = (params) =>
+        route('admin.dashboard', { tab, period: period.key, ...params });
 
     const periodPicker = (
         <div className="flex gap-2 flex-wrap">
             {periodOptions.map((option) => (
-                <button
+                <Link
                     key={option.value}
-                    onClick={() => navigate({ period: option.value })}
+                    href={href({ period: option.value })}
+                    preserveScroll
                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                         period.key === option.value
                             ? 'bg-flame-orange-500 text-white'
@@ -46,7 +47,7 @@ export default function UsageDashboard({
                     }`}
                 >
                     {option.label}
-                </button>
+                </Link>
             ))}
         </div>
     );
@@ -93,23 +94,27 @@ export default function UsageDashboard({
                         // Phase 2 and 3 tabs are shown disabled rather than
                         // hidden, so it is visible what is coming and visible
                         // that the gap is deliberate.
+                        const classes = `px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+                            active
+                                ? 'border-flame-orange-500 text-flame-orange-600'
+                                : t.enabled
+                                  ? 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
+                                  : 'border-transparent text-gray-300 cursor-not-allowed'
+                        }`;
+
+                        if (! t.enabled) {
+                            return (
+                                <span key={t.key} className={classes} title="Not built yet">
+                                    {t.label}
+                                    <span className="ml-2 text-xs font-normal">soon</span>
+                                </span>
+                            );
+                        }
+
                         return (
-                            <button
-                                key={t.key}
-                                disabled={!t.enabled}
-                                onClick={() => t.enabled && navigate({ tab: t.key })}
-                                title={t.enabled ? undefined : 'Not built yet'}
-                                className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
-                                    active
-                                        ? 'border-flame-orange-500 text-flame-orange-600'
-                                        : t.enabled
-                                          ? 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
-                                          : 'border-transparent text-gray-300 cursor-not-allowed'
-                                }`}
-                            >
+                            <Link key={t.key} href={href({ tab: t.key })} preserveScroll className={classes}>
                                 {t.label}
-                                {!t.enabled && <span className="ml-2 text-xs font-normal">soon</span>}
-                            </button>
+                            </Link>
                         );
                     })}
                 </nav>

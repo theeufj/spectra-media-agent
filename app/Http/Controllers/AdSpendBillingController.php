@@ -6,6 +6,7 @@ use App\Http\Requests\AddAdSpendCreditRequest;
 use App\Http\Requests\SetupAdSpendBillingRequest;
 use App\Models\ActivityLog;
 use App\Models\Customer;
+use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
 use App\Support\SafeError;
 use Illuminate\Http\Request;
@@ -373,6 +374,8 @@ class AdSpendBillingController extends Controller
             } else {
                 // First campaign — initialize the account
                 $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget);
+
+                ActivityLogger::adSpendBillingSetup($customer, (float) $dailyBudget);
                 $chargedAmount = $credit->initial_credit_amount;
                 $logMessage = "Ad spend billing set up for customer '{$customer->name}' — \${$chargedAmount} charged";
             }

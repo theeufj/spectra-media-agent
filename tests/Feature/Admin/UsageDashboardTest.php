@@ -118,6 +118,24 @@ class UsageDashboardTest extends TestCase
 
     // ── Shape ────────────────────────────────────────────────────────────────
 
+    public function test_the_readiness_tab_is_reachable(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard', ['tab' => 'readiness']))
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page->where('tab', 'readiness'));
+    }
+
+    public function test_the_readiness_tab_is_advertised_as_enabled(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard'))
+            ->assertInertia(fn ($page) => $page->where(
+                'tabs',
+                fn ($tabs) => collect($tabs)->firstWhere('key', 'readiness')['enabled'] === true,
+            ));
+    }
+
     public function test_the_summary_strip_and_coverage_note_are_always_present(): void
     {
         $this->actingAs($this->admin)

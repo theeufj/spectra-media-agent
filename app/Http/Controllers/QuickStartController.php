@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\CrawlSitemap;
 use App\Jobs\ExtractBrandGuidelines;
 use App\Models\Customer;
+use App\Services\ActivityLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -52,6 +53,8 @@ class QuickStartController extends Controller
 
         $user->customers()->attach($customer->id, ['role' => 'owner']);
         session(['active_customer_id' => $customer->id]);
+
+        ActivityLogger::customer('created', $customer);
 
         CrawlSitemap::dispatch($user, $sitemapUrl, $customer->id);
         ExtractBrandGuidelines::dispatch($customer)->delay(now()->addMinutes(3));

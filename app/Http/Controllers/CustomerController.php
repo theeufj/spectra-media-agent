@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Customer;
+use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -78,6 +79,8 @@ class CustomerController extends Controller
         $user->customers()->attach($customer->id, ['role' => 'owner']);
 
         session(['active_customer_id' => $customer->id]);
+
+        ActivityLogger::customer('created', $customer);
 
         if ($request->wantsJson()) {
             return response()->json(['message' => 'Customer created successfully', 'customer' => $customer]);

@@ -292,7 +292,16 @@ class AdoptionMetrics
     public function featureBreadth(): array
     {
         return $this->cached('feature_breadth', function () {
-            $denominator = $this->activeAccountCount();
+            // Denominator is every real account, not just the ones with recent
+            // campaign activity. Scoping it to "active" accounts sounded more
+            // precise and was useless in practice: with one active account
+            // every feature read as either 0% or 100%, which says nothing about
+            // adoption and quietly implied total uptake of six features.
+            //
+            // "How many of our customers use SEO" is a question about
+            // customers, so the denominator is customers.
+            $denominator = $this->realAccountCount();
+            $active = $this->activeAccountCount();
             $features = [];
 
             foreach ($this->derivableSources() as $key => $source) {
@@ -329,6 +338,10 @@ class AdoptionMetrics
 
             return [
                 'denominator' => $denominator,
+                'active_accounts' => $active,
+                // Below this, a percentage is theatre — one account moving
+                // swings it by 10 points or more. The UI leads with counts instead.
+                'percentages_meaningful' => $denominator >= 20,
                 'features' => $features,
                 // proposals.customer_id is nullable, so some rows belong to a
                 // user but to no account. Reported rather than silently dropped:
@@ -405,10 +418,25 @@ class AdoptionMetrics
             // Accounts that touched nothing are the most important bar on this
             // chart and appear in none of the union arms, so they are added here.
             $touchedAny = array_sum(array_column($used, 'accounts'));
-            $zero = max(0, $this->activeAccountCount() - $touchedAny);
+            $zero = max(0, $this->realAccountCount() - $touchedAny);
 
             return [['features' => 0, 'accounts' => $zero], ...$used];
         });
+    }
+
+    /**
+     * Every real account — the denominator for adoption.
+     *
+     * Sandbox and soft-deleted excluded, but otherwise unfiltered: an account
+     * that has never touched a feature is precisely what an adoption rate is
+     * measuring against.
+     */
+    private function realAccountCount(): int
+    {
+        return (int) DB::table('customers')
+            ->whereNull('deleted_at')
+            ->where('is_sandbox', false)
+            ->count();
     }
 
     /**

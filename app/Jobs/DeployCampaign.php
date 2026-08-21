@@ -9,6 +9,7 @@ use App\Models\Campaign;
 use App\Models\Setting;
 use App\Notifications\DeploymentCompleted;
 use App\Notifications\DeploymentFailed;
+use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
 use App\Services\Agents\PreLaunchComplianceAgent;
 use App\Services\DeploymentService;
@@ -362,6 +363,16 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             Log::info("All deployments successful for Campaign ID: {$this->campaign->id}");
             $this->notifyUsers(new DeploymentCompleted($this->campaign, $successCount, $failureCount, $strategies->toArray()));
         }
+
+        // AgentActivity is the per-customer feed; the activity log is the
+        // platform-wide one an admin reads. A deployment is the single most
+        // consequential thing that happens on this platform and appeared in
+        // neither of the admin's views before.
+        ActivityLogger::campaign(
+            $failureCount === 0 ? 'deployed' : 'deploy_blocked',
+            $this->campaign,
+            ['successful' => $successCount, 'failed' => $failureCount],
+        );
 
         AgentActivity::record(
             'deployment',

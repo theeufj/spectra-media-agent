@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Models\ActivityLog;
+use App\Models\Campaign;
+use App\Models\Customer;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 class ActivityLogger
@@ -26,7 +29,7 @@ class ActivityLogger
     /**
      * Log impersonation start.
      */
-    public static function impersonateStart(Model $targetUser): ActivityLog
+    public static function impersonateStart(User $targetUser): ActivityLog
     {
         return ActivityLog::log(
             'impersonate_start',
@@ -38,7 +41,7 @@ class ActivityLogger
     /**
      * Log impersonation stop.
      */
-    public static function impersonateStop(Model $targetUser): ActivityLog
+    public static function impersonateStop(User $targetUser): ActivityLog
     {
         return ActivityLog::log(
             'impersonate_stop',
@@ -50,7 +53,7 @@ class ActivityLogger
     /**
      * Log user banned.
      */
-    public static function userBanned(Model $user): ActivityLog
+    public static function userBanned(User $user): ActivityLog
     {
         return ActivityLog::log('user_banned', "Banned user {$user->name}", $user);
     }
@@ -58,7 +61,7 @@ class ActivityLogger
     /**
      * Log user unbanned.
      */
-    public static function userUnbanned(Model $user): ActivityLog
+    public static function userUnbanned(User $user): ActivityLog
     {
         return ActivityLog::log('user_unbanned', "Unbanned user {$user->name}", $user);
     }
@@ -66,7 +69,7 @@ class ActivityLogger
     /**
      * Log user promoted to admin.
      */
-    public static function userPromoted(Model $user): ActivityLog
+    public static function userPromoted(User $user): ActivityLog
     {
         return ActivityLog::log('user_promoted', "Promoted {$user->name} to admin", $user);
     }
@@ -74,7 +77,7 @@ class ActivityLogger
     /**
      * Log campaign action.
      */
-    public static function campaign(string $action, Model $campaign, array $properties = []): ActivityLog
+    public static function campaign(string $action, Campaign $campaign, array $properties = []): ActivityLog
     {
         $description = match ($action) {
             'created' => "Created campaign: {$campaign->name}",
@@ -82,6 +85,11 @@ class ActivityLogger
             'deleted' => "Deleted campaign: {$campaign->name}",
             'paused' => "Paused campaign: {$campaign->name}",
             'started' => "Started campaign: {$campaign->name}",
+            // Deployment runs on the queue, so there is no authenticated user
+            // on the row. The description has to carry the whole story on its
+            // own or the entry reads as an anonymous "campaign action".
+            'deployed' => "Deployed campaign to platforms: {$campaign->name}",
+            'deploy_blocked' => "Deployment did not fully succeed: {$campaign->name}",
             default => "Campaign action: {$action}",
         };
 
@@ -91,7 +99,7 @@ class ActivityLogger
     /**
      * Log customer action.
      */
-    public static function customer(string $action, Model $customer): ActivityLog
+    public static function customer(string $action, Customer $customer): ActivityLog
     {
         $description = match ($action) {
             'created' => "Created customer: {$customer->name}",
@@ -100,6 +108,23 @@ class ActivityLogger
         };
 
         return ActivityLog::log("customer_{$action}", $description, $customer);
+    }
+
+    /**
+     * Log that an account became billable.
+     *
+     * The readiness audit found 14 of 15 accounts had no ad-spend credit
+     * account, so this is the event that unblocks the platform. Worth seeing
+     * the moment it happens.
+     */
+    public static function adSpendBillingSetup(Customer $customer, float $dailyBudget): ActivityLog
+    {
+        return ActivityLog::log(
+            'ad_spend_billing_setup',
+            "Ad-spend billing set up for {$customer->name}",
+            $customer,
+            ['daily_budget' => $dailyBudget],
+        );
     }
 
     /**

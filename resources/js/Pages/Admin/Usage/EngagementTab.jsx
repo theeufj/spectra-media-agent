@@ -112,14 +112,25 @@ const TimeToValue = ({ steps }) => (
 );
 
 const FeatureBreadth = ({ breadth, recordingSince }) => {
-    const { features, denominator, unattributed_proposals: unattributed } = breadth;
+    const {
+        features,
+        denominator,
+        active_accounts: activeAccounts,
+        percentages_meaningful: pctMeaningful,
+        unattributed_proposals: unattributed,
+    } = breadth;
 
+    // Counts, not percentages. Below a couple of dozen accounts a percentage
+    // is theatre — one account moves it ten points — and a 100% bar reads as
+    // "everyone uses this" when it means "the one account that did anything
+    // touched it". The axis is accounts, capped at the total, so bar length is
+    // honestly comparable between features.
     const data = {
         labels: features.map((f) => f.label),
         datasets: [
             {
                 label: 'Accounts',
-                data: features.map((f) => f.pct),
+                data: features.map((f) => f.accounts),
                 backgroundColor: seriesColor(0),
                 borderColor: INK.light.surface,
                 borderWidth: 2,
@@ -139,7 +150,9 @@ const FeatureBreadth = ({ breadth, recordingSince }) => {
                 callbacks: {
                     label: (ctx) => {
                         const f = features[ctx.dataIndex];
-                        return `${f.accounts.toLocaleString()} of ${denominator.toLocaleString()} active accounts (${f.pct}%)`;
+                        return `${f.accounts.toLocaleString()} of ${denominator.toLocaleString()} accounts${
+                            pctMeaningful ? ` (${f.pct}%)` : ''
+                        }`;
                     },
                 },
             },
@@ -147,10 +160,12 @@ const FeatureBreadth = ({ breadth, recordingSince }) => {
         scales: {
             x: {
                 beginAtZero: true,
-                max: 100,
+                max: denominator,
                 grid: { color: INK.light.grid, drawTicks: false },
                 border: { display: false },
-                ticks: { color: INK.light.muted, callback: (v) => `${v}%` },
+                // Whole accounts only — "2.5 accounts" is not a thing.
+                ticks: { color: INK.light.muted, precision: 0, stepSize: 1 },
+                title: { display: true, text: `accounts (of ${denominator})`, color: INK.light.muted },
             },
             y: {
                 grid: { display: false },
@@ -163,15 +178,47 @@ const FeatureBreadth = ({ breadth, recordingSince }) => {
     return (
         <Section
             title="Feature adoption"
-            subtitle={`Share of active accounts that used each feature this period. Denominator is ${denominator.toLocaleString()} accounts with activity — not every account ever, which would make everything look unused.`}
+            subtitle={
+                `How many of your ${denominator.toLocaleString()} accounts used each feature this period` +
+                (activeAccounts !== undefined
+                    ? `. ${activeAccounts.toLocaleString()} had any campaign activity at all, so most bars will be short until more accounts are live.`
+                    : '.')
+            }
         >
             {denominator === 0 ? (
-                <p className="text-sm text-gray-500">No active accounts in this window.</p>
+                <p className="text-sm text-gray-500">No accounts yet.</p>
             ) : (
                 <div style={{ height: `${Math.max(240, features.length * 34)}px` }}>
                     <Bar data={data} options={options} />
                 </div>
             )}
+
+            <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full">
+                    <thead>
+                        <tr>
+                            <th className="px-2 py-1 text-left text-xs font-semibold uppercase tracking-wider text-gray-500">Feature</th>
+                            <th className="px-2 py-1 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Accounts</th>
+                            {pctMeaningful && (
+                                <th className="px-2 py-1 text-right text-xs font-semibold uppercase tracking-wider text-gray-500">Share</th>
+                            )}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                        {features.map((f) => (
+                            <tr key={f.key}>
+                                <td className="px-2 py-1 text-sm text-gray-700">{f.label}</td>
+                                <td className="px-2 py-1 text-right text-sm tabular-nums text-gray-900">
+                                    {f.accounts} <span className="text-gray-400">/ {denominator}</span>
+                                </td>
+                                {pctMeaningful && (
+                                    <td className="px-2 py-1 text-right text-sm tabular-nums text-gray-500">{f.pct}%</td>
+                                )}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
 
             <div className="mt-4 space-y-1">
                 {/* Say plainly what is missing. A reader who assumes this list is
