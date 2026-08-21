@@ -114,12 +114,38 @@ class AdoptionMetrics
             );
 
             $steps = [
-                ['key' => 'signed_up', 'label' => 'Signed up', 'count' => (int) $row->signed_up],
-                ['key' => 'created_account', 'label' => 'Reached an account', 'count' => (int) $row->created_account],
-                ['key' => 'created_campaign', 'label' => 'Created a campaign', 'count' => (int) $row->created_campaign],
-                ['key' => 'generated_strategy', 'label' => 'Generated a strategy', 'count' => (int) $row->generated_strategy],
-                ['key' => 'deployed', 'label' => 'Deployed to a platform', 'count' => (int) $row->deployed],
-                ['key' => 'live', 'label' => 'Live on a platform', 'count' => (int) $row->live],
+                [
+                    'key' => 'signed_up', 'label' => 'Signed up',
+                    'count' => (int) $row->signed_up,
+                    'means' => 'Created a login during this window.',
+                ],
+                [
+                    'key' => 'created_account', 'label' => 'Has an ad account',
+                    'count' => (int) $row->created_account,
+                    // Membership, not authorship: someone invited onto an
+                    // existing account counts, because they can advertise.
+                    'means' => 'Belongs to at least one ad account — either they created one or were invited to it.',
+                ],
+                [
+                    'key' => 'created_campaign', 'label' => 'Created a campaign',
+                    'count' => (int) $row->created_campaign,
+                    'means' => 'One of their accounts has at least one campaign, in any state including draft.',
+                ],
+                [
+                    'key' => 'generated_strategy', 'label' => 'Generated a strategy',
+                    'count' => (int) $row->generated_strategy,
+                    'means' => 'A campaign finished AI strategy generation.',
+                ],
+                [
+                    'key' => 'deployed', 'label' => 'Deployed to a platform',
+                    'count' => (int) $row->deployed,
+                    'means' => 'A strategy reached Google, Facebook, Microsoft or LinkedIn.',
+                ],
+                [
+                    'key' => 'live', 'label' => 'Live on a platform',
+                    'count' => (int) $row->live,
+                    'means' => 'The platform reports a campaign as serving — eligible, limited or learning.',
+                ],
             ];
 
             $start = $steps[0]['count'];

@@ -57,6 +57,7 @@ export default function FunnelChart({ steps }) {
                             parts.push(`${step.pct_of_previous}% of previous step`);
                         }
                         parts.push(`${step.pct_of_start}% of signups`);
+                        if (step.means) parts.push(step.means);
                         return parts;
                     },
                 },
@@ -110,8 +111,19 @@ export default function FunnelChart({ steps }) {
                             const leaky = step.pct_of_previous != null && step.pct_of_previous < 50;
 
                             return (
-                                <tr key={step.key} className="hover:bg-gray-50">
-                                    <td className="px-6 py-2 text-sm text-gray-700 whitespace-nowrap">{step.label}</td>
+                                <tr key={step.key} className="hover:bg-gray-50 align-top">
+                                    <td className="px-6 py-2 text-sm text-gray-700">
+                                        <div>{step.label}</div>
+                                        {/* Each step's definition, because the
+                                            labels are necessarily short and
+                                            "Has an ad account" does not say
+                                            whether being invited counts. */}
+                                        {step.means && (
+                                            <div className="mt-0.5 max-w-md text-xs font-normal text-gray-400">
+                                                {step.means}
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="px-4 py-2 text-sm text-right font-semibold text-gray-900 tabular-nums">
                                         {step.count.toLocaleString()}
                                     </td>

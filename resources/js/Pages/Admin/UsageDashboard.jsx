@@ -30,8 +30,15 @@ export default function UsageDashboard({
     // existing component instance, which is exactly wrong here: every tab
     // renders different props, and there is no local state worth preserving.
     // Links also give middle-click, open-in-new-tab and a real href for free.
-    const href = (params) =>
-        route('admin.dashboard', { tab, period: period.key, ...params });
+    // Built by hand rather than through Ziggy's route(). admin.dashboard takes
+    // no route parameters, so everything here is query string anyway, and a
+    // plain template removes a whole layer that could silently produce the
+    // wrong URL.
+    const href = (params) => {
+        const query = new URLSearchParams({ tab, period: period.key, ...params });
+
+        return `/admin/dashboard?${query.toString()}`;
+    };
 
     const periodPicker = (
         <div className="flex gap-2 flex-wrap">

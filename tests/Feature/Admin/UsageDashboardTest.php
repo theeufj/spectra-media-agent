@@ -136,6 +136,28 @@ class UsageDashboardTest extends TestCase
             ));
     }
 
+    public function test_the_readiness_data_loads_on_a_deferred_reload(): void
+    {
+        // The tab renders a Deferred block, so the initial response carries no
+        // readiness prop — it arrives on a follow-up partial request. If that
+        // request fails the tab sits on its loading message forever, which is
+        // indistinguishable from the tab not working.
+        $version = (new \App\Http\Middleware\HandleInertiaRequests)->version(request());
+
+        $this->actingAs($this->admin)
+            ->withHeaders([
+                'X-Inertia' => 'true',
+                'X-Inertia-Version' => (string) $version,
+                'X-Inertia-Partial-Component' => 'Admin/UsageDashboard',
+                'X-Inertia-Partial-Data' => 'readiness',
+            ])
+            ->get(route('admin.dashboard', ['tab' => 'readiness']))
+            ->assertStatus(200)
+            ->assertJsonStructure([
+                'props' => ['readiness' => ['accounts', 'summary', 'blocker_counts']],
+            ]);
+    }
+
     public function test_the_summary_strip_and_coverage_note_are_always_present(): void
     {
         $this->actingAs($this->admin)
