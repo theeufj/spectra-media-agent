@@ -235,6 +235,46 @@ class Campaign extends Model
     }
 
     /**
+     * Per-platform daily performance rows.
+     *
+     * These are the tables that are actually populated — FetchGoogleAdsPerformanceData,
+     * FetchFacebookAdsPerformanceData, MicrosoftAds\PerformanceService and
+     * LinkedInAds\PerformanceService each write one row per campaign per date.
+     * (Contrast Strategy::performanceData(), whose table has no writer at all.)
+     *
+     * Declared here because YesterdayPerformanceSummaryTest already queries
+     * `campaigns.googleAdsPerformanceData` through whereHas, which would have
+     * thrown the moment that test ran outside its RUN_INTEGRATION_TESTS guard.
+     *
+     * Money lives in `cost`, and there is one row per DATE — sum over a range
+     * rather than taking first().
+     *
+     * @return HasMany<GoogleAdsPerformanceData, $this>
+     */
+    public function googleAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(GoogleAdsPerformanceData::class);
+    }
+
+    /** @return HasMany<FacebookAdsPerformanceData, $this> */
+    public function facebookAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(FacebookAdsPerformanceData::class);
+    }
+
+    /** @return HasMany<MicrosoftAdsPerformanceData, $this> */
+    public function microsoftAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(MicrosoftAdsPerformanceData::class);
+    }
+
+    /** @return HasMany<LinkedInAdsPerformanceData, $this> */
+    public function linkedInAdsPerformanceData(): HasMany
+    {
+        return $this->hasMany(LinkedInAdsPerformanceData::class);
+    }
+
+    /**
      * Scope campaigns that have been deployed to at least one ad platform.
      */
     public function scopeWithDeployedPlatforms($query)

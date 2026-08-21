@@ -254,8 +254,10 @@ class Customer extends Model
 
     /**
      * Get the campaigns for the customer.
+     *
+     * @return HasMany<Campaign, $this>
      */
-    public function campaigns()
+    public function campaigns(): HasMany
     {
         return $this->hasMany(Campaign::class);
     }

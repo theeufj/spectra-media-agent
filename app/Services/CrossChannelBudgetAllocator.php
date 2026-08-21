@@ -174,7 +174,13 @@ class CrossChannelBudgetAllocator
             }
 
             // LinkedIn Ads performance
-            if ($campaign->linkedin_ads_campaign_id) {
+            //
+            // The column is `linkedin_campaign_id` — every other platform uses
+            // `{platform}_ads_campaign_id`, and this one does not. Reading the
+            // consistent-looking name returned null for every campaign, so
+            // LinkedIn spend was silently dropped from every rebalance snapshot
+            // and its budget arm was rebalanced against zero performance.
+            if ($campaign->linkedin_campaign_id) {
                 $liPerf = LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
                     ->where('date', '>=', $since)
                     ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value, SUM(clicks) as clicks, SUM(impressions) as impressions')

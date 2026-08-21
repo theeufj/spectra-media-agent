@@ -95,7 +95,44 @@ class Strategy extends Model
     }
 
     /**
+     * Strategy-level performance rows.
+     *
+     * The inverse of PerformanceData::strategy(), which has existed since the
+     * model was added but was never declared on this side — so every
+     * `->with('strategies.performanceData')` in the codebase was a fatal
+     * "call to undefined relationship" waiting to happen.
+     *
+     * ⚠ NOTHING WRITES `performance_data`. The four fetch jobs
+     * (FetchGoogleAdsPerformanceData and friends) all write the per-platform,
+     * campaign-keyed tables instead — see Campaign::googleAdsPerformanceData()
+     * and its siblings. So this relation is correct but returns an empty
+     * collection, and the services that read it
+     * (BudgetAllocationService, PortfolioOptimizationService,
+     * DashboardDataService, StatisticalSignificanceService) will compute zeros
+     * rather than crash.
+     *
+     * That is a deliberate improvement on crashing, not a claim that those
+     * services work. They are all currently unreferenced; before wiring any of
+     * them up, either populate this table or repoint them at the per-platform
+     * relations. Repointing is not a rename: those tables store one row per
+     * campaign PER DATE and call the money column `cost`, whereas these
+     * services expect a single row with `spend`, so the aggregation has to be
+     * chosen rather than assumed.
+     *
+     * @return HasMany<PerformanceData, $this>
+     */
+    public function performanceData(): HasMany
+    {
+        return $this->hasMany(PerformanceData::class);
+    }
+
+    /**
      * Get the ad copies for the strategy.
+     *
+     * The generic matters: without it PHPStan resolves
+     * `$strategy->adCopies->first()` to a bare Model, so every read of
+     * ->headlines / ->descriptions in the deployment agents looked like an
+     * undefined property and the real errors were invisible behind it.
      *
      * @return HasMany<AdCopy, $this>
      */
