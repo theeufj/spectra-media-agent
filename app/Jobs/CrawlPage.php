@@ -49,14 +49,29 @@ class CrawlPage implements ShouldQueue
         'request blocked',
     ];
 
-    /** Retried rather than abandoned: rate limiting is temporary by definition. */
-    public int $tries = 4;
+    /**
+     * Fail after three genuine errors, not after three attempts.
+     *
+     * The distinction matters because RateLimited releases the job back to the
+     * queue when the host limit is reached, and a release counts as an attempt.
+     * With `tries` set, a large crawl would burn every attempt on being politely
+     * told to wait and then fail the page — the throttle would look exactly
+     * like the site refusing us. maxExceptions counts only attempts that threw,
+     * so a page can be deferred all day and still get its three real tries.
+     */
+    public int $maxExceptions = 3;
+
+    /** Paired with maxExceptions: bounds the deferrals without bounding retries. */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addHours(12);
+    }
 
     public int $timeout = 300; // 5 minutes max per page
 
     /**
-     * Back off hard between attempts. A site that just rate-limited us will
-     * rate-limit an immediate retry too, and each wasted attempt costs an
+     * Back off hard between real failures. A site that just rate-limited us
+     * will rate-limit an immediate retry too, and each wasted attempt costs an
      * embedding call.
      *
      * @return list<int>

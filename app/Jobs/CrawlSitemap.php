@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
+use App\Models\CustomerPage;
 use App\Models\User;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
@@ -123,6 +124,22 @@ class CrawlSitemap implements ShouldQueue
                 return;
             }
             libxml_use_internal_errors(false);
+
+            // A large store's sitemap index fans out into thousands of product
+            // pages — one clothing site produced 15,326 queued jobs, each a
+            // headless browser render and a paid embedding call, and at a
+            // polite crawl rate that is close to a day of work.
+            //
+            // A campaign brief does not improve for having read the nine
+            // hundredth dress. Stop once enough of the site is understood.
+            if ($this->customerId && $this->alreadyCrawledEnough()) {
+                Log::info('CrawlSitemap: page budget reached, not descending further', [
+                    'customer_id' => $this->customerId,
+                    'sitemap' => $this->sitemapUrl,
+                ]);
+
+                return;
+            }
 
             // Check if it's a sitemap index file
             if (isset($xml->sitemap)) {
@@ -270,5 +287,25 @@ class CrawlSitemap implements ShouldQueue
         Log::error('CrawlSitemap failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+    }
+
+    /**
+     * Has this customer's crawl already gathered enough of the site?
+     *
+     * Counted from what is stored rather than from what was dispatched,
+     * because sub-sitemaps are separate concurrent jobs with no shared
+     * counter. It is a soft ceiling — jobs already queued still run — and that
+     * is fine: the point is to stop descending into ten more product
+     * sitemaps, not to be exact.
+     */
+    private function alreadyCrawledEnough(): bool
+    {
+        $budget = (int) config('crawl.max_pages_per_site', 400);
+
+        if ($budget <= 0) {
+            return false;
+        }
+
+        return CustomerPage::where('customer_id', $this->customerId)->count() >= $budget;
     }
 }

@@ -85,9 +85,12 @@ class CrawlPageBlockingTest extends TestCase
     {
         $job = $this->job();
 
-        // Rate limiting is temporary, so being turned away must lead to a
-        // retry rather than an empty page being accepted as the truth.
-        $this->assertGreaterThan(1, $job->tries);
+        // Deferrals must not consume retries. RateLimited releases the job back
+        // to the queue and a release counts as an attempt, so a `tries` limit
+        // would let a busy crawl fail pages purely for having been asked to
+        // wait. maxExceptions counts only attempts that actually threw.
+        $this->assertSame(3, $job->maxExceptions);
+        $this->assertGreaterThan(now(), $job->retryUntil());
         $this->assertNotEmpty($job->backoff());
 
         $middleware = $job->middleware();
