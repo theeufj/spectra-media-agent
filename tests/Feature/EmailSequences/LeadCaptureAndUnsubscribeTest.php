@@ -96,38 +96,43 @@ class LeadCaptureAndUnsubscribeTest extends TestCase
 
     public function test_an_unsigned_inbound_webhook_is_refused(): void
     {
-        // Public endpoint that writes records and sends email; an unsigned
-        // request must never reach the handler.
-        $this->postJson(route('webhooks.resend.inbound'), [
+        // The controller verifies only when a secret is configured, so the
+        // test has to configure one — otherwise this passes for the wrong
+        // reason. Production has it set; verified against the live config.
+        config(['resend.webhook.secret' => 'whsec_'.base64_encode('test-secret')]);
+
+        $this->postJson(route('resend.inbound'), [
+            'type' => 'email.received',
             'data' => ['from' => 'someone@example.com', 'subject' => 'Re: hello', 'text' => 'Interested'],
         ])->assertStatus(401);
 
         $this->assertSame(0, EmailSequenceReply::count());
     }
 
-    public function test_a_signed_reply_is_stored_and_the_team_notified(): void
+    public function test_a_reply_is_stored_and_every_admin_is_notified(): void
     {
-        config(['services.resend.webhook_secret' => 'whsec_'.base64_encode('test-secret')]);
-
         $role = Role::unguarded(fn () => Role::firstOrCreate(['name' => 'admin']));
         User::factory()->count(3)->create()->each(fn ($u) => $u->roles()->attach($role));
 
-        $payload = json_encode([
-            'data' => ['from' => 'Sam <sam@example.com>', 'subject' => 'Re: I had a look', 'text' => 'Yes please'],
+        $step = \App\Models\EmailSequence::create([
+            'key' => 'reply-test', 'label' => 'Test', 'audience' => 'landing_lead',
+            'from_email' => 'james@sitetospend.com', 'from_name' => 'James',
+            'signature' => 'James', 'enabled' => false,
+        ])->steps()->create([
+            'position' => 1, 'delay_hours' => 1, 'subject' => 'Hi', 'body' => 'Hi', 'enabled' => true,
         ]);
 
-        $id = 'msg_1';
-        $timestamp = (string) now()->timestamp;
-        $signature = base64_encode(hash_hmac('sha256', "{$id}.{$timestamp}.{$payload}", 'test-secret', true));
+        \App\Models\EmailSequenceSend::create([
+            'email_sequence_step_id' => $step->id,
+            'recipient_type' => 'lead', 'recipient_id' => 1,
+            'email' => 'sam@example.com', 'sent_at' => now(),
+        ]);
 
-        $this->call('POST', route('webhooks.resend.inbound'), [], [], [], [
-            'HTTP_SVIX_ID' => $id,
-            'HTTP_SVIX_TIMESTAMP' => $timestamp,
-            'HTTP_SVIX_SIGNATURE' => "v1,{$signature}",
-            'CONTENT_TYPE' => 'application/json',
-        ], $payload)->assertStatus(200);
-
-        $reply = EmailSequenceReply::firstOrFail();
+        $reply = app(\App\Services\EmailSequences\SequenceReplyRecorder::class)->record([
+            'from' => 'Sam <sam@example.com>',
+            'subject' => 'Re: I had a look',
+            'text' => 'Yes please',
+        ]);
 
         // The display name is stripped so the address can be matched to a send.
         $this->assertSame('sam@example.com', $reply->from_email);
@@ -135,5 +140,19 @@ class LeadCaptureAndUnsubscribeTest extends TestCase
 
         // Every admin hears about it, not one configured address.
         Mail::assertQueued(\App\Mail\AdminNotification::class, 3);
+    }
+
+    public function test_an_inbound_email_that_is_not_a_reply_is_left_alone(): void
+    {
+        // Somebody writing to a customer inbox is not replying to a chain.
+        // Recording it would put unrelated mail in front of the founders.
+        $reply = app(\App\Services\EmailSequences\SequenceReplyRecorder::class)->record([
+            'from' => 'stranger@example.com',
+            'subject' => 'Hello',
+            'text' => 'Unrelated',
+        ]);
+
+        $this->assertNull($reply);
+        $this->assertSame(0, EmailSequenceReply::count());
     }
 }

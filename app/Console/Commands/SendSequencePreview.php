@@ -61,7 +61,11 @@ class SendSequencePreview extends Command
 
             foreach ($sequence->steps as $step) {
                 foreach ($recipients as $recipient) {
-                    Mail::to($recipient)->send(new SequenceEmail(
+                    // sendNow, not send: SequenceEmail is ShouldQueue, so
+                    // send() would merely queue it — and a preview sitting
+                    // behind a thousand crawl jobs is a preview nobody reads.
+                    // A review command should either deliver or fail here.
+                    Mail::to($recipient)->sendNow(new SequenceEmail(
                         sequence: $sequence,
                         step: $step,
                         // Stand-in values so the placeholders can be seen
@@ -84,7 +88,7 @@ class SendSequencePreview extends Command
             $this->newLine();
         }
 
-        $this->info("Sent {$sent} emails.");
+        $this->info("Delivered {$sent} emails.");
         $this->comment('Sent regardless of EMAIL_SEQUENCES_ENABLED — reviewing copy does not require going live.');
 
         return self::SUCCESS;

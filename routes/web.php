@@ -874,12 +874,6 @@ Route::middleware(['auth', 'admin'])->group(function () {
 // Callback must be outside auth middleware — Google redirects here and the session won't carry over
 Route::get('/youtube/auth/callback', [App\Http\Controllers\YouTubeAuthController::class, 'callback'])->name('youtube.auth.callback');
 
-// Replies to the follow-up chains, posted back by Resend. Public by
-// necessity and signature-verified in the controller; CSRF is not applicable
-// to a server-to-server callback.
-Route::post('/webhooks/resend/inbound', \App\Http\Controllers\ResendInboundController::class)
-    ->name('webhooks.resend.inbound');
-
 // Follow-up sequence unsubscribe. Signed rather than authenticated: someone
 // stopping email they did not want should never be asked to log in first.
 Route::get('/email/sequences/unsubscribe/{type}/{id}', [App\Http\Controllers\EmailPreferenceController::class, 'unsubscribeFromSequences'])
