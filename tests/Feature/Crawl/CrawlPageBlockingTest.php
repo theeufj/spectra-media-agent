@@ -7,6 +7,7 @@ use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -94,6 +95,12 @@ class CrawlPageBlockingTest extends TestCase
         $this->assertNotEmpty($job->backoff());
 
         $middleware = $job->middleware();
-        $this->assertInstanceOf(RateLimited::class, $middleware[0]);
+
+        // Order matters. Middleware runs before the batch-cancelled check, so
+        // with the limiter first a cancelled crawl never drains: every job is
+        // throttled, released, picked up and throttled again. Cancelling
+        // 14,637 jobs left them cycling at twelve a minute.
+        $this->assertInstanceOf(SkipIfBatchCancelled::class, $middleware[0]);
+        $this->assertInstanceOf(RateLimited::class, $middleware[1]);
     }
 }

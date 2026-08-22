@@ -15,6 +15,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\Middleware\RateLimited;
+use Illuminate\Queue\Middleware\SkipIfBatchCancelled;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -92,7 +93,12 @@ class CrawlPage implements ShouldQueue
      */
     public function middleware(): array
     {
-        return [new RateLimited('crawling')];
+        // SkipIfBatchCancelled MUST come first. Middleware runs before the
+        // batch-cancelled check, so with the limiter alone a cancelled crawl
+        // does not drain: every job is throttled, released back to the queue,
+        // picked up, throttled again. Cancelling 14,637 jobs left them cycling
+        // at twelve a minute instead of disappearing.
+        return [new SkipIfBatchCancelled, new RateLimited('crawling')];
     }
 
     /**
