@@ -187,7 +187,10 @@ class CrawlPage implements ShouldQueue
             $html = Browsershot::url($this->url)
                 ->setNodeBinary(config('browsershot.node_binary_path'))
                 ->addChromiumArguments(array_merge(config('browsershot.chrome_args', []), ['disable-gpu']))
-                ->timeout(30)
+                // Thirty seconds lost ten of eleven pages on a re-crawl of two
+                // Shopify storefronts. The job itself allows 300, so the render
+                // was the binding constraint, not the queue.
+                ->timeout(config('browsershot.page_timeout', 90))
                 ->waitUntilDOMContentLoaded()
                 ->bodyHtml();
 

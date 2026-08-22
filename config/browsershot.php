@@ -15,6 +15,21 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Page render timeout
+    |--------------------------------------------------------------------------
+    |
+    | Seconds Browsershot waits for a page before giving up. Thirty was too
+    | short for JS-heavy storefronts: a re-crawl of two Shopify sites timed out
+    | on ten pages and rendered one. The queue job allows 300 seconds, so there
+    | is room, and a page that renders slowly is still worth having — the
+    | alternative is a knowledge base missing every product page on the site.
+    |
+    */
+
+    'page_timeout' => (int) env('BROWSERSHOT_PAGE_TIMEOUT', 90),
+
+    /*
+    |--------------------------------------------------------------------------
     | Chrome Arguments
     |--------------------------------------------------------------------------
     |
