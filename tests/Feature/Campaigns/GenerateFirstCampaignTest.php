@@ -108,7 +108,7 @@ class GenerateFirstCampaignTest extends TestCase
         $this->crawlPages(12);
         $this->fakeAi($this->brief());
 
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         $campaign = Campaign::where('customer_id', $this->customer->id)->firstOrFail();
 
@@ -127,7 +127,7 @@ class GenerateFirstCampaignTest extends TestCase
         $this->crawlPages(12);
         $this->fakeAi($this->brief());
 
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         Mail::assertQueued(FirstCampaignReady::class);
     }
@@ -139,7 +139,7 @@ class GenerateFirstCampaignTest extends TestCase
         // Models do this however firmly you ask them not to.
         $this->fakeAi($this->brief(), fenced: true);
 
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         $this->assertSame(1, Campaign::where('customer_id', $this->customer->id)->count());
     }
@@ -152,7 +152,7 @@ class GenerateFirstCampaignTest extends TestCase
         $this->crawlPages(12);
         $this->fakeAi($this->brief(['daily_budget' => 60]));
 
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         $campaign = Campaign::where('customer_id', $this->customer->id)->firstOrFail();
 
@@ -171,7 +171,7 @@ class GenerateFirstCampaignTest extends TestCase
         // A misplaced decimal must not present someone with a four-figure daily spend.
         $this->fakeAi($this->brief(['daily_budget' => 99999]));
 
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         $this->assertEquals(200, Campaign::where('customer_id', $this->customer->id)->value('daily_budget'));
     }
@@ -261,7 +261,7 @@ class GenerateFirstCampaignTest extends TestCase
         $this->crawlPages(12);
         $this->fakeAi($this->brief());
 
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         $campaign = Campaign::where('customer_id', $this->customer->id)->firstOrFail();
 
@@ -389,7 +389,7 @@ class GenerateFirstCampaignTest extends TestCase
 
         // This runs unbidden at the end of onboarding. A failure means the
         // customer misses a bonus, not that their signup broke.
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         $this->assertSame(0, Campaign::where('customer_id', $this->customer->id)->count());
     }
@@ -410,7 +410,7 @@ class GenerateFirstCampaignTest extends TestCase
             }
         });
 
-        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class));
+        (new GenerateFirstCampaign($this->customer))->handle(app(GeminiService::class), app(\App\Services\KnowledgeBase\KnowledgeBaseRetriever::class));
 
         // Half a campaign is worse than none.
         $this->assertSame(0, Campaign::where('customer_id', $this->customer->id)->count());

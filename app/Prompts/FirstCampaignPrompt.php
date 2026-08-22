@@ -46,13 +46,23 @@ Hard rules:
 SYSTEM;
     }
 
-    public static function generate(Customer $customer, ?BrandGuideline $brand, array $pageTitles): string
+    /**
+     * @param  list<string>  $pageTitles
+     * @param  list<array{url: string, excerpt: string}>  $pages  the customer's own page text
+     */
+    public static function generate(Customer $customer, ?BrandGuideline $brand, array $pageTitles, array $pages = []): string
     {
         $brandBlock = $brand
             ? self::describeBrand($brand)
-            : 'No brand guidelines were extracted — rely on the page titles alone and stay general.';
+            : 'No brand guidelines were extracted — rely on the material below and stay general.';
 
-        $pages = $pageTitles !== []
+        // What the business actually says about itself, retrieved from its own
+        // pages. Brand guidelines are a summary of this; page titles are a
+        // table of contents for it. Neither says what they sell in their own
+        // words, and that is what a campaign has to be about.
+        $contentBlock = $pages !== [] ? self::describePages($pages) : '';
+
+        $titles = $pageTitles !== []
             ? '- '.implode("\n- ", array_slice($pageTitles, 0, 40))
             : '(no pages captured)';
 
@@ -68,11 +78,13 @@ Industry: {$industry}
 Budget currency: {$currency}
 
 {$brandBlock}
+{$contentBlock}
+Page titles found on their website:
+{$titles}
 
-Pages found on their website:
-{$pages}
-
-Write their first Google Ads campaign brief. Return ONLY a JSON object, no prose, no code
+Write their first Google Ads campaign brief. Ground it in what these pages
+actually say — name the specific services, products or offers they describe.
+A brief that could apply to any business in this industry is a failure. Return ONLY a JSON object, no prose, no code
 fences, with exactly these keys:
 
 {
@@ -89,6 +101,20 @@ fences, with exactly these keys:
 
 daily_budget must be a plain number in {$currency}, no symbols or separators.
 PROMPT;
+    }
+
+    /**
+     * @param  list<array{url: string, excerpt: string}>  $pages
+     */
+    private static function describePages(array $pages): string
+    {
+        $blocks = [];
+
+        foreach ($pages as $page) {
+            $blocks[] = "--- {$page['url']} ---\n{$page['excerpt']}";
+        }
+
+        return "\nWhat their own pages say (most relevant first):\n\n".implode("\n\n", $blocks)."\n";
     }
 
     private static function describeBrand(BrandGuideline $brand): string

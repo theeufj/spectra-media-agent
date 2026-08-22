@@ -8,6 +8,7 @@ use App\Models\Customer;
 use App\Models\CustomerPage;
 use App\Prompts\FirstCampaignPrompt;
 use App\Services\GeminiService;
+use App\Services\KnowledgeBase\KnowledgeBaseRetriever;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -48,7 +49,7 @@ class GenerateFirstCampaign implements ShouldQueue
 
     public function __construct(public Customer $customer) {}
 
-    public function handle(GeminiService $gemini): void
+    public function handle(GeminiService $gemini, KnowledgeBaseRetriever $knowledgeBase): void
     {
         try {
             // Re-checked rather than trusted from dispatch time: a queued
@@ -67,9 +68,20 @@ class GenerateFirstCampaign implements ShouldQueue
                 ->values()
                 ->all();
 
+            // The campaign has to be about what they actually sell, in their own
+            // words. Brand guidelines are a summary of the site and page titles
+            // are its table of contents; neither says what is on offer. This
+            // pulls the pages that answer that question straight from the
+            // knowledge base the crawl built.
+            $pages = $knowledgeBase->search(
+                $this->customer,
+                'What products or services does this business sell, who buys them, and what makes them worth choosing?',
+                limit: 10,
+            );
+
             $response = $gemini->generateContent(
                 model: config('ai.models.default'),
-                prompt: FirstCampaignPrompt::generate($this->customer, $brand, $pageTitles),
+                prompt: FirstCampaignPrompt::generate($this->customer, $brand, $pageTitles, $pages),
                 config: ['temperature' => 0.6, 'maxOutputTokens' => 1500],
                 systemInstruction: FirstCampaignPrompt::systemInstruction(),
                 context: ['customer_id' => $this->customer->id, 'task_type' => 'strategy'],
