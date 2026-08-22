@@ -349,6 +349,9 @@ class CampaignController extends Controller
             'videos' => $totalVideos,
             'total' => $totalAdCopies + $totalImages + $totalVideos,
         ];
+        // The budget panel states what will be charged, so it needs the
+        // currency. Sent as a scalar rather than loading the whole customer.
+        $campaignData['currency_code'] = $customer->currency_code ?? 'USD';
 
         return Inertia::render('Campaigns/Show', [
             'campaign' => $campaignData,

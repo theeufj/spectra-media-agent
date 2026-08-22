@@ -282,6 +282,66 @@ class GenerateFirstCampaignTest extends TestCase
         $this->assertTrue($campaign->allowsAutomaticVideo());
     }
 
+    public function test_the_review_screen_carries_everything_the_budget_panel_needs(): void
+    {
+        // The deployment guard is enforced server-side, but if the review
+        // screen cannot render a confirmation the customer clicks Deploy, is
+        // told to confirm a budget, and has nowhere to do it.
+        $campaign = Campaign::factory()->create([
+            'customer_id' => $this->customer->id,
+            'auto_generated_at' => now(),
+            'daily_budget' => 60,
+            'budget_confirmed_at' => null,
+            'budget_rationale' => 'Enough to appear for urgent searches.',
+        ]);
+
+        $this->actingAs($this->user)
+            ->withSession(['active_customer_id' => $this->customer->id])
+            ->get(route('campaigns.show', $campaign))
+            ->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->where('campaign.auto_generated_at', fn ($v) => $v !== null)
+                ->where('campaign.budget_confirmed_at', null)
+                ->where('campaign.budget_rationale', 'Enough to appear for urgent searches.')
+                // Needed to state what will actually be charged.
+                ->where('campaign.currency_code', 'AUD')
+            );
+    }
+
+    public function test_confirming_from_the_review_screen_unblocks_deployment(): void
+    {
+        Queue::fake();
+
+        $subscriber = User::factory()->create([
+            'email_verified_at' => now(),
+            'subscription_status' => 'active',
+        ]);
+        $subscriber->customers()->attach($this->customer->id, ['role' => 'owner']);
+
+        $campaign = Campaign::factory()->create([
+            'customer_id' => $this->customer->id,
+            'auto_generated_at' => now(),
+            'daily_budget' => 60,
+            'budget_confirmed_at' => null,
+        ]);
+
+        // The full path a customer takes: change the number, confirm, deploy.
+        $this->actingAs($subscriber)
+            ->withSession(['active_customer_id' => $this->customer->id])
+            ->post(route('campaigns.confirm-budget', $campaign), ['daily_budget' => 40]);
+
+        $this->actingAs($subscriber)
+            ->withSession(['active_customer_id' => $this->customer->id])
+            ->post(route('deployment.deploy'), ['campaign_id' => $campaign->id]);
+
+        $campaign->refresh();
+
+        $this->assertEquals(40, $campaign->daily_budget);
+        $this->assertNotNull($campaign->budget_confirmed_at);
+        // Seven days at the figure they chose, not the one we suggested.
+        $this->assertEquals(280, $campaign->total_budget);
+    }
+
     // ── Who qualifies ────────────────────────────────────────────────────────
 
     public function test_a_thin_crawl_does_not_qualify(): void

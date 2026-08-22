@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import PrimaryButton from '@/Components/PrimaryButton';
 import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
+import BudgetConfirmation from '@/Components/BudgetConfirmation';
 import CampaignCopilot from '@/Components/CampaignCopilot';
 
 // Collateral Summary Card Component
@@ -457,6 +458,20 @@ export default function Show({ auth, campaign }) {
             header={<h2 className="font-semibold text-xl text-jet leading-tight">Review Strategy for: {campaigns.name}</h2>}
         >
             <Head title={`Strategy for ${campaigns.name}`} />
+
+            {/* Leads the page for campaigns we generated: it is the one thing
+                standing between the customer and deploying, and without it they
+                would click Deploy and be told to confirm a budget with nowhere
+                to do it. */}
+            {campaign.auto_generated_at && (
+                <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+                    {/* The prop, not the polled local state: confirming the
+                        budget redirects back with fresh props, and the local
+                        copy is only seeded once so it would still show as
+                        unconfirmed. */}
+                    <BudgetConfirmation campaign={campaign} currency={campaign.currency_code || 'USD'} />
+                </div>
+            )}
 
             <ConfirmationModal
                 show={confirmModal.show}
