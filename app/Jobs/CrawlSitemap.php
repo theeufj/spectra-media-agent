@@ -175,6 +175,12 @@ class CrawlSitemap implements ShouldQueue
                     '/reset-password',
                 ];
 
+                // Query shapes that re-serve a page we already crawled. A
+                // storefront exposes every product once per colour and size —
+                // ?variant= alone can multiply one product into dozens of
+                // identical pages, each costing a render and an embedding.
+                $duplicateParams = ['?variant=', '&variant=', '?page=', '&page=', '?sort_by=', '&sort_by=', '?filter'];
+
                 foreach ($xml->url as $url) {
                     $loc = (string) $url->loc;
 
@@ -183,6 +189,13 @@ class CrawlSitemap implements ShouldQueue
                     foreach ($skipPatterns as $pattern) {
                         if (str_contains(strtolower($loc), $pattern)) {
                             Log::info("CrawlSitemap: Skipping auth/admin page: {$loc}");
+                            $shouldSkip = true;
+                            break;
+                        }
+                    }
+
+                    foreach ($duplicateParams as $param) {
+                        if (! $shouldSkip && str_contains(strtolower($loc), $param)) {
                             $shouldSkip = true;
                             break;
                         }
@@ -237,6 +250,7 @@ class CrawlSitemap implements ShouldQueue
                 // single file spends a 400-page budget more than twice over
                 // before any other sitemap gets a look in.
                 if ($this->customerId && ! empty($jobs)) {
+                    $jobs = $this->prioritise($jobs);
                     $granted = $this->claimBudget(count($jobs));
 
                     if ($granted < count($jobs)) {
@@ -306,6 +320,65 @@ class CrawlSitemap implements ShouldQueue
         Log::error('CrawlSitemap failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+    }
+
+    /**
+     * Spend the crawl budget on the pages that describe the business.
+     *
+     * Not every page is worth the same. A storefront's "about", "shipping" and
+     * collection pages say what the company is, who it serves and what it
+     * stocks. Its fifteen thousand product pages say the same three sentences
+     * with a different noun — informative for the first twenty, noise after
+     * that, and each one costs a headless render and a paid embedding.
+     *
+     * Start2finish is the case in point: 15,326 product URLs against about
+     * thirty pages that actually describe the business. Left unordered the
+     * budget fills with dresses and the "about" page never gets crawled.
+     *
+     * Product pages are therefore capped at a share of the budget rather than
+     * excluded — some are needed to know what is actually sold — and
+     * everything else is taken first.
+     *
+     * @param  list<CrawlPage>  $jobs
+     * @return list<CrawlPage>
+     */
+    private function prioritise(array $jobs): array
+    {
+        $describes = [];
+        $products = [];
+
+        foreach ($jobs as $job) {
+            $path = strtolower((string) parse_url($job->url, PHP_URL_PATH));
+
+            if (str_contains($path, '/products/')) {
+                $products[] = $job;
+            } else {
+                $describes[] = $job;
+            }
+        }
+
+        if ($products === []) {
+            return $describes;
+        }
+
+        $productShare = max(1, (int) round(
+            (int) config('crawl.max_pages_per_site', 400) * (float) config('crawl.product_page_share', 0.25)
+        ));
+
+        if (count($products) > $productShare) {
+            Log::info('CrawlSitemap: capping product pages in favour of pages that describe the business', [
+                'customer_id' => $this->customerId,
+                'products_found' => count($products),
+                'products_taken' => $productShare,
+                'other_pages' => count($describes),
+            ]);
+
+            $products = array_slice($products, 0, $productShare);
+        }
+
+        // Descriptive pages first, so if the budget runs out mid-list it is the
+        // products that are dropped.
+        return [...$describes, ...$products];
     }
 
     /**
