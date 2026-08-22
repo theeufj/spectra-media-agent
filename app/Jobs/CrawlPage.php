@@ -14,6 +14,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
+use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -27,9 +28,57 @@ class CrawlPage implements ShouldQueue
 {
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 2;
+    /**
+     * Responses that mean the site turned us away, not that the page is empty.
+     *
+     * This is why one production store has 1,236 crawled pages and 3 with real
+     * text: Shopify answered 1,205 of them with "local_rate_limited" and the
+     * crawler stored that string as the page's content, embedded it at cost,
+     * and later offered it to the AI as a description of the business. A page
+     * we were blocked from is not a page with nothing on it, and must never be
+     * persisted as one.
+     */
+    private const BLOCKED_SIGNATURES = [
+        'local_rate_limited',
+        'there was a problem loading this website',
+        'too many requests',
+        'rate limit exceeded',
+        'access denied',
+        'checking your browser before accessing',
+        'enable javascript and cookies to continue',
+        'request blocked',
+    ];
+
+    /** Retried rather than abandoned: rate limiting is temporary by definition. */
+    public int $tries = 4;
 
     public int $timeout = 300; // 5 minutes max per page
+
+    /**
+     * Back off hard between attempts. A site that just rate-limited us will
+     * rate-limit an immediate retry too, and each wasted attempt costs an
+     * embedding call.
+     *
+     * @return list<int>
+     */
+    public function backoff(): array
+    {
+        return [60, 300, 900];
+    }
+
+    /**
+     * Bound the crawl to a rate the site will tolerate.
+     *
+     * There is a sleep() further down described as an ethical scraping delay,
+     * but it only slows one worker: Horizon runs these jobs concurrently, so
+     * the aggregate request rate was unbounded and that is what got us blocked.
+     * This middleware limits by host across every worker, and releases the job
+     * back to the queue instead of holding a worker idle.
+     */
+    public function middleware(): array
+    {
+        return [new RateLimited('crawling')];
+    }
 
     /**
      * @var \App\Models\User
@@ -127,8 +176,11 @@ class CrawlPage implements ShouldQueue
         }
 
         try {
-            // Ethical scraping delay
-            sleep(rand(5, 10));
+            // No sleep() here any more. It held a worker idle for 5-10s while
+            // doing nothing to bound the aggregate rate, since Horizon runs
+            // these concurrently — see the 'crawling' limiter in
+            // AppServiceProvider, which paces by host across all workers and
+            // releases the job rather than blocking on it.
 
             // Step 1: Use a headless browser to get the fully rendered HTML.
             // This executes the JavaScript on the page, just like a real browser.
@@ -176,6 +228,12 @@ class CrawlPage implements ShouldQueue
             if ($this->customerId) {
                 $metadata = $this->metadata ?? [];
                 $metadata['headings'] = $headings;
+
+                // Checked BEFORE embedding, not after storing: an embedding
+                // call on a rate-limit notice costs money and produces a
+                // vector that will later be retrieved as though it described
+                // the business.
+                $this->assertNotBlocked($cleanedContent);
 
                 // Initialize Gemini Service for embedding
                 $geminiService = new GeminiService;
@@ -432,5 +490,33 @@ class CrawlPage implements ShouldQueue
         Log::error('CrawlPage failed: '.$exception->getMessage(), [
             'exception' => $exception->getTraceAsString(),
         ]);
+    }
+
+    /**
+     * Refuse to store a page the site would not give us.
+     *
+     * Throws so the job retries with backoff. Failing loudly here is the whole
+     * point: silently storing the refusal is what poisoned the knowledge base,
+     * and a knowledge base full of "local_rate_limited" looks exactly like a
+     * knowledge base full of thin pages.
+     */
+    private function assertNotBlocked(string $content): void
+    {
+        $haystack = mb_strtolower(trim($content));
+
+        if ($haystack === '') {
+            throw new \RuntimeException("Empty page body for {$this->url}");
+        }
+
+        foreach (self::BLOCKED_SIGNATURES as $signature) {
+            if (str_contains($haystack, $signature)) {
+                Log::warning('CrawlPage: blocked or rate-limited, not storing', [
+                    'url' => $this->url,
+                    'signature' => $signature,
+                ]);
+
+                throw new \RuntimeException("Blocked or rate-limited fetching {$this->url} ({$signature})");
+            }
+        }
     }
 }

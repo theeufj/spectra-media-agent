@@ -73,6 +73,24 @@ class AppServiceProvider extends ServiceProvider
         // Rate limiter for Resend's 5 req/s API limit — applied via RateLimited middleware on queued mailables.
         RateLimiter::for('resend', fn () => Limit::perSecond(4));
 
+        // Crawl rate, applied per host via RateLimited middleware on CrawlPage.
+        //
+        // Keyed by host rather than globally, because the limit that matters is
+        // the one the site enforces: crawling twenty sites at once is fine,
+        // hammering one is not. A Shopify store answered 1,205 of 1,236
+        // requests with "local_rate_limited" under the previous arrangement,
+        // which was a sleep() inside each job — that slows one worker while
+        // Horizon runs the rest concurrently, so the aggregate rate was
+        // unbounded.
+        //
+        // Twelve a minute is roughly one page every five seconds per site,
+        // which matches the delay the job always intended to apply.
+        RateLimiter::for('crawling', function (object $job) {
+            $host = parse_url($job->url ?? '', PHP_URL_HOST) ?: 'unknown';
+
+            return Limit::perMinute(12)->by($host);
+        });
+
         // Block scratch Test* commands that create/send REAL ad resources when running
         // in production. They are auto-discovered and would otherwise be runnable live
         // (e.g. minting a real MCC sub-account or publishing a real campaign). Read-only
