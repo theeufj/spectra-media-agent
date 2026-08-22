@@ -26,7 +26,7 @@ return [
     |
     */
 
-    'page_timeout' => (int) env('BROWSERSHOT_PAGE_TIMEOUT', 90),
+    'page_timeout' => (int) env('BROWSERSHOT_PAGE_TIMEOUT', 120),
 
     /*
     |--------------------------------------------------------------------------
@@ -41,5 +41,19 @@ return [
         'no-sandbox',
         'disable-setuid-sandbox',
         'disable-dev-shm-usage',
+
+        // We are reading text, not taking screenshots. Product pages on a
+        // large storefront were exceeding a ninety-second render budget, and
+        // almost all of that work is fetching and decoding assets that get
+        // thrown away the moment the DOM is turned into a string. Chromium
+        // renders roughly an order of magnitude faster without them, and five
+        // of these run concurrently on one box.
+        'blink-settings=imagesEnabled=false',
+        'disable-remote-fonts',
+        'mute-audio',
+        'disable-extensions',
+        'disable-background-networking',
+        'disable-sync',
+        'disable-translate',
     ],
 ];
