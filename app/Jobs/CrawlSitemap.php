@@ -3,7 +3,6 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
-use App\Models\CustomerPage;
 use App\Models\User;
 use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
@@ -12,6 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Spatie\Sitemap\Sitemap;
@@ -132,8 +132,8 @@ class CrawlSitemap implements ShouldQueue
             //
             // A campaign brief does not improve for having read the nine
             // hundredth dress. Stop once enough of the site is understood.
-            if ($this->customerId && $this->alreadyCrawledEnough()) {
-                Log::info('CrawlSitemap: page budget reached, not descending further', [
+            if ($this->customerId && $this->budgetRemaining() <= 0) {
+                Log::info('CrawlSitemap: page budget spent, not descending further', [
                     'customer_id' => $this->customerId,
                     'sitemap' => $this->sitemapUrl,
                 ]);
@@ -232,6 +232,25 @@ class CrawlSitemap implements ShouldQueue
                     $jobs[] = new CrawlPage($this->user, $loc, $this->customerId, $metadata);
                 }
 
+                // Take only as much of the budget as is still unclaimed. One
+                // Shopify product sitemap holds a thousand URLs; without this a
+                // single file spends a 400-page budget more than twice over
+                // before any other sitemap gets a look in.
+                if ($this->customerId && ! empty($jobs)) {
+                    $granted = $this->claimBudget(count($jobs));
+
+                    if ($granted < count($jobs)) {
+                        Log::info('CrawlSitemap: trimming to remaining page budget', [
+                            'customer_id' => $this->customerId,
+                            'sitemap' => $this->sitemapUrl,
+                            'found' => count($jobs),
+                            'crawling' => $granted,
+                        ]);
+
+                        $jobs = array_slice($jobs, 0, $granted);
+                    }
+                }
+
                 // Dispatch as a batch with completion callback
                 if (! empty($jobs)) {
                     $customer = Customer::find($this->customerId);
@@ -290,22 +309,55 @@ class CrawlSitemap implements ShouldQueue
     }
 
     /**
-     * Has this customer's crawl already gathered enough of the site?
+     * How many more pages this customer's crawl may dispatch.
      *
-     * Counted from what is stored rather than from what was dispatched,
-     * because sub-sitemaps are separate concurrent jobs with no shared
-     * counter. It is a soft ceiling — jobs already queued still run — and that
-     * is fine: the point is to stop descending into ten more product
-     * sitemaps, not to be exact.
+     * COUNTED ON DISPATCH, NOT ON STORED PAGES. A sitemap index fans out into
+     * one CrawlSitemap job per sub-sitemap and they run concurrently, so a
+     * budget measured against stored pages is read by all of them before any
+     * page has been crawled — every one sees the budget as untouched and
+     * dispatches its full thousand. That is how one store queued 15,326 jobs.
+     *
+     * Cache::increment is atomic, so the reservation below cannot be
+     * double-spent no matter how many sub-sitemaps run at once. The counter
+     * expires so a later re-crawl starts with a fresh budget rather than
+     * inheriting a spent one.
      */
-    private function alreadyCrawledEnough(): bool
+    private function budgetRemaining(): int
     {
         $budget = (int) config('crawl.max_pages_per_site', 400);
 
         if ($budget <= 0) {
-            return false;
+            return PHP_INT_MAX;
         }
 
-        return CustomerPage::where('customer_id', $this->customerId)->count() >= $budget;
+        return max(0, $budget - (int) Cache::get($this->budgetKey(), 0));
+    }
+
+    /**
+     * Claim part of the budget. Returns how much was actually granted, which
+     * may be less than asked for and may be zero.
+     */
+    private function claimBudget(int $wanted): int
+    {
+        if ((int) config('crawl.max_pages_per_site', 400) <= 0) {
+            return $wanted;
+        }
+
+        $key = $this->budgetKey();
+
+        Cache::add($key, 0, now()->addHours(6));
+
+        $granted = min($wanted, $this->budgetRemaining());
+
+        if ($granted > 0) {
+            Cache::increment($key, $granted);
+        }
+
+        return $granted;
+    }
+
+    private function budgetKey(): string
+    {
+        return "crawl:budget:{$this->customerId}";
     }
 }
