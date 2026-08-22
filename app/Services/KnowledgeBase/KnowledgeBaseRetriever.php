@@ -27,6 +27,15 @@ class KnowledgeBaseRetriever
     /** Per-page character cap. Enough to convey what a page sells; short enough that ten fit in a prompt. */
     private const EXCERPT_CHARS = 1200;
 
+    /**
+     * Shorter than this and the row is chrome, not content — a nav bar, a
+     * cookie banner, or a crawler error captured as if it were the page. One
+     * production store has 1,236 crawled pages and 3 above this threshold;
+     * without the filter a prompt would be padded with 100-character
+     * fragments that say nothing about the business.
+     */
+    private const MIN_CONTENT_CHARS = 300;
+
     public function __construct(private readonly GeminiService $gemini) {}
 
     /**
@@ -65,11 +74,11 @@ class KnowledgeBaseRetriever
                 WHERE customer_id = ?
                   AND embedding IS NOT NULL
                   AND content IS NOT NULL
-                  AND content <> ''
+                  AND length(content) >= ?
                 ORDER BY embedding <=> ?::vector
                 LIMIT ?
                 SQL,
-                [$customer->id, $vector, $limit],
+                [$customer->id, self::MIN_CONTENT_CHARS, $vector, $limit],
             );
 
             return array_map(fn ($row) => [

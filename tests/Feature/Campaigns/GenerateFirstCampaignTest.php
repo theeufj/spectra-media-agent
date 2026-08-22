@@ -53,13 +53,25 @@ class GenerateFirstCampaignTest extends TestCase
         $this->user->customers()->attach($this->customer->id, ['role' => 'owner']);
     }
 
-    private function crawlPages(int $count): void
+    /**
+     * A crawl that found real text. The gate counts readable knowledge-base
+     * content, not customer_pages rows, so fixtures have to write both.
+     */
+    private function crawlPages(int $count, int $contentChars = 800): void
     {
         foreach (range(1, $count) as $i) {
             DB::table('customer_pages')->insert([
                 'customer_id' => $this->customer->id,
                 'url' => "https://acmeplumbing.test/page-{$i}",
                 'title' => "Page {$i}",
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+
+            DB::table('knowledge_bases')->insert([
+                'customer_id' => $this->customer->id,
+                'user_id' => $this->user->id,
+                'url' => "https://acmeplumbing.test/page-{$i}",
+                'content' => str_repeat('Emergency plumbing in Sydney. ', (int) ceil($contentChars / 30)),
                 'created_at' => now(), 'updated_at' => now(),
             ]);
         }
@@ -352,6 +364,24 @@ class GenerateFirstCampaignTest extends TestCase
         $this->crawlPages(2);
 
         $this->assertFalse(GenerateFirstCampaign::qualifies($this->customer));
+    }
+
+    public function test_many_pages_of_navigation_chrome_do_not_qualify(): void
+    {
+        // The shape production actually had: 1,236 crawled pages, 3 with more
+        // than 300 characters on them. A row count waves this through and the
+        // customer gets a generic campaign written from menu text.
+        $this->crawlPages(40, contentChars: 90);
+
+        $this->assertFalse(GenerateFirstCampaign::qualifies($this->customer));
+    }
+
+    public function test_a_handful_of_real_pages_qualifies(): void
+    {
+        // Five substantive pages beats a thousand empty ones.
+        $this->crawlPages(5, contentChars: 900);
+
+        $this->assertTrue(GenerateFirstCampaign::qualifies($this->customer));
     }
 
     public function test_an_account_that_already_has_a_campaign_does_not_qualify(): void

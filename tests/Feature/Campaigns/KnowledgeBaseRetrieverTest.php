@@ -59,6 +59,10 @@ class KnowledgeBaseRetrieverTest extends TestCase
 
     private function page(Customer $customer, string $url, string $content, float $lead): void
     {
+        // Padded past the chrome threshold — anything shorter is filtered as a
+        // nav bar or an error page, which is what test_chrome_is_skipped covers.
+        $content = str_pad($content, 400, ' Further detail about this page.');
+
         DB::statement(
             'INSERT INTO knowledge_bases (customer_id, user_id, url, content, embedding, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?::vector, now(), now())',
@@ -126,6 +130,21 @@ class KnowledgeBaseRetrieverTest extends TestCase
 
         $this->assertStringStartsWith('Heat pumps x', $excerpt);
         $this->assertLessThan(1400, mb_strlen($excerpt));
+    }
+
+    public function test_chrome_is_skipped(): void
+    {
+        // One production store has 1,236 crawled pages and 3 with real text on
+        // them; the rest are menus and "there was a problem loading this
+        // website". Feeding those to a model pads the prompt with fragments
+        // that say nothing about the business.
+        DB::statement(
+            'INSERT INTO knowledge_bases (customer_id, user_id, url, content, embedding, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?::vector, now(), now())',
+            [$this->ours->id, $this->user->id, 'https://ours.test/menu', 'Home About Contact', $this->vector(1.0)],
+        );
+
+        $this->assertSame([], $this->retrieverReturning(1.0)->search($this->ours, 'anything', 10));
     }
 
     public function test_pages_without_an_embedding_are_skipped(): void

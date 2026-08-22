@@ -14,6 +14,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -39,13 +40,25 @@ class GenerateFirstCampaign implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * Below this the crawl did not find a real site — a parked domain, a
-     * single-page placeholder, a URL that did not resolve. Generating a
-     * campaign from three pages produces something generic, which is worse
-     * than nothing as a first impression, and it spends model budget on a
-     * signup that was never real.
+     * How many pages with real text on them the crawl must have found.
+     *
+     * COUNTED ON CONTENT, NOT ON ROWS. This gate originally counted
+     * customer_pages, and production showed why that fails: one Shopify store
+     * had 1,236 crawled pages of which 3 held more than 300 characters — the
+     * crawler had captured navigation chrome and "there was a problem loading
+     * this website" instead of product text. Another had 51 pages and 1 with
+     * content. Both would have sailed through a row count and been handed a
+     * generic campaign, which is the exact "worse than nothing" first
+     * impression this gate exists to prevent.
      */
-    public const MIN_PAGES = 5;
+    public const MIN_SUBSTANTIVE_PAGES = 5;
+
+    /**
+     * Below this a page is chrome — a menu, a cookie banner, an error. Chosen
+     * against real data: the healthy accounts average 2,000–4,500 characters a
+     * page, the unusable ones 100–240.
+     */
+    public const MIN_CONTENT_CHARS = 300;
 
     public function __construct(public Customer $customer) {}
 
@@ -138,12 +151,18 @@ class GenerateFirstCampaign implements ShouldQueue
             return false;
         }
 
-        $pageCount = CustomerPage::where('customer_id', $customer->id)->count();
+        // The knowledge base, not customer_pages: this is the text the campaign
+        // is actually written from, so it is the thing worth counting.
+        $substantive = DB::table('knowledge_bases')
+            ->where('customer_id', $customer->id)
+            ->whereRaw('length(content) >= ?', [self::MIN_CONTENT_CHARS])
+            ->count();
 
-        if ($pageCount < self::MIN_PAGES) {
-            Log::info('GenerateFirstCampaign skipped: too few pages crawled', [
+        if ($substantive < self::MIN_SUBSTANTIVE_PAGES) {
+            Log::info('GenerateFirstCampaign skipped: crawl found too little readable content', [
                 'customer_id' => $customer->id,
-                'pages' => $pageCount,
+                'substantive_pages' => $substantive,
+                'total_pages' => CustomerPage::where('customer_id', $customer->id)->count(),
             ]);
 
             return false;
