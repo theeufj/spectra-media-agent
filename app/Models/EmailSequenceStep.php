@@ -15,9 +15,15 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 class EmailSequenceStep extends Model
 {
-    protected $fillable = ['email_sequence_id', 'position', 'delay_hours', 'subject', 'body', 'enabled'];
+    protected $fillable = ['email_sequence_id', 'position', 'delay_hours', 'subject', 'body', 'format', 'enabled'];
 
     protected $casts = ['enabled' => 'boolean'];
+
+    /** The body is admin-authored HTML rather than plain text. */
+    public function isHtml(): bool
+    {
+        return $this->format === 'html';
+    }
 
     /** @return BelongsTo<EmailSequence, $this> */
     public function sequence(): BelongsTo

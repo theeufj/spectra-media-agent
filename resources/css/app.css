@@ -32,3 +32,41 @@
     @apply border-l-4 border-violet-300 pl-4 italic text-gray-500 mb-4;
 }
 .prose-article h2:first-child { @apply mt-0; }
+
+/* ── Email body editor ───────────────────────────────────────────────────
+   Mirrors the email shell's own typography (15px/1.6, #2d3748, 1.2em
+   paragraph spacing) rather than a generic prose theme, so what is typed
+   sits at the size and rhythm it will arrive at.
+
+   Written out rather than reached for via `prose`: @tailwindcss/typography
+   is not installed, so those classes do nothing — and Preflight strips list
+   markers, which made bulleted lists in the editor render as unmarked lines
+   while the preview beside them showed bullets. */
+.email-editor-content {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #2d3748;
+}
+.email-editor-content p { margin-bottom: 1.2em; }
+.email-editor-content p:last-child { margin-bottom: 0; }
+.email-editor-content h1 { @apply text-[22px] font-bold mb-3 mt-4 text-gray-800; }
+.email-editor-content h2 { @apply text-[18px] font-bold mb-2 mt-4 text-gray-800; }
+.email-editor-content h1:first-child,
+.email-editor-content h2:first-child { @apply mt-0; }
+.email-editor-content ul { @apply list-disc list-outside pl-5 mb-4 space-y-1; }
+.email-editor-content ol { @apply list-decimal list-outside pl-5 mb-4 space-y-1; }
+.email-editor-content strong { @apply font-semibold; }
+.email-editor-content em { @apply italic; }
+.email-editor-content u { @apply underline; }
+.email-editor-content s { @apply line-through; }
+.email-editor-content a { @apply text-flame-orange-600 underline; }
+.email-editor-content blockquote {
+    @apply border-l-4 border-gray-200 pl-4 italic text-gray-500 mb-4;
+}
+.email-editor-content hr { @apply my-5 border-gray-200; }
+.email-editor-content img { @apply max-w-full h-auto rounded; }
+/* The selected image needs a visible state — without it, clicking one looks
+   like nothing happened and it cannot be told apart from the text caret. */
+.email-editor-content img.ProseMirror-selectednode {
+    @apply outline outline-2 outline-flame-orange-500;
+}

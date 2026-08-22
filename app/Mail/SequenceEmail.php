@@ -4,6 +4,7 @@ namespace App\Mail;
 
 use App\Models\EmailSequence;
 use App\Models\EmailSequenceStep;
+use App\Services\EmailSequences\SequenceBodyRenderer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -46,31 +47,26 @@ class SequenceEmail extends Mailable implements ShouldQueue
 
     public function content(): Content
     {
+        // Resolved through the container rather than constructed here so the
+        // preview pane and the send share one renderer — a preview that
+        // escapes differently from the email is worse than none, because it
+        // gets believed.
+        $renderer = app(SequenceBodyRenderer::class);
+
         return new Content(
             view: 'emails.sequence',
             with: [
-                'bodyHtml' => nl2br(e($this->substitute($this->step->body))),
+                'bodyHtml' => $renderer->body($this->step, $this->variables),
                 'signature' => nl2br(e($this->sequence->signature)),
                 'unsubscribeUrl' => $this->unsubscribeUrl,
             ],
         );
     }
 
-    /**
-     * Substitute {{ first_name }} and friends.
-     *
-     * A placeholder with no value collapses to nothing rather than printing
-     * its own name — "Hi {{ first_name }}," reaching a real prospect is worse
-     * than "Hi," and there is no value in the middle.
-     */
+    /** Subject-line placeholders; the body goes through the same renderer. */
     private function substitute(string $text): string
     {
-        foreach ($this->variables as $key => $value) {
-            $text = str_replace(['{{ '.$key.' }}', '{{'.$key.'}}'], (string) $value, $text);
-        }
-
-        // Anything still unresolved, and the space before it.
-        return trim(preg_replace('/\s*\{\{\s*[a-z_]+\s*\}\}/i', '', $text) ?? $text);
+        return app(SequenceBodyRenderer::class)->substitute($text, $this->variables);
     }
 
     public function attachments(): array

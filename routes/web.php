@@ -635,6 +635,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('email-sequences', [App\Http\Controllers\Admin\EmailSequenceController::class, 'index'])->name('admin.email-sequences.index');
     Route::put('email-sequences/{sequence}', [App\Http\Controllers\Admin\EmailSequenceController::class, 'updateSequence'])->name('admin.email-sequences.update');
     Route::put('email-sequence-steps/{step}', [App\Http\Controllers\Admin\EmailSequenceController::class, 'updateStep'])->name('admin.email-sequence-steps.update');
+    Route::post('email-sequences/{sequence}/steps', [App\Http\Controllers\Admin\EmailSequenceController::class, 'storeStep'])->name('admin.email-sequence-steps.store');
+    Route::delete('email-sequence-steps/{step}', [App\Http\Controllers\Admin\EmailSequenceController::class, 'destroyStep'])->name('admin.email-sequence-steps.destroy');
+    // Preview and test send are deliberately outside the enabled/disabled
+    // gate: reading the copy is what you do before going live.
+    Route::post('email-sequence-steps/{step}/preview', [App\Http\Controllers\Admin\EmailSequenceController::class, 'previewStep'])->name('admin.email-sequence-steps.preview');
+    Route::post('email-sequence-steps/{step}/test', [App\Http\Controllers\Admin\EmailSequenceController::class, 'sendTest'])->name('admin.email-sequence-steps.test');
+    Route::post('email-sequences/image', [App\Http\Controllers\Admin\EmailSequenceController::class, 'uploadImage'])->name('admin.email-sequences.image');
 
     Route::get('support-tickets', [App\Http\Controllers\Admin\SupportTicketController::class, 'index'])->name('admin.support-tickets.index');
     Route::get('support-tickets/{supportTicket}', [App\Http\Controllers\Admin\SupportTicketController::class, 'show'])->name('admin.support-tickets.show');
