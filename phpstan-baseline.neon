@@ -901,18 +901,6 @@ parameters:
 			path: app/Jobs/GenerateCampaignCollateral.php
 
 		-
-			message: '#^Offset ''performance_reports'' on array\{\}\|string in isset\(\) does not exist\.$#'
-			identifier: isset.offset
-			count: 1
-			path: app/Jobs/GenerateExecutiveReport.php
-
-		-
-			message: '#^Result of && is always false\.$#'
-			identifier: booleanAnd.alwaysFalse
-			count: 1
-			path: app/Jobs/GenerateExecutiveReport.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$subscription_status\.$#'
 			identifier: property.notFound
 			count: 1
@@ -929,18 +917,6 @@ parameters:
 			identifier: identical.alwaysFalse
 			count: 1
 			path: app/Jobs/GenerateImage.php
-
-		-
-			message: '#^Offset ''performance_reports'' on array\{\}\|string in isset\(\) does not exist\.$#'
-			identifier: isset.offset
-			count: 1
-			path: app/Jobs/GenerateMonthlyReport.php
-
-		-
-			message: '#^Result of && is always false\.$#'
-			identifier: booleanAnd.alwaysFalse
-			count: 1
-			path: app/Jobs/GenerateMonthlyReport.php
 
 		-
 			message: '#^Access to an undefined property App\\Models\\FacebookAdsPerformanceData\|App\\Models\\GoogleAdsPerformanceData\:\:\$total_cost\.$#'
@@ -1103,18 +1079,6 @@ parameters:
 			identifier: empty.variable
 			count: 1
 			path: app/Jobs/RunStrategicDiagnosis.php
-
-		-
-			message: '#^Offset ''performance_reports'' on array\{\}\|string in isset\(\) does not exist\.$#'
-			identifier: isset.offset
-			count: 1
-			path: app/Jobs/SendDailyPerformanceReports.php
-
-		-
-			message: '#^Result of && is always false\.$#'
-			identifier: booleanAnd.alwaysFalse
-			count: 1
-			path: app/Jobs/SendDailyPerformanceReports.php
 
 		-
 			message: '#^Parameter \#1 \$customer of class App\\Services\\GoogleAds\\MerchantCenterService constructor expects App\\Models\\Customer, Illuminate\\Database\\Eloquent\\Model\|null given\.$#'

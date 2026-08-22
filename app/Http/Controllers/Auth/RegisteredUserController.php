@@ -67,6 +67,12 @@ class RegisteredUserController extends Controller
             'tenant_key' => $tenant['key'] ?? null,
         ]);
 
+        // A lead who registers stops being a lead. Without this both chains
+        // run and they get told what they are missing after they have joined.
+        \App\Models\LandingLead::where('email', strtolower($user->email))
+            ->whereNull('converted_at')
+            ->update(['converted_user_id' => $user->id, 'converted_at' => now()]);
+
         if ($request->invitation_token) {
             $invitation = \App\Models\Invitation::where('token', $request->invitation_token)->first();
             if ($invitation) {

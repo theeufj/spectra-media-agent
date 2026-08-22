@@ -7,7 +7,15 @@
 </head>
 <body>
     <h1>You've been unsubscribed</h1>
-    <p>Hi {{ $user->name }}, you will no longer receive performance report emails.</p>
-    <p style="margin-top: 32px;"><a href="{{ url('/dashboard') }}" style="color: #ff4d00;">Back to dashboard</a></p>
+
+    {{-- A landing-page lead has no account, so $user may be null. Addressing
+         someone by name was safe only while registered users were the only
+         people who could reach this page. --}}
+    @isset($user)
+        <p>Hi {{ $user->name }}, you won't hear from us again.</p>
+        <p style="margin-top: 32px;"><a href="{{ url('/dashboard') }}" style="color: #ff4d00;">Back to dashboard</a></p>
+    @else
+        <p>You won't hear from us again.</p>
+    @endisset
 </body>
 </html>

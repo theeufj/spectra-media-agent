@@ -19,6 +19,8 @@ return [
     ],
 
     'resend' => [
+        // Verifies inbound reply webhooks — see ResendInboundController.
+        'webhook_secret' => env('RESEND_WEBHOOK_SECRET'),
         'key' => env('RESEND_API_KEY'),
     ],
 

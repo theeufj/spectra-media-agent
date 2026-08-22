@@ -10,6 +10,14 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Mail;
 use Laravel\Cashier\Billable;
 
+/**
+ * Larastan types model attributes from the column, so a json column reads as
+ * string|null however it is cast. notification_preferences IS cast to array —
+ * see casts() — and every caller treats it as one, so the annotation states
+ * the truth rather than every usage site working around a wrong inference.
+ *
+ * @property array<string, mixed>|null $notification_preferences
+ */
 class User extends Authenticatable implements MustVerifyEmail
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */

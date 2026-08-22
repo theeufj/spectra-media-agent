@@ -29,6 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->validateCsrfTokens(except: [
             'email/verify/*',
+            // Server-to-server callback from Resend; authenticity comes from
+            // the Svix signature, which the controller verifies.
+            'webhooks/resend/*',
         ]);
 
         $middleware->web(append: [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\LandingLead;
 use App\Services\BrandGuidelineExtractorService;
 use App\Services\GeminiService;
 use Illuminate\Http\Request;
@@ -35,6 +36,13 @@ class DemoController extends Controller
         $userEmail = $request->input('email', '');
 
         Log::info("DemoController: Starting full extraction demo for {$url}");
+
+        // Keep the lead. Until now this endpoint emailed the team and threw the
+        // contact away, so everyone who asked us to look at their website and
+        // did not go on to register was lost the moment the page closed. They
+        // gave an address to get a result back, which makes them a contact who
+        // asked to hear from us rather than a scraped one.
+        $this->rememberLead($userEmail, $firstName, $url);
 
         // Notify the team every time someone hits Try Now — one email to all recipients
         try {
@@ -262,5 +270,36 @@ HTML;
             'ad_copy' => $adCopy,
             'visuals' => $visuals,
         ]);
+    }
+
+    /**
+     * Record the person behind a Try Now, without ever failing the request.
+     *
+     * They are waiting on a demo. A duplicate address, a database hiccup or a
+     * malformed email must not cost them the thing they actually came for.
+     */
+    private function rememberLead(string $email, string $firstName, string $url): void
+    {
+        $email = trim(strtolower($email));
+
+        if ($email === '' || ! filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return;
+        }
+
+        try {
+            LandingLead::updateOrCreate(
+                ['email' => $email],
+                [
+                    // Keep the earliest name and the latest URL: people try
+                    // more than one site, but the name they gave first is the
+                    // one they introduced themselves with.
+                    'first_name' => LandingLead::where('email', $email)->value('first_name') ?: ($firstName ?: null),
+                    'url' => $url,
+                ],
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('Failed to record landing lead', ['email' => $email, 'error' => $e->getMessage()]);
+        }
     }
 }

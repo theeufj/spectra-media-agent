@@ -422,6 +422,14 @@ Schedule::command('model:prune', [
     ],
 ])->daily()->withoutOverlapping();
 
+// Follow-up chains for people who tried the landing page or signed up and
+// stopped. Hourly because the first step lands an hour in, and a nudge that
+// arrives the next morning has missed its moment. Does nothing at all while
+// EMAIL_SEQUENCES_ENABLED is false.
+Schedule::job(new \App\Jobs\DispatchEmailSequences)
+    ->hourly()
+    ->withoutOverlapping();
+
 // Which accounts cannot yet run ads, and why. Nothing measured the gap between
 // signing up and advertising, so accounts sat blocked with no one seeing it.
 Schedule::job(new \App\Jobs\MonitorAccountReadiness)
