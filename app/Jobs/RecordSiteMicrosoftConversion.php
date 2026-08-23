@@ -52,22 +52,41 @@ class RecordSiteMicrosoftConversion implements ShouldQueue
 
         $config = config("conversions.events.{$this->event}", []);
 
-        // Use a minimal customer stub — Microsoft service only needs account credentials from config
-        $customer = new \App\Models\Customer;
-        $service = new ConversionTrackingService($customer);
+        // Spectra's own advertising account, not a customer's.
+        //
+        // This used to be `new Customer` — an empty, unsaved stub. Every SOAP
+        // call built its CustomerId / CustomerAccountId headers from that stub
+        // (see BaseMicrosoftAdsService::apiCall), so each upload went to
+        // Microsoft with both headers blank and attributed nothing.
+        $accountId = config('conversions.microsoft_ads_account_id');
+        $customerId = config('conversions.microsoft_ads_customer_id');
+
+        if (! $accountId || ! $customerId) {
+            Log::warning('RecordSiteMicrosoftConversion: Spectra Microsoft Ads account not configured — set SPECTRA_MICROSOFT_ADS_ACCOUNT_ID and SPECTRA_MICROSOFT_ADS_CUSTOMER_ID');
+
+            return;
+        }
+
+        $spectraAccount = new \App\Models\Customer;
+        $spectraAccount->microsoft_ads_account_id = $accountId;
+        $spectraAccount->microsoft_ads_customer_id = $customerId;
+
+        $service = new ConversionTrackingService($spectraAccount);
 
         try {
             $uploaded = $service->applyOfflineConversion(
                 msclid: $this->user->msclid,
                 goalName: $goalName,
-                conversionTime: $this->user->created_at ?? now(),
+                // The moment being reported, not when the account was opened.
+                conversionTime: now(),
                 value: (float) ($config['value'] ?? 0),
                 currencyCode: $config['currency'] ?? 'USD',
             );
 
+            // Only gclid/fbclid have columns on spectra_conversion_events, so
+            // the msclid that drove this one is not stored — it is in the log
+            // line below and on the user record.
             SpectraConversionEvent::record($this->event, $this->user->id, [
-                'gclid' => null,
-                'fbclid' => null,
                 'mode' => 'server_microsoft',
                 'uploaded' => $uploaded,
             ]);
@@ -77,7 +96,8 @@ class RecordSiteMicrosoftConversion implements ShouldQueue
             } else {
                 Log::warning("RecordSiteMicrosoftConversion: upload returned false for '{$this->event}' user {$this->user->id}");
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("RecordSiteMicrosoftConversion: failed for '{$this->event}': ".$e->getMessage(), [
                 'user_id' => $this->user->id,
             ]);

@@ -78,12 +78,16 @@ class DiscoverNavigationUrls implements ShouldQueue
                     'error' => $e2->getMessage(),
                 ]);
 
+                $this->concludeWithoutDiscovery('We couldn\'t reach your website — it may have been down, or it may be blocking automated visitors.');
+
                 return;
             }
         }
 
         if (empty($html)) {
             Log::warning('DiscoverNavigationUrls: Empty HTML from homepage');
+
+            $this->concludeWithoutDiscovery('Your website loaded but returned an empty page, so there was nothing we could read.');
 
             return;
         }
@@ -150,6 +154,36 @@ class DiscoverNavigationUrls implements ShouldQueue
             'customer_id' => $this->customer->id,
             'count' => count($missingUrls),
         ]);
+    }
+
+    /**
+     * The homepage could not be read. This job sits in the middle of the
+     * onboarding chain, so simply returning here used to sever it in both of
+     * its roles: as the gap-filler after a successful sitemap crawl (where
+     * pages already exist and brand extraction should proceed anyway), and as
+     * the no-sitemap fallback (where nothing was crawled and the user is
+     * still watching "we're scanning your website now").
+     */
+    private function concludeWithoutDiscovery(string $reason): void
+    {
+        $hasPages = CustomerPage::where('customer_id', $this->customer->id)->exists();
+
+        if ($hasPages) {
+            Log::info('DiscoverNavigationUrls: homepage unreadable but pages exist — continuing to brand extraction', [
+                'customer_id' => $this->customer->id,
+            ]);
+            ExtractBrandGuidelines::dispatch($this->customer);
+
+            return;
+        }
+
+        Log::warning('DiscoverNavigationUrls: scan ended with no pages — notifying users', [
+            'customer_id' => $this->customer->id,
+        ]);
+
+        foreach ($this->customer->users as $user) {
+            $user->notify(new \App\Notifications\SiteScanFailed($this->customer, $reason));
+        }
     }
 
     private function extractNavigationLinks(string $html, string $websiteUrl): array
@@ -275,5 +309,13 @@ class DiscoverNavigationUrls implements ShouldQueue
             'customer_id' => $this->customer->id,
             'error' => $exception->getMessage(),
         ]);
+
+        // An unexpected crash is a dead-end just like an unreadable homepage:
+        // continue the chain if pages exist, tell the user if they don't.
+        try {
+            $this->concludeWithoutDiscovery('Something went wrong on our side while reading your website.');
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

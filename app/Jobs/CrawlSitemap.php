@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Spatie\Sitemap\Sitemap;
 
-// DiscoverNavigationUrls is dispatched in the batch callback to find nav links missing from sitemap
+// DiscoverNavigationUrls is dispatched in the batch callback to find nav links
+// missing from the sitemap, and by fallBackToNavigationCrawl() when there is no
+// readable sitemap at all.
 
 class CrawlSitemap implements ShouldQueue
 {
@@ -65,6 +67,8 @@ class CrawlSitemap implements ShouldQueue
             if ($response->failed()) {
                 Log::error("CrawlSitemap: Failed to fetch sitemap: {$this->sitemapUrl}. Status: ".$response->status());
 
+                $this->fallBackToNavigationCrawl('sitemap_fetch_failed');
+
                 return;
             }
 
@@ -78,6 +82,8 @@ class CrawlSitemap implements ShouldQueue
                 if ($decoded === false) {
                     Log::error("CrawlSitemap: Failed to decompress Gzip content for URL: {$this->sitemapUrl}");
 
+                    $this->fallBackToNavigationCrawl('gzip_decode_failed');
+
                     return;
                 }
                 $content = $decoded;
@@ -85,6 +91,8 @@ class CrawlSitemap implements ShouldQueue
 
             if (empty($content)) {
                 Log::warning("CrawlSitemap: Sitemap content is empty for URL: {$this->sitemapUrl}");
+
+                $this->fallBackToNavigationCrawl('sitemap_empty');
 
                 return;
             }
@@ -95,6 +103,8 @@ class CrawlSitemap implements ShouldQueue
                 // Check if it looks like HTML
                 if (str_contains(strtolower($trimmedContent), '<!doctype html') || str_contains(strtolower($trimmedContent), '<html')) {
                     Log::error("CrawlSitemap: Received HTML instead of XML for URL: {$this->sitemapUrl}. The site may be returning a login page or error page.");
+
+                    $this->fallBackToNavigationCrawl('sitemap_not_xml');
 
                     return;
                 }
@@ -120,6 +130,8 @@ class CrawlSitemap implements ShouldQueue
                     'xml_errors' => $errorMessages,
                     'content_preview' => substr($trimmedContent, 0, 500),
                 ]);
+
+                $this->fallBackToNavigationCrawl('sitemap_parse_failed');
 
                 return;
             }
@@ -302,6 +314,7 @@ class CrawlSitemap implements ShouldQueue
                 }
             } else {
                 Log::warning("CrawlSitemap: Could not find <sitemap> or <url> tags in the sitemap: {$this->sitemapUrl}");
+                $this->fallBackToNavigationCrawl('sitemap_had_no_urls');
             }
 
             Log::info("CrawlSitemap: Finished processing job for URL: {$this->sitemapUrl}");
@@ -310,6 +323,64 @@ class CrawlSitemap implements ShouldQueue
             Log::error("CrawlSitemap: Error processing sitemap {$this->sitemapUrl}: ".$e->getMessage());
             $this->fail($e);
         }
+    }
+
+    /**
+     * Start a site scan for a customer, deriving the sitemap URL from their
+     * website. The single entry point for onboarding — both the quick start
+     * and the manual business-profile form come through here, so a customer
+     * created either way gets the same crawl.
+     */
+    public static function forCustomer(Customer $customer, User $user): bool
+    {
+        if (empty($customer->website)) {
+            return false;
+        }
+
+        $parts = parse_url($customer->website);
+        $host = $parts['host'] ?? null;
+
+        if (! $host) {
+            return false;
+        }
+
+        $scheme = $parts['scheme'] ?? 'https';
+
+        self::dispatch($user, "{$scheme}://{$host}/sitemap.xml", $customer->id);
+
+        return true;
+    }
+
+    /**
+     * Plenty of small business sites have no sitemap.xml at all, and this job
+     * used to just log and return when it could not read one. The customer had
+     * already been told "we're scanning your website now", so the run ended in
+     * silence: no pages, no brand guidelines, no completion email, and a first
+     * campaign written with no knowledge of the business.
+     *
+     * DiscoverNavigationUrls reads the homepage itself and follows the nav, so
+     * it is the natural second attempt. It ends by dispatching
+     * ExtractBrandGuidelines, which is what closes the loop with the user.
+     */
+    private function fallBackToNavigationCrawl(string $reason): void
+    {
+        if (! $this->customerId) {
+            return;
+        }
+
+        $customer = Customer::find($this->customerId);
+
+        if (! $customer) {
+            return;
+        }
+
+        Log::info('CrawlSitemap: falling back to a navigation crawl.', [
+            'customer_id' => $this->customerId,
+            'sitemap' => $this->sitemapUrl,
+            'reason' => $reason,
+        ]);
+
+        DiscoverNavigationUrls::dispatch($customer, $this->user);
     }
 
     /**

@@ -158,6 +158,12 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
             'google_ads_customer_id' => $result['customer_id'],
         ]);
 
+        // Until this account existed the campaign wizard's platform step was
+        // blocked with no ETA — tell the user it just cleared.
+        foreach ($customer->users as $user) {
+            $user->notify(new \App\Notifications\PlatformAccountReady($customer, 'Google Ads'));
+        }
+
         // Conversion tracking needs the account, and gave up before it existed.
         SetupConversionTracking::dispatch($customer->fresh())->delay(now()->addMinute());
     }

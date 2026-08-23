@@ -1,26 +1,43 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { Head, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-export default function QuickStart({ auth }) {
-    const { data, setData, post, processing, errors } = useForm({
-        website_url: '',
+export default function QuickStart({ auth, demoUrl = null }) {
+    // No country field: the server derives it (and the currency) from the
+    // timezone below, rather than assuming US for everyone.
+    const { data, setData, post, processing, errors, transform } = useForm({
+        website_url: demoUrl || '',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
-        country: 'US',
     });
 
     const [urlFocused, setUrlFocused] = useState(false);
 
+    // A signup that came from the landing-page demo already told us their URL.
+    // Submit it for them — from here, so the post carries the browser timezone
+    // the server-side auto-process never had.
+    const autoSubmitted = useRef(false);
+    useEffect(() => {
+        if (demoUrl && !autoSubmitted.current) {
+            autoSubmitted.current = true;
+            post(route('quick-start.process'));
+        }
+    }, []);
+
+    // The placeholder shows a bare host, so accept one. This must happen in
+    // transform(), which runs on the data actually being posted — a setData
+    // immediately before post() hasn't committed yet, and the first submit
+    // used to send the un-prefixed value and fail validation.
+    transform((current) => {
+        const url = current.website_url.trim();
+
+        return {
+            ...current,
+            website_url: url && !url.match(/^https?:\/\//i) ? `https://${url}` : url,
+        };
+    });
+
     function handleSubmit(e) {
         e.preventDefault();
-
-        // Auto-prepend https:// if no protocol
-        let url = data.website_url.trim();
-        if (url && !url.match(/^https?:\/\//i)) {
-            url = 'https://' + url;
-            setData('website_url', url);
-        }
-
         post(route('quick-start.process'));
     }
 

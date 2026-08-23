@@ -256,20 +256,29 @@ class UploadOfflineConversions implements ShouldQueue
                 return;
             }
 
-            // Microsoft uses offline conversion goals; each upload is one SOAP call per conversion
+            // One ApplyOfflineConversions call per conversion.
+            //
+            // This used to call createEventConversionGoal() per row, which
+            // defines a brand new conversion *goal* rather than uploading a
+            // conversion — so a busy account accumulated a goal per lead and
+            // not one conversion was ever recorded against a click.
             foreach ($conversions as $conversion) {
                 $results = $conversion->upload_results ?? [];
 
+                // Microsoft attributes an offline conversion by click id; there
+                // is nothing to attach it to without one.
+                if (empty($conversion->msclid)) {
+                    continue;
+                }
+
                 try {
-                    $result = $msService->createEventConversionGoal([
-                        'name' => $conversion->conversion_name ?? 'Offline Conversion',
-                        'uet_tag_id' => $uetTagId,
-                        'action_expression' => 'offline_conversion',
-                        'conversion_window_minutes' => 43200, // 30 days
-                        'revenue_type' => 'FixedValue',
-                        'revenue_value' => (float) $conversion->conversion_value,
-                        'currency_code' => $conversion->currency_code ?? 'USD',
-                    ]);
+                    $result = $msService->applyOfflineConversion(
+                        msclid: $conversion->msclid,
+                        goalName: $conversion->conversion_name ?? 'Offline Conversion',
+                        conversionTime: $conversion->conversion_time ?? $conversion->created_at ?? now(),
+                        value: (float) $conversion->conversion_value,
+                        currencyCode: $conversion->currency_code ?? 'USD',
+                    );
 
                     if ($result) {
                         $results['microsoft'] = ['status' => 'uploaded', 'uploaded_at' => now()->toDateTimeString()];

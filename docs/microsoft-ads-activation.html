@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Getting Microsoft Ads Live — Spectra</title>
+<!--
+  Internal runbook. Deliberately NOT in public/docs — that directory is served
+  over the web, and this describes credential configuration.
+-->
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  body, h1, h2, h3, p, dl, dd, ul, pre, figure { margin: 0; padding: 0; }
+  /* No blanket list-style reset — .gaps relies on its markers. */
+</style>
+<style>
+  /* ── Tokens: light is the base, both dark states redefine only these ── */
+  :root {
+    --ground:      #F6F8F9;
+    --surface:     #FFFFFF;
+    --surface-alt: #EDF2F3;
+    --ink:         #0F1518;
+    --ink-soft:    #55636A;
+    --ink-faint:   #7C8991;
+    --rule:        #DEE5E7;
+    --rule-strong: #C4D0D3;
+    --accent:      #0D5A66;
+    --accent-soft: #E4EFF1;
+    --critical:    #9E3520;
+    --critical-soft:#FAEAE6;
+    --ok:          #2C6A49;
+    --ok-soft:     #E6F1EA;
+    --warn:        #86590F;
+    --warn-soft:   #F8EFDD;
+    --code-bg:     #10191C;
+    --code-ink:    #DDE7EA;
+    --shadow:      0 1px 2px rgba(15,21,24,.05), 0 6px 20px -12px rgba(15,21,24,.22);
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans:  ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:  ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground:      #0C1012;
+      --surface:     #141A1D;
+      --surface-alt: #1B2327;
+      --ink:         #E6EDEF;
+      --ink-soft:    #94A2A8;
+      --ink-faint:   #75838A;
+      --rule:        #242E32;
+      --rule-strong: #354247;
+      --accent:      #63BECB;
+      --accent-soft: #122E33;
+      --critical:    #E38F79;
+      --critical-soft:#2C1712;
+      --ok:          #6FB68F;
+      --ok-soft:     #12251B;
+      --warn:        #D7A648;
+      --warn-soft:   #2A2113;
+      --code-bg:     #090E10;
+      --code-ink:    #CFDCE0;
+      --shadow:      0 1px 2px rgba(0,0,0,.4), 0 6px 20px -12px rgba(0,0,0,.7);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --ground:      #0C1012;
+    --surface:     #141A1D;
+    --surface-alt: #1B2327;
+    --ink:         #E6EDEF;
+    --ink-soft:    #94A2A8;
+    --ink-faint:   #75838A;
+    --rule:        #242E32;
+    --rule-strong: #354247;
+    --accent:      #63BECB;
+    --accent-soft: #122E33;
+    --critical:    #E38F79;
+    --critical-soft:#2C1712;
+    --ok:          #6FB68F;
+    --ok-soft:     #12251B;
+    --warn:        #D7A648;
+    --warn-soft:   #2A2113;
+    --code-bg:     #090E10;
+    --code-ink:    #CFDCE0;
+    --shadow:      0 1px 2px rgba(0,0,0,.4), 0 6px 20px -12px rgba(0,0,0,.7);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0 1.25rem 6rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: 47rem; margin: 0 auto; }
+
+  /* ── Masthead ── */
+  .masthead { padding: 4.5rem 0 2rem; border-bottom: 1px solid var(--rule); }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: .7rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 1.1rem;
+  }
+  h1 {
+    font-family: var(--serif);
+    font-size: clamp(2.1rem, 5.5vw, 3rem);
+    line-height: 1.1;
+    font-weight: 600;
+    letter-spacing: -.018em;
+    text-wrap: balance;
+    margin: 0 0 1rem;
+  }
+  .standfirst {
+    font-size: 1.09rem;
+    color: var(--ink-soft);
+    max-width: 40rem;
+    margin: 0;
+  }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* ── Status board ── */
+  .board {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 2.5rem 0 0;
+  }
+  @media (max-width: 34rem) {
+    .board { grid-template-columns: repeat(2, 1fr); }
+  }
+  .cell { background: var(--surface); padding: 1rem 1.1rem; }
+  .cell dt {
+    font-family: var(--mono);
+    font-size: .67rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin: 0 0 .5rem;
+  }
+  .cell dd {
+    margin: 0;
+    font-size: .95rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: .45rem;
+  }
+  .dot { width: .5rem; height: .5rem; border-radius: 50%; flex: none; }
+  .dot.is-ok { background: var(--ok); }
+  .dot.is-bad { background: var(--critical); }
+  .dot.is-warn { background: var(--warn); }
+
+  /* ── Sections ── */
+  h2 {
+    font-family: var(--serif);
+    font-size: 1.6rem;
+    font-weight: 600;
+    letter-spacing: -.012em;
+    text-wrap: balance;
+    margin: 3.75rem 0 .5rem;
+  }
+  .section-note { color: var(--ink-soft); margin: 0 0 1.75rem; }
+
+  p { margin: 0 0 1.1rem; }
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible, summary:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+
+  /* ── Steps: a real dependency chain, so the numbers carry meaning ── */
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    padding: 1.6rem 1.6rem 1.35rem;
+    margin: 0 0 1rem;
+    box-shadow: var(--shadow);
+  }
+  .step.is-blocking { border-color: var(--critical); }
+  .step.is-done { background: var(--surface-alt); box-shadow: none; }
+
+  .step-head {
+    display: flex;
+    align-items: baseline;
+    gap: .85rem;
+    margin-bottom: .3rem;
+    flex-wrap: wrap;
+  }
+  .step-num {
+    font-family: var(--mono);
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: .06em;
+    flex: none;
+  }
+  .step-title {
+    font-family: var(--serif);
+    font-size: 1.24rem;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    margin: 0;
+    flex: 1 1 14rem;
+  }
+  .chip {
+    font-family: var(--mono);
+    font-size: .63rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    padding: .24rem .5rem;
+    border-radius: 2px;
+    white-space: nowrap;
+    flex: none;
+    font-weight: 600;
+  }
+  .chip.is-you { background: var(--warn-soft); color: var(--warn); }
+  .chip.is-blocking { background: var(--critical-soft); color: var(--critical); }
+  .chip.is-done { background: var(--ok-soft); color: var(--ok); }
+  .chip.is-code { background: var(--accent-soft); color: var(--accent); }
+
+  .step-body { margin-left: 0; }
+  .step-body > :last-child { margin-bottom: 0; }
+  .step p { font-size: .96rem; }
+
+  /* ── Code ── */
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.65;
+    padding: .95rem 1.1rem;
+    border-radius: 3px;
+    overflow-x: auto;
+    margin: 0 0 1.1rem;
+  }
+  pre .c { color: #7E9AA1; }
+  code {
+    font-family: var(--mono);
+    font-size: .87em;
+    background: var(--surface-alt);
+    padding: .1em .36em;
+    border-radius: 2px;
+    color: var(--ink);
+  }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+
+  /* ── Evidence block: verbatim output ── */
+  .evidence {
+    white-space: pre;
+    border-left: 2px solid var(--rule-strong);
+    padding: .1rem 0 .1rem 1.1rem;
+    margin: 0 0 1.1rem;
+    color: var(--ink-soft);
+    font-family: var(--mono);
+    font-size: .79rem;
+    line-height: 1.75;
+    overflow-x: auto;
+  }
+  .evidence .bad { color: var(--critical); }
+  .evidence .good { color: var(--ok); }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--warn-soft);
+    border-left: 2px solid var(--warn);
+    padding: .95rem 1.1rem;
+    margin: 0 0 1.1rem;
+    font-size: .93rem;
+  }
+  .callout p:last-child { margin-bottom: 0; }
+  .callout strong { color: var(--ink); }
+
+  /* ── Fix list ── */
+  .fixes { list-style: none; padding: 0; margin: 0; }
+  .fixes li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: .3rem .8rem;
+    padding: 1rem 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .fixes li:first-child { border-top: 1px solid var(--rule); }
+  .fixes .mark { color: var(--ok); font-weight: 700; line-height: 1.5; }
+  .fixes .what { font-weight: 600; font-size: .96rem; }
+  .fixes .where {
+    grid-column: 2;
+    font-family: var(--mono);
+    font-size: .74rem;
+    color: var(--ink-faint);
+    word-break: break-all;
+  }
+  .fixes .why { grid-column: 2; font-size: .92rem; color: var(--ink-soft); }
+
+  /* ── Gap list ── */
+  .gaps { padding-left: 1.15rem; margin: 0 0 1.1rem; }
+  .gaps li { margin-bottom: .6rem; font-size: .96rem; }
+  .gaps li::marker { color: var(--ink-faint); }
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--rule);
+    font-size: .85rem;
+    color: var(--ink-faint);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">Spectra Media Agent · Platform integration</p>
+    <h1>Getting Microsoft Ads live</h1>
+    <p class="standfirst">
+      The credentials are valid and the API answers. What stops Microsoft Ads working is a
+      <strong>paused ad account</strong>, a <strong>wrong tenant ID</strong>, and a
+      <strong>kill switch that is off</strong> — in that order. Four code bugs behind them are already fixed.
+    </p>
+  </header>
+
+  <dl class="board">
+    <div class="cell">
+      <dt>Developer token</dt>
+      <dd><span class="dot is-ok"></span>Valid</dd>
+    </div>
+    <div class="cell">
+      <dt>Ad account</dt>
+      <dd><span class="dot is-bad"></span>Paused</dd>
+    </div>
+    <div class="cell">
+      <dt>Production auth</dt>
+      <dd><span class="dot is-bad"></span>Failing</dd>
+    </div>
+    <div class="cell">
+      <dt>Platform switch</dt>
+      <dd><span class="dot is-bad"></span>Off</dd>
+    </div>
+    <div class="cell">
+      <dt>Customers linked</dt>
+      <dd><span class="dot is-warn"></span>1 of 15</dd>
+    </div>
+    <div class="cell">
+      <dt>Campaigns run</dt>
+      <dd><span class="dot is-warn"></span>None yet</dd>
+    </div>
+  </dl>
+
+  <h2>What I checked</h2>
+  <p class="section-note">
+    Read-only calls against the live Microsoft API from the production server.
+  </p>
+
+  <p>
+    Both developer tokens work — the one on the Microsoft account page and the different one already
+    in <code>.env</code> ending <code>4081</code>. (Values deliberately not recorded here.) Microsoft has simply issued you two, and
+    both authenticate as joshua@sitetospend.com. <strong>Nothing to change there.</strong>
+  </p>
+  <p>
+    Under manager account <code>254798374</code> there is one ad account: <em>sitetospend</em>
+    (<code>188443253</code>, number G120QTNQ, customer <code>255004728</code>), billing in AUD.
+    It is paused. Fourteen of your fifteen customers have a Google Ads account; one has a Microsoft one.
+    There are 56 rows of Google performance data and zero of Microsoft.
+  </p>
+
+  <h2>The steps</h2>
+  <p class="section-note">
+    Genuinely sequential — each one is wasted effort until the one above it is done.
+  </p>
+
+  <section class="step is-blocking">
+    <div class="step-head">
+      <span class="step-num">01</span>
+      <h3 class="step-title">Get the ad account out of pause</h3>
+      <span class="chip is-blocking">Blocking</span>
+      <span class="chip is-you">You · Microsoft UI</span>
+    </div>
+    <div class="step-body">
+      <p>The account is paused at Microsoft's end, and no code change touches this:</p>
+      <div class="evidence">Name                   "sitetospend"
+Number                 "G120QTNQ"
+<span class="bad">AccountLifeCycleStatus "Pause"</span>
+<span class="bad">PauseReason            2</span>
+CurrencyCode           "AUD"</div>
+      <p>
+        <code>PauseReason 2</code> is a system pause, which in practice almost always means there is no
+        valid payment method on the account. Sign in to Microsoft Advertising, add billing, and get the
+        account to <strong>Active</strong>. Until then anything we deploy simply will not serve.
+      </p>
+      <div class="callout">
+        <p>
+          The account bills in <strong>AUD</strong>, but <code>config/microsoftads.php</code> still
+          defaults to <code>country_code =&gt; 'US'</code> and <code>EasternStandardTime</code>. Worth
+          switching to AU once the account is live — cosmetic next to the pause, but it will skew
+          new campaign defaults.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <span class="step-num">02</span>
+      <h3 class="step-title">Fix the tenant ID in production</h3>
+      <span class="chip is-you">You · Forge</span>
+    </div>
+    <div class="step-body">
+      <p>
+        This is the one that makes the API reachable at all. Production has
+        <code>MICROSOFT_ADS_TENANT_ID</code> set to a tenant GUID, but your Microsoft account is a
+        <strong>personal account, not an organizational one</strong>, so that endpoint rejects the
+        refresh token. Tested live from production:
+      </p>
+      <div class="evidence"><span class="bad">CONFIGURED(4e0ad749..)  HTTP 400  FAIL: invalid_grant</span>
+<span class="good">consumers               HTTP 200  OK</span>
+<span class="bad">organizations           HTTP 400  FAIL: invalid_grant</span>
+<span class="good">common                  HTTP 200  OK</span></div>
+      <p>In the Forge environment editor for the site, change:</p>
+      <pre><code>MICROSOFT_ADS_TENANT_ID=common</code></pre>
+      <div class="callout">
+        <p>
+          <strong>This one has been hiding.</strong> <code>php artisan microsoftads:test</code> loops
+          through four endpoints until one works, so it reports success — but
+          <code>BaseMicrosoftAdsService::authenticate()</code>, the path every real API call takes, uses
+          only the configured tenant. A green test command has never proved the app can authenticate.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <span class="step-num">03</span>
+      <h3 class="step-title">Add Spectra's own account IDs</h3>
+      <span class="chip is-you">You · Forge</span>
+    </div>
+    <div class="step-body">
+      <p>
+        New settings, needed by the own-site conversion fix in step 6. I have already added them to
+        your local <code>.env</code> and to <code>.env.example</code>; production needs them too:
+      </p>
+      <pre><code>SPECTRA_MICROSOFT_ADS_ACCOUNT_ID=188443253
+SPECTRA_MICROSOFT_ADS_CUSTOMER_ID=255004728</code></pre>
+      <p>
+        Then redeploy (or run <code>php artisan config:clear</code>) so the cached config picks up all
+        three env changes.
+      </p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <span class="step-num">04</span>
+      <h3 class="step-title">Turn the platform on</h3>
+      <span class="chip is-you">You · Admin</span>
+    </div>
+    <div class="step-body">
+      <p>
+        <code>enabled_platforms.microsoft.is_enabled</code> is <code>false</code>. It is checked before
+        authentication, so every Microsoft service currently returns early no matter how good the
+        credentials are. Flip it in the admin platforms screen, or:
+      </p>
+      <pre><code>php artisan tinker --execute="\App\Models\EnabledPlatform::where('slug','microsoft')->update(['is_enabled'=>true]);"</code></pre>
+      <p>Do this <em>after</em> steps 1–3, so the first thing it enables is a working path.</p>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="step-head">
+      <span class="step-num">05</span>
+      <h3 class="step-title">Link one customer and prove the chain</h3>
+      <span class="chip is-code">Verify</span>
+    </div>
+    <div class="step-body">
+      <p>
+        Linking is still manual (see <a href="#gaps">what is still missing</a>). Pick one customer and
+        wire it to the ad account by hand — this proves the whole path end to end without waiting on
+        the provisioning work:
+      </p>
+      <pre><code>php artisan microsoftads:link-account \
+  --customer-id=&lt;your customer id&gt; \
+  --account-id=188443253 \
+  --ms-customer-id=255004728</code></pre>
+      <p>Then confirm the account answers and the UET tag resolves:</p>
+      <pre><code><span class="c"># lists accounts under the manager — should print sitetospend</span>
+php artisan microsoftads:refresh-token --list-accounts
+
+<span class="c"># resolves and stores the customer's UET tag</span>
+php artisan microsoftads:list-uet-tags</code></pre>
+      <p>
+        Once that is clean, deploy a search campaign to that customer and watch for rows landing in
+        <code>microsoft_ads_performance_data</code> — the hourly sync job is already scheduled and
+        genuinely works.
+      </p>
+    </div>
+  </section>
+
+  <section class="step is-done">
+    <div class="step-head">
+      <span class="step-num">06</span>
+      <h3 class="step-title">Code bugs</h3>
+      <span class="chip is-done">Done</span>
+    </div>
+    <div class="step-body">
+      <p>
+        All four are fixed, formatted, and pass static analysis with no new baseline entries.
+        Nothing here is deployed until you push.
+      </p>
+
+      <ul class="fixes">
+        <li>
+          <span class="mark">✓</span>
+          <span class="what">The main deploy path was sending a campaign ID where an account ID belongs</span>
+          <span class="where">app/Services/Agents/MicrosoftAdsExecutionAgent.php — executeGoogleImport()</span>
+          <span class="why">
+            <code>AddImportJobs</code> takes the Google Ads <em>account</em> to import from, but the code
+            passed <code>google_campaign_id</code>, so every import job went up malformed. Now it reads the
+            customer's linked Google account, strips the dashes Google displays, skips cleanly when there
+            is no linked account, and returns the import job ID so the run can actually be followed up.
+          </span>
+        </li>
+        <li>
+          <span class="mark">✓</span>
+          <span class="what">Conversion tracking set up a tag it then threw away</span>
+          <span class="where">app/Services/Agents/MicrosoftAdsExecutionAgent.php — executeConfigureTracking()</span>
+          <span class="why">
+            It read <code>$newTag['UetTagId']</code>, which <code>createUetTag()</code> never returns, so
+            the create branch always produced null and the tag was never stored on the customer. It also
+            passed <code>url_expression</code> where the method reads <code>url_contains</code>, so the goal
+            went up matching nothing. Now it calls <code>resolveUetTagId()</code>, which finds or creates
+            the tag and persists it, with the correct key names.
+          </span>
+        </li>
+        <li>
+          <span class="mark">✓</span>
+          <span class="what">Offline conversions created a goal per lead instead of uploading conversions</span>
+          <span class="where">app/Jobs/UploadOfflineConversions.php — uploadToMicrosoft()</span>
+          <span class="why">
+            It called <code>createEventConversionGoal()</code> for every row, which defines a new conversion
+            <em>goal</em> rather than recording a conversion — so a busy account would accumulate one goal
+            per lead and never attribute anything. Now it calls <code>applyOfflineConversion()</code> with
+            the row's Microsoft click ID, and skips rows that have none, since there is nothing to attribute
+            without one.
+          </span>
+        </li>
+        <li>
+          <span class="mark">✓</span>
+          <span class="what">Own-site conversions were sent with blank account headers</span>
+          <span class="where">app/Jobs/RecordSiteMicrosoftConversion.php</span>
+          <span class="why">
+            It built <code>new Customer</code> — an empty, unsaved stub — and every SOAP call takes its
+            CustomerId and CustomerAccountId headers from that object, so each upload reached Microsoft with
+            both blank. It now uses Spectra's own account from config (step 3), reports the conversion at the
+            time it happened rather than when the user signed up, and surfaces failures to the admin
+            exception dashboard.
+          </span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <h2 id="gaps">What is still missing</h2>
+  <p class="section-note">
+    Working through steps 1–5 gets one customer live. This is what stands between that and Microsoft
+    being a real self-serve platform alongside Google.
+  </p>
+
+  <p>
+    <strong>There is no automatic account provisioning, and this is the significant one.</strong>
+    For Google, creating a customer fires an observer that dispatches a job to create a sub-account under
+    your MCC and write the ID back — which is why fourteen of fifteen customers have a Google account and
+    you have never thought about it. Microsoft has no equivalent: no provisioning job, no observer hook,
+    no link-state column. The <code>manager_account_id</code> sits in config and is read by no code in the
+    repo at all. Until a <code>ProvisionMicrosoftAdsAccount</code> job exists, every Microsoft customer has
+    to be linked by hand.
+  </p>
+
+  <p>Beyond that, the integration is thinner than Google's in ways worth knowing before you sell it:</p>
+  <ul class="gaps">
+    <li>
+      <strong>Search campaigns only.</strong> Google has seven campaign-type executors; the Microsoft
+      agent dispatches on actions rather than campaign types, and its extensions step is a literal no-op.
+    </li>
+    <li>
+      <strong>The optimization agent only notifies.</strong> It checks budget pacing, CTR decline, CPL and
+      impression share, then raises a notification or a creative brief — it never changes a campaign.
+    </li>
+    <li>
+      <strong>The audience agent skips Microsoft silently.</strong> It builds audiences for Google and
+      Facebook, with no Microsoft branch and no warning that it was skipped.
+    </li>
+    <li>
+      <strong>Health checks do not call the API.</strong> Google and Facebook have dedicated checkers that
+      probe the live account; Microsoft only confirms a refresh token exists and that performance data
+      is not stale.
+    </li>
+    <li>
+      <strong>Creative work is metrics-only.</strong> No ad copy is fetched or generated for Microsoft —
+      headline and description variations are Google and Facebook paths.
+    </li>
+    <li>
+      <code>customers.microsoft_ads_access_token</code> is a leftover column from an abandoned
+      per-customer OAuth design, read and written by nothing. Safe to drop.
+    </li>
+  </ul>
+
+  <p>
+    The parts that genuinely match Google: hourly performance sync with circuit breaker and locking,
+    UET tag provisioning into GTM, and management-account authentication — no per-customer OAuth
+    anywhere, correctly following the architecture rule.
+  </p>
+
+  <footer>
+    Verified against the live Microsoft Advertising API from production, 22 August 2026.
+    Account and status figures are from that check and will move once step 1 is done.
+  </footer>
+
+</div>
+</body>
+</html>

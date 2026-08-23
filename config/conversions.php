@@ -8,6 +8,17 @@ return [
     'google_ads_customer_id' => env('SPECTRA_GOOGLE_ADS_CUSTOMER_ID'),
 
     /*
+     * Sitetospend.com's own Microsoft Advertising account, for own-site
+     * conversions. Both are required: the Campaign Management SOAP header needs
+     * the customer (manager-level) id and the account id, and Microsoft
+     * silently attributes nothing if either is blank.
+     *
+     * Find them with: php artisan microsoftads:refresh-token --list-accounts
+     */
+    'microsoft_ads_customer_id' => env('SPECTRA_MICROSOFT_ADS_CUSTOMER_ID'),
+    'microsoft_ads_account_id' => env('SPECTRA_MICROSOFT_ADS_ACCOUNT_ID'),
+
+    /*
      * Default Google Ads conversion tracking ID. This is NOT the same number as
      * google_ads_customer_id above — it is the AW- id that owns the conversion
      * labels, and gtag drops any conversion whose account and label disagree.

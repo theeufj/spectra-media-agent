@@ -13,7 +13,7 @@ class ProfileTest extends TestCase
 
     /**
      * Every authenticated page sits behind ensureUserHasCustomer, which sends a
-     * user with no customer to /customers/create. These tests predate that
+     * user with no customer to the quick start. These tests predate that
      * middleware and were creating a bare user, so every request 302'd.
      */
     private function userWithCustomer(): User

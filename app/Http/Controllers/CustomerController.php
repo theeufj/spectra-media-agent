@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\CrawlSitemap;
 use App\Models\Customer;
 use App\Services\ActivityLogger;
 use Illuminate\Http\Request;
@@ -82,11 +83,19 @@ class CustomerController extends Controller
 
         ActivityLogger::customer('created', $customer);
 
+        // The manual form used to create the customer and stop, so anyone who
+        // arrived here rather than through the quick start began with an empty
+        // knowledge base and got a first campaign written with no knowledge of
+        // their business. Same scan either way now.
+        $scanning = CrawlSitemap::forCustomer($customer, $user);
+
         if ($request->wantsJson()) {
             return response()->json(['message' => 'Customer created successfully', 'customer' => $customer]);
         }
 
-        return redirect()->route('dashboard')->with('success', 'New customer account created successfully.');
+        return redirect()->route('dashboard')->with('success', $scanning
+            ? "Created \"{$customer->name}\" — we're scanning your website now. This usually takes a few minutes."
+            : 'New customer account created successfully.');
     }
 
     public function switch(Customer $customer)

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Head, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import InputLabel from '@/Components/InputLabel';
@@ -90,19 +90,49 @@ const TIMEZONES = [
     { value: 'Africa/Johannesburg', label: 'Johannesburg' },
 ];
 
+// Currency for each supported country, so the field can fill itself in.
+const COUNTRY_CURRENCY = {
+    US: 'USD', CA: 'CAD', GB: 'GBP', AU: 'AUD', NZ: 'NZD', IN: 'INR',
+    JP: 'JPY', KR: 'KRW', SG: 'SGD', HK: 'HKD', CH: 'CHF', SE: 'SEK',
+    NO: 'NOK', DK: 'DKK', PL: 'PLN', CZ: 'CZK', BR: 'BRL', MX: 'MXN',
+    AR: 'ARS', ZA: 'ZAR', AE: 'AED', SA: 'SAR',
+    IE: 'EUR', DE: 'EUR', FR: 'EUR', ES: 'EUR', IT: 'EUR', NL: 'EUR',
+    BE: 'EUR', AT: 'EUR', FI: 'EUR', PT: 'EUR', GR: 'EUR',
+};
+
 export default function Create({ auth }) {
+    const { tenant } = usePage().props;
+
+    // Prefill the timezone from the browser, as the quick start does, but only
+    // when it is one of the options actually offered below.
+    const detectedTimezone = useMemo(() => {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        return TIMEZONES.some((t) => t.value === tz) ? tz : '';
+    }, []);
+
     const { data, setData, post, processing, errors } = useForm({
         name: '',
         business_type: '',
         description: '',
         country: '',
-        timezone: '',
+        timezone: detectedTimezone,
         currency_code: '',
         website: '',
         phone: '',
         facebook_page_url: '',
         google_ads_customer_id: '',
     });
+
+    // Picking a country fills in the currency, unless it has been typed over.
+    const selectCountry = (code) => {
+        setData((previous) => ({
+            ...previous,
+            country: code,
+            currency_code: COUNTRY_CURRENCY[previous.country] === previous.currency_code || !previous.currency_code
+                ? (COUNTRY_CURRENCY[code] ?? previous.currency_code)
+                : previous.currency_code,
+        }));
+    };
 
     const submit = (e) => {
         e.preventDefault();
@@ -121,9 +151,16 @@ export default function Create({ auth }) {
                     <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                         <div className="p-6 text-gray-900">
                             <div className="mb-6">
-                                <h3 className="text-lg font-medium text-gray-900">Welcome to MediaAgent!</h3>
+                                <h3 className="text-lg font-medium text-gray-900">Welcome to {tenant?.name ?? 'Spectra'}!</h3>
                                 <p className="mt-1 text-sm text-gray-600">
                                     To get started, please tell us a bit about your business. This information helps us tailor your marketing campaigns.
+                                </p>
+                                <p className="mt-2 text-sm text-gray-500">
+                                    In a hurry?{' '}
+                                    <a href={route('quick-start')} className="text-flame-orange-600 hover:text-flame-orange-800">
+                                        Just paste your website URL
+                                    </a>{' '}
+                                    and we'll fill this in for you.
                                 </p>
                             </div>
 
@@ -260,7 +297,7 @@ export default function Create({ auth }) {
                                                 name="country"
                                                 value={data.country}
                                                 className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
-                                                onChange={(e) => setData('country', e.target.value)}
+                                                onChange={(e) => selectCountry(e.target.value)}
                                                 required
                                             >
                                                 <option value="">Select a country</option>

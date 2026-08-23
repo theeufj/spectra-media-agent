@@ -19,7 +19,10 @@ class DeploymentFailed extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        // Database too: a deploy failure the user only hears about if they
+        // happen to open the right email is a deploy failure they never hear
+        // about. The bell is the in-product record.
+        return ['mail', 'database'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -37,7 +40,13 @@ class DeploymentFailed extends Notification implements ShouldQueue
 
     public function toArray(object $notifiable): array
     {
+        // title/message/action_* are lifted into columns by the custom
+        // Notification model's creating hook — they are what the bell shows.
         return [
+            'title' => "Deployment failed: {$this->campaign->name}",
+            'message' => $this->error,
+            'action_url' => url('/campaigns/'.$this->campaign->id),
+            'action_text' => 'View Campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,
             'error' => $this->error,

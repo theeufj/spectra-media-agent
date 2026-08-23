@@ -419,13 +419,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
     };
 
     const confirmDeploy = () => {
+        // On success the server redirects to the deployment-status page, whose
+        // flash toast covers the messaging — no client toast needed here.
         router.post(route('deployment.deploy'), {
             campaign_id: campaign.id,
         }, {
             preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.');
-            },
             onError: (errors) => {
                 console.error('Deployment errors:', errors);
                 toast.error(errors.message || 'Deployment failed. Please check the console for details.');

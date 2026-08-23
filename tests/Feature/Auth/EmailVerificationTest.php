@@ -36,7 +36,7 @@ class EmailVerificationTest extends TestCase
         $response = $this->actingAs($user)->get($verificationUrl);
 
         $this->assertTrue($user->fresh()->hasVerifiedEmail());
-        $response->assertRedirect(route('customers.create', absolute: false));
+        $response->assertRedirect(route('quick-start', absolute: false));
     }
 
     public function test_email_is_not_verified_with_invalid_hash(): void

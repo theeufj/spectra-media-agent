@@ -162,13 +162,12 @@ export function PendingTasks({ tasks = [] }) {
                     </Link>
                 ))}
             </div>
+            {/* No /tasks route exists — the first five are shown above, and the
+                count in the header already says how many there are in total. */}
             {tasks.length > 5 && (
-                <Link
-                    href="/tasks"
-                    className="block mt-4 text-center text-sm text-flame-orange-600 hover:text-flame-orange-800 font-medium"
-                >
-                    View all {tasks.length} tasks →
-                </Link>
+                <p className="block mt-4 text-center text-sm text-gray-400">
+                    {tasks.length - 5} more on your campaigns
+                </p>
             )}
         </div>
     );

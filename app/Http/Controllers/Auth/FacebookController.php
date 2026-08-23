@@ -54,7 +54,7 @@ class FacebookController extends Controller
             Auth::login($user, true);
 
             if ($user->customers()->doesntExist()) {
-                return redirect()->route('customers.create');
+                return redirect()->route('quick-start');
             }
 
             return redirect()->route('dashboard');

@@ -307,10 +307,39 @@ PROMPT;
 
     protected function executeGoogleImport(array $params): array
     {
-        $importService = new ImportService($this->customer);
-        $result = $importService->importFromGoogleAds($params['google_campaign_id']);
+        // AddImportJobs takes the Google Ads ACCOUNT to import from. This used
+        // to pass $params['google_campaign_id'], so every import job went up
+        // with a campaign id sitting in the GoogleAccountId field — which is
+        // the primary deploy route for Microsoft, and it never worked.
+        $googleAccountId = $params['google_account_id']
+            ?? $params['google_ads_customer_id']
+            ?? $this->customer->google_ads_customer_id;
 
-        return $result ?? ['status' => 'import_submitted'];
+        // Google shows ids as 123-456-7890; the API wants digits only.
+        $googleAccountId = $googleAccountId ? preg_replace('/\D/', '', (string) $googleAccountId) : null;
+
+        if (! $googleAccountId) {
+            $this->logError('Google import skipped: customer has no linked Google Ads account');
+
+            return ['status' => 'import_skipped', 'reason' => 'no_google_ads_account'];
+        }
+
+        $result = (new ImportService($this->customer))->importFromGoogleAds($googleAccountId);
+
+        if (! $result) {
+            return ['status' => 'import_failed', 'google_account_id' => $googleAccountId];
+        }
+
+        // Keep the job id so the import can actually be followed up on;
+        // getImportJobStatus() had nothing to poll with before.
+        $ids = $result['ImportJobIds']['long'] ?? $result['ImportJobIds'] ?? null;
+        $jobId = is_array($ids) ? ($ids[0] ?? null) : $ids;
+
+        return [
+            'status' => 'import_submitted',
+            'google_account_id' => $googleAccountId,
+            'import_job_id' => $jobId,
+        ];
     }
 
     protected function executeCreateCampaign(array $params, ExecutionContext $context): array
@@ -444,18 +473,12 @@ PROMPT;
         try {
             $trackingService = new ConversionTrackingService($this->customer);
 
-            $tags = $trackingService->getUetTags();
-            $tagId = null;
-
-            if (! empty($tags)) {
-                $tagId = $tags[0]['Id'] ?? null;
-            } else {
-                $newTag = $trackingService->createUetTag(
-                    $this->customer->name.' UET',
-                    'Auto-provisioned by Sitetospend'
-                );
-                $tagId = $newTag['UetTagId'] ?? null;
-            }
+            // resolveUetTagId() finds or creates the tag and persists it to
+            // customers.microsoft_uet_tag_id. The inline version this replaces
+            // read $newTag['UetTagId'], which createUetTag() never returns — it
+            // returns ['UetTags' => ['UetTag' => [...]]] — so the create branch
+            // always produced null and the id was never stored on the customer.
+            $tagId = $trackingService->resolveUetTagId();
 
             if ($tagId) {
                 $goals = $trackingService->getConversionGoals();
@@ -463,8 +486,12 @@ PROMPT;
                     $trackingService->createUrlConversionGoal([
                         'name' => 'Website Conversion',
                         'uet_tag_id' => $tagId,
-                        'url_expression' => '/thank-you',
-                        'conversion_window' => 30,
+                        // createUrlConversionGoal() reads 'url_contains' and
+                        // 'conversion_window_minutes'. The old 'url_expression'
+                        // and 'conversion_window' keys were silently ignored,
+                        // so UrlExpression went up null and matched nothing.
+                        'url_contains' => '/thank-you',
+                        'conversion_window_minutes' => 43200,
                     ]);
                 }
             }

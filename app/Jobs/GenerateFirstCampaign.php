@@ -107,6 +107,12 @@ class GenerateFirstCampaign implements ShouldQueue
                     'customer_id' => $this->customer->id,
                 ]);
 
+                // ExtractBrandGuidelines skipped its own "your site is ready"
+                // email on the promise this job would notify instead. Keep that
+                // promise even when the bonus campaign falls through — the scan
+                // itself succeeded, and the user can build a campaign by hand.
+                $this->sendCrawlCompletedFallback();
+
                 return;
             }
 
@@ -130,6 +136,30 @@ class GenerateFirstCampaign implements ShouldQueue
                 'customer_id' => $this->customer->id,
                 'error' => $e->getMessage(),
             ]);
+
+            $this->sendCrawlCompletedFallback();
+        }
+    }
+
+    /**
+     * The scan finished but the bonus campaign didn't materialise. Send the
+     * same crawl-completed email the non-qualifying path sends, so the user
+     * still hears their site is ready instead of nothing at all.
+     */
+    private function sendCrawlCompletedFallback(): void
+    {
+        try {
+            $totalPages = CustomerPage::where('customer_id', $this->customer->id)->count();
+
+            foreach ($this->customer->users as $user) {
+                Mail::to($user->email)->queue(new \App\Mail\SitemapCrawlCompleted(
+                    $this->customer->website ?? '',
+                    $totalPages,
+                    $user->name
+                ));
+            }
+        } catch (\Throwable $e) {
+            report($e);
         }
     }
 

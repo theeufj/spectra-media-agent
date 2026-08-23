@@ -347,7 +347,7 @@ class GenerateStrategy implements ShouldQueue
                 ['strategy_count' => $strategyCount]
             );
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error generating strategy for campaign {$this->campaign->id}: ".$e->getMessage(), [
                 'campaign_id' => $this->campaign->id,
                 'customer_id' => $this->campaign->customer_id,
@@ -357,12 +357,13 @@ class GenerateStrategy implements ShouldQueue
                 'trace' => $e->getTraceAsString(),
             ]);
 
-            // Mark strategy generation as failed
-            $this->campaign->update([
-                'strategy_generation_completed_at' => now(),
-                'strategy_generation_error' => $e->getMessage(),
-            ]);
+            // failWithError records the failure AND notifies the user.
+            // Updating the columns directly here used to skip the notification
+            // for exactly the failures nobody predicted — the user watched a
+            // spinner while the error sat unread in the database.
+            $this->failWithError('Strategy generation hit an unexpected error. Our team has been notified — please try regenerating in a few minutes.');
 
+            // Rethrow so the queue records the real failure (and its details).
             throw $e;
         }
     }

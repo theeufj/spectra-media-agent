@@ -219,6 +219,23 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             Log::info('Plan-filtered strategies for deployment: '.$strategies->pluck('platform')->implode(', '));
         }
 
+        // Nothing left to deploy is a failure the user must hear about, not a
+        // success with zero platforms. Falling through used to email
+        // "deployment completed" for a campaign where the plan filter had
+        // dropped every strategy, while the campaign never went Active.
+        if ($strategies->isEmpty()) {
+            Log::warning("DeployCampaign: no deployable strategies for Campaign ID: {$this->campaign->id}", [
+                'strategy_id_filter' => $this->strategyId,
+            ]);
+
+            $this->notifyUsers(new DeploymentFailed(
+                $this->campaign,
+                'None of this campaign\'s strategies can be deployed on your current plan. Upgrade your plan or adjust the campaign\'s platforms, then deploy again.'
+            ));
+
+            return;
+        }
+
         if ($strategies->count() > 0 && $this->campaign->daily_budget) {
             DB::transaction(function () use ($strategies, $customer) {
                 // Try to use cross-channel budget allocation for smart splits
@@ -413,11 +430,31 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
 
     /**
      * Handle a job failure.
+     *
+     * With $tries = 1 this is the end of the line — nothing retries, so if the
+     * user isn't told here they are never told. The most common throw for a
+     * new self-serve account is the card charge in handle(), which is exactly
+     * the failure the user can actually fix themselves.
      */
     public function failed(\Throwable $exception): void
     {
         Log::error('DeployCampaign failed: '.$exception->getMessage(), [
+            'campaign_id' => $this->campaign->id ?? null,
             'exception' => $exception->getTraceAsString(),
         ]);
+
+        $isPaymentIssue = str_contains($exception->getMessage(), 'Payment issue');
+
+        try {
+            $this->notifyUsers(new DeploymentFailed(
+                $this->campaign,
+                $isPaymentIssue
+                    ? 'We couldn\'t charge your payment method for the ad spend prepayment. Update your card under Billing → Ad Spend, then deploy again.'
+                    : 'Something went wrong while deploying. Our team has been notified — you can retry from the campaign page.'
+            ));
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('DeployCampaign::failed could not notify users: '.$e->getMessage());
+        }
     }
 }

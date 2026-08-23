@@ -83,6 +83,16 @@ class ExtractBrandGuidelines implements ShouldQueue
                 Log::warning('Brand guideline extraction returned null', [
                     'customer_id' => $this->customer->id,
                 ]);
+
+                // This is the end of the onboarding chain — nothing downstream
+                // runs without a brand guideline, so tell the user now rather
+                // than leaving them on "we're scanning your website".
+                foreach ($this->customer->users as $user) {
+                    $user->notify(new \App\Notifications\SiteScanFailed(
+                        $this->customer,
+                        'We scanned your site but couldn\'t extract enough about your brand to build campaigns from.'
+                    ));
+                }
             }
 
         } catch (\Exception $e) {
@@ -105,5 +115,18 @@ class ExtractBrandGuidelines implements ShouldQueue
             'customer_id' => $this->customer->id,
             'error' => $exception->getMessage(),
         ]);
+
+        // Out of retries — the onboarding chain ends here, so the user must
+        // hear about it from us rather than from silence.
+        try {
+            foreach ($this->customer->users as $user) {
+                $user->notify(new \App\Notifications\SiteScanFailed(
+                    $this->customer,
+                    'Our analysis of your site kept failing partway through.'
+                ));
+            }
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 }

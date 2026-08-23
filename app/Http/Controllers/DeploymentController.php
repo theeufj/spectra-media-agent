@@ -225,9 +225,12 @@ class DeploymentController extends Controller
 
         Log::info("📤 DeployCampaign job dispatched for Campaign ID: {$campaign->id}");
 
-        return redirect()->back()->with('flash', [
+        // Land the user on the page that actually shows what happens next.
+        // Deployment runs for minutes and can fail per-platform; a toast on the
+        // collateral page communicated neither.
+        return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
             'type' => 'success',
-            'message' => 'Campaign deployment has been initiated! Your ads will be deployed to the selected platforms shortly.',
+            'message' => 'Deployment started — you can watch each platform\'s progress here.',
         ]);
     }
 

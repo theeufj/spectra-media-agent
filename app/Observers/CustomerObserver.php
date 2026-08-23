@@ -158,28 +158,4 @@ class CustomerObserver
 
         SendGoogleAdsLinkInvitation::dispatch($customer);
     }
-
-    /**
-     * Handle the Customer "deleted" event.
-     */
-    public function deleted(Customer $customer): void
-    {
-        //
-    }
-
-    /**
-     * Handle the Customer "restored" event.
-     */
-    public function restored(Customer $customer): void
-    {
-        //
-    }
-
-    /**
-     * Handle the Customer "force deleted" event.
-     */
-    public function forceDeleted(Customer $customer): void
-    {
-        //
-    }
 }

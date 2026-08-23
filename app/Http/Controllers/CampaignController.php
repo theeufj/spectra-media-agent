@@ -697,17 +697,19 @@ class CampaignController extends Controller
         }
 
         // Step 2: Deployment started
-        if ($strategy->deployment_status === 'deploying' || $strategy->deployment_status === 'deployed') {
+        if (in_array($strategy->deployment_status, ['deploying', 'deployed', 'verified'], true)) {
             $progress++;
         }
 
-        // Step 3: Platform configured
-        if ($strategy->deployment_status === 'deployed' || $strategy->deployed_at) {
+        // Step 3: Live on the platform
+        if ($strategy->deployed_at || in_array($strategy->deployment_status, ['deployed', 'verified'], true)) {
             $progress++;
         }
 
-        // Step 4: Verification complete
-        if ($strategy->deployed_at && $strategy->deployment_status === 'deployed') {
+        // Step 4: VerifyDeployment confirmed the objects exist. This used to
+        // repeat step 3's condition, so the bar hit 4/4 the moment a deploy
+        // finished, verified or not.
+        if ($strategy->deployment_status === 'verified') {
             $progress++;
         }
 

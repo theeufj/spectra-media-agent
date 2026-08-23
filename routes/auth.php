@@ -57,7 +57,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
         $request->fulfill();
 
-        return redirect()->intended(route('customers.create'))->with('status', 'Your email has been verified! Please set up your customer profile.');
+        return redirect()->intended(route('quick-start'))->with('status', 'Your email has been verified!');
     })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
 
     // Resend verification email

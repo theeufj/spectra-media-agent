@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 
 /** Dispatch this from anywhere to restart the tour */
 export function startTour() {
@@ -9,7 +9,7 @@ export function startTour() {
 const TOUR_STEPS = [
     {
         target: '[data-tour="dashboard"]',
-        title: 'Welcome to Site to Spend',
+        title: (brand) => `Welcome to ${brand}`,
         body: 'This is your dashboard — a quick overview of campaign performance, tasks, and AI agent activity.',
         placement: 'bottom',
     },
@@ -20,15 +20,11 @@ const TOUR_STEPS = [
         placement: 'bottom',
     },
     {
+        // One step, not two: both lived under the same menu, and two
+        // consecutive tooltips pinned to the same element read as a stuck tour.
         target: '[data-tour="content"]',
-        title: 'Knowledge Base',
-        body: 'Add your website pages to the Knowledge Base. The AI reads them to understand your business before writing a single word of ad copy.',
-        placement: 'bottom',
-    },
-    {
-        target: '[data-tour="content"]',
-        title: 'Brand Guidelines',
-        body: 'Once your pages are crawled, go to Brand Guidelines to extract your colours, tone of voice, and messaging. Ads written with your brand guidelines are noticeably more on-brand.',
+        title: 'Knowledge Base & Brand Guidelines',
+        body: 'The Knowledge Base holds your website pages — the AI reads them to understand your business before writing a word of ad copy. Once crawled, Brand Guidelines extracts your colours, tone of voice, and messaging.',
         placement: 'bottom',
     },
     {
@@ -65,6 +61,17 @@ const TOUR_STEPS = [
 
 const STORAGE_KEY = 'spectra_tour_completed';
 
+/**
+ * Every tour target lives in the desktop nav (`hidden md:flex`). Below the
+ * md breakpoint the elements exist but render nowhere, so querySelector still
+ * finds them and getBoundingClientRect() returns zeros — the tour then pinned
+ * nine tooltips half off the left edge of a dark full-screen overlay. If the
+ * target isn't actually visible, there is nothing to tour.
+ */
+function isVisible(el) {
+    return !!el && (el.offsetWidth > 0 || el.offsetHeight > 0 || el.getClientRects().length > 0);
+}
+
 function getTooltipPosition(targetEl, placement) {
     const rect = targetEl.getBoundingClientRect();
     const scrollY = window.scrollY;
@@ -97,22 +104,37 @@ function getTooltipPosition(targetEl, placement) {
 }
 
 export default function OnboardingTour({ forceShow = false }) {
+    const { url, props } = usePage();
+    const brand = props?.tenant?.name || 'Spectra';
     const [active, setActive] = useState(false);
     const [step, setStep] = useState(0);
     const [pos, setPos] = useState(null);
     const tooltipRef = useRef(null);
 
+    const startPathRef = useRef(null);
+
     const startTour = useCallback(() => {
+        // No visible first target (mobile nav, collapsed layout) — don't
+        // start, and don't mark the tour completed either, so it still shows
+        // the first time this account opens the dashboard on a desktop.
+        if (!isVisible(document.querySelector(TOUR_STEPS[0].target))) return;
+        startPathRef.current = window.location.pathname;
         setStep(0);
         setActive(true);
     }, []);
 
-    // Determine if the tour should show on first visit
+    // Determine if the tour should show on first visit.
+    //
+    // Only on the dashboard. This component mounts on the layout, so the first
+    // authenticated screen a new account sees is onboarding — and the tour
+    // would open there, narrating "this is your dashboard" over the top of a
+    // setup form, then close itself the moment they navigated away.
     useEffect(() => {
         if (forceShow) {
             startTour();
             return;
         }
+        if (!url?.startsWith('/dashboard')) return;
         try {
             const completed = localStorage.getItem(STORAGE_KEY);
             if (!completed) {
@@ -121,7 +143,7 @@ export default function OnboardingTour({ forceShow = false }) {
         } catch {
             // localStorage not available
         }
-    }, [forceShow, startTour]);
+    }, [forceShow, startTour, url]);
 
     // Listen for custom event so any button can trigger the tour
     useEffect(() => {
@@ -130,14 +152,29 @@ export default function OnboardingTour({ forceShow = false }) {
         return () => window.removeEventListener('start-onboarding-tour', handler);
     }, [startTour]);
 
+    const finish = useCallback(() => {
+        setActive(false);
+        try {
+            localStorage.setItem(STORAGE_KEY, '1');
+        } catch {
+            // ignore
+        }
+    }, []);
+
     const positionTooltip = useCallback(() => {
         if (!active) return;
         const current = TOUR_STEPS[step];
         if (!current) return;
         const el = document.querySelector(current.target);
-        if (!el) return;
+        // Mid-tour resize into a layout where the target no longer renders:
+        // end cleanly rather than leaving a backdrop with a mispinned tooltip.
+        if (!isVisible(el)) {
+            finish();
+
+            return;
+        }
         setPos(getTooltipPosition(el, current.placement));
-    }, [active, step]);
+    }, [active, step, finish]);
 
     useEffect(() => {
         positionTooltip();
@@ -167,15 +204,6 @@ export default function OnboardingTour({ forceShow = false }) {
         };
     }, [active, step]);
 
-    const finish = useCallback(() => {
-        setActive(false);
-        try {
-            localStorage.setItem(STORAGE_KEY, '1');
-        } catch {
-            // ignore
-        }
-    }, []);
-
     const next = useCallback(() => {
         if (step < TOUR_STEPS.length - 1) {
             setStep(s => s + 1);
@@ -188,11 +216,17 @@ export default function OnboardingTour({ forceShow = false }) {
         if (step > 0) setStep(s => s - 1);
     }, [step]);
 
-    // Close on navigation
+    // Close on navigation — away from where the tour started. Inertia fires
+    // `navigate` for the page being arrived on too, so a bare listener closed
+    // (and permanently "completed") the tour in the same tick it opened: the
+    // tour never actually displayed for anyone arriving via an Inertia visit.
     useEffect(() => {
-        const remove = router.on('navigate', finish);
+        if (!active) return undefined;
+        const remove = router.on('navigate', () => {
+            if (window.location.pathname !== startPathRef.current) finish();
+        });
         return remove;
-    }, [finish]);
+    }, [active, finish]);
 
     // Close on escape
     useEffect(() => {
@@ -247,7 +281,9 @@ export default function OnboardingTour({ forceShow = false }) {
                     </button>
                 </div>
 
-                <h4 className="text-sm font-semibold text-gray-900 mb-1">{current.title}</h4>
+                <h4 className="text-sm font-semibold text-gray-900 mb-1">
+                    {typeof current.title === 'function' ? current.title(brand) : current.title}
+                </h4>
                 <p className="text-sm text-gray-600 leading-relaxed mb-4">{current.body}</p>
 
                 {/* Progress dots */}

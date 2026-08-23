@@ -21,7 +21,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
 
     public function via(object $notifiable): array
     {
-        return ['mail'];
+        return ['mail', 'database'];
     }
 
     public function toMail(object $notifiable): MailMessage
@@ -84,7 +84,19 @@ class DeploymentCompleted extends Notification implements ShouldQueue
 
     public function toArray(object $notifiable): array
     {
+        $allFailed = $this->failureCount > 0 && $this->successCount === 0;
+
         return [
+            'title' => $allFailed
+                ? "Deployment issue: {$this->campaign->name}"
+                : "Your campaign is live: {$this->campaign->name}",
+            'message' => $allFailed
+                ? 'We ran into an issue deploying your campaign and our team has been notified.'
+                : ($this->failureCount > 0
+                    ? "{$this->successCount} platform(s) live, {$this->failureCount} had an issue."
+                    : 'Your ads are running.'),
+            'action_url' => url('/campaigns/'.$this->campaign->id),
+            'action_text' => 'View Campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,
             'success_count' => $this->successCount,

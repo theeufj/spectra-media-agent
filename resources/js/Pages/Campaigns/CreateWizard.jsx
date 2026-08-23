@@ -6,7 +6,7 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
-import ProgressStepper from '@/Components/ProgressStepper';
+import ProgressStepper, { CompactStepper } from '@/Components/ProgressStepper';
 import ProductSelection from './ProductSelection';
 import KeywordSelector from '@/Components/KeywordSelector';
 import { useTenant } from '@/hooks/useTenant';
@@ -303,23 +303,44 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
 
     const { data, setData, post, processing, errors, reset } = form;
 
-    // Auto-save draft to localStorage
+    // Auto-save draft to localStorage. The draft wraps the form data with the
+    // step the user was on, so a remount (including the redirect-back from a
+    // plan-limit rejection) resumes where they left off instead of wiping
+    // nine steps of typing.
+    const [draftSavedAt, setDraftSavedAt] = useState(null);
+
     useEffect(() => {
+        // On mount currentStep is always 0, so this must not be gated on it —
+        // the old guard meant the draft was written but never restored.
         const savedDraft = localStorage.getItem('campaign_draft');
-        if (savedDraft && currentStep > 0) {
-            const draft = JSON.parse(savedDraft);
-            // Only restore if no data has been entered yet
-            if (!data.name) {
-                Object.keys(draft).forEach(key => {
-                    if (draft[key]) setData(key, draft[key]);
-                });
-            }
+        if (!savedDraft) return;
+        try {
+            const parsed = JSON.parse(savedDraft);
+            // Current shape is { data, step }; older drafts were the bare data.
+            const draft = parsed?.data ?? parsed;
+            const step = parsed?.step ?? 1;
+            Object.keys(draft).forEach(key => {
+                if (draft[key] === undefined || draft[key] === null || draft[key] === '') return;
+                // A draft can outlive platform availability — keep only
+                // platforms the server still offers.
+                if (key === 'platforms') {
+                    const stillSelectable = draft.platforms.filter(p => selectablePlatforms.includes(p));
+                    if (stillSelectable.length > 0) setData('platforms', stillSelectable);
+                    return;
+                }
+                setData(key, draft[key]);
+            });
+            setCreationMode('template');
+            setCurrentStep(Math.min(step, WIZARD_STEPS.length - 1));
+        } catch {
+            localStorage.removeItem('campaign_draft');
         }
     }, []);
-    
+
     useEffect(() => {
         if (currentStep > 0) {
-            localStorage.setItem('campaign_draft', JSON.stringify(data));
+            localStorage.setItem('campaign_draft', JSON.stringify({ data, step: currentStep }));
+            setDraftSavedAt(new Date());
         }
     }, [data, currentStep]);
     
@@ -382,7 +403,6 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
     
     const submit = (e) => {
         e.preventDefault();
-        localStorage.removeItem('campaign_draft');
         form.transform((d) => ({
             ...d,
             images: stagedImages.filter(s => !s.isSeed).map(s => s.file),
@@ -390,6 +410,16 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             videos: stagedVideos,
         }));
         post(route('campaigns.store'), {
+            // The draft is only cleared once the campaign actually exists —
+            // i.e. the server sent us somewhere other than back to the wizard.
+            // A rejected submit (validation, or the plan-limit redirect-back,
+            // which arrives as a "successful" flash visit) remounts this
+            // component, and the draft is what restores the work.
+            onSuccess: (page) => {
+                if (!page.url.includes('/campaigns/wizard')) {
+                    localStorage.removeItem('campaign_draft');
+                }
+            },
             onError: () => {
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             },
@@ -1047,14 +1077,29 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
             
             <div className="py-8">
                 <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-                    {/* Progress Stepper */}
+                    {/* Progress Stepper — the full version squeezes 8 labelled
+                        columns into a phone viewport, so small screens get the
+                        compact dots with the current step named underneath. */}
                     {currentStep > 0 && (
-                        <ProgressStepper 
-                            steps={WIZARD_STEPS.slice(1)} 
-                            currentStep={currentStep - 1}
-                            onStepClick={(index) => goToStep(index + 1)}
-                            allowNavigation={true}
-                        />
+                        <>
+                            <div className="hidden md:block">
+                                <ProgressStepper
+                                    steps={WIZARD_STEPS.slice(1)}
+                                    currentStep={currentStep - 1}
+                                    onStepClick={(index) => goToStep(index + 1)}
+                                    allowNavigation={true}
+                                />
+                            </div>
+                            <div className="md:hidden mb-6">
+                                <CompactStepper
+                                    steps={WIZARD_STEPS.slice(1)}
+                                    currentStep={currentStep - 1}
+                                />
+                                <p className="mt-2 text-sm font-medium text-flame-orange-600">
+                                    {WIZARD_STEPS[currentStep].title}
+                                </p>
+                            </div>
+                        </>
                     )}
                     
                     {/* Pre-flight Warnings */}
@@ -1107,10 +1152,10 @@ export default function CreateWizard({ auth, pages = [], brandGuideline, selecta
                         </form>
                     </div>
                     
-                    {/* Draft Saved Indicator */}
-                    {currentStep > 0 && (
+                    {/* Draft Saved Indicator — the real save time, not the render time */}
+                    {currentStep > 0 && draftSavedAt && (
                         <p className="text-center text-sm text-gray-400 mt-4">
-                            Draft auto-saved • {new Date().toLocaleTimeString()}
+                            Draft auto-saved • {draftSavedAt.toLocaleTimeString()}
                         </p>
                     )}
                 </div>

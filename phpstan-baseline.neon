@@ -607,18 +607,6 @@ parameters:
 			path: app/Http/Controllers/SandboxController.php
 
 		-
-			message: '#^Comparison operation "\>" between 4 and 0 is always true\.$#'
-			identifier: greater.alwaysTrue
-			count: 1
-			path: app/Http/Controllers/SetupProgressController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>user_verified" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/SetupProgressController.php
-
-		-
 			message: '#^Parameter \#1 \$campaign of job class App\\Jobs\\GenerateAdCopy constructor expects App\\Models\\Campaign in App\\Jobs\\GenerateAdCopy\:\:dispatch\(\), Illuminate\\Database\\Eloquent\\Model\|null given\.$#'
 			identifier: argument.type
 			count: 1

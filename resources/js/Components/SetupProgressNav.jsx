@@ -1,45 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import React from 'react';
+import { Link } from '@inertiajs/react';
+import { usePolling } from '@/hooks/usePolling';
 
 /**
- * SetupProgressNav - Shows setup progress for new users
- * Guides them through Knowledge Base → Brand Guidelines → Campaign
+ * SetupProgressNav - the new-account checklist.
+ *
+ * Steps come from /api/setup-progress and mirror the real funnel:
+ * scan → campaign → budget → payment → deploy. Each step carries a
+ * `status` of completed | in_progress | failed | pending.
+ *
+ * Polls while the server reports work in flight (`is_working`) — the site
+ * scan completes minutes after signup, and this card is how the user finds
+ * out without refreshing.
  */
 export default function SetupProgressNav() {
-    const { auth } = usePage().props;
-    const user = auth?.user;
-    const [setupData, setSetupData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    
-    // Fetch setup progress from API
-    useEffect(() => {
-        const fetchSetupProgress = async () => {
-            try {
-                const response = await fetch('/api/setup-progress', {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    setSetupData(data);
-                }
-            } catch (error) {
-                console.error('Failed to fetch setup progress:', error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        
-        fetchSetupProgress();
-    }, []);
-    
-    // Don't show while loading or if setup is complete
-    if (isLoading || !setupData || setupData.progress === 100) return null;
-    
+    const { data: setupData, error } = usePolling('/api/setup-progress', {
+        interval: 8000,
+        // Keep polling until nothing is moving server-side. The first
+        // response arrives through the same mechanism (immediate fetch).
+        until: (data) => data && data.is_working === false,
+    });
+
+    // Nothing to show yet, nothing worth showing (fetch failed — don't render
+    // a broken empty card), or setup is done.
+    if (!setupData || error) return null;
+    if (!setupData.steps?.length || setupData.progress === 100) return null;
+
     const { steps, progress, completed_steps, total_steps } = setupData;
-    
+    const currentKey = steps.find(s => !s.completed && s.status !== 'in_progress')?.key;
+
     return (
         <div className="bg-gradient-to-r from-flame-orange-50 to-purple-50 border border-flame-orange-100 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
@@ -49,100 +38,76 @@ export default function SetupProgressNav() {
                 </div>
                 <span className="text-xs text-gray-500">{completed_steps}/{total_steps} complete</span>
             </div>
-            
+
             {/* Progress Bar */}
             <div className="w-full bg-gray-200 rounded-full h-1.5 mb-3">
-                <div 
+                <div
                     className="bg-gradient-to-r from-flame-orange-500 to-purple-500 h-1.5 rounded-full transition-all duration-500"
                     style={{ width: `${progress}%` }}
                 />
             </div>
-            
+
             {/* Steps */}
             <div className="flex flex-col sm:flex-row gap-2">
-                {steps.map((step, index) => (
-                    <Link 
+                {steps.map((step) => (
+                    <Link
                         key={step.key}
                         href={step.action_url}
                         className={`
                             sm:flex-1 flex items-center space-x-2 px-3 py-2 rounded-lg text-xs
                             transition-all duration-200
-                            ${step.completed 
-                                ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                                : step.partial
-                                    ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200 ring-2 ring-yellow-300'
-                                    : index === completed_steps
-                                        ? 'bg-flame-orange-100 text-flame-orange-700 hover:bg-flame-orange-200 ring-2 ring-flame-orange-300'
-                                        : 'bg-white text-gray-500 hover:bg-gray-50'
-                            }
+                            ${stepClasses(step, step.key === currentKey)}
                         `}
                         title={step.description}
                     >
-                        <span className="flex-shrink-0">
-                            {step.completed ? '✓' : step.partial ? '◐' : getStepIcon(step.key)}
-                        </span>
+                        <span className="flex-shrink-0">{stepMarker(step)}</span>
                         <div className="min-w-0">
                             <p className="font-medium truncate">{step.title}</p>
                         </div>
                     </Link>
                 ))}
             </div>
+
+            {/* One line of guidance for whatever the card is currently doing */}
+            {steps.some(s => s.status === 'in_progress' || s.status === 'failed') && (
+                <p className="mt-2 text-xs text-gray-600">
+                    {steps.find(s => s.status === 'failed')?.description
+                        ?? steps.find(s => s.status === 'in_progress')?.description}
+                </p>
+            )}
         </div>
     );
 }
 
-function getStepIcon(stepKey) {
-    const icons = {
-        knowledge_base: '📚',
-        brand_guidelines: '🎨',
-        first_campaign: '🚀',
-    };
-    return icons[stepKey] || '📋';
+function stepClasses(step, isCurrent) {
+    if (step.completed) return 'bg-green-100 text-green-700 hover:bg-green-200';
+    if (step.status === 'failed') return 'bg-red-50 text-red-700 hover:bg-red-100 ring-2 ring-red-200';
+    if (step.status === 'in_progress') return 'bg-blue-50 text-blue-700 hover:bg-blue-100';
+    if (isCurrent) return 'bg-flame-orange-100 text-flame-orange-700 hover:bg-flame-orange-200 ring-2 ring-flame-orange-300';
+    return 'bg-white text-gray-500 hover:bg-gray-50';
 }
 
-/**
- * Inline Setup Progress for the navigation bar
- */
-export function InlineSetupProgress() {
-    const [setupData, setSetupData] = useState(null);
-    const [isLoading, setIsLoading] = useState(true);
-    
-    useEffect(() => {
-        const fetchSetupProgress = async () => {
-            try {
-                const response = await fetch('/api/setup-progress', {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                    }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    setSetupData(data);
-                }
-            } catch (error) {
-                console.error('Failed to fetch setup progress:', error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-        
-        fetchSetupProgress();
-    }, []);
-    
-    if (isLoading || !setupData || setupData.progress === 100) return null;
-    
-    const nextStep = setupData.current_step;
-    
-    if (!nextStep) return null;
-    
-    return (
-        <Link
-            href={nextStep.action_url}
-            className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-flame-orange-700 bg-flame-orange-100 rounded-full hover:bg-flame-orange-200 transition-colors"
-        >
-            <span className="mr-1.5">→</span>
-            {nextStep.action_text || nextStep.title}
-        </Link>
-    );
+function stepMarker(step) {
+    if (step.completed) return '✓';
+    if (step.status === 'failed') return '⚠️';
+    if (step.status === 'in_progress') {
+        return (
+            <svg className="animate-spin h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" aria-label="in progress">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+        );
+    }
+    return stepIcon(step.key);
+}
+
+function stepIcon(stepKey) {
+    const icons = {
+        site_scan: '🔍',
+        first_campaign: '🚀',
+        budget_confirmed: '💰',
+        payment: '💳',
+        deployed: '📡',
+    };
+    return icons[stepKey] || '📋';
 }

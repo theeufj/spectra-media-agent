@@ -10,9 +10,13 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     const { auth } = usePage().props;
     const [deployments, setDeployments] = useState(initialDeployments || []);
     const [overallProgress, setOverallProgress] = useState(0);
+    // 'verified' is the state VerifyDeployment promotes 'deployed' to once it
+    // confirms the objects exist on the platform — success, terminally so.
+    // 'deploy_unverified' is its "couldn't confirm" outcome: also terminal.
+    const isLive = (d) => d.status === 'deployed' || d.status === 'verified';
+    const isTerminal = (d) => isLive(d) || d.status === 'failed' || d.status === 'deploy_unverified';
     // Stop once every strategy has reached a terminal state.
-    const allComplete = deployments.length > 0
-        && deployments.every(d => d.status === 'deployed' || d.status === 'failed');
+    const allComplete = deployments.length > 0 && deployments.every(isTerminal);
 
     const { data: polled } = usePolling(
         `/api/campaigns/${campaign.id}/deployment-status`,
@@ -31,11 +35,13 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     }, [polled]);
 
     // Derive progress locally too, so Echo-pushed updates move the bar without
-    // waiting for the next poll.
+    // waiting for the next poll. Progress means "how far through the process",
+    // so failed counts as terminal — counting only successes froze the bar at
+    // 50% forever when one of two platforms failed.
     useEffect(() => {
         if (deployments.length === 0) return;
-        const completedCount = deployments.filter(d => d.status === 'deployed').length;
-        setOverallProgress(Math.round((completedCount / deployments.length) * 100));
+        const terminalCount = deployments.filter(isTerminal).length;
+        setOverallProgress(Math.round((terminalCount / deployments.length) * 100));
     }, [deployments]);
 
 
@@ -71,14 +77,19 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     }, [campaign.id]);
     
     const getOverallStatus = () => {
+        // No strategies yet is "pending", not "completed" — [].every() is true,
+        // and this used to greet an empty campaign with "Deployment Complete!".
+        if (deployments.length === 0) return 'pending';
+
         const hasFailure = deployments.some(d => d.status === 'failed');
-        const allComplete = deployments.every(d => d.status === 'deployed');
-        const isProcessing = deployments.some(d => d.status === 'deploying');
-        
+        const allComplete = deployments.every(isLive);
+        const stillRunning = deployments.some(d => !isTerminal(d));
+
         if (allComplete) return 'completed';
-        if (hasFailure) return 'failed';
-        if (isProcessing) return 'processing';
-        return 'pending';
+        // While anything is still running, report progress — one early platform
+        // failure shouldn't label the whole deploy "failed" mid-flight.
+        if (stillRunning) return 'processing';
+        return hasFailure ? 'failed' : 'pending';
     };
     
     const getStatusColor = (status) => {
@@ -87,6 +98,8 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             deploying: 'bg-blue-100 text-blue-800',
             processing: 'bg-blue-100 text-blue-800',
             deployed: 'bg-green-100 text-green-800',
+            verified: 'bg-green-100 text-green-800',
+            deploy_unverified: 'bg-yellow-100 text-yellow-800',
             completed: 'bg-green-100 text-green-800',
             failed: 'bg-red-100 text-red-800',
         };
@@ -99,6 +112,8 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             deploying: '🔄',
             processing: '🔄',
             deployed: '✅',
+            verified: '✅',
+            deploy_unverified: '⚠️',
             completed: '✅',
             failed: '❌',
         };
@@ -238,222 +253,5 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                 </div>
             </div>
         </AuthenticatedLayout>
-    );
-}
-
-/**
- * DeploymentProgress - Visual progress indicator
- */
-function DeploymentProgress({ job }) {
-    const stages = [
-        { id: 'init', name: 'Initializing', description: 'Preparing deployment' },
-        { id: 'google', name: 'Google Ads', description: 'Creating Google campaigns' },
-        { id: 'facebook', name: 'Facebook Ads', description: 'Creating Facebook campaigns' },
-        { id: 'microsoft', name: 'Microsoft Ads', description: 'Creating Microsoft campaigns' },
-        { id: 'linkedin', name: 'LinkedIn Ads', description: 'Creating LinkedIn campaigns' },
-        { id: 'verify', name: 'Verification', description: 'Verifying deployment' },
-        { id: 'complete', name: 'Complete', description: 'All done!' },
-    ];
-    
-    const getCurrentStage = () => {
-        if (!job || job.status === 'pending') return 0;
-        if (job.status === 'failed') return -1;
-        if (job.status === 'completed') return stages.length;
-        
-        // Determine current stage based on events
-        if (job.linkedin_status === 'processing') return 4;
-        if (job.microsoft_status === 'processing') return 3;
-        if (job.facebook_status === 'processing') return 2;
-        if (job.google_status === 'processing') return 1;
-        if (job.google_status === 'completed' && job.facebook_status === 'completed' && job.microsoft_status === 'completed' && job.linkedin_status === 'completed') return 5;
-        return 1;
-    };
-    
-    const currentStage = getCurrentStage();
-    
-    return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                {stages.map((stage, index) => (
-                    <React.Fragment key={stage.id}>
-                        <div className="flex flex-col items-center">
-                            <div 
-                                className={`
-                                    w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium
-                                    ${index < currentStage 
-                                        ? 'bg-green-500 text-white' 
-                                        : index === currentStage && job?.status === 'processing'
-                                            ? 'bg-blue-500 text-white animate-pulse'
-                                            : job?.status === 'failed' && index === currentStage
-                                                ? 'bg-red-500 text-white'
-                                                : 'bg-gray-200 text-gray-500'
-                                    }
-                                `}
-                            >
-                                {index < currentStage ? '✓' : index + 1}
-                            </div>
-                            <span className="mt-2 text-xs text-gray-600 text-center max-w-[80px]">
-                                {stage.name}
-                            </span>
-                        </div>
-                        {index < stages.length - 1 && (
-                            <div 
-                                className={`flex-1 h-1 mx-2 ${
-                                    index < currentStage ? 'bg-green-500' : 'bg-gray-200'
-                                }`}
-                            />
-                        )}
-                    </React.Fragment>
-                ))}
-            </div>
-            
-            {job?.status === 'processing' && (
-                <div className="text-center">
-                    <div className="inline-flex items-center px-4 py-2 bg-blue-50 text-blue-700 rounded-full">
-                        <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                        </svg>
-                        Deploying your campaign...
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-/**
- * PlatformStatusCard - Shows status for a specific platform
- */
-function PlatformStatusCard({ platform, status, entities, icon }) {
-    const getStatusStyles = (status) => {
-        const styles = {
-            pending: 'border-gray-200 bg-gray-50',
-            processing: 'border-blue-200 bg-blue-50',
-            completed: 'border-green-200 bg-green-50',
-            failed: 'border-red-200 bg-red-50',
-        };
-        return styles[status] || styles.pending;
-    };
-    
-    return (
-        <div className={`rounded-lg border-2 p-4 ${getStatusStyles(status)}`}>
-            <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                    <span className="text-2xl">{icon}</span>
-                    <h3 className="font-semibold text-gray-900">{platform}</h3>
-                </div>
-                <StatusBadge status={status} />
-            </div>
-            
-            {entities.length > 0 && (
-                <div className="space-y-2">
-                    {entities.map((entity, index) => (
-                        <div key={index} className="flex items-center text-sm">
-                            <span className={`w-2 h-2 rounded-full mr-2 ${
-                                entity.status === 'created' ? 'bg-green-500' : 'bg-gray-300'
-                            }`} />
-                            <span className="text-gray-700">{entity.type}:</span>
-                            <span className="ml-1 text-gray-900 font-medium">{entity.name || entity.id}</span>
-                        </div>
-                    ))}
-                </div>
-            )}
-            
-            {status === 'processing' && entities.length === 0 && (
-                <div className="flex items-center text-sm text-blue-600">
-                    <svg className="animate-spin h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Creating campaigns...
-                </div>
-            )}
-            
-            {status === 'pending' && (
-                <p className="text-sm text-gray-500">Waiting to start...</p>
-            )}
-        </div>
-    );
-}
-
-/**
- * StatusBadge - Small status indicator
- */
-function StatusBadge({ status }) {
-    const styles = {
-        pending: 'bg-gray-100 text-gray-600',
-        processing: 'bg-blue-100 text-blue-700',
-        completed: 'bg-green-100 text-green-700',
-        failed: 'bg-red-100 text-red-700',
-    };
-    
-    return (
-        <span className={`px-2 py-1 text-xs font-medium rounded ${styles[status] || styles.pending}`}>
-            {status?.charAt(0).toUpperCase() + status?.slice(1)}
-        </span>
-    );
-}
-
-/**
- * DeploymentTimeline - Shows chronological events
- */
-function DeploymentTimeline({ events }) {
-    if (events.length === 0) {
-        return (
-            <div className="text-center py-8 text-gray-500">
-                <p>No events yet. Deployment will start shortly...</p>
-            </div>
-        );
-    }
-    
-    const getEventIcon = (type) => {
-        const icons = {
-            'started': '🚀',
-            'google.campaign.created': '📊',
-            'google.adgroup.created': '📁',
-            'google.ad.created': '📝',
-            'facebook.campaign.created': '📊',
-            'facebook.adset.created': '📁',
-            'facebook.ad.created': '📝',
-            'completed': '✅',
-            'failed': '❌',
-            'warning': '⚠️',
-        };
-        return icons[type] || '📌';
-    };
-    
-    return (
-        <div className="flow-root">
-            <ul className="-mb-8">
-                {events.map((event, index) => (
-                    <li key={index}>
-                        <div className="relative pb-8">
-                            {index !== events.length - 1 && (
-                                <span 
-                                    className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200"
-                                    aria-hidden="true"
-                                />
-                            )}
-                            <div className="relative flex space-x-3">
-                                <div>
-                                    <span className="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white bg-gray-100">
-                                        {getEventIcon(event.type)}
-                                    </span>
-                                </div>
-                                <div className="flex-1 min-w-0 pt-1.5">
-                                    <p className="text-sm text-gray-900 font-medium">
-                                        {event.message}
-                                    </p>
-                                    <p className="mt-0.5 text-xs text-gray-500">
-                                        {new Date(event.timestamp).toLocaleTimeString()}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </li>
-                ))}
-            </ul>
-        </div>
     );
 }
