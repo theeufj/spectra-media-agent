@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Campaign;
 use App\Models\HarvestedAsset;
+use App\Models\ImageCollateral;
 use App\Models\Setting;
 use App\Models\Strategy;
+use App\Models\VideoCollateral;
 use App\Services\CreativeQuotaService;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -45,10 +47,10 @@ class CollateralController extends Controller
         $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
 
         // Find all active image collaterals for the current strategy
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->get();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->get();
 
         // Find all active video collaterals for the current strategy
-        $videoCollaterals = $strategy->videoCollaterals()->where('is_active', true)->get();
+        $videoCollaterals = VideoCollateral::forStrategy($strategy)->where('is_active', true)->get();
 
         // Get the customer's ad spend credit status
         $customer = $campaign->customer;
@@ -98,8 +100,8 @@ class CollateralController extends Controller
 
         return response()->json([
             'adCopy' => $strategy->adCopies->where('platform', $strategy->platform)->first(),
-            'imageCollaterals' => $strategy->imageCollaterals()->where('is_active', true)->get(),
-            'videoCollaterals' => $strategy->videoCollaterals()->where('is_active', true)->get(),
+            'imageCollaterals' => ImageCollateral::forStrategy($strategy)->where('is_active', true)->get(),
+            'videoCollaterals' => VideoCollateral::forStrategy($strategy)->where('is_active', true)->get(),
             'collateralErrors' => $strategy->collateral_errors ?? [],
         ]);
     }

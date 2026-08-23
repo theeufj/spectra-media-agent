@@ -54,6 +54,15 @@ class ExtractBrandGuidelines implements ShouldQueue
 
                 $totalPages = CustomerPage::where('customer_id', $this->customer->id)->count();
 
+                // The crawl just filled customer_pages, so harvest the site's
+                // own imagery now — classified product/lifestyle shots become
+                // deployable collateral and the seed pool image generation
+                // falls back to. This used to exist only behind a manual
+                // button buried in the collateral page, so onboarding never
+                // produced it. Idempotent: the job skips already-harvested
+                // source URLs.
+                HarvestWebsiteAssets::dispatch($this->customer);
+
                 // Everything needed to write their first campaign is now known:
                 // brand voice, audience, messaging, and every page they sell
                 // from. Asking them to describe that business back to us in a

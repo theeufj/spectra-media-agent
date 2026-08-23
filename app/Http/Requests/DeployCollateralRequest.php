@@ -16,6 +16,9 @@ class DeployCollateralRequest extends FormRequest
         return [
             'type' => 'required|string|in:ad_copy,image,video',
             'id' => 'required|integer',
+            // should_deploy (default) flips deployment; is_seed marks an
+            // image as AI reference material — images only.
+            'field' => 'nullable|string|in:should_deploy,is_seed',
         ];
     }
 }

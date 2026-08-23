@@ -4,6 +4,7 @@ namespace App\Services\Deployment;
 
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionContext;
 use App\Services\Agents\GoogleAdsExecutionAgent;
@@ -116,7 +117,7 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
         $strategy->save();
 
         // 3. Upload Assets and Create Ad
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->get();
         $adCopy = $strategy->adCopies()->where('platform', $strategy->platform)->first();
         $imageAssetResourceNames = [];
 

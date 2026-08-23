@@ -4,6 +4,7 @@ namespace App\Services\Agents\Google\Executors;
 
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Services\Agents\ExecutionPlan;
@@ -147,7 +148,7 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 2.2 Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->limit(15)->get();
         $hasLogo = false;
         $firstSquareAsset = null; // track for logo fallback
 

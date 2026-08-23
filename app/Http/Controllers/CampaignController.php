@@ -291,6 +291,9 @@ class CampaignController extends Controller
                 'cloudfront_url' => $url,
                 'is_active' => true,
                 'is_seed' => true,
+                // Inspiration only. Deploy queries now adopt campaign-level
+                // rows, so without this the raw seed uploads would run as ads.
+                'should_deploy' => false,
                 'source' => 'uploaded',
             ]);
         }

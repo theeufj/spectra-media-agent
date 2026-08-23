@@ -114,7 +114,9 @@ Industry: {$this->customer->industry}
 Business name: {$this->customer->name}
 
 Available ad copies: {$context->availableAssets['ad_copies']}
-Available images: {$context->availableAssets['images']}
+
+NOTE: This integration creates text creatives only (headline, description,
+destination URL). Do not plan image or video ads — media cannot be attached.
 
 BUYER PERSPECTIVE RULE: Target and write copy for the decision-maker who wants to BUY or HIRE this service — focus on their problems and desired outcomes, not the product's features or technology. Job titles, industries, and ad copy should reflect who has budget authority and is actively looking for a solution.
 

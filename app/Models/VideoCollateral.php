@@ -22,6 +22,7 @@ class VideoCollateral extends Model
         'refinement_depth',
         'parent_id',
         'is_active',
+        'should_deploy',
         'source',
         'provider',
     ];
@@ -31,6 +32,22 @@ class VideoCollateral extends Model
         'extension_count' => 'integer',
         'refinement_depth' => 'integer',
     ];
+
+    /**
+     * All media a strategy may use: its own rows plus campaign-level rows
+     * (strategy_id null, e.g. wizard uploads). Mirrors
+     * ImageCollateral::scopeForStrategy — see the rationale there.
+     */
+    public function scopeForStrategy($query, Strategy $strategy)
+    {
+        return $query->where(function ($q) use ($strategy) {
+            $q->where('strategy_id', $strategy->id)
+                ->orWhere(function ($campaignLevel) use ($strategy) {
+                    $campaignLevel->where('campaign_id', $strategy->campaign_id)
+                        ->whereNull('strategy_id');
+                });
+        });
+    }
 
     public function campaign()
     {

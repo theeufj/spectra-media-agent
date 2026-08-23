@@ -24,6 +24,7 @@ class ImageCollateral extends Model
         'refinement_depth',
         'is_active',
         'is_seed',
+        'should_deploy',
         'source',
         'format',
     ];
@@ -34,7 +35,26 @@ class ImageCollateral extends Model
     protected $casts = [
         'is_active' => 'boolean',
         'is_seed' => 'boolean',
+        'should_deploy' => 'boolean',
     ];
+
+    /**
+     * All media a strategy may use: its own rows plus campaign-level rows
+     * (strategy_id null). Campaign-level rows are what the wizard's upload
+     * step creates — the customer uploaded them for the campaign as a whole,
+     * before strategies existed, so every strategy shares them. Deploy-time
+     * queries that filtered on strategy_id alone silently orphaned them.
+     */
+    public function scopeForStrategy($query, Strategy $strategy)
+    {
+        return $query->where(function ($q) use ($strategy) {
+            $q->where('strategy_id', $strategy->id)
+                ->orWhere(function ($campaignLevel) use ($strategy) {
+                    $campaignLevel->where('campaign_id', $strategy->campaign_id)
+                        ->whereNull('strategy_id');
+                });
+        });
+    }
 
     /**
      * Get the parent image that this image was refined from.

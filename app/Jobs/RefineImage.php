@@ -86,8 +86,14 @@ class RefineImage implements ShouldQueue
 
             Log::info("Refined image uploaded at path: {$s3Path}");
 
-            // Deactivate the original image
-            $this->originalImage->update(['is_active' => false]);
+            // Replace the original with the refinement — except seeds. A seed
+            // is the customer's reference material, not a draft: refining one
+            // produces a new deployable image while the seed keeps informing
+            // future generations. Deactivating it here silently destroyed the
+            // seed on first refine.
+            if (! $this->originalImage->is_seed) {
+                $this->originalImage->update(['is_active' => false]);
+            }
 
             $newImage = ImageCollateral::create([
                 'campaign_id' => $this->originalImage->campaign_id,
@@ -98,6 +104,9 @@ class RefineImage implements ShouldQueue
                 'parent_id' => $this->originalImage->id,
                 'refinement_depth' => ($this->originalImage->refinement_depth ?? 0) + 1,
                 'is_active' => true,
+                // The refinement is a normal deployable image, not a seed —
+                // but it should keep where it came from.
+                'source' => $this->originalImage->source ?? 'ai',
             ]);
 
             Log::info("Successfully refined image. New ImageCollateral ID: {$newImage->id}, Parent ID: {$this->originalImage->id}");

@@ -122,28 +122,42 @@ class GenerateImage implements ShouldQueue
 
             $successfulUploads = 0;
 
+            // Visual reference for generation, loaded once — not per prompt,
+            // which re-downloaded every seed from S3 for every image.
+            // Explicit seeds (the wizard's "AI Seed" uploads) win; without
+            // any, fall back to the customer's own harvested product and
+            // lifestyle photos, so generated ads look like their business
+            // rather than a generic render.
+            $seedContextImages = [];
+            $seeds = $this->campaign->imageCollaterals()
+                ->where('is_seed', true)
+                ->where('is_active', true)
+                ->get();
+
+            if ($seeds->isEmpty()) {
+                $seeds = \App\Models\HarvestedAsset::where('customer_id', $this->campaign->customer_id)
+                    ->usable()
+                    ->whereIn('classification', ['product', 'lifestyle'])
+                    ->latest()
+                    ->limit(3)
+                    ->get();
+            }
+
+            foreach ($seeds as $seed) {
+                $seedData = StorageHelper::get($seed->s3_path);
+                if ($seedData) {
+                    $seedContextImages[] = [
+                        'mime_type' => StorageHelper::mimeType($seed->s3_path) ?? 'image/jpeg',
+                        'data' => base64_encode($seedData),
+                    ];
+                }
+            }
+
             foreach ($prompts as $index => $prompt) {
                 Log::info('Generating image '.($index + 1).'/'.count($prompts)." for Strategy ID: {$this->strategy->id}");
 
                 $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext))->getPrompt();
                 Log::info('Gemini Image Generation Prompt:', ['prompt' => $imagePrompt]);
-
-                // Load seed images for this campaign (uploaded as AI visual reference)
-                $seedContextImages = [];
-                $seeds = $this->campaign->imageCollaterals()
-                    ->where('is_seed', true)
-                    ->where('is_active', true)
-                    ->get();
-
-                foreach ($seeds as $seed) {
-                    $seedData = StorageHelper::get($seed->s3_path);
-                    if ($seedData) {
-                        $seedContextImages[] = [
-                            'mime_type' => StorageHelper::mimeType($seed->s3_path) ?? 'image/jpeg',
-                            'data' => base64_encode($seedData),
-                        ];
-                    }
-                }
 
                 // Retry logic with exponential backoff
                 $maxRetries = 3;

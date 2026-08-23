@@ -7,6 +7,7 @@ use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\GoogleAdsPerformanceData;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Models\VideoCollateral;
 use App\Notifications\ConversionTrackingReady;
@@ -155,7 +156,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
         // Validate creative assets
         $strategy = $context->strategy;
-        $hasImages = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->exists();
+        $hasImages = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->exists();
         $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%google%'])->exists();
 
         if (! $hasAdCopy) {
@@ -257,7 +258,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
         $campaign = $context->campaign;
 
         // Check Performance Max eligibility
-        $hasMultipleAssets = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->count() >= 3
+        $hasMultipleAssets = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->count() >= 3
             && VideoCollateral::where('campaign_id', $campaign->id)->where('is_active', true)->count() >= 1;
         $hasConversionTracking = $this->hasConversionTracking($context);
         $meetsPerformanceMaxBudget = $context->calculateDailyBudget() >= 8.33; // ~$250/month minimum
@@ -453,7 +454,7 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
                 $validPmaxImages = 0;
                 if ($hasAdCopy && $minBudget && $hasConversionSignal) {
-                    $images = $strategy->imageCollaterals()
+                    $images = ImageCollateral::forStrategy($strategy)
                         ->where('is_active', true)
                         ->where('should_deploy', true)
                         ->get();

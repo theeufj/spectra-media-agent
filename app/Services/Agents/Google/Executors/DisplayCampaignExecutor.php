@@ -4,6 +4,7 @@ namespace App\Services\Agents\Google\Executors;
 
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
 use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
@@ -107,7 +108,7 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
         }
 
         // 3. Upload Image Assets
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->where('should_deploy', true)->get();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->get();
         $imageAssetResourceNames = [];
 
         if ($imageCollaterals->isNotEmpty()) {

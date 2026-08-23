@@ -8,7 +8,9 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\FacebookAdsPerformanceData;
 use App\Models\GoogleAdsPerformanceData;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Models\VideoCollateral;
 
 /**
  * Represents the execution context for deployment.
@@ -64,19 +66,19 @@ class ExecutionContext
         Customer $customer,
         array $platformStatus = []
     ): self {
-        // Analyze available assets — include strategy-specific and pre-wizard (strategy_id = null) uploads
-        $preWizardImages = $campaign->imageCollaterals()->whereNull('strategy_id')->where('is_active', true)->count();
-        $preWizardVideos = $campaign->videoCollaterals()->whereNull('strategy_id')->where('is_active', true)->count();
+        // forStrategy already spans strategy-specific AND campaign-level
+        // (wizard) uploads — the same set the executors now deploy, so the
+        // counts the planner sees match what the upload loops can honour.
         $availableAssets = [
-            'images' => $strategy->imageCollaterals()->where('is_active', true)->count() + $preWizardImages,
-            'videos' => $strategy->videoCollaterals()->where('is_active', true)->count() + $preWizardVideos,
+            'images' => ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->count(),
+            'videos' => VideoCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->count(),
             'ad_copies' => $strategy->adCopies()->count(),
             'has_ad_copy' => $strategy->adCopies()->exists(),
         ];
 
         // Add detailed asset information if requested
         if ($strategy->relationLoaded('imageCollaterals')) {
-            $availableAssets['image_details'] = $strategy->imageCollaterals()
+            $availableAssets['image_details'] = ImageCollateral::forStrategy($strategy)
                 ->where('is_active', true)
                 ->get()
                 ->map(fn ($img) => [
@@ -87,7 +89,7 @@ class ExecutionContext
         }
 
         if ($strategy->relationLoaded('videoCollaterals')) {
-            $availableAssets['video_details'] = $strategy->videoCollaterals()
+            $availableAssets['video_details'] = VideoCollateral::forStrategy($strategy)
                 ->where('is_active', true)
                 ->get()
                 ->map(fn ($vid) => [

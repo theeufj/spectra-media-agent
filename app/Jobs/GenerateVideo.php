@@ -198,10 +198,16 @@ class GenerateVideo implements ShouldQueue
 
             Log::info("Generated video script: {$script}");
 
-            // Step 2: Create a placeholder VideoCollateral record
+            // Step 2: Create a placeholder VideoCollateral record.
+            //
+            // strategy_id null on purpose: these are the campaign's two shared
+            // videos (see GenerateStrategyCollateral), and campaign-level rows
+            // are what VideoCollateral::forStrategy shares with every
+            // strategy. Stamping the generating strategy's id meant only that
+            // strategy's Facebook deploy ever saw the video.
             $videoCollateral = VideoCollateral::create([
                 'campaign_id' => $this->campaign->id,
-                'strategy_id' => $this->strategy->id,
+                'strategy_id' => null,
                 'platform' => $this->platform,
                 'script' => $script,
                 'status' => 'pending',

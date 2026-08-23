@@ -4,7 +4,9 @@ namespace App\Services\Agents;
 
 use App\Models\Campaign;
 use App\Models\Customer;
+use App\Models\ImageCollateral;
 use App\Models\Strategy;
+use App\Models\VideoCollateral;
 use App\Prompts\FacebookAdsExecutionPrompt;
 use App\Services\Agents\Traits\RetryableApiOperation;
 use App\Services\CampaignStatusHelper;
@@ -147,8 +149,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
         // Validate creative assets
         $strategy = $context->strategy;
-        $hasImages = $strategy->imageCollaterals()->where('is_active', true)->exists();
-        $hasVideos = $strategy->videoCollaterals()->where('is_active', true)->exists();
+        $hasImages = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->exists();
+        $hasVideos = VideoCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->exists();
         $hasAdCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->exists();
 
         if (! $hasAdCopy) {
@@ -188,7 +190,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         $campaign = $context->campaign;
 
         // Check Dynamic Creative eligibility
-        $imageCount = $strategy->imageCollaterals()->where('is_active', true)->count();
+        $imageCount = ImageCollateral::forStrategy($strategy)->where('is_active', true)->count();
         $adCopy = $strategy->adCopies()->where('platform', 'facebook')->first();
         $headlineCount = $adCopy && isset($adCopy->headlines) ? count($adCopy->headlines) : 0;
         $descriptionCount = $adCopy && isset($adCopy->descriptions) ? count($adCopy->descriptions) : 0;
@@ -223,7 +225,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         }
 
         // Check creative format opportunities
-        $videoCount = $strategy->videoCollaterals()->where('is_active', true)->count();
+        $videoCount = VideoCollateral::forStrategy($strategy)->where('is_active', true)->count();
 
         if ($imageCount >= 3) {
             $analysis->addOpportunity(
@@ -372,7 +374,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             $adsCreated = 0;
 
             // 3a. Image ads — one ad per image marked for deployment
-            $images = $strategy->imageCollaterals()
+            $images = ImageCollateral::forStrategy($strategy)
                 ->where('is_active', true)
                 ->where('should_deploy', true)
                 ->get();
@@ -417,7 +419,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
             }
 
             // 3b. Video ads — one ad per video marked for deployment
-            $videos = $strategy->videoCollaterals()
+            $videos = VideoCollateral::forStrategy($strategy)
                 ->where('is_active', true)
                 ->where('should_deploy', true)
                 ->get();
@@ -610,7 +612,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        $imageCollateral = $strategy->imageCollaterals()->where('is_active', true)->first();
+        $imageCollateral = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->first();
         $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
 
         if (! $imageCollateral || ! $adCopy) {
@@ -671,7 +673,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        $imageCollaterals = $strategy->imageCollaterals()->where('is_active', true)->take(10)->get();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->take(10)->get();
         $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
 
         if ($imageCollaterals->count() < 2 || ! $adCopy) {
@@ -737,7 +739,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
         ExecutionPlan $plan,
         ExecutionResult $result
     ): void {
-        $videoCollateral = $strategy->videoCollaterals()->where('is_active', true)->first();
+        $videoCollateral = VideoCollateral::forStrategy($strategy)->where('is_active', true)->where('should_deploy', true)->first();
         $adCopy = $strategy->adCopies()->whereRaw('LOWER(platform) LIKE ?', ['%facebook%'])->first();
 
         if (! $videoCollateral || ! $adCopy) {

@@ -86,6 +86,7 @@ class HarvestedAssetController extends Controller
             'campaign_id' => ['required', 'integer', 'exists:campaigns,id'],
             'strategy_id' => ['required', 'integer', 'exists:strategies,id'],
             'variant' => ['nullable', 'string', 'in:landscape,square,vertical,original,bg_removed'],
+            'as_seed' => ['nullable', 'boolean'],
         ]);
 
         $customer = $this->resolveCustomer($request);
@@ -137,19 +138,28 @@ class HarvestedAssetController extends Controller
             ]);
         }
 
+        // As a seed the image guides the AI instead of running as an ad:
+        // campaign-level so every strategy's generation sees it, and never
+        // deployed raw.
+        $asSeed = $request->boolean('as_seed');
+
         $collateral = ImageCollateral::create([
             'campaign_id' => $campaign->id,
-            'strategy_id' => $strategy->id,
+            'strategy_id' => $asSeed ? null : $strategy->id,
             'platform' => $strategy->platform,
             's3_path' => $s3Path,
             'cloudfront_url' => $url,
             'is_active' => true,
+            'is_seed' => $asSeed,
+            'should_deploy' => ! $asSeed,
             'source' => 'harvested',
         ]);
 
         return redirect()->back()->with('flash', [
             'type' => 'success',
-            'message' => 'Asset added to campaign collateral.',
+            'message' => $asSeed
+                ? 'Asset added as AI seed — future generated creatives will use it as visual reference.'
+                : 'Asset added to campaign collateral.',
         ]);
     }
 

@@ -205,17 +205,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         setIsPolling(true);
     };
 
-    const handleToggleCollateral = (type, id) => {
+    const handleToggleCollateral = (type, id, field = 'should_deploy') => {
         // Optimistic update — local state responds immediately; server persists in background
         setCollateral(prev => {
             if (type === 'ad_copy') {
-                return { ...prev, adCopy: { ...prev.adCopy, should_deploy: !prev.adCopy.should_deploy } };
+                return { ...prev, adCopy: { ...prev.adCopy, [field]: !prev.adCopy[field] } };
             }
             if (type === 'image') {
                 return {
                     ...prev,
                     imageCollaterals: prev.imageCollaterals.map(img =>
-                        img.id === id ? { ...img, should_deploy: !img.should_deploy } : img
+                        img.id === id ? { ...img, [field]: !img[field] } : img
                     ),
                 };
             }
@@ -223,14 +223,14 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                 return {
                     ...prev,
                     videoCollaterals: prev.videoCollaterals.map(vid =>
-                        vid.id === id ? { ...vid, should_deploy: !vid.should_deploy } : vid
+                        vid.id === id ? { ...vid, [field]: !vid[field] } : vid
                     ),
                 };
             }
             return prev;
         });
 
-        router.post(route('deployment.toggle-collateral'), { type, id }, {
+        router.post(route('deployment.toggle-collateral'), { type, id, field }, {
             preserveScroll: true,
             onError: (errors) => {
                 console.error('Failed to toggle collateral status:', errors);
@@ -330,16 +330,19 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
         });
     };
 
-    const handleUseHarvestedAsset = (assetId, variant = 'original') => {
+    const handleUseHarvestedAsset = (assetId, variant = 'original', asSeed = false) => {
         router.post(route('harvested-assets.use', { asset: assetId }), {
             campaign_id: campaign.id,
             strategy_id: currentStrategy.id,
             variant,
+            as_seed: asSeed,
         }, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsPolling(true);
-                toast.success('Asset added to collateral.');
+                toast.success(asSeed
+                    ? 'Added as AI seed — generated creatives will use it as reference.'
+                    : 'Asset added to collateral.');
             },
         });
     };
@@ -887,6 +890,13 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         >
                                                                             Use Original
                                                                         </button>
+                                                                        <button
+                                                                            onClick={() => handleUseHarvestedAsset(asset.id, 'original', true)}
+                                                                            title="Guide AI-generated creatives with this image instead of running it as an ad"
+                                                                            className="text-[10px] px-2 py-0.5 bg-purple-50 text-purple-700 rounded hover:bg-purple-100 font-medium"
+                                                                        >
+                                                                            ✦ AI Seed
+                                                                        </button>
                                                                         {asset.bg_removed_url ? (
                                                                             <button
                                                                                 onClick={() => handleUseHarvestedAsset(asset.id, 'bg_removed')}
@@ -979,6 +989,17 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                         </div>
                                                         {/* Format + source badges */}
                                                         <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); handleToggleCollateral('image', image.id, 'is_seed'); }}
+                                                                title={image.is_seed
+                                                                    ? 'This image guides the AI as visual reference. Click to stop using it as a seed.'
+                                                                    : 'Use this image as visual reference for AI-generated creatives.'}
+                                                                className={`px-2 py-0.5 rounded-full text-xs font-medium shadow ${image.is_seed
+                                                                    ? 'bg-purple-600 text-white'
+                                                                    : 'bg-white/90 text-gray-600 opacity-0 group-hover:opacity-100 transition-opacity'}`}
+                                                            >
+                                                                {image.is_seed ? '✦ AI Seed' : '✦ Use as AI seed'}
+                                                            </button>
                                                             {image.format && image.format !== 'square' && (
                                                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium shadow bg-gray-800 text-white">
                                                                     {image.format === 'landscape' ? '1200×628' : image.format === 'mrec' ? '300×250' : image.format}

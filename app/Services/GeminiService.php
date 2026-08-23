@@ -688,8 +688,12 @@ class GeminiService
     /**
      * Generates an image based on a prompt using a specified Gemini image generation model.
      */
-    public function generateImage(string $prompt, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K', array $context = []): ?array
+    public function generateImage(string $prompt, ?string $model = null, string $imageSize = '1K', array $context = []): ?array
     {
+        // config('ai.models.image') is the source of truth (env-overridable);
+        // most callers pass nothing, and the old hardcoded default meant the
+        // config was silently ignored on the main generation path.
+        $model ??= config('ai.models.image', 'gemini-2.5-flash-image');
         $payload = [
             'contents' => [
                 [
@@ -711,8 +715,9 @@ class GeminiService
     /**
      * Refines an existing image based on a new prompt and context images.
      */
-    public function refineImage(string $prompt, array $contextImages, string $model = 'gemini-2.5-flash-image', string $imageSize = '1K', array $context = []): ?array
+    public function refineImage(string $prompt, array $contextImages, ?string $model = null, string $imageSize = '1K', array $context = []): ?array
     {
+        $model ??= config('ai.models.image', 'gemini-2.5-flash-image');
         $parts = [['text' => $prompt]];
         foreach ($contextImages as $image) {
             if (isset($image['mime_type']) && isset($image['data'])) {

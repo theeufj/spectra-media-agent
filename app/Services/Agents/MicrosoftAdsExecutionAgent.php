@@ -4,6 +4,7 @@ namespace App\Services\Agents;
 
 use App\Models\Campaign;
 use App\Services\MicrosoftAds\AdGroupService;
+use App\Services\MicrosoftAds\AssetService;
 use App\Services\MicrosoftAds\CampaignService;
 use App\Services\MicrosoftAds\ConversionTrackingService;
 use App\Services\MicrosoftAds\ImportService;
@@ -461,11 +462,91 @@ PROMPT;
             'final_url' => $finalUrl,
         ]]);
 
+        // Microsoft was the one platform that deployed no customer media at
+        // all — AssetService's image upload existed with no caller. Best
+        // effort: extensions are an enhancement, never a reason to fail the
+        // text ads that just went live.
+        $imageExtensions = $this->attachImageExtensions($context, $finalUrl);
+
         return [
             'ad_group_id' => $adGroupId,
             'keywords_added' => $kwResult,
             'ad_created' => $adResult ? 'yes' : 'failed',
+            'image_extensions' => $imageExtensions,
         ];
+    }
+
+    /**
+     * Upload the strategy's deployable images as image ad extensions and
+     * associate them with the Microsoft campaign.
+     */
+    protected function attachImageExtensions(ExecutionContext $context, string $finalUrl): array
+    {
+        try {
+            $campaign = $context->campaign;
+            $strategy = $context->strategy;
+
+            if (! $campaign->microsoft_ads_campaign_id) {
+                return ['skipped' => 'no_microsoft_campaign_id'];
+            }
+
+            $images = \App\Models\ImageCollateral::forStrategy($strategy)
+                ->where('is_active', true)
+                ->where('should_deploy', true)
+                ->limit(5)
+                ->get();
+
+            if ($images->isEmpty()) {
+                return ['skipped' => 'no_images'];
+            }
+
+            $assetService = new AssetService($this->customer);
+            $extensionIds = [];
+
+            foreach ($images as $image) {
+                $data = \App\Services\StorageHelper::get($image->s3_path);
+                if (! $data) {
+                    continue;
+                }
+
+                $mediaId = $assetService->uploadImage($data);
+                if (! $mediaId) {
+                    continue;
+                }
+
+                $extension = $assetService->createImageExtension([
+                    'media_id' => $mediaId,
+                    'final_url' => $finalUrl,
+                ]);
+
+                // The SOAP response nests identities; tolerate both shapes.
+                $identities = $extension['AdExtensionIdentities']['AdExtensionIdentity']
+                    ?? $extension['AdExtensionIdentities']
+                    ?? [];
+                $first = $identities[0] ?? $identities;
+                if (! empty($first['Id'])) {
+                    $extensionIds[] = $first['Id'];
+                }
+            }
+
+            if (empty($extensionIds)) {
+                return ['uploaded' => 0];
+            }
+
+            $linked = $assetService->linkExtensionsToCampaign(
+                (string) $campaign->microsoft_ads_campaign_id,
+                $extensionIds,
+                'Image'
+            );
+
+            return ['uploaded' => count($extensionIds), 'linked' => $linked];
+        } catch (\Throwable $e) {
+            Log::warning('[MicrosoftAdsExecutionAgent] Image extension attachment failed: '.$e->getMessage(), [
+                'strategy_id' => $context->strategy->id,
+            ]);
+
+            return ['error' => $e->getMessage()];
+        }
     }
 
     protected function executeConfigureTracking(): array

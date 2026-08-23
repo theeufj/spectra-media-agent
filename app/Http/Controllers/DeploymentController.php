@@ -53,7 +53,13 @@ class DeploymentController extends Controller
             abort(403);
         }
 
-        $collateral->update(['should_deploy' => ! $collateral->should_deploy]);
+        $field = $validated['field'] ?? 'should_deploy';
+
+        if ($field === 'is_seed' && $validated['type'] !== 'image') {
+            abort(400, 'Only images can be marked as AI seeds.');
+        }
+
+        $collateral->update([$field => ! $collateral->{$field}]);
 
         return back();
     }
