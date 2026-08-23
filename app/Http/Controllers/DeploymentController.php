@@ -96,22 +96,9 @@ class DeploymentController extends Controller
             ]);
         }
 
-        // 1. Subscription Check — passes if the current user OR any teammate on the same
-        //    customer account has an active subscription / payment method.
-        //    Team members (admin/member roles) share the company's plan.
-        $userHasAccess = $user->subscribed('default')
-            || $user->hasDefaultPaymentMethod()
-            || $user->subscription_status === 'active';
-
-        $customerHasAccess = $userHasAccess || $customer->users()
-            ->where(function ($q) {
-                $q->where('subscription_status', 'active')
-                    ->orWhereNotNull('pm_type')
-                    ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
-            })
-            ->exists();
-
-        if (! $customerHasAccess) {
+        // 1. Subscription Check — the shared teammate-aware rule (also what
+        //    the EnsureSubscribed middleware now applies).
+        if (! $user->hasSubscriptionAccess($customer)) {
             ActivityLog::log('campaign_deploy_blocked', "Deploy blocked — no active subscription for campaign '{$campaign->name}'", $campaign, [
                 'campaign_id' => $campaign->id,
                 'reason' => 'no_subscription',
@@ -175,22 +162,53 @@ class DeploymentController extends Controller
             ]);
         }
 
+        // Already in the admin queue: re-clicking Deploy used to wipe the
+        // strategies' statuses, send another raw email, and repeat the same
+        // success message with nothing new happening.
+        if ($campaign->status === CampaignStatus::PendingAdminDeployment) {
+            return redirect()->back()->with('flash', [
+                'type' => 'info',
+                'message' => 'This campaign is already with our team for launch — we\'ll notify you as soon as it\'s live.',
+            ]);
+        }
+
+        // A deploy already in flight: don't reset its status rows (that blinds
+        // verification), and don't dispatch again (ShouldBeUnique would drop
+        // it silently while we claimed success).
+        if ($campaign->strategies()->where('deployment_status', 'deploying')->exists()) {
+            return redirect()->route('campaigns.deployment-status', $campaign)->with('flash', [
+                'type' => 'info',
+                'message' => 'A deployment is already running for this campaign — here\'s its progress.',
+            ]);
+        }
+
         // Reset deployment_status on all signed-off strategies so an explicit
         // "Deploy All" always re-deploys, even if previously marked deployed/verified.
         $campaign->strategies()
             ->whereNotNull('signed_off_at')
             ->update(['deployment_status' => null]);
 
-        // If the customer doesn't have a Google Ads account ID yet, we can't deploy
-        // programmatically. Queue the campaign for manual admin deployment instead —
-        // the admin team will create the account, attach it, and deploy from the portal.
+        // Google readiness: no account ID, or an account whose manager link
+        // isn't active. Both used to reach the execution agent and die with
+        // PERMISSION_DENIED after the card had been charged — the link-status
+        // case even triggered the identity-verification email, the wrong
+        // remedy entirely. Queue for the admin team instead.
         $hasGoogleStrategy = $campaign->strategies()
             ->whereNotNull('signed_off_at')
             ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
             ->exists();
 
-        if ($hasGoogleStrategy && empty($customer->google_ads_customer_id)) {
-            $campaign->update(['status' => CampaignStatus::PendingAdminDeployment]);
+        $linkProblem = in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed'], true);
+
+        if ($hasGoogleStrategy && (empty($customer->google_ads_customer_id) || $linkProblem)) {
+            $reason = empty($customer->google_ads_customer_id)
+                ? 'The customer has no Google Ads account ID. Create a sub-account under the MCC, attach it in the admin portal, then click Deploy on this campaign.'
+                : "The customer's Google Ads manager link is '{$customer->google_ads_link_status}' — resolve the link (or re-invite), then click Deploy on this campaign.";
+
+            $campaign->update([
+                'status' => CampaignStatus::PendingAdminDeployment,
+                'pending_admin_deployment_at' => now(),
+            ]);
 
             \Illuminate\Support\Facades\Mail::raw(
                 "Campaign pending deployment — admin action required\n\n"
@@ -198,21 +216,27 @@ class DeploymentController extends Controller
                 ."Campaign: {$campaign->name} (ID: {$campaign->id})\n"
                 ."Budget: \${$campaign->daily_budget}/day\n"
                 ."Strategies: {$signedOffCount} signed off\n\n"
-                ."The customer has no Google Ads account ID. Create a sub-account under the MCC,\n"
-                ."attach it in the admin portal, then click Deploy on this campaign:\n\n"
+                .$reason."\n\n"
                 .url(route('admin.customers.show', $customer->id)),
                 fn ($m) => $m->to(config('app.admin_email'))
                     ->subject("Action required: Deploy \"{$campaign->name}\" for {$customer->business_name}")
             );
 
-            ActivityLog::log('campaign_pending_admin_deployment', "Campaign '{$campaign->name}' queued for admin deployment — no Google Ads account ID", $campaign, [
-                'campaign_id' => $campaign->id,
-                'customer_id' => $customer->id,
-            ]);
+            // Also raise the in-product admin alert — a raw email with no
+            // follow-up was the entire SLA machinery behind "within 24 hours".
+            \App\Notifications\CriticalAgentAlert::deliver(
+                'pending_admin_deployment',
+                "Deploy \"{$campaign->name}\" for {$customer->business_name}",
+                $reason,
+                ['campaign_id' => $campaign->id, 'customer_id' => $customer->id],
+                \App\Models\NotificationTemplate::RECIPIENTS_ADMINS,
+                $customer
+            );
 
-            Log::info('Campaign queued for admin deployment — no Google Ads account ID', [
+            ActivityLog::log('campaign_pending_admin_deployment', "Campaign '{$campaign->name}' queued for admin deployment", $campaign, [
                 'campaign_id' => $campaign->id,
                 'customer_id' => $customer->id,
+                'reason' => $reason,
             ]);
 
             return redirect()->back()->with('flash', [
@@ -265,19 +289,7 @@ class DeploymentController extends Controller
         $strategy = $campaign->strategies()->findOrFail($validated['strategy_id']);
 
         // Re-use the same subscription + deployment-enabled checks as the full deploy.
-        $userHasAccess = $user->subscribed('default')
-            || $user->hasDefaultPaymentMethod()
-            || $user->subscription_status === 'active';
-
-        $customerHasAccess = $userHasAccess || $customer->users()
-            ->where(function ($q) {
-                $q->where('subscription_status', 'active')
-                    ->orWhereNotNull('pm_type')
-                    ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
-            })
-            ->exists();
-
-        if (! $customerHasAccess) {
+        if (! $user->hasSubscriptionAccess($customer)) {
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'error',
                 'message' => 'You must have an active subscription to deploy campaigns.',

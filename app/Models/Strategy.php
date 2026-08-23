@@ -95,6 +95,50 @@ class Strategy extends Model
     }
 
     /**
+     * The Google Ads campaign this strategy may reuse on redeploy, or null if
+     * it must create its own.
+     *
+     * Prefers the strategy's own id. The legacy campaign-level id is honoured
+     * only by the campaign's first Google strategy — it was that strategy's
+     * deploy that created it. Handing it to every Google strategy attached
+     * the second strategy's ad groups to the first one's campaign (wrong
+     * type, wrong budget).
+     */
+    public function reusableGoogleCampaignId(): ?string
+    {
+        if ($this->google_ads_campaign_id) {
+            return $this->google_ads_campaign_id;
+        }
+
+        $campaign = $this->campaign;
+        if (! $campaign instanceof Campaign || ! $campaign->google_ads_campaign_id) {
+            return null;
+        }
+
+        $firstGoogleStrategyId = $campaign->strategies()
+            ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
+            ->orderBy('id')
+            ->value('id');
+
+        return $firstGoogleStrategyId === $this->id ? $campaign->google_ads_campaign_id : null;
+    }
+
+    /**
+     * Record a freshly created Google Ads campaign against this strategy,
+     * keeping the legacy campaign-level column filled for everything that
+     * still reads it (verification fallback, budget jobs).
+     */
+    public function recordGoogleCampaignId(string $resourceName): void
+    {
+        $this->forceFill(['google_ads_campaign_id' => $resourceName])->save();
+
+        $campaign = $this->campaign;
+        if ($campaign instanceof Campaign && empty($campaign->google_ads_campaign_id)) {
+            $campaign->forceFill(['google_ads_campaign_id' => $resourceName])->save();
+        }
+    }
+
+    /**
      * Strategy-level performance rows.
      *
      * The inverse of PerformanceData::strategy(), which has existed since the

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import { usePolling } from '@/hooks/usePolling';
 
@@ -12,18 +12,33 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
     const [overallProgress, setOverallProgress] = useState(0);
     // 'verified' is the state VerifyDeployment promotes 'deployed' to once it
     // confirms the objects exist on the platform — success, terminally so.
-    // 'deploy_unverified' is its "couldn't confirm" outcome: also terminal.
+    // 'deploy_unverified' is its "couldn't confirm" outcome, and
+    // 'skipped_plan' means the platform isn't in the user's plan: terminal.
     const isLive = (d) => d.status === 'deployed' || d.status === 'verified';
-    const isTerminal = (d) => isLive(d) || d.status === 'failed' || d.status === 'deploy_unverified';
+    const isTerminal = (d) => isLive(d) || ['failed', 'deploy_unverified', 'skipped_plan'].includes(d.status);
     // Stop once every strategy has reached a terminal state.
     const allComplete = deployments.length > 0 && deployments.every(isTerminal);
+
+    // Cap the watch at 15 minutes: a deploy that long has stalled, and an
+    // uncapped 3-second poll ran forever on any strategy that never reached a
+    // terminal state.
+    const pollStartRef = React.useRef(Date.now());
+    const [pollTimedOut, setPollTimedOut] = useState(false);
 
     const { data: polled } = usePolling(
         `/api/campaigns/${campaign.id}/deployment-status`,
         {
             interval: 3000,
-            enabled: !allComplete,
-            until: data => data?.is_complete === true,
+            enabled: !allComplete && !pollTimedOut,
+            until: (data) => {
+                if (Date.now() - pollStartRef.current > 15 * 60 * 1000) {
+                    setPollTimedOut(true);
+
+                    return true;
+                }
+
+                return data?.is_complete === true;
+            },
             immediate: false,
         }
     );
@@ -82,14 +97,16 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
         if (deployments.length === 0) return 'pending';
 
         const hasFailure = deployments.some(d => d.status === 'failed');
-        const allComplete = deployments.every(isLive);
         const stillRunning = deployments.some(d => !isTerminal(d));
 
-        if (allComplete) return 'completed';
         // While anything is still running, report progress — one early platform
         // failure shouldn't label the whole deploy "failed" mid-flight.
         if (stillRunning) return 'processing';
-        return hasFailure ? 'failed' : 'pending';
+        if (hasFailure) return 'failed';
+        if (deployments.some(isLive)) return 'completed';
+        // Everything terminal, nothing live, nothing failed: unverified or
+        // plan-skipped rows only. "Pending" here read as stuck-forever.
+        return 'attention';
     };
     
     const getStatusColor = (status) => {
@@ -100,8 +117,10 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             deployed: 'bg-green-100 text-green-800',
             verified: 'bg-green-100 text-green-800',
             deploy_unverified: 'bg-yellow-100 text-yellow-800',
+            skipped_plan: 'bg-gray-200 text-gray-700',
             completed: 'bg-green-100 text-green-800',
             failed: 'bg-red-100 text-red-800',
+            attention: 'bg-yellow-100 text-yellow-800',
         };
         return colors[status] || 'bg-gray-100 text-gray-800';
     };
@@ -114,8 +133,10 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             deployed: '✅',
             verified: '✅',
             deploy_unverified: '⚠️',
+            skipped_plan: '🔒',
             completed: '✅',
             failed: '❌',
+            attention: '⚠️',
         };
         return icons[status] || '📋';
     };
@@ -148,6 +169,13 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
             
             <div className="py-12">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+                    {pollTimedOut && !allComplete && (
+                        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+                            This is taking longer than expected — we've stopped auto-refreshing.
+                            Reload the page to check again, or contact support if it stays stuck.
+                        </div>
+                    )}
+
                     {/* Overall Progress */}
                     <div className="bg-white rounded-lg shadow-md p-6 mb-6">
                         <div className="flex items-center justify-between mb-4">
@@ -215,15 +243,37 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                     {overallStatus === 'failed' && (
                         <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-6">
                             <h3 className="text-lg font-semibold text-red-800 mb-2">Deployment Issues</h3>
-                            <p className="text-red-700 mb-4">Some platforms encountered errors during deployment.</p>
-                            <div className="mt-4">
+                            <p className="text-red-700 mb-4">
+                                Some platforms encountered errors during deployment. You can retry now —
+                                already-deployed platforms are skipped automatically — or review the campaign first.
+                            </p>
+                            <div className="mt-4 flex gap-3 flex-wrap">
+                                <button
+                                    type="button"
+                                    onClick={() => router.post(route('deployment.deploy'), { campaign_id: campaign.id })}
+                                    className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                >
+                                    Retry Deployment
+                                </button>
                                 <Link
                                     href={`/campaigns/${campaign.id}/strategies`}
-                                    className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                    className="inline-flex items-center px-4 py-2 bg-white text-red-700 border border-red-300 rounded-lg hover:bg-red-50"
                                 >
                                     Review Campaign →
                                 </Link>
                             </div>
+                        </div>
+                    )}
+
+                    {/* Needs attention: nothing failed outright, but nothing is confirmed live either */}
+                    {overallStatus === 'attention' && (
+                        <div className="mt-6 bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+                            <h3 className="text-lg font-semibold text-yellow-800 mb-2">⚠️ Needs a closer look</h3>
+                            <p className="text-yellow-700">
+                                Deployment finished, but we couldn't confirm the ads on the platform yet — or a
+                                platform wasn't included in your plan. Each platform's card above explains its state,
+                                and our team has been alerted where confirmation is pending.
+                            </p>
                         </div>
                     )}
                     
@@ -232,7 +282,8 @@ export default function DeploymentStatus({ campaign, deployments: initialDeploym
                         <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-6">
                             <h3 className="text-lg font-semibold text-green-800 mb-2">🎉 Deployment Complete!</h3>
                             <p className="text-green-700 mb-4">
-                                Your campaign has been successfully deployed. It may take a few hours for ads to start serving.
+                                Your campaign has been successfully deployed. Ads are scheduled to begin serving
+                                from tomorrow — campaigns start the day after deployment.
                             </p>
                             <div className="flex gap-4">
                                 <Link

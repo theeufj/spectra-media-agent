@@ -134,6 +134,36 @@ class User extends Authenticatable implements MustVerifyEmail
         return $this->belongsToMany(Customer::class)->withPivot('role');
     }
 
+    /**
+     * Can this user act on paid features — their own subscription or payment
+     * method, or a teammate's on the given customer account?
+     *
+     * This is THE subscription test for anything customer-scoped. Team
+     * members on a company plan don't carry a subscription themselves; the
+     * deploy controller understood that, the EnsureSubscribed middleware ran
+     * first and bounced them to pricing anyway.
+     */
+    public function hasSubscriptionAccess(?Customer $customer = null): bool
+    {
+        if ($this->subscribed('default')
+            || $this->hasDefaultPaymentMethod()
+            || $this->subscription_status === 'active') {
+            return true;
+        }
+
+        if (! $customer) {
+            return false;
+        }
+
+        return $customer->users()
+            ->where(function ($q) {
+                $q->where('subscription_status', 'active')
+                    ->orWhereNotNull('pm_type')
+                    ->orWhereHas('subscriptions', fn ($sq) => $sq->where('stripe_status', 'active'));
+            })
+            ->exists();
+    }
+
     public function emailInbox()
     {
         return $this->hasOne(\App\Models\EmailInbox::class);

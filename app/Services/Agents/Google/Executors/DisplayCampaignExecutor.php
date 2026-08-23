@@ -55,8 +55,8 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
 
         // 1. Create Campaign — idempotency guard prevents duplicates on retry
         $timestamp = now()->format('Ymd_His');
-        if (! empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
+        if ($reusableGoogleCampaign = $strategy->reusableGoogleCampaignId()) {
+            $campaignResourceName = $reusableGoogleCampaign;
             Log::info('GoogleAdsExecutionAgent: Reusing existing Display campaign from prior attempt', [
                 'campaign_id' => $campaign->id,
                 'google_ads_campaign_id' => $campaignResourceName,
@@ -79,8 +79,7 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
             }
 
             $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
+            $strategy->recordGoogleCampaignId($campaignResourceName);
         }
 
         // 1.5 Add Location Targeting

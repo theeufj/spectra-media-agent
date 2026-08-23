@@ -154,7 +154,7 @@ class CriticalAgentAlert extends Notification implements ShouldQueue
         }
 
         if (! empty($this->details['campaign_id'])) {
-            $mail->action('View Campaign', url('/campaigns/'.$this->details['campaign_id']));
+            $mail->action('View Campaign', route('campaigns.show', $this->details['campaign_id']));
         }
 
         return $mail->salutation('— Site to Spend');

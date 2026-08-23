@@ -54,10 +54,10 @@ const useBudgetCalcs = (campaign) => {
     const campaignDurationDays = getCampaignDurationDays();
     const estimatedDailySpend = calculateDailyBudget();
     const daysToCharge = Math.min(7, campaignDurationDays);
-    const totalBudget = Number(campaign?.total_budget || 0);
-    const upfrontCharge = (daysToCharge === campaignDurationDays && totalBudget > 0)
-        ? totalBudget
-        : Math.round(estimatedDailySpend * daysToCharge * 100) / 100;
+    // Show exactly what the server charges: daily × days. Substituting
+    // total_budget for short campaigns showed one number on the button and
+    // put a different one on the card.
+    const upfrontCharge = Math.round(estimatedDailySpend * daysToCharge * 100) / 100;
 
     return { campaignDurationDays, estimatedDailySpend, daysToCharge, upfrontCharge };
 };
@@ -135,6 +135,7 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                 },
                 body: JSON.stringify({
+                    campaign_id: campaign?.id,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 }),
@@ -240,6 +241,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
                 },
                 body: JSON.stringify({
                     payment_method_id: paymentMethod.id,
+                    campaign_id: campaign?.id,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
                 }),

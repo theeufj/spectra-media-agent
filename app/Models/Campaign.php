@@ -86,6 +86,7 @@ class Campaign extends Model
         'strategy_generation_started_at',
         'strategy_generation_completed_at',
         'strategy_generation_error',
+        'pending_admin_deployment_at',
         'geographic_targeting',
         'keywords',
         'platforms',

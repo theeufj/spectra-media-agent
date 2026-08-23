@@ -294,7 +294,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
 };
 
 
-export default function Show({ auth, campaign }) {
+export default function Show({ auth, campaign, canRegenerate = true }) {
     const [campaigns, setCampaign] = useState(campaign);
     const [isPolling, setIsPolling] = useState(
         campaign.is_generating_strategies ||
@@ -528,7 +528,8 @@ export default function Show({ auth, campaign }) {
                             {!anyStrategiesSignedOff && (
                                 <button
                                     onClick={() => handleRegenerate(false)}
-                                    disabled={processing || isPolling}
+                                    disabled={processing || isPolling || !canRegenerate}
+                                    title={!canRegenerate ? 'Regenerating strategies is available on paid plans — upgrade to use it.' : undefined}
                                     className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 disabled:opacity-50 transition"
                                 >
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -540,7 +541,8 @@ export default function Show({ auth, campaign }) {
                             {anyStrategiesSignedOff && (
                                 <button
                                     onClick={() => handleRegenerate(true)}
-                                    disabled={processing || isPolling}
+                                    disabled={processing || isPolling || !canRegenerate}
+                                    title={!canRegenerate ? 'Regenerating strategies is available on paid plans — upgrade to use it.' : undefined}
                                     className="inline-flex items-center px-4 py-2 bg-white border border-red-300 rounded-md font-semibold text-xs text-red-700 uppercase tracking-widest shadow-sm hover:bg-red-50 disabled:opacity-50 transition"
                                 >
                                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">

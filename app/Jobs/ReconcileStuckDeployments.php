@@ -90,6 +90,19 @@ class ReconcileStuckDeployments implements ShouldQueue
                         'deployment_error' => 'Deployment did not complete — worker stopped before the agent returned, and no platform objects could be verified.',
                     ]);
                     Log::warning("ReconcileStuckDeployments: strategy {$strategy->id} ({$strategy->platform}) unverifiable — marked failed");
+
+                    // The user was told "deployment initiated" up to an hour
+                    // ago and has heard nothing since. Silently flipping the
+                    // strategy to failed left them to discover it themselves.
+                    $stuckCampaign = $strategy->campaign;
+                    if ($customer && $stuckCampaign instanceof \App\Models\Campaign) {
+                        foreach ($customer->users as $user) {
+                            $user->notify(new \App\Notifications\DeploymentFailed(
+                                $stuckCampaign,
+                                "Your {$strategy->platform} deployment didn't complete. You can redeploy it from the campaign's collateral page — nothing was charged for ads that never ran."
+                            ));
+                        }
+                    }
                 }
 
                 $resolved++;

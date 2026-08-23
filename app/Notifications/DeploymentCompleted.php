@@ -32,7 +32,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 ->greeting('Hi '.$notifiable->name.',')
                 ->line("We ran into an issue deploying your campaign \"{$this->campaign->name}\" and our team has been notified.")
                 ->line("We'll be in touch shortly to get this resolved.")
-                ->action('View Campaign', url('/campaigns/'.$this->campaign->id))
+                ->action('View Campaign', route('campaigns.show', $this->campaign->id))
                 ->salutation('— The Site to Spend Team');
         }
 
@@ -77,7 +77,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
         }
 
         return $mail
-            ->line('Performance data will start appearing in your dashboard within a few hours as Google begins serving your ads.')
+            ->line('Your ads are scheduled to begin serving from tomorrow (campaigns start the day after deployment), and performance data appears in your dashboard once they do.')
             ->action('View Your Dashboard', url(route('dashboard')))
             ->salutation('— The Site to Spend Team');
     }
@@ -95,7 +95,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 : ($this->failureCount > 0
                     ? "{$this->successCount} platform(s) live, {$this->failureCount} had an issue."
                     : 'Your ads are running.'),
-            'action_url' => url('/campaigns/'.$this->campaign->id),
+            'action_url' => route('campaigns.show', $this->campaign->id),
             'action_text' => 'View Campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,

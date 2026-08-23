@@ -153,7 +153,7 @@ class CampaignController extends Controller
         $this->authorize('update', $campaign);
 
         $validated = $request->validate([
-            'daily_budget' => 'required|numeric|min:1|max:10000',
+            'daily_budget' => 'required|numeric|min:5|max:10000',
         ]);
 
         $daily = round((float) $validated['daily_budget'], 2);
@@ -358,6 +358,10 @@ class CampaignController extends Controller
 
         return Inertia::render('Campaigns/Show', [
             'campaign' => $campaignData,
+            // Regeneration is a paid action; the page needs to say so instead
+            // of letting a free user click into an unexplained pricing
+            // redirect.
+            'canRegenerate' => $request->user()->hasSubscriptionAccess($customer),
         ]);
     }
 
@@ -414,6 +418,13 @@ class CampaignController extends Controller
 
         $force = $request->boolean('force', false);
 
+        // A live campaign's strategy rows are what billing and reconciliation
+        // read against — deleting them under running ads orphans the platform
+        // campaigns. Pause first, then rebuild.
+        if ($this->hasLiveDeployments($campaign)) {
+            return back()->with('error', 'This campaign has ads running. Pause the campaign before regenerating its strategies.');
+        }
+
         if ($campaign->strategies()->whereNotNull('signed_off_at')->exists()) {
             if (! $force) {
                 return back()->with('error', 'Some strategies are already signed off. Use force regeneration to revert sign-offs and start over.');
@@ -450,9 +461,27 @@ class CampaignController extends Controller
             abort(403);
         }
 
+        // Deleting the local row does NOT stop the platform campaigns — the
+        // ads keep running and spending with nothing left to reconcile or
+        // bill against. Deletion is for campaigns that aren't live.
+        if ($this->hasLiveDeployments($campaign)) {
+            return back()->with('error', 'This campaign has ads running on the platforms. Pause it first, then delete — otherwise the ads would keep spending with no record on our side.');
+        }
+
         $campaign->delete();
 
         return redirect()->route('campaigns.index')->with('success', 'Campaign deleted successfully.');
+    }
+
+    /**
+     * Does this campaign have ads live (or plausibly live) on any platform?
+     */
+    private function hasLiveDeployments(Campaign $campaign): bool
+    {
+        return $campaign->status === \App\Enums\CampaignStatus::Active
+            || $campaign->strategies()
+                ->whereIn('deployment_status', array_merge(Strategy::DEPLOYED_STATUSES, ['deploying', 'deploy_unverified']))
+                ->exists();
     }
 
     /**

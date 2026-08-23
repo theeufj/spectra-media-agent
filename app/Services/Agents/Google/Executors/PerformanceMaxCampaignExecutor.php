@@ -61,8 +61,8 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         // This was the source of 6 duplicate PMax campaigns created on 2026-05-19
         // when the deployment job was retried without checking for an existing campaign.
         $timestamp = now()->format('Ymd_His');
-        if (! empty($campaign->google_ads_campaign_id)) {
-            $campaignResourceName = $campaign->google_ads_campaign_id;
+        if ($reusableGoogleCampaign = $strategy->reusableGoogleCampaignId()) {
+            $campaignResourceName = $reusableGoogleCampaign;
             Log::info('GoogleAdsExecutionAgent: Reusing existing PMax campaign from prior attempt — skipping creation to prevent duplicate', [
                 'campaign_id' => $campaign->id,
                 'google_ads_campaign_id' => $campaignResourceName,
@@ -97,8 +97,7 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
             }
 
             $result->addPlatformId('campaign', $campaignResourceName);
-            $campaign->google_ads_campaign_id = $campaignResourceName;
-            $campaign->save();
+            $strategy->recordGoogleCampaignId($campaignResourceName);
         }
 
         // 1.5 Add Location Targeting

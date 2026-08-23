@@ -62,7 +62,7 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
                     <input
                         id="daily_budget"
                         type="number"
-                        min="1"
+                        min="5"
                         step="1"
                         value={data.daily_budget}
                         onChange={(e) => setData('daily_budget', e.target.value)}

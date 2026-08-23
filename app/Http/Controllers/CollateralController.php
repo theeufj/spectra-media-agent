@@ -70,10 +70,15 @@ class CollateralController extends Controller
             'imageCollaterals' => $imageCollaterals,
             'videoCollaterals' => $videoCollaterals,
             'collateralErrors' => $strategy->collateral_errors ?? [],
-            'hasActiveSubscription' => $user->subscribed('default') || $user->hasDefaultPaymentMethod() || $user->subscription_status === 'active',
+            // Teammate-aware: a member on a company plan has access through
+            // the owner's subscription.
+            'hasActiveSubscription' => $user->hasSubscriptionAccess($campaign->customer),
             'hasPaymentMethod' => $user->hasDefaultPaymentMethod(),
             'deploymentEnabled' => Setting::get('deployment_enabled', true),
-            'managedBillingEnabled' => Setting::get('managed_billing_enabled', true),
+            // Mirrors DeployCampaign's own rule: self-funded accounts are
+            // billed by the platform directly, so never show them the
+            // prepay-funding modal (it double-billed them).
+            'managedBillingEnabled' => Setting::get('managed_billing_enabled', true) && ! $campaign->customer->isSelfFundedAds(),
             'creativeUsage' => app(CreativeQuotaService::class)->getUsageSummary($user),
             'adSpendCredit' => $adSpendCredit ? [
                 'id' => $adSpendCredit->id,

@@ -48,19 +48,48 @@ class VerifyDeployment implements ShouldQueue
 
         $customer = $this->campaign->customer;
 
+        $unverified = [];
+
         foreach ($strategies as $strategy) {
             try {
+                // "Can't verify this platform" is not "unverified".
+                // ReconcileStuckDeployments checks supports() for exactly this
+                // reason; skipping it here downgraded every successful
+                // Microsoft/LinkedIn deploy to ⚠️ deploy_unverified 60 seconds
+                // after it went live.
+                if (! $this->verifier->supports($strategy->platform)) {
+                    Log::info("VerifyDeployment: Strategy {$strategy->id} ({$strategy->platform}) has no verification path — leaving as deployed");
+
+                    continue;
+                }
+
                 $verified = $this->verifier->verify($strategy, $customer);
 
                 $strategy->update([
                     'deployment_status' => $verified ? 'verified' : 'deploy_unverified',
                 ]);
 
+                if (! $verified) {
+                    $unverified[] = $strategy->platform;
+                }
+
                 Log::info("VerifyDeployment: Strategy {$strategy->id} ({$strategy->platform}): ".($verified ? 'verified' : 'unverified'));
             } catch (\Exception $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 Log::error("VerifyDeployment: Failed to verify strategy {$strategy->id}: ".$e->getMessage());
+            }
+        }
+
+        // A supported platform whose objects can't be found is a real problem
+        // the user was told nothing about — the deploy had already reported
+        // success by the time this ran.
+        if (! empty($unverified) && $customer) {
+            foreach ($customer->users as $user) {
+                $user->notify(new \App\Notifications\DeploymentFailed(
+                    $this->campaign,
+                    'We deployed your ads to '.implode(', ', $unverified).' but could not confirm they exist on the platform. Our team has been alerted and is checking — no action needed from you yet.'
+                ));
             }
         }
     }

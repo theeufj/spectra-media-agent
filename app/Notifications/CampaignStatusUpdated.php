@@ -41,7 +41,7 @@ class CampaignStatusUpdated extends Notification
             ->greeting('Hi '.$notifiable->name.',')
             ->line('The status of your campaign "'.$this->campaign->name.'" has changed.')
             ->line('New Status: '.$this->campaign->primary_status)
-            ->action('View Campaign', url('/campaigns/'.$this->campaign->id))
+            ->action('View Campaign', route('campaigns.show', $this->campaign->id))
             ->salutation('— Site to Spend');
     }
 

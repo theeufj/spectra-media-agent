@@ -196,17 +196,22 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             ]);
         }
 
-        // Split the campaign's daily budget evenly across strategies
+        // Split the campaign's daily budget evenly across strategies.
+        //
+        // Signed-off only: sign-off is the user's approval of what runs and
+        // what the budget is split across. Deploying every strategy meant an
+        // unreviewed one could go live AND halve the budget of the one the
+        // user actually approved.
         $strategies = $this->strategyId
             ? $this->campaign->strategies->where('id', $this->strategyId)
-            : $this->campaign->strategies;
+            : $this->campaign->strategies->whereNotNull('signed_off_at');
 
         // Filter strategies to only platforms the user's plan allows
         $user = $this->campaign->customer->users()->wherePivot('role', 'owner')->first()
             ?? $this->campaign->customer->users()->first();
         if ($user) {
             $allowed = $user->allowedPlatforms();
-            $strategies = $strategies->filter(function ($strategy) use ($allowed) {
+            [$strategies, $planFiltered] = $strategies->partition(function ($strategy) use ($allowed) {
                 $platformStr = strtolower($strategy->platform);
                 foreach ($allowed as $allow) {
                     if (str_contains($platformStr, $allow)) {
@@ -216,6 +221,17 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
 
                 return false;
             });
+
+            // A dropped strategy must reach a terminal state the status page
+            // can display — leaving it at null read as "pending" and kept the
+            // page polling forever with no explanation.
+            foreach ($planFiltered as $skipped) {
+                $skipped->update([
+                    'deployment_status' => 'skipped_plan',
+                    'deployment_error' => "{$skipped->platform} isn't included in your current plan, so this strategy was not deployed. Upgrade your plan to run it.",
+                ]);
+            }
+
             Log::info('Plan-filtered strategies for deployment: '.$strategies->pluck('platform')->implode(', '));
         }
 

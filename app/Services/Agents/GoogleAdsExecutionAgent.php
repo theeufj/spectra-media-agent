@@ -512,6 +512,31 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
                 }
             }
 
+            // Every executor's idempotency guard reuses an existing Google
+            // campaign and skips creation — which is the only call that ever
+            // carried the budget. A user who confirmed a new daily budget and
+            // redeployed was charged at the new rate while Google kept
+            // spending at the old one. Sync it before executing; best-effort,
+            // a failed budget write must not sink the deploy.
+            if ($reusedCampaignId = $strategy->reusableGoogleCampaignId()) {
+                try {
+                    $newDaily = (float) ($strategy->daily_budget ?: $campaign->daily_budget);
+                    if ($newDaily > 0) {
+                        (new \App\Services\GoogleAds\CommonServices\UpdateCampaignBudget($this->customer))(
+                            $customerId,
+                            $reusedCampaignId,
+                            $newDaily * 1_000_000
+                        );
+                        Log::info("GoogleAdsExecutionAgent: Synced reused campaign budget to \${$newDaily}/day", [
+                            'campaign_id' => $campaign->id,
+                        ]);
+                    }
+                } catch (\Throwable $e) {
+                    report($e);
+                    Log::warning('GoogleAdsExecutionAgent: Budget sync on reuse failed: '.$e->getMessage());
+                }
+            }
+
             $this->executorFor($campaignType)
                 ->execute($customerId, $campaign, $strategy, $plan, $result);
 

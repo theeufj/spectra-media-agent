@@ -360,6 +360,23 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             return;
         }
 
+        // Budget confirmation BEFORE money: the deploy endpoint refuses
+        // unconfirmed auto-generated campaigns, so charging the prepay first
+        // took the user's money for a deploy that was then rejected.
+        if (campaign?.auto_generated_at && !campaign?.budget_confirmed_at) {
+            toast.warning('Please confirm your daily budget first — taking you there now.');
+            router.visit(route('campaigns.show', campaign.id));
+            return;
+        }
+
+        // Payment problems block deploying regardless of balance. 'paused'
+        // lives on payment_status; the old check compared it against status,
+        // a field that never holds that value, so this warning never fired.
+        if (managedBillingEnabled && adSpendCredit?.payment_status === 'paused') {
+            toast.warning('Your ad spend billing is paused due to a payment issue. Please update your payment method in Billing → Ad Spend before deploying.');
+            return;
+        }
+
         // Check if ad spend billing is set up and has enough balance for this campaign
         if (managedBillingEnabled) {
             const totalBudget = Number(campaign?.total_budget || 0);
@@ -374,20 +391,12 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
             const daysToCharge = Math.min(7, durationDays);
             const requiredFunds = dailyBudget * daysToCharge;
             const currentBalance = adSpendCredit?.current_balance ?? 0;
-            const needsFunding = !adSpendCredit
-                || adSpendCredit.status === 'pending'
-                || currentBalance < requiredFunds;
+            const needsFunding = !adSpendCredit || currentBalance < requiredFunds;
 
             if (needsFunding) {
                 setShowAdSpendSetupModal(true);
                 return;
             }
-        }
-
-        // Check if account is paused due to payment failure (only when managed billing is enabled)
-        if (managedBillingEnabled && adSpendCredit?.status === 'paused') {
-            toast.warning('Your ad spend billing is paused due to a payment issue. Please update your payment method in Billing → Ad Spend before deploying.');
-            return;
         }
 
         setConfirmModal({

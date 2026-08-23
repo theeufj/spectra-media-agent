@@ -314,6 +314,32 @@ class AdSpendBillingController extends Controller
             ], 404);
         }
 
+        // Self-funded accounts are billed by the ad platform directly — the
+        // deploy job refuses to draw down credit for them, so charging here
+        // billed those customers twice for the same clicks.
+        if ($customer->isSelfFundedAds()) {
+            return response()->json([
+                'success' => false,
+                'error' => 'Your ad spend is billed directly through your own ad account — no prepayment is needed. You can deploy right away.',
+            ], 422);
+        }
+
+        // Never take money for a deploy the deploy endpoint will refuse. The
+        // budget-confirmation gate used to live only there, after the charge.
+        if ($request->campaign_id) {
+            $campaign = \App\Models\Campaign::find($request->campaign_id);
+            if (! $campaign || $campaign->customer_id !== $customer->id) {
+                return response()->json(['success' => false, 'error' => 'Campaign not found'], 404);
+            }
+            if ($campaign->auto_generated_at && ! $campaign->budget_confirmed_at) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Please confirm this campaign\'s daily budget before funding it — open the campaign page and approve the proposed budget.',
+                    'requires_budget_confirmation' => true,
+                ], 422);
+            }
+        }
+
         try {
             // Save payment method to the customer's owner so recurring charges work for all team members
             $billingUser = $customer->users()->wherePivot('role', 'owner')->first() ?? $user;
@@ -342,42 +368,54 @@ class AdSpendBillingController extends Controller
             $daysToCharge = $request->days_to_charge ?? 7;
             $topUpAmount = round($dailyBudget * $daysToCharge, 2);
 
-            $existingCredit = $customer->adSpendCredit;
+            // Serialize the read-compute-charge sequence per customer. The
+            // init branch is already locked inside initializeCreditAccount
+            // (different key, no deadlock); the top-up branch was not, so two
+            // concurrent deploys could both see the same balance, both
+            // compute the same shortfall, and both charge it.
+            $setupLock = \Illuminate\Support\Facades\Cache::lock("adspend_setup:{$customer->id}", 60);
+            $setupLock->block(20);
 
-            if ($existingCredit) {
-                // Account already exists — only charge the SHORTFALL needed to reach
-                // this campaign's target runway. If the current balance already covers
-                // it, charge nothing. Prevents stacking a full top-up on top of unused
-                // credit on every deploy.
-                $currentBalance = (float) $existingCredit->current_balance;
-                $shortfall = round(max(0, $topUpAmount - $currentBalance), 2);
+            try {
+                $existingCredit = $customer->adSpendCredit()->first();
 
-                if ($shortfall <= 0) {
-                    $credit = $existingCredit;
-                    $chargedAmount = 0.0;
-                    $logMessage = "Ad spend for customer '{$customer->name}' — existing credit \${$currentBalance} already covers {$daysToCharge} days @ \${$dailyBudget}/day; no charge";
-                } else {
-                    $result = $this->billingService->addCredit(
-                        $customer,
-                        $shortfall,
-                        "Campaign ad spend top-up ({$daysToCharge} days @ \${$dailyBudget}/day — shortfall)"
-                    );
+                if ($existingCredit) {
+                    // Account already exists — only charge the SHORTFALL needed to reach
+                    // this campaign's target runway. If the current balance already covers
+                    // it, charge nothing. Prevents stacking a full top-up on top of unused
+                    // credit on every deploy.
+                    $currentBalance = (float) $existingCredit->current_balance;
+                    $shortfall = round(max(0, $topUpAmount - $currentBalance), 2);
 
-                    if (! $result['success']) {
-                        throw new \Exception($result['error'] ?? 'Payment failed');
+                    if ($shortfall <= 0) {
+                        $credit = $existingCredit;
+                        $chargedAmount = 0.0;
+                        $logMessage = "Ad spend for customer '{$customer->name}' — existing credit \${$currentBalance} already covers {$daysToCharge} days @ \${$dailyBudget}/day; no charge";
+                    } else {
+                        $result = $this->billingService->addCredit(
+                            $customer,
+                            $shortfall,
+                            "Campaign ad spend top-up ({$daysToCharge} days @ \${$dailyBudget}/day — shortfall)"
+                        );
+
+                        if (! $result['success']) {
+                            throw new \Exception($result['error'] ?? 'Payment failed');
+                        }
+
+                        $credit = $customer->fresh()->adSpendCredit;
+                        $chargedAmount = $shortfall;
+                        $logMessage = "Ad spend top-up for customer '{$customer->name}' — \${$chargedAmount} charged (shortfall to {$daysToCharge}-day runway)";
                     }
+                } else {
+                    // First campaign — initialize the account
+                    $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget);
 
-                    $credit = $customer->fresh()->adSpendCredit;
-                    $chargedAmount = $shortfall;
-                    $logMessage = "Ad spend top-up for customer '{$customer->name}' — \${$chargedAmount} charged (shortfall to {$daysToCharge}-day runway)";
+                    ActivityLogger::adSpendBillingSetup($customer, (float) $dailyBudget);
+                    $chargedAmount = $credit->initial_credit_amount;
+                    $logMessage = "Ad spend billing set up for customer '{$customer->name}' — \${$chargedAmount} charged";
                 }
-            } else {
-                // First campaign — initialize the account
-                $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget);
-
-                ActivityLogger::adSpendBillingSetup($customer, (float) $dailyBudget);
-                $chargedAmount = $credit->initial_credit_amount;
-                $logMessage = "Ad spend billing set up for customer '{$customer->name}' — \${$chargedAmount} charged";
+            } finally {
+                $setupLock->release();
             }
 
             Log::info('AdSpendBilling: Campaign funding collected', [

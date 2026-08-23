@@ -91,6 +91,31 @@ Schedule::job(new VerifyGtmInstallation)->dailyAt('05:15')->withoutOverlapping()
 // Nothing else reconciles that state, so it is terminal without this.
 Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 
+// Campaigns queued for manual admin deployment promise the customer "within
+// 24 hours". This is what holds the admin team to it: a daily re-alert for
+// anything still waiting past that window (the original alert was a single
+// email — if it was missed, the campaign sat in the queue forever).
+Schedule::call(function () {
+    \App\Models\Campaign::where('status', \App\Enums\CampaignStatus::PendingAdminDeployment)
+        ->where('pending_admin_deployment_at', '<', now()->subDay())
+        ->with('customer')
+        ->get()
+        ->each(function ($campaign) {
+            \App\Notifications\CriticalAgentAlert::deliver(
+                'pending_admin_deployment_overdue',
+                "OVERDUE: \"{$campaign->name}\" still waiting for admin deployment",
+                'This campaign has been in the manual deployment queue for over 24 hours — the customer was promised launch within a day.',
+                [
+                    'campaign_id' => $campaign->id,
+                    'customer_id' => $campaign->customer_id,
+                    'queued_at' => (string) $campaign->pending_admin_deployment_at,
+                ],
+                \App\Models\NotificationTemplate::RECIPIENTS_ADMINS,
+                $campaign->customer
+            );
+        });
+})->name('pending-admin-deployment-overdue')->dailyAt('08:00');
+
 // Hourly budget optimization - applies learned per-account multipliers and snapshots performance
 Schedule::job(new HourlyBudgetOptimization)->hourly()->withoutOverlapping();
 
