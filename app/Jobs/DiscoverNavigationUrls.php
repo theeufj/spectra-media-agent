@@ -94,6 +94,21 @@ class DiscoverNavigationUrls implements ShouldQueue
 
         $discoveredUrls = $this->extractNavigationLinks($html, $websiteUrl);
 
+        // A bot-protection service (Cloudflare, Signal Sciences, ...) doesn't
+        // fail the fetch — it serves a shell document with no readable text
+        // and no navigation. Without this check that shell sails through as
+        // "sitemap has full coverage" and the customer eventually gets a
+        // misleading "couldn't extract enough about your brand" email.
+        if (empty($discoveredUrls) && self::looksBlocked($html)) {
+            $this->concludeWithoutDiscovery(
+                'Your website appears to be blocking automated visitors — usually a firewall '
+                .'or bot-protection service sitting in front of the site. If your web provider '
+                .'can allow our scanner through, reply to this email and we\'ll rerun the scan.'
+            );
+
+            return;
+        }
+
         // Also include already-crawled CustomerPage URLs in the comparison
         $existingPageUrls = CustomerPage::where('customer_id', $this->customer->id)
             ->pluck('url')
@@ -184,6 +199,21 @@ class DiscoverNavigationUrls implements ShouldQueue
         foreach ($this->customer->users as $user) {
             $user->notify(new \App\Notifications\SiteScanFailed($this->customer, $reason));
         }
+    }
+
+    /**
+     * Does this rendered document look like a bot-protection shell rather
+     * than a real page? WAF interstitials render as markup with scripts but
+     * almost no readable text. Threshold is deliberately low: a legitimate
+     * homepage with under 200 characters of visible text has nothing to
+     * crawl anyway, so a false positive costs nothing.
+     */
+    public static function looksBlocked(string $html): bool
+    {
+        $text = preg_replace('#<(script|style|noscript|template|svg)\b[^>]*>.*?</\1>#si', ' ', $html);
+        $text = trim(preg_replace('/\s+/', ' ', strip_tags($text)));
+
+        return mb_strlen($text) < 200;
     }
 
     private function extractNavigationLinks(string $html, string $websiteUrl): array
