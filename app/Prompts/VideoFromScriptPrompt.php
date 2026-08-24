@@ -31,10 +31,10 @@ class VideoFromScriptPrompt
      * {{voiceover_script}} (the narration the visuals must follow),
      * {{ad_text}} (approved ad copy — the only words allowed on screen).
      *
-     * Body text stays off-screen (long generated type still garbles), but a
-     * single short closing end-card is allowed: Veo 3.1 sets a few plain
-     * words reliably, and an ad that ends with the offer outperforms one
-     * that just fades out.
+     * Strictly no on-screen text: validated 2026-08-24 — Veo 3.1 garbled
+     * even a three-word end-card ("Agency Resullts"), unlike the image
+     * model, which sets type accurately. The message belongs in the
+     * voiceover; admins can experiment with text via the editable template.
      */
     public static function defaultTemplate(): string
     {
@@ -47,7 +47,7 @@ Create a polished advertising video with spoken English voiceover.
 --- CREATIVE STRATEGY ---
 {{creative_strategy}}
 
---- APPROVED AD TEXT (the only words permitted on screen) ---
+--- APPROVED AD TEXT (context for the message — never rendered on screen) ---
 {{ad_text}}
 
 --- REQUIREMENTS ---
@@ -57,12 +57,11 @@ Create a polished advertising video with spoken English voiceover.
    - Dynamic camera movement and clean transitions; professional, polished production quality
    - Colour grading and lighting that fit the brand tone in the creative strategy
 
-2. ON-SCREEN TEXT:
-   - No captions, subtitles, labels or body text anywhere in the video
-   - EXCEPTION: the final shot may close on ONE short end-card of at most five words, taken
-     word-for-word from the approved ad text above, set in plain modern type
-   - If no approved ad text is provided, end with no text at all
-   - Never render fine print, UI text or any other words — long generated text garbles
+2. ON-SCREEN TEXT (NONE):
+   - No text anywhere in the video: no captions, titles, labels, end-cards, UI text or fine print
+   - Any scene that would naturally contain text (screens, signs, documents) must show it as
+     abstract blurred shapes or placeholder bars, never legible words
+   - Video text rendering garbles even short phrases — the message belongs in the voiceover
 
 3. AUDIO:
    - The voiceover script above must be spoken clearly as English narration
