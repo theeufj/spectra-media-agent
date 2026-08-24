@@ -110,6 +110,11 @@ class Customer extends Model
         return strtoupper($this->currency_code ?: config('cashier.currency', 'aud'));
     }
 
+    public function setWebsiteAttribute(?string $value): void
+    {
+        $this->attributes['website'] = \App\Support\Url::forceHttps($value);
+    }
+
     // Secrets encrypted at rest (tolerant of legacy plaintext rows).
 
     /** @return Attribute<string|null, string|null> */

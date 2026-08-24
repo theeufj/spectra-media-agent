@@ -36,6 +36,11 @@ class Proposal extends Model
         'completed_at' => 'datetime',
     ];
 
+    public function setWebsiteUrlAttribute(?string $value): void
+    {
+        $this->attributes['website_url'] = \App\Support\Url::forceHttps($value);
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
