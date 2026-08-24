@@ -945,6 +945,67 @@ class GeminiService
     }
 
     /**
+     * Synthesize speech with a Gemini TTS model.
+     *
+     * Returns raw PCM audio (s16le, 24kHz, mono) or null. Used to replace a
+     * chained video's audio with one consistent narrator: Veo regenerates
+     * the voice on every extension call, while a named TTS voice is
+     * deterministic across calls.
+     */
+    public function synthesizeSpeech(string $text, ?string $voice = null, array $context = []): ?string
+    {
+        $model = config('ai.models.tts', 'gemini-2.5-flash-preview-tts');
+        $voice ??= config('ai.tts_voice', 'Charon');
+
+        $payload = [
+            'contents' => [[
+                'role' => 'user',
+                'parts' => [['text' => "Read this advertising voiceover with warm, confident, energetic delivery — a professional ad narrator. Speak only the script, nothing else:\n\n".$text]],
+            ]],
+            'generationConfig' => [
+                'responseModalities' => ['AUDIO'],
+                'speechConfig' => [
+                    'voiceConfig' => ['prebuiltVoiceConfig' => ['voiceName' => $voice]],
+                ],
+            ],
+        ];
+
+        $startTime = hrtime(true);
+
+        try {
+            $response = Http::withHeaders($this->authHeaders())
+                ->timeout(300)
+                ->post("{$this->vertexBaseUrl}{$model}:generateContent", $payload);
+
+            if ($response->failed()) {
+                Log::error("GeminiService: TTS synthesis failed on {$model}", [
+                    'status' => $response->status(),
+                    'body' => substr($response->body(), 0, 400),
+                ]);
+
+                return null;
+            }
+
+            $json = $response->json();
+            $audio = $json['candidates'][0]['content']['parts'][0]['inlineData']['data'] ?? null;
+
+            $this->recordCost(
+                $model,
+                'synthesizeSpeech',
+                $json['usageMetadata'] ?? [],
+                (int) ((hrtime(true) - $startTime) / 1_000_000),
+                $context
+            );
+
+            return $audio ? base64_decode($audio) : null;
+        } catch (\Throwable $e) {
+            Log::error('GeminiService: TTS synthesis exception: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /**
      * Downloads video data from a given URI.
      */
     public function downloadVideo(string $uri): ?string

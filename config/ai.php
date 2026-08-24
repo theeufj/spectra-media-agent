@@ -64,6 +64,13 @@ return [
          */
         'video' => env('AI_MODEL_VIDEO', 'veo-3.1-generate-001'),
 
+        /*
+         * Speech synthesis (video narration). A named Gemini TTS voice is
+         * deterministic across calls — the property Veo's built-in narration
+         * lacks, and the reason chained extensions changed voice mid-video.
+         */
+        'tts' => env('AI_MODEL_TTS', 'gemini-2.5-flash-preview-tts'),
+
     ],
 
     /*
@@ -140,6 +147,8 @@ return [
         'gemini-2.5-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-3.1-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-3.1-flash-image-preview' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
+        // TTS: text in at $0.50/1M, audio out at $10/1M tokens.
+        'gemini-2.5-flash-preview-tts' => ['input' => 0.50, 'output' => 10.00, 'cached' => 0.00],
         'gemini-embedding-2-preview' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'text-embedding-005' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
@@ -155,5 +164,16 @@ return [
         'veo-3.1-generate-001' => 0.40,
         'default' => 0.40,
     ],
+
+    /*
+     * TTS voice for video narration. Any Gemini prebuilt voice name; the
+     * same name always produces the same voice.
+     */
+    'tts_voice' => env('AI_TTS_VOICE', 'Charon'),
+
+    /*
+     * Replace chained-video audio with a single consistent TTS narration.
+     */
+    'video_narration_tts' => env('AI_VIDEO_NARRATION_TTS', true),
 
 ];

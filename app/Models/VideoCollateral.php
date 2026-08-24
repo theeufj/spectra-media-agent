@@ -25,6 +25,7 @@ class VideoCollateral extends Model
         'should_deploy',
         'source',
         'provider',
+        'narration_finalized_at',
     ];
 
     protected $casts = [

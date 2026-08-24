@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Mail\VideosGenerated;
 use App\Models\VideoCollateral;
 use App\Services\GeminiService;
 use App\Services\StorageHelper;
@@ -13,7 +12,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class CheckVideoStatus implements ShouldQueue
 {
@@ -159,8 +157,8 @@ class CheckVideoStatus implements ShouldQueue
             // Script coverage first: Veo caps a single call at 8 seconds, but
             // scripts run longer — clips were ending mid-sentence. Keep
             // extending until the whole voiceover fits; each extension
-            // re-enters this job, so the email and the flows below run once
-            // narration is complete.
+            // re-enters this job, so the steps below run once narration is
+            // complete.
             if (\App\Jobs\ExtendVideoForScript::needsExtension($this->videoCollateral->fresh())) {
                 \App\Jobs\ExtendVideoForScript::dispatch($this->videoCollateral)->delay(now()->addSeconds(20));
                 Log::info("CheckVideoStatus: script not fully narrated yet — extending video {$this->videoCollateral->id}");
@@ -168,28 +166,18 @@ class CheckVideoStatus implements ShouldQueue
                 return;
             }
 
-            $videoCount = $campaign->videoCollaterals()->where('status', 'completed')->count();
-            foreach ($campaign->customer->users as $user) {
-                Mail::to($user->email)->send(new VideosGenerated($user, $campaign, $videoCount));
+            // Voice consistency: Veo regenerates the narrator on every
+            // extension call, so a chained clip changes voice mid-video.
+            // Replace the whole audio track with one Gemini TTS pass of the
+            // full script before the video is called done.
+            if (\App\Jobs\FinalizeVideoNarration::shouldRun($this->videoCollateral->fresh())) {
+                \App\Jobs\FinalizeVideoNarration::dispatch($this->videoCollateral)->delay(now()->addSeconds(10));
+                Log::info("CheckVideoStatus: dispatching narration finalize for video {$this->videoCollateral->id}");
+
+                return;
             }
 
-            // PMax video flow: an 8s Veo clip is too short for PMax (min 10s), so extend
-            // the original once (~15s) before linking. An already-extended clip links
-            // straight to the asset group to lift ad strength.
-            $isPmax = str_contains(strtolower($this->videoCollateral->platform ?? ''), 'performance max')
-                && $campaign->google_ads_campaign_id;
-
-            if ($isPmax) {
-                if (($this->videoCollateral->extension_count ?? 0) < 1) {
-                    \App\Jobs\ExtendPMaxVideo::dispatch($this->videoCollateral)->delay(now()->addSeconds(20));
-                } else {
-                    $strategyId = $this->videoCollateral->strategy_id ?? $campaign->strategies()->latest()->value('id');
-                    if ($strategyId) {
-                        \App\Jobs\UploadPMaxVideoAssets::dispatch($strategyId, $campaign->customer->cleanGoogleCustomerId())
-                            ->delay(now()->addSeconds(30));
-                    }
-                }
-            }
+            (new \App\Services\VideoGeneration\VideoPostCompletion)($this->videoCollateral);
         }
 
         Log::info("--- CheckVideoStatus Completed for VideoCollateral ID: {$this->videoCollateral->id} ---");
