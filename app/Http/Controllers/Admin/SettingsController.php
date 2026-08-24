@@ -34,9 +34,19 @@ class SettingsController extends Controller
             }
         }
 
+        // What creative generation actually ran last — the configured model
+        // can differ from what history shows if the env changed recently.
+        $lastImageGeneration = \App\Models\AiCost::where('model', 'like', '%image%')
+            ->latest()
+            ->first(['model', 'created_at', 'cost']);
+
         return Inertia::render('Admin/Settings', [
             'settings' => $settings,
             'campaignModeDescription' => \App\Services\CampaignStatusHelper::getModeDescription(),
+            'imagePromptDefault' => \App\Prompts\ImagePrompt::defaultTemplate(),
+            'imagePromptCustom' => (string) Setting::get(\App\Prompts\ImagePrompt::TEMPLATE_SETTING, ''),
+            'imageModel' => config('ai.models.image'),
+            'lastImageGeneration' => $lastImageGeneration,
         ]);
     }
 
@@ -50,6 +60,7 @@ class SettingsController extends Controller
             'creative_boost_image_generations' => 'sometimes|integer|min:0',
             'creative_boost_video_generations' => 'sometimes|integer|min:0',
             'creative_boost_refinements' => 'sometimes|integer|min:0',
+            'image_prompt_template' => 'sometimes|nullable|string|max:20000',
         ]);
 
         Setting::set('deployment_enabled', $request->deployment_enabled, 'boolean');
@@ -68,6 +79,22 @@ class SettingsController extends Controller
             if ($request->has($key)) {
                 Setting::set($key, $request->integer($key), 'integer');
             }
+        }
+
+        // Creative generation prompt — blank means "use the built-in default".
+        // Saving an edit that strips every placeholder would generate images
+        // with no brand or strategy input, so require at least the strategy.
+        if ($request->has('image_prompt_template')) {
+            $template = trim((string) $request->input('image_prompt_template'));
+
+            if ($template !== '' && ! str_contains($template, '{{creative_strategy}}')) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'The creative prompt must include the {{creative_strategy}} placeholder — without it every image ignores the campaign it was generated for.',
+                ]);
+            }
+
+            Setting::set(\App\Prompts\ImagePrompt::TEMPLATE_SETTING, $template, 'string', 'Custom creative generation prompt (blank = built-in default)');
         }
 
         return redirect()->back()->with('flash', [
