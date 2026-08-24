@@ -17,6 +17,40 @@ export default function CustomerWorkspace({ auth }) {
     } = usePage().props;
     const [lightbox, setLightbox] = useState(null);
 
+    // Traffic-light per section: green = has data, orange = partial/needs a
+    // look, red = empty. "Partial" is judged against what downstream
+    // generation actually needs (e.g. five substantive pages is the
+    // first-campaign gate), not arbitrary thresholds.
+    const allStrategies = campaigns.flatMap(c => c.strategies || []);
+    const activeImages = [
+        ...campaigns.flatMap(c => c.image_collaterals || []),
+        ...allStrategies.flatMap(s => s.image_collaterals || []),
+    ].filter(i => i.is_active);
+    const adCopyCount = allStrategies.reduce((n, s) => n + (s.ad_copies || []).length, 0);
+    const strategyKeywordCount = allStrategies.reduce((n, s) => n + (s.bidding_strategy?.keywords || []).length, 0);
+
+    const statuses = {
+        brand: !brandGuideline
+            ? 'red'
+            : (brandGuideline.user_verified && (brandGuideline.extraction_quality_score ?? 0) >= 7 ? 'green' : 'orange'),
+        campaigns: campaigns.length === 0
+            ? 'red'
+            : (campaigns.every(c => (c.strategies || []).some(s => s.signed_off_at)) ? 'green' : 'orange'),
+        creative: (activeImages.length > 0 && adCopyCount > 0)
+            ? 'green'
+            : (activeImages.length > 0 || adCopyCount > 0 ? 'orange' : 'red'),
+        harvested: knowledge.harvested_total > 0 ? 'green' : 'red',
+        knowledge: knowledge.pages >= 5 ? 'green' : (knowledge.pages > 0 ? 'orange' : 'red'),
+        keywords: (knowledge.keywords_total + strategyKeywordCount) >= 5
+            ? 'green'
+            : ((knowledge.keywords_total + strategyKeywordCount) > 0 ? 'orange' : 'red'),
+        personas: personas.length > 0 ? 'green' : 'red',
+        briefs: creativeBriefs.length > 0 ? 'green' : 'red',
+        proposals: proposals.length > 0 ? 'green' : 'red',
+        products: knowledge.products_total > 0 ? 'green' : 'red',
+        audits: (seoAudits.length + landingPageAudits.length) > 0 ? 'green' : 'red',
+    };
+
     return (
         <AuthenticatedLayout
             user={auth.user}
@@ -56,10 +90,16 @@ export default function CustomerWorkspace({ auth }) {
                         <StatTile label="Products" value={knowledge.products_total} />
                     </div>
 
+                    <p className="text-xs text-gray-400 flex items-center gap-4">
+                        <span className="inline-flex items-center gap-1.5"><StatusDot status="green" /> has data</span>
+                        <span className="inline-flex items-center gap-1.5"><StatusDot status="orange" /> partial</span>
+                        <span className="inline-flex items-center gap-1.5"><StatusDot status="red" /> empty</span>
+                    </p>
+
                     {/* Brand guidelines */}
                     <section className="bg-white shadow-sm rounded-lg p-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-lg font-semibold text-gray-900">Brand Guidelines</h2>
+                            <h2 className="text-lg font-semibold text-gray-900"><SectionTitle status={statuses.brand}>Brand Guidelines</SectionTitle></h2>
                             {brandGuideline ? (
                                 <div className="flex items-center gap-2 text-xs">
                                     {brandGuideline.extraction_quality_score != null && (
@@ -124,6 +164,12 @@ export default function CustomerWorkspace({ auth }) {
                     </section>
 
                     {/* Campaigns */}
+                    <div className="flex items-center gap-5 pt-2">
+                        <h2 className="text-lg font-semibold text-gray-900"><SectionTitle status={statuses.campaigns}>Campaigns</SectionTitle></h2>
+                        <span className="text-sm text-gray-500 inline-flex items-center gap-1.5">
+                            <StatusDot status={statuses.creative} /> creative (copy + imagery)
+                        </span>
+                    </div>
                     {campaigns.length === 0 && (
                         <section className="bg-white shadow-sm rounded-lg p-6 text-sm text-gray-500">
                             No campaigns yet.
@@ -228,10 +274,12 @@ export default function CustomerWorkspace({ auth }) {
                     ))}
 
                     {/* Harvested assets */}
-                    {harvestedAssets.length > 0 && (
-                        <section className="bg-white shadow-sm rounded-lg p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-1">Harvested Website Assets</h2>
-                            <p className="text-xs text-gray-500 mb-4">Latest {harvestedAssets.length} of {knowledge.harvested_total} pulled from the customer's own site. These feed AI generation when no explicit seeds exist.</p>
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.harvested}>Harvested Website Assets</SectionTitle></h2>
+                        <p className="text-xs text-gray-500 mb-4">Latest {harvestedAssets.length} of {knowledge.harvested_total} pulled from the customer's own site. These feed AI generation when no explicit seeds exist.</p>
+                        {harvestedAssets.length === 0 ? (
+                            <p className="text-sm text-gray-400">Nothing harvested — the site scan hasn't produced usable imagery, so generated creatives fall back to pure AI renders.</p>
+                        ) : (
                             <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                                 {harvestedAssets.map((asset) => (
                                     <button key={asset.id} onClick={() => setLightbox(asset.cloudfront_url)} className="relative group text-left">
@@ -240,11 +288,11 @@ export default function CustomerWorkspace({ auth }) {
                                     </button>
                                 ))}
                             </div>
-                        </section>
-                    )}
+                        )}
+                    </section>
                     {/* Knowledge base content */}
                     <section className="bg-white shadow-sm rounded-lg p-6">
-                        <h2 className="text-lg font-semibold text-gray-900 mb-1">Knowledge Base</h2>
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.knowledge}>Knowledge Base</SectionTitle></h2>
                         <p className="text-xs text-gray-500 mb-4">
                             What the AI knows about this business — every campaign is written from this text.
                             Showing {knowledgePages.length} of {knowledge.pages} entries.
@@ -265,11 +313,13 @@ export default function CustomerWorkspace({ auth }) {
                     </section>
 
                     {/* Keyword research */}
-                    {(keywords.length > 0 || negativeKeywordLists.length > 0) && (
-                        <section className="bg-white shadow-sm rounded-lg p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-1">Keyword Research</h2>
-                            <p className="text-xs text-gray-500 mb-4">Latest {keywords.length} of {knowledge.keywords_total} — this is what the money bids on.</p>
-                            {keywords.length > 0 && (
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.keywords}>Keyword Research</SectionTitle></h2>
+                        <p className="text-xs text-gray-500 mb-4">Latest {keywords.length} of {knowledge.keywords_total} — this is what the money bids on.</p>
+                        {keywords.length === 0 && negativeKeywordLists.length === 0 && (
+                            <p className="text-sm text-gray-400">No keyword research yet — strategies rely solely on the keywords inside their own bidding plans.</p>
+                        )}
+                        {keywords.length > 0 && (
                                 <div className="overflow-x-auto">
                                     <table className="min-w-full text-sm">
                                         <thead>
@@ -299,19 +349,18 @@ export default function CustomerWorkspace({ auth }) {
                                     </table>
                                 </div>
                             )}
-                            {negativeKeywordLists.map((list) => (
-                                <Collapsible key={list.id} label={`Negative list: ${list.name} (${(list.keywords || []).length} terms)`}>
-                                    <ChipList items={list.keywords} tone="red" />
-                                </Collapsible>
-                            ))}
-                        </section>
-                    )}
+                        {negativeKeywordLists.map((list) => (
+                            <Collapsible key={list.id} label={`Negative list: ${list.name} (${(list.keywords || []).length} terms)`}>
+                                <ChipList items={list.keywords} tone="red" />
+                            </Collapsible>
+                        ))}
+                    </section>
 
                     {/* Personas */}
-                    {personas.length > 0 && (
-                        <section className="bg-white shadow-sm rounded-lg p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Personas</h2>
-                            <div className="grid md:grid-cols-2 gap-4">
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4"><SectionTitle status={statuses.personas}>Personas</SectionTitle></h2>
+                        {personas.length === 0 && <p className="text-sm text-gray-400">No personas generated.</p>}
+                        <div className="grid md:grid-cols-2 gap-4">
                                 {personas.map((persona) => (
                                     <div key={persona.id} className={`border rounded-lg p-4 ${persona.is_active === false ? 'opacity-50 border-gray-100' : 'border-gray-200'}`}>
                                         <div className="flex items-center justify-between mb-1">
@@ -327,29 +376,27 @@ export default function CustomerWorkspace({ auth }) {
                                         )}
                                     </div>
                                 ))}
-                            </div>
-                        </section>
-                    )}
+                        </div>
+                    </section>
 
                     {/* Creative briefs */}
-                    {creativeBriefs.length > 0 && (
-                        <section className="bg-white shadow-sm rounded-lg p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Creative Briefs</h2>
-                            <div className="space-y-2">
-                                {creativeBriefs.map((brief) => (
-                                    <Collapsible key={brief.id} label={`${brief.platform || '—'} · ${brief.brief_type || 'brief'} · ${brief.status}${brief.created_by_agent ? ` · by ${brief.created_by_agent}` : ''}`}>
-                                        <p className="whitespace-pre-wrap">{brief.ai_brief}</p>
-                                    </Collapsible>
-                                ))}
-                            </div>
-                        </section>
-                    )}
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4"><SectionTitle status={statuses.briefs}>Creative Briefs</SectionTitle></h2>
+                        {creativeBriefs.length === 0 && <p className="text-sm text-gray-400">No creative briefs.</p>}
+                        <div className="space-y-2">
+                            {creativeBriefs.map((brief) => (
+                                <Collapsible key={brief.id} label={`${brief.platform || '—'} · ${brief.brief_type || 'brief'} · ${brief.status}${brief.created_by_agent ? ` · by ${brief.created_by_agent}` : ''}`}>
+                                    <p className="whitespace-pre-wrap">{brief.ai_brief}</p>
+                                </Collapsible>
+                            ))}
+                        </div>
+                    </section>
 
                     {/* Proposals */}
-                    {proposals.length > 0 && (
-                        <section className="bg-white shadow-sm rounded-lg p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Proposals</h2>
-                            <div className="divide-y divide-gray-100 text-sm">
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4"><SectionTitle status={statuses.proposals}>Proposals</SectionTitle></h2>
+                        {proposals.length === 0 && <p className="text-sm text-gray-400">No proposals.</p>}
+                        <div className="divide-y divide-gray-100 text-sm">
                                 {proposals.map((proposal) => (
                                     <div key={proposal.id} className="py-2 flex items-center justify-between gap-3 flex-wrap">
                                         <div>
@@ -362,16 +409,15 @@ export default function CustomerWorkspace({ auth }) {
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        </section>
-                    )}
+                        </div>
+                    </section>
 
                     {/* Products */}
-                    {products.length > 0 && (
-                        <section className="bg-white shadow-sm rounded-lg p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-1">Products</h2>
-                            <p className="text-xs text-gray-500 mb-4">Latest {products.length} of {knowledge.products_total} from the product feed.</p>
-                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1"><SectionTitle status={statuses.products}>Products</SectionTitle></h2>
+                        <p className="text-xs text-gray-500 mb-4">Latest {products.length} of {knowledge.products_total} from the product feed.</p>
+                        {products.length === 0 && <p className="text-sm text-gray-400">No product feed connected.</p>}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                                 {products.map((product) => (
                                     <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden">
                                         {product.image_link
@@ -383,14 +429,12 @@ export default function CustomerWorkspace({ auth }) {
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        </section>
-                    )}
+                        </div>
+                    </section>
 
                     {/* SEO + landing page audits */}
-                    {(seoAudits.length > 0 || landingPageAudits.length > 0) && (
-                        <section className="bg-white shadow-sm rounded-lg p-6">
-                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Site Audits</h2>
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-4"><SectionTitle status={statuses.audits}>Site Audits</SectionTitle></h2>
                             <div className="grid md:grid-cols-2 gap-6 text-sm">
                                 <div>
                                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">SEO audits</p>
@@ -411,8 +455,7 @@ export default function CustomerWorkspace({ auth }) {
                                     ))}
                                 </div>
                             </div>
-                        </section>
-                    )}
+                    </section>
                 </div>
             </div>
 
@@ -425,6 +468,28 @@ export default function CustomerWorkspace({ auth }) {
         </AuthenticatedLayout>
     );
 }
+
+/** Traffic light: green = has data, orange = partial, red = empty. */
+const DOT_COLORS = { green: 'bg-green-500', orange: 'bg-orange-400', red: 'bg-red-500' };
+const DOT_TITLES = {
+    green: 'Has data',
+    orange: 'Partial — worth a look',
+    red: 'Empty — nothing here yet',
+};
+
+const StatusDot = ({ status }) => (
+    <span
+        title={DOT_TITLES[status] || status}
+        className={`inline-block w-2.5 h-2.5 rounded-full flex-shrink-0 ${DOT_COLORS[status] || 'bg-gray-300'}`}
+    />
+);
+
+const SectionTitle = ({ status, children }) => (
+    <span className="inline-flex items-center gap-2">
+        <StatusDot status={status} />
+        <span>{children}</span>
+    </span>
+);
 
 const StatTile = ({ label, value, warn = false }) => (
     <div className={`rounded-lg p-3 border ${warn ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-200'}`}>
