@@ -25,6 +25,47 @@ class CustomerController extends Controller
         $customers = Customer::with(['users.assignedPlan', 'campaigns'])->withCount('campaigns')->get();
         $plans = \App\Models\Plan::active()->ordered()->get();
 
+        // Row-level coverage lights, same rules as the workspace page.
+        // Grouped aggregates rather than per-customer queries — this table
+        // lists every customer.
+        $guidelines = \App\Models\BrandGuideline::query()
+            ->selectRaw('customer_id, max(extraction_quality_score) as quality, bool_or(user_verified) as verified')
+            ->groupBy('customer_id')
+            ->get()
+            ->keyBy('customer_id')
+            ->map(fn ($row) => [
+                'quality' => (int) $row->getAttribute('quality'),
+                'verified' => (bool) $row->getAttribute('verified'),
+            ]);
+        $kbCounts = \App\Models\KnowledgeBase::selectRaw('customer_id, count(*) as c')->groupBy('customer_id')->pluck('c', 'customer_id');
+        $keywordCounts = \App\Models\Keyword::selectRaw('customer_id, count(*) as c')->groupBy('customer_id')->pluck('c', 'customer_id');
+        $signedOffCampaigns = \App\Models\Campaign::whereHas('strategies', fn ($q) => $q->whereNotNull('signed_off_at'))
+            ->selectRaw('customer_id, count(*) as c')->groupBy('customer_id')->pluck('c', 'customer_id');
+        $adCopyCounts = \App\Models\AdCopy::join('strategies', 'strategies.id', '=', 'ad_copies.strategy_id')
+            ->join('campaigns', 'campaigns.id', '=', 'strategies.campaign_id')
+            ->selectRaw('campaigns.customer_id, count(*) as c')->groupBy('campaigns.customer_id')->pluck('c', 'customer_id');
+        $imageCounts = \App\Models\ImageCollateral::where('image_collaterals.is_active', true)
+            ->join('campaigns', 'campaigns.id', '=', 'image_collaterals.campaign_id')
+            ->selectRaw('campaigns.customer_id, count(*) as c')->groupBy('campaigns.customer_id')->pluck('c', 'customer_id');
+
+        $customers->each(function ($customer) use ($guidelines, $kbCounts, $keywordCounts, $signedOffCampaigns, $adCopyCounts, $imageCounts) {
+            $guideline = $guidelines->get($customer->id);
+            $kb = (int) ($kbCounts[$customer->id] ?? 0);
+            $keywords = (int) ($keywordCounts[$customer->id] ?? 0);
+            $campaignTotal = $customer->campaigns_count;
+            $campaignsSigned = (int) ($signedOffCampaigns[$customer->id] ?? 0);
+            $copies = (int) ($adCopyCounts[$customer->id] ?? 0);
+            $images = (int) ($imageCounts[$customer->id] ?? 0);
+
+            $customer->setAttribute('coverage', [
+                'brand' => ! $guideline ? 'red' : (($guideline['verified'] && $guideline['quality'] >= 7) ? 'green' : 'orange'),
+                'knowledge' => $kb >= 5 ? 'green' : ($kb > 0 ? 'orange' : 'red'),
+                'campaigns' => $campaignTotal === 0 ? 'red' : ($campaignsSigned >= $campaignTotal ? 'green' : 'orange'),
+                'creative' => ($copies > 0 && $images > 0) ? 'green' : (($copies > 0 || $images > 0) ? 'orange' : 'red'),
+                'keywords' => $keywords >= 5 ? 'green' : ($keywords > 0 ? 'orange' : 'red'),
+            ]);
+        });
+
         return Inertia::render('Admin/Customers', [
             'customers' => $customers,
             'plans' => $plans,

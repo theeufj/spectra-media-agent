@@ -3,6 +3,33 @@ import { router, Link } from '@inertiajs/react';
 import DataTable from '@/Components/DataTable';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 
+// Same traffic-light language as the workspace page: green has data,
+// orange partial, red empty. One dot per load-bearing area.
+const COVERAGE_AREAS = [
+    ['brand', 'Brand guidelines'],
+    ['knowledge', 'Knowledge base'],
+    ['campaigns', 'Campaigns signed off'],
+    ['creative', 'Creative (copy + imagery)'],
+    ['keywords', 'Keywords'],
+];
+const DOT_COLORS = { green: 'bg-green-500', orange: 'bg-orange-400', red: 'bg-red-500' };
+
+const CoverageDots = ({ customer }) => (
+    <Link
+        href={route('admin.customers.workspace', customer.id)}
+        title="Open workspace review"
+        className="inline-flex items-center gap-1.5"
+    >
+        {COVERAGE_AREAS.map(([key, label]) => (
+            <span
+                key={key}
+                title={`${label}: ${customer.coverage?.[key] === 'green' ? 'has data' : customer.coverage?.[key] === 'orange' ? 'partial' : 'empty'}`}
+                className={`inline-block w-2.5 h-2.5 rounded-full ${DOT_COLORS[customer.coverage?.[key]] || 'bg-gray-300'}`}
+            />
+        ))}
+    </Link>
+);
+
 const CustomerTable = ({ customers, plans = [] }) => {
     const [confirmModal, setConfirmModal] = React.useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
 
@@ -44,11 +71,12 @@ const CustomerTable = ({ customers, plans = [] }) => {
         }, { preserveScroll: true });
     };
 
-    const customerHeaders = ['Business Name', 'Owner', 'Email', 'Plan', 'Campaigns', 'Created At', 'Actions'];
+    const customerHeaders = ['Business Name', 'Coverage', 'Owner', 'Email', 'Plan', 'Campaigns', 'Created At', 'Actions'];
     const customerData = customers.map(customer => {
         const owner = customer.users?.[0];
         return [
         customer.business_name || 'Unnamed',
+        <CoverageDots customer={customer} />,
         owner?.name || 'N/A',
         owner?.email || 'N/A',
         owner ? (

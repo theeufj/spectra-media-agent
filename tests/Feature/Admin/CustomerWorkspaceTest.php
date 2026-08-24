@@ -113,6 +113,24 @@ class CustomerWorkspaceTest extends TestCase
                 ->has('knowledge.pages'));
     }
 
+    public function test_customer_rows_carry_coverage_lights(): void
+    {
+        $this->withoutVite();
+
+        $customer = Customer::factory()->create(['website' => 'https://example.com']);
+        Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.customers.index'))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Admin/Customers')
+                ->where('customers.0.coverage.brand', 'red')
+                // A campaign with no signed-off strategy is partial, not done.
+                ->where('customers.0.coverage.campaigns', 'orange')
+                ->where('customers.0.coverage.creative', 'red'));
+    }
+
     public function test_regular_users_cannot_open_the_workspace(): void
     {
         $customer = Customer::factory()->create();
