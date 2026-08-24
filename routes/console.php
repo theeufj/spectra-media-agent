@@ -95,7 +95,7 @@ Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 // silently falls back to the Google stack. Tell admins before that happens.
 Schedule::call(function () {
     $credits = app(\App\Services\OpenRouterService::class)->creditBalance();
-    $threshold = (float) env('OPENROUTER_LOW_CREDIT_ALERT', 10);
+    $threshold = (float) config('services.openrouter.low_credit_alert', 10);
 
     if ($credits && $credits['remaining'] < $threshold) {
         \App\Notifications\CriticalAgentAlert::deliver(
