@@ -69,6 +69,61 @@ class CustomerController extends Controller
     }
 
     /**
+     * Everything the customer's AI workspace has produced, on one page:
+     * brand guidelines, campaign strategies, ad copy, and creative. This is
+     * the admin's monitoring view — spotting a bad extraction, an off-brand
+     * image, or a strategy that misread the business before the customer
+     * (or their audience) does.
+     */
+    public function customerWorkspace(Customer $customer)
+    {
+        $brandGuideline = \App\Models\BrandGuideline::where('customer_id', $customer->id)
+            ->latest('extracted_at')
+            ->first();
+
+        // The heavy JSON columns (execution_plan/result) stay out of the
+        // payload — this page is for reviewing content, not debugging runs.
+        $campaigns = $customer->campaigns()
+            ->latest()
+            ->with([
+                'strategies' => function ($q) {
+                    $q->select([
+                        'id', 'campaign_id', 'platform', 'campaign_type', 'daily_budget',
+                        'status', 'signed_off_at', 'deployed_at', 'deployment_status',
+                        'deployment_error', 'ad_copy_strategy', 'imagery_strategy',
+                        'video_strategy', 'created_at',
+                    ])->with([
+                        'adCopies',
+                        'imageCollaterals' => fn ($iq) => $iq->where('is_active', true)->latest(),
+                        'videoCollaterals' => fn ($vq) => $vq->where('is_active', true)->latest(),
+                    ]);
+                },
+                // Campaign-level media: wizard uploads, AI seeds, shared videos.
+                'imageCollaterals' => fn ($iq) => $iq->whereNull('strategy_id')->where('is_active', true)->latest(),
+                'videoCollaterals' => fn ($vq) => $vq->whereNull('strategy_id')->where('is_active', true)->latest(),
+            ])
+            ->get();
+
+        $harvested = \App\Models\HarvestedAsset::where('customer_id', $customer->id)
+            ->whereIn('status', ['classified', 'processed'])
+            ->latest()
+            ->limit(24)
+            ->get(['id', 'cloudfront_url', 'classification', 'source_page_url', 'status', 'created_at']);
+
+        return Inertia::render('Admin/CustomerWorkspace', [
+            'customer' => $customer->only(['id', 'name', 'business_name', 'website', 'country', 'currency_code', 'created_at']),
+            'brandGuideline' => $brandGuideline,
+            'campaigns' => $campaigns,
+            'harvestedAssets' => $harvested,
+            'knowledge' => [
+                'pages' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)->count(),
+                'last_crawled_at' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)->latest()->value('created_at'),
+                'harvested_total' => \App\Models\HarvestedAsset::where('customer_id', $customer->id)->count(),
+            ],
+        ]);
+    }
+
+    /**
      * Show performance dashboard for a customer (admin view).
      */
     public function customerDashboard(Customer $customer)

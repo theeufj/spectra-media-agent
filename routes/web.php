@@ -562,6 +562,7 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::get('customers', [App\Http\Controllers\Admin\CustomerController::class, 'customersIndex'])->name('admin.customers.index');
     Route::get('customers/{customer}', [App\Http\Controllers\Admin\CustomerController::class, 'customerShow'])->name('admin.customers.show');
     Route::get('customers/{customer}/dashboard', [App\Http\Controllers\Admin\CustomerController::class, 'customerDashboard'])->name('admin.customers.dashboard');
+    Route::get('customers/{customer}/workspace', [App\Http\Controllers\Admin\CustomerController::class, 'customerWorkspace'])->name('admin.customers.workspace');
     Route::get('campaigns/{campaign}', [App\Http\Controllers\Admin\CampaignController::class, 'campaignShow'])->name('admin.campaigns.show');
     Route::get('campaigns/{campaign}/performance', [App\Http\Controllers\Admin\CampaignController::class, 'campaignPerformance'])->name('admin.campaigns.performance');
     Route::post('campaigns/{campaign}/pause', [App\Http\Controllers\Admin\CampaignController::class, 'pauseCampaign'])->name('admin.campaigns.pause');

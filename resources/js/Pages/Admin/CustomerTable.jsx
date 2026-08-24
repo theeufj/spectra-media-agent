@@ -77,6 +77,12 @@ const CustomerTable = ({ customers, plans = [] }) => {
                 View
             </Link>
             <Link
+                href={route('admin.customers.workspace', customer.id)}
+                className="text-purple-600 hover:text-purple-900 font-medium"
+            >
+                Workspace
+            </Link>
+            <Link
                 href={route('admin.customers.credit-ledger', customer.id)}
                 className="text-blue-600 hover:text-blue-900 font-medium"
             >
