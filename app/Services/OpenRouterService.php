@@ -160,6 +160,44 @@ class OpenRouterService
         }
     }
 
+    /**
+     * Current credit balance, cached briefly. Null when unavailable — never
+     * let a billing-status call break anything.
+     *
+     * @return array{total: float, used: float, remaining: float}|null
+     */
+    public function creditBalance(): ?array
+    {
+        if (! $this->isConfigured()) {
+            return null;
+        }
+
+        try {
+            return \Illuminate\Support\Facades\Cache::remember('openrouter_credits', 300, function () {
+                $response = Http::withToken(config('services.openrouter.api_key'))
+                    ->timeout(15)
+                    ->get(self::BASE.'/credits');
+
+                if ($response->failed()) {
+                    return null;
+                }
+
+                $total = (float) $response->json('data.total_credits');
+                $used = (float) $response->json('data.total_usage');
+
+                return [
+                    'total' => $total,
+                    'used' => round($used, 2),
+                    'remaining' => round($total - $used, 2),
+                ];
+            });
+        } catch (\Throwable $e) {
+            Log::warning('OpenRouterService: credit check failed: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
     private function recordCost(string $model, string $operation, float $cost, array $context): void
     {
         try {

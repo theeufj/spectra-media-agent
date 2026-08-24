@@ -92,6 +92,22 @@ class OpenRouterProviderTest extends TestCase
         $this->assertSame('job-9', $result['operation_name']);
     }
 
+    public function test_credit_balance_parses_and_fails_soft(): void
+    {
+        Http::fake([
+            'openrouter.ai/api/v1/credits' => Http::response(['data' => ['total_credits' => 25, 'total_usage' => 12.9]]),
+        ]);
+
+        $balance = app(OpenRouterService::class)->creditBalance();
+
+        $this->assertSame(25.0, $balance['total']);
+        $this->assertSame(12.1, $balance['remaining']);
+
+        \Illuminate\Support\Facades\Cache::forget('openrouter_credits');
+        Http::fake(['openrouter.ai/api/v1/credits' => Http::response(null, 500)]);
+        $this->assertNull(app(OpenRouterService::class)->creditBalance());
+    }
+
     public function test_grok_videos_skip_the_veo_only_extension_and_revoice_steps(): void
     {
         $customer = Customer::factory()->create();

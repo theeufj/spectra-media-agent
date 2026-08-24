@@ -3,7 +3,7 @@ import { Head, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SideNav from './SideNav';
 
-export default function Settings({ settings, campaignModeDescription, imagePromptDefault = '', imagePromptCustom = '', imageModel = '', lastImageGeneration = null, videoPromptDefault = '', videoPromptCustom = '', videoModel = '', lastVideoGeneration = null, adCopyDirectives = '', adCopyModel = '' }) {
+export default function Settings({ settings, campaignModeDescription, imagePromptDefault = '', imagePromptCustom = '', imageModel = '', lastImageGeneration = null, videoPromptDefault = '', videoPromptCustom = '', videoModel = '', lastVideoGeneration = null, adCopyDirectives = '', adCopyModel = '', openRouterCredits = null }) {
     const deploymentSetting = settings.find(s => s.key === 'deployment_enabled');
     const campaignTestingModeSetting = settings.find(s => s.key === 'campaign_testing_mode');
     const managedBillingSetting = settings.find(s => s.key === 'managed_billing_enabled');
@@ -330,6 +330,16 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                         The prompt every AI-generated image is built from. Edit it here to change creative
                                         quality platform-wide — no deploy needed. Leave blank to use the built-in default.
                                     </p>
+
+                                    {openRouterCredits && (
+                                        <div className={`mb-3 p-3 rounded-lg text-sm flex flex-wrap gap-x-6 gap-y-1 ${openRouterCredits.remaining < 10 ? 'bg-yellow-50 text-yellow-800 border border-yellow-200' : 'bg-gray-50 text-gray-600'}`}>
+                                            <span>
+                                                OpenRouter credits: <strong>${openRouterCredits.remaining.toFixed(2)} remaining</strong>
+                                                {' '}(${openRouterCredits.used.toFixed(2)} used of ${openRouterCredits.total.toFixed(2)})
+                                            </span>
+                                            {openRouterCredits.remaining < 10 && <span>Running low — top up to keep Grok as the creative provider; generation falls back to Gemini/Veo at $0.</span>}
+                                        </div>
+                                    )}
 
                                     <div className="mb-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600 flex flex-wrap gap-x-6 gap-y-1">
                                         <span>Model in use: <strong className="font-mono">{imageModel}</strong></span>

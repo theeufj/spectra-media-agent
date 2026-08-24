@@ -91,6 +91,23 @@ Schedule::job(new VerifyGtmInstallation)->dailyAt('05:15')->withoutOverlapping()
 // Nothing else reconciles that state, so it is terminal without this.
 Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 
+// Creative generation runs on prepaid OpenRouter credits; at $0 the pipeline
+// silently falls back to the Google stack. Tell admins before that happens.
+Schedule::call(function () {
+    $credits = app(\App\Services\OpenRouterService::class)->creditBalance();
+    $threshold = (float) env('OPENROUTER_LOW_CREDIT_ALERT', 10);
+
+    if ($credits && $credits['remaining'] < $threshold) {
+        \App\Notifications\CriticalAgentAlert::deliver(
+            'openrouter_credits_low',
+            sprintf('OpenRouter credits low: $%.2f remaining', $credits['remaining']),
+            sprintf('Creative generation (Grok images + video) runs on these credits — at $0 it falls back to Gemini/Veo. $%.2f used of $%.2f. Top up at openrouter.ai.', $credits['used'], $credits['total']),
+            $credits,
+            \App\Models\NotificationTemplate::RECIPIENTS_ADMINS
+        );
+    }
+})->name('openrouter-low-credit-check')->dailyAt('07:30');
+
 // Campaigns queued for manual admin deployment promise the customer "within
 // 24 hours". This is what holds the admin team to it: a daily re-alert for
 // anything still waiting past that window (the original alert was a single

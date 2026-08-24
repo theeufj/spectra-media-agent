@@ -50,6 +50,7 @@ class SettingsController extends Controller
                 ? config('ai.models.image_grok').' via OpenRouter (fallback: '.config('ai.models.image').')'
                 : config('ai.models.image'),
             'lastImageGeneration' => $lastImageGeneration,
+            'openRouterCredits' => app(\App\Services\OpenRouterService::class)->creditBalance(),
             'adCopyDirectives' => (string) Setting::get(\App\Prompts\AdCopyPrompt::DIRECTIVES_SETTING, ''),
             'adCopyModel' => config('ai.models.default'),
             'videoPromptDefault' => \App\Prompts\VideoFromScriptPrompt::defaultTemplate(),
