@@ -91,16 +91,19 @@ class CustomerController extends Controller
                         'id', 'campaign_id', 'platform', 'campaign_type', 'daily_budget',
                         'status', 'signed_off_at', 'deployed_at', 'deployment_status',
                         'deployment_error', 'ad_copy_strategy', 'imagery_strategy',
-                        'video_strategy', 'created_at',
+                        'video_strategy', 'bidding_strategy', 'created_at',
                     ])->with([
                         'adCopies',
-                        'imageCollaterals' => fn ($iq) => $iq->where('is_active', true)->latest(),
-                        'videoCollaterals' => fn ($vq) => $vq->where('is_active', true)->latest(),
+                        // Inactive rows included: superseded creative (a refined
+                        // image deactivates its parent) is exactly what an admin
+                        // reviewing history needs to see.
+                        'imageCollaterals' => fn ($iq) => $iq->latest(),
+                        'videoCollaterals' => fn ($vq) => $vq->latest(),
                     ]);
                 },
                 // Campaign-level media: wizard uploads, AI seeds, shared videos.
-                'imageCollaterals' => fn ($iq) => $iq->whereNull('strategy_id')->where('is_active', true)->latest(),
-                'videoCollaterals' => fn ($vq) => $vq->whereNull('strategy_id')->where('is_active', true)->latest(),
+                'imageCollaterals' => fn ($iq) => $iq->whereNull('strategy_id')->latest(),
+                'videoCollaterals' => fn ($vq) => $vq->whereNull('strategy_id')->latest(),
             ])
             ->get();
 
@@ -110,15 +113,42 @@ class CustomerController extends Controller
             ->limit(24)
             ->get(['id', 'cloudfront_url', 'classification', 'source_page_url', 'status', 'created_at']);
 
+        // The knowledge base is what every campaign is written FROM — a bad
+        // crawl surfaces here first. Excerpts only; full content by request.
+        $knowledgePages = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
+            ->latest()
+            ->limit(150)
+            ->get(['id', 'url', 'source_type', 'original_filename', 'created_at', \Illuminate\Support\Facades\DB::raw('length(content) as content_length'), \Illuminate\Support\Facades\DB::raw('left(content, 300) as excerpt')]);
+
+        $keywords = \App\Models\Keyword::where('customer_id', $customer->id)
+            ->orderByDesc('created_at')
+            ->limit(200)
+            ->get(['id', 'campaign_id', 'keyword_text', 'match_type', 'status', 'source', 'intent', 'funnel_stage', 'quality_score']);
+
         return Inertia::render('Admin/CustomerWorkspace', [
             'customer' => $customer->only(['id', 'name', 'business_name', 'website', 'country', 'currency_code', 'created_at']),
             'brandGuideline' => $brandGuideline,
             'campaigns' => $campaigns,
             'harvestedAssets' => $harvested,
+            'knowledgePages' => $knowledgePages,
+            'creativeBriefs' => \App\Models\CreativeBrief::where('customer_id', $customer->id)->latest()->limit(50)->get(),
+            'personas' => \App\Models\Persona::where('customer_id', $customer->id)->latest()->get(),
+            'proposals' => \App\Models\Proposal::where('customer_id', $customer->id)->latest()
+                ->get(['id', 'client_name', 'industry', 'budget', 'goals', 'platforms', 'status', 'created_at']),
+            'keywords' => $keywords,
+            'negativeKeywordLists' => \App\Models\NegativeKeywordList::where('customer_id', $customer->id)->get(),
+            'products' => \App\Models\Product::where('customer_id', $customer->id)->latest()->limit(12)
+                ->get(['id', 'title', 'image_link', 'price', 'sale_price', 'currency_code', 'availability', 'brand']),
+            'seoAudits' => \App\Models\SeoAudit::where('customer_id', $customer->id)->latest()->limit(5)
+                ->get(['id', 'url', 'score', 'created_at']),
+            'landingPageAudits' => \App\Models\LandingPageAudit::where('customer_id', $customer->id)->latest()->limit(5)
+                ->get(['id', 'url', 'message_match_score', 'cta_count', 'primary_cta', 'created_at']),
             'knowledge' => [
                 'pages' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)->count(),
                 'last_crawled_at' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)->latest()->value('created_at'),
                 'harvested_total' => \App\Models\HarvestedAsset::where('customer_id', $customer->id)->count(),
+                'keywords_total' => \App\Models\Keyword::where('customer_id', $customer->id)->count(),
+                'products_total' => \App\Models\Product::where('customer_id', $customer->id)->count(),
             ],
         ]);
     }

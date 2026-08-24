@@ -9,7 +9,12 @@ import SideNav from './SideNav';
  * catching a bad extraction or off-brand creative before the customer does.
  */
 export default function CustomerWorkspace({ auth }) {
-    const { customer, brandGuideline, campaigns, harvestedAssets, knowledge } = usePage().props;
+    const {
+        customer, brandGuideline, campaigns, harvestedAssets, knowledge,
+        knowledgePages = [], creativeBriefs = [], personas = [], proposals = [],
+        keywords = [], negativeKeywordLists = [], products = [], seoAudits = [],
+        landingPageAudits = [],
+    } = usePage().props;
     const [lightbox, setLightbox] = useState(null);
 
     return (
@@ -42,11 +47,13 @@ export default function CustomerWorkspace({ auth }) {
                     </div>
 
                     {/* Knowledge summary strip */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                         <StatTile label="Knowledge pages" value={knowledge.pages} warn={knowledge.pages < 5} />
                         <StatTile label="Last crawled" value={knowledge.last_crawled_at ? new Date(knowledge.last_crawled_at).toLocaleDateString() : 'never'} warn={!knowledge.last_crawled_at} />
                         <StatTile label="Harvested assets" value={knowledge.harvested_total} />
                         <StatTile label="Campaigns" value={campaigns.length} />
+                        <StatTile label="Keywords" value={knowledge.keywords_total} />
+                        <StatTile label="Products" value={knowledge.products_total} />
                     </div>
 
                     {/* Brand guidelines */}
@@ -174,6 +181,23 @@ export default function CustomerWorkspace({ auth }) {
                                         </Collapsible>
                                     )}
 
+                                    {(strategy.bidding_strategy?.keywords || []).length > 0 && (
+                                        <Collapsible label={`Keywords (${strategy.bidding_strategy.keywords.length}) — what this strategy bids on`}>
+                                            <div className="flex flex-wrap gap-1.5">
+                                                {strategy.bidding_strategy.keywords.map((kw, i) => {
+                                                    const text = typeof kw === 'string' ? kw : kw.text;
+                                                    const match = typeof kw === 'object' ? kw.match_type : null;
+
+                                                    return (
+                                                        <span key={i} className="px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700">
+                                                            {text}{match ? ` · ${match}` : ''}
+                                                        </span>
+                                                    );
+                                                })}
+                                            </div>
+                                        </Collapsible>
+                                    )}
+
                                     {(strategy.ad_copies || []).map((copy) => (
                                         <Collapsible key={copy.id} label={`Ad copy — ${copy.platform}${copy.should_deploy === false ? ' (not deploying)' : ''}`}>
                                             <div className="grid sm:grid-cols-2 gap-4">
@@ -215,6 +239,177 @@ export default function CustomerWorkspace({ auth }) {
                                         <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]">{asset.classification}</span>
                                     </button>
                                 ))}
+                            </div>
+                        </section>
+                    )}
+                    {/* Knowledge base content */}
+                    <section className="bg-white shadow-sm rounded-lg p-6">
+                        <h2 className="text-lg font-semibold text-gray-900 mb-1">Knowledge Base</h2>
+                        <p className="text-xs text-gray-500 mb-4">
+                            What the AI knows about this business — every campaign is written from this text.
+                            Showing {knowledgePages.length} of {knowledge.pages} entries.
+                        </p>
+                        {knowledgePages.length === 0 ? (
+                            <p className="text-sm text-red-600">Empty. Anything generated for this customer is written blind.</p>
+                        ) : (
+                            <div className="divide-y divide-gray-100">
+                                {knowledgePages.map((page) => (
+                                    <div key={page.id} className="py-2">
+                                        <Collapsible label={`${page.url || page.original_filename || 'Untitled'} · ${page.source_type || 'crawl'} · ${Math.round((page.content_length || 0) / 100) / 10}k chars`}>
+                                            <p className="text-gray-600 whitespace-pre-wrap">{page.excerpt}{(page.content_length || 0) > 300 ? '…' : ''}</p>
+                                        </Collapsible>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+
+                    {/* Keyword research */}
+                    {(keywords.length > 0 || negativeKeywordLists.length > 0) && (
+                        <section className="bg-white shadow-sm rounded-lg p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-1">Keyword Research</h2>
+                            <p className="text-xs text-gray-500 mb-4">Latest {keywords.length} of {knowledge.keywords_total} — this is what the money bids on.</p>
+                            {keywords.length > 0 && (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full text-sm">
+                                        <thead>
+                                            <tr className="text-left text-xs text-gray-500 uppercase tracking-wide">
+                                                <th className="py-1.5 pr-4">Keyword</th>
+                                                <th className="py-1.5 pr-4">Match</th>
+                                                <th className="py-1.5 pr-4">Status</th>
+                                                <th className="py-1.5 pr-4">Intent</th>
+                                                <th className="py-1.5 pr-4">Funnel</th>
+                                                <th className="py-1.5 pr-4">QS</th>
+                                                <th className="py-1.5">Source</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {keywords.map((kw) => (
+                                                <tr key={kw.id}>
+                                                    <td className="py-1.5 pr-4 font-medium text-gray-900">{kw.keyword_text}</td>
+                                                    <td className="py-1.5 pr-4 text-gray-600">{kw.match_type || '—'}</td>
+                                                    <td className="py-1.5 pr-4"><StatusChip value={kw.status} /></td>
+                                                    <td className="py-1.5 pr-4 text-gray-600">{kw.intent || '—'}</td>
+                                                    <td className="py-1.5 pr-4 text-gray-600">{kw.funnel_stage || '—'}</td>
+                                                    <td className="py-1.5 pr-4 text-gray-600">{kw.quality_score ?? '—'}</td>
+                                                    <td className="py-1.5 text-gray-500 text-xs">{kw.source || '—'}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                            {negativeKeywordLists.map((list) => (
+                                <Collapsible key={list.id} label={`Negative list: ${list.name} (${(list.keywords || []).length} terms)`}>
+                                    <ChipList items={list.keywords} tone="red" />
+                                </Collapsible>
+                            ))}
+                        </section>
+                    )}
+
+                    {/* Personas */}
+                    {personas.length > 0 && (
+                        <section className="bg-white shadow-sm rounded-lg p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Personas</h2>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                {personas.map((persona) => (
+                                    <div key={persona.id} className={`border rounded-lg p-4 ${persona.is_active === false ? 'opacity-50 border-gray-100' : 'border-gray-200'}`}>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <p className="font-medium text-gray-900">{persona.name}</p>
+                                            <span className="text-xs text-gray-400">{persona.source}</span>
+                                        </div>
+                                        <p className="text-sm text-gray-600 mb-2">{persona.description}</p>
+                                        {persona.pain_points?.length > 0 && (
+                                            <Field label="Pain points"><BulletList items={persona.pain_points} /></Field>
+                                        )}
+                                        {persona.messaging_angle && (
+                                            <p className="text-xs text-gray-500 mt-2"><strong>Angle:</strong> {persona.messaging_angle}</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Creative briefs */}
+                    {creativeBriefs.length > 0 && (
+                        <section className="bg-white shadow-sm rounded-lg p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Creative Briefs</h2>
+                            <div className="space-y-2">
+                                {creativeBriefs.map((brief) => (
+                                    <Collapsible key={brief.id} label={`${brief.platform || '—'} · ${brief.brief_type || 'brief'} · ${brief.status}${brief.created_by_agent ? ` · by ${brief.created_by_agent}` : ''}`}>
+                                        <p className="whitespace-pre-wrap">{brief.ai_brief}</p>
+                                    </Collapsible>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Proposals */}
+                    {proposals.length > 0 && (
+                        <section className="bg-white shadow-sm rounded-lg p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Proposals</h2>
+                            <div className="divide-y divide-gray-100 text-sm">
+                                {proposals.map((proposal) => (
+                                    <div key={proposal.id} className="py-2 flex items-center justify-between gap-3 flex-wrap">
+                                        <div>
+                                            <p className="font-medium text-gray-900">{proposal.client_name} <span className="text-gray-400 font-normal">· {proposal.industry}</span></p>
+                                            <p className="text-xs text-gray-500">{proposal.goals}</p>
+                                        </div>
+                                        <div className="flex items-center gap-2 text-xs">
+                                            {proposal.budget && <span className="text-gray-600">${Number(proposal.budget).toLocaleString()}</span>}
+                                            <StatusChip value={proposal.status} />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* Products */}
+                    {products.length > 0 && (
+                        <section className="bg-white shadow-sm rounded-lg p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-1">Products</h2>
+                            <p className="text-xs text-gray-500 mb-4">Latest {products.length} of {knowledge.products_total} from the product feed.</p>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+                                {products.map((product) => (
+                                    <div key={product.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                                        {product.image_link
+                                            ? <img src={product.image_link} alt="" className="w-full h-24 object-cover" />
+                                            : <div className="w-full h-24 bg-gray-100 flex items-center justify-center text-gray-300 text-2xl">📦</div>}
+                                        <div className="p-2">
+                                            <p className="text-xs font-medium text-gray-900 truncate" title={product.title}>{product.title}</p>
+                                            <p className="text-xs text-gray-500">{product.sale_price || product.price} {product.currency_code} · {product.availability}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {/* SEO + landing page audits */}
+                    {(seoAudits.length > 0 || landingPageAudits.length > 0) && (
+                        <section className="bg-white shadow-sm rounded-lg p-6">
+                            <h2 className="text-lg font-semibold text-gray-900 mb-4">Site Audits</h2>
+                            <div className="grid md:grid-cols-2 gap-6 text-sm">
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">SEO audits</p>
+                                    {seoAudits.length === 0 ? <p className="text-gray-400">None run.</p> : seoAudits.map((audit) => (
+                                        <p key={audit.id} className="py-1 flex justify-between gap-2">
+                                            <span className="truncate text-gray-700">{audit.url}</span>
+                                            <span className={`font-semibold ${audit.score >= 70 ? 'text-green-600' : 'text-yellow-700'}`}>{audit.score}/100</span>
+                                        </p>
+                                    ))}
+                                </div>
+                                <div>
+                                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Landing page audits</p>
+                                    {landingPageAudits.length === 0 ? <p className="text-gray-400">None run.</p> : landingPageAudits.map((audit) => (
+                                        <p key={audit.id} className="py-1 flex justify-between gap-2">
+                                            <span className="truncate text-gray-700">{audit.url}</span>
+                                            <span className="text-gray-600">{audit.cta_count} CTAs{audit.message_match_score != null ? ` · match ${audit.message_match_score}` : ''}</span>
+                                        </p>
+                                    ))}
+                                </div>
                             </div>
                         </section>
                     )}
@@ -282,24 +477,37 @@ const Collapsible = ({ label, children }) => {
     );
 };
 
+const ImageThumb = ({ img, onOpen }) => (
+    <button onClick={() => onOpen(img.cloudfront_url)} className="relative group text-left">
+        <img src={img.cloudfront_url} alt="" className={`w-full h-24 object-cover rounded border border-gray-200 ${img.is_active ? '' : 'opacity-40'}`} />
+        <div className="absolute top-1 left-1 flex flex-col gap-0.5">
+            {img.is_seed && <span className="px-1.5 py-0.5 rounded bg-purple-600 text-white text-[10px]">seed</span>}
+            {img.should_deploy === false && !img.is_seed && img.is_active && <span className="px-1.5 py-0.5 rounded bg-gray-700 text-white text-[10px]">off</span>}
+            {(img.refinement_depth ?? 0) > 0 && <span className="px-1.5 py-0.5 rounded bg-amber-600 text-white text-[10px]">edit {img.refinement_depth}</span>}
+        </div>
+        <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]">{img.source || 'ai'}</span>
+    </button>
+);
+
 const MediaGrid = ({ images = [], videos = [], onOpen }) => {
     if (!images?.length && !videos?.length) return null;
 
+    const active = (images || []).filter(i => i.is_active);
+    const superseded = (images || []).filter(i => !i.is_active);
+
     return (
         <div>
-            {images?.length > 0 && (
+            {active.length > 0 && (
                 <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-3">
-                    {images.map((img) => (
-                        <button key={img.id} onClick={() => onOpen(img.cloudfront_url)} className="relative group text-left">
-                            <img src={img.cloudfront_url} alt="" className="w-full h-24 object-cover rounded border border-gray-200" />
-                            <div className="absolute top-1 left-1 flex flex-col gap-0.5">
-                                {img.is_seed && <span className="px-1.5 py-0.5 rounded bg-purple-600 text-white text-[10px]">seed</span>}
-                                {img.should_deploy === false && !img.is_seed && <span className="px-1.5 py-0.5 rounded bg-gray-700 text-white text-[10px]">off</span>}
-                            </div>
-                            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/60 text-white text-[10px]">{img.source || 'ai'}</span>
-                        </button>
-                    ))}
+                    {active.map((img) => <ImageThumb key={img.id} img={img} onOpen={onOpen} />)}
                 </div>
+            )}
+            {superseded.length > 0 && (
+                <Collapsible label={`Superseded creative (${superseded.length}) — earlier versions replaced by refinement`}>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                        {superseded.map((img) => <ImageThumb key={img.id} img={img} onOpen={onOpen} />)}
+                    </div>
+                </Collapsible>
             )}
             {videos?.length > 0 && (
                 <ul className="space-y-1 text-sm">

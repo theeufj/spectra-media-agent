@@ -79,6 +79,20 @@ class CustomerWorkspaceTest extends TestCase
             'source' => 'uploaded',
         ]);
 
+        \App\Models\KnowledgeBase::create([
+            'user_id' => User::factory()->create()->id,
+            'customer_id' => $customer->id,
+            'url' => 'https://example.com/about',
+            'content' => str_repeat('About the business. ', 40),
+        ]);
+
+        \App\Models\Keyword::create([
+            'customer_id' => $customer->id,
+            'keyword_text' => 'buy leather boots',
+            'match_type' => 'PHRASE',
+            'status' => 'active',
+        ]);
+
         $this->actingAs($this->admin())
             ->get(route('admin.customers.workspace', $customer))
             ->assertOk()
@@ -89,6 +103,13 @@ class CustomerWorkspaceTest extends TestCase
                 ->has('campaigns.0.strategies', 1)
                 ->has('campaigns.0.strategies.0.image_collaterals', 1)
                 ->has('campaigns.0.image_collaterals', 1)
+                ->has('knowledgePages', 1)
+                ->where('knowledgePages.0.url', 'https://example.com/about')
+                ->has('keywords', 1)
+                ->has('personas')
+                ->has('creativeBriefs')
+                ->has('proposals')
+                ->has('products')
                 ->has('knowledge.pages'));
     }
 
