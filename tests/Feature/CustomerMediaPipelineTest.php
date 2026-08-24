@@ -198,6 +198,37 @@ class CustomerMediaPipelineTest extends TestCase
         $this->assertSame('harvested', $seed->source);
     }
 
+    public function test_stale_collateral_errors_are_hidden_once_the_collateral_exists(): void
+    {
+        [$user, $customer] = $this->actor();
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        $strategy = Strategy::factory()->create([
+            'campaign_id' => $campaign->id,
+            'platform' => 'Google Ads',
+            'signed_off_at' => now(),
+            'collateral_errors' => [
+                'ad_copy' => 'Failed to generate approved ad copy after 10 attempts. Last violations: null',
+                'images' => 'Image generation failed.',
+            ],
+        ]);
+
+        // Ad copy exists now — its old failure is noise. No images exist —
+        // that failure is still true.
+        \App\Models\AdCopy::create([
+            'strategy_id' => $strategy->id,
+            'platform' => 'Google Ads',
+            'headlines' => ['Real Headline'],
+            'descriptions' => ['Real description.'],
+        ]);
+
+        $response = $this->actingAs($user)->getJson(route('api.collateral.show', $strategy));
+
+        $response->assertOk();
+        $errors = $response->json('collateralErrors');
+        $this->assertArrayNotHasKey('ad_copy', $errors);
+        $this->assertArrayHasKey('images', $errors);
+    }
+
     public function test_onboarding_extraction_kicks_off_the_website_asset_harvest(): void
     {
         Queue::fake();

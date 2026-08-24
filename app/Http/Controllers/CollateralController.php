@@ -69,7 +69,7 @@ class CollateralController extends Controller
             'adCopy' => $adCopy,
             'imageCollaterals' => $imageCollaterals,
             'videoCollaterals' => $videoCollaterals,
-            'collateralErrors' => $strategy->collateral_errors ?? [],
+            'collateralErrors' => $this->liveCollateralErrors($strategy, $adCopy, $imageCollaterals, $videoCollaterals),
             // Teammate-aware: a member on a company plan has access through
             // the owner's subscription.
             'hasActiveSubscription' => $user->hasSubscriptionAccess($campaign->customer),
@@ -103,11 +103,34 @@ class CollateralController extends Controller
 
         $strategy->load(['adCopies', 'imageCollaterals', 'videoCollaterals']);
 
+        $adCopy = $strategy->adCopies->where('platform', $strategy->platform)->first();
+        $imageCollaterals = ImageCollateral::forStrategy($strategy)->where('is_active', true)->get();
+        $videoCollaterals = VideoCollateral::forStrategy($strategy)->where('is_active', true)->get();
+
         return response()->json([
-            'adCopy' => $strategy->adCopies->where('platform', $strategy->platform)->first(),
-            'imageCollaterals' => ImageCollateral::forStrategy($strategy)->where('is_active', true)->get(),
-            'videoCollaterals' => VideoCollateral::forStrategy($strategy)->where('is_active', true)->get(),
-            'collateralErrors' => $strategy->collateral_errors ?? [],
+            'adCopy' => $adCopy,
+            'imageCollaterals' => $imageCollaterals,
+            'videoCollaterals' => $videoCollaterals,
+            'collateralErrors' => $this->liveCollateralErrors($strategy, $adCopy, $imageCollaterals, $videoCollaterals),
         ]);
+    }
+
+    /**
+     * Stored generation failures that are still true — i.e. the collateral in
+     * question is actually missing. Errors persist from old runs (only a
+     * later success of that exact generator clears them), so an 11-day-old
+     * "ad copy failed" banner was greeting users whose ad copy had long since
+     * generated fine.
+     */
+    private function liveCollateralErrors(Strategy $strategy, $adCopy, $imageCollaterals, $videoCollaterals): array
+    {
+        return collect($strategy->collateral_errors ?? [])
+            ->reject(fn ($message, $key) => match (true) {
+                str_contains($key, 'ad_copy') => $adCopy !== null,
+                str_contains($key, 'image') => $imageCollaterals->isNotEmpty(),
+                str_contains($key, 'video') => $videoCollaterals->isNotEmpty(),
+                default => false,
+            })
+            ->all();
     }
 }
