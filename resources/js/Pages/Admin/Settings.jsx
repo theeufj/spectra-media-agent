@@ -3,7 +3,7 @@ import { Head, useForm } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import SideNav from './SideNav';
 
-export default function Settings({ settings, campaignModeDescription, imagePromptDefault = '', imagePromptCustom = '', imageModel = '', lastImageGeneration = null }) {
+export default function Settings({ settings, campaignModeDescription, imagePromptDefault = '', imagePromptCustom = '', imageModel = '', lastImageGeneration = null, videoPromptDefault = '', videoPromptCustom = '', videoModel = '', lastVideoGeneration = null, adCopyDirectives = '', adCopyModel = '' }) {
     const deploymentSetting = settings.find(s => s.key === 'deployment_enabled');
     const campaignTestingModeSetting = settings.find(s => s.key === 'campaign_testing_mode');
     const managedBillingSetting = settings.find(s => s.key === 'managed_billing_enabled');
@@ -21,6 +21,8 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
         creative_boost_video_generations: parseInt(boostVideosSetting?.value) || 5,
         creative_boost_refinements: parseInt(boostRefinementsSetting?.value) || 25,
         image_prompt_template: imagePromptCustom || '',
+        video_prompt_template: videoPromptCustom || '',
+        ad_copy_directives: adCopyDirectives || '',
     });
 
     const handleSubmit = (e) => {
@@ -377,6 +379,84 @@ export default function Settings({ settings, campaignModeDescription, imagePromp
                                             )}
                                         </div>
                                     </div>
+                                </div>
+
+                                {/* Video Generation Prompt */}
+                                <div className="border-b border-gray-200 pb-6">
+                                    <h4 className="text-lg font-medium text-gray-900 mb-2">Video Generation Prompt</h4>
+                                    <p className="text-sm text-gray-500 mb-3">
+                                        The prompt every AI-generated video is built from. Leave blank to use the built-in default.
+                                    </p>
+
+                                    <div className="mb-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600 flex flex-wrap gap-x-6 gap-y-1">
+                                        <span>Model in use: <strong className="font-mono">{videoModel}</strong></span>
+                                        {lastVideoGeneration ? (
+                                            <span>
+                                                Last generation: <strong className="font-mono">{lastVideoGeneration.model}</strong>
+                                                {' '}on {new Date(lastVideoGeneration.created_at).toLocaleString()}
+                                            </span>
+                                        ) : (
+                                            <span>No video generations recorded yet.</span>
+                                        )}
+                                    </div>
+
+                                    <textarea
+                                        rows={12}
+                                        value={data.video_prompt_template}
+                                        onChange={(e) => setData('video_prompt_template', e.target.value)}
+                                        placeholder={videoPromptDefault}
+                                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
+                                    />
+
+                                    <div className="mt-2 flex items-start justify-between gap-4 flex-wrap">
+                                        <p className="text-xs text-gray-500">
+                                            Placeholders filled per generation:{' '}
+                                            <code className="bg-gray-100 px-1 rounded">{'{{voiceover_script}}'}</code> (narration — required),{' '}
+                                            <code className="bg-gray-100 px-1 rounded">{'{{creative_strategy}}'}</code> (the strategy's video brief),{' '}
+                                            <code className="bg-gray-100 px-1 rounded">{'{{ad_text}}'}</code> (approved copy for the closing end-card).
+                                        </p>
+                                        <div className="flex gap-3 text-xs">
+                                            {!data.video_prompt_template && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setData('video_prompt_template', videoPromptDefault)}
+                                                    className="text-flame-orange-600 hover:text-flame-orange-800 font-medium"
+                                                >
+                                                    Copy default in to edit
+                                                </button>
+                                            )}
+                                            {data.video_prompt_template && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setData('video_prompt_template', '')}
+                                                    className="text-gray-500 hover:text-gray-700 font-medium"
+                                                >
+                                                    Reset to default
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Ad Copy House Style */}
+                                <div className="border-b border-gray-200 pb-6">
+                                    <h4 className="text-lg font-medium text-gray-900 mb-2">Ad Copy House Style</h4>
+                                    <p className="text-sm text-gray-500 mb-3">
+                                        Style directives injected into every ad copy generation, for every customer —
+                                        tone rules, banned phrases, structural preferences. Unlike the prompts above,
+                                        this adds to the copy prompt rather than replacing it: the platform rules,
+                                        response format and rejection-retry machinery stay intact.
+                                    </p>
+                                    <div className="mb-3 p-3 bg-gray-50 rounded-lg text-sm text-gray-600">
+                                        Model in use: <strong className="font-mono">{adCopyModel}</strong>
+                                    </div>
+                                    <textarea
+                                        rows={6}
+                                        value={data.ad_copy_directives}
+                                        onChange={(e) => setData('ad_copy_directives', e.target.value)}
+                                        placeholder={'e.g.\n- Lead with the outcome, not the feature\n- Never use "unlock", "elevate" or "supercharge"\n- Headlines under 25 characters where possible\n- Australian English spelling'}
+                                        className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm font-mono"
+                                    />
                                 </div>
 
                                 {/* Save Button */}

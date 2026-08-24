@@ -68,6 +68,43 @@ class CreativePromptSettingTest extends TestCase
         $this->assertSame(ImagePrompt::defaultTemplate(), ImagePrompt::activeTemplate());
     }
 
+    public function test_video_generation_uses_default_then_override(): void
+    {
+        $prompt = (new \App\Prompts\VideoFromScriptPrompt('Fast-paced product shots.', 'Welcome to Acme.'))->getPrompt();
+        $this->assertStringContainsString('Welcome to Acme.', $prompt);
+        $this->assertStringContainsString('VISUAL STORYTELLING', $prompt);
+        $this->assertStringNotContainsString('{{voiceover_script}}', $prompt);
+
+        Setting::set(\App\Prompts\VideoFromScriptPrompt::TEMPLATE_SETTING, "Documentary style.\n{{voiceover_script}}", 'string');
+        $prompt = (new \App\Prompts\VideoFromScriptPrompt('x', 'Welcome to Acme.'))->getPrompt();
+        $this->assertStringContainsString('Documentary style.', $prompt);
+        $this->assertStringContainsString('Welcome to Acme.', $prompt);
+    }
+
+    public function test_video_template_without_script_placeholder_is_rejected(): void
+    {
+        $this->actingAs($this->admin())->post(route('admin.settings.update'), [
+            'deployment_enabled' => true,
+            'video_prompt_template' => 'Just pretty scenes.',
+        ])->assertRedirect();
+
+        $this->assertSame('', (string) Setting::get(\App\Prompts\VideoFromScriptPrompt::TEMPLATE_SETTING, ''));
+    }
+
+    public function test_ad_copy_directives_are_injected_when_set(): void
+    {
+        $prompt = (new \App\Prompts\AdCopyPrompt('Sell boots.', 'Google Ads'))->getPrompt();
+        $this->assertStringNotContainsString('HOUSE STYLE DIRECTIVES', $prompt);
+
+        Setting::set(\App\Prompts\AdCopyPrompt::DIRECTIVES_SETTING, 'Australian English spelling. Never say "unlock".', 'string');
+
+        $prompt = (new \App\Prompts\AdCopyPrompt('Sell boots.', 'Google Ads'))->getPrompt();
+        $this->assertStringContainsString('HOUSE STYLE DIRECTIVES', $prompt);
+        $this->assertStringContainsString('Never say "unlock"', $prompt);
+        // The machine contract survives the injection.
+        $this->assertStringContainsString('RESPONSE FORMAT', $prompt);
+    }
+
     public function test_a_template_without_the_strategy_placeholder_is_rejected(): void
     {
         $admin = $this->admin();

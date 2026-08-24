@@ -58,7 +58,9 @@ return [
         'image' => env('AI_MODEL_IMAGE', 'gemini-3.1-flash-image'),
 
         /*
-         * Video generation model.
+         * Video generation model. Veo 3.1 is the current generation as of
+         * 2026-08 (the March 2026 refresh added Lite/Fast variants but no
+         * new major version).
          */
         'video' => env('AI_MODEL_VIDEO', 'veo-3.1-generate-001'),
 
@@ -115,7 +117,7 @@ return [
      * Pricing per 1M tokens (USD). Used to calculate costs stored in ai_costs.
      * Sourced from the Vertex / Gemini Enterprise Agent Platform pricing page
      * (verified 2026-07-19). Pro tiers use the <=200K-token rate; Flash uses the
-     * global rate. Veo is billed per second, not per token, so it stays at 0.
+     * global rate. Veo is billed per second — see video_cost_per_second below.
      */
     'pricing' => [
         'gemini-3.1-pro-preview' => ['input' => 2.00,   'output' => 12.00, 'cached' => 0.20],
@@ -142,6 +144,16 @@ return [
         'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'text-embedding-005' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'veo-3.1-generate-001' => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
+    ],
+
+    /*
+     * Per-second billing for video models (USD). Vertex Veo 3.1 with audio at
+     * 720p/1080p is $0.40/s (verified 2026-08-24). Recorded at dispatch via
+     * cost_override — the token-based table above prices every Veo run at $0.
+     */
+    'video_cost_per_second' => [
+        'veo-3.1-generate-001' => 0.40,
+        'default' => 0.40,
     ],
 
 ];

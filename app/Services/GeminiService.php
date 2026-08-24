@@ -881,9 +881,13 @@ class GeminiService
             $json = $response->json();
             Log::info('GeminiService: Veo response keys: '.implode(', ', array_keys($json ?? [])));
 
-            // Record a nominal cost entry for video generation dispatch (billed per second by Google)
+            // Video is billed per second, not per token — the token-based cost
+            // calc recorded every Veo generation as $0.
+            $seconds = (int) ($requestBody['parameters']['durationSeconds'] ?? 8);
+            $perSecond = (float) config("ai.video_cost_per_second.{$model}", config('ai.video_cost_per_second.default', 0));
             $this->recordCost($model, 'startVideoGeneration', [], 0, array_merge($context, [
-                'duration_seconds' => $parameters['durationSeconds'] ?? 8,
+                'duration_seconds' => $seconds,
+                'cost_override' => round($seconds * $perSecond, 6),
             ]));
 
             return $json['name'] ?? null;
@@ -1197,7 +1201,11 @@ class GeminiService
             $inputTokens = (int) ($usageMetadata['promptTokenCount'] ?? 0);
             $outputTokens = (int) ($usageMetadata['candidatesTokenCount'] ?? 0);
             $cachedTokens = (int) ($usageMetadata['cachedContentTokenCount'] ?? 0);
-            $cost = $this->calculateCost($model, $inputTokens, $outputTokens, $cachedTokens);
+            // Media billed by duration (video) carries an explicit cost; the
+            // token calc only applies where tokens are the billing unit.
+            $cost = array_key_exists('cost_override', $context)
+                ? (float) $context['cost_override']
+                : $this->calculateCost($model, $inputTokens, $outputTokens, $cachedTokens);
 
             AiCost::create([
                 'campaign_id' => $context['campaign_id'] ?? null,

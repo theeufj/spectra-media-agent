@@ -47,6 +47,14 @@ class SettingsController extends Controller
             'imagePromptCustom' => (string) Setting::get(\App\Prompts\ImagePrompt::TEMPLATE_SETTING, ''),
             'imageModel' => config('ai.models.image'),
             'lastImageGeneration' => $lastImageGeneration,
+            'adCopyDirectives' => (string) Setting::get(\App\Prompts\AdCopyPrompt::DIRECTIVES_SETTING, ''),
+            'adCopyModel' => config('ai.models.default'),
+            'videoPromptDefault' => \App\Prompts\VideoFromScriptPrompt::defaultTemplate(),
+            'videoPromptCustom' => (string) Setting::get(\App\Prompts\VideoFromScriptPrompt::TEMPLATE_SETTING, ''),
+            'videoModel' => config('ai.models.video'),
+            'lastVideoGeneration' => \App\Models\AiCost::where('operation', 'startVideoGeneration')
+                ->latest()
+                ->first(['model', 'created_at', 'cost']),
         ]);
     }
 
@@ -61,6 +69,8 @@ class SettingsController extends Controller
             'creative_boost_video_generations' => 'sometimes|integer|min:0',
             'creative_boost_refinements' => 'sometimes|integer|min:0',
             'image_prompt_template' => 'sometimes|nullable|string|max:20000',
+            'video_prompt_template' => 'sometimes|nullable|string|max:20000',
+            'ad_copy_directives' => 'sometimes|nullable|string|max:10000',
         ]);
 
         Setting::set('deployment_enabled', $request->deployment_enabled, 'boolean');
@@ -95,6 +105,26 @@ class SettingsController extends Controller
             }
 
             Setting::set(\App\Prompts\ImagePrompt::TEMPLATE_SETTING, $template, 'string', 'Custom creative generation prompt (blank = built-in default)');
+        }
+
+        // Video prompt — same rules: blank = default, and the visuals must
+        // follow the narration, so the script placeholder is required.
+        if ($request->has('video_prompt_template')) {
+            $template = trim((string) $request->input('video_prompt_template'));
+
+            if ($template !== '' && ! str_contains($template, '{{voiceover_script}}')) {
+                return redirect()->back()->with('flash', [
+                    'type' => 'error',
+                    'message' => 'The video prompt must include the {{voiceover_script}} placeholder — without it the visuals have no connection to the narration.',
+                ]);
+            }
+
+            Setting::set(\App\Prompts\VideoFromScriptPrompt::TEMPLATE_SETTING, $template, 'string', 'Custom video generation prompt (blank = built-in default)');
+        }
+
+        // Ad copy house style — additive directives, no placeholders needed.
+        if ($request->has('ad_copy_directives')) {
+            Setting::set(\App\Prompts\AdCopyPrompt::DIRECTIVES_SETTING, trim((string) $request->input('ad_copy_directives')), 'string', 'House style directives injected into every ad copy prompt');
         }
 
         return redirect()->back()->with('flash', [

@@ -217,7 +217,12 @@ class GenerateVideo implements ShouldQueue
             // Step 3: Generate the final video prompt using the dedicated prompt class with actionable content
             // Note: VideoFromScriptPrompt might need update if we want to pass product context there too,
             // but usually the script is enough.
-            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $script))->getPrompt();
+            // Approved ad copy is the only text allowed on screen (a single
+            // short end-card) — mirrors the image pipeline's rule.
+            $endCardCopy = $this->strategy->adCopies()->first();
+            $endCardText = $endCardCopy ? trim(implode("\n", array_slice($endCardCopy->headlines ?? [], 0, 2))) : '';
+
+            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $script, $endCardText))->getPrompt();
             Log::info("Combined video prompt: {$videoPrompt}");
 
             // Step 4: Start the video generation and get the operation name + provider

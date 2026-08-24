@@ -2,7 +2,6 @@
 
 namespace App\Services\VideoGeneration;
 
-use App\Prompts\VideoGenerationPrompt;
 use App\Services\GeminiService;
 use App\Services\ViduService;
 use Illuminate\Support\Facades\Log;
@@ -26,7 +25,11 @@ class VideoGenerationService
      */
     public function startGeneration(string $topic, array $parameters = [], ?string $model = null, ?string $voiceoverScript = null): ?array
     {
-        $prompt = VideoGenerationPrompt::create($topic);
+        // The caller (GenerateVideo) already builds a complete prompt via
+        // VideoFromScriptPrompt. This used to be re-wrapped in a generic
+        // "Create a short, engaging video about {topic}" sentence — nesting a
+        // multi-paragraph brief inside a one-liner and duplicating its rules.
+        $prompt = $topic;
 
         // ── Primary: Veo ────────────────────────────────────────────────────
         $operationName = $this->geminiService->startVideoGeneration(

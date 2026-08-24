@@ -8,6 +8,15 @@ use Illuminate\Support\Facades\Log;
 
 class AdCopyPrompt
 {
+    /**
+     * Admin-editable house-style directives injected into every ad copy
+     * prompt (Admin → Settings). Unlike the image/video prompts this is an
+     * additive block, not a full template: the rest of this prompt carries
+     * machine contracts (the JSON response format, platform rules, the
+     * rejection-feedback loop) that a free-form edit could silently break.
+     */
+    public const DIRECTIVES_SETTING = 'ad_copy_directives';
+
     private string $strategyContent;
 
     private string $platform;
@@ -89,7 +98,14 @@ class AdCopyPrompt
             $personaContext .= '--- END PERSONA ---';
         }
 
+        // Admin-authored style rules apply to every customer's copy.
+        $directives = trim((string) \App\Models\Setting::get(self::DIRECTIVES_SETTING, ''));
+        $directivesBlock = $directives !== ''
+            ? "--- HOUSE STYLE DIRECTIVES (always follow) ---\n{$directives}\n--- END HOUSE STYLE ---\n\n"
+            : '';
+
         $basePrompt = "You are an expert copywriter specializing in {$this->platform} advertising.\n\n".
+                      $directivesBlock.
                       $brandContext."\n\n".
                       $competitorContext.
                       "--- PLATFORM RULES ---\n".
