@@ -198,6 +198,15 @@ class GenerateVideo implements ShouldQueue
 
             Log::info("Generated video script: {$script}");
 
+            // The script prompt sets a hard 35-word budget (15s canvas at
+            // ~2.4 words/sec). Models sometimes overrun anyway — make it
+            // visible when they do, since the overflow either rushes the
+            // read (Grok single-pass) or forces a Veo extension chain.
+            $scriptWords = str_word_count($script);
+            if ($scriptWords > 35) {
+                Log::warning("GenerateVideo: script overran the 35-word budget ({$scriptWords} words) for Strategy ID {$this->strategy->id}");
+            }
+
             // Step 2: Create a placeholder VideoCollateral record.
             //
             // strategy_id null on purpose: these are the campaign's two shared
