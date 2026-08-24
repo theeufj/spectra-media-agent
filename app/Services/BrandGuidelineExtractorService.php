@@ -55,6 +55,35 @@ class BrandGuidelineExtractorService
     /**
      * Extract brand guidelines from customer's website and knowledge base
      */
+    /**
+     * Join content chunks under a hard budget, keeping the caller's priority
+     * order and capping each chunk so one giant page can't crowd out the
+     * rest.
+     *
+     * The extractor used to concatenate everything unbounded: a 405-page
+     * store put 1.25M characters into a single prompt and extraction failed
+     * silently, so a customer with the RICHEST content got NO brand
+     * guidelines — while an 8-page site extracted at quality 96.
+     *
+     * @param  list<string>  $chunks
+     */
+    public static function budgetedContent(array $chunks, int $perChunk = 8000, int $total = 120000): string
+    {
+        $kept = [];
+        $used = 0;
+
+        foreach ($chunks as $chunk) {
+            if ($used >= $total) {
+                break;
+            }
+            $piece = mb_substr($chunk, 0, min($perChunk, $total - $used));
+            $kept[] = $piece;
+            $used += mb_strlen($piece);
+        }
+
+        return implode("\n\n---PAGE BREAK---\n\n", $kept);
+    }
+
     public function extractGuidelines(Customer $customer): ?BrandGuideline
     {
         try {
@@ -80,20 +109,21 @@ class BrandGuidelineExtractorService
                 END")
                 ->get(['url', 'content', 'page_type']);
 
-            $customerPageContent = $pages->map(function ($page) {
+            $customerPageChunks = $pages->map(function ($page) {
                 $typeLabel = strtoupper($page->page_type ?? 'UNKNOWN');
 
                 return "--- PAGE TYPE: {$typeLabel} | URL: {$page->url} ---\n\n{$page->content}";
-            })->implode("\n\n---PAGE BREAK---\n\n");
+            })->all();
 
-            $websiteContent = $customerPageContent;
+            $websiteContent = self::budgetedContent($customerPageChunks);
 
             // Fallback to KnowledgeBase if no CustomerPage data
             if (empty($websiteContent)) {
-                $userIds = $customer->users()->pluck('users.id');
-                $websiteContent = \App\Models\KnowledgeBase::where('customer_id', $customer->id)
-                    ->pluck('content')
-                    ->implode("\n\n---PAGE BREAK---\n\n");
+                $websiteContent = self::budgetedContent(
+                    \App\Models\KnowledgeBase::where('customer_id', $customer->id)
+                        ->pluck('content')
+                        ->all()
+                );
             }
 
             if (empty($websiteContent)) {
