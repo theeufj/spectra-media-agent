@@ -222,14 +222,16 @@ class GenerateVideo implements ShouldQueue
             $endCardCopy = $this->strategy->adCopies()->first();
             $endCardText = $endCardCopy ? trim(implode("\n", array_slice($endCardCopy->headlines ?? [], 0, 2))) : '';
 
-            // A Veo call produces at most 8 seconds, so the initial clip
-            // narrates only the first ~8s segment of the script. The full
-            // script is stored on the collateral row, and CheckVideoStatus
-            // chains extensions (ExtendVideoForScript) until every segment
-            // has been spoken — clips used to just end mid-sentence.
-            $firstSegment = ExtendVideoForScript::scriptSegments($script)[0] ?? $script;
+            // Provider-aware narration sizing: Grok generates up to 15s in a
+            // single pass with native audio, so it gets the full script. Veo
+            // caps at 8 seconds, so its initial clip narrates only the first
+            // segment and CheckVideoStatus chains extensions
+            // (ExtendVideoForScript) until every segment has been spoken.
+            $promptScript = config('ai.video_provider', 'grok') === 'grok'
+                ? $script
+                : (ExtendVideoForScript::scriptSegments($script)[0] ?? $script);
 
-            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $firstSegment, $endCardText))->getPrompt();
+            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $promptScript, $endCardText))->getPrompt();
             Log::info("Combined video prompt: {$videoPrompt}");
 
             // Step 4: Start the video generation and get the operation name + provider

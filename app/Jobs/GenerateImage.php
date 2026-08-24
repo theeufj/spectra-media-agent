@@ -181,12 +181,23 @@ class GenerateImage implements ShouldQueue
                         sleep($waitTime);
                     }
 
-                    // Use seed images as context if provided, otherwise generate from prompt only
+                    // Seeded generation stays on Gemini (reference-image
+                    // support). Fresh generation goes to the configured
+                    // provider — Grok via OpenRouter by default, chosen in the
+                    // 2026-08-24 shootout — with Gemini as automatic fallback.
                     if (! empty($seedContextImages)) {
                         Log::info('Generating image with '.count($seedContextImages).' seed image(s) as reference');
                         $imageData = $geminiService->refineImage($imagePrompt, $seedContextImages);
                     } else {
-                        $imageData = $geminiService->generateImage($imagePrompt);
+                        $imageData = null;
+                        if (config('ai.image_provider', 'grok') === 'grok') {
+                            $imageData = app(\App\Services\OpenRouterService::class)->generateImage($imagePrompt, [
+                                'campaign_id' => $this->campaign->id,
+                                'customer_id' => $this->campaign->customer_id,
+                                'task_type' => 'image_generation',
+                            ]);
+                        }
+                        $imageData ??= $geminiService->generateImage($imagePrompt);
                     }
 
                     if ($imageData && isset($imageData['data']) && isset($imageData['mimeType'])) {

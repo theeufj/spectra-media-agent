@@ -40,6 +40,9 @@ class FinalizeVideoNarration implements ShouldQueue
     {
         return $video
             && config('ai.video_narration_tts', true)
+            // Only the Veo chain suffers per-call narrator drift; Grok and
+            // Vidu produce one voice natively.
+            && ($video->provider ?? 'veo') === 'veo'
             && $video->status === 'completed'
             && filled($video->script)
             && is_null($video->narration_finalized_at)
@@ -104,6 +107,11 @@ class FinalizeVideoNarration implements ShouldQueue
             // Replace the audio track entirely (mixing would leak the old,
             // inconsistent voices). apad + -shortest: narration is padded
             // with silence to the video's length, output ends with the video.
+            // -shortest with stream copy is unreliable on its own: an
+            // unbounded apad emits audio forever while the muxer waits to
+            // interleave, and the process hangs. Bound the pad and add the
+            // fflags/interleave pair that makes -shortest honour the copied
+            // video stream's end.
             $ffmpeg = self::ffmpegPath();
             $result = Process::timeout(300)->run([
                 $ffmpeg, '-y',
@@ -111,7 +119,9 @@ class FinalizeVideoNarration implements ShouldQueue
                 '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', "{$dir}/voice.pcm",
                 '-map', '0:v', '-map', '1:a',
                 '-c:v', 'copy', '-c:a', 'aac', '-b:a', '128k',
-                '-af', 'apad',
+                '-af', 'apad=pad_dur=120',
+                '-fflags', '+shortest',
+                '-max_interleave_delta', '500M',
                 '-shortest',
                 "{$dir}/out.mp4",
             ]);

@@ -33,7 +33,9 @@ class CheckVideoStatus implements ShouldQueue
         try {
             $provider = $this->videoCollateral->provider ?? 'veo';
 
-            if ($provider === 'vidu') {
+            if ($provider === 'openrouter') {
+                $this->handleOpenRouter();
+            } elseif ($provider === 'vidu') {
                 $this->handleVidu($viduService);
             } else {
                 $this->handleVeo($geminiService);
@@ -104,6 +106,31 @@ class CheckVideoStatus implements ShouldQueue
         }
 
         $this->storeAndComplete($videoData, ['gemini_video_uri' => $videoUri]);
+    }
+
+    // ─── OpenRouter (Grok) ───────────────────────────────────────────────────
+
+    private function handleOpenRouter(): void
+    {
+        Log::info("CheckVideoStatus: Polling OpenRouter job: {$this->videoCollateral->operation_name}");
+
+        $result = app(\App\Services\OpenRouterService::class)
+            ->checkVideoStatus($this->videoCollateral->operation_name);
+
+        if ($result === null) {
+            Log::info('CheckVideoStatus: OpenRouter not ready yet — releasing with 60s delay.');
+            $this->release(60);
+
+            return;
+        }
+
+        if (isset($result['error'])) {
+            $this->videoCollateral->update(['status' => 'failed']);
+            throw new \Exception('OpenRouter video generation failed: '.$result['error']);
+        }
+
+        Log::info('CheckVideoStatus: OpenRouter video ready.');
+        $this->storeAndComplete($result['bytes'], []);
     }
 
     // ─── Vidu ────────────────────────────────────────────────────────────────

@@ -11,6 +11,7 @@ class VideoGenerationService
     public function __construct(
         private GeminiService $geminiService,
         private ViduService $viduService,
+        private \App\Services\OpenRouterService $openRouter,
     ) {}
 
     /**
@@ -31,7 +32,32 @@ class VideoGenerationService
         // multi-paragraph brief inside a one-liner and duplicating its rules.
         $prompt = $topic;
 
-        // ── Primary: Veo ────────────────────────────────────────────────────
+        // ── Primary: Grok via OpenRouter (default after the 2026-08-24
+        //    shootout: single-pass native audio = one narrator throughout,
+        //    where Veo needed an extension chain plus a TTS re-voice) ───────
+        if (config('ai.video_provider', 'grok') === 'grok' && $this->openRouter->isConfigured()) {
+            // One pass, capped at Grok's 15s — duration sized to the script.
+            $seconds = $voiceoverScript
+                ? (int) min(15, max(6, ceil(str_word_count($voiceoverScript) / 2.4)))
+                : 8;
+
+            $grokParams = [];
+            if (($parameters['aspectRatio'] ?? null) === '9:16') {
+                $grokParams['aspect_ratio'] = '9:16';
+            }
+
+            $jobId = $this->openRouter->startVideoGeneration($prompt, $seconds, $grokParams);
+
+            if ($jobId) {
+                Log::info("VideoGenerationService: Started via OpenRouter/Grok. Job: {$jobId}");
+
+                return ['provider' => 'openrouter', 'operation_name' => $jobId];
+            }
+
+            Log::warning('VideoGenerationService: Grok start failed — falling back to Veo.');
+        }
+
+        // ── Fallback: Veo ───────────────────────────────────────────────────
         $operationName = $this->geminiService->startVideoGeneration(
             $prompt,
             $model ?? config('ai.models.video'),

@@ -36,7 +36,8 @@ class SettingsController extends Controller
 
         // What creative generation actually ran last — the configured model
         // can differ from what history shows if the env changed recently.
-        $lastImageGeneration = \App\Models\AiCost::where('model', 'like', '%image%')
+        $lastImageGeneration = \App\Models\AiCost::where('operation', 'generateImage')
+            ->orWhere('model', 'like', '%image%')
             ->latest()
             ->first(['model', 'created_at', 'cost']);
 
@@ -45,13 +46,17 @@ class SettingsController extends Controller
             'campaignModeDescription' => \App\Services\CampaignStatusHelper::getModeDescription(),
             'imagePromptDefault' => \App\Prompts\ImagePrompt::defaultTemplate(),
             'imagePromptCustom' => (string) Setting::get(\App\Prompts\ImagePrompt::TEMPLATE_SETTING, ''),
-            'imageModel' => config('ai.models.image'),
+            'imageModel' => config('ai.image_provider', 'grok') === 'grok'
+                ? config('ai.models.image_grok').' via OpenRouter (fallback: '.config('ai.models.image').')'
+                : config('ai.models.image'),
             'lastImageGeneration' => $lastImageGeneration,
             'adCopyDirectives' => (string) Setting::get(\App\Prompts\AdCopyPrompt::DIRECTIVES_SETTING, ''),
             'adCopyModel' => config('ai.models.default'),
             'videoPromptDefault' => \App\Prompts\VideoFromScriptPrompt::defaultTemplate(),
             'videoPromptCustom' => (string) Setting::get(\App\Prompts\VideoFromScriptPrompt::TEMPLATE_SETTING, ''),
-            'videoModel' => config('ai.models.video'),
+            'videoModel' => config('ai.video_provider', 'grok') === 'grok'
+                ? config('ai.models.video_grok').' via OpenRouter (fallback: '.config('ai.models.video').')'
+                : config('ai.models.video'),
             'lastVideoGeneration' => \App\Models\AiCost::where('operation', 'startVideoGeneration')
                 ->latest()
                 ->first(['model', 'created_at', 'cost']),

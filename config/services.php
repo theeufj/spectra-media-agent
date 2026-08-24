@@ -38,6 +38,10 @@ return [
         'api_key' => env('VIDU_API_KEY'),
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+    ],
+
     'runway' => [
         'api_key' => env('RUNWAY_API_KEY'),
     ],

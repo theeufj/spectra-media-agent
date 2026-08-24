@@ -68,8 +68,17 @@ return [
          * Speech synthesis (video narration). A named Gemini TTS voice is
          * deterministic across calls — the property Veo's built-in narration
          * lacks, and the reason chained extensions changed voice mid-video.
+         * Only used on the Veo path; Grok video has single-pass native audio.
          */
         'tts' => env('AI_MODEL_TTS', 'gemini-2.5-flash-preview-tts'),
+
+        /*
+         * OpenRouter (Grok Imagine) models — the default creative providers
+         * after the 2026-08-24 shootout. Gemini/Veo remain as fallbacks and
+         * for reference-image work.
+         */
+        'image_grok' => env('AI_MODEL_IMAGE_GROK', 'x-ai/grok-imagine-image-2.0'),
+        'video_grok' => env('AI_MODEL_VIDEO_GROK', 'x-ai/grok-imagine-video-1.5'),
 
     ],
 
@@ -162,8 +171,26 @@ return [
      */
     'video_cost_per_second' => [
         'veo-3.1-generate-001' => 0.40,
+        // Grok 1.5 via OpenRouter: $0.08/s at 480p, $0.25/s at 1080p; 720p
+        // rate unpublished — estimated between the two.
+        'x-ai/grok-imagine-video-1.5' => 0.15,
         'default' => 0.40,
     ],
+
+    /*
+     * Providers for fresh creative generation. 'grok' routes through
+     * OpenRouter (requires OPENROUTER_API_KEY) with automatic fallback to
+     * Gemini/Veo; 'gemini' uses the Google stack directly. Seeded image
+     * generation and image edits always use Gemini (reference-image
+     * support), regardless of this setting.
+     */
+    'image_provider' => env('AI_IMAGE_PROVIDER', 'grok'),
+    'video_provider' => env('AI_VIDEO_PROVIDER', 'grok'),
+
+    /*
+     * Flat per-image cost for Grok Imagine 2.0 at 1K via OpenRouter.
+     */
+    'openrouter_image_cost' => 0.04,
 
     /*
      * TTS voice for video narration. Any Gemini prebuilt voice name; the

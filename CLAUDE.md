@@ -61,12 +61,17 @@ Do:
 Never hardcode a model string. Always read `config('ai.models.*')`, which is env-overridable
 via `AI_MODEL_*`. Cost-per-token tables and the fallback chain also live in `config/ai.php`.
 
-Prefer the Gemini 3.x series. `models.image` is `gemini-3.1-flash-image` (Nano Banana 2),
-validated end to end 2026-08-24. Two 3.x-specific requirements live in `GeminiService`:
-image requests must send an explicit `imageConfig.aspect_ratio` (3.x does not default to
-square the way 2.5 did), and inline reference images are downscaled before sending
-(multi-MB payloads get an HTML 417 from Google's anti-abuse layer, not an API error).
-Keep both if you change the image model again.
+Prefer the Gemini 3.x series for text. Creative generation defaults to Grok Imagine via
+OpenRouter (`ai.image_provider` / `ai.video_provider` = 'grok', chosen in a 2026-08-24
+side-by-side shootout; needs `OPENROUTER_API_KEY`), with automatic fallback to the Google
+stack. Seeded/reference image work always uses Gemini `gemini-3.1-flash-image`
+(Nano Banana 2). Two 3.x-specific requirements live in `GeminiService`: image requests
+must send an explicit `imageConfig.aspect_ratio` (3.x does not default to square the way
+2.5 did), and inline reference images are downscaled before sending (multi-MB payloads
+get an HTML 417 from Google's anti-abuse layer). Veo-path videos chain 8s extensions to
+cover their script and are re-voiced with one Gemini TTS pass (Veo regenerates its
+narrator per call); Grok videos are single-pass with native audio, so neither step runs
+for them.
 
 ## Money
 

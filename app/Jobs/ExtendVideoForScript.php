@@ -76,6 +76,12 @@ class ExtendVideoForScript implements ShouldQueue
             return false;
         }
 
+        // Only Veo needs the chain: it caps at 8 seconds per call. Grok (via
+        // OpenRouter) and Vidu generate the full narration in one pass.
+        if (($video->provider ?? 'veo') !== 'veo') {
+            return false;
+        }
+
         $covered = ($video->extension_count ?? 0) + 1;
         $needed = count(self::scriptSegments($video->script));
 
