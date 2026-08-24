@@ -61,9 +61,12 @@ Do:
 Never hardcode a model string. Always read `config('ai.models.*')`, which is env-overridable
 via `AI_MODEL_*`. Cost-per-token tables and the fallback chain also live in `config/ai.php`.
 
-Prefer the Gemini 3.x series. `config/ai.php` still pins `models.image` to `gemini-2.5-flash-image`;
-that is a deliberate exception (3.x image output was not yet validated for this pipeline), so
-don't "fix" it without testing image generation end to end.
+Prefer the Gemini 3.x series. `models.image` is `gemini-3.1-flash-image` (Nano Banana 2),
+validated end to end 2026-08-24. Two 3.x-specific requirements live in `GeminiService`:
+image requests must send an explicit `imageConfig.aspect_ratio` (3.x does not default to
+square the way 2.5 did), and inline reference images are downscaled before sending
+(multi-MB payloads get an HTML 417 from Google's anti-abuse layer, not an API error).
+Keep both if you change the image model again.
 
 ## Money
 

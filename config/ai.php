@@ -48,9 +48,14 @@ return [
         'embedding' => env('AI_MODEL_EMBEDDING', 'gemini-embedding-2-preview'),
 
         /*
-         * Image generation model.
+         * Image generation model. gemini-3.1-flash-image (Nano Banana 2) —
+         * validated end to end against production 2026-08-24: requires an
+         * explicit imageConfig.aspect_ratio (it does not default to square
+         * the way 2.5 did), and inline reference images must be downscaled
+         * (multi-MB payloads trip Google's anti-abuse layer). Both are
+         * handled in GeminiService.
          */
-        'image' => env('AI_MODEL_IMAGE', 'gemini-2.5-flash-image'),
+        'image' => env('AI_MODEL_IMAGE', 'gemini-3.1-flash-image'),
 
         /*
          * Video generation model.
@@ -131,6 +136,7 @@ return [
         'gemini-2.5-flash-lite' => ['input' => 0.10,   'output' => 0.40,  'cached' => 0.01],
         // Image model: output priced at the image-output rate ($60/1M tokens).
         'gemini-2.5-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
+        'gemini-3.1-flash-image' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-3.1-flash-image-preview' => ['input' => 0.50,   'output' => 60.00, 'cached' => 0.05],
         'gemini-embedding-2-preview' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],

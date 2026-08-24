@@ -703,7 +703,10 @@ class GeminiService
             ],
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => ['image_size' => $imageSize],
+                // aspect_ratio must be explicit: 2.5 defaulted to square, but
+                // gemini-3.1-flash-image returns 1408x768 without it — and the
+                // whole collateral pipeline assumes 1:1 unless told otherwise.
+                'imageConfig' => ['image_size' => $imageSize, 'aspect_ratio' => '1:1'],
             ],
         ];
 
@@ -721,7 +724,7 @@ class GeminiService
         $parts = [['text' => $prompt]];
         foreach ($contextImages as $image) {
             if (isset($image['mime_type']) && isset($image['data'])) {
-                $parts[] = ['inline_data' => ['mime_type' => $image['mime_type'], 'data' => $image['data']]];
+                $parts[] = ['inline_data' => $this->shrinkContextImage($image)];
             }
         }
 
@@ -729,7 +732,7 @@ class GeminiService
             'contents' => [['role' => 'user', 'parts' => $parts]],
             'generationConfig' => [
                 'responseModalities' => ['IMAGE', 'TEXT'],
-                'imageConfig' => ['image_size' => $imageSize],
+                'imageConfig' => ['image_size' => $imageSize, 'aspect_ratio' => '1:1'],
                 'candidateCount' => 1,
             ],
         ];
@@ -737,6 +740,43 @@ class GeminiService
         $result = $this->sendImageRequest($model, $payload, $context);
 
         return $result ? $result[0] : null;
+    }
+
+    /**
+     * Downscale a reference image before inlining it in a request.
+     *
+     * A full-resolution generated PNG is ~1.7MB, and multi-megabyte inline
+     * payloads trip Google's anti-abuse layer (an HTML 417 "Sorry" page, not
+     * an API error). The model only needs the reference for style and
+     * content, so 768px JPEG is plenty — a 70KB context image refines
+     * identically to the original.
+     */
+    private function shrinkContextImage(array $image): array
+    {
+        $raw = base64_decode($image['data'] ?? '', true);
+
+        // Under the threshold, or not decodable as an image: send as-is.
+        if ($raw === false || strlen($raw) < 300_000 || ! function_exists('imagecreatefromstring')) {
+            return ['mime_type' => $image['mime_type'], 'data' => $image['data']];
+        }
+
+        $source = @imagecreatefromstring($raw);
+        if ($source === false) {
+            return ['mime_type' => $image['mime_type'], 'data' => $image['data']];
+        }
+
+        $width = imagesx($source);
+        $height = imagesy($source);
+        $scale = 768 / max($width, $height);
+        $resized = $scale < 1
+            ? imagescale($source, (int) round($width * $scale), (int) round($height * $scale))
+            : $source;
+
+        ob_start();
+        imagejpeg($resized, null, 85);
+        $jpeg = ob_get_clean();
+
+        return ['mime_type' => 'image/jpeg', 'data' => base64_encode($jpeg)];
     }
 
     private function sendImageRequest(string $model, array $payload, array $context = []): ?array

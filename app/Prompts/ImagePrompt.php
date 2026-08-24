@@ -19,36 +19,49 @@ class ImagePrompt
 
     private ?array $productContext;
 
-    public function __construct(string $strategyContent, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null)
+    private string $adText;
+
+    public function __construct(string $strategyContent, ?BrandGuideline $brandGuidelines = null, ?array $productContext = null, string $adText = '')
     {
         $this->strategyContent = $strategyContent;
         $this->brandGuidelines = $brandGuidelines;
         $this->productContext = $productContext;
+        $this->adText = $adText;
     }
 
     /**
      * The built-in prompt template. Placeholders are substituted per
      * generation: {{brand_context}} (colour palette + visual style from the
      * brand guidelines), {{product_context}} (product details when the
-     * campaign sells specific products), {{creative_strategy}} (the
-     * strategy's imagery brief).
+     * campaign sells specific products), {{ad_text}} (the strategy's approved
+     * ad copy — the only text allowed to appear in the image),
+     * {{creative_strategy}} (the strategy's imagery brief).
+     *
+     * Asks for a DESIGNED ad creative — layout, typography, brand colour
+     * panels — not a bare photograph. The old "avoid text in the image" rule
+     * dated from a model generation whose text rendering was unreliable;
+     * current image models render type accurately, and finished ads with a
+     * headline outperform captionless photos.
      */
     public static function defaultTemplate(): string
     {
-        return "Generate a high-quality, visually compelling marketing image that adheres to the following requirements:\n\n".
+        return "Create a finished, scroll-stopping advertising creative — a professionally DESIGNED composition (layout, typography, colour panels), not a plain photograph. Think polished brand social/display advertising.\n\n".
                "{{brand_context}}{{product_context}}\n\n".
-               "**TECHNICAL SPECIFICATIONS:**\n".
-               "- Style: Professional, modern, high-resolution\n".
-               "- Format: Suitable for digital advertising\n".
-               "- Aspect Ratio: 1:1 (Square) - 1024x1024 pixels\n".
-               "- Composition: Clear focal point, mobile-friendly, high contrast\n\n".
+               "**APPROVED AD TEXT (the only words allowed in the image):**\n".
+               "{{ad_text}}\n\n".
                "**CREATIVE STRATEGY:**\n".
                "{{creative_strategy}}\n\n".
-               "**IMPORTANT:**\n".
-               "- Avoid text in the image (will be added separately)\n".
-               "- Ensure cultural sensitivity and inclusivity\n".
-               "- No stock photo clichés\n".
-               '- Brand recognition should be implicit through style';
+               "**DESIGN REQUIREMENTS:**\n".
+               "- Square 1:1 composition, 1024x1024, designed mobile-first: clear focal point, high contrast, legible at thumbnail size\n".
+               "- Use the brand colour palette for backgrounds, panels and accents; generous negative space\n".
+               "- One short, punchy headline set in clean modern typography, taken from the approved ad text above (shorten it if needed — never write new claims)\n".
+               "- Photorealistic product or lifestyle imagery integrated into the layout\n\n".
+               "**HARD RULES:**\n".
+               "- Never invent text: no statistics, review counts, star ratings, awards, prices or guarantees unless they appear word-for-word in the approved ad text\n".
+               "- If no approved ad text is provided, produce a text-free designed composition\n".
+               "- Every rendered word must be spelled correctly — when in doubt, use less text\n".
+               "- No watermarks, no fake interface elements, no third-party logos\n".
+               '- Ensure cultural sensitivity and inclusivity; no stock photo clichés';
     }
 
     /**
@@ -76,6 +89,7 @@ class ImagePrompt
         return strtr(self::activeTemplate(), [
             '{{brand_context}}' => $brandContext,
             '{{product_context}}' => $productContextString,
+            '{{ad_text}}' => $this->adText !== '' ? $this->adText : '(none provided — do not render any text)',
             '{{creative_strategy}}' => $this->strategyContent,
         ]);
     }

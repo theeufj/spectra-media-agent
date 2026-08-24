@@ -120,6 +120,17 @@ class GenerateImage implements ShouldQueue
             }
             // --- End Prompt Splitting ---
 
+            // The only words allowed inside a generated creative are the
+            // strategy's approved ad copy — the model composes a headline
+            // from these rather than inventing claims of its own.
+            $adCopy = $this->strategy->adCopies()->first();
+            $adText = $adCopy
+                ? trim(implode("\n", array_filter(array_merge(
+                    array_slice($adCopy->headlines ?? [], 0, 3),
+                    [($adCopy->descriptions ?? [])[0] ?? null],
+                ))))
+                : '';
+
             $successfulUploads = 0;
 
             // Visual reference for generation, loaded once — not per prompt,
@@ -156,7 +167,7 @@ class GenerateImage implements ShouldQueue
             foreach ($prompts as $index => $prompt) {
                 Log::info('Generating image '.($index + 1).'/'.count($prompts)." for Strategy ID: {$this->strategy->id}");
 
-                $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext))->getPrompt();
+                $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext, $adText))->getPrompt();
                 Log::info('Gemini Image Generation Prompt:', ['prompt' => $imagePrompt]);
 
                 // Retry logic with exponential backoff

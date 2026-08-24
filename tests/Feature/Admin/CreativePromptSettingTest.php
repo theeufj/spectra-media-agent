@@ -32,7 +32,7 @@ class CreativePromptSettingTest extends TestCase
         $prompt = (new ImagePrompt('Show boots in workshop light.'))->getPrompt();
 
         $this->assertStringContainsString('Show boots in workshop light.', $prompt);
-        $this->assertStringContainsString('TECHNICAL SPECIFICATIONS', $prompt);
+        $this->assertStringContainsString('DESIGN REQUIREMENTS', $prompt);
         $this->assertStringNotContainsString('{{creative_strategy}}', $prompt);
     }
 
@@ -44,7 +44,7 @@ class CreativePromptSettingTest extends TestCase
 
         $this->assertStringContainsString('Cinematic photography only.', $prompt);
         $this->assertStringContainsString('Show boots.', $prompt);
-        $this->assertStringNotContainsString('TECHNICAL SPECIFICATIONS', $prompt);
+        $this->assertStringNotContainsString('DESIGN REQUIREMENTS', $prompt);
     }
 
     public function test_admin_can_save_and_reset_the_template_from_settings(): void
