@@ -217,12 +217,19 @@ class GenerateVideo implements ShouldQueue
             // Step 3: Generate the final video prompt using the dedicated prompt class with actionable content
             // Note: VideoFromScriptPrompt might need update if we want to pass product context there too,
             // but usually the script is enough.
-            // Approved ad copy is the only text allowed on screen (a single
-            // short end-card) — mirrors the image pipeline's rule.
+            // Approved ad copy gives the model the campaign's message as
+            // context for the voiceover (never rendered on screen).
             $endCardCopy = $this->strategy->adCopies()->first();
             $endCardText = $endCardCopy ? trim(implode("\n", array_slice($endCardCopy->headlines ?? [], 0, 2))) : '';
 
-            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $script, $endCardText))->getPrompt();
+            // A Veo call produces at most 8 seconds, so the initial clip
+            // narrates only the first ~8s segment of the script. The full
+            // script is stored on the collateral row, and CheckVideoStatus
+            // chains extensions (ExtendVideoForScript) until every segment
+            // has been spoken — clips used to just end mid-sentence.
+            $firstSegment = ExtendVideoForScript::scriptSegments($script)[0] ?? $script;
+
+            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $firstSegment, $endCardText))->getPrompt();
             Log::info("Combined video prompt: {$videoPrompt}");
 
             // Step 4: Start the video generation and get the operation name + provider

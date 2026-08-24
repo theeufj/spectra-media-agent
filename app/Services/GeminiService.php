@@ -1063,7 +1063,7 @@ class GeminiService
                 if ($response->successful()) {
                     $operationName = $response->json()['name'] ?? null;
                     Log::info("GeminiService: Video extension started successfully. Operation: {$operationName}");
-                    $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, $context);
+                    $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, array_merge($context, ['cost_override' => round(8 * (float) config('ai.video_cost_per_second.veo-3.1-generate-001', 0.40), 6)]));
 
                     return $operationName;
                 }
@@ -1140,7 +1140,7 @@ class GeminiService
 
             if ($response->successful()) {
                 $operationName = $response->json()['name'] ?? null;
-                $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, $context);
+                $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, array_merge($context, ['cost_override' => round(8 * (float) config('ai.video_cost_per_second.veo-3.1-generate-001', 0.40), 6)]));
                 Log::info("GeminiService: Video extension (from bytes) started. Operation: {$operationName}");
 
                 return $operationName;

@@ -156,6 +156,18 @@ class CheckVideoStatus implements ShouldQueue
 
         $campaign = $this->videoCollateral->campaign;
         if ($campaign && $campaign->customer) {
+            // Script coverage first: Veo caps a single call at 8 seconds, but
+            // scripts run longer — clips were ending mid-sentence. Keep
+            // extending until the whole voiceover fits; each extension
+            // re-enters this job, so the email and the flows below run once
+            // narration is complete.
+            if (\App\Jobs\ExtendVideoForScript::needsExtension($this->videoCollateral->fresh())) {
+                \App\Jobs\ExtendVideoForScript::dispatch($this->videoCollateral)->delay(now()->addSeconds(20));
+                Log::info("CheckVideoStatus: script not fully narrated yet — extending video {$this->videoCollateral->id}");
+
+                return;
+            }
+
             $videoCount = $campaign->videoCollaterals()->where('status', 'completed')->count();
             foreach ($campaign->customer->users as $user) {
                 Mail::to($user->email)->send(new VideosGenerated($user, $campaign, $videoCount));
