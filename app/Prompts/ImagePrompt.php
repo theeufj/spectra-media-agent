@@ -60,6 +60,7 @@ class ImagePrompt
                "- Never invent text: no statistics, review counts, star ratings, awards, prices or guarantees unless they appear word-for-word in the approved ad text\n".
                "- If no approved ad text is provided, produce a text-free designed composition\n".
                "- Every rendered word must be spelled correctly — when in doubt, use less text\n".
+               "- In any small interface or document mock-up, render fine print as abstract placeholder bars, never as legible words (small generated text garbles)\n".
                "- No watermarks, no fake interface elements, no third-party logos\n".
                '- Ensure cultural sensitivity and inclusivity; no stock photo clichés';
     }
