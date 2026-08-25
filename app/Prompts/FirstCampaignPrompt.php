@@ -120,12 +120,12 @@ PROMPT;
     private static function describeBrand(BrandGuideline $brand): string
     {
         $parts = array_filter([
-            'Brand voice' => $brand->brand_voice,
+            'Brand voice' => self::flatten($brand->brand_voice),
             'Tone' => self::flatten($brand->tone_attributes),
-            'Audience they describe' => $brand->target_audience,
+            'Audience they describe' => self::flatten($brand->target_audience),
             'Messaging themes' => self::flatten($brand->messaging_themes),
             'What they say sets them apart' => self::flatten($brand->unique_selling_propositions),
-            'Differentiators' => $brand->competitor_differentiation,
+            'Differentiators' => self::flatten($brand->competitor_differentiation),
             'Never say' => self::flatten($brand->do_not_use),
         ]);
 
@@ -138,16 +138,23 @@ PROMPT;
     }
 
     /**
-     * Brand guideline fields are sometimes arrays, sometimes JSON strings,
-     * sometimes plain text depending on what the extractor got back.
+     * Brand guideline fields are sometimes plain text, sometimes flat lists,
+     * and sometimes nested structures (brand_voice is an object with a
+     * description and example phrases; target_audience nests pain_points).
+     * Interpolating those raw was an "Array to string conversion" that killed
+     * the whole first-campaign job. Collect every scalar leaf instead.
      */
     private static function flatten(mixed $value): ?string
     {
         if (is_array($value)) {
-            return implode(', ', array_filter(array_map(
-                fn ($v) => is_scalar($v) ? (string) $v : null,
-                $value,
-            ))) ?: null;
+            $leaves = [];
+            array_walk_recursive($value, function ($v) use (&$leaves) {
+                if (is_scalar($v) && trim((string) $v) !== '') {
+                    $leaves[] = (string) $v;
+                }
+            });
+
+            return $leaves !== [] ? implode('. ', $leaves) : null;
         }
 
         return is_string($value) && trim($value) !== '' ? $value : null;

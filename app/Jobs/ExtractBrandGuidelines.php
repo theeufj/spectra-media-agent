@@ -2,7 +2,6 @@
 
 namespace App\Jobs;
 
-use App\Mail\SitemapCrawlCompleted;
 use App\Models\Customer;
 use App\Models\CustomerPage;
 use App\Services\BrandGuidelineExtractorService;
@@ -12,7 +11,6 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 class ExtractBrandGuidelines implements ShouldQueue
 {
@@ -36,11 +34,40 @@ class ExtractBrandGuidelines implements ShouldQueue
     ) {}
 
     /**
+     * The onboarding chain dispatches this from every batch that finishes
+     * (one per child sitemap, plus the navigation-gap batch), so several
+     * copies race. Without this, each ran a full Gemini extraction — and the
+     * late ones hit the extractor's rate-limit guard, got null back, and
+     * emailed the customer a scan FAILURE minutes after the scan succeeded.
+     */
+    public function middleware(): array
+    {
+        return [
+            (new \Illuminate\Queue\Middleware\WithoutOverlapping('extract-brand-'.$this->customer->id))
+                ->releaseAfter(120)
+                ->expireAfter(600),
+        ];
+    }
+
+    /**
      * Execute the job.
      */
     public function handle(BrandGuidelineExtractorService $extractor): void
     {
         Log::info("ExtractBrandGuidelines job started for customer {$this->customer->id}");
+
+        // A fresh guideline means another copy of this job already completed
+        // the whole chain — emails, asset harvest, first campaign. Re-running
+        // would duplicate all of it.
+        $existing = $this->customer->brandGuideline;
+        if ($existing && $existing->created_at->gt(now()->subHour())) {
+            Log::info('ExtractBrandGuidelines: fresh guideline already exists, skipping duplicate run', [
+                'customer_id' => $this->customer->id,
+                'guideline_id' => $existing->id,
+            ]);
+
+            return;
+        }
 
         try {
             $brandGuideline = $extractor->extractGuidelines($this->customer);
@@ -80,18 +107,34 @@ class ExtractBrandGuidelines implements ShouldQueue
                     return;
                 }
 
-                // Notify all users: brand extraction is complete and the knowledge base is ready
+                // Notify all users: brand extraction is complete and the
+                // knowledge base is ready. Mail plus the in-app bell — the
+                // dashboard checklist flips quietly, and "quietly" is how a
+                // customer ends up watching a finished scan wondering if it
+                // ever ran.
                 foreach ($this->customer->users as $user) {
-                    Mail::to($user->email)->queue(new SitemapCrawlCompleted(
-                        $this->customer->website ?? '',
+                    $user->notify(new \App\Notifications\SiteScanCompleted(
+                        $this->customer,
                         $totalPages,
-                        $user->name
                     ));
                 }
             } else {
                 Log::warning('Brand guideline extraction returned null', [
                     'customer_id' => $this->customer->id,
                 ]);
+
+                // Null does not always mean failure: a duplicate dispatch that
+                // slipped past the freshness check (e.g. the extractor's own
+                // rate-limit guard) returns null while a perfectly good
+                // guideline sits in the table. Only report failure when the
+                // customer actually has nothing.
+                if ($this->customer->brandGuideline()->exists()) {
+                    Log::info('ExtractBrandGuidelines: extraction returned null but a guideline exists — not a failure', [
+                        'customer_id' => $this->customer->id,
+                    ]);
+
+                    return;
+                }
 
                 // This is the end of the onboarding chain — nothing downstream
                 // runs without a brand guideline, so tell the user now rather

@@ -152,10 +152,9 @@ class GenerateFirstCampaign implements ShouldQueue
             $totalPages = CustomerPage::where('customer_id', $this->customer->id)->count();
 
             foreach ($this->customer->users as $user) {
-                Mail::to($user->email)->queue(new \App\Mail\SitemapCrawlCompleted(
-                    $this->customer->website ?? '',
+                $user->notify(new \App\Notifications\SiteScanCompleted(
+                    $this->customer,
                     $totalPages,
-                    $user->name
                 ));
             }
         } catch (\Throwable $e) {
@@ -212,6 +211,15 @@ class GenerateFirstCampaign implements ShouldQueue
         foreach ($this->customer->users as $user) {
             try {
                 Mail::to($user->email)->queue(new FirstCampaignReady($campaign, $user->name));
+
+                // Bell only — FirstCampaignReady already covers the inbox,
+                // but nothing in the app itself said the scan finished.
+                $user->notify(new \App\Notifications\SiteScanCompleted(
+                    $this->customer,
+                    CustomerPage::where('customer_id', $this->customer->id)->count(),
+                    campaign: $campaign,
+                    withMail: false,
+                ));
             } catch (\Throwable $e) {
                 report($e);
                 Log::error('Failed to send first-campaign email', [
