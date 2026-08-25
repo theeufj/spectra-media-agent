@@ -387,8 +387,9 @@ Schedule::call(function () {
         });
 })->name('track-keyword-rankings')->dailyAt('05:00')->withoutOverlapping();
 
-// Sitemap is maintained as a static file in public/sitemap.xml
-// and committed to version control. No need to regenerate dynamically.
+// Sitemap is maintained as a committed template in resources/sitemap.xml and
+// served per-tenant by TenantStaticController, which rewrites the host to the
+// requesting domain. No need to regenerate dynamically.
 
 // Weekly cleanup - remove expired proposals and temp files
 Schedule::job(new \App\Jobs\CleanupTemporaryFiles)->weeklyOn(0, '03:00')->withoutOverlapping();

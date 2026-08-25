@@ -27,6 +27,12 @@ Route::get('/privacy-policy', [LegalController::class, 'privacy'])->name('privac
 Route::get('/blog', [\App\Http\Controllers\HelpController::class, 'index'])->name('blog.index');
 Route::get('/blog/{article}', [\App\Http\Controllers\HelpController::class, 'show'])->name('blog.show');
 
+// Served per-tenant: the templates live in resources/ and the <loc>/Sitemap
+// hosts are rewritten to the requesting domain, so vertical skins stop
+// advertising sitetospend.com URLs to crawlers (ours included).
+Route::get('/sitemap.xml', [\App\Http\Controllers\TenantStaticController::class, 'sitemap'])->name('sitemap');
+Route::get('/robots.txt', [\App\Http\Controllers\TenantStaticController::class, 'robots'])->name('robots');
+
 /*
 |--------------------------------------------------------------------------
 | Health Check (Public — no auth, used by load balancers)

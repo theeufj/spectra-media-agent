@@ -46,7 +46,7 @@ class GenerateSitemap extends Command
             ->add(Url::create($baseUrl.'/login')->setPriority(0.7)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))
             ->add(Url::create($baseUrl.'/terms-of-service')->setPriority(0.3)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))
             ->add(Url::create($baseUrl.'/privacy-policy')->setPriority(0.3)->setChangeFrequency(Url::CHANGE_FREQUENCY_MONTHLY))
-            ->writeToFile(public_path('sitemap.xml'));
+            ->writeToFile(resource_path('sitemap.xml'));
 
         $this->info('Sitemap generated successfully.');
     }
