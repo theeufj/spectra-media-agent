@@ -31,7 +31,7 @@
     <p>We typically respond within 1 business day. High and urgent priority tickets are reviewed first.</p>
 
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ url('/support-tickets/' . $ticket->id) }}" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Your Ticket</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}/support-tickets/{{ $ticket->id }}" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Your Ticket</a>
     </p>
 
     <p style="color: #718096; font-size: 14px;">If you need immediate assistance, reply to this email and reference ticket #{{ $ticket->id }}.</p>

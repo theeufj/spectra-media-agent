@@ -5,12 +5,11 @@ namespace App\Mail;
 use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class AdsReadyToDeploy extends Mailable
+class AdsReadyToDeploy extends AppMailable
 {
     use Queueable, SerializesModels;
 

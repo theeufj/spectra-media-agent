@@ -75,6 +75,10 @@ class CustomerController extends Controller
             $validated['industry'] = $tenant['vertical'];
         }
 
+        // The creator's skin is the customer's skin — lifecycle email
+        // branding reads this.
+        $validated['tenant_key'] = $user->tenant_key;
+
         $customer = Customer::create($validated);
 
         $user->customers()->attach($customer->id, ['role' => 'owner']);

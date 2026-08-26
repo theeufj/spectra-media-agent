@@ -16,7 +16,7 @@
         They're ready to review and approve right now.
     </p>
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ route('campaigns.show', $campaign) }}?tab=collateral" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Review Your Videos</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('campaigns.show', $campaign, false) }}?tab=collateral" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Review Your Videos</a>
     </p>
     <p style="color: #888; font-size: 13px; text-align: center;">
         ⏳ Videos are stored for <strong>30 days</strong> — review them before they expire.

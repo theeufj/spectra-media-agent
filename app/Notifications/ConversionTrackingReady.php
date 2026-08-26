@@ -10,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class ConversionTrackingReady extends Notification implements ShouldQueue
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public function __construct(
@@ -23,7 +24,7 @@ class ConversionTrackingReady extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $setupUrl = url(route('customers.gtm.setup', $this->customer->id, false));
+        $setupUrl = $this->tenantUrl(route('customers.gtm.setup', $this->customer->id, false));
 
         return (new MailMessage)
             ->subject('Action required: install your conversion tracking snippet')
@@ -32,7 +33,7 @@ class ConversionTrackingReady extends Notification implements ShouldQueue
             ->line('The final step is adding a small snippet to your website — it takes about two minutes.')
             ->action('Install snippet →', $setupUrl)
             ->line('Once installed, every lead and sale from your campaigns will be tracked automatically. You can verify installation directly from the setup page.')
-            ->salutation('— Site to Spend');
+            ->salutation($this->teamSalutation());
     }
 
     public function toArray(object $notifiable): array

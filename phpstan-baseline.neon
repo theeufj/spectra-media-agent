@@ -883,12 +883,6 @@ parameters:
 			path: app/Jobs/GenerateAdCopy.php
 
 		-
-			message: '#^Variable \$totalAssets on left side of \?\? always exists and is not nullable\.$#'
-			identifier: nullCoalesce.variable
-			count: 1
-			path: app/Jobs/GenerateCampaignCollateral.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$subscription_status\.$#'
 			identifier: property.notFound
 			count: 1

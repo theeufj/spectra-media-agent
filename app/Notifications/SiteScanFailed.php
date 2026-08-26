@@ -18,6 +18,7 @@ use Illuminate\Notifications\Notification;
  */
 class SiteScanFailed extends Notification implements ShouldQueue
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public function __construct(
@@ -38,9 +39,9 @@ class SiteScanFailed extends Notification implements ShouldQueue
             ->line("We ran into a problem while scanning {$this->customer->website} to learn about your business.")
             ->line($this->reason)
             ->line('You can still get set up in a couple of minutes: add a few pages or a description of your business to your knowledge base, and we\'ll build your first campaign from that instead.')
-            ->action('Add your content', url('/knowledge-base'))
+            ->action('Add your content', $this->tenantUrl('/knowledge-base'))
             ->line('If your site was just temporarily unreachable, reply to this email and we\'ll rerun the scan for you.')
-            ->salutation('— The Site to Spend Team');
+            ->salutation($this->teamSalutation());
     }
 
     public function toArray(object $notifiable): array
@@ -50,7 +51,7 @@ class SiteScanFailed extends Notification implements ShouldQueue
         return [
             'title' => 'We couldn\'t finish scanning your website',
             'message' => $this->reason.' Add your content manually and we\'ll build from that instead.',
-            'action_url' => url('/knowledge-base'),
+            'action_url' => $this->tenantUrl('/knowledge-base'),
             'action_text' => 'Add Content',
             'customer_id' => $this->customer->id,
             'website' => $this->customer->website,

@@ -63,7 +63,7 @@
     </p>
 
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ url('/dashboard') }}" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Full Dashboard</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}/dashboard" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">View Full Dashboard</a>
     </p>
 
     <p style="text-align: center; font-size: 12px; color: #a0aec0; margin-top: 24px;">

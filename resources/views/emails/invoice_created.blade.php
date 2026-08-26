@@ -1,6 +1,6 @@
 @extends('layouts.email')
 
-@section('title', 'Your Invoice from Site to Spend')
+@section('title', 'Your Invoice from ' . ($tenantName ?? 'Site to Spend'))
 
 @section('content')
     <h1>Invoice Details</h1>
@@ -12,6 +12,6 @@
     </ul>
     <p>You can view and manage all your invoices and billing details in your customer portal.</p>
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
-        <a href="{{ route('subscription.portal') }}" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Go to Billing Portal</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('subscription.portal', absolute: false) }}" class="btn-primary" style="background: linear-gradient(135deg, #ff4d00 0%, #cc3d00 100%); color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 700;">Go to Billing Portal</a>
     </p>
 @endsection

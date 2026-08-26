@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Cache;
 
 class StrategyGenerationFailed extends Notification implements ShouldQueue
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public function __construct(
@@ -37,9 +38,9 @@ class StrategyGenerationFailed extends Notification implements ShouldQueue
             ->greeting('Hi '.$notifiable->name.',')
             ->line("We were unable to generate a strategy for your campaign \"{$this->campaign->name}\".")
             ->line('Reason: '.$this->error)
-            ->action('View Campaign', route('campaigns.show', $this->campaign->id))
+            ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)))
             ->line('Please check your knowledge base content and try again.')
-            ->salutation('— Site to Spend');
+            ->salutation($this->teamSalutation());
     }
 
     public function toArray(object $notifiable): array

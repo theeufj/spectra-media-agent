@@ -5,7 +5,6 @@ namespace App\Mail;
 use App\Models\Campaign;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -17,7 +16,7 @@ use Illuminate\Queue\SerializesModels;
  * told someone a job had finished, which is our news, not theirs. This one
  * tells them there is something waiting with their business in it.
  */
-class FirstCampaignReady extends Mailable implements ShouldQueue
+class FirstCampaignReady extends AppMailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 

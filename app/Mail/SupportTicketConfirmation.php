@@ -4,12 +4,11 @@ namespace App\Mail;
 
 use App\Models\SupportTicket;
 use Illuminate\Bus\Queueable;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class SupportTicketConfirmation extends Mailable
+class SupportTicketConfirmation extends AppMailable
 {
     use Queueable, SerializesModels;
 

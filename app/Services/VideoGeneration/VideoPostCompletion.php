@@ -24,9 +24,20 @@ class VideoPostCompletion
             return;
         }
 
+        // This runs once per finished video. Emailing here unconditionally
+        // sent every user a fresh "Your N Videos Are Ready!" for each clip —
+        // three videos meant three emails. Only announce when the batch is
+        // actually done: nothing still pending or generating.
+        $stillRunning = $campaign->videoCollaterals()
+            ->whereIn('status', ['pending', 'generating'])
+            ->count();
+
         $videoCount = $campaign->videoCollaterals()->where('status', 'completed')->count();
-        foreach ($campaign->customer->users as $user) {
-            Mail::to($user->email)->send(new VideosGenerated($user, $campaign, $videoCount));
+
+        if ($stillRunning === 0 && $videoCount > 0) {
+            foreach ($campaign->customer->users as $user) {
+                Mail::to($user->email)->send(new VideosGenerated($user, $campaign, $videoCount));
+            }
         }
 
         // PMax video flow: an 8s Veo clip is too short for PMax (min 10s), so extend

@@ -32,7 +32,7 @@
     <p>The full report includes step-by-step fixes and A/B testing recommendations for each issue.</p>
 
     <p style="text-align:center;margin:28px 0;">
-        <a href="{{ route('subscription.pricing') }}" class="btn-primary">See the full report</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('subscription.pricing', absolute: false) }}" class="btn-primary">See the full report</a>
     </p>
 
     @php($auditsLeft = max(0, 3 - $customer->landingPageAudits->count()))

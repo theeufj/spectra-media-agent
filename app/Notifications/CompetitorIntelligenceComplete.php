@@ -10,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class CompetitorIntelligenceComplete extends Notification implements ShouldQueue
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public function __construct(
@@ -34,8 +35,8 @@ class CompetitorIntelligenceComplete extends Notification implements ShouldQueue
         }
 
         return $mail
-            ->action('View Competitor Analysis', url('/seo/competitors'))
-            ->salutation('— Site to Spend');
+            ->action('View Competitor Analysis', $this->tenantUrl('/seo/competitors'))
+            ->salutation($this->teamSalutation());
     }
 
     public function toArray(object $notifiable): array

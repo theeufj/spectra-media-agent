@@ -5,12 +5,11 @@ namespace App\Mail;
 use App\Models\Campaign;
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class VideosGenerated extends Mailable
+class VideosGenerated extends AppMailable
 {
     use Queueable, SerializesModels;
 

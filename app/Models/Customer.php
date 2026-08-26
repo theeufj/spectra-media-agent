@@ -30,6 +30,7 @@ class Customer extends Model
         'timezone',
         'currency_code',
         'website',
+        'tenant_key',
         'phone',
         'google_ads_customer_id',
         'google_ads_link_status',

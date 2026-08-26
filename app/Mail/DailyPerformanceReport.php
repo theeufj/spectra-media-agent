@@ -4,13 +4,12 @@ namespace App\Mail;
 
 use App\Models\User;
 use Illuminate\Bus\Queueable;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\Middleware\RateLimited;
 use Illuminate\Queue\SerializesModels;
 
-class DailyPerformanceReport extends Mailable
+class DailyPerformanceReport extends AppMailable
 {
     use Queueable, SerializesModels;
 

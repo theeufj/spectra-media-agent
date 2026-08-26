@@ -10,6 +10,7 @@ use Illuminate\Notifications\Notification;
 
 class DeploymentCompleted extends Notification implements ShouldQueue
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public function __construct(
@@ -32,8 +33,8 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 ->greeting('Hi '.$notifiable->name.',')
                 ->line("We ran into an issue deploying your campaign \"{$this->campaign->name}\" and our team has been notified.")
                 ->line("We'll be in touch shortly to get this resolved.")
-                ->action('View Campaign', route('campaigns.show', $this->campaign->id))
-                ->salutation('— The Site to Spend Team');
+                ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)))
+                ->salutation($this->teamSalutation());
         }
 
         $mail = (new MailMessage)
@@ -78,8 +79,8 @@ class DeploymentCompleted extends Notification implements ShouldQueue
 
         return $mail
             ->line('Your ads are scheduled to begin serving from tomorrow (campaigns start the day after deployment), and performance data appears in your dashboard once they do.')
-            ->action('View Your Dashboard', url(route('dashboard')))
-            ->salutation('— The Site to Spend Team');
+            ->action('View Your Dashboard', $this->tenantUrl(route('dashboard', absolute: false)))
+            ->salutation($this->teamSalutation());
     }
 
     public function toArray(object $notifiable): array
@@ -95,7 +96,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 : ($this->failureCount > 0
                     ? "{$this->successCount} platform(s) live, {$this->failureCount} had an issue."
                     : 'Your ads are running.'),
-            'action_url' => route('campaigns.show', $this->campaign->id),
+            'action_url' => $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)),
             'action_text' => 'View Campaign',
             'campaign_id' => $this->campaign->id,
             'campaign_name' => $this->campaign->name,

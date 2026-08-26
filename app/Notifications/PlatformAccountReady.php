@@ -16,6 +16,7 @@ use Illuminate\Notifications\Notification;
  */
 class PlatformAccountReady extends Notification implements ShouldQueue
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public function __construct(
@@ -33,7 +34,7 @@ class PlatformAccountReady extends Notification implements ShouldQueue
         return [
             'title' => "{$this->platform} is ready",
             'message' => "Your {$this->platform} account is set up — you can now include it in campaigns.",
-            'action_url' => url('/campaigns/wizard'),
+            'action_url' => $this->tenantUrl('/campaigns/wizard'),
             'action_text' => 'Create a Campaign',
             'customer_id' => $this->customer->id,
             'platform' => $this->platform,

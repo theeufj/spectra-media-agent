@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notification;
 
 class CampaignStatusUpdated extends Notification
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public $campaign;
@@ -41,8 +42,8 @@ class CampaignStatusUpdated extends Notification
             ->greeting('Hi '.$notifiable->name.',')
             ->line('The status of your campaign "'.$this->campaign->name.'" has changed.')
             ->line('New Status: '.$this->campaign->primary_status)
-            ->action('View Campaign', route('campaigns.show', $this->campaign->id))
-            ->salutation('— Site to Spend');
+            ->action('View Campaign', $this->tenantUrl(route('campaigns.show', $this->campaign->id, false)))
+            ->salutation($this->teamSalutation());
     }
 
     /**

@@ -31,6 +31,9 @@ trait HasTenantBranding
             'tenantDark' => $config['colors']['dark'] ?? '#cc3d00',
             'tenantAccent' => $config['colors']['accent'] ?? '#ffc300',
             'tenantLogoText' => $config['logo_text'] ?? 'Site to Spend',
+            // For links in email bodies: the skin's own domain serves the
+            // same app, so path-only routes prefixed with this stay on-brand.
+            'tenantBaseUrl' => rtrim(\App\Support\Tenant::url($key, '/'), '/'),
         ];
     }
 }

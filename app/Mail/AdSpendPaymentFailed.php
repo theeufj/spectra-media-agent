@@ -5,7 +5,6 @@ namespace App\Mail;
 use App\Models\AdSpendCredit;
 use App\Models\Customer;
 use Illuminate\Bus\Queueable;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
@@ -14,7 +13,7 @@ use Illuminate\Queue\SerializesModels;
  * Sent when payment continues to fail after grace period.
  * Budgets have been reduced to 50%.
  */
-class AdSpendPaymentFailed extends Mailable
+class AdSpendPaymentFailed extends AppMailable
 {
     use Queueable, SerializesModels;
 

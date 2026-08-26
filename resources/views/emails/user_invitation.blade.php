@@ -4,7 +4,7 @@
 
 @section('content')
     <h1>You've Been Invited!</h1>
-    <p>You've been invited to join <strong>{{ $invitation->customer->name }}</strong> on Site to Spend as a <strong>{{ $invitation->role }}</strong>.</p>
+    <p>You've been invited to join <strong>{{ $invitation->customer->name }}</strong> on {{ $tenantName ?? 'Site to Spend' }} as a <strong>{{ $invitation->role }}</strong>.</p>
 
     <p>As a {{ $invitation->role }}, you'll be able to:</p>
     <ul>

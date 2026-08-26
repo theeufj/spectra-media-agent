@@ -18,7 +18,7 @@
     <p>Review the assets, connect your ad account, set a daily budget, and publish &mdash; the whole process takes just a few minutes.</p>
 
     <p style="text-align:center;margin:28px 0;">
-        <a href="{{ route('campaigns.show', $campaign) }}" class="btn-primary">Review &amp; deploy your campaign</a>
+        <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('campaigns.show', $campaign, false) }}" class="btn-primary">Review &amp; deploy your campaign</a>
     </p>
 
     <p>If you have any questions, just reply to this email and we'll help you get live.</p>

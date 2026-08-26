@@ -60,7 +60,12 @@ class GenerateCampaignCollateral implements ShouldQueue
                 ->name("Campaign {$campaignId} Collateral")
                 ->allowFailures()
                 ->then(function () use ($campaignId, $userId) {
-                    $campaign = Campaign::find($campaignId);
+                    // ad_copies_count & friends are withCount() virtuals — a
+                    // plain find() leaves them null and the upsell email told
+                    // every trial user we'd generated "0 assets" for them.
+                    $campaign = Campaign::with(['strategies' => function ($query) {
+                        $query->withCount(['adCopies', 'imageCollaterals', 'videoCollaterals']);
+                    }])->find($campaignId);
                     $user = \App\Models\User::find($userId);
                     if ($campaign && $user) {
                         Mail::to($user->email)->send(new CollateralGenerated($campaign, $user));
@@ -71,7 +76,7 @@ class GenerateCampaignCollateral implements ShouldQueue
                             $totalAssets = $campaign->strategies->sum('ad_copies_count') +
                                            $campaign->strategies->sum('image_collaterals_count') +
                                            $campaign->strategies->sum('video_collaterals_count');
-                            Mail::to($user->email)->send(new \App\Mail\AdsReadyToDeploy($user, $campaign, $totalAssets ?? 0));
+                            Mail::to($user->email)->send(new \App\Mail\AdsReadyToDeploy($user, $campaign, $totalAssets));
                             Log::info("Sent AdsReadyToDeploy trial upsell email to {$user->email}");
                         }
                     }

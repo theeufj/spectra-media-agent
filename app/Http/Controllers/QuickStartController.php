@@ -50,6 +50,9 @@ class QuickStartController extends Controller
         $customer = Customer::create([
             'name' => $businessName,
             'website' => $url,
+            // The creator's skin is the customer's skin — every lifecycle
+            // email brands itself from this.
+            'tenant_key' => $user->tenant_key,
             'country' => $country,
             'timezone' => $timezone,
             // Must be right at creation time: ProvisionGoogleAdsAccount bakes

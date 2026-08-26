@@ -32,9 +32,9 @@
 
     <p style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
         @if($campaign->strategies->isNotEmpty())
-            <a href="{{ route('campaigns.collateral.show', ['campaign' => $campaign->id, 'strategy' => $campaign->strategies->first()->id]) }}" class="btn-primary">View Your Collateral</a>
+            <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('campaigns.collateral.show', ['campaign' => $campaign->id, 'strategy' => $campaign->strategies->first()->id], false) }}" class="btn-primary">View Your Collateral</a>
         @else
-            <a href="{{ route('campaigns.show', $campaign) }}" class="btn-primary">View Your Campaign</a>
+            <a href="{{ ($tenantBaseUrl ?? url('')) }}{{ route('campaigns.show', $campaign, false) }}" class="btn-primary">View Your Campaign</a>
         @endif
     </p>
 

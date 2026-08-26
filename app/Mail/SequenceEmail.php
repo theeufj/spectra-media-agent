@@ -7,7 +7,6 @@ use App\Models\EmailSequenceStep;
 use App\Services\EmailSequences\SequenceBodyRenderer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Address;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
@@ -20,7 +19,7 @@ use Illuminate\Queue\SerializesModels;
  * a reply — so the Reply-To has to reach a human, and the whole point of the
  * chain is lost if it does not.
  */
-class SequenceEmail extends Mailable implements ShouldQueue
+class SequenceEmail extends AppMailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
 
