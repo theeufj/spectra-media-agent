@@ -22,16 +22,21 @@ trait TenantAware
     protected function brandedMail(): MailMessage
     {
         $models = array_values(array_filter(get_object_vars($this), 'is_object'));
-        $customer = Tenant::customerFromModels(...$models);
-        $class = static::class;
+        $stamps = \App\Models\EmailLog::stampHeaders($this, Tenant::customerFromModels(...$models));
 
         return (new MailMessage)
-            ->view('emails.notification', Tenant::viewData($this->tenantKey()))
-            // Stamp the customer for the per-customer email log (LogSentEmail).
-            ->withSymfonyMessage(function ($message) use ($customer, $class) {
-                $message->getHeaders()->addTextHeader('X-App-Mailable', $class);
-                if ($customer?->id) {
-                    $message->getHeaders()->addTextHeader('X-Customer-Id', (string) $customer->id);
+            // Both parts: a bare html view would drop the text/plain
+            // alternative the stock markdown template always shipped, which
+            // text-mode clients and spam filters both care about.
+            ->view(
+                ['html' => 'emails.notification', 'text' => 'emails.notification-text'],
+                Tenant::viewData($this->tenantKey()),
+            )
+            // Stamp the customer for the per-customer email log; stripped
+            // again before transport (LogSentEmail::handleSending).
+            ->withSymfonyMessage(function ($message) use ($stamps) {
+                foreach ($stamps as $name => $value) {
+                    $message->getHeaders()->addTextHeader($name, $value);
                 }
             });
     }

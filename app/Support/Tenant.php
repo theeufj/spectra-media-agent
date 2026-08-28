@@ -81,25 +81,11 @@ class Tenant
      */
     public static function keyFromModels(object ...$candidates): ?string
     {
-        foreach ($candidates as $model) {
-            if ($model instanceof \App\Models\Customer && $model->tenant_key) {
-                return $model->tenant_key;
-            }
-        }
-        foreach ($candidates as $model) {
-            if ($model instanceof \App\Models\Campaign && $model->customer?->tenant_key) {
-                return $model->customer->tenant_key;
-            }
-        }
-        // Anything else that belongs to a customer (invitations, strategies…).
-        foreach ($candidates as $model) {
-            if ($model instanceof \Illuminate\Database\Eloquent\Model
-                && ! $model instanceof \App\Models\User
-                && isset($model->customer)
-                && $model->customer instanceof \App\Models\Customer
-                && $model->customer->tenant_key) {
-                return $model->customer->tenant_key;
-            }
+        // Derived from the same customer the email log files under
+        // (customerFromModels), so branding and log-filing can never
+        // disagree about whose email this is.
+        if ($key = self::customerFromModels(...$candidates)?->tenant_key) {
+            return $key;
         }
 
         foreach ($candidates as $model) {

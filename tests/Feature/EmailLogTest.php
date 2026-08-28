@@ -37,6 +37,14 @@ class EmailLogTest extends TestCase
         $this->assertSame($customer->id, $log->customer_id);
         $this->assertSame(FirstCampaignReady::class, $log->mailable);
         $this->assertNotNull($log->subject);
+
+        // The stamps are internal plumbing: they must be stripped before
+        // transport, never delivered in the recipient's raw message.
+        /** @var \Illuminate\Mail\Transport\ArrayTransport $transport */
+        $transport = app('mailer')->getSymfonyTransport();
+        $delivered = $transport->messages()->last()->getOriginalMessage();
+        $this->assertFalse($delivered->getHeaders()->has(EmailLog::HEADER_CUSTOMER));
+        $this->assertFalse($delivered->getHeaders()->has(EmailLog::HEADER_MAILABLE));
     }
 
     public function test_notification_mails_are_logged_with_their_customer(): void
@@ -68,6 +76,12 @@ class EmailLogTest extends TestCase
         EmailLog::create(['customer_id' => null, 'to_email' => $owner->email, 'subject' => 'Password reset', 'mailable' => null]);
         EmailLog::create(['customer_id' => null, 'to_email' => 'unrelated@example.com', 'subject' => 'Not ours', 'mailable' => null]);
 
+        // The owner also belongs to another customer; that customer's
+        // stamped mail to the shared address must NOT leak into this history.
+        $other = Customer::factory()->create();
+        $other->users()->attach($owner->id, ['role' => 'owner']);
+        EmailLog::create(['customer_id' => $other->id, 'to_email' => $owner->email, 'subject' => 'Other customer secret', 'mailable' => 'App\\Mail\\Whatever']);
+
         $response = $this->actingAs($admin)->get(route('admin.customers.show', $customer));
 
         $response->assertSuccessful();
@@ -76,5 +90,6 @@ class EmailLogTest extends TestCase
         $this->assertTrue($subjects->contains('Stamped'));
         $this->assertTrue($subjects->contains('Password reset'));
         $this->assertFalse($subjects->contains('Not ours'));
+        $this->assertFalse($subjects->contains('Other customer secret'));
     }
 }

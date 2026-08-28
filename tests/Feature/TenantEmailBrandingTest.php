@@ -77,6 +77,50 @@ class TenantEmailBrandingTest extends TestCase
         $this->assertStringContainsString('https://realpropertyads.com/brand-guidelines', $html);
     }
 
+    public function test_notification_lines_render_markdown_not_literal_asterisks(): void
+    {
+        // The notification strings were written for the stock CommonMark
+        // template; the branded view must keep rendering **bold** as bold.
+        $customer = Customer::factory()->create();
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id, 'name' => 'Spring Launch']);
+        $user = User::factory()->create();
+
+        $html = (new DeploymentCompleted($campaign->fresh('customer'), successCount: 1, failureCount: 0, strategies: []))
+            ->toMail($user)->render();
+
+        $this->assertStringNotContainsString('**', $html);
+        $this->assertStringContainsString('<strong>', $html);
+    }
+
+    public function test_failure_notifications_keep_their_error_styling(): void
+    {
+        $customer = Customer::factory()->create();
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+        $user = User::factory()->create();
+
+        $html = (new \App\Notifications\DeploymentFailed($campaign->fresh('customer'), 'quota exceeded'))
+            ->toMail($user)->render();
+
+        $this->assertStringContainsString('#dc2626', $html); // red button, not the success gradient
+    }
+
+    public function test_maintenance_summary_wears_the_tenant_skin(): void
+    {
+        // The one customer-facing notification the original branding sweep
+        // missed — it hardcoded '— Site to Spend' for every tenant.
+        $customer = Customer::factory()->create(['tenant_key' => 'realpropertyads']);
+        $user = User::factory()->create();
+
+        $html = (new \App\Notifications\MaintenanceSummaryNotification(
+            $customer,
+            ['My Campaign' => ['total_changes' => 2, 'healed' => 1, 'keywords_added' => 1]],
+            1,
+        ))->toMail($user)->render();
+
+        $this->assertStringContainsString('Real Property Ads Team', $html);
+        $this->assertStringNotContainsString('— Site to Spend', $html);
+    }
+
     public function test_tenant_url_helper_defaults_to_app_url(): void
     {
         $this->assertSame(url('/dashboard'), Tenant::url(null, '/dashboard'));

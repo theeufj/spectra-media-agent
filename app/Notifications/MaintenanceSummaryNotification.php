@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Models\Customer;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
@@ -10,12 +11,18 @@ use Illuminate\Notifications\Notification;
 /**
  * One email per customer per maintenance run summarising everything
  * the agents did. Replaces per-agent individual emails.
+ *
+ * Carries the customer so the email wears their skin (TenantAware) and
+ * files under them in the email log — this is a nightly customer-facing
+ * send, not an internal alert.
  */
 class MaintenanceSummaryNotification extends Notification implements ShouldQueue
 {
+    use \App\Notifications\Concerns\TenantAware;
     use Queueable;
 
     public function __construct(
+        protected Customer $customer,
         private array $changeSummary,
         private int $campaignsProcessed,
     ) {}
@@ -30,7 +37,7 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = (new MailMessage)
+        $mail = $this->brandedMail()
             ->subject('Your Campaign Optimisation Summary')
             ->greeting('Hi '.$notifiable->name.',')
             ->line("Our agents completed their daily optimisation run across {$this->campaignsProcessed} campaign(s). Here's what changed:");
@@ -64,7 +71,7 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
 
         $mail->line('No action is required on your part. All changes are applied automatically to improve campaign performance.');
 
-        return $mail->salutation('— Site to Spend');
+        return $mail->salutation($this->teamSalutation());
     }
 
     public function toArray(object $notifiable): array

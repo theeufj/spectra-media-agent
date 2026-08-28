@@ -18,6 +18,12 @@ use Illuminate\Queue\SerializesModels;
  * Sent from a named founder rather than a noreply address, because it invites
  * a reply — so the Reply-To has to reach a human, and the whole point of the
  * chain is lost if it does not.
+ *
+ * Email-log note: sequence audiences are leads and dormant signups — people
+ * who are not (yet) anyone's customer — so these sends log with customer_id
+ * NULL by design. If a recipient later becomes a customer's user, the admin
+ * profile's address fallback picks their history up. A sender that does know
+ * the customer can say so via ->logAsCustomer($customer).
  */
 class SequenceEmail extends AppMailable implements ShouldQueue
 {

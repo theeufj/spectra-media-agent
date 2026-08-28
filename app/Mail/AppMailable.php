@@ -28,19 +28,33 @@ abstract class AppMailable extends Mailable
     }
 
     /**
-     * Stamp the customer this email is about onto the message, so the
-     * MessageSent listener can file it in the per-customer email log
-     * without guessing from the recipient address.
+     * For senders whose customer isn't discoverable from the mailable's own
+     * models (the mailable holds only strings, or the recipient is a lead) —
+     * lets the call site file the email under the right customer anyway.
+     */
+    public ?\App\Models\Customer $logAsCustomer = null;
+
+    public function logAsCustomer(?\App\Models\Customer $customer): static
+    {
+        $this->logAsCustomer = $customer;
+
+        return $this;
+    }
+
+    /**
+     * Stamp the customer this email is about onto the message, so the email
+     * log listener can file it per customer without guessing from the
+     * recipient address. The stamps are stripped again before transport
+     * (LogSentEmail::handleSending) — they never reach the recipient.
      */
     public function headers(): \Illuminate\Mail\Mailables\Headers
     {
         $models = array_filter(get_object_vars($this), 'is_object');
-        $customer = Tenant::customerFromModels(...array_values($models));
+        $customer = $this->logAsCustomer ?? Tenant::customerFromModels(...array_values($models));
 
-        return new \Illuminate\Mail\Mailables\Headers(text: array_filter([
-            'X-App-Mailable' => static::class,
-            'X-Customer-Id' => $customer?->id ? (string) $customer->id : null,
-        ]));
+        return new \Illuminate\Mail\Mailables\Headers(
+            text: \App\Models\EmailLog::stampHeaders($this, $customer),
+        );
     }
 
     /**

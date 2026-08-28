@@ -96,10 +96,16 @@ class CustomerController extends Controller
 
         // Everything we've emailed this customer: rows stamped with their id
         // at send time, plus unstamped framework mail (password resets,
-        // invitations) matched by recipient address.
+        // invitations) matched by recipient address. The address branch is
+        // restricted to unstamped rows — a user can belong to several
+        // customers, and mail stamped for one must not appear in another's
+        // history.
         $emailLogs = \App\Models\EmailLog::query()
-            ->where('customer_id', $customer->id)
-            ->orWhereIn('to_email', $customer->users->pluck('email')->filter())
+            ->where(function ($query) use ($customer) {
+                $query->where('customer_id', $customer->id)
+                    ->orWhere(fn ($q) => $q->whereNull('customer_id')
+                        ->whereIn('to_email', $customer->users->pluck('email')->filter()->all()));
+            })
             ->latest()
             ->limit(100)
             ->get(['id', 'to_email', 'subject', 'mailable', 'created_at'])
