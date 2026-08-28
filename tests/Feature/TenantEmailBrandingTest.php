@@ -63,6 +63,20 @@ class TenantEmailBrandingTest extends TestCase
         $this->assertStringContainsString('Real Property Ads Team', $mail->salutation);
     }
 
+    public function test_notification_mail_renders_through_the_branded_layout(): void
+    {
+        // Notification emails used to render through Laravel's stock grey
+        // template — customers read that as a misconfigured system email.
+        $customer = Customer::factory()->create(['tenant_key' => 'realpropertyads']);
+        $user = User::factory()->create();
+
+        $html = (new \App\Notifications\SiteScanCompleted($customer, 12))->toMail($user)->render();
+
+        $this->assertStringContainsString('Real Property Ads', $html);
+        $this->assertStringContainsString('#1B3C6B', $html); // the skin's own palette, not the stock template
+        $this->assertStringContainsString('https://realpropertyads.com/brand-guidelines', $html);
+    }
+
     public function test_tenant_url_helper_defaults_to_app_url(): void
     {
         $this->assertSame(url('/dashboard'), Tenant::url(null, '/dashboard'));

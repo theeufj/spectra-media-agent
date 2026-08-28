@@ -5,7 +5,7 @@ import SideNav from './SideNav';
 import FacebookAdAccountModal from '@/Components/FacebookAdAccountModal';
 
 export default function CustomerDetail({ auth, bm_configured }) {
-    const { customer, adSpendCredit } = usePage().props;
+    const { customer, adSpendCredit, emailLogs = [] } = usePage().props;
     const [showFacebookModal, setShowFacebookModal] = useState(false);
     const [editingFbAccount, setEditingFbAccount] = useState(false);
     const [editingMsAccount, setEditingMsAccount] = useState(false);
@@ -537,6 +537,52 @@ export default function CustomerDetail({ auth, bm_configured }) {
                         </div>
                     ) : (
                         <p className="text-sm text-gray-500">No ad spend credit account initialised for this customer.</p>
+                    )}
+                </div>
+            </div>
+
+            {/* Email history — every message the platform has sent this customer */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-8">
+                <div className="bg-white shadow rounded-lg p-6">
+                    <h3 className="text-lg font-medium text-gray-900 mb-1">Email History</h3>
+                    <p className="text-sm text-gray-500 mb-4">
+                        Everything we've emailed this customer, newest first. A row means the mail server accepted the message.
+                    </p>
+                    {emailLogs.length === 0 ? (
+                        <p className="text-sm text-gray-500">No emails recorded yet. Logging began when this feature shipped, so older sends won't appear.</p>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead>
+                                    <tr className="text-left text-xs text-gray-500 uppercase tracking-wide">
+                                        <th className="py-2 pr-4">Sent</th>
+                                        <th className="py-2 pr-4">To</th>
+                                        <th className="py-2 pr-4">Subject</th>
+                                        <th className="py-2">Type</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {emailLogs.map(log => (
+                                        <tr key={log.id}>
+                                            <td className="py-2 pr-4 whitespace-nowrap text-gray-500">
+                                                {new Date(log.sent_at).toLocaleString()}
+                                            </td>
+                                            <td className="py-2 pr-4 whitespace-nowrap text-gray-700">{log.to_email}</td>
+                                            <td className="py-2 pr-4 text-gray-900">{log.subject || '—'}</td>
+                                            <td className="py-2">
+                                                {log.type ? (
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                                        {log.type}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400 text-xs">system</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
             </div>

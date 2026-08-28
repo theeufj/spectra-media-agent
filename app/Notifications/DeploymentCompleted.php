@@ -28,7 +28,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
     public function toMail(object $notifiable): MailMessage
     {
         if ($this->failureCount > 0 && $this->successCount === 0) {
-            return (new MailMessage)
+            return $this->brandedMail()
                 ->subject('Campaign deployment issue: '.$this->campaign->name)
                 ->greeting('Hi '.$notifiable->name.',')
                 ->line("We ran into an issue deploying your campaign \"{$this->campaign->name}\" and our team has been notified.")
@@ -37,7 +37,7 @@ class DeploymentCompleted extends Notification implements ShouldQueue
                 ->salutation($this->teamSalutation());
         }
 
-        $mail = (new MailMessage)
+        $mail = $this->brandedMail()
             ->subject('Your campaign is live: '.$this->campaign->name)
             ->greeting('Great news, '.$notifiable->name.'!')
             ->line("Your campaign **\"{$this->campaign->name}\"** is now live and your ads are running.");

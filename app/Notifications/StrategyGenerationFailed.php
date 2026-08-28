@@ -32,7 +32,7 @@ class StrategyGenerationFailed extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
+        return $this->brandedMail()
             ->subject('Strategy Generation Failed: '.$this->campaign->name)
             ->error()
             ->greeting('Hi '.$notifiable->name.',')

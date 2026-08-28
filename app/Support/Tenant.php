@@ -52,6 +52,29 @@ class Tenant
     }
 
     /**
+     * The blade variables the branded email layout consumes. Shared by
+     * mailables (HasTenantBranding) and notification mails (TenantAware) so
+     * both kinds of email dress identically.
+     *
+     * @return array<string, string>
+     */
+    public static function viewData(?string $key): array
+    {
+        $config = self::config($key);
+
+        return [
+            'tenantName' => $config['name'] ?? 'Site to Spend',
+            'tenantPrimary' => $config['colors']['primary'] ?? '#ff4d00',
+            'tenantDark' => $config['colors']['dark'] ?? '#cc3d00',
+            'tenantAccent' => $config['colors']['accent'] ?? '#ffc300',
+            'tenantLogoText' => $config['logo_text'] ?? 'Site to Spend',
+            // For links in email bodies: the skin's own domain serves the
+            // same app, so path-only routes prefixed with this stay on-brand.
+            'tenantBaseUrl' => rtrim(self::url($key, '/'), '/'),
+        ];
+    }
+
+    /**
      * Resolve a tenant key from whatever models an email or notification
      * holds. Customers own the answer; campaigns borrow their customer's;
      * a user's own key is the last resort (they may belong to several).
@@ -82,6 +105,36 @@ class Tenant
         foreach ($candidates as $model) {
             if ($model instanceof \App\Models\User && $model->tenant_key) {
                 return $model->tenant_key;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The customer an email or notification is about, resolved from the
+     * models it holds — same walk as keyFromModels, minus the user fallback
+     * (a user may belong to several customers). Feeds the per-customer
+     * email log.
+     */
+    public static function customerFromModels(object ...$candidates): ?\App\Models\Customer
+    {
+        foreach ($candidates as $model) {
+            if ($model instanceof \App\Models\Customer) {
+                return $model;
+            }
+        }
+        foreach ($candidates as $model) {
+            if ($model instanceof \App\Models\Campaign && $model->customer) {
+                return $model->customer;
+            }
+        }
+        foreach ($candidates as $model) {
+            if ($model instanceof \Illuminate\Database\Eloquent\Model
+                && ! $model instanceof \App\Models\User
+                && isset($model->customer)
+                && $model->customer instanceof \App\Models\Customer) {
+                return $model->customer;
             }
         }
 

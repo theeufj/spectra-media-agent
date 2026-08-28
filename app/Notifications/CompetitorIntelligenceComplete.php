@@ -25,7 +25,7 @@ class CompetitorIntelligenceComplete extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $mail = (new MailMessage)
+        $mail = $this->brandedMail()
             ->subject('Competitor Intelligence Report: '.$this->customer->name)
             ->greeting('Hi '.$notifiable->name.',')
             ->line('Your competitor intelligence analysis for **'.$this->customer->name.'** is complete.');

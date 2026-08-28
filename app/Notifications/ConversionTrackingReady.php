@@ -26,7 +26,7 @@ class ConversionTrackingReady extends Notification implements ShouldQueue
     {
         $setupUrl = $this->tenantUrl(route('customers.gtm.setup', $this->customer->id, false));
 
-        return (new MailMessage)
+        return $this->brandedMail()
             ->subject('Action required: install your conversion tracking snippet')
             ->greeting('Hi '.$notifiable->name.',')
             ->line("We've set up conversion tracking for **{$this->customer->name}**. Your Google Tag Manager container is provisioned and all ad conversion tags are configured.")

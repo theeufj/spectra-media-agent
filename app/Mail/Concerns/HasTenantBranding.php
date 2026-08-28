@@ -2,38 +2,12 @@
 
 namespace App\Mail\Concerns;
 
+use App\Support\Tenant;
+
 trait HasTenantBranding
 {
     protected function tenantViewData(?string $tenantKey = null): array
     {
-        $key = $tenantKey ?? ($this->tenantKey ?? null);
-
-        $tenants = config('tenants');
-        $config = null;
-
-        if ($key) {
-            foreach ($tenants as $domain => $tenant) {
-                if (is_array($tenant) && ($tenant['key'] ?? null) === $key) {
-                    $config = $tenant;
-                    break;
-                }
-            }
-        }
-
-        if (! $config) {
-            $defaultDomain = $tenants['default'] ?? 'sitetospend.com';
-            $config = $tenants[$defaultDomain] ?? $tenants['sitetospend.com'];
-        }
-
-        return [
-            'tenantName' => $config['name'] ?? 'Site to Spend',
-            'tenantPrimary' => $config['colors']['primary'] ?? '#ff4d00',
-            'tenantDark' => $config['colors']['dark'] ?? '#cc3d00',
-            'tenantAccent' => $config['colors']['accent'] ?? '#ffc300',
-            'tenantLogoText' => $config['logo_text'] ?? 'Site to Spend',
-            // For links in email bodies: the skin's own domain serves the
-            // same app, so path-only routes prefixed with this stay on-brand.
-            'tenantBaseUrl' => rtrim(\App\Support\Tenant::url($key, '/'), '/'),
-        ];
+        return Tenant::viewData($tenantKey ?? ($this->tenantKey ?? null));
     }
 }

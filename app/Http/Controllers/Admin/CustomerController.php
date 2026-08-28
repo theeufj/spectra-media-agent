@@ -94,8 +94,26 @@ class CustomerController extends Controller
         $totalActualSpend = round($googleSpend + $facebookSpend, 2);
         $totalDebited = $credit ? round($credit->transactions()->whereIn('type', [AdSpendTransaction::TYPE_DEDUCTION, AdSpendTransaction::TYPE_ADJUSTMENT])->sum('amount'), 2) : 0;
 
+        // Everything we've emailed this customer: rows stamped with their id
+        // at send time, plus unstamped framework mail (password resets,
+        // invitations) matched by recipient address.
+        $emailLogs = \App\Models\EmailLog::query()
+            ->where('customer_id', $customer->id)
+            ->orWhereIn('to_email', $customer->users->pluck('email')->filter())
+            ->latest()
+            ->limit(100)
+            ->get(['id', 'to_email', 'subject', 'mailable', 'created_at'])
+            ->map(fn ($log) => [
+                'id' => $log->id,
+                'to_email' => $log->to_email,
+                'subject' => $log->subject,
+                'type' => $log->mailable ? class_basename($log->mailable) : null,
+                'sent_at' => $log->created_at,
+            ]);
+
         return Inertia::render('Admin/CustomerDetail', [
             'customer' => $customer,
+            'emailLogs' => $emailLogs,
             'bm_configured' => app(\App\Services\FacebookAds\BusinessManagerService::class)->isConfigured(),
             'adSpendCredit' => $credit ? [
                 'current_balance' => (float) $credit->current_balance,

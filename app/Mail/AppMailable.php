@@ -28,6 +28,22 @@ abstract class AppMailable extends Mailable
     }
 
     /**
+     * Stamp the customer this email is about onto the message, so the
+     * MessageSent listener can file it in the per-customer email log
+     * without guessing from the recipient address.
+     */
+    public function headers(): \Illuminate\Mail\Mailables\Headers
+    {
+        $models = array_filter(get_object_vars($this), 'is_object');
+        $customer = Tenant::customerFromModels(...array_values($models));
+
+        return new \Illuminate\Mail\Mailables\Headers(text: array_filter([
+            'X-App-Mailable' => static::class,
+            'X-Customer-Id' => $customer?->id ? (string) $customer->id : null,
+        ]));
+    }
+
+    /**
      * Most mailables never call withTenant() — resolve the skin from the
      * models they already carry (customer first, then campaign, then user),
      * so every subclass is tenant-branded without per-send-site plumbing.

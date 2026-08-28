@@ -38,7 +38,7 @@ class SiteScanCompleted extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
+        return $this->brandedMail()
             ->subject('We\'ve finished scanning '.($this->customer->website ?: 'your website'))
             ->greeting('Hi '.$notifiable->name.',')
             ->line("We read {$this->totalPages} pages of {$this->customer->website} and built your brand profile from them — your voice, your services, your audience.")

@@ -33,7 +33,7 @@ class SiteScanFailed extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        return (new MailMessage)
+        return $this->brandedMail()
             ->subject("We couldn't finish scanning ".($this->customer->website ?: 'your website'))
             ->greeting('Hi '.$notifiable->name.',')
             ->line("We ran into a problem while scanning {$this->customer->website} to learn about your business.")
