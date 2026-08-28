@@ -55,11 +55,7 @@ export function useJobWatch(url, {
         }
     }, [enabled]);
 
-    // Consecutive poll failures. A single blip shouldn't scare anyone, but a
-    // page whose session died would otherwise show a spinner forever.
-    const errorStreakRef = useRef(0);
-
-    const { data, error } = usePolling(enabled ? url : null, {
+    const { data, error, failureStreak } = usePolling(enabled ? url : null, {
         interval,
         until: (result) => {
             if (settledRef.current) return true;
@@ -91,19 +87,14 @@ export function useJobWatch(url, {
         },
     });
 
+    // A single blip shouldn't scare anyone, but a page whose session died
+    // would otherwise show a spinner forever.
     useEffect(() => {
-        if (!error) {
-            errorStreakRef.current = 0;
-
-            return;
-        }
-
-        errorStreakRef.current += 1;
-        if (errorStreakRef.current >= 4 && !settledRef.current) {
+        if (failureStreak >= 4 && !settledRef.current) {
             settledRef.current = true;
             setPhase('disconnected');
         }
-    }, [error]);
+    }, [failureStreak]);
 
     return { phase, data, error };
 }

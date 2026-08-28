@@ -27,6 +27,11 @@ export function usePolling(url, options = {}) {
     const [data, setData] = useState(null);
     const [error, setError] = useState(null);
     const [isPolling, setIsPolling] = useState(enabled);
+    // Consecutive failed ticks, reset by any success. A monotonically
+    // changing number, unlike `error`, which can be the same instance twice
+    // and bail out of re-renders — callers watching for sustained failure
+    // (useJobWatch's disconnected phase) count on this.
+    const [failureStreak, setFailureStreak] = useState(0);
 
     // Keep the stop predicate in a ref so callers can pass an inline arrow
     // without restarting the interval on every render.
@@ -60,9 +65,13 @@ export function usePolling(url, options = {}) {
                 if (cancelled) return;
                 setData(result);
                 setError(null);
+                setFailureStreak(0);
                 if (untilRef.current(result)) stop();
             } catch (e) {
-                if (!cancelled) setError(e);
+                if (!cancelled) {
+                    setError(e);
+                    setFailureStreak((n) => n + 1);
+                }
             } finally {
                 inFlight = false;
             }
@@ -77,5 +86,5 @@ export function usePolling(url, options = {}) {
         };
     }, [url, interval, enabled, immediate]);
 
-    return { data, error, isPolling };
+    return { data, error, isPolling, failureStreak };
 }
