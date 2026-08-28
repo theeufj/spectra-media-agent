@@ -47,12 +47,20 @@ class QuickStartController extends Controller
         // timezone instead, which is the one regional signal we actually have.
         $country = $request->input('country') ?: self::countryFromTimezone($timezone);
 
+        // The skin the customer is being created ON wins — every lifecycle
+        // email brands itself from this. The live host beats the user's
+        // stored key because OAuth signups can carry the wrong tenant: the
+        // provider redirects to one registered callback URI, so a skin-domain
+        // signup gets stamped with the canonical domain's tenant.
+        $tenantKey = $request->attributes->get('tenant')['key'] ?? $user->tenant_key;
+        if ($tenantKey && ! $user->tenant_key) {
+            $user->forceFill(['tenant_key' => $tenantKey])->save();
+        }
+
         $customer = Customer::create([
             'name' => $businessName,
             'website' => $url,
-            // The creator's skin is the customer's skin — every lifecycle
-            // email brands itself from this.
-            'tenant_key' => $user->tenant_key,
+            'tenant_key' => $tenantKey,
             'country' => $country,
             'timezone' => $timezone,
             // Must be right at creation time: ProvisionGoogleAdsAccount bakes

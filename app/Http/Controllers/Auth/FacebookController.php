@@ -34,11 +34,16 @@ class FacebookController extends Controller
                 return redirect()->route('login')->with('error', 'Unable to retrieve email from Facebook. Please use a different login method.');
             }
 
+            // Same tenant caveat as GoogleController: the callback host is
+            // the best signal available; QuickStart re-derives from the host.
+            $tenant = request()->attributes->get('tenant', config('tenants.'.config('tenants.default')));
+
             $user = User::firstOrCreate([
                 'email' => $email,
             ], [
                 'name' => $facebookUser->getName(),
                 'password' => Hash::make(Str::random(24)),
+                'tenant_key' => $tenant['key'] ?? null,
             ]);
 
             // Always mark email as verified when signing in via Facebook (Facebook has verified it)
@@ -48,7 +53,7 @@ class FacebookController extends Controller
             }
 
             if ($user->wasRecentlyCreated) {
-                Mail::to($user->email)->send(new WelcomeEmail($user->name));
+                Mail::to($user->email)->send((new WelcomeEmail($user->name))->withTenant($user->tenant_key));
             }
 
             Auth::login($user, true);

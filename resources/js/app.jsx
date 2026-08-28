@@ -25,14 +25,21 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 // titles ("Dashboard", "Quick Start") get the brand appended.
 const brands = ['sitetospend', 'Site to Spend', 'Real Property Ads'];
 
+// The suffix must be the TENANT's name, not the build-time app name — a
+// visitor on realpropertyads.com used to see "Register - Site to Spend" in
+// their tab. Captured from the shared tenant prop in setup(), which runs
+// before the first title render.
+let brandName = appName;
+
 createInertiaApp({
-    title: (title) => (brands.some((brand) => title.includes(brand)) ? title : `${title} - ${appName}`),
+    title: (title) => (brands.some((brand) => title.includes(brand)) ? title : `${title} - ${brandName}`),
     resolve: (name) =>
         resolvePageComponent(
             `./Pages/${name}.jsx`,
             import.meta.glob('./Pages/**/*.jsx'),
         ),
     setup({ el, App, props }) {
+        brandName = props.initialPage.props.tenant?.name ?? appName;
         initConversions(props.initialPage.props.conversionTargets);
         const root = createRoot(el);
 

@@ -75,9 +75,10 @@ class CustomerController extends Controller
             $validated['industry'] = $tenant['vertical'];
         }
 
-        // The creator's skin is the customer's skin — lifecycle email
-        // branding reads this.
-        $validated['tenant_key'] = $user->tenant_key;
+        // The skin the customer is created ON wins — the live host beats the
+        // user's stored key, which OAuth signups can carry wrong (the
+        // provider callback lands on the canonical domain).
+        $validated['tenant_key'] = $tenant['key'] ?? $user->tenant_key;
 
         $customer = Customer::create($validated);
 

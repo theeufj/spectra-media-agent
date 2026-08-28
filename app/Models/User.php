@@ -24,6 +24,16 @@ class User extends Authenticatable implements MustVerifyEmail
     use Billable, HasFactory, Notifiable;
 
     /**
+     * Tenant-aware replacement for the stock verification email: branded for
+     * the skin the user signed up under, linking to that skin's own domain
+     * (where their session actually lives).
+     */
+    public function sendEmailVerificationNotification(): void
+    {
+        $this->notify(new \App\Notifications\VerifyEmailAddress);
+    }
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var list<string>

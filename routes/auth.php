@@ -53,12 +53,14 @@ Route::middleware('auth')->group(function () {
         ]);
     })->name('verification.notice');
 
-    // Handle the email verification link
+    // Handle the email verification link. signed:relative because the link
+    // is issued on the tenant's own domain (VerifyEmailAddress) — the
+    // signature must hold whichever skin domain it was prefixed with.
     Route::get('/email/verify/{id}/{hash}', function (EmailVerificationRequest $request) {
         $request->fulfill();
 
         return redirect()->intended(route('quick-start'))->with('status', 'Your email has been verified!');
-    })->middleware(['signed', 'throttle:6,1'])->name('verification.verify');
+    })->middleware(['signed:relative', 'throttle:6,1'])->name('verification.verify');
 
     // Resend verification email
     Route::post('/email/verification-notification', function (Request $request) {

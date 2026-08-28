@@ -72,7 +72,7 @@ export default function Register({ enabledPlatforms = [] }) {
                             type="text"
                             name="name"
                             value={data.name}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 sm:text-sm"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
                             autoComplete="name"
                             autoFocus
                             onChange={(e) => setData('name', e.target.value)}
@@ -92,7 +92,7 @@ export default function Register({ enabledPlatforms = [] }) {
                             type="email"
                             name="email"
                             value={data.email}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 sm:text-sm"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
                             autoComplete="username"
                             onChange={(e) => setData('email', e.target.value)}
                             required
@@ -111,7 +111,7 @@ export default function Register({ enabledPlatforms = [] }) {
                             type="password"
                             name="password"
                             value={data.password}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 sm:text-sm"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
                             autoComplete="new-password"
                             onChange={(e) => setData('password', e.target.value)}
                             required
@@ -130,7 +130,7 @@ export default function Register({ enabledPlatforms = [] }) {
                             type="password"
                             name="password_confirmation"
                             value={data.password_confirmation}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 sm:text-sm"
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary sm:text-sm"
                             autoComplete="new-password"
                             onChange={(e) => setData('password_confirmation', e.target.value)}
                             required
@@ -156,7 +156,7 @@ export default function Register({ enabledPlatforms = [] }) {
                     <button
                         type="submit"
                         disabled={processing}
-                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-flame-orange-600 hover:bg-flame-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-flame-orange-500 disabled:opacity-50"
+                        className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-brand-primary hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary disabled:opacity-50"
                     >
                         {processing ? 'Creating account...' : 'Register'}
                     </button>
@@ -191,7 +191,7 @@ export default function Register({ enabledPlatforms = [] }) {
                 <div className="mt-4 text-center">
                     <Link
                         href={route('login')}
-                        className="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-flame-orange-500"
+                        className="underline text-sm text-gray-600 hover:text-gray-900 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary"
                     >
                         Already registered?
                     </Link>

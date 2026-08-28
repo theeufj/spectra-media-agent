@@ -43,12 +43,19 @@ class GoogleController extends Controller
 
         $demoUrl = session()->pull('oauth_demo_url');
 
+        // Best available tenant signal: the host this callback ran on. OAuth
+        // providers redirect to one registered URI, so a skin-domain signup
+        // may land here on the canonical domain — QuickStart re-derives the
+        // customer's tenant from the request host to close that gap.
+        $tenant = request()->attributes->get('tenant', config('tenants.'.config('tenants.default')));
+
         $user = User::firstOrCreate([
             'email' => $googleUser->getEmail(),
         ], [
             'name' => $googleUser->getName(),
             'password' => Hash::make(Str::random(24)),
             'demo_url' => $demoUrl,
+            'tenant_key' => $tenant['key'] ?? null,
         ]);
 
         // Always mark email as verified when signing in via Google (Google has verified it)
@@ -80,7 +87,7 @@ class GoogleController extends Controller
                 RecordSiteMicrosoftConversion::dispatch($user, 'signup');
             }
 
-            Mail::to($user->email)->send(new WelcomeEmail($user->name));
+            Mail::to($user->email)->send((new WelcomeEmail($user->name))->withTenant($user->tenant_key));
             Mail::raw(
                 "New registration on SiteToSpend (Google OAuth)\n\nName: {$user->name}\nEmail: {$user->email}\nTime: ".now()->format('d M Y H:i T'),
                 fn ($m) => $m->to(config('app.admin_email'))->subject("New signup: {$user->name}")

@@ -27,7 +27,11 @@
         --}}
         @php
             $meta = data_get($page ?? [], 'props.meta', []);
-            $metaTitle = $meta['title'] ?? 'sitetospend — AI-Powered Ad Campaign Management';
+            // Defaults speak the tenant's own brand — a realpropertyads.com
+            // page must not fall back to a sitetospend title.
+            $tenantCfg = request()->attributes->get('tenant', config('tenants.'.config('tenants.default'), []));
+            $tenantBrand = ($tenantCfg['logo_text'] ?? 'sitetospend').' — '.($tenantCfg['tagline'] ?? 'AI-Powered Ad Campaign Management');
+            $metaTitle = $meta['title'] ?? $tenantBrand;
             $metaDescription = $meta['description'] ?? 'AI-powered ad campaign management across Google Ads, Facebook Ads, Microsoft Ads, and LinkedIn. 6 autonomous agents optimize your campaigns 24/7.';
             $metaCanonical = $meta['canonical'] ?? str_replace('http://', 'https://', url()->current());
             $metaType = $meta['type'] ?? 'website';
@@ -60,7 +64,7 @@
 
         <!-- Twitter Card Meta Tags -->
         <meta name="twitter:card" content="summary_large_image">
-        <meta name="twitter:title" content="sitetospend — AI-Powered Ad Campaign Management">
+        <meta name="twitter:title" content="{{ $meta['og_title'] ?? $metaTitle }}">
         <meta name="twitter:description" content="6 autonomous AI agents create, manage, and optimize your digital ad campaigns across Google, Facebook, Microsoft, and LinkedIn.">
         <meta name="twitter:image" content="{{ url('/twitter-image.png') }}">
 
