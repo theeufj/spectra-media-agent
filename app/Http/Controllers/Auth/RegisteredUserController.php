@@ -108,9 +108,10 @@ class RegisteredUserController extends Controller
 
         event(new Registered($user));
 
-        \Illuminate\Support\Facades\Mail::to($user->email)->send(
-            (new \App\Mail\WelcomeEmail($user->name))->withTenant($tenant['key'] ?? null)
-        );
+        // No welcome email here: registration's one email is the verification
+        // link. The welcome follows once they verify (SendWelcomeAfterVerification)
+        // — "Welcome!" before "prove this is your address" read backwards, and
+        // an unverified address may not even be theirs.
 
         \Illuminate\Support\Facades\Mail::raw(
             "New registration on SiteToSpend\n\nName: {$user->name}\nEmail: {$user->email}\nTime: ".now()->format('d M Y H:i T'),

@@ -45,6 +45,11 @@ class VerifyEmailAddress extends VerifyEmail
                 ['html' => 'emails.notification', 'text' => 'emails.notification-text'],
                 Tenant::viewData($tenantKey),
             )
+            // Stamp for the email log (stripped before transport). No
+            // customer exists yet — the recipient matcher files it.
+            ->withSymfonyMessage(function ($message) {
+                $message->getHeaders()->addTextHeader(\App\Models\EmailLog::HEADER_MAILABLE, static::class);
+            })
             ->subject('Verify your email address')
             ->greeting('Hi '.($notifiable->name ?? 'there').',')
             ->line('Welcome to '.Tenant::name($tenantKey).'! Click the button below to verify your email address and finish setting up your account.')

@@ -55,6 +55,31 @@ class TenantOnboardingTest extends TestCase
         $this->assertNotNull($user->fresh()->email_verified_at);
     }
 
+    public function test_welcome_email_follows_verification_not_registration(): void
+    {
+        \Illuminate\Support\Facades\Mail::fake();
+
+        $this->post('https://realpropertyads.com/register', [
+            'name' => 'Test Agent',
+            'email' => 'agent@example.com',
+            'password' => 'long-enough-password-1!',
+            'password_confirmation' => 'long-enough-password-1!',
+        ]);
+
+        // Registration's one email is the verification link — welcoming an
+        // address nobody has proven they own read backwards.
+        \Illuminate\Support\Facades\Mail::assertNotSent(\App\Mail\WelcomeEmail::class);
+
+        $user = User::where('email', 'agent@example.com')->firstOrFail();
+        $url = (new VerifyEmailAddress)->toMail($user)->actionUrl;
+        $this->actingAs($user)->get(substr($url, strlen('https://realpropertyads.com')));
+
+        \Illuminate\Support\Facades\Mail::assertSent(
+            \App\Mail\WelcomeEmail::class,
+            fn ($mail) => $mail->hasTo('agent@example.com') && $mail->tenantKey === 'realpropertyads'
+        );
+    }
+
     public function test_quick_start_on_a_skin_host_stamps_the_skin_even_for_a_tenantless_user(): void
     {
         // OAuth signups can arrive with a null or wrong tenant_key (the
