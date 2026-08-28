@@ -52,7 +52,8 @@ class SelfServeOnboardingTest extends TestCase
             'timezone' => 'Australia/Sydney',
         ]);
 
-        $response->assertRedirect(route('dashboard', absolute: false));
+        // The holding screen, not the dashboard — the scan is narrated now.
+        $response->assertRedirect(route('quick-start.scanning', absolute: false));
 
         $customer = $user->customers()->firstOrFail();
         $this->assertSame('https://example.com', $customer->website);

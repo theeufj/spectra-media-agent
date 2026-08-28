@@ -168,6 +168,24 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                         baselineUpdatedAt={extractionBaseline.current}
                         onSettled={() => setIsExtracting(false)}
                     />
+                    {/* Sign-off: the first launch is gated on this confirmation,
+                        so the ask is explicit rather than buried in a toolbar. */}
+                    {!brandGuideline.user_verified && canEdit && (
+                        <div className="mb-6 rounded-lg border-2 border-brand-primary bg-white p-5 flex flex-col sm:flex-row sm:items-center gap-4 shadow-sm">
+                            <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900">This is the brand profile your ads will be written from</p>
+                                <p className="text-sm text-gray-600 mt-0.5">
+                                    Look it over and fix anything we got wrong — then confirm it to move on to your first campaign.
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => router.post(route('brand-guidelines.verify', brandGuideline.id), { continue: true })}
+                                className="flex-shrink-0 px-6 py-3 bg-brand-primary hover:bg-brand-dark text-white rounded-md font-semibold"
+                            >
+                                Confirm & continue →
+                            </button>
+                        </div>
+                    )}
                     {/* Header */}
                     <div className="mb-8">
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">

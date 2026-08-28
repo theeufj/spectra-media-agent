@@ -25,6 +25,28 @@ class QuickStartController extends Controller
         ]);
     }
 
+    /**
+     * The holding screen shown while the scan runs. If the work is already
+     * done (revisit, back button), skip straight to the guidelines.
+     */
+    public function scanning(Request $request)
+    {
+        $customer = $request->user()->customers()->find(session('active_customer_id'));
+
+        if (! $customer) {
+            return redirect()->route('quick-start');
+        }
+
+        if ($customer->brandGuideline()->exists()) {
+            return redirect()->route('brand-guidelines.index', ['review' => 1]);
+        }
+
+        return \Inertia\Inertia::render('QuickStart/Scanning', [
+            'customerName' => $customer->name,
+            'website' => $customer->website,
+        ]);
+    }
+
     public function process(Request $request)
     {
         $validated = $request->validate([
@@ -79,7 +101,10 @@ class QuickStartController extends Controller
         // a timer used to race that, and on a healthy crawl ran the job twice.
         CrawlSitemap::forCustomer($customer, $user);
 
-        return redirect()->route('dashboard')->with('success', "Setting up \"{$businessName}\" — we're scanning your website now. This usually takes a few minutes.");
+        // Not the dashboard: the holding screen narrates the scan (reading
+        // pages → building the brand profile) and lands on the brand
+        // guidelines for sign-off the moment they exist.
+        return redirect()->route('quick-start.scanning');
     }
 
     /**

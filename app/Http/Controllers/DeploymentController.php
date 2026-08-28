@@ -96,6 +96,27 @@ class DeploymentController extends Controller
             ]);
         }
 
+        // 0. First launch requires a signed-off brand profile. Everything we
+        //    deploy is written from the guidelines, so the user must have
+        //    looked at them and confirmed they represent the business before
+        //    the first ad ever runs. Customers who have launched before are
+        //    not re-gated.
+        $hasLaunchedBefore = $customer->campaigns()
+            ->whereIn('status', ['active', 'paused', 'completed', 'ended', 'pending_admin_deployment'])
+            ->exists();
+
+        if (! $hasLaunchedBefore && ! $customer->brandGuideline()->where('user_verified', true)->exists()) {
+            ActivityLog::log('campaign_deploy_blocked', "Deploy blocked — brand profile not confirmed for campaign '{$campaign->name}'", $campaign, [
+                'campaign_id' => $campaign->id,
+                'reason' => 'brand_guideline_unverified',
+            ]);
+
+            return redirect()->route('brand-guidelines.index', ['review' => 1])->with('flash', [
+                'type' => 'error',
+                'message' => 'One last check before your first launch: review your brand profile and confirm it represents your business — every ad we write starts from it.',
+            ]);
+        }
+
         // 1. Subscription Check — the shared teammate-aware rule (also what
         //    the EnsureSubscribed middleware now applies).
         if (! $user->hasSubscriptionAccess($customer)) {

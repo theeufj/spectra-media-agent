@@ -149,6 +149,24 @@ class BrandGuidelineController extends Controller
 
         $brandGuideline->update(['user_verified' => true]);
 
+        // The onboarding review flow signs off and moves straight into
+        // campaign creation — to the auto-generated first campaign when one
+        // exists, otherwise the wizard. Plain verifies stay on the page.
+        if ($request->boolean('continue')) {
+            $autoCampaign = $customer->campaigns()
+                ->whereNotNull('auto_generated_at')
+                ->orderBy('id')
+                ->first();
+
+            if ($autoCampaign && $autoCampaign->strategies()->exists()) {
+                return redirect()->route('campaigns.show', $autoCampaign->id)
+                    ->with('success', 'Brand profile confirmed — here\'s the first campaign we built from it.');
+            }
+
+            return redirect()->route('campaigns.create')
+                ->with('success', 'Brand profile confirmed — let\'s build your first campaign.');
+        }
+
         return back()->with('success', 'Brand guidelines verified!');
     }
 
@@ -187,6 +205,9 @@ class BrandGuidelineController extends Controller
             'quality_score' => $guideline?->extraction_quality_score,
             'failed' => $failed,
             'failure_reason' => $failed ? ($failure->data['reason'] ?? null) : null,
+            // Lets the onboarding holding screen narrate the crawl phase
+            // ("reading N pages…") before extraction begins.
+            'pages' => \App\Models\KnowledgeBase::where('customer_id', $customer->id)->count(),
         ]);
     }
 

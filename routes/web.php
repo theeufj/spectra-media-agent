@@ -400,6 +400,9 @@ Route::middleware(['auth'])->group(function () {
     // URL-first quick start onboarding
     Route::get('/quick-start', [App\Http\Controllers\QuickStartController::class, 'show'])->name('quick-start');
     Route::post('/quick-start', [App\Http\Controllers\QuickStartController::class, 'process'])->name('quick-start.process');
+    // The post-QuickStart holding screen: narrates scan → brand extraction,
+    // then hands off to the brand guidelines for sign-off.
+    Route::get('/quick-start/scanning', [App\Http\Controllers\QuickStartController::class, 'scanning'])->name('quick-start.scanning');
 });
 
 Route::middleware(['auth'])->group(function () {
