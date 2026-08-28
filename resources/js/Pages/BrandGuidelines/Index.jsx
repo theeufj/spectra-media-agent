@@ -1,15 +1,20 @@
-import React, { useState, Fragment } from 'react';
+import React, { useState, useRef, Fragment } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { Dialog, Transition } from '@headlessui/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import ConfirmationModal from '@/Components/ConfirmationModal';
+import BrandExtractionStatus from '@/Components/BrandExtractionStatus';
 
 export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit }) {
     const { flash } = usePage().props;
     const [isEditing, setIsEditing] = useState(false);
     const [activeSection, setActiveSection] = useState('overview');
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null });
-    const [isExtracting, setIsExtracting] = useState(false);
+    // Watch from first render when no guideline exists yet — onboarding may
+    // still be scanning, and this page is where the user comes to find out.
+    const [isExtracting, setIsExtracting] = useState(!brandGuideline);
+    // What "new" means for the watcher: any guideline fresher than this.
+    const extractionBaseline = useRef(brandGuideline?.updated_at ?? null);
     
     const { data, setData, put, processing, errors } = useForm({
         brand_voice: brandGuideline?.brand_voice || { primary_tone: '', description: '', examples: [] },
@@ -40,13 +45,21 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
         });
     };
 
+    // The POST only queues the job — the real work takes minutes. Keep the
+    // watch (and the button's busy state) running until the status endpoint
+    // reports a fresh guideline; BrandExtractionStatus narrates the wait.
+    const startExtraction = () => {
+        extractionBaseline.current = brandGuideline?.updated_at ?? null;
+        setIsExtracting(true);
+        router.post(route('brand-guidelines.re-extract'), {}, {
+            preserveScroll: true,
+            onError: () => setIsExtracting(false),
+        });
+    };
+
     const handleReExtract = () => {
         if (!brandGuideline) {
-            setIsExtracting(true);
-            router.post(route('brand-guidelines.re-extract'), {}, {
-                preserveScroll: true,
-                onFinish: () => setIsExtracting(false),
-            });
+            startExtraction();
             return;
         }
 
@@ -56,11 +69,7 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
             message: 'This will re-analyze your website and update the brand guidelines. Your manual edits will be preserved. Continue?',
             onConfirm: () => {
                 setConfirmModal(prev => ({ ...prev, show: false }));
-                setIsExtracting(true);
-                router.post(route('brand-guidelines.re-extract'), {}, {
-                    preserveScroll: true,
-                    onFinish: () => setIsExtracting(false),
-                });
+                startExtraction();
             },
         });
     };
@@ -90,6 +99,11 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                                 <p className="text-sm font-medium">{flash.success}</p>
                             </div>
                         )}
+                        <BrandExtractionStatus
+                            watching={isExtracting}
+                            baselineUpdatedAt={extractionBaseline.current}
+                            onSettled={() => setIsExtracting(false)}
+                        />
                         <div className="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                             <div className="p-6 text-center">
                                 <h2 className="text-2xl font-bold text-gray-900 mb-4">No Brand Guidelines Yet</h2>
@@ -148,6 +162,12 @@ export default function BrandGuidelinesIndex({ brandGuideline, customer, canEdit
                             <p className="text-sm font-medium">{flash.success}</p>
                         </div>
                     )}
+                    {/* Live narration of a running re-extraction */}
+                    <BrandExtractionStatus
+                        watching={isExtracting}
+                        baselineUpdatedAt={extractionBaseline.current}
+                        onSettled={() => setIsExtracting(false)}
+                    />
                     {/* Header */}
                     <div className="mb-8">
                         <div className="flex flex-col sm:flex-row justify-between items-start gap-4">

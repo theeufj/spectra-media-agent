@@ -153,6 +153,44 @@ class BrandGuidelineController extends Controller
     }
 
     /**
+     * Live status for the extraction the page is waiting on. Polled by the
+     * frontend (useJobWatch) so "Extract" doesn't dispatch a queued job and
+     * then go silent for the minutes it actually takes.
+     */
+    public function status(Request $request)
+    {
+        $user = $request->user();
+        $customer = $user->customers()->find(session('active_customer_id'));
+
+        if (! $customer) {
+            return response()->json(['exists' => false, 'failed' => false]);
+        }
+
+        $guideline = $customer->brandGuideline()
+            ->select(['id', 'customer_id', 'extraction_quality_score', 'extracted_at', 'updated_at'])
+            ->first();
+
+        // A scan-failure notification newer than the latest guideline means
+        // the run the user is watching is the one that failed.
+        $failure = $user->notifications()
+            ->where('type', \App\Notifications\SiteScanFailed::class)
+            ->where('data->customer_id', $customer->id)
+            ->latest()
+            ->first();
+
+        $failed = $failure !== null
+            && ($guideline === null || $failure->created_at->gt($guideline->updated_at));
+
+        return response()->json([
+            'exists' => $guideline !== null,
+            'updated_at' => $guideline?->updated_at?->toIso8601String(),
+            'quality_score' => $guideline?->extraction_quality_score,
+            'failed' => $failed,
+            'failure_reason' => $failed ? ($failure->data['reason'] ?? null) : null,
+        ]);
+    }
+
+    /**
      * Trigger re-extraction of brand guidelines from knowledge base.
      */
     public function reExtract(Request $request)
@@ -167,7 +205,9 @@ class BrandGuidelineController extends Controller
         // Ensure user has access to this customer
         $customer = $user->customers()->findOrFail($activeCustomerId);
 
-        \App\Jobs\ExtractBrandGuidelines::dispatch($customer);
+        // force: the user explicitly asked; the freshness skip that guards
+        // the onboarding chain's duplicate dispatches must not eat this run.
+        \App\Jobs\ExtractBrandGuidelines::dispatch($customer, force: true);
 
         Log::info('Brand guideline re-extraction triggered', [
             'user_id' => $user->id,

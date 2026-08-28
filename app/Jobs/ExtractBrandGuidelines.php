@@ -29,8 +29,14 @@ class ExtractBrandGuidelines implements ShouldQueue
     /**
      * Create a new job instance.
      */
+    /**
+     * $force bypasses the freshness skip below: it exists for the explicit
+     * "Re-analyze Website" button, where the user asked for a fresh run and
+     * a silent no-op reads as the feature being broken.
+     */
     public function __construct(
-        protected Customer $customer
+        protected Customer $customer,
+        protected bool $force = false,
     ) {}
 
     /**
@@ -60,7 +66,7 @@ class ExtractBrandGuidelines implements ShouldQueue
         // the whole chain — emails, asset harvest, first campaign. Re-running
         // would duplicate all of it.
         $existing = $this->customer->brandGuideline;
-        if ($existing && $existing->created_at->gt(now()->subHour())) {
+        if (! $this->force && $existing && $existing->created_at->gt(now()->subHour())) {
             Log::info('ExtractBrandGuidelines: fresh guideline already exists, skipping duplicate run', [
                 'customer_id' => $this->customer->id,
                 'guideline_id' => $existing->id,

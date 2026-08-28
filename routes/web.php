@@ -188,6 +188,9 @@ Route::middleware(['auth'])->group(function () {
     // POST /brand-guidelines/re-extract
     Route::post('/brand-guidelines/re-extract', [App\Http\Controllers\BrandGuidelineController::class, 'reExtract'])->name('brand-guidelines.re-extract');
 
+    // GET /brand-guidelines/status — polled while an extraction runs
+    Route::get('/brand-guidelines/status', [App\Http\Controllers\BrandGuidelineController::class, 'status'])->name('brand-guidelines.status');
+
     // Route to export brand guidelines as PDF.
     // GET /brand-guidelines/export-pdf
     Route::get('/brand-guidelines/export-pdf', [App\Http\Controllers\BrandGuidelineController::class, 'exportPdf'])->name('brand-guidelines.export-pdf');

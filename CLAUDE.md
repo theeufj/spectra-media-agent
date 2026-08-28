@@ -134,6 +134,7 @@ For the JSON endpoints that sit alongside Inertia:
 vendor/bin/pint            # format
 vendor/bin/phpstan analyse # static analysis against the baseline
 php artisan test
+npm test                   # frontend (vitest) — resources/js/tests/
 ```
 
 Don't add to `phpstan-baseline.neon` — it's there to freeze existing debt, not to
