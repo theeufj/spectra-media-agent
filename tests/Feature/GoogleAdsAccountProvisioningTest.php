@@ -96,6 +96,17 @@ class GoogleAdsAccountProvisioningTest extends TestCase
         // One customer carried "DOL", which is not an ISO 4217 code — so a bad
         // value does not produce a failed call to retry, it produces a
         // permanently wrong account.
+        //
+        // The MCC row matters: without one the job exits before the currency
+        // check, and this test only passed on machines whose .env supplied
+        // the fallback — CI has no such env and saw an empty activity table.
+        \App\Models\MccAccount::create([
+            'name' => 'Test MCC',
+            'google_customer_id' => '111-222-3333',
+            'refresh_token' => 'test-token',
+            'is_active' => true,
+        ]);
+
         $customer = Customer::factory()->create([
             'google_ads_customer_id' => null,
             'currency_code' => 'DOL',

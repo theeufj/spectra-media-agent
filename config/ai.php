@@ -162,6 +162,12 @@ return [
         'gemini-embedding-001' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'text-embedding-005' => ['input' => 0.0010, 'output' => 0.00,  'cached' => 0.00],
         'veo-3.1-generate-001' => ['input' => 0.00,   'output' => 0.00,  'cached' => 0.00], // billed per second
+        // OpenRouter Grok models bill flat per artefact, not per token:
+        // images via openrouter_image_cost, video via video_cost_per_second.
+        // Both are recorded as cost_override at dispatch; the zero entries
+        // here exist so token-based cost tracking knows they are covered.
+        'x-ai/grok-imagine-image-2.0' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // flat per image
+        'x-ai/grok-imagine-video-1.5' => ['input' => 0.00, 'output' => 0.00, 'cached' => 0.00], // billed per second
     ],
 
     /*
