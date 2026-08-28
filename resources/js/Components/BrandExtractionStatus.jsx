@@ -63,6 +63,11 @@ export default function BrandExtractionStatus({ watching, baselineUpdatedAt, onS
             title: 'This is taking longer than usual',
             message: 'The analysis is still running in the background. We\'ll email you the moment it\'s ready — no need to keep this page open.',
         },
+        disconnected: {
+            state: 'timeout',
+            title: 'We lost the connection',
+            message: 'Refresh the page to keep watching — the analysis continues in the background either way.',
+        },
     };
 
     const banner = banners[phase];

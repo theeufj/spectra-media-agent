@@ -51,6 +51,21 @@ export function ScanningProgress({ phase, data, website }) {
         );
     }
 
+    if (phase === 'disconnected') {
+        return (
+            <div className="text-center">
+                <p className="text-4xl mb-4">🔌</p>
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">We lost the connection</h1>
+                <p className="text-gray-600 mb-6">
+                    The page can't reach the server — your session may have ended. Refresh to pick up where you left off; the work continues in the background either way.
+                </p>
+                <button onClick={() => window.location.reload()} className="px-5 py-2.5 bg-brand-primary text-white rounded-md font-semibold">
+                    Refresh
+                </button>
+            </div>
+        );
+    }
+
     if (phase === 'timeout') {
         return (
             <div className="text-center">

@@ -92,6 +92,36 @@ describe('useJobWatch', () => {
         expect(getByTestId('phase').textContent).toBe('timeout');
     });
 
+    it('settles on disconnected after repeated poll failures instead of spinning forever', async () => {
+        // The real case: the session died (user logged out or deleted) and
+        // every poll bounces off the auth layer. The page must say so.
+        fetchJson.mockRejectedValue(new Error('401'));
+
+        const { getByTestId } = render(
+            <Harness enabled options={{ interval: 1000, isDone: () => false }} />
+        );
+
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        await act(() => vi.advanceTimersByTimeAsync(5000));
+
+        expect(getByTestId('phase').textContent).toBe('disconnected');
+    });
+
+    it('a transient failure does not disconnect the watch', async () => {
+        fetchJson
+            .mockRejectedValueOnce(new Error('blip'))
+            .mockResolvedValue({ finished: false });
+
+        const { getByTestId } = render(
+            <Harness enabled options={{ interval: 1000, isDone: (d) => d.finished }} />
+        );
+
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        await act(() => vi.advanceTimersByTimeAsync(6000));
+
+        expect(getByTestId('phase').textContent).toBe('watching');
+    });
+
     it('re-arms for a fresh watch when enabled goes false then true again', async () => {
         fetchJson.mockResolvedValue({ finished: true });
 

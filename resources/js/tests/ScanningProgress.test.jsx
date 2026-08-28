@@ -35,6 +35,13 @@ describe('ScanningProgress', () => {
         expect(getByText('Add content manually')).toBeInTheDocument();
     });
 
+    it('tells a dead session to refresh instead of spinning forever', () => {
+        const { getByText } = render(<ScanningProgress phase="disconnected" data={null} />);
+
+        expect(getByText('We lost the connection')).toBeInTheDocument();
+        expect(getByText('Refresh')).toBeInTheDocument();
+    });
+
     it('offers the dashboard exit on timeout without pretending anything failed', () => {
         const { getByText, queryByText } = render(
             <ScanningProgress phase="timeout" data={{ pages: 20 }} />

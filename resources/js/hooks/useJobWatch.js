@@ -10,8 +10,11 @@ import { usePolling } from '@/hooks/usePolling';
  * actual work runs for minutes with the page communicating nothing. This
  * hook keeps a phase the UI can narrate.
  *
- * Phases: idle → watching → done | failed | timeout. Terminal phases stick
- * until `enabled` goes false and true again (a new watch).
+ * Phases: idle → watching → done | failed | timeout | disconnected.
+ * Terminal phases stick until `enabled` goes false and true again (a new
+ * watch). `disconnected` means the status endpoint itself has failed
+ * repeatedly — an expired session, a deploy, a dropped connection — and
+ * the UI should say "refresh" instead of spinning forever.
  *
  * @param {string} url                       status endpoint
  * @param {object}  options
@@ -52,6 +55,10 @@ export function useJobWatch(url, {
         }
     }, [enabled]);
 
+    // Consecutive poll failures. A single blip shouldn't scare anyone, but a
+    // page whose session died would otherwise show a spinner forever.
+    const errorStreakRef = useRef(0);
+
     const { data, error } = usePolling(enabled ? url : null, {
         interval,
         until: (result) => {
@@ -83,6 +90,20 @@ export function useJobWatch(url, {
             return false;
         },
     });
+
+    useEffect(() => {
+        if (!error) {
+            errorStreakRef.current = 0;
+
+            return;
+        }
+
+        errorStreakRef.current += 1;
+        if (errorStreakRef.current >= 4 && !settledRef.current) {
+            settledRef.current = true;
+            setPhase('disconnected');
+        }
+    }, [error]);
 
     return { phase, data, error };
 }
