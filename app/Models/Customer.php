@@ -31,6 +31,9 @@ class Customer extends Model
         'currency_code',
         'website',
         'tenant_key',
+        'service_type',
+        'setup_fee_paid_at',
+        'handover_at',
         'phone',
         'google_ads_customer_id',
         'google_ads_link_status',
@@ -73,6 +76,8 @@ class Customer extends Model
     ];
 
     protected $casts = [
+        'setup_fee_paid_at' => 'datetime',
+        'handover_at' => 'datetime',
         'gtm_config' => 'array',
         'gtm_installed' => 'boolean',
         'gtm_detected' => 'boolean',
@@ -249,6 +254,26 @@ class Customer extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class)->withPivot('role');
+    }
+
+    /**
+     * A one-and-done customer whose single setup fee has been confirmed
+     * paid. Grants deploy access without a subscription; excluded from
+     * every recurring management agent.
+     */
+    public function isPaidSetupOnly(): bool
+    {
+        return $this->service_type === 'setup_only' && $this->setup_fee_paid_at !== null;
+    }
+
+    /**
+     * Customers under ongoing management — what the recurring agents
+     * (maintenance, optimization, reporting) are allowed to touch. One-time
+     * setup customers are never managed, before or after handover.
+     */
+    public function scopeManaged($query)
+    {
+        return $query->where('service_type', '!=', 'setup_only');
     }
 
     /**

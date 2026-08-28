@@ -403,6 +403,10 @@ Route::middleware(['auth'])->group(function () {
     // The post-QuickStart holding screen: narrates scan → brand extraction,
     // then hands off to the brand guidelines for sign-off.
     Route::get('/quick-start/scanning', [App\Http\Controllers\QuickStartController::class, 'scanning'])->name('quick-start.scanning');
+
+    // One-and-done: a single USD setup fee instead of a subscription.
+    Route::post('/setup-fee/checkout', [App\Http\Controllers\SetupFeeController::class, 'checkout'])->name('setup-fee.checkout');
+    Route::get('/setup-fee/success', [App\Http\Controllers\SetupFeeController::class, 'success'])->name('setup-fee.success');
 });
 
 Route::middleware(['auth'])->group(function () {
@@ -591,6 +595,8 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('settings', [App\Http\Controllers\Admin\SettingsController::class, 'updateSettings'])->name('admin.settings.update');
     Route::post('users/{user}/promote', [App\Http\Controllers\Admin\UserController::class, 'promoteToAdmin'])->name('admin.users.promote');
     Route::post('customers/{customer}/reconcile-spend', [App\Http\Controllers\Admin\CustomerBillingController::class, 'reconcileSpend'])->name('admin.customers.reconcile-spend');
+    // One-time setup engagements: closes the engagement and emails the keys.
+    Route::post('customers/{customer}/handover', [App\Http\Controllers\Admin\CustomerController::class, 'markHandedOver'])->name('admin.customers.handover');
     Route::get('customers/{customer}/credit-ledger', [App\Http\Controllers\Admin\CustomerBillingController::class, 'customerCreditLedger'])->name('admin.customers.credit-ledger');
     Route::put('customers/{customer}', [App\Http\Controllers\Admin\CustomerController::class, 'updateCustomerFacebook'])->name('admin.customers.update-facebook');
     Route::put('customers/{customer}/microsoft', [App\Http\Controllers\Admin\CustomerController::class, 'updateCustomerMicrosoft'])->name('admin.customers.update-microsoft');

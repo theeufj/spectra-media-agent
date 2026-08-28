@@ -22,8 +22,16 @@ class SubscriptionController extends Controller
     {
         $plans = Plan::active()->ordered()->get();
 
+        $customer = $request->user()?->customers()->find(session('active_customer_id'));
+
         return Inertia::render('Subscription/Pricing', [
             'plans' => $plans,
+            // The one-and-done alternative: a single USD fee instead of a plan.
+            'setupFee' => [
+                'price_usd' => (int) round(config('services.stripe.setup_fee_usd_cents', 99900) / 100),
+                'intent' => $customer?->service_type === 'setup_only',
+                'paid' => (bool) $customer?->isPaidSetupOnly(),
+            ],
         ]);
     }
 

@@ -75,6 +75,35 @@ class CustomerController extends Controller
     /**
      * Show detailed view of a customer including campaigns, strategies, and collateral.
      */
+    /**
+     * Close a one-time setup engagement: stamp the handover and email the
+     * customer the keys (account id + the two steps to go live).
+     */
+    public function markHandedOver(Customer $customer)
+    {
+        if ($customer->service_type !== 'setup_only') {
+            return redirect()->back()->with('flash', [
+                'type' => 'error',
+                'message' => 'Handover only applies to one-time setup customers.',
+            ]);
+        }
+
+        if (! $customer->handover_at) {
+            $customer->forceFill(['handover_at' => now()])->save();
+
+            foreach ($customer->users as $user) {
+                \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\HandoverComplete($customer));
+            }
+
+            \App\Services\ActivityLogger::customer('handover_completed', $customer);
+        }
+
+        return redirect()->back()->with('flash', [
+            'type' => 'success',
+            'message' => "Handover recorded — {$customer->name} has the keys.",
+        ]);
+    }
+
     public function customerShow(Customer $customer)
     {
         $customer->load([

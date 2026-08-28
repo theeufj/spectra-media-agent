@@ -51,6 +51,9 @@ class QuickStartController extends Controller
     {
         $validated = $request->validate([
             'website_url' => 'required|url|max:255',
+            // The fork: ongoing management (default) or the one-time US$999
+            // setup. Intent only — payment is collected at the plan step.
+            'service_type' => 'nullable|in:managed,setup_only',
         ]);
 
         return $this->doProcess($validated['website_url'], Auth::user(), $request);
@@ -83,6 +86,7 @@ class QuickStartController extends Controller
             'name' => $businessName,
             'website' => $url,
             'tenant_key' => $tenantKey,
+            'service_type' => $request->input('service_type') === 'setup_only' ? 'setup_only' : 'managed',
             'country' => $country,
             'timezone' => $timezone,
             // Must be right at creation time: ProvisionGoogleAdsAccount bakes

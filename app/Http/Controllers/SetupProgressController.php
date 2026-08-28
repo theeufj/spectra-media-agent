@@ -142,7 +142,18 @@ class SetupProgressController extends Controller
                     'action_url' => route('customers.gtm.setup', $customer->id),
                     'action_text' => $customer->gtm_installed ? 'View Tracking' : 'Install Snippet',
                 ],
-                [
+                $customer->service_type === 'setup_only' ? [
+                    // One-and-done customers pay a single fee, not a plan.
+                    'key' => 'payment',
+                    'title' => 'Pay your one-time setup fee',
+                    'description' => $customer->setup_fee_paid_at
+                        ? 'Paid — we\'re building your account and will hand you the keys.'
+                        : 'US$999 once. We build everything and hand it over — nothing recurring.',
+                    'completed' => $customer->setup_fee_paid_at !== null,
+                    'status' => $customer->setup_fee_paid_at !== null ? 'completed' : 'pending',
+                    'action_url' => route('subscription.pricing'),
+                    'action_text' => $customer->setup_fee_paid_at ? 'View' : 'Pay Setup Fee',
+                ] : [
                     'key' => 'payment',
                     'title' => 'Add a payment method',
                     'description' => 'Building is free — a payment method is only needed to deploy.',

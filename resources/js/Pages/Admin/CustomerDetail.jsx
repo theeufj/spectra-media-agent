@@ -139,6 +139,25 @@ export default function CustomerDetail({ auth, bm_configured }) {
                                             </svg>
                                             Impersonate
                                         </button>
+                                        {customer.service_type === 'setup_only' && (
+                                            customer.handover_at ? (
+                                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">
+                                                    One-time setup · handed over
+                                                </span>
+                                            ) : (
+                                                <button
+                                                    onClick={() => {
+                                                        if (window.confirm('Mark this one-time setup as handed over? The customer gets the keys email and recurring agents stay off this account.')) {
+                                                            router.post(route('admin.customers.handover', customer.id), {}, { preserveScroll: true });
+                                                        }
+                                                    }}
+                                                    className="inline-flex items-center px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600"
+                                                    title={customer.setup_fee_paid_at ? 'Setup fee paid — hand over when the build is done' : 'Setup fee NOT paid yet'}
+                                                >
+                                                    {customer.setup_fee_paid_at ? '💰 ' : '⚠️ '}Mark Handed Over
+                                                </button>
+                                            )
+                                        )}
                                         <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
                                             Active
                                         </span>

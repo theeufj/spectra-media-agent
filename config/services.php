@@ -119,6 +119,9 @@ return [
             'tolerance' => env('STRIPE_WEBHOOK_TOLERANCE', 300),
         ],
         'ad_spend_price_id' => env('STRIPE_AD_SPEND_PRICE_ID'),
+        // One-and-done Google Ads setup: a single charge, always in USD
+        // regardless of the Cashier default currency.
+        'setup_fee_usd_cents' => (int) env('STRIPE_SETUP_FEE_USD_CENTS', 99900),
     ],
 
     'cloudflare' => [

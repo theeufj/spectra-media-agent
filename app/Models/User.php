@@ -165,6 +165,12 @@ class User extends Authenticatable implements MustVerifyEmail
             return false;
         }
 
+        // One-and-done customers bought access with a single setup fee — no
+        // subscription exists or ever will.
+        if ($customer->isPaidSetupOnly()) {
+            return true;
+        }
+
         return $customer->users()
             ->where(function ($q) {
                 $q->where('subscription_status', 'active')

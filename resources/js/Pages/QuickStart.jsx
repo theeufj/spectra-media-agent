@@ -8,6 +8,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
     const { data, setData, post, processing, errors, transform } = useForm({
         website_url: demoUrl || '',
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        service_type: 'managed',
     });
 
     const [urlFocused, setUrlFocused] = useState(false);
@@ -113,6 +114,31 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                     )}
                                 </div>
                             </form>
+
+                            {/* The fork: ongoing management or one-and-done.
+                                Intent only — payment happens at the plan step. */}
+                            <div className="mt-8 grid sm:grid-cols-2 gap-3 max-w-xl mx-auto text-left">
+                                <button
+                                    type="button"
+                                    onClick={() => setData('service_type', 'managed')}
+                                    className={`rounded-lg border-2 p-4 transition ${data.service_type === 'managed' ? 'border-brand-primary bg-brand-primary/10' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                                >
+                                    <p className="font-semibold text-gray-900 text-sm">Manage it for me</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        We build, launch and optimise your ads around the clock. Monthly plan.
+                                    </p>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setData('service_type', 'setup_only')}
+                                    className={`rounded-lg border-2 p-4 transition ${data.service_type === 'setup_only' ? 'border-brand-primary bg-brand-primary/10' : 'border-gray-200 bg-white hover:border-gray-300'}`}
+                                >
+                                    <p className="font-semibold text-gray-900 text-sm">Set it up once — US$999</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                        We build your account, campaigns and tracking, then hand you the keys. One payment, nothing recurring.
+                                    </p>
+                                </button>
+                            </div>
 
                             <div className="mt-10 grid grid-cols-3 gap-4 max-w-lg mx-auto text-center">
                                 <div className="p-3">
