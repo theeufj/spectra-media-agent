@@ -13,7 +13,13 @@ class PlanSeeder extends Seeder
             ['slug' => 'free'],
             [
                 'name' => 'Free',
-                'description' => 'Explore the platform with generous limits.',
+                // NOT a sellable tier — there is no free tier and nothing can
+                // be deployed without payment. This row exists only as the
+                // default limits profile that plan-less users resolve by slug
+                // (User::planSlug fallback, CroController, defaultPlan()).
+                // is_active=false keeps it off the pricing page, where only
+                // Plan::active() rows render.
+                'description' => 'Internal default limits for users without a plan. Never shown on pricing.',
                 'price_cents' => 0,
                 'billing_interval' => 'month',
                 'stripe_price_id' => null,
@@ -26,7 +32,7 @@ class PlanSeeder extends Seeder
                     'Unlimited Ad Copy Generation',
                     'Analytics Dashboard',
                 ],
-                'is_active' => true,
+                'is_active' => false,
                 'is_free' => true,
                 'is_popular' => false,
                 'cta_text' => 'Get Started Free',

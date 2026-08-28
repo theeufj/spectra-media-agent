@@ -275,7 +275,9 @@ export default function Dashboard({ auth }) {
                     {creativeUsage && !creativeUsage.is_unlimited && (
                         <div className="mb-6 bg-white overflow-hidden shadow-sm sm:rounded-lg p-5">
                             <div className="flex items-center justify-between mb-3">
-                                <h3 className="text-sm font-medium text-gray-700">Creative Usage — {creativeUsage.plan_name} Plan</h3>
+                                <h3 className="text-sm font-medium text-gray-700">
+                                    Creative Usage{creativeUsage.plan_name && creativeUsage.plan_name !== 'Free' ? ` — ${creativeUsage.plan_name} Plan` : ''}
+                                </h3>
                                 <a href={route('creative-usage')} className="text-brand-dark hover:text-brand-darker font-medium text-xs">View Details →</a>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
