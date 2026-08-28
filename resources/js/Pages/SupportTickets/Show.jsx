@@ -79,16 +79,16 @@ export default function Show({ ticket }) {
 
                         {/* Admin Response */}
                         {ticket.admin_response && (
-                            <div className="px-6 py-5 border-t border-gray-200 bg-flame-orange-50">
-                                <h4 className="text-sm font-medium text-flame-orange-900 mb-2">
+                            <div className="px-6 py-5 border-t border-gray-200 bg-brand-primary/10">
+                                <h4 className="text-sm font-medium text-brand-darker mb-2">
                                     Response from Support
-                                    {ticket.assignee && <span className="font-normal text-flame-orange-600"> — {ticket.assignee.name}</span>}
+                                    {ticket.assignee && <span className="font-normal text-brand-dark"> — {ticket.assignee.name}</span>}
                                 </h4>
-                                <div className="bg-white rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap border border-flame-orange-100">
+                                <div className="bg-white rounded-lg p-4 text-sm text-gray-800 whitespace-pre-wrap border border-brand-primary/20">
                                     {ticket.admin_response}
                                 </div>
                                 {ticket.resolved_at && (
-                                    <p className="mt-3 text-xs text-flame-orange-600">
+                                    <p className="mt-3 text-xs text-brand-dark">
                                         Resolved on {new Date(ticket.resolved_at).toLocaleDateString('en-US', {
                                             year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                                         })}

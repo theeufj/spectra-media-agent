@@ -119,7 +119,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                     onClick={() => setActiveTab('research')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                         activeTab === 'research'
-                            ? 'border-flame-orange-500 text-flame-orange-600'
+                            ? 'border-brand-primary text-brand-dark'
                             : 'border-transparent text-gray-500 hover:text-gray-700'
                     }`}
                 >
@@ -130,7 +130,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                     onClick={() => setActiveTab('manual')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
                         activeTab === 'manual'
-                            ? 'border-flame-orange-500 text-flame-orange-600'
+                            ? 'border-brand-primary text-brand-dark'
                             : 'border-transparent text-gray-500 hover:text-gray-700'
                     }`}
                 >
@@ -148,7 +148,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                                 onChange={e => setSeedInput(e.target.value)}
                                 placeholder="e.g. plumber, emergency plumbing, drain repair"
                                 rows={2}
-                                className="w-full rounded-lg border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                className="w-full rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                             />
                         </div>
                         <div className="space-y-3">
@@ -159,7 +159,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                                     value={urlInput}
                                     onChange={e => setUrlInput(e.target.value)}
                                     placeholder="https://example.com"
-                                    className="w-full rounded-lg border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="w-full rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                                 />
                             </div>
                             <div className="flex items-center gap-3">
@@ -186,7 +186,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                             type="button"
                             onClick={runResearch}
                             disabled={loading || (!seedInput.trim() && !urlInput.trim())}
-                            className="px-5 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="px-5 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             {loading ? (
                                 <span className="flex items-center gap-2">
@@ -232,7 +232,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                             onChange={e => setManualInput(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addManualKeyword())}
                             placeholder="Enter a keyword..."
-                            className="flex-1 rounded-lg border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                            className="flex-1 rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                         />
                         <select
                             value={manualMatchType}
@@ -247,7 +247,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                             type="button"
                             onClick={addManualKeyword}
                             disabled={!manualInput.trim()}
-                            className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50"
+                            className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50"
                         >
                             Add
                         </button>
@@ -262,7 +262,7 @@ export default function KeywordSelector({ value = [], onChange, landingPage = ''
                         <div className="flex items-center justify-between mb-3">
                             <h4 className="text-sm font-semibold text-gray-900">
                                 Selected Keywords
-                                <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-flame-orange-500 rounded-full">
+                                <span className="ml-2 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-brand-primary rounded-full">
                                     {value.length}
                                 </span>
                             </h4>

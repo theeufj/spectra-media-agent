@@ -51,9 +51,9 @@ export default function Pricing({ auth, plans = [] }) {
 
                 <main>
                     {/* Hero */}
-                    <div className="bg-gradient-to-b from-flame-orange-50 to-white py-16 sm:py-24">
+                    <div className="bg-gradient-to-b from-brand-primary/10 to-white py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">Pricing</p>
+                            <p className="text-sm font-semibold text-brand-dark uppercase tracking-wider">Pricing</p>
                             <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
                                 Simple, Transparent Pricing
                             </h1>
@@ -75,7 +75,7 @@ export default function Pricing({ auth, plans = [] }) {
                                         <tr>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                                             <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Traditional Agency</th>
-                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-flame-orange-600 uppercase tracking-wider">sitetospend AI</th>
+                                            <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-brand-dark uppercase tracking-wider">sitetospend AI</th>
                                         </tr>
                                     </thead>
                                     <tbody className="bg-white divide-y divide-gray-200">
@@ -91,7 +91,7 @@ export default function Pricing({ auth, plans = [] }) {
                                             <tr key={label}>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{label}</td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{agency}</td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-flame-orange-600">{ai}</td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-brand-dark">{ai}</td>
                                             </tr>
                                         ))}
                                     </tbody>
@@ -109,12 +109,12 @@ export default function Pricing({ auth, plans = [] }) {
                                         key={plan.id}
                                         className={`rounded-lg p-8 flex flex-col relative ${
                                             plan.is_popular
-                                                ? 'border-2 border-flame-orange-600 bg-flame-orange-50 shadow-lg'
+                                                ? 'border-2 border-brand-dark bg-brand-primary/10 shadow-lg'
                                                 : 'border border-gray-200 bg-white'
                                         }`}
                                     >
                                         {plan.badge_text && (
-                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-flame-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full">
+                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-brand-dark text-white px-3 py-1 text-xs font-semibold rounded-full">
                                                 {plan.badge_text}
                                             </div>
                                         )}
@@ -156,7 +156,7 @@ export default function Pricing({ auth, plans = [] }) {
                                                 href={plan.cta_text === 'Contact Sales' ? 'mailto:hello@sitetospend.com?subject=Agency Plan Inquiry' : '/register'}
                                                 className={`block w-full text-center rounded-lg px-6 py-3 text-base font-medium ${
                                                     plan.is_popular
-                                                        ? 'bg-flame-orange-600 text-white hover:bg-flame-orange-700 shadow-lg'
+                                                        ? 'bg-brand-dark text-white hover:bg-brand-darker shadow-lg'
                                                         : 'border-2 border-gray-300 text-gray-900 hover:border-gray-400'
                                                 }`}
                                             >
@@ -192,7 +192,7 @@ export default function Pricing({ auth, plans = [] }) {
                                             className="w-full px-6 py-4 text-left flex items-center justify-between hover:bg-gray-50 transition-colors"
                                         >
                                             <h3 className="text-lg font-bold text-gray-900">{faq.question}</h3>
-                                            <svg className={`h-6 w-6 text-flame-orange-600 flex-shrink-0 transition-transform ${openFAQ === index ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <svg className={`h-6 w-6 text-brand-dark flex-shrink-0 transition-transform ${openFAQ === index ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                                             </svg>
                                         </button>
@@ -208,23 +208,23 @@ export default function Pricing({ auth, plans = [] }) {
                     </div>
 
                     {/* CTA */}
-                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-800 py-16 sm:py-24">
+                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
                         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 Ready to transform your marketing?
                             </h2>
-                            <p className="mt-6 text-xl text-flame-orange-100">
+                            <p className="mt-6 text-xl text-brand-primary/20">
                                 Start creating smarter, faster campaigns with AI-powered optimization.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
+                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
                                     Get Started Free
                                 </a>
-                                <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700">
+                                <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
                                     Explore Features
                                 </Link>
                             </div>
-                            <p className="mt-8 text-flame-orange-100">✓ Free to explore · ✓ No credit card required · ✓ Live in minutes</p>
+                            <p className="mt-8 text-brand-primary/20">✓ Free to explore · ✓ No credit card required · ✓ Live in minutes</p>
                         </div>
                     </div>
                 </main>

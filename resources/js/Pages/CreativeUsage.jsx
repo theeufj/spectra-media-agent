@@ -91,12 +91,12 @@ export default function CreativeUsage({ auth }) {
 
                 {/* Creative Boost Pack */}
                 {!creativeUsage.is_unlimited && (
-                    <div className="mb-8 bg-gradient-to-r from-flame-orange-50 to-amber-50 rounded-xl border border-flame-orange-200 p-6">
+                    <div className="mb-8 bg-gradient-to-r from-brand-primary/10 to-amber-50 rounded-xl border border-brand-primary/30 p-6">
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                             <div>
                                 <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
                                     🚀 Creative Boost Pack
-                                    <span className="text-flame-orange-600 text-xl font-black">${(boost.price_cents / 100).toFixed(0)}</span>
+                                    <span className="text-brand-dark text-xl font-black">${(boost.price_cents / 100).toFixed(0)}</span>
                                 </h2>
                                 <p className="text-gray-600 text-sm mt-1">
                                     Instantly add more credits to your current billing period.
@@ -115,7 +115,7 @@ export default function CreativeUsage({ auth }) {
                             </div>
                             <button
                                 onClick={handleBuyBoost}
-                                className="px-6 py-3 bg-flame-orange-600 text-white font-semibold rounded-lg hover:bg-flame-orange-700 transition-colors shadow-md hover:shadow-lg whitespace-nowrap"
+                                className="px-6 py-3 bg-brand-dark text-white font-semibold rounded-lg hover:bg-brand-darker transition-colors shadow-md hover:shadow-lg whitespace-nowrap"
                             >
                                 Buy Boost Pack
                             </button>
@@ -197,7 +197,7 @@ function UsageBar({ label, icon, used, limit, bonus, remaining }) {
                     </span>
                     <span className="text-gray-400 text-sm"> / {total}</span>
                     {bonus > 0 && (
-                        <span className="ml-2 text-xs text-flame-orange-600 font-medium">
+                        <span className="ml-2 text-xs text-brand-dark font-medium">
                             (+{bonus} bonus)
                         </span>
                     )}

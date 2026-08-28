@@ -123,7 +123,7 @@ export default function Index({ auth, platforms }) {
                                                 <button
                                                     onClick={() => handleToggle(platform.id)}
                                                     disabled={processing}
-                                                    className="text-flame-orange-600 hover:text-flame-orange-900"
+                                                    className="text-brand-dark hover:text-brand-darker"
                                                 >
                                                     Toggle
                                                 </button>

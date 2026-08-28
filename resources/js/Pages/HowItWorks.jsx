@@ -48,9 +48,9 @@ export default function HowItWorks({ auth }) {
 
                 <main>
                     {/* Hero */}
-                    <div className="bg-gradient-to-b from-flame-orange-50 to-white py-16 sm:py-24">
+                    <div className="bg-gradient-to-b from-brand-primary/10 to-white py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">How It Works</p>
+                            <p className="text-sm font-semibold text-brand-dark uppercase tracking-wider">How It Works</p>
                             <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
                                 Up and running in 3 steps
                             </h1>
@@ -66,7 +66,7 @@ export default function HowItWorks({ auth }) {
                             {/* Step 1 */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-24">
                                 <div>
-                                    <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-flame-orange-100 mb-6">
+                                    <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-brand-primary/20 mb-6">
                                         <span className="text-3xl">👁️</span>
                                     </div>
                                     <h2 className="text-3xl font-bold text-gray-900 mb-4">1. We read your website</h2>
@@ -76,22 +76,22 @@ export default function HowItWorks({ auth }) {
                                     <ul className="space-y-3">
                                         {['Your colours and visual style, read automatically', 'Your fonts and brand feel', 'Your tone of voice and messaging', 'Your products and services'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
-                                                <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                <svg className="h-5 w-5 text-brand-primary mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
                                             </li>
                                         ))}
                                     </ul>
                                     <div className="mt-8">
-                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg hover:shadow-xl transition-all">
+                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-brand-dark hover:bg-brand-darker shadow-lg hover:shadow-xl transition-all">
                                             Start Free →
                                         </a>
                                         <p className="mt-3 text-sm text-gray-400">No credit card required</p>
                                     </div>
                                 </div>
-                                <div className="bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
+                                <div className="bg-brand-primary/10 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
                                         <span className="text-7xl">👁️</span>
-                                        <p className="mt-4 text-flame-orange-600 font-semibold">Your brand, understood instantly</p>
+                                        <p className="mt-4 text-brand-dark font-semibold">Your brand, understood instantly</p>
                                         <p className="text-sm text-gray-500 mt-2">Just your website address. That's all we need.</p>
                                     </div>
                                 </div>
@@ -99,15 +99,15 @@ export default function HowItWorks({ auth }) {
 
                             {/* Step 2 */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-24">
-                                <div className="order-2 lg:order-1 bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
+                                <div className="order-2 lg:order-1 bg-brand-primary/10 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
                                         <span className="text-7xl">🧠</span>
-                                        <p className="mt-4 text-flame-orange-600 font-semibold">Know your competition</p>
+                                        <p className="mt-4 text-brand-dark font-semibold">Know your competition</p>
                                         <p className="text-sm text-gray-500 mt-2">Find them → read them → beat them</p>
                                     </div>
                                 </div>
                                 <div className="order-1 lg:order-2">
-                                    <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-flame-orange-100 mb-6">
+                                    <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-brand-primary/20 mb-6">
                                         <span className="text-3xl">🧠</span>
                                     </div>
                                     <h2 className="text-3xl font-bold text-gray-900 mb-4">2. We find your competitors</h2>
@@ -117,13 +117,13 @@ export default function HowItWorks({ auth }) {
                                     <ul className="space-y-3">
                                         {['Finds competitors you might not know about', 'Reads their websites and messaging', 'Checks their pricing and offers', 'Tells you exactly how to stand out from them'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
-                                                <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                <svg className="h-5 w-5 text-brand-primary mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
                                             </li>
                                         ))}
                                     </ul>
                                     <div className="mt-8">
-                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg hover:shadow-xl transition-all">
+                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-brand-dark hover:bg-brand-darker shadow-lg hover:shadow-xl transition-all">
                                             Start Free →
                                         </a>
                                         <p className="mt-3 text-sm text-gray-400">No credit card required</p>
@@ -134,7 +134,7 @@ export default function HowItWorks({ auth }) {
                             {/* Step 3 */}
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
                                 <div>
-                                    <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-flame-orange-100 mb-6">
+                                    <div className="inline-flex items-center justify-center h-14 w-14 rounded-full bg-brand-primary/20 mb-6">
                                         <span className="text-3xl">🚀</span>
                                     </div>
                                     <h2 className="text-3xl font-bold text-gray-900 mb-4">3. Your ads run themselves</h2>
@@ -144,22 +144,22 @@ export default function HowItWorks({ auth }) {
                                     <ul className="space-y-3">
                                         {['Rejected ads fixed and resubmitted automatically', 'Budget shifts to your best-performing hours every day', 'Continuously testing headline variations to find winners', 'Refreshes lookalike audiences from your customers every week'].map((item) => (
                                             <li key={item} className="flex items-center text-gray-600">
-                                                <svg className="h-5 w-5 text-flame-orange-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                                                <svg className="h-5 w-5 text-brand-primary mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
                                                 {item}
                                             </li>
                                         ))}
                                     </ul>
                                     <div className="mt-8">
-                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg hover:shadow-xl transition-all">
+                                        <a href="/register" className="inline-flex items-center justify-center w-full sm:w-auto px-10 py-5 text-xl font-bold rounded-xl text-white bg-brand-dark hover:bg-brand-darker shadow-lg hover:shadow-xl transition-all">
                                             Start Free →
                                         </a>
                                         <p className="mt-3 text-sm text-gray-400">No credit card required</p>
                                     </div>
                                 </div>
-                                <div className="bg-flame-orange-50 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
+                                <div className="bg-brand-primary/10 rounded-2xl p-8 flex items-center justify-center min-h-[300px]">
                                     <div className="text-center">
                                         <span className="text-7xl">🚀</span>
-                                        <p className="mt-4 text-flame-orange-600 font-semibold">Improving every day</p>
+                                        <p className="mt-4 text-brand-dark font-semibold">Improving every day</p>
                                         <p className="text-sm text-gray-500 mt-2">Launch → Learn → Keep getting better</p>
                                     </div>
                                 </div>
@@ -188,7 +188,7 @@ export default function HowItWorks({ auth }) {
                                         </div>
                                         <p className="text-lg font-medium text-gray-900">"{testimonial.quote}"</p>
                                         <div className="mt-6 font-semibold">{testimonial.name}</div>
-                                        <div className="text-sm text-gray-600">{testimonial.role}, <a href={testimonial.url} target="_blank" rel="noopener noreferrer" className="text-flame-orange-600 hover:text-flame-orange-700">{testimonial.company}</a></div>
+                                        <div className="text-sm text-gray-600">{testimonial.role}, <a href={testimonial.url} target="_blank" rel="noopener noreferrer" className="text-brand-dark hover:text-brand-darker">{testimonial.company}</a></div>
                                     </div>
                                 ))}
                             </div>
@@ -196,23 +196,23 @@ export default function HowItWorks({ auth }) {
                     </div>
 
                     {/* CTA */}
-                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-800 py-16 sm:py-24">
+                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
                         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 Ready to get started?
                             </h2>
-                            <p className="mt-6 text-xl text-flame-orange-100">
+                            <p className="mt-6 text-xl text-brand-primary/20">
                                 Sign up free and see your first ads ready to launch in minutes.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
+                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
                                     Start Free Trial
                                 </a>
-                                <a href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700">
+                                <a href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
                                     View Pricing
                                 </a>
                             </div>
-                            <p className="mt-8 text-flame-orange-100">✓ No credit card required · ✓ Free to explore · ✓ Live in minutes</p>
+                            <p className="mt-8 text-brand-primary/20">✓ No credit card required · ✓ Free to explore · ✓ Live in minutes</p>
                         </div>
                     </div>
                 </main>

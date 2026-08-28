@@ -108,7 +108,7 @@ const PaymentForm = ({ onSuccess, buttonText = 'Update Payment Method', isRetry 
                         ? 'bg-gray-400 cursor-not-allowed'
                         : isRetry
                             ? 'bg-red-600 hover:bg-red-700'
-                            : 'bg-flame-orange-600 hover:bg-flame-orange-700'
+                            : 'bg-brand-dark hover:bg-brand-darker'
                 }`}
             >
                 {processing ? 'Processing...' : succeeded ? 'Updated!' : buttonText}
@@ -248,10 +248,10 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
 
                             {credit ? (
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="bg-gradient-to-br from-flame-orange-500 to-flame-orange-600 rounded-xl p-6 text-white">
-                                        <p className="text-flame-orange-100 text-sm">Current Balance</p>
+                                    <div className="bg-gradient-to-br from-brand-primary to-brand-dark rounded-xl p-6 text-white">
+                                        <p className="text-brand-primary/20 text-sm">Current Balance</p>
                                         <p className="text-3xl font-bold mt-1">{formatCurrency(credit.current_balance)}</p>
-                                        <p className="text-flame-orange-200 text-sm mt-2">
+                                        <p className="text-brand-primary/30 text-sm mt-2">
                                             ~{credit.days_remaining || 0} days remaining
                                         </p>
                                     </div>
@@ -288,7 +288,7 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                 {!showPaymentForm && (
                                     <button
                                         onClick={() => setShowPaymentForm(true)}
-                                        className="text-flame-orange-600 hover:text-flame-orange-800 text-sm font-medium"
+                                        className="text-brand-dark hover:text-brand-darker text-sm font-medium"
                                     >
                                         Update Payment Method
                                     </button>
@@ -332,29 +332,29 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                             <h3 className="text-lg font-semibold text-gray-900 mb-4">How Ad Spend Billing Works</h3>
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-flame-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <span className="text-flame-orange-600 font-bold">1</span>
+                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <span className="text-brand-dark font-bold">1</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Initial Charge</h4>
                                     <p className="text-sm text-gray-500 mt-1">7 days of estimated spend charged upfront</p>
                                 </div>
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-flame-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <span className="text-flame-orange-600 font-bold">2</span>
+                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <span className="text-brand-dark font-bold">2</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Daily Billing</h4>
                                     <p className="text-sm text-gray-500 mt-1">Actual spend deducted each morning at 6 AM</p>
                                 </div>
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-flame-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <span className="text-flame-orange-600 font-bold">3</span>
+                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <span className="text-brand-dark font-bold">3</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Auto Top-Up</h4>
                                     <p className="text-sm text-gray-500 mt-1">Balance auto-replenished when low</p>
                                 </div>
                                 <div className="text-center p-4">
-                                    <div className="w-10 h-10 bg-flame-orange-100 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <span className="text-flame-orange-600 font-bold">4</span>
+                                    <div className="w-10 h-10 bg-brand-primary/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                                        <span className="text-brand-dark font-bold">4</span>
                                     </div>
                                     <h4 className="font-medium text-gray-900">Full Transparency</h4>
                                     <p className="text-sm text-gray-500 mt-1">View all transactions below</p>

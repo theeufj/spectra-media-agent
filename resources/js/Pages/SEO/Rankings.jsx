@@ -54,13 +54,13 @@ export default function Rankings({ summary, rankings = [], trends = {} }) {
                 <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <a href={route('seo.index')} className="text-sm text-flame-orange-600 hover:underline mb-1 inline-block">← Back to SEO</a>
+                            <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
                             <h1 className="text-2xl font-bold text-gray-900">Keyword Rankings</h1>
                             <p className="mt-1 text-sm text-gray-500">Track your keyword positions across search engines.</p>
                         </div>
                         <button
                             onClick={() => router.post(route('seo.rankings.track'), {}, { preserveScroll: true })}
-                            className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg text-sm font-medium hover:bg-flame-orange-700"
+                            className="px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker"
                         >
                             Track Now
                         </button>

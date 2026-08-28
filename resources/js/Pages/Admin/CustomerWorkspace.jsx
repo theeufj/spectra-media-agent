@@ -66,7 +66,7 @@ export default function CustomerWorkspace({ auth }) {
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">{customer.business_name || customer.name}</h1>
                             <p className="text-sm text-gray-500">
-                                {customer.website && <a href={customer.website} target="_blank" rel="noreferrer" className="text-flame-orange-600 hover:underline">{customer.website}</a>}
+                                {customer.website && <a href={customer.website} target="_blank" rel="noreferrer" className="text-brand-dark hover:underline">{customer.website}</a>}
                                 {' · '}{customer.country} · {customer.currency_code}
                             </p>
                         </div>
@@ -591,7 +591,7 @@ const MediaGrid = ({ images = [], videos = [], onOpen }) => {
                             <span>🎬</span>
                             <StatusChip value={vid.status} />
                             {vid.cloudfront_url
-                                ? <a href={vid.cloudfront_url} target="_blank" rel="noreferrer" className="text-flame-orange-600 hover:underline">Watch video</a>
+                                ? <a href={vid.cloudfront_url} target="_blank" rel="noreferrer" className="text-brand-dark hover:underline">Watch video</a>
                                 : <span className="text-gray-400">no file yet</span>}
                             {vid.youtube_video_id && <span className="text-xs text-gray-400">YT: {vid.youtube_video_id}</span>}
                         </li>

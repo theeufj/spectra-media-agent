@@ -94,7 +94,7 @@ export default function Audit({ audit }) {
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <a href={route('seo.index')} className="text-sm text-flame-orange-600 hover:underline mb-1 inline-block">← Back to SEO</a>
+                            <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
                             <h1 className="text-2xl font-bold text-gray-900">{audit.url}</h1>
                             <p className="mt-1 text-sm text-gray-500">Audited on {new Date(audit.created_at).toLocaleString()}</p>
                         </div>

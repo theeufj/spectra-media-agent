@@ -70,7 +70,7 @@ export default function Index({ keywords, stats, qsTrends }) {
                             <p className="mt-1 text-sm text-gray-500">All keywords across your campaigns with QS tracking.</p>
                         </div>
                         <div className="flex items-center gap-2">
-                            <a href={route('keywords.research')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700">
+                            <a href={route('keywords.research')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
                                 Research Keywords
                             </a>
                             <a href={route('keywords.competitor-gap')} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">

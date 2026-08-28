@@ -5,8 +5,8 @@ import { useState } from 'react';
 function UpgradePrompt() {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-            <div className="mx-auto w-12 h-12 bg-flame-orange-100 rounded-full flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-flame-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mx-auto w-12 h-12 bg-brand-primary/20 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-brand-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
             </div>
@@ -17,7 +17,7 @@ function UpgradePrompt() {
             <div className="flex flex-col items-center gap-3">
                 <Link
                     href={route('subscription.pricing')}
-                    className="inline-flex items-center px-5 py-2.5 bg-flame-orange-600 text-white text-sm font-medium rounded-lg hover:bg-flame-orange-700 transition"
+                    className="inline-flex items-center px-5 py-2.5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker transition"
                 >
                     Upgrade to Growth Plan
                 </Link>
@@ -82,7 +82,7 @@ function CompetitorCard({ competitor }) {
                             <span key={i} className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded">{kw}</span>
                         ))}
                         {!expanded && c.keywords_detected.length > 8 && (
-                            <button onClick={() => setExpanded(true)} className="text-xs text-flame-orange-600 hover:underline">+{c.keywords_detected.length - 8} more</button>
+                            <button onClick={() => setExpanded(true)} className="text-xs text-brand-dark hover:underline">+{c.keywords_detected.length - 8} more</button>
                         )}
                     </div>
                 </div>
@@ -318,7 +318,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
             <Head title="SEO Competitors" />
             <div className="py-8">
                 <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-                    <a href={route('seo.index')} className="text-sm text-flame-orange-600 hover:underline mb-1 inline-block">← Back to SEO</a>
+                    <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
                     <div className="flex items-center justify-between mb-1">
                         <h1 className="text-2xl font-bold text-gray-900">Competitor Analysis</h1>
                         {canAccessCompetitors && (
@@ -329,7 +329,7 @@ export default function Competitors({ domain, competitors = [], canAccessCompeti
                                 <button
                                     onClick={handleRefresh}
                                     disabled={refreshing}
-                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     <svg className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />

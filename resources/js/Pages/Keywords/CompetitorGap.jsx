@@ -4,8 +4,8 @@ import { Head, Link, router } from '@inertiajs/react';
 function UpgradePrompt() {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-8 text-center">
-            <div className="mx-auto w-12 h-12 bg-flame-orange-100 rounded-full flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-flame-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mx-auto w-12 h-12 bg-brand-primary/20 rounded-full flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-brand-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                 </svg>
             </div>
@@ -16,7 +16,7 @@ function UpgradePrompt() {
             <div className="flex flex-col items-center gap-3">
                 <Link
                     href={route('subscription.pricing')}
-                    className="inline-flex items-center px-5 py-2.5 bg-flame-orange-600 text-white text-sm font-medium rounded-lg hover:bg-flame-orange-700 transition"
+                    className="inline-flex items-center px-5 py-2.5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker transition"
                 >
                     Upgrade to Growth Plan
                 </Link>
@@ -83,7 +83,7 @@ export default function CompetitorGap({ gaps = [], competitors = [], ourKeywordC
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                <button onClick={() => handleAdd(gap.keyword)} className="text-xs px-3 py-1.5 bg-flame-orange-50 text-flame-orange-700 rounded-lg hover:bg-flame-orange-100 font-medium">
+                                                <button onClick={() => handleAdd(gap.keyword)} className="text-xs px-3 py-1.5 bg-brand-primary/10 text-brand-darker rounded-lg hover:bg-brand-primary/20 font-medium">
                                                     + Add
                                                 </button>
                                             </td>

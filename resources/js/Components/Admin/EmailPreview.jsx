@@ -71,7 +71,7 @@ export default function EmailPreview({ step, draft }) {
                             type="button"
                             onClick={() => setDevice(key)}
                             className={`rounded px-2 py-1 text-xs transition ${
-                                device === key ? 'bg-flame-orange-500 text-white' : 'text-gray-600 hover:bg-gray-100'
+                                device === key ? 'bg-brand-primary text-white' : 'text-gray-600 hover:bg-gray-100'
                             }`}
                         >
                             {label}

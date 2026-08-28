@@ -184,7 +184,7 @@ export default function Create({ auth }) {
                                                     name="sitemap_url"
                                                     type="url"
                                                     value={data.sitemap_url}
-                                                    className="block w-full rounded-lg border-gray-300 pl-10 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
+                                                    className="block w-full rounded-lg border-gray-300 pl-10 shadow-sm focus:border-brand-primary focus:ring-brand-primary text-sm"
                                                     autoComplete="off"
                                                     autoFocus
                                                     onChange={(e) => setData('sitemap_url', e.target.value)}

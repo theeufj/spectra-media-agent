@@ -15,7 +15,7 @@ const RevenueChart = ({ data }) => {
                 {data.map((item, index) => (
                     <div key={index} className="flex flex-col items-center flex-1">
                         <div 
-                            className="w-full bg-flame-orange-500 rounded-t transition-all duration-300 hover:bg-flame-orange-600"
+                            className="w-full bg-brand-primary rounded-t transition-all duration-300 hover:bg-brand-dark"
                             style={{ height: `${(item.revenue / maxRevenue) * 100}%`, minHeight: item.revenue > 0 ? '4px' : '0' }}
                             title={`$${item.revenue.toLocaleString()}`}
                         />
@@ -61,7 +61,7 @@ const TransactionRow = ({ transaction, onRefund }) => (
                     href={transaction.receipt_url} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-flame-orange-600 hover:text-flame-orange-900 mr-3"
+                    className="text-brand-dark hover:text-brand-darker mr-3"
                 >
                     Receipt
                 </a>
@@ -193,7 +193,7 @@ export default function Revenue({ metrics, recentTransactions, subscriptionBreak
                                     <h4 className="text-sm font-medium text-gray-700 mb-3">User Distribution</h4>
                                     <div className="flex items-center">
                                         <div 
-                                            className="h-4 bg-flame-orange-500 rounded-l"
+                                            className="h-4 bg-brand-primary rounded-l"
                                             style={{ width: `${metrics.conversionRate || 0}%` }}
                                         />
                                         <div 

@@ -79,12 +79,12 @@ export default function DemoResultsPanel({ result }) {
                     </div>
                 </div>
 
-                <div className="mt-12 text-center bg-flame-orange-50 rounded-lg p-8 border border-flame-orange-100">
+                <div className="mt-12 text-center bg-brand-primary/10 rounded-lg p-8 border border-brand-primary/20">
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">Ready to deploy these campaigns?</h3>
                     <p className="text-gray-600 mb-6">Our AI agents will build out your entire account structure, write dozens of variations, and manage the budget automatically.</p>
                     <Link
                         href={`/register?demo_url=${encodeURIComponent(url)}`}
-                        className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg transition-colors w-full sm:w-auto"
+                        className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-brand-dark hover:bg-brand-darker shadow-lg transition-colors w-full sm:w-auto"
                     >
                         Deploy Automatically — Start Free Trial
                     </Link>

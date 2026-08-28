@@ -50,7 +50,7 @@ const Td = ({ children, right, mono, bold }) => (
     </td>
 );
 
-const PctBar = ({ pct, color = 'bg-flame-orange-400' }) => (
+const PctBar = ({ pct, color = 'bg-brand-primary/70' }) => (
     <div className="flex items-center gap-2">
         <div className="flex-1 bg-gray-100 rounded-full h-1.5">
             <div className={`${color} h-1.5 rounded-full`} style={{ width: `${Math.min(pct, 100)}%` }} />
@@ -82,7 +82,7 @@ const DailyChart = ({ data }) => {
                 {data.map((d, i) => (
                     <div key={i} className="flex flex-col items-center flex-1 group relative">
                         <div
-                            className="w-full bg-flame-orange-400 hover:bg-flame-orange-500 rounded-t transition-all cursor-default"
+                            className="w-full bg-brand-primary/70 hover:bg-brand-primary rounded-t transition-all cursor-default"
                             style={{ height: `${(d.total_cost / max) * 100}%`, minHeight: d.total_cost > 0 ? '3px' : '0' }}
                         />
                         <div className="absolute bottom-full mb-1 hidden group-hover:block z-10 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap">
@@ -135,7 +135,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
                                     onClick={() => changePeriod(p.value)}
                                     className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
                                         activePeriod === p.value
-                                            ? 'bg-flame-orange-500 text-white'
+                                            ? 'bg-brand-primary text-white'
                                             : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                                     }`}
                                 >

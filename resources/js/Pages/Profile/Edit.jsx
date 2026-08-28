@@ -103,7 +103,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                             id="starter_platform"
                                             name="starter_platform"
                                             defaultValue={starterPlatform}
-                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                         >
                                             <option value="google">Google Ads</option>
                                             <option value="facebook">Facebook Ads</option>
@@ -127,7 +127,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                 <button
                                     type="button"
                                     onClick={() => { router.visit(route('dashboard'), { onFinish: () => setTimeout(startTour, 400) }); }}
-                                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
+                                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors"
                                 >
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -258,7 +258,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                         <select
                                             id="business_type"
                                             name="business_type"
-                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                             value={formData.business_type}
                                             onChange={handleInputChange}
                                         >
@@ -279,7 +279,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                     <textarea
                                         id="description"
                                         name="description"
-                                        className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                        className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                         rows="3"
                                         value={formData.description}
                                         onChange={handleInputChange}
@@ -294,7 +294,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                         <select
                                             id="country"
                                             name="country"
-                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                             value={formData.country}
                                             onChange={handleInputChange}
                                         >
@@ -312,7 +312,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                         <select
                                             id="timezone"
                                             name="timezone"
-                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                             value={formData.timezone}
                                             onChange={handleInputChange}
                                         >
@@ -331,7 +331,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                         <select
                                             id="currency_code"
                                             name="currency_code"
-                                            className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                            className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                             value={formData.currency_code}
                                             onChange={handleInputChange}
                                         >
@@ -482,7 +482,7 @@ export default function Edit({ auth, mustVerifyEmail, status, googleApiConnectio
                                                 </div>
                                                 <div className="flex-1">
                                                     <InputLabel htmlFor="role" value="Role" className="sr-only" />
-                                                    <select id="role" name="role" className="block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm">
+                                                    <select id="role" name="role" className="block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm">
                                                         <option>biller</option>
                                                         <option>marketing</option>
                                                     </select>

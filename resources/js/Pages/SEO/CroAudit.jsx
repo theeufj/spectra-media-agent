@@ -111,7 +111,7 @@ export default function CroAudit({ audit }) {
                         </div>
                         <button
                             onClick={handleRerun}
-                            className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg text-sm font-medium hover:bg-flame-orange-700 transition"
+                            className="px-4 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker transition"
                         >
                             Re-run Audit
                         </button>
@@ -170,7 +170,7 @@ export default function CroAudit({ audit }) {
                                         <p className="text-xs text-gray-500 mb-2">Detected Buttons</p>
                                         <div className="flex flex-wrap gap-1.5">
                                             {ctaButtons.map((btn, i) => (
-                                                <span key={i} className="text-[10px] bg-flame-orange-50 text-flame-orange-700 px-2 py-0.5 rounded-full border border-flame-orange-100">
+                                                <span key={i} className="text-[10px] bg-brand-primary/10 text-brand-darker px-2 py-0.5 rounded-full border border-brand-primary/20">
                                                     {btn.text || btn}
                                                 </span>
                                             ))}

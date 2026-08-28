@@ -39,7 +39,7 @@ export default function CrossPlatform({ comparison = [], timeSeries = [], days =
                 <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between mb-6">
                         <div>
-                            <a href={route('analytics.index')} className="text-sm text-flame-orange-600 hover:underline mb-1 inline-block">← Back to Analytics</a>
+                            <a href={route('analytics.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to Analytics</a>
                             <h1 className="text-2xl font-bold text-gray-900">Cross-Platform Comparison</h1>
                             <p className="mt-1 text-sm text-gray-500">Compare performance across Google, Facebook, Microsoft, and LinkedIn.</p>
                         </div>
@@ -48,7 +48,7 @@ export default function CrossPlatform({ comparison = [], timeSeries = [], days =
                                 <button
                                     key={d}
                                     onClick={() => changeDays(d)}
-                                    className={`px-3 py-1.5 text-xs rounded-lg border ${days === d ? 'bg-flame-orange-600 text-white border-flame-orange-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    className={`px-3 py-1.5 text-xs rounded-lg border ${days === d ? 'bg-brand-dark text-white border-brand-dark' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                 >
                                     {d}d
                                 </button>

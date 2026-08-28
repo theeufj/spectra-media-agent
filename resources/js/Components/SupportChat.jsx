@@ -82,7 +82,7 @@ export default function SupportChat() {
                 onClick={() => setOpen((o) => !o)}
                 aria-label={open ? 'Close support chat' : 'Open support chat'}
                 aria-expanded={open}
-                className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-flame-orange-500 text-white shadow-lg transition-colors hover:bg-flame-orange-600 focus:outline-none focus:ring-2 focus:ring-flame-orange-400 focus:ring-offset-2"
+                className="fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand-primary text-white shadow-lg transition-colors hover:bg-brand-dark focus:outline-none focus:ring-2 focus:ring-brand-primary/70 focus:ring-offset-2"
             >
                 {open ? (
                     <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -101,7 +101,7 @@ export default function SupportChat() {
                     aria-label="Support chat"
                     className="fixed bottom-24 right-5 z-50 flex h-[30rem] w-[min(23rem,calc(100vw-2.5rem))] flex-col overflow-hidden rounded-xl bg-white shadow-2xl ring-1 ring-black/10"
                 >
-                    <div className="bg-flame-orange-500 px-4 py-3 text-white">
+                    <div className="bg-brand-primary px-4 py-3 text-white">
                         <h2 className="text-sm font-semibold">Support</h2>
                         <p className="text-xs text-white/90">
                             Ask anything — your question goes straight to the team either way.
@@ -121,7 +121,7 @@ export default function SupportChat() {
                                 <div
                                     className={`max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2 text-sm ${
                                         m.role === 'customer'
-                                            ? 'bg-flame-orange-500 text-white'
+                                            ? 'bg-brand-primary text-white'
                                             : 'bg-white text-gray-800 ring-1 ring-gray-200'
                                     }`}
                                 >
@@ -162,12 +162,12 @@ export default function SupportChat() {
                                 }}
                                 maxLength={2000}
                                 placeholder={closed ? 'This conversation is with the team now.' : 'Type your question…'}
-                                className="flex-1 resize-none rounded-lg border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 disabled:bg-gray-100"
+                                className="flex-1 resize-none rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary disabled:bg-gray-100"
                             />
                             <button
                                 type="submit"
                                 disabled={sending || closed || !draft.trim()}
-                                className="rounded-lg bg-flame-orange-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-flame-orange-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                                className="rounded-lg bg-brand-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-gray-300"
                             >
                                 Send
                             </button>

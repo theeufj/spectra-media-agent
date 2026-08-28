@@ -11,7 +11,7 @@ function TabButton({ label, active, onClick }) {
             onClick={onClick}
             className={`px-5 py-3 text-sm font-medium rounded-t-lg transition border-b-2 ${
                 active
-                    ? 'border-flame-orange-500 text-flame-orange-700 bg-white'
+                    ? 'border-brand-primary text-brand-darker bg-white'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
             }`}
         >
@@ -24,7 +24,7 @@ function Section({ title, children }) {
     return (
         <div className="mb-8">
             <h3 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-flame-orange-500" />
+                <span className="w-1.5 h-1.5 rounded-full bg-brand-primary" />
                 {title}
             </h3>
             <div className="text-sm text-gray-700 leading-relaxed space-y-3">{children}</div>
@@ -35,7 +35,7 @@ function Section({ title, children }) {
 function Step({ number, title, children }) {
     return (
         <div className="flex gap-4 py-3">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-flame-orange-100 text-flame-orange-700 flex items-center justify-center text-sm font-bold">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-brand-primary/20 text-brand-darker flex items-center justify-center text-sm font-bold">
                 {number}
             </div>
             <div className="flex-1">
@@ -79,7 +79,7 @@ function GoogleAdsGuide() {
 
             <Section title="Setup Steps">
                 <Step number={1} title="Create a sub-account in Google Ads MCC">
-                    <p>Log in to the Spectra MCC at <a href="https://ads.google.com" target="_blank" rel="noopener" className="text-flame-orange-600 underline">ads.google.com</a>.</p>
+                    <p>Log in to the Spectra MCC at <a href="https://ads.google.com" target="_blank" rel="noopener" className="text-brand-dark underline">ads.google.com</a>.</p>
                     <p>Navigate to <strong>Accounts → Performance → + (New Account)</strong> and create a new sub-account for the customer.</p>
                     <p>Note the new account's <strong>Customer ID</strong> (format: <code>xxx-xxx-xxxx</code>).</p>
                 </Step>
@@ -119,7 +119,7 @@ function FacebookAdsGuide() {
 
             <Section title="Setup Steps">
                 <Step number={1} title="Create an ad account in Business Manager">
-                    <p>Log in to <a href="https://business.facebook.com" target="_blank" rel="noopener" className="text-flame-orange-600 underline">business.facebook.com</a>.</p>
+                    <p>Log in to <a href="https://business.facebook.com" target="_blank" rel="noopener" className="text-brand-dark underline">business.facebook.com</a>.</p>
                     <p>Navigate to <strong>Business Settings → Accounts → Ad Accounts → + Add → Create a new ad account</strong>.</p>
                     <p>Name the account after the customer (e.g., "Acme Corp - Search").</p>
                     <p>Set the timezone and currency.</p>

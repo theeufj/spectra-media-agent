@@ -71,7 +71,7 @@ export default function NotificationTemplates({ templates, recipientOptions }) {
                                                 key={t.key}
                                                 onClick={() => setSelectedKey(t.key)}
                                                 className={`w-full text-left px-4 py-3 border-b border-gray-100 hover:bg-gray-50 ${
-                                                    t.key === selectedKey ? 'bg-flame-orange-50 border-l-4 border-l-flame-orange-500' : ''
+                                                    t.key === selectedKey ? 'bg-brand-primary/10 border-l-4 border-l-brand-primary' : ''
                                                 }`}
                                             >
                                                 <div className="flex items-center justify-between">
@@ -139,7 +139,7 @@ function TemplateEditor({ template, recipientOptions }) {
 
     return (
         <div className="bg-white shadow rounded-lg overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-flame-orange-600">
+            <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-brand-dark">
                 <h3 className="text-lg font-semibold text-white">{template.label}</h3>
                 {template.description && <p className="text-sm text-purple-100 mt-1">{template.description}</p>}
             </div>
@@ -152,7 +152,7 @@ function TemplateEditor({ template, recipientOptions }) {
                         <select
                             value={data.recipients}
                             onChange={(e) => setData('recipients', e.target.value)}
-                            className="rounded-md border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                            className="rounded-md border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                         >
                             {recipientOptions.map((r) => (
                                 <option key={r} value={r}>{RECIPIENT_LABELS[r]}</option>
@@ -164,7 +164,7 @@ function TemplateEditor({ template, recipientOptions }) {
                             type="checkbox"
                             checked={data.enabled}
                             onChange={(e) => setData('enabled', e.target.checked)}
-                            className="rounded border-gray-300 text-flame-orange-600 focus:ring-flame-orange-500"
+                            className="rounded border-gray-300 text-brand-dark focus:ring-brand-primary"
                         />
                         <span className="text-sm text-gray-700">Enabled {data.enabled ? '' : '(this email is switched off)'}</span>
                     </label>
@@ -192,7 +192,7 @@ function TemplateEditor({ template, recipientOptions }) {
                         value={data.subject}
                         onChange={(e) => setData('subject', e.target.value)}
                         placeholder={`Default: ${defaultSubject}`}
-                        className="w-full rounded-md border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                        className="w-full rounded-md border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                     />
                 </div>
 
@@ -204,7 +204,7 @@ function TemplateEditor({ template, recipientOptions }) {
                         onChange={(e) => setData('body', e.target.value)}
                         rows={5}
                         placeholder={defaultBody ? `Default: ${defaultBody}` : 'Uses the built-in default copy when left blank.'}
-                        className="w-full rounded-md border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                        className="w-full rounded-md border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                     />
                     <p className="text-xs text-gray-400 mt-1">Leave blank to keep the built-in default copy.</p>
                 </div>
@@ -224,7 +224,7 @@ function TemplateEditor({ template, recipientOptions }) {
                     <button
                         type="submit"
                         disabled={processing}
-                        className="px-4 py-2 bg-flame-orange-600 text-white text-sm font-medium rounded-md hover:bg-flame-orange-700 disabled:opacity-50"
+                        className="px-4 py-2 bg-brand-dark text-white text-sm font-medium rounded-md hover:bg-brand-darker disabled:opacity-50"
                     >
                         {processing ? 'Saving…' : 'Save'}
                     </button>

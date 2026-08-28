@@ -16,7 +16,7 @@ const BellIcon = () => (
     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
 );
 const LockIcon = () => (
-    <svg className="w-6 h-6 text-flame-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+    <svg className="w-6 h-6 text-brand-dark" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
 );
 
 const AGENT_ICONS = {
@@ -41,7 +41,7 @@ const HEALTH_COLORS = {
 function UpgradePrompt() {
     return (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center max-w-lg mx-auto mt-12">
-            <div className="mx-auto w-14 h-14 bg-flame-orange-100 rounded-full flex items-center justify-center mb-5">
+            <div className="mx-auto w-14 h-14 bg-brand-primary/20 rounded-full flex items-center justify-center mb-5">
                 <LockIcon />
             </div>
             <h3 className="text-xl font-semibold text-gray-900 mb-2">Strategy War Room</h3>
@@ -51,7 +51,7 @@ function UpgradePrompt() {
             </p>
             <Link
                 href={route('subscription.pricing')}
-                className="inline-flex items-center px-6 py-2.5 bg-flame-orange-600 text-white text-sm font-medium rounded-lg hover:bg-flame-orange-700 transition"
+                className="inline-flex items-center px-6 py-2.5 bg-brand-dark text-white text-sm font-medium rounded-lg hover:bg-brand-darker transition"
             >
                 Upgrade to Growth Plan
             </Link>
@@ -243,7 +243,7 @@ function PerformanceSnapshot({ performance }) {
                             return (
                                 <div key={d.date} className="flex-1 flex flex-col items-center gap-1">
                                     <div
-                                        className="w-full bg-flame-orange-200 rounded-t hover:bg-flame-orange-400 transition"
+                                        className="w-full bg-brand-primary/30 rounded-t hover:bg-brand-primary/70 transition"
                                         style={{ height: `${Math.max(pct, 4)}%` }}
                                         title={`${d.date}: $${(d.cost || 0).toFixed(2)}`}
                                     />
@@ -275,7 +275,7 @@ function AlertsBar({ alerts }) {
                     </div>
                     <div className="flex items-center gap-2 ml-3 flex-shrink-0">
                         {a.action_url && (
-                            <Link href={a.action_url} className="text-[11px] text-flame-orange-600 hover:underline font-medium">
+                            <Link href={a.action_url} className="text-[11px] text-brand-dark hover:underline font-medium">
                                 View
                             </Link>
                         )}
@@ -295,7 +295,7 @@ function CompetitiveIntelPanel({ strategy, updatedAt }) {
         return (
             <div className="text-center py-6 text-gray-400 text-sm">
                 No competitive intelligence yet. The agent runs weekly to analyze your competitors.
-                <Link href={route('seo.competitors')} className="block mt-2 text-flame-orange-600 hover:underline text-xs">
+                <Link href={route('seo.competitors')} className="block mt-2 text-brand-dark hover:underline text-xs">
                     View Competitor Analysis →
                 </Link>
             </div>
@@ -343,7 +343,7 @@ function CompetitiveIntelPanel({ strategy, updatedAt }) {
                 </div>
             )}
 
-            <Link href={route('seo.competitors')} className="block text-center text-xs text-flame-orange-600 hover:underline pt-1">
+            <Link href={route('seo.competitors')} className="block text-center text-xs text-brand-dark hover:underline pt-1">
                 View Full Strategy →
             </Link>
         </div>
@@ -378,12 +378,12 @@ function CompetitorPinPanel({ competitors }) {
                         value={data.url}
                         onChange={(e) => setData('url', e.target.value)}
                         placeholder="https://competitor.com"
-                        className="flex-1 text-xs rounded-lg border border-gray-200 px-3 py-2 focus:border-flame-orange-400 focus:ring-flame-orange-400"
+                        className="flex-1 text-xs rounded-lg border border-gray-200 px-3 py-2 focus:border-brand-primary/70 focus:ring-brand-primary/70"
                     />
                     <button
                         type="submit"
                         disabled={processing || !data.url}
-                        className="text-xs px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 font-medium transition"
+                        className="text-xs px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker disabled:opacity-50 font-medium transition"
                     >
                         {processing ? 'Adding...' : 'Add'}
                     </button>
@@ -477,7 +477,7 @@ function GapDashboard({ gapAnalysis, gapAnalysisAt }) {
         <div className="space-y-3">
             {/* Summary */}
             {gapAnalysis.summary && (
-                <div className="bg-gradient-to-r from-flame-orange-50 to-orange-50 rounded-lg p-3 border border-flame-orange-100">
+                <div className="bg-gradient-to-r from-brand-primary/10 to-orange-50 rounded-lg p-3 border border-brand-primary/20">
                     <p className="text-xs text-gray-700">{gapAnalysis.summary}</p>
                 </div>
             )}
@@ -505,7 +505,7 @@ function GapDashboard({ gapAnalysis, gapAnalysisAt }) {
                         onClick={() => setActiveTab(tab.key)}
                         className={`text-[11px] px-2.5 py-1.5 rounded-t font-medium transition ${
                             activeTab === tab.key
-                                ? 'bg-white text-flame-orange-600 border border-b-0 border-gray-200'
+                                ? 'bg-white text-brand-dark border border-b-0 border-gray-200'
                                 : 'text-gray-500 hover:text-gray-700'
                         }`}
                     >
@@ -571,7 +571,7 @@ function MessagingGapsTab({ gaps }) {
                     {g.competitors_using?.length > 0 && (
                         <p className="text-[10px] text-gray-400 mt-0.5">Used by: {g.competitors_using.join(', ')}</p>
                     )}
-                    <p className="text-xs text-flame-orange-700 mt-1">{g.recommended_angle}</p>
+                    <p className="text-xs text-brand-darker mt-1">{g.recommended_angle}</p>
                 </div>
             ))}
         </div>

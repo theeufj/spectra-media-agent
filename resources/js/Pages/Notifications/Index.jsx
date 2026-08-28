@@ -58,7 +58,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
             'billing.success': 'bg-green-50 border-l-4 border-l-green-500',
         };
         
-        return colors[notification.type] || 'bg-flame-orange-50 border-l-4 border-l-flame-orange-500';
+        return colors[notification.type] || 'bg-brand-primary/10 border-l-4 border-l-brand-primary';
     };
 
     const markAsRead = async (notificationId) => {
@@ -158,7 +158,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                     {unreadNotifications.length > 0 && (
                         <button
                             onClick={markAllAsRead}
-                            className="text-sm text-flame-orange-600 hover:text-flame-orange-800 font-medium"
+                            className="text-sm text-brand-dark hover:text-brand-darker font-medium"
                         >
                             Mark all as read
                         </button>
@@ -211,7 +211,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                                 {formatTime(notification.created_at)}
                                                             </span>
                                                             {notification.action_text && notification.action_url && (
-                                                                <span className="text-xs text-flame-orange-600 font-medium hover:text-flame-orange-800">
+                                                                <span className="text-xs text-brand-dark font-medium hover:text-brand-darker">
                                                                     {notification.action_text} →
                                                                 </span>
                                                             )}
@@ -220,7 +220,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                     <div className="flex items-center space-x-2 flex-shrink-0">
                                                         <button
                                                             onClick={() => markAsRead(notification.id)}
-                                                            className="p-1 text-gray-400 hover:text-flame-orange-600 transition-colors"
+                                                            className="p-1 text-gray-400 hover:text-brand-dark transition-colors"
                                                             title="Mark as read"
                                                         >
                                                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -275,7 +275,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                                                 {formatTime(notification.created_at)}
                                                             </span>
                                                             {notification.action_text && notification.action_url && (
-                                                                <span className="text-xs text-flame-orange-600 font-medium hover:text-flame-orange-800">
+                                                                <span className="text-xs text-brand-dark font-medium hover:text-brand-darker">
                                                                     {notification.action_text} →
                                                                 </span>
                                                             )}
@@ -306,7 +306,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                                             href={link.url || '#'}
                                             className={`px-3 py-2 text-sm rounded-md ${
                                                 link.active
-                                                    ? 'bg-flame-orange-600 text-white'
+                                                    ? 'bg-brand-dark text-white'
                                                     : link.url
                                                     ? 'bg-white text-gray-700 hover:bg-gray-50 border'
                                                     : 'bg-gray-100 text-gray-400 cursor-not-allowed'
@@ -323,7 +323,7 @@ export default function NotificationsIndex({ notifications, dynamicNotifications
                     <div className="mt-8 text-center">
                         <p className="text-sm text-gray-500">
                             Want to customize your notifications?{' '}
-                            <Link href={route('profile.edit')} className="text-flame-orange-600 hover:text-flame-orange-800 font-medium">
+                            <Link href={route('profile.edit')} className="text-brand-dark hover:text-brand-darker font-medium">
                                 Manage preferences
                             </Link>
                         </p>

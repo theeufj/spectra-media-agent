@@ -28,9 +28,9 @@ export default function Create() {
             <div className="py-12">
                 <div className="max-w-2xl mx-auto sm:px-6 lg:px-8">
                     <div className="bg-white rounded-lg shadow-md overflow-hidden">
-                        <div className="px-6 py-4 bg-gradient-to-r from-flame-orange-600 to-purple-600">
+                        <div className="px-6 py-4 bg-gradient-to-r from-brand-dark to-purple-600">
                             <h3 className="text-lg font-semibold text-white">How can we help?</h3>
-                            <p className="text-sm text-flame-orange-100 mt-1">Describe your issue and we'll get back to you as soon as possible.</p>
+                            <p className="text-sm text-brand-primary/20 mt-1">Describe your issue and we'll get back to you as soon as possible.</p>
                         </div>
 
                         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -42,7 +42,7 @@ export default function Create() {
                                     id="category"
                                     value={data.category}
                                     onChange={(e) => setData('category', e.target.value)}
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                 >
                                     <option value="general">General</option>
                                     <option value="billing">Billing</option>
@@ -62,7 +62,7 @@ export default function Create() {
                                     value={data.subject}
                                     onChange={(e) => setData('subject', e.target.value)}
                                     placeholder="Brief summary of your issue"
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                     maxLength={255}
                                 />
                                 {errors.subject && <p className="mt-1 text-sm text-red-600">{errors.subject}</p>}
@@ -76,7 +76,7 @@ export default function Create() {
                                     id="priority"
                                     value={data.priority}
                                     onChange={(e) => setData('priority', e.target.value)}
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                 >
                                     <option value="low">Low — General question</option>
                                     <option value="normal">Normal — Something isn't working right</option>
@@ -96,7 +96,7 @@ export default function Create() {
                                     onChange={(e) => setData('description', e.target.value)}
                                     placeholder="Please describe your issue in detail. Include any relevant campaign names, error messages, or steps to reproduce."
                                     rows={6}
-                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="w-full rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                     maxLength={5000}
                                 />
                                 <p className="mt-1 text-xs text-gray-400">{data.description.length}/5000</p>
@@ -113,7 +113,7 @@ export default function Create() {
                                 <button
                                     type="submit"
                                     disabled={processing}
-                                    className="inline-flex items-center px-6 py-2.5 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 transition-colors"
+                                    className="inline-flex items-center px-6 py-2.5 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50 transition-colors"
                                 >
                                     {processing ? 'Submitting...' : 'Submit Ticket'}
                                 </button>

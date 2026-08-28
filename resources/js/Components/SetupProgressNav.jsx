@@ -30,7 +30,7 @@ export default function SetupProgressNav() {
     const currentKey = steps.find(s => !s.completed && s.status !== 'in_progress')?.key;
 
     return (
-        <div className="bg-gradient-to-r from-flame-orange-50 to-purple-50 border border-flame-orange-100 rounded-lg p-4 mb-4">
+        <div className="bg-gradient-to-r from-brand-primary/10 to-purple-50 border border-brand-primary/20 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center space-x-2">
                     <span className="text-lg">🚀</span>
@@ -42,7 +42,7 @@ export default function SetupProgressNav() {
             {/* Progress Bar */}
             <div className="w-full bg-gray-200 rounded-full h-1.5 mb-3">
                 <div
-                    className="bg-gradient-to-r from-flame-orange-500 to-purple-500 h-1.5 rounded-full transition-all duration-500"
+                    className="bg-gradient-to-r from-brand-primary to-purple-500 h-1.5 rounded-full transition-all duration-500"
                     style={{ width: `${progress}%` }}
                 />
             </div>
@@ -83,7 +83,7 @@ function stepClasses(step, isCurrent) {
     if (step.completed) return 'bg-green-100 text-green-700 hover:bg-green-200';
     if (step.status === 'failed') return 'bg-red-50 text-red-700 hover:bg-red-100 ring-2 ring-red-200';
     if (step.status === 'in_progress') return 'bg-blue-50 text-blue-700 hover:bg-blue-100';
-    if (isCurrent) return 'bg-flame-orange-100 text-flame-orange-700 hover:bg-flame-orange-200 ring-2 ring-flame-orange-300';
+    if (isCurrent) return 'bg-brand-primary/20 text-brand-darker hover:bg-brand-primary/30 ring-2 ring-brand-primary/50';
     return 'bg-white text-gray-500 hover:bg-gray-50';
 }
 
@@ -106,6 +106,7 @@ function stepIcon(stepKey) {
         site_scan: '🔍',
         first_campaign: '🚀',
         budget_confirmed: '💰',
+        conversion_tracking: '📈',
         payment: '💳',
         deployed: '📡',
     };

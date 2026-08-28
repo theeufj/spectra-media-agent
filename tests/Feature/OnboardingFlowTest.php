@@ -141,6 +141,40 @@ class OnboardingFlowTest extends TestCase
         );
     }
 
+    public function test_setup_checklist_includes_the_tracking_snippet_step(): void
+    {
+        [$user, $customer] = $this->userWithCustomer(['gtm_installed' => false, 'gtm_container_id' => 'GTM-TEST123']);
+
+        $response = $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->getJson('/api/setup-progress');
+
+        $step = collect($response->json('steps'))->firstWhere('key', 'conversion_tracking');
+        $this->assertNotNull($step);
+        $this->assertFalse($step['completed']);
+        $this->assertStringContainsString('/gtm/setup', $step['action_url']);
+
+        $customer->update(['gtm_installed' => true]);
+        $step = collect($this->getJson('/api/setup-progress')->json('steps'))->firstWhere('key', 'conversion_tracking');
+        $this->assertTrue($step['completed']);
+    }
+
+    public function test_campaign_review_surfaces_the_tracking_snippet_call_to_action(): void
+    {
+        [$user, $customer] = $this->userWithCustomer(['gtm_installed' => false, 'gtm_container_id' => 'GTM-TEST123']);
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        $response = $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->get(route('campaigns.show', $campaign));
+
+        $response->assertSuccessful();
+        $tracking = $response->viewData('page')['props']['conversionTracking'] ?? null;
+        $this->assertNotNull($tracking);
+        $this->assertSame('GTM-TEST123', $tracking['container_id']);
+        $this->assertFalse($tracking['installed']);
+    }
+
     public function test_a_returning_customer_who_has_launched_before_is_not_re_gated(): void
     {
         [$user, $customer] = $this->userWithCustomer();

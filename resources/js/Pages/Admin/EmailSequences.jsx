@@ -30,8 +30,8 @@ const Field = ({ label, hint, children }) => (
     </label>
 );
 
-const input = 'w-full rounded-lg border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500';
-const primaryBtn = 'rounded-lg bg-flame-orange-500 px-4 py-2 text-sm font-medium text-white hover:bg-flame-orange-600 disabled:bg-gray-300';
+const input = 'w-full rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary';
+const primaryBtn = 'rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:bg-brand-dark disabled:bg-gray-300';
 
 const humanDelay = (hours) => {
     if (hours === 0) return 'immediately';
@@ -141,7 +141,7 @@ function StepEditor({ step, onDirtyChange, canDelete }) {
                             type="checkbox"
                             checked={data.enabled}
                             onChange={(e) => setData('enabled', e.target.checked)}
-                            className="rounded border-gray-300 text-flame-orange-500 focus:ring-flame-orange-500"
+                            className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
                         />
                         This email is part of the chain
                     </label>
@@ -155,7 +155,7 @@ function StepEditor({ step, onDirtyChange, canDelete }) {
                                     type="button"
                                     onClick={() => switchFormat(f)}
                                     className={`rounded px-2 py-1 transition ${
-                                        data.format === f ? 'bg-flame-orange-500 text-white' : 'text-gray-600 hover:bg-gray-100'
+                                        data.format === f ? 'bg-brand-primary text-white' : 'text-gray-600 hover:bg-gray-100'
                                     }`}
                                 >
                                     {f === 'plain' ? 'Plain' : 'Rich'}
@@ -304,7 +304,7 @@ function SequencePanel({ sequence }) {
                     >
                         {sequence.enabled ? 'Live' : 'Off'}
                     </span>
-                    <button onClick={() => setSettingsOpen(!settingsOpen)} className="text-sm font-medium text-flame-orange-600 hover:underline">
+                    <button onClick={() => setSettingsOpen(!settingsOpen)} className="text-sm font-medium text-brand-dark hover:underline">
                         {settingsOpen ? 'Hide' : 'Sender'} settings
                     </button>
                 </div>
@@ -325,7 +325,7 @@ function SequencePanel({ sequence }) {
                                 type="checkbox"
                                 checked={data.enabled}
                                 onChange={(e) => setData('enabled', e.target.checked)}
-                                className="rounded border-gray-300 text-flame-orange-500 focus:ring-flame-orange-500"
+                                className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
                             />
                             Send this chain to the {sequence.audience_size} people in its audience
                         </label>
@@ -350,7 +350,7 @@ function SequencePanel({ sequence }) {
                             onClick={() => switchStep(s.id)}
                             className={`-mb-px flex items-center gap-2 rounded-t-lg border-b-2 px-4 py-2 text-sm transition ${
                                 active
-                                    ? 'border-flame-orange-500 font-medium text-flame-orange-600'
+                                    ? 'border-brand-primary font-medium text-brand-dark'
                                     : 'border-transparent text-gray-500 hover:text-gray-800'
                             }`}
                         >
@@ -366,7 +366,7 @@ function SequencePanel({ sequence }) {
 
                 <button
                     onClick={addStep}
-                    className="-mb-px rounded-t-lg border-b-2 border-transparent px-3 py-2 text-sm text-flame-orange-600 hover:text-flame-orange-700"
+                    className="-mb-px rounded-t-lg border-b-2 border-transparent px-3 py-2 text-sm text-brand-dark hover:text-brand-darker"
                     title="Add another email to this chain"
                 >
                     + Add email
@@ -438,7 +438,7 @@ export default function EmailSequences({ sequences, globallyEnabled, leads, repl
                             onClick={() => setActiveSequence(s.id)}
                             className={`rounded-lg border px-4 py-2 text-sm transition ${
                                 s.id === sequence?.id
-                                    ? 'border-flame-orange-500 bg-flame-orange-50 font-medium text-flame-orange-700'
+                                    ? 'border-brand-primary bg-brand-primary/10 font-medium text-brand-darker'
                                     : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                             }`}
                         >

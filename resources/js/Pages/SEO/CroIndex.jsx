@@ -10,11 +10,11 @@ function ScoreBadge({ score }) {
 
 function UpgradePrompt() {
     return (
-        <div className="bg-gradient-to-br from-flame-orange-50 to-orange-50 rounded-lg border border-flame-orange-200 p-6 text-center mb-6">
+        <div className="bg-gradient-to-br from-brand-primary/10 to-orange-50 rounded-lg border border-brand-primary/30 p-6 text-center mb-6">
             <h3 className="text-lg font-semibold text-gray-900">Audit Limit Reached</h3>
             <p className="text-sm text-gray-600 mt-1">You've used all 3 free CRO audits. Upgrade to unlock unlimited audits.</p>
             <p className="text-xs text-gray-400 mt-3">Available on Growth ($249/mo) and Agency plans</p>
-            <a href={route('pricing')} className="mt-4 inline-flex items-center px-5 py-2 bg-flame-orange-600 text-white rounded-lg text-sm font-medium hover:bg-flame-orange-700 transition">
+            <a href={route('pricing')} className="mt-4 inline-flex items-center px-5 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker transition">
                 View Plans
             </a>
         </div>
@@ -64,13 +64,13 @@ export default function CroIndex({ audits, auditsUsed = 0, maxAudits, canRunAudi
                                     value={url}
                                     onChange={(e) => setUrl(e.target.value)}
                                     placeholder="https://example.com/landing-page"
-                                    className="flex-1 rounded-lg border-gray-300 text-sm focus:ring-flame-orange-500 focus:border-flame-orange-500"
+                                    className="flex-1 rounded-lg border-gray-300 text-sm focus:ring-brand-primary focus:border-brand-primary"
                                     required
                                 />
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="px-6 py-2 bg-flame-orange-600 text-white rounded-lg text-sm font-medium hover:bg-flame-orange-700 disabled:opacity-50 transition"
+                                    className="px-6 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker disabled:opacity-50 transition"
                                 >
                                     {submitting ? 'Starting...' : 'Run CRO Audit'}
                                 </button>

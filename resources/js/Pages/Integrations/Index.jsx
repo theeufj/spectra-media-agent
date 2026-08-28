@@ -34,7 +34,7 @@ function IntegrationCard({ integration }) {
             <div className="flex gap-2">
                 {integration.status !== 'disconnected' && (
                     <>
-                        <button onClick={() => router.post(route('integrations.sync', integration.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-flame-orange-50 text-flame-orange-700 rounded-lg hover:bg-flame-orange-100 font-medium">Sync Now</button>
+                        <button onClick={() => router.post(route('integrations.sync', integration.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-brand-primary/10 text-brand-darker rounded-lg hover:bg-brand-primary/20 font-medium">Sync Now</button>
                         <button onClick={() => { if (confirm('Disconnect this integration?')) router.post(route('integrations.disconnect', integration.id), {}, {preserveScroll: true}); }} className="text-xs px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg">Disconnect</button>
                     </>
                 )}
@@ -73,7 +73,7 @@ function ConnectForm({ provider, onClose }) {
                 )}
                 <div className="flex justify-end gap-2">
                     <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancel</button>
-                    <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50">
+                    <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
                         {saving ? 'Connecting...' : 'Connect'}
                     </button>
                 </div>
@@ -130,7 +130,7 @@ export default function Index({ integrations = [], conversionStats, availablePro
                                     <div key={p.id} className="bg-white rounded-lg border border-gray-200 border-dashed p-5">
                                         <h3 className="text-sm font-semibold text-gray-900">{p.name}</h3>
                                         <p className="text-xs text-gray-500 mt-1 mb-3">{p.description}</p>
-                                        <button onClick={() => setConnectingProvider(p)} className="text-xs px-3 py-1.5 bg-flame-orange-50 text-flame-orange-700 rounded-lg hover:bg-flame-orange-100 font-medium">Connect</button>
+                                        <button onClick={() => setConnectingProvider(p)} className="text-xs px-3 py-1.5 bg-brand-primary/10 text-brand-darker rounded-lg hover:bg-brand-primary/20 font-medium">Connect</button>
                                     </div>
                                 ))}
                             </div>

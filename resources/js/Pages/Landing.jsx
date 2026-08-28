@@ -196,7 +196,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
 
                 <main>
                     {/* Hero Section */}
-                    <div className="pt-6 px-4 sm:pt-10 md:pt-14 lg:pt-8 lg:pb-14 lg:overflow-hidden bg-gradient-to-b from-flame-orange-50 to-white">
+                    <div className="pt-6 px-4 sm:pt-10 md:pt-14 lg:pt-8 lg:pb-14 lg:overflow-hidden bg-gradient-to-b from-brand-primary/10 to-white">
                         <div className="mx-auto max-w-7xl lg:px-8">
                             {demoResult ? (
                                 <DemoResultsPanel result={demoResult} />
@@ -204,7 +204,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 lg:gap-8">
                                 <div className="mx-auto max-w-sm px-2 sm:max-w-md sm:px-4 md:max-w-none md:px-0 text-center sm:text-center md:text-left md:flex md:items-center">
                                     <div className="py-8 sm:py-12 md:py-16 lg:py-24 w-full">
-                                        <p className="text-xs sm:text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">AI-Powered Ad Campaign Management</p>
+                                        <p className="text-xs sm:text-sm font-semibold text-brand-dark uppercase tracking-wider">AI-Powered Ad Campaign Management</p>
                                         <h1 className="mt-3 sm:mt-4 text-3xl sm:text-4xl md:text-5xl lg:text-5xl xl:text-6xl tracking-tight font-extrabold text-gray-900">
                                             {/*
                                                 The trailing space is deliberate and must stay inside a JSX
@@ -213,7 +213,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                                 "Managementwith the Power of AI" to crawlers and screen readers.
                                             */}
                                             <span className="block whitespace-normal">{'Automated Google & Meta Ads Management '}</span>
-                                            <span className="block text-flame-orange-600 whitespace-normal">with the Power of AI</span>
+                                            <span className="block text-brand-dark whitespace-normal">with the Power of AI</span>
                                         </h1>
                                         <p className="mt-2 sm:mt-3 text-sm sm:text-base md:text-lg lg:text-lg xl:text-xl text-gray-500 leading-relaxed">
                                             Stop paying agency retainer fees. Our AI spots your competitors, fixes broken ads, moves budget to what's working, and keeps testing new ideas—every single day, without you lifting a finger.
@@ -228,7 +228,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                                         value={firstName}
                                                         onChange={e => setFirstName(e.target.value)}
                                                         placeholder="First name"
-                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
+                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary py-3"
                                                         disabled={loadingStage > 0}
                                                     />
                                                     <input
@@ -237,7 +237,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                                         value={email}
                                                         onChange={e => setEmail(e.target.value)}
                                                         placeholder="Your email address"
-                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
+                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary py-3"
                                                         disabled={loadingStage > 0}
                                                     />
                                                 </div>
@@ -248,13 +248,13 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                                         value={url}
                                                         onChange={e => setUrl(e.target.value)}
                                                         placeholder="Enter your website URL..."
-                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 py-3"
+                                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary py-3"
                                                         disabled={loadingStage > 0}
                                                     />
                                                     <button
                                                         type="submit"
                                                         disabled={loadingStage > 0}
-                                                        className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-sm disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
+                                                        className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-brand-dark hover:bg-brand-darker shadow-sm disabled:opacity-50 w-full sm:w-auto whitespace-nowrap"
                                                     >
                                                         {loadingStage > 0 ? "Analyzing..." : "Build My Ads"}
                                                     </button>
@@ -264,9 +264,9 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                             {loadingStage > 0 && (
                                                 <div className="mt-4">
                                                     <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                                        <div className="bg-flame-orange-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(loadingStage / 4) * 100}%` }}></div>
+                                                        <div className="bg-brand-dark h-2.5 rounded-full transition-all duration-500" style={{ width: `${(loadingStage / 4) * 100}%` }}></div>
                                                     </div>
-                                                    <p className="text-sm mt-2 text-center text-flame-orange-700 font-medium animate-pulse">{getLoadingText()}</p>
+                                                    <p className="text-sm mt-2 text-center text-brand-darker font-medium animate-pulse">{getLoadingText()}</p>
                                                 </div>
                                             )}
                                         </div>
@@ -302,14 +302,14 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                 </p>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-12 relative">
-                                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-flame-orange-100 -z-10"></div>
+                                <div className="hidden md:block absolute top-12 left-[16%] right-[16%] h-0.5 bg-brand-primary/20 -z-10"></div>
                                 {[
                                     { icon: '👁️', title: '1. We read your website', desc: 'Just enter your URL. We pick up your colours, fonts, and brand voice automatically—no forms to fill in.' },
                                     { icon: '🧠', title: '2. We find your competitors', desc: 'We look at who else is advertising in your space, check out their messaging, and figure out how to beat them.' },
                                     { icon: '🚀', title: '3. Your ads run themselves', desc: 'We fix disapproved ads, shift budget to what\'s working, and keep testing new ideas—every day, on autopilot.' },
                                 ].map((step) => (
                                     <div key={step.title} className="relative flex flex-col items-center text-center">
-                                        <div className="flex items-center justify-center h-24 w-24 rounded-full bg-flame-orange-50 border-4 border-white shadow-lg mb-6">
+                                        <div className="flex items-center justify-center h-24 w-24 rounded-full bg-brand-primary/10 border-4 border-white shadow-lg mb-6">
                                             <span className="text-4xl">{step.icon}</span>
                                         </div>
                                         <h3 className="text-xl font-bold text-gray-900 mb-3">{step.title}</h3>
@@ -318,7 +318,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                 ))}
                             </div>
                             <div className="mt-12 text-center">
-                                <Link href="/how-it-works" className="text-flame-orange-600 font-semibold hover:text-flame-orange-700 transition-colors">
+                                <Link href="/how-it-works" className="text-brand-dark font-semibold hover:text-brand-darker transition-colors">
                                     Learn more about how it works →
                                 </Link>
                             </div>
@@ -326,11 +326,11 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     </div>
 
                     {/* Agents Highlight */}
-                    <div className="bg-gradient-to-br from-flame-orange-900 via-flame-orange-800 to-purple-900 py-16 sm:py-24">
+                    <div className="bg-gradient-to-br from-brand-darker via-brand-darker to-purple-900 py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
+                            <p className="text-brand-primary/50 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
                             <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 AI PPC Campaign Manager</h2>
-                            <p className="mt-4 max-w-2xl mx-auto text-lg text-flame-orange-200">
+                            <p className="mt-4 max-w-2xl mx-auto text-lg text-brand-primary/30">
                                 Six AI specialists, each focused on a different part of your advertising. Running around the clock, whether you're in a meeting or fast asleep.
                             </p>
                             <div className="mt-12 grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
@@ -349,7 +349,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                 ))}
                             </div>
                             <div className="mt-12 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-900 bg-white hover:bg-flame-orange-50 shadow-lg transition-colors">
+                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-darker bg-white hover:bg-brand-primary/10 shadow-lg transition-colors">
                                     Put These Agents to Work →
                                 </a>
                                 <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-white/10 transition-colors">
@@ -368,9 +368,9 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                             </div>
                             <div className={`grid grid-cols-1 ${plans.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-8 max-w-4xl mx-auto`}>
                                 {plans.map((plan) => (
-                                    <div key={plan.id} className={`rounded-lg p-8 text-center ${plan.is_popular ? 'border-2 border-flame-orange-600 bg-flame-orange-50 shadow-lg relative' : 'border border-gray-200 bg-white'}`}>
+                                    <div key={plan.id} className={`rounded-lg p-8 text-center ${plan.is_popular ? 'border-2 border-brand-dark bg-brand-primary/10 shadow-lg relative' : 'border border-gray-200 bg-white'}`}>
                                         {plan.badge_text && (
-                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-flame-orange-600 text-white px-3 py-1 text-xs font-semibold rounded-full">{plan.badge_text}</div>
+                                            <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 bg-brand-dark text-white px-3 py-1 text-xs font-semibold rounded-full">{plan.badge_text}</div>
                                         )}
                                         <h3 className="text-2xl font-bold text-gray-900">{plan.name}</h3>
                                         <p className="mt-2 text-sm text-gray-500">{plan.description}</p>
@@ -379,7 +379,7 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                                 ))}
                             </div>
                             <div className="mt-12 text-center">
-                                <Link href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-flame-orange-600 hover:bg-flame-orange-700 shadow-lg transition-colors">
+                                <Link href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-white bg-brand-dark hover:bg-brand-darker shadow-lg transition-colors">
                                     Compare Plans & Start Free Trial
                                 </Link>
                             </div>
@@ -440,23 +440,23 @@ export default function Landing({ auth, plans = [], meta = {} }) {
                     </div>
 
                     {/* Final CTA */}
-                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-800 py-16 sm:py-24">
+                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
                         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 Ready to stop doing this the hard way?
                             </h2>
-                            <p className="mt-6 text-xl text-flame-orange-100">
+                            <p className="mt-6 text-xl text-brand-primary/20">
                                 Join hundreds of businesses who handed the heavy lifting to their AI team—and haven't looked back.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
+                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
                                     Get Started Free
                                 </a>
-                                <a href="/login" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700">
+                                <a href="/login" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
                                     Sign In
                                 </a>
                             </div>
-                            <p className="mt-8 text-flame-orange-100">✓ Free to explore · ✓ No credit card required · ✓ Live in minutes</p>
+                            <p className="mt-8 text-brand-primary/20">✓ Free to explore · ✓ No credit card required · ✓ Live in minutes</p>
                         </div>
                     </div>
                 </main>

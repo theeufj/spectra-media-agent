@@ -723,7 +723,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         navigator.clipboard.writeText(copyText);
                                                                         toast.success('Ad copy copied to clipboard!');
                                                                     }}
-                                                                    className="px-3 py-1 text-xs font-medium text-flame-orange-600 bg-flame-orange-50 rounded-md hover:bg-flame-orange-100"
+                                                                    className="px-3 py-1 text-xs font-medium text-brand-dark bg-brand-primary/10 rounded-md hover:bg-brand-primary/20"
                                                                 >
                                                                     📋 Copy All
                                                                 </button>
@@ -731,7 +731,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 <a
                                                                     href={route('subscription.pricing')}
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    className="px-3 py-1 text-xs font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700"
+                                                                    className="px-3 py-1 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
                                                                 >
                                                                     🔒 Upgrade to Export
                                                                 </a>
@@ -786,7 +786,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     {creativeUsage.image_generations.remaining} image generation{creativeUsage.image_generations.remaining !== 1 ? 's' : ''} remaining
                                                 </span>
                                                 {creativeUsage.image_generations.remaining <= 0 && (
-                                                    <a href={route('creative-usage')} className="text-flame-orange-600 hover:underline text-xs font-medium">Buy Boost →</a>
+                                                    <a href={route('creative-usage')} className="text-brand-dark hover:underline text-xs font-medium">Buy Boost →</a>
                                                 )}
                                             </div>
                                         )}
@@ -795,7 +795,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                             <button
                                                 onClick={() => handleGenerateImage(strategyItem.id)}
                                                 disabled={generatingImage || (creativeUsage && !creativeUsage.is_unlimited && creativeUsage.image_generations.remaining <= 0)}
-                                                className="px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                                                className="px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
                                             >
                                                 {generatingImage && (
                                                     <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -895,7 +895,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                     <div className="flex flex-wrap gap-1 mt-1.5">
                                                                         <button
                                                                             onClick={() => handleUseHarvestedAsset(asset.id, 'original')}
-                                                                            className="text-[10px] px-2 py-0.5 bg-flame-orange-50 text-flame-orange-700 rounded hover:bg-flame-orange-100 font-medium"
+                                                                            className="text-[10px] px-2 py-0.5 bg-brand-primary/10 text-brand-darker rounded hover:bg-brand-primary/20 font-medium"
                                                                         >
                                                                             Use Original
                                                                         </button>
@@ -1032,7 +1032,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                         <button
                                                                             onClick={(e) => { e.stopPropagation(); setEditingImage(image); }}
                                                                             disabled={creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item}
-                                                                            className="px-3 py-1.5 text-xs font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                            className="px-3 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker disabled:opacity-50 disabled:cursor-not-allowed"
                                                                         >
                                                                             {creativeUsage && (image.refinement_depth ?? 0) >= creativeUsage.max_refinements_per_item ? 'Max Edits' : 'Edit'}
                                                                         </button>
@@ -1056,7 +1056,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                                 <a
                                                                     href={route('subscription.pricing')}
                                                                     onClick={(e) => e.stopPropagation()}
-                                                                    className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-md hover:bg-flame-orange-700"
+                                                                    className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-md hover:bg-brand-darker"
                                                                 >
                                                                     🔒 Upgrade to Download
                                                                 </a>
@@ -1080,7 +1080,7 @@ export default function Collateral({ campaign, currentStrategy, allStrategies, a
                                                     {creativeUsage.video_generations.remaining} video generation{creativeUsage.video_generations.remaining !== 1 ? 's' : ''} remaining
                                                 </span>
                                                 {creativeUsage.video_generations.remaining <= 0 && (
-                                                    <a href={route('creative-usage')} className="text-flame-orange-600 hover:underline text-xs font-medium">Buy Boost →</a>
+                                                    <a href={route('creative-usage')} className="text-brand-dark hover:underline text-xs font-medium">Buy Boost →</a>
                                                 )}
                                             </div>
                                         )}

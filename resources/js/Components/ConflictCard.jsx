@@ -45,7 +45,7 @@ const ConflictCard = ({ conflict, onResolve }) => {
                 {onResolve && (
                     <button
                         onClick={() => onResolve(conflict)}
-                        className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-flame-orange-600 bg-flame-orange-50 rounded-md hover:bg-flame-orange-100 transition-colors"
+                        className="flex-shrink-0 px-3 py-1.5 text-sm font-medium text-brand-dark bg-brand-primary/10 rounded-md hover:bg-brand-primary/20 transition-colors"
                     >
                         Resolve
                     </button>

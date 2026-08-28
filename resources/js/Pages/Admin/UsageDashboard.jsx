@@ -49,7 +49,7 @@ export default function UsageDashboard({
                     preserveScroll
                     className={`px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
                         period.key === option.value
-                            ? 'bg-flame-orange-500 text-white'
+                            ? 'bg-brand-primary text-white'
                             : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
                     }`}
                 >
@@ -103,7 +103,7 @@ export default function UsageDashboard({
                         // that the gap is deliberate.
                         const classes = `px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
                             active
-                                ? 'border-flame-orange-500 text-flame-orange-600'
+                                ? 'border-brand-primary text-brand-dark'
                                 : t.enabled
                                   ? 'border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300'
                                   : 'border-transparent text-gray-300 cursor-not-allowed'
@@ -146,11 +146,11 @@ export default function UsageDashboard({
             <div className="mt-8 border-t border-gray-200 pt-4">
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Deep dives</p>
                 <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                    <Link href={route('admin.revenue.index')} className="text-flame-orange-600 hover:underline">Revenue &amp; MRR →</Link>
-                    <Link href={route('admin.ai-costs.index')} className="text-flame-orange-600 hover:underline">AI cost breakdown →</Link>
-                    <Link href={route('admin.execution.metrics')} className="text-flame-orange-600 hover:underline">Deployment execution →</Link>
-                    <Link href={route('admin.automation-health')} className="text-flame-orange-600 hover:underline">Automation health →</Link>
-                    <Link href={route('admin.activity.index')} className="text-flame-orange-600 hover:underline">Activity log →</Link>
+                    <Link href={route('admin.revenue.index')} className="text-brand-dark hover:underline">Revenue &amp; MRR →</Link>
+                    <Link href={route('admin.ai-costs.index')} className="text-brand-dark hover:underline">AI cost breakdown →</Link>
+                    <Link href={route('admin.execution.metrics')} className="text-brand-dark hover:underline">Deployment execution →</Link>
+                    <Link href={route('admin.automation-health')} className="text-brand-dark hover:underline">Automation health →</Link>
+                    <Link href={route('admin.activity.index')} className="text-brand-dark hover:underline">Activity log →</Link>
                 </div>
             </div>
         </AdminShell>

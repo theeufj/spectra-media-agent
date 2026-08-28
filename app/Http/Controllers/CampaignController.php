@@ -362,6 +362,13 @@ class CampaignController extends Controller
             // of letting a free user click into an unexplained pricing
             // redirect.
             'canRegenerate' => $request->user()->hasSubscriptionAccess($customer),
+            // Surfaced during onboarding: install tracking before the first
+            // launch so conversions are counted from day one.
+            'conversionTracking' => [
+                'container_id' => $customer->gtm_container_id,
+                'installed' => (bool) $customer->gtm_installed,
+                'setup_url' => route('customers.gtm.setup', $customer->id, false),
+            ],
         ]);
     }
 

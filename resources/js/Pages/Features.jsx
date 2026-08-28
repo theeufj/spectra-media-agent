@@ -34,9 +34,9 @@ export default function Features({ auth }) {
 
                 <main>
                     {/* Hero */}
-                    <div className="bg-gradient-to-b from-flame-orange-50 to-white py-16 sm:py-24">
+                    <div className="bg-gradient-to-b from-brand-primary/10 to-white py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">Platform Features</p>
+                            <p className="text-sm font-semibold text-brand-dark uppercase tracking-wider">Platform Features</p>
                             <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
                                 Everything You Need to Win at Paid Ads
                             </h1>
@@ -81,12 +81,12 @@ export default function Features({ auth }) {
                     </div>
 
                     {/* AI Agents Showcase */}
-                    <div className="bg-gradient-to-br from-flame-orange-900 via-flame-orange-800 to-purple-900 py-16 sm:py-24">
+                    <div className="bg-gradient-to-br from-brand-darker via-brand-darker to-purple-900 py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center mb-12">
-                                <p className="text-flame-orange-300 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
+                                <p className="text-brand-primary/50 font-semibold text-sm uppercase tracking-wider">Always Working For You</p>
                                 <h2 className="mt-2 text-3xl sm:text-4xl font-bold tracking-tight text-white">Your 24/7 Marketing Team</h2>
-                                <p className="mt-4 text-lg text-flame-orange-200">
+                                <p className="mt-4 text-lg text-brand-primary/30">
                                     Six AI specialists, each focused on a different part of your advertising, running around the clock.
                                 </p>
                             </div>
@@ -107,7 +107,7 @@ export default function Features({ auth }) {
                                             </div>
                                             <h3 className="text-lg font-bold text-white">{agent.name}</h3>
                                         </div>
-                                        <p className="text-flame-orange-200 text-sm leading-relaxed">{agent.desc}</p>
+                                        <p className="text-brand-primary/30 text-sm leading-relaxed">{agent.desc}</p>
                                         <div className="mt-4 pt-4 border-t border-white/10">
                                             <span className={`text-xs text-${agent.color}-300`}>Runs: {agent.freq}</span>
                                         </div>
@@ -116,7 +116,7 @@ export default function Features({ auth }) {
                             </div>
 
                             <div className="mt-12 text-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-900 bg-white hover:bg-flame-orange-50 shadow-lg transition-colors">
+                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-darker bg-white hover:bg-brand-primary/10 shadow-lg transition-colors">
                                     Put These Agents to Work →
                                 </a>
                             </div>
@@ -127,7 +127,7 @@ export default function Features({ auth }) {
                     <div className="bg-gray-50 py-12 sm:py-16 md:py-20 lg:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                             <div className="mx-auto max-w-2xl lg:text-center">
-                                <h2 className="text-base font-semibold leading-7 text-flame-orange-600">Built for real businesses</h2>
+                                <h2 className="text-base font-semibold leading-7 text-brand-dark">Built for real businesses</h2>
                                 <p className="mt-2 text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-gray-900">
                                     Everything you need to launch great ads and keep them running
                                 </p>
@@ -150,7 +150,7 @@ export default function Features({ auth }) {
                                     ].map((feature) => (
                                         <div key={feature.title} className="relative pl-16">
                                             <dt className="text-base font-semibold leading-7 text-gray-900">
-                                                <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-flame-orange-600">
+                                                <div className="absolute left-0 top-0 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-dark">
                                                     <svg className="h-6 w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={feature.icon} /></svg>
                                                 </div>
                                                 {feature.title}
@@ -164,19 +164,19 @@ export default function Features({ auth }) {
                     </div>
 
                     {/* CTA */}
-                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-800 py-16 sm:py-24">
+                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
                         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 See All Features in Action
                             </h2>
-                            <p className="mt-6 text-xl text-flame-orange-100">
+                            <p className="mt-6 text-xl text-brand-primary/20">
                                 Sign up free and explore everything sitetospend has to offer—no credit card required.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
+                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
                                     Get Started Free
                                 </a>
-                                <Link href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700">
+                                <Link href="/pricing" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
                                     View Pricing
                                 </Link>
                             </div>

@@ -18,7 +18,7 @@ function FunnelBar({ stage, maxValue }) {
             <span className="text-sm font-medium text-gray-700 w-28">{stage.name}</span>
             <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
                 <div
-                    className="bg-gradient-to-r from-flame-orange-500 to-flame-orange-400 h-6 rounded-full flex items-center justify-end pr-2"
+                    className="bg-gradient-to-r from-brand-primary to-brand-primary/70 h-6 rounded-full flex items-center justify-end pr-2"
                     style={{ width: `${Math.max(width, 2)}%` }}
                 >
                     <span className="text-xs text-white font-medium">{stage.value.toLocaleString()}</span>
@@ -51,7 +51,7 @@ export default function Index({ summary, timeSeries = [], funnel, days = 30 }) {
                                 <button
                                     key={d}
                                     onClick={() => changeDays(d)}
-                                    className={`px-3 py-1.5 text-xs rounded-lg border ${days === d ? 'bg-flame-orange-600 text-white border-flame-orange-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                    className={`px-3 py-1.5 text-xs rounded-lg border ${days === d ? 'bg-brand-dark text-white border-brand-dark' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                 >
                                     {d}d
                                 </button>

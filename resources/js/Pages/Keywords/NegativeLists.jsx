@@ -54,7 +54,7 @@ export default function NegativeLists({ lists = [] }) {
                             <h1 className="text-2xl font-bold text-gray-900">Negative Keyword Lists</h1>
                             <p className="mt-1 text-sm text-gray-500">Shared negative keyword lists to apply across campaigns.</p>
                         </div>
-                        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700">
+                        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
                             New List
                         </button>
                     </div>
@@ -72,7 +72,7 @@ export default function NegativeLists({ lists = [] }) {
                                 </div>
                                 <div className="flex justify-end gap-2">
                                     <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-                                    <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50">
+                                    <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
                                         {saving ? 'Creating...' : 'Create List'}
                                     </button>
                                 </div>

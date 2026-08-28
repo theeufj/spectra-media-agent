@@ -60,7 +60,7 @@ const StatusDrift = ({ drift }) => {
             title="Status drift"
             subtitle="Spectra's own campaign status against what the ad platform reports. These drift by design; large numbers here mean billing is working from the wrong picture."
             action={
-                <Link href={route('admin.runtime-exceptions.index')} className="text-xs text-flame-orange-600 hover:underline whitespace-nowrap">
+                <Link href={route('admin.runtime-exceptions.index')} className="text-xs text-brand-dark hover:underline whitespace-nowrap">
                     Exceptions →
                 </Link>
             }

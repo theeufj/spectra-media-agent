@@ -113,7 +113,7 @@ const CustomerTable = ({ customers, plans = [] }) => {
         <div className="flex gap-2">
             <Link
                 href={route('admin.customers.show', customer.id)}
-                className="text-flame-orange-600 hover:text-flame-orange-900 font-medium"
+                className="text-brand-dark hover:text-brand-darker font-medium"
             >
                 View
             </Link>

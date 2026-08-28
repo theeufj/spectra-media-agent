@@ -102,7 +102,7 @@ export default function Index({ personas, campaigns }) {
                             <h1 className="text-2xl font-bold text-gray-900">Audience Personas</h1>
                             <p className="mt-1 text-sm text-gray-500">AI-generated audience segments to tailor ad copy and targeting.</p>
                         </div>
-                        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700">
+                        <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">
                             {showCreate ? 'Cancel' : '+ Create Persona'}
                         </button>
                     </div>
@@ -197,7 +197,7 @@ export default function Index({ personas, campaigns }) {
                                 </div>
                             </div>
                             <div className="flex justify-end">
-                                <button type="submit" disabled={createForm.processing} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50">
+                                <button type="submit" disabled={createForm.processing} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
                                     {createForm.processing ? 'Creating...' : 'Create Persona'}
                                 </button>
                             </div>

@@ -38,7 +38,7 @@ const Button = ({ active, disabled, title, onClick, children }) => (
         disabled={disabled}
         onClick={onClick}
         className={`rounded px-2 py-1 text-sm leading-none transition disabled:opacity-40 ${
-            active ? 'bg-flame-orange-100 text-flame-orange-700' : 'text-gray-600 hover:bg-gray-100'
+            active ? 'bg-brand-primary/20 text-brand-darker' : 'text-gray-600 hover:bg-gray-100'
         }`}
     >
         {children}
@@ -145,7 +145,7 @@ export default function EmailEditor({ value, onChange, uploadUrl, csrf }) {
     const can = editor.can().chain().focus();
 
     return (
-        <div className="rounded-lg border border-gray-300 focus-within:border-flame-orange-500 focus-within:ring-1 focus-within:ring-flame-orange-500">
+        <div className="rounded-lg border border-gray-300 focus-within:border-brand-primary focus-within:ring-1 focus-within:ring-brand-primary">
             <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-200 bg-gray-50 px-2 py-1.5">
                 <Button title="Bold" active={editor.isActive('bold')} disabled={!can.toggleBold().run()} onClick={() => editor.chain().focus().toggleBold().run()}>
                     <span className="font-bold">B</span>

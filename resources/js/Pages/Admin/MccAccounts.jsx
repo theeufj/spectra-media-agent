@@ -38,7 +38,7 @@ function AccountForm({ account, onClose, isEdit }) {
                             value={data.name}
                             onChange={(e) => setData('name', e.target.value)}
                             placeholder="e.g., Primary MCC"
-                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-flame-orange-500 focus:border-flame-orange-500"
+                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
                         />
                         {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name}</p>}
                     </div>
@@ -50,7 +50,7 @@ function AccountForm({ account, onClose, isEdit }) {
                             value={data.google_customer_id}
                             onChange={(e) => setData('google_customer_id', e.target.value)}
                             placeholder="e.g., 5584506211 or 558-450-6211"
-                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-flame-orange-500 focus:border-flame-orange-500"
+                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
                         />
                         <p className="text-xs text-gray-500 mt-1">The MCC account ID from Google Ads. Dashes are stripped automatically.</p>
                         {errors.google_customer_id && <p className="text-red-500 text-xs mt-1">{errors.google_customer_id}</p>}
@@ -65,7 +65,7 @@ function AccountForm({ account, onClose, isEdit }) {
                             onChange={(e) => setData('refresh_token', e.target.value)}
                             placeholder={isEdit ? '••••••••' : 'Paste the refresh token here'}
                             rows={2}
-                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-flame-orange-500 focus:border-flame-orange-500 font-mono text-xs"
+                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary font-mono text-xs"
                         />
                         {errors.refresh_token && <p className="text-red-500 text-xs mt-1">{errors.refresh_token}</p>}
                     </div>
@@ -77,7 +77,7 @@ function AccountForm({ account, onClose, isEdit }) {
                             onChange={(e) => setData('notes', e.target.value)}
                             placeholder="Optional notes about this account..."
                             rows={2}
-                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-flame-orange-500 focus:border-flame-orange-500"
+                            className="w-full border-gray-300 rounded-md shadow-sm focus:ring-brand-primary focus:border-brand-primary"
                         />
                     </div>
 
@@ -88,7 +88,7 @@ function AccountForm({ account, onClose, isEdit }) {
                                 id="is_active"
                                 checked={data.is_active}
                                 onChange={(e) => setData('is_active', e.target.checked)}
-                                className="rounded border-gray-300 text-flame-orange-500 focus:ring-flame-orange-500"
+                                className="rounded border-gray-300 text-brand-primary focus:ring-brand-primary"
                             />
                             <label htmlFor="is_active" className="ml-2 text-sm text-gray-700">
                                 Set as active MCC account
@@ -107,7 +107,7 @@ function AccountForm({ account, onClose, isEdit }) {
                         <button
                             type="submit"
                             disabled={processing}
-                            className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-500 rounded-md hover:bg-flame-orange-600 disabled:opacity-50"
+                            className="px-4 py-2 text-sm font-medium text-white bg-brand-primary rounded-md hover:bg-brand-dark disabled:opacity-50"
                         >
                             {processing ? 'Saving...' : (isEdit ? 'Update' : 'Add Account')}
                         </button>
@@ -164,14 +164,14 @@ export default function MccAccounts({ accounts, usingEnvFallback, envCustomerId 
                     <div className="max-w-4xl mx-auto">
                         {/* Header */}
                         <div className="bg-white shadow-md rounded-lg overflow-hidden">
-                            <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-flame-orange-600 flex items-center justify-between">
+                            <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-brand-dark flex items-center justify-between">
                                 <div>
                                     <h3 className="text-lg font-semibold text-white">Google Ads MCC Accounts</h3>
                                     <p className="text-sm text-purple-100 mt-1">Manage Manager (MCC) accounts used to create and manage customer sub-accounts</p>
                                 </div>
                                 <button
                                     onClick={() => { setEditAccount(null); setShowForm(true); }}
-                                    className="px-4 py-2 text-sm font-medium text-flame-orange-600 bg-white rounded-md hover:bg-gray-50 shadow"
+                                    className="px-4 py-2 text-sm font-medium text-brand-dark bg-white rounded-md hover:bg-gray-50 shadow"
                                 >
                                     + Add MCC Account
                                 </button>

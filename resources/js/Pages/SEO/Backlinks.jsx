@@ -16,7 +16,7 @@ export default function Backlinks({ profile, domain, error }) {
             <Head title="Backlink Analysis" />
             <div className="py-8">
                 <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-                    <a href={route('seo.index')} className="text-sm text-flame-orange-600 hover:underline mb-1 inline-block">← Back to SEO</a>
+                    <a href={route('seo.index')} className="text-sm text-brand-dark hover:underline mb-1 inline-block">← Back to SEO</a>
                     <h1 className="text-2xl font-bold text-gray-900 mb-1">Backlink Analysis</h1>
                     <p className="text-sm text-gray-500 mb-6">{domain ? `Analyzing: ${domain}` : 'Set your website to analyze backlinks.'}</p>
 
@@ -43,7 +43,7 @@ export default function Backlinks({ profile, domain, error }) {
                                                 <span className="text-sm text-gray-700">{a.text || a.anchor}</span>
                                                 <div className="flex items-center gap-2">
                                                     <div className="w-32 bg-gray-200 rounded-full h-2">
-                                                        <div className="bg-flame-orange-500 h-2 rounded-full" style={{ width: `${Math.min(a.percentage || 0, 100)}%` }} />
+                                                        <div className="bg-brand-primary h-2 rounded-full" style={{ width: `${Math.min(a.percentage || 0, 100)}%` }} />
                                                     </div>
                                                     <span className="text-xs text-gray-500 w-10 text-right">{a.percentage?.toFixed(1) ?? 0}%</span>
                                                 </div>

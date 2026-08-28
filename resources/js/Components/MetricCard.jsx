@@ -17,7 +17,7 @@
  */
 
 const BADGE_COLORS = {
-    flame: 'bg-flame-orange-500',
+    flame: 'bg-brand-primary',
     green: 'bg-green-500',
     blue: 'bg-blue-500',
     purple: 'bg-purple-500',
@@ -60,7 +60,7 @@ export default function MetricCard({
                         <p className="text-3xl font-bold text-gray-900 mt-2">{value}</p>
                         {subtitle && <p className="text-sm text-gray-500 mt-1">{subtitle}</p>}
                     </div>
-                    {icon && <div className="text-flame-orange-600">{icon}</div>}
+                    {icon && <div className="text-brand-dark">{icon}</div>}
                 </div>
                 {hasTrend && (
                     <div className={`mt-4 flex items-center text-sm ${trendColor}`}>

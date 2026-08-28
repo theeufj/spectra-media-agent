@@ -28,7 +28,7 @@
  * treating tables as a nice-to-have.
  */
 
-// Slot 1 is the brand flame-orange (#ff4d00, flame-orange-500) — the primary
+// Slot 1 is the brand flame-orange (#ff4d00, brand-primary) — the primary
 // series, and the only slot with a fixed meaning.
 export const CATEGORICAL = {
     light: ['#ff4d00', '#2a78d6', '#1baf7a', '#eda100', '#e87ba4', '#4a3aa7', '#008300'],

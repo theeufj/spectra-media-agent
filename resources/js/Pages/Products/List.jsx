@@ -32,7 +32,7 @@ export default function List({ products = [], filter }) {
                     {/* Filters */}
                     <div className="flex gap-2 mb-4">
                         {filters.map(f => (
-                            <a key={f.value} href={route('products.list', f.value ? { status: f.value } : {})} className={`text-xs px-3 py-1.5 rounded-lg ${(filter || '') === f.value ? 'bg-flame-orange-100 text-flame-orange-700 font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f.label}</a>
+                            <a key={f.value} href={route('products.list', f.value ? { status: f.value } : {})} className={`text-xs px-3 py-1.5 rounded-lg ${(filter || '') === f.value ? 'bg-brand-primary/20 text-brand-darker font-medium' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>{f.label}</a>
                         ))}
                     </div>
 

@@ -157,7 +157,7 @@ export default function Create({ auth }) {
                                 </p>
                                 <p className="mt-2 text-sm text-gray-500">
                                     In a hurry?{' '}
-                                    <a href={route('quick-start')} className="text-flame-orange-600 hover:text-flame-orange-800">
+                                    <a href={route('quick-start')} className="text-brand-dark hover:text-brand-darker">
                                         Just paste your website URL
                                     </a>{' '}
                                     and we'll fill this in for you.
@@ -202,7 +202,7 @@ export default function Create({ auth }) {
                                                 id="description"
                                                 name="description"
                                                 value={data.description}
-                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                 rows="3"
                                                 placeholder="Briefly describe what your business does..."
                                                 onChange={(e) => setData('description', e.target.value)}
@@ -296,7 +296,7 @@ export default function Create({ auth }) {
                                                 id="country"
                                                 name="country"
                                                 value={data.country}
-                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                 onChange={(e) => selectCountry(e.target.value)}
                                                 required
                                             >
@@ -316,7 +316,7 @@ export default function Create({ auth }) {
                                                 id="timezone"
                                                 name="timezone"
                                                 value={data.timezone}
-                                                className="mt-1 block w-full border-gray-300 focus:border-flame-orange-500 focus:ring-flame-orange-500 rounded-md shadow-sm"
+                                                className="mt-1 block w-full border-gray-300 focus:border-brand-primary focus:ring-brand-primary rounded-md shadow-sm"
                                                 onChange={(e) => setData('timezone', e.target.value)}
                                                 required
                                             >

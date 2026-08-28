@@ -68,7 +68,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                 <div className="relative">
                                     <div className={`
                                         flex items-center border-2 rounded-xl transition-all duration-200
-                                        ${urlFocused ? 'border-flame-orange-500 shadow-lg shadow-flame-orange-100' : 'border-gray-200'}
+                                        ${urlFocused ? 'border-brand-primary shadow-lg shadow-brand-primary/20' : 'border-gray-200'}
                                         ${errors.website_url ? 'border-red-400' : ''}
                                     `}>
                                         <span className="pl-4 text-gray-400">
@@ -93,7 +93,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
                                                 mr-2 px-6 py-2.5 rounded-lg font-medium text-white transition-all duration-200
                                                 ${processing || !data.website_url.trim()
                                                     ? 'bg-gray-300 cursor-not-allowed'
-                                                    : 'bg-flame-orange-600 hover:bg-flame-orange-700 shadow-md hover:shadow-lg'
+                                                    : 'bg-brand-dark hover:bg-brand-darker shadow-md hover:shadow-lg'
                                                 }
                                             `}
                                         >
@@ -131,7 +131,7 @@ export default function QuickStart({ auth, demoUrl = null }) {
 
                             <p className="mt-6 text-xs text-gray-400">
                                 Or{' '}
-                                <a href={route('customers.create')} className="text-flame-orange-600 hover:text-flame-orange-800">
+                                <a href={route('customers.create')} className="text-brand-dark hover:text-brand-darker">
                                     set up manually
                                 </a>
                             </p>

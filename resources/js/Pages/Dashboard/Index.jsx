@@ -89,7 +89,7 @@ function FunnelBar({ stage, maxValue }) {
         <div className="flex items-center gap-4">
             <span className="text-sm font-medium text-gray-700 w-28">{stage.name}</span>
             <div className="flex-1 bg-gray-200 rounded-full h-6 relative">
-                <div className="bg-gradient-to-r from-flame-orange-500 to-flame-orange-400 h-6 rounded-full flex items-center justify-end pr-2" style={{ width: `${Math.max(width, 2)}%` }}>
+                <div className="bg-gradient-to-r from-brand-primary to-brand-primary/70 h-6 rounded-full flex items-center justify-end pr-2" style={{ width: `${Math.max(width, 2)}%` }}>
                     <span className="text-xs text-white font-medium">{stage.value.toLocaleString()}</span>
                 </div>
             </div>
@@ -120,7 +120,7 @@ function TabBtn({ children }) {
         <Tab className={({ selected }) =>
             `px-4 py-2.5 text-sm font-medium rounded-lg transition focus:outline-none ${
                 selected
-                    ? 'bg-white text-flame-orange-700 shadow-sm border border-gray-200'
+                    ? 'bg-white text-brand-darker shadow-sm border border-gray-200'
                     : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
             }`
         }>
@@ -221,7 +221,7 @@ export default function Dashboard({ auth }) {
                         <div className="inline-flex rounded-lg border border-gray-200 bg-white">
                             {[7, 14, 30, 90].map(d => (
                                 <button key={d} onClick={() => handleDaysChange(d)}
-                                    className={`px-3 py-1.5 text-xs font-medium transition rounded-lg ${selectedDays === d ? 'bg-flame-orange-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}
+                                    className={`px-3 py-1.5 text-xs font-medium transition rounded-lg ${selectedDays === d ? 'bg-brand-dark text-white' : 'text-gray-600 hover:bg-gray-50'}`}
                                 >{d}d</button>
                             ))}
                         </div>
@@ -276,7 +276,7 @@ export default function Dashboard({ auth }) {
                         <div className="mb-6 bg-white overflow-hidden shadow-sm sm:rounded-lg p-5">
                             <div className="flex items-center justify-between mb-3">
                                 <h3 className="text-sm font-medium text-gray-700">Creative Usage — {creativeUsage.plan_name} Plan</h3>
-                                <a href={route('creative-usage')} className="text-flame-orange-600 hover:text-flame-orange-900 font-medium text-xs">View Details →</a>
+                                <a href={route('creative-usage')} className="text-brand-dark hover:text-brand-darker font-medium text-xs">View Details →</a>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <DashboardUsageBar label="Images" used={creativeUsage.image_generations.used} limit={creativeUsage.image_generations.limit} bonus={creativeUsage.image_generations.bonus} />
@@ -503,7 +503,7 @@ export default function Dashboard({ auth }) {
                                                                 <td className="py-3 px-4 text-right">
                                                                     <div className="flex items-center justify-end gap-2">
                                                                         <div className="w-16 bg-gray-200 rounded-full h-2">
-                                                                            <div className={`h-2 rounded-full ${c.budget_utilization > 100 ? 'bg-red-500' : 'bg-flame-orange-500'}`} style={{ width: `${Math.min(100, c.budget_utilization)}%` }} />
+                                                                            <div className={`h-2 rounded-full ${c.budget_utilization > 100 ? 'bg-red-500' : 'bg-brand-primary'}`} style={{ width: `${Math.min(100, c.budget_utilization)}%` }} />
                                                                         </div>
                                                                         <span className="text-xs text-gray-500">{c.budget_utilization}%</span>
                                                                     </div>
@@ -544,7 +544,7 @@ export default function Dashboard({ auth }) {
                     {/* Attribution link */}
                     {campaigns.length > 0 && (
                         <div className="mt-6 text-center">
-                            <a href={route('analytics.attribution')} className="text-sm text-flame-orange-600 hover:text-flame-orange-800 font-medium">
+                            <a href={route('analytics.attribution')} className="text-sm text-brand-dark hover:text-brand-darker font-medium">
                                 View Attribution Analysis →
                             </a>
                         </div>

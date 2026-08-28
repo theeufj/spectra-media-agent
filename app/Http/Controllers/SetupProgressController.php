@@ -132,6 +132,17 @@ class SetupProgressController extends Controller
                     'action_text' => 'Review Budget',
                 ],
                 [
+                    'key' => 'conversion_tracking',
+                    'title' => 'Install your tracking snippet',
+                    'description' => $customer->gtm_installed
+                        ? 'Conversion tracking is active — every lead your ads bring is counted.'
+                        : 'Two minutes on your website so we can count the leads and sales your ads bring.',
+                    'completed' => (bool) $customer->gtm_installed,
+                    'status' => $customer->gtm_installed ? 'completed' : 'pending',
+                    'action_url' => route('customers.gtm.setup', $customer->id),
+                    'action_text' => $customer->gtm_installed ? 'View Tracking' : 'Install Snippet',
+                ],
+                [
                     'key' => 'payment',
                     'title' => 'Add a payment method',
                     'description' => 'Building is free — a payment method is only needed to deploy.',

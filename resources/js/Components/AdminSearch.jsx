@@ -76,7 +76,7 @@ export default function AdminSearch() {
                 onFocus={() => results.length > 0 && setOpen(true)}
                 onKeyDown={(e) => e.key === 'Escape' && setOpen(false)}
                 placeholder="Search email, domain, campaign id…"
-                className="w-full rounded-md border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                className="w-full rounded-md border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
             />
 
             {open && (

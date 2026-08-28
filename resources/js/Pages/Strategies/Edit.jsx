@@ -55,7 +55,7 @@ export default function Edit({ auth, strategy, campaign }) {
                                 <InputLabel htmlFor="ad_copy_strategy" value="Ad Copy Strategy" />
                                 <textarea
                                     id="ad_copy_strategy"
-                                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                     rows={8}
                                     value={data.ad_copy_strategy}
                                     onChange={(e) => setData('ad_copy_strategy', e.target.value)}
@@ -67,7 +67,7 @@ export default function Edit({ auth, strategy, campaign }) {
                                 <InputLabel htmlFor="imagery_strategy" value="Imagery Strategy" />
                                 <textarea
                                     id="imagery_strategy"
-                                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                     rows={8}
                                     value={data.imagery_strategy}
                                     onChange={(e) => setData('imagery_strategy', e.target.value)}
@@ -79,7 +79,7 @@ export default function Edit({ auth, strategy, campaign }) {
                                 <InputLabel htmlFor="video_strategy" value="Video Strategy" />
                                 <textarea
                                     id="video_strategy"
-                                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                                     rows={8}
                                     value={data.video_strategy}
                                     onChange={(e) => setData('video_strategy', e.target.value)}

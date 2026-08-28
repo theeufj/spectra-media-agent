@@ -189,7 +189,7 @@ export default function KnowledgeBaseIndex({ knowledgeBases: paginatedData }) {
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             placeholder="Search for topics, keywords, or specific information..."
-                                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-flame-orange-500 focus:border-flame-orange-500 text-sm"
+                                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-brand-primary focus:border-brand-primary text-sm"
                                         />
                                     </div>
                                     <button

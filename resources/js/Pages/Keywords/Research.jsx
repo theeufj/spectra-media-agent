@@ -10,7 +10,7 @@ function ClusterCard({ cluster }) {
         <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-semibold text-gray-900">{cluster.cluster_name}</h4>
-                {cluster.recommended_ad_group && <span className="text-xs px-2 py-0.5 rounded bg-flame-orange-100 text-flame-orange-700">Ad Group ✓</span>}
+                {cluster.recommended_ad_group && <span className="text-xs px-2 py-0.5 rounded bg-brand-primary/20 text-brand-darker">Ad Group ✓</span>}
             </div>
             <div className="flex gap-2 mb-3">
                 <span className={`text-xs px-2 py-0.5 rounded ${intentColors[cluster.intent] || 'bg-gray-100 text-gray-600'}`}>{cluster.intent}</span>
@@ -87,7 +87,7 @@ export default function Research({ customer }) {
                                     <option value={10}>10</option><option value={20}>20</option><option value={30}>30</option><option value={50}>50</option>
                                 </select>
                             </div>
-                            <button type="submit" disabled={loading} className="px-6 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50">
+                            <button type="submit" disabled={loading} className="px-6 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
                                 {loading ? 'Researching...' : 'Research Keywords'}
                             </button>
                         </div>
@@ -98,7 +98,7 @@ export default function Research({ customer }) {
                             {/* Keywords Table */}
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-gray-900">{results.keywords?.length || 0} Keywords Found</h2>
-                                <button onClick={handleAddAll} className="px-4 py-2 text-sm font-medium text-flame-orange-700 bg-flame-orange-50 rounded-lg hover:bg-flame-orange-100">
+                                <button onClick={handleAddAll} className="px-4 py-2 text-sm font-medium text-brand-darker bg-brand-primary/10 rounded-lg hover:bg-brand-primary/20">
                                     Add All to Portfolio
                                 </button>
                             </div>

@@ -2,6 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Default (Site to Spend) brand palette. TenantTheme.jsx overrides these at
+   runtime for vertical skins via inline style on <html>, which beats this
+   stylesheet — the CSS layer exists so pages that render without a layout
+   (and therefore without TenantTheme) still get the default brand instead
+   of undefined variables. Values mirror flame-orange 500/600/700. */
+:root {
+    --color-brand-primary: #ff4d00;
+    --color-brand-dark: #cc3d00;
+    --color-brand-darker: #992e00;
+    --color-brand-accent: #ffc300;
+}
+
 /* ── Help article prose styles ──────────────────────────── */
 .prose-article h2 {
     @apply text-xl font-bold text-gray-900 mt-10 mb-3;

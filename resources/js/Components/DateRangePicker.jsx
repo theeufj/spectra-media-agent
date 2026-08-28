@@ -42,14 +42,14 @@ const DateRangePicker = ({ value, onChange }) => {
                     type="date"
                     value={toInputDate(value?.start)}
                     onChange={handleStartChange}
-                    className="block w-[130px] text-sm border-gray-300 rounded-md shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                    className="block w-[130px] text-sm border-gray-300 rounded-md shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                 />
                 <span className="text-gray-400 text-sm">–</span>
                 <input
                     type="date"
                     value={toInputDate(value?.end)}
                     onChange={handleEndChange}
-                    className="block w-[130px] text-sm border-gray-300 rounded-md shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                    className="block w-[130px] text-sm border-gray-300 rounded-md shadow-sm focus:border-brand-primary focus:ring-brand-primary"
                 />
             </div>
             <div className="flex items-center gap-1">

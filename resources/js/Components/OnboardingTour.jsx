@@ -267,7 +267,7 @@ export default function OnboardingTour({ forceShow = false }) {
 
                 {/* Step counter */}
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-[11px] font-medium text-flame-orange-600 uppercase tracking-wider">
+                    <span className="text-[11px] font-medium text-brand-dark uppercase tracking-wider">
                         Step {step + 1} of {TOUR_STEPS.length}
                     </span>
                     <button
@@ -293,7 +293,7 @@ export default function OnboardingTour({ forceShow = false }) {
                             <div
                                 key={i}
                                 className={`w-1.5 h-1.5 rounded-full transition-colors ${
-                                    i === step ? 'bg-flame-orange-500' : i < step ? 'bg-flame-orange-200' : 'bg-gray-200'
+                                    i === step ? 'bg-brand-primary' : i < step ? 'bg-brand-primary/30' : 'bg-gray-200'
                                 }`}
                             />
                         ))}
@@ -310,7 +310,7 @@ export default function OnboardingTour({ forceShow = false }) {
                         )}
                         <button
                             onClick={next}
-                            className="px-4 py-1.5 text-xs font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
+                            className="px-4 py-1.5 text-xs font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors"
                         >
                             {isLast ? 'Get Started' : 'Next'}
                         </button>

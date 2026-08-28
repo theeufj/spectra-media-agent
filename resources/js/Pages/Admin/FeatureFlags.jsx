@@ -98,7 +98,7 @@ export default function FeatureFlags({ auth, features = [], users = [] }) {
                                         placeholder="Filter users..."
                                         value={filter}
                                         onChange={(e) => setFilter(e.target.value)}
-                                        className="text-xs border border-gray-200 rounded-md px-3 py-1.5 w-56 focus:ring-1 focus:ring-flame-orange-500 focus:border-flame-orange-500"
+                                        className="text-xs border border-gray-200 rounded-md px-3 py-1.5 w-56 focus:ring-1 focus:ring-brand-primary focus:border-brand-primary"
                                     />
                                 </div>
                                 <div className="overflow-x-auto">

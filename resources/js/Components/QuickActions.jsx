@@ -19,7 +19,7 @@ export default function QuickActions() {
                 </svg>
             ),
             href: '/campaigns/wizard',
-            color: 'bg-flame-orange-500 hover:bg-flame-orange-600',
+            color: 'bg-brand-primary hover:bg-brand-dark',
             primary: true
         },
         {
@@ -71,20 +71,20 @@ export default function QuickActions() {
                         className={`
                             flex items-center p-3 rounded-lg transition-all duration-200
                             ${action.primary 
-                                ? 'bg-flame-orange-600 text-white hover:bg-flame-orange-700 shadow-md hover:shadow-lg' 
+                                ? 'bg-brand-dark text-white hover:bg-brand-darker shadow-md hover:shadow-lg' 
                                 : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
                             }
                         `}
                     >
                         <span className={`
                             flex items-center justify-center w-10 h-10 rounded-lg mr-3
-                            ${action.primary ? 'bg-flame-orange-500' : 'bg-white shadow-sm'}
+                            ${action.primary ? 'bg-brand-primary' : 'bg-white shadow-sm'}
                         `}>
                             {action.icon}
                         </span>
                         <div>
                             <p className="font-medium">{action.title}</p>
-                            <p className={`text-sm ${action.primary ? 'text-flame-orange-200' : 'text-gray-500'}`}>
+                            <p className={`text-sm ${action.primary ? 'text-brand-primary/30' : 'text-gray-500'}`}>
                                 {action.description}
                             </p>
                         </div>
@@ -137,7 +137,7 @@ export function PendingTasks({ tasks = [] }) {
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-gray-700">Pending Tasks</h3>
-                <span className="px-2 py-0.5 text-xs font-medium bg-flame-orange-100 text-flame-orange-700 rounded-full">
+                <span className="px-2 py-0.5 text-xs font-medium bg-brand-primary/20 text-brand-darker rounded-full">
                     {tasks.length}
                 </span>
             </div>

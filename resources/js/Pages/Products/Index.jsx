@@ -42,7 +42,7 @@ function FeedCard({ feed }) {
             <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">{feed.last_synced_at ? `Synced: ${new Date(feed.last_synced_at).toLocaleDateString()}` : 'Never synced'}</span>
                 <div className="flex gap-2">
-                    <button onClick={() => router.post(route('products.feeds.sync', feed.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-flame-orange-50 text-flame-orange-700 rounded-lg hover:bg-flame-orange-100 font-medium">Sync</button>
+                    <button onClick={() => router.post(route('products.feeds.sync', feed.id), {}, {preserveScroll: true})} className="text-xs px-3 py-1.5 bg-brand-primary/10 text-brand-darker rounded-lg hover:bg-brand-primary/20 font-medium">Sync</button>
                     <button onClick={() => { if (confirm('Delete this feed?')) router.delete(route('products.feeds.delete', feed.id), {preserveScroll: true}); }} className="text-xs px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg">Delete</button>
                 </div>
             </div>
@@ -78,7 +78,7 @@ export default function Index({ feeds = [], stats }) {
                         </div>
                         <div className="flex gap-2">
                             <a href={route('products.list')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">All Products</a>
-                            <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700">New Feed</button>
+                            <button onClick={() => setShowCreate(!showCreate)} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">New Feed</button>
                         </div>
                     </div>
 
@@ -120,7 +120,7 @@ export default function Index({ feeds = [], stats }) {
                             </div>
                             <div className="mt-4 flex justify-end gap-2">
                                 <button type="button" onClick={() => setShowCreate(false)} className="px-4 py-2 text-sm text-gray-600">Cancel</button>
-                                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50">{saving ? 'Creating...' : 'Create Feed'}</button>
+                                <button type="submit" disabled={saving} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">{saving ? 'Creating...' : 'Create Feed'}</button>
                             </div>
                         </form>
                     )}

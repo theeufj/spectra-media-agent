@@ -29,7 +29,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                             <div className="mt-6">
                                 <a
                                     href={route('pricing')}
-                                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors"
+                                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors"
                                 >
                                     View Plans
                                 </a>
@@ -75,7 +75,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                                     type="button"
                                     onClick={() => setForm({ ...form, enabled: !form.enabled })}
                                     className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                                        form.enabled ? 'bg-flame-orange-600' : 'bg-gray-200'
+                                        form.enabled ? 'bg-brand-dark' : 'bg-gray-200'
                                     }`}
                                 >
                                     <span
@@ -98,7 +98,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                                 value={form.company_name}
                                 onChange={(e) => setForm({ ...form, company_name: e.target.value })}
                                 placeholder="Your Agency Name"
-                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
+                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary text-sm"
                                 disabled={!form.enabled}
                             />
                         </div>
@@ -114,7 +114,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                                 value={form.logo_url}
                                 onChange={(e) => setForm({ ...form, logo_url: e.target.value })}
                                 placeholder="https://your-agency.com/logo.png"
-                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm"
+                                className="w-full rounded-lg border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary text-sm"
                                 disabled={!form.enabled}
                             />
                             <p className="mt-1 text-xs text-gray-400">Recommended: PNG or SVG, at least 200×60px.</p>
@@ -148,7 +148,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                                             setForm({ ...form, primary_color: e.target.value });
                                         }
                                     }}
-                                    className="w-28 rounded-lg border-gray-300 shadow-sm focus:border-flame-orange-500 focus:ring-flame-orange-500 text-sm font-mono"
+                                    className="w-28 rounded-lg border-gray-300 shadow-sm focus:border-brand-primary focus:ring-brand-primary text-sm font-mono"
                                     disabled={!form.enabled}
                                 />
                                 <div
@@ -166,7 +166,7 @@ export default function Settings({ customer, canWhiteLabel }) {
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 transition-colors disabled:opacity-50"
+                                className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker transition-colors disabled:opacity-50"
                             >
                                 {saving ? 'Saving...' : 'Save Branding'}
                             </button>

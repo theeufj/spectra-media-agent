@@ -60,13 +60,13 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                                 value={auditUrl}
                                 onChange={(e) => setAuditUrl(e.target.value)}
                                 placeholder="https://example.com"
-                                className="flex-1 rounded-lg border-gray-300 text-sm focus:ring-flame-orange-500 focus:border-flame-orange-500"
+                                className="flex-1 rounded-lg border-gray-300 text-sm focus:ring-brand-primary focus:border-brand-primary"
                                 required
                             />
                             <button
                                 type="submit"
                                 disabled={running}
-                                className="px-6 py-2 bg-flame-orange-600 text-white rounded-lg text-sm font-medium hover:bg-flame-orange-700 disabled:opacity-50"
+                                className="px-6 py-2 bg-brand-dark text-white rounded-lg text-sm font-medium hover:bg-brand-darker disabled:opacity-50"
                             >
                                 {running ? 'Starting...' : 'Run Audit'}
                             </button>
@@ -107,7 +107,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                             <div className="flex items-center justify-between mb-3">
                                 <h2 className="text-lg font-semibold text-gray-900">Quick Wins</h2>
                                 {latestAudit?.id && (
-                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-flame-orange-600 hover:underline">View Full Audit</a>
+                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-brand-dark hover:underline">View Full Audit</a>
                                 )}
                             </div>
                             <div className="space-y-3">
@@ -135,12 +135,12 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                             <div className="flex items-center justify-between mb-3">
                                 <h2 className="text-lg font-semibold text-gray-900">Top Keywords Detected</h2>
                                 {latestAudit?.id && (
-                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-flame-orange-600 hover:underline">Full Analysis</a>
+                                    <a href={route('seo.audit.detail', latestAudit.id)} className="text-sm text-brand-dark hover:underline">Full Analysis</a>
                                 )}
                             </div>
                             <div className="flex flex-wrap gap-1.5 mb-3">
                                 {latestAudit.content_analysis.detected_keywords.slice(0, 15).map((kw, i) => (
-                                    <span key={i} className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-flame-orange-50 text-flame-orange-700">{kw}</span>
+                                    <span key={i} className="inline-block px-2.5 py-1 rounded-full text-xs font-medium bg-brand-primary/10 text-brand-darker">{kw}</span>
                                 ))}
                             </div>
                             {(latestAudit.content_analysis.keywords_missing_from_title?.length > 0 || latestAudit.content_analysis.keywords_missing_from_description?.length > 0) && (
@@ -163,7 +163,7 @@ export default function Index({ latestAudit, audits = [], rankingSummary, topRan
                         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
                             <div className="flex items-center justify-between mb-3">
                                 <h2 className="text-lg font-semibold text-gray-900">Top Rankings</h2>
-                                <a href={route('seo.rankings')} className="text-sm text-flame-orange-600 hover:underline">View All</a>
+                                <a href={route('seo.rankings')} className="text-sm text-brand-dark hover:underline">View All</a>
                             </div>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">

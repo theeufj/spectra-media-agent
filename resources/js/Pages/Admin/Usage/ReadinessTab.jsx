@@ -124,7 +124,7 @@ function Readiness({ readiness }) {
                                     <td className="px-4 py-3 text-sm">
                                         <Link
                                             href={route('admin.customers.show', a.id)}
-                                            className="font-medium text-flame-orange-600 hover:underline"
+                                            className="font-medium text-brand-dark hover:underline"
                                         >
                                             {a.name}
                                         </Link>

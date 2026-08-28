@@ -35,9 +35,9 @@ export default function About({ auth }) {
 
                 <main>
                     {/* Hero */}
-                    <div className="bg-gradient-to-b from-flame-orange-50 to-white py-16 sm:py-24">
+                    <div className="bg-gradient-to-b from-brand-primary/10 to-white py-16 sm:py-24">
                         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
-                            <p className="text-sm font-semibold text-flame-orange-600 uppercase tracking-wider">About Us</p>
+                            <p className="text-sm font-semibold text-brand-dark uppercase tracking-wider">About Us</p>
                             <h1 className="mt-3 text-4xl sm:text-5xl font-extrabold tracking-tight text-gray-900">
                                 Agency-Level Marketing, Accessible&nbsp;to&nbsp;Everyone
                             </h1>
@@ -63,7 +63,7 @@ export default function About({ auth }) {
                                         We're not here to replace your marketing instincts—we're here to give every business the tools that used to be reserved for companies with enormous ad budgets.
                                     </p>
                                 </div>
-                                <div className="bg-flame-orange-50 rounded-2xl p-10">
+                                <div className="bg-brand-primary/10 rounded-2xl p-10">
                                     <div className="space-y-8">
                                         {[
                                             { stat: '24/7', label: 'Campaign Monitoring' },
@@ -72,7 +72,7 @@ export default function About({ auth }) {
                                             { stat: '96%', label: 'Cost Savings vs. Agencies' },
                                         ].map((item) => (
                                             <div key={item.label} className="flex items-center gap-4">
-                                                <div className="text-3xl font-extrabold text-flame-orange-600 w-24 text-right">{item.stat}</div>
+                                                <div className="text-3xl font-extrabold text-brand-dark w-24 text-right">{item.stat}</div>
                                                 <div className="text-gray-700 font-medium">{item.label}</div>
                                             </div>
                                         ))}
@@ -118,7 +118,7 @@ export default function About({ auth }) {
                                     { label: 'What you see is what you pay', desc: 'Your subscription covers the platform. Your ad spend goes straight to Google, Facebook, and the others. We never add a margin to your media costs.' },
                                 ].map((item) => (
                                     <div key={item.label} className="flex gap-4 items-start">
-                                        <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-flame-orange-500"></div>
+                                        <div className="flex-shrink-0 w-2 h-2 mt-2 rounded-full bg-brand-primary"></div>
                                         <div>
                                             <h3 className="font-bold text-gray-900">{item.label}</h3>
                                             <p className="text-gray-600">{item.desc}</p>
@@ -130,23 +130,23 @@ export default function About({ auth }) {
                     </div>
 
                     {/* CTA */}
-                    <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-800 py-16 sm:py-24">
+                    <div className="bg-gradient-to-r from-brand-dark to-brand-darker py-16 sm:py-24">
                         <div className="max-w-4xl mx-auto text-center px-4 sm:px-6 lg:px-8">
                             <h2 className="text-4xl font-extrabold text-white sm:text-5xl">
                                 Ready to see the difference?
                             </h2>
-                            <p className="mt-6 text-xl text-flame-orange-100">
+                            <p className="mt-6 text-xl text-brand-primary/20">
                                 Start free and discover what AI-powered marketing can do for your business.
                             </p>
                             <div className="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-flame-orange-600 bg-white hover:bg-gray-50 shadow-lg">
+                                <a href="/register" className="inline-flex items-center justify-center px-8 py-4 border border-transparent text-lg font-medium rounded-lg text-brand-dark bg-white hover:bg-gray-50 shadow-lg">
                                     Get Started Free
                                 </a>
-                                <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-flame-orange-700">
+                                <Link href="/features" className="inline-flex items-center justify-center px-8 py-4 border-2 border-white text-lg font-medium rounded-lg text-white hover:bg-brand-darker">
                                     Explore Features
                                 </Link>
                             </div>
-                            <p className="mt-8 text-flame-orange-100">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
+                            <p className="mt-8 text-brand-primary/20">✓ No credit card required · ✓ Free to explore · ✓ Cancel anytime</p>
                         </div>
                     </div>
                 </main>

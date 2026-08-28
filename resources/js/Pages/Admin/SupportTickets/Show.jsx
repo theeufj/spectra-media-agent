@@ -138,7 +138,7 @@ export default function Show({ ticket }) {
                                                         key={i}
                                                         className={`rounded-lg p-4 text-sm whitespace-pre-wrap ${
                                                             isBot
-                                                                ? 'bg-flame-orange-50 border-l-4 border-flame-orange-500 text-gray-800'
+                                                                ? 'bg-brand-primary/10 border-l-4 border-brand-primary text-gray-800'
                                                                 : 'bg-white border border-gray-200 text-gray-800'
                                                         }`}
                                                     >

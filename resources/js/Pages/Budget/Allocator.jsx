@@ -72,7 +72,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                         </div>
                         <div className="flex gap-2">
                             <a href={route('budget.history')} className="px-4 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">History</a>
-                            <button onClick={handleRebalance} className="px-4 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700">Rebalance Now</button>
+                            <button onClick={handleRebalance} className="px-4 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker">Rebalance Now</button>
                         </div>
                     </div>
 
@@ -194,7 +194,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
 
                         <div className="mt-6 flex items-center gap-4">
                             <label className="flex items-center gap-2">
-                                <input type="checkbox" checked={data.auto_rebalance} onChange={e => setData('auto_rebalance', e.target.checked)} className="rounded border-gray-300 text-flame-orange-600" />
+                                <input type="checkbox" checked={data.auto_rebalance} onChange={e => setData('auto_rebalance', e.target.checked)} className="rounded border-gray-300 text-brand-dark" />
                                 <span className="text-sm text-gray-700">Auto-rebalance</span>
                             </label>
                             {data.auto_rebalance && (
@@ -207,7 +207,7 @@ export default function Allocator({ allocation, snapshot, recommendations }) {
                         </div>
 
                         <div className="mt-6 flex justify-end">
-                            <button type="submit" disabled={processing} className="px-6 py-2 text-sm font-medium text-white bg-flame-orange-600 rounded-lg hover:bg-flame-orange-700 disabled:opacity-50">
+                            <button type="submit" disabled={processing} className="px-6 py-2 text-sm font-medium text-white bg-brand-dark rounded-lg hover:bg-brand-darker disabled:opacity-50">
                                 {processing ? 'Saving...' : 'Save Allocation'}
                             </button>
                         </div>

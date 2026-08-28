@@ -62,7 +62,7 @@ const ActionableInsights = ({ insights, onAction }) => {
                         {onAction && insight.action && (
                             <button
                                 onClick={() => onAction(insight)}
-                                className="flex-shrink-0 px-3 py-1 text-xs font-medium text-flame-orange-600 bg-white border border-flame-orange-200 rounded hover:bg-flame-orange-50 transition-colors"
+                                className="flex-shrink-0 px-3 py-1 text-xs font-medium text-brand-dark bg-white border border-brand-primary/30 rounded hover:bg-brand-primary/10 transition-colors"
                             >
                                 {insight.action}
                             </button>

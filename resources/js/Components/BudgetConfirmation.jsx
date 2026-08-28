@@ -37,8 +37,8 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
     }
 
     return (
-        <div className="mb-6 overflow-hidden rounded-lg border-2 border-flame-orange-300 bg-white shadow-sm">
-            <div className="border-b border-flame-orange-200 bg-flame-orange-50 px-6 py-4">
+        <div className="mb-6 overflow-hidden rounded-lg border-2 border-brand-primary/50 bg-white shadow-sm">
+            <div className="border-b border-brand-primary/30 bg-brand-primary/10 px-6 py-4">
                 <h3 className="text-base font-semibold text-gray-900">Confirm your budget before going live</h3>
                 <p className="mt-1 text-sm text-gray-600">
                     We built this campaign from your website, including a suggested budget. Nothing is live
@@ -66,13 +66,13 @@ export default function BudgetConfirmation({ campaign, currency = 'USD' }) {
                         step="1"
                         value={data.daily_budget}
                         onChange={(e) => setData('daily_budget', e.target.value)}
-                        className="w-36 rounded-lg border-gray-300 text-sm focus:border-flame-orange-500 focus:ring-flame-orange-500"
+                        className="w-36 rounded-lg border-gray-300 text-sm focus:border-brand-primary focus:ring-brand-primary"
                     />
 
                     <button
                         type="submit"
                         disabled={processing || !data.daily_budget}
-                        className="rounded-lg bg-flame-orange-500 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-flame-orange-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                        className="rounded-lg bg-brand-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-dark disabled:cursor-not-allowed disabled:bg-gray-300"
                     >
                         {processing ? 'Saving…' : 'Confirm budget'}
                     </button>

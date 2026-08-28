@@ -79,7 +79,7 @@ function PlanForm({ plan, onClose, isEdit }) {
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-                <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-flame-orange-600 rounded-t-lg">
+                <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-brand-dark rounded-t-lg">
                     <h3 className="text-lg font-semibold text-white">{isEdit ? 'Edit Plan' : 'Create Plan'}</h3>
                 </div>
                 <form onSubmit={handleSubmit} className="p-6 space-y-4">
@@ -331,7 +331,7 @@ export default function Plans({ plans }) {
                 <div className="flex-1 p-8">
                     <div className="max-w-6xl mx-auto">
                         <div className="bg-white shadow-md rounded-lg overflow-hidden">
-                            <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-flame-orange-600 flex items-center justify-between">
+                            <div className="px-6 py-4 bg-gradient-to-r from-purple-600 to-brand-dark flex items-center justify-between">
                                 <div>
                                     <h3 className="text-lg font-semibold text-white">Subscription Plans</h3>
                                     <p className="text-sm text-purple-100 mt-1">Manage your pricing plans and Stripe configuration</p>

@@ -17,7 +17,7 @@ const CollateralSummaryCard = ({ campaign }) => {
 
     return (
         <div className="mb-8 bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="bg-gradient-to-r from-flame-orange-600 to-flame-orange-700 px-6 py-4">
+            <div className="bg-gradient-to-r from-brand-dark to-brand-darker px-6 py-4">
                 <h3 className="text-lg font-semibold text-white flex items-center">
                     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
@@ -47,10 +47,10 @@ const CollateralSummaryCard = ({ campaign }) => {
                                 <Link
                                     key={strategy.id}
                                     href={route('campaigns.collateral.show', { campaign: campaign.id, strategy: strategy.id })}
-                                    className="inline-flex items-center px-4 py-2 bg-flame-orange-600 text-white rounded-lg hover:bg-flame-orange-700 transition text-sm"
+                                    className="inline-flex items-center px-4 py-2 bg-brand-dark text-white rounded-lg hover:bg-brand-darker transition text-sm"
                                 >
                                     <span className="mr-2">{strategy.platform}</span>
-                                    <span className="bg-flame-orange-500 px-2 py-0.5 rounded text-xs">
+                                    <span className="bg-brand-primary px-2 py-0.5 rounded text-xs">
                                         {(strategy.ad_copies_count || 0) + (strategy.image_collaterals_count || 0) + (strategy.video_collaterals_count || 0)} items
                                     </span>
                                 </Link>
@@ -60,7 +60,7 @@ const CollateralSummaryCard = ({ campaign }) => {
                 ) : (
                     <div className="text-center py-6">
                         <div className="animate-pulse flex flex-col items-center">
-                            <svg className="w-12 h-12 text-flame-orange-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-12 h-12 text-brand-primary/70 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                             </svg>
                             <p className="text-gray-600 font-medium">Generating your collateral...</p>
@@ -103,7 +103,7 @@ const StrategyCard = ({ strategy, campaignId, onSignOff }) => {
                     <p className="text-xs text-gray-400 mt-0.5">AI-generated strategy</p>
                 </div>
                 {!isSignedOff && !isEditing && (
-                    <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-flame-orange-600 hover:text-flame-orange-700 hover:bg-flame-orange-50 px-3 py-1.5 rounded-lg transition">
+                    <button onClick={() => setIsEditing(true)} className="inline-flex items-center gap-1.5 text-sm font-medium text-brand-dark hover:text-brand-darker hover:bg-brand-primary/10 px-3 py-1.5 rounded-lg transition">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                         Edit
                     </button>
@@ -220,20 +220,20 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
         <div className="mb-8">
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-flame-orange-600 via-flame-orange-700 to-purple-700 px-8 py-6">
+                <div className="bg-gradient-to-r from-brand-dark via-brand-darker to-purple-700 px-8 py-6">
                     <div className="flex items-center justify-between">
                         <div>
                             <h3 className="text-xl font-bold text-white">Building your strategy</h3>
-                            <p className="text-flame-orange-200 text-sm mt-1">for {campaignName}</p>
+                            <p className="text-brand-primary/30 text-sm mt-1">for {campaignName}</p>
                         </div>
                         <div className="text-right">
                             <div className="text-2xl font-mono font-bold text-white">{formatTime(elapsedSeconds)}</div>
-                            <p className="text-flame-orange-200 text-xs">elapsed</p>
+                            <p className="text-brand-primary/30 text-xs">elapsed</p>
                         </div>
                     </div>
-                    <div className="mt-4 h-2 bg-flame-orange-900/30 rounded-full overflow-hidden">
+                    <div className="mt-4 h-2 bg-brand-darker/30 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-gradient-to-r from-flame-orange-300 to-white rounded-full transition-all duration-1000 ease-out"
+                            className="h-full bg-gradient-to-r from-brand-primary/50 to-white rounded-full transition-all duration-1000 ease-out"
                             style={{ width: `${overallProgress}%` }}
                         />
                     </div>
@@ -250,7 +250,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                                 <div
                                     key={idx}
                                     className={`flex items-center gap-3 py-2 px-3 rounded-lg transition-all duration-500 ${
-                                        isActive ? 'bg-flame-orange-50 border border-flame-orange-200' :
+                                        isActive ? 'bg-brand-primary/10 border border-brand-primary/30' :
                                         isComplete ? 'opacity-60' : 'opacity-40'
                                     }`}
                                 >
@@ -260,14 +260,14 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                             </svg>
                                         ) : isActive ? (
-                                            <div className="w-6 h-6 border-2 border-flame-orange-500 border-t-transparent rounded-full animate-spin" />
+                                            <div className="w-6 h-6 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
                                         ) : (
                                             <div className="w-5 h-5 rounded-full border-2 border-gray-300" />
                                         )}
                                     </div>
                                     <span className="text-lg">{step.icon}</span>
                                     <span className={`text-sm font-medium ${
-                                        isActive ? 'text-flame-orange-700' :
+                                        isActive ? 'text-brand-darker' :
                                         isComplete ? 'text-gray-500' : 'text-gray-400'
                                     }`}>
                                         {step.label}
@@ -294,7 +294,7 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
 };
 
 
-export default function Show({ auth, campaign, canRegenerate = true }) {
+export default function Show({ auth, campaign, canRegenerate = true, conversionTracking = null }) {
     const [campaigns, setCampaign] = useState(campaign);
     const [isPolling, setIsPolling] = useState(
         campaign.is_generating_strategies ||
@@ -473,6 +473,37 @@ export default function Show({ auth, campaign, canRegenerate = true }) {
                 </div>
             )}
 
+            {/* Conversion tracking, surfaced where the launch decision happens:
+                without the snippet the ads run blind, and the setup page was
+                previously only reachable from an email. */}
+            {conversionTracking && (
+                <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
+                    {conversionTracking.installed ? (
+                        <div className="rounded-lg border border-green-200 bg-green-50 px-5 py-3 text-sm text-green-800 flex items-center gap-2">
+                            <span aria-hidden="true">✓</span>
+                            Conversion tracking is active — every lead and sale from this campaign will be counted.
+                        </div>
+                    ) : (
+                        <div className="rounded-lg border border-amber-300 bg-amber-50 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-amber-900">Install your tracking snippet before launch</p>
+                                <p className="text-sm text-amber-800 mt-0.5">
+                                    {conversionTracking.container_id
+                                        ? <>Your Google Tag Manager container <code className="font-mono bg-amber-100 px-1.5 py-0.5 rounded">{conversionTracking.container_id}</code> is ready — add the snippet to your website so every lead and sale your ads bring is counted from day one.</>
+                                        : 'Set up conversion tracking so every lead and sale your ads bring is counted from day one.'}
+                                </p>
+                            </div>
+                            <Link
+                                href={conversionTracking.setup_url}
+                                className="flex-shrink-0 px-5 py-2.5 bg-brand-primary hover:bg-brand-dark text-white rounded-md font-semibold text-sm"
+                            >
+                                Get the snippet →
+                            </Link>
+                        </div>
+                    )}
+                </div>
+            )}
+
             <ConfirmationModal
                 show={confirmModal.show}
                 onClose={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, isDestructive: false })}
@@ -585,7 +616,7 @@ export default function Show({ auth, campaign, canRegenerate = true }) {
             {!copilotOpen && (
                 <button
                     onClick={() => setCopilotOpen(true)}
-                    className="fixed bottom-6 right-6 z-40 bg-flame-orange-600 text-white p-4 rounded-full shadow-lg hover:bg-flame-orange-700 hover:scale-105 transition-all group"
+                    className="fixed bottom-6 right-6 z-40 bg-brand-dark text-white p-4 rounded-full shadow-lg hover:bg-brand-darker hover:scale-105 transition-all group"
                     title="Ask Campaign Copilot"
                 >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

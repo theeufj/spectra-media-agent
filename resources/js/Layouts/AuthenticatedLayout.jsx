@@ -20,7 +20,7 @@ function UserInitials({ name, className = '' }) {
         .toUpperCase()
         .slice(0, 2);
     return (
-        <div className={`flex items-center justify-center rounded-full bg-flame-orange-100 text-flame-orange-700 text-xs font-semibold ${className}`}>
+        <div className={`flex items-center justify-center rounded-full bg-brand-primary/20 text-brand-darker text-xs font-semibold ${className}`}>
             {initials}
         </div>
     );
