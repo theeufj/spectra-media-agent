@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Customer;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -101,6 +102,73 @@ class ImpersonationTest extends TestCase
         $this->actingAs($user)
             ->post(route('admin.impersonation.start', $target))
             ->assertForbidden();
+    }
+
+    public function test_an_admin_can_impersonate_a_customer(): void
+    {
+        // Impersonating a customer means stepping in as its owner with that
+        // customer pinned as the active workspace — the owner may belong to
+        // several customers, and landing in the wrong one defeats the point.
+        $admin = $this->admin();
+        $owner = $this->customerUser();
+        $member = $this->customerUser();
+        $customer = Customer::factory()->create();
+        $customer->users()->attach($member->id, ['role' => 'member']);
+        $customer->users()->attach($owner->id, ['role' => 'owner']);
+
+        $this->actingAs($admin)
+            ->post(route('admin.impersonation.start-customer', $customer))
+            ->assertRedirect(route('dashboard'));
+
+        $this->assertSame($owner->id, session('impersonate_user_id'));
+        $this->assertSame($customer->id, session('active_customer_id'));
+    }
+
+    public function test_customer_impersonation_skips_admin_users(): void
+    {
+        // An admin attached to a customer account must never be the body the
+        // impersonation lands in — that would be an admin impersonating an
+        // admin with extra steps.
+        $admin = $this->admin();
+        $adminOwner = $this->admin();
+        $member = $this->customerUser();
+        $customer = Customer::factory()->create();
+        $customer->users()->attach($adminOwner->id, ['role' => 'owner']);
+        $customer->users()->attach($member->id, ['role' => 'member']);
+
+        $this->actingAs($admin)->post(route('admin.impersonation.start-customer', $customer));
+
+        $this->assertSame($member->id, session('impersonate_user_id'));
+    }
+
+    public function test_a_customer_with_no_impersonatable_user_errors_cleanly(): void
+    {
+        $admin = $this->admin();
+        $customer = Customer::factory()->create();
+
+        $this->actingAs($admin)
+            ->post(route('admin.impersonation.start-customer', $customer))
+            ->assertRedirect();
+
+        $this->assertNull(session('impersonate_user_id'));
+    }
+
+    public function test_stopping_clears_the_borrowed_customer_context(): void
+    {
+        // The active customer belonged to the impersonated user, not the
+        // admin — leaving it in the session would keep the admin browsing a
+        // workspace that isn't theirs.
+        $admin = $this->admin();
+        $owner = $this->customerUser();
+        $customer = Customer::factory()->create();
+        $customer->users()->attach($owner->id, ['role' => 'owner']);
+
+        $this->actingAs($admin)->post(route('admin.impersonation.start-customer', $customer));
+        $this->assertSame($customer->id, session('active_customer_id'));
+
+        $this->post(route('admin.impersonation.stop'));
+
+        $this->assertNull(session('active_customer_id'));
     }
 
     public function test_an_admin_cannot_impersonate_another_admin(): void

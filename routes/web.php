@@ -616,6 +616,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->group(function () {
     Route::post('notification', [App\Http\Controllers\Admin\NotificationController::class, 'sendNotification'])->name('admin.notification.send');
 
     // Impersonation. Only start is admin-gated — see the stop route below.
+    // The customer route must be registered before the {user} route, or
+    // "impersonate/customer/…" would bind "customer" as a user id.
+    Route::post('impersonate/customer/{customer}', [App\Http\Controllers\Admin\ImpersonationController::class, 'startCustomer'])->name('admin.impersonation.start-customer');
     Route::post('impersonate/{user}', [App\Http\Controllers\Admin\ImpersonationController::class, 'start'])->name('admin.impersonation.start');
 
     // System Health Dashboard

@@ -65,6 +65,19 @@ const CustomerTable = ({ customers, plans = [] }) => {
         });
     };
 
+    const handleImpersonate = (customer) => {
+        setConfirmModal({
+            show: true,
+            title: 'Impersonate Customer',
+            message: `You will be logged in as the owner of "${customer.business_name || customer.name}" with their workspace active. Continue?`,
+            isDestructive: false,
+            onConfirm: () => {
+                setConfirmModal(prev => ({ ...prev, show: false }));
+                router.post(route('admin.impersonation.start-customer', customer.id));
+            },
+        });
+    };
+
     const handleAssignPlan = (userId, planId) => {
         router.post(route('admin.users.assign-plan', userId), {
             plan_id: planId || null,
@@ -116,6 +129,13 @@ const CustomerTable = ({ customers, plans = [] }) => {
             >
                 Ledger
             </Link>
+            <button
+                onClick={() => handleImpersonate(customer)}
+                className="text-purple-600 hover:text-purple-900 font-medium"
+                title="Log in as this customer's owner"
+            >
+                Impersonate
+            </button>
             <button
                 onClick={() => handleDeleteCustomer(customer.id, customer.business_name || customer.name)}
                 className="text-red-600 hover:text-red-900"

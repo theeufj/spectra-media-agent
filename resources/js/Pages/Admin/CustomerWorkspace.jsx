@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import SideNav from './SideNav';
 
 /**
@@ -77,6 +77,16 @@ export default function CustomerWorkspace({ auth }) {
                             <Link href={route('admin.customers.dashboard', customer.id)} className="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-md hover:bg-gray-50">
                                 Performance
                             </Link>
+                            <button
+                                onClick={() => {
+                                    if (window.confirm(`Log in as the owner of ${customer.business_name || customer.name}?`)) {
+                                        router.post(route('admin.impersonation.start-customer', customer.id));
+                                    }
+                                }}
+                                className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                            >
+                                Impersonate
+                            </button>
                         </div>
                     </div>
 
