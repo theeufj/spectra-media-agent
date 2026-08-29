@@ -37,6 +37,28 @@ class DeploymentJourneyGuardsTest extends TestCase
         $user->customers()->attach($customer->id, ['role' => 'owner']);
         session(['active_customer_id' => $customer->id]);
 
+        // A confirmed brand profile: first launches are gated on sign-off,
+        // and these tests are about the guards AFTER that gate.
+        \App\Models\BrandGuideline::create([
+            'customer_id' => $customer->id,
+            'brand_voice' => ['primary_tone' => 'direct'],
+            'tone_attributes' => ['direct'],
+            'target_audience' => ['primary' => 'Homeowners'],
+            'competitor_differentiation' => ['End to end.'],
+            'messaging_themes' => ['Care'],
+            'unique_selling_propositions' => ['None'],
+            'do_not_use' => ['Jargon'],
+            'color_palette' => ['primary_colors' => ['#111111']],
+            'typography' => ['heading_style' => 'sans'],
+            'visual_style' => ['overall_aesthetic' => 'modern'],
+            'writing_patterns' => ['sentence_length' => 'varied'],
+            'brand_personality' => ['archetype' => 'Everyman'],
+            'service_lines' => [['name' => 'Service']],
+            'extraction_quality_score' => 90,
+            'extracted_at' => now(),
+            'user_verified' => true,
+        ]);
+
         return [$user, $customer];
     }
 

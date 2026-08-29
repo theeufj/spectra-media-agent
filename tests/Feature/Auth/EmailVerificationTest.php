@@ -27,10 +27,13 @@ class EmailVerificationTest extends TestCase
 
         Event::fake();
 
+        // Relative signing, matching VerifyEmailAddress: the route runs
+        // signed:relative so the link stays valid on any tenant domain.
         $verificationUrl = URL::temporarySignedRoute(
             'verification.verify',
             now()->addMinutes(60),
-            ['id' => $user->id, 'hash' => sha1($user->email)]
+            ['id' => $user->id, 'hash' => sha1($user->email)],
+            absolute: false
         );
 
         $response = $this->actingAs($user)->get($verificationUrl);

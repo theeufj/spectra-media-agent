@@ -95,7 +95,7 @@ class FirstCampaignFunnelTest extends TestCase
 
         $steps = collect($response->json('steps'));
         $this->assertSame(
-            ['site_scan', 'first_campaign', 'budget_confirmed', 'payment', 'deployed'],
+            ['site_scan', 'first_campaign', 'budget_confirmed', 'conversion_tracking', 'payment', 'deployed'],
             $steps->pluck('key')->all()
         );
         $this->assertSame('in_progress', $steps->firstWhere('key', 'site_scan')['status']);
