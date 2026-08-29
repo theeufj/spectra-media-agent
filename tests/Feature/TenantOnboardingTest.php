@@ -103,7 +103,7 @@ class TenantOnboardingTest extends TestCase
         $user = User::factory()->create(['tenant_key' => null]);
 
         $this->actingAs($user)
-            ->post('https://realpropertyads.com/quick-start', ['website_url' => 'https://example-agency.com.au']);
+            ->post('https://realpropertyads.com/quick-start', ['website_url' => 'https://example.net']);
 
         $customer = $user->customers()->first();
         $this->assertNotNull($customer);

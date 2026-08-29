@@ -40,7 +40,7 @@ class OneTimeSetupTest extends TestCase
         $user = User::factory()->create();
 
         $this->actingAs($user)->post('/quick-start', [
-            'website_url' => 'https://example-agency.com',
+            'website_url' => 'https://example.org',
             'service_type' => 'setup_only',
         ]);
 
@@ -51,7 +51,7 @@ class OneTimeSetupTest extends TestCase
     {
         $user = User::factory()->create();
 
-        $this->actingAs($user)->post('/quick-start', ['website_url' => 'https://example-agency.com']);
+        $this->actingAs($user)->post('/quick-start', ['website_url' => 'https://example.org']);
 
         $this->assertSame('managed', $user->customers()->firstOrFail()->service_type);
     }

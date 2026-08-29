@@ -185,8 +185,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/brand-guidelines/{brandGuideline}/verify', [App\Http\Controllers\BrandGuidelineController::class, 'verify'])->name('brand-guidelines.verify');
 
     // Route to re-extract brand guidelines from knowledge base.
-    // POST /brand-guidelines/re-extract
-    Route::post('/brand-guidelines/re-extract', [App\Http\Controllers\BrandGuidelineController::class, 'reExtract'])->name('brand-guidelines.re-extract');
+    // POST /brand-guidelines/re-extract — throttled: each click is a forced
+    // full Gemini extraction (the freshness skip is bypassed on purpose).
+    Route::post('/brand-guidelines/re-extract', [App\Http\Controllers\BrandGuidelineController::class, 'reExtract'])
+        ->middleware('throttle:3,10')
+        ->name('brand-guidelines.re-extract');
 
     // GET /brand-guidelines/status — polled while an extraction runs
     Route::get('/brand-guidelines/status', [App\Http\Controllers\BrandGuidelineController::class, 'status'])->name('brand-guidelines.status');
@@ -399,7 +402,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // URL-first quick start onboarding
     Route::get('/quick-start', [App\Http\Controllers\QuickStartController::class, 'show'])->name('quick-start');
-    Route::post('/quick-start', [App\Http\Controllers\QuickStartController::class, 'process'])->name('quick-start.process');
+    // Throttled: every submission starts a full crawl + Gemini extraction.
+    Route::post('/quick-start', [App\Http\Controllers\QuickStartController::class, 'process'])
+        ->middleware('throttle:5,1')
+        ->name('quick-start.process');
     // The post-QuickStart holding screen: narrates scan → brand extraction,
     // then hands off to the brand guidelines for sign-off.
     Route::get('/quick-start/scanning', [App\Http\Controllers\QuickStartController::class, 'scanning'])->name('quick-start.scanning');

@@ -50,7 +50,7 @@ class QuickStartController extends Controller
     public function process(Request $request)
     {
         $validated = $request->validate([
-            'website_url' => 'required|url|max:255',
+            'website_url' => ['required', 'url', 'max:255', new \App\Rules\SafePublicUrl],
             // The fork: ongoing management (default) or the one-time US$999
             // setup. Intent only — payment is collected at the plan step.
             'service_type' => 'nullable|in:managed,setup_only',

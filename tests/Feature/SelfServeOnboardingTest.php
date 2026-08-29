@@ -91,13 +91,13 @@ class SelfServeOnboardingTest extends TestCase
             'name' => 'Acme',
             'country' => 'AU',
             'timezone' => 'Australia/Sydney',
-            'website' => 'https://acme.example',
+            'website' => 'https://example.org',
         ])->assertRedirect(route('dashboard', absolute: false));
 
         $customer = $user->customers()->firstOrFail();
 
         Queue::assertPushed(CrawlSitemap::class, fn ($job) => $job->customerId === $customer->id
-            && $job->sitemapUrl === 'https://acme.example/sitemap.xml');
+            && $job->sitemapUrl === 'https://example.org/sitemap.xml');
     }
 
     public function test_a_customer_with_no_website_starts_no_scan(): void

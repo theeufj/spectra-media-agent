@@ -26,7 +26,7 @@ class CustomerController extends Controller
             'country' => 'required|string|size:2', // ISO 3166-1 alpha-2 country code
             'timezone' => 'required|string|max:255|timezone', // Valid IANA timezone
             'currency_code' => 'nullable|string|size:3|uppercase', // ISO 4217 currency code
-            'website' => 'nullable|url|max:255',
+            'website' => ['nullable', 'url', 'max:255', new \App\Rules\SafePublicUrl],
             'phone' => 'nullable|string|max:20',
             'facebook_page_url' => 'nullable|string|max:500',
 
@@ -187,7 +187,7 @@ class CustomerController extends Controller
             'country' => 'nullable|string|size:2', // ISO 3166-1 alpha-2 country code
             'timezone' => 'nullable|string|max:255|timezone', // Valid IANA timezone
             'currency_code' => 'nullable|string|size:3|uppercase', // ISO 4217 currency code
-            'website' => 'nullable|url|max:255',
+            'website' => ['nullable', 'url', 'max:255', new \App\Rules\SafePublicUrl],
             'phone' => 'nullable|string|max:20',
 
             // Most customers do not have this to hand at sign-up, so it has to

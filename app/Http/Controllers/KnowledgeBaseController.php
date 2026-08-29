@@ -68,7 +68,7 @@ class KnowledgeBaseController extends Controller
 
         // Otherwise, handle sitemap URL submission
         $validated = $request->validate([
-            'sitemap_url' => 'required|url',
+            'sitemap_url' => ['required', 'url', new \App\Rules\SafePublicUrl],
         ]);
 
         $customerId = session('active_customer_id');
