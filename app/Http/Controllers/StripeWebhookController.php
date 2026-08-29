@@ -100,6 +100,27 @@ class StripeWebhookController extends CashierController
 
             // Handle Creative Boost purchase
             $metadata = $session['metadata'] ?? [];
+
+            // One-time setup fee: the fallback recorder for buyers who paid
+            // and closed the tab before the success redirect ran. Idempotent
+            // via SetupFeeService::recordPayment.
+            if (($metadata['purpose'] ?? null) === 'setup_fee' && $session['payment_status'] === 'paid') {
+                $customer = \App\Models\Customer::find($metadata['customer_id'] ?? null);
+
+                if ($customer && $user->customers()->where('customers.id', $customer->id)->exists()) {
+                    if (app(\App\Services\SetupFeeService::class)->recordPayment($customer, $user)) {
+                        Log::info('💰 Setup fee recorded via webhook', [
+                            'customer_id' => $customer->id,
+                            'session_id' => $session['id'],
+                        ]);
+                    }
+                } else {
+                    Log::warning('Setup fee webhook: customer mismatch', [
+                        'metadata_customer_id' => $metadata['customer_id'] ?? null,
+                        'user_id' => $user->id,
+                    ]);
+                }
+            }
             if (($metadata['type'] ?? null) === 'creative_boost' && $session['payment_status'] === 'paid') {
                 $purchaseId = $metadata['purchase_id'] ?? null;
                 $purchase = $purchaseId ? CreativeBoostPurchase::find($purchaseId) : null;
@@ -128,7 +149,11 @@ class StripeWebhookController extends CashierController
             ]);
         }
 
-        return parent::handleCheckoutSessionCompleted($payload);
+        // Not parent::handleCheckoutSessionCompleted — this Cashier version
+        // has no such method, so that call hit __call and threw AFTER the
+        // work was done: every checkout.session.completed webhook returned
+        // 500 and was retried by Stripe.
+        return $this->successMethod();
     }
 
     /**
@@ -159,7 +184,7 @@ class StripeWebhookController extends CashierController
             ]);
         }
 
-        return parent::handleInvoicePaid($payload);
+        return $this->successMethod(); // parent has no handleInvoicePaid — see checkout handler note
     }
 
     /**
@@ -192,6 +217,6 @@ class StripeWebhookController extends CashierController
             }
         }
 
-        return parent::handleInvoicePaymentSucceeded($payload);
+        return $this->successMethod(); // parent has no handleInvoicePaymentSucceeded either
     }
 }

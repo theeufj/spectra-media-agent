@@ -2,11 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\ActivityLogger;
 use App\Services\SetupFeeService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 
 /**
  * The one-and-done product: US$999 once, we set up their Google Ads
@@ -51,8 +48,6 @@ class SetupFeeController extends Controller
             return redirect()->route('dashboard');
         }
 
-        $alreadyPaid = $customer->isPaidSetupOnly();
-
         if (! $service->confirm($user, $customer, $sessionId)) {
             return redirect()->route('subscription.pricing')->with('flash', [
                 'type' => 'error',
@@ -60,18 +55,8 @@ class SetupFeeController extends Controller
             ]);
         }
 
-        if (! $alreadyPaid) {
-            ActivityLogger::customer('setup_fee_paid', $customer);
-            Log::info('Setup fee paid', ['customer_id' => $customer->id, 'user_id' => $user->id]);
-
-            Mail::to($user->email)->send(
-                (new \App\Mail\SetupFeeReceived($customer, $user->name))
-            );
-            Mail::raw(
-                "One-time setup fee paid (US$999)\n\nCustomer: {$customer->name} (#{$customer->id})\nWebsite: {$customer->website}\nUser: {$user->name} <{$user->email}>\n\nBuild their account, then mark the handover from the admin customer page.",
-                fn ($m) => $m->to(config('app.admin_email'))->subject("Setup fee paid: {$customer->name}")
-            );
-        }
+        // Receipt + admin emails are the service's job (recordPayment) so
+        // the webhook path and this redirect can't double-send.
 
         return redirect()->route('dashboard')->with('flash', [
             'type' => 'success',

@@ -123,14 +123,23 @@ class OneTimeSetupTest extends TestCase
     {
         Mail::fake();
         [$user, $customer] = $this->setupOnlyCustomer(paid: false);
+        $user->forceFill(['stripe_id' => 'cus_once'])->save();
 
-        $this->mock(SetupFeeService::class, function ($mock) use ($customer) {
-            $mock->shouldReceive('confirm')
-                ->andReturnUsing(function () use ($customer) {
-                    $customer->forceFill(['setup_fee_paid_at' => $customer->setup_fee_paid_at ?? now()])->save();
+        // Real service, stubbed Stripe read — the acceptance rules and the
+        // one-send guarantee both run for real.
+        $session = (object) [
+            'metadata' => ['customer_id' => (string) $customer->id],
+            'customer' => 'cus_once',
+            'payment_status' => 'paid',
+        ];
+        $this->app->instance(SetupFeeService::class, new class($session) extends SetupFeeService
+        {
+            public function __construct(private object $session) {}
 
-                    return true;
-                });
+            protected function retrieveSession(string $sessionId): object
+            {
+                return $this->session;
+            }
         });
 
         $this->actingAs($user)
@@ -142,6 +151,42 @@ class OneTimeSetupTest extends TestCase
 
         // The success URL can be revisited; the receipt must not resend.
         $this->get(route('setup-fee.success', ['session_id' => 'cs_test_123']));
+        Mail::assertSent(SetupFeeReceived::class, 1);
+    }
+
+    public function test_the_webhook_records_a_payment_the_redirect_never_delivered(): void
+    {
+        // The buyer paid, then closed the tab on Stripe's confirmation
+        // screen: the success redirect never ran. The webhook is the
+        // fallback recorder — and it must be idempotent against the
+        // redirect arriving later.
+        Mail::fake();
+        // Signature verification is Stripe-secret-bound; the handler's
+        // behaviour is what's under test here.
+        $this->withoutMiddleware(\Laravel\Cashier\Http\Middleware\VerifyWebhookSignature::class);
+        [$user, $customer] = $this->setupOnlyCustomer(paid: false);
+        $user->forceFill(['stripe_id' => 'cus_webhook'])->save();
+
+        $payload = [
+            'type' => 'checkout.session.completed',
+            'data' => ['object' => [
+                'id' => 'cs_webhook_1',
+                'customer' => 'cus_webhook',
+                'mode' => 'payment',
+                'status' => 'complete',
+                'payment_status' => 'paid',
+                'metadata' => ['purpose' => 'setup_fee', 'customer_id' => (string) $customer->id],
+            ]],
+        ];
+
+        $this->postJson('/api/stripe/webhook', $payload)->assertSuccessful();
+
+        $customer->refresh();
+        $this->assertTrue($customer->isPaidSetupOnly());
+        Mail::assertSent(SetupFeeReceived::class, 1);
+
+        // Replayed webhook: no double-record, no second receipt.
+        $this->postJson('/api/stripe/webhook', $payload)->assertSuccessful();
         Mail::assertSent(SetupFeeReceived::class, 1);
     }
 

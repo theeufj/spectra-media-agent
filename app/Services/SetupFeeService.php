@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Customer;
 use App\Models\User;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 /**
  * The one-and-done product: a single USD charge for setting up a customer's
@@ -77,10 +78,37 @@ class SetupFeeService
             return false;
         }
 
+        $this->recordPayment($customer, $user);
+
+        return true;
+    }
+
+    /**
+     * The single place a setup-fee payment becomes real: marks the customer,
+     * sends the receipt/roadmap to the buyer and the build order to the
+     * admin — exactly once, whichever path got here first (the success
+     * redirect, or the checkout.session.completed webhook when the buyer
+     * closed the tab on Stripe's confirmation screen).
+     */
+    public function recordPayment(Customer $customer, User $user): bool
+    {
+        if ($customer->isPaidSetupOnly()) {
+            return false;
+        }
+
         $customer->forceFill([
             'service_type' => 'setup_only',
             'setup_fee_paid_at' => now(),
         ])->save();
+
+        ActivityLogger::customer('setup_fee_paid', $customer);
+        Log::info('Setup fee paid', ['customer_id' => $customer->id, 'user_id' => $user->id]);
+
+        Mail::to($user->email)->send(new \App\Mail\SetupFeeReceived($customer, $user->name));
+        Mail::raw(
+            "One-time setup fee paid (US$999)\n\nCustomer: {$customer->name} (#{$customer->id})\nWebsite: {$customer->website}\nUser: {$user->name} <{$user->email}>\n\nBuild their account, then mark the handover from the admin customer page.",
+            fn ($m) => $m->to(config('app.admin_email'))->subject("Setup fee paid: {$customer->name}")
+        );
 
         return true;
     }
