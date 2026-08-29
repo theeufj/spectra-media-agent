@@ -34,6 +34,7 @@ class Customer extends Model
         'service_type',
         'setup_fee_paid_at',
         'handover_at',
+        'early_exit_assessed_at',
         'phone',
         'google_ads_customer_id',
         'google_ads_link_status',
@@ -78,6 +79,7 @@ class Customer extends Model
     protected $casts = [
         'setup_fee_paid_at' => 'datetime',
         'handover_at' => 'datetime',
+        'early_exit_assessed_at' => 'datetime',
         'gtm_config' => 'array',
         'gtm_installed' => 'boolean',
         'gtm_detected' => 'boolean',

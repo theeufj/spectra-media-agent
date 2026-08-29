@@ -219,7 +219,7 @@ class DeploymentController extends Controller
             ->where(fn ($q) => $q->where('platform', 'like', '%google%')->orWhere('platform', 'like', '%Google%'))
             ->exists();
 
-        $linkProblem = in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed'], true);
+        $linkProblem = in_array($customer->google_ads_link_status, ['pending', 'refused', 'cancelled', 'failed', 'revoked'], true);
 
         if ($hasGoogleStrategy && (empty($customer->google_ads_customer_id) || $linkProblem)) {
             $reason = empty($customer->google_ads_customer_id)

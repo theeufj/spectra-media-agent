@@ -3,16 +3,19 @@
 return [
 
     /*
-     * Ad spend is billed through the managed prepaid-credit system
-     * (App\Jobs\ProcessDailyAdSpendBilling + App\Models\AdSpendCredit). The legacy
-     * Stripe-metered path (billing:report-ad-spend) is a second, mutually-exclusive
-     * billing model kept OFF by default so the two can never double-charge the same
-     * customer. Only enable it for a tier that is billed by metered usage instead of
-     * prepaid credit, and set a Stripe meter event name below.
+     * Early-exit terms for managed customers whose campaigns we built inside
+     * an account THEY own (bring-your-own-account links). The build has a
+     * price — the one-time setup fee — and it's included only after this
+     * many paid months. Leaving earlier (cancelling, or revoking our
+     * manager access) converts the engagement to the setup fee, less what
+     * they've already paid in subscription.
+     *
+     * Nothing is auto-charged: an assessment is recorded and the admin is
+     * emailed the computed amount with the trigger. Collection is a human
+     * decision, made against the ToS clause, not a surprise card charge.
      */
-    'metered_ad_spend_enabled' => (bool) env('BILLING_METERED_AD_SPEND_ENABLED', false),
-
-    // Stripe meter event name used by reportMeterEvent() when metered billing is enabled.
-    'ad_spend_meter' => env('BILLING_AD_SPEND_METER'),
+    'early_exit' => [
+        'minimum_months' => (int) env('EARLY_EXIT_MINIMUM_MONTHS', 3),
+    ],
 
 ];

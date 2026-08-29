@@ -205,6 +205,12 @@ Schedule::job(new \App\Jobs\ManageDSACampaigns)
 // Autonomous campaign maintenance - self-healing, keyword mining, budget intelligence
 Schedule::job(new AutomatedCampaignMaintenance)->dailyAt('04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('AutomatedCampaignMaintenance'));
 
+// Drift detection for bring-your-own-account customers: notices the day a
+// customer revokes our manager access, stands the agents down, and starts
+// the win-back + early-exit flow. Runs before maintenance so a revoked
+// account never gets a night of failing agent calls first.
+Schedule::job(new \App\Jobs\VerifyLinkedGoogleAdsAccess)->dailyAt('03:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('VerifyLinkedGoogleAdsAccess'));
+
 // Google Ads recommendation review — dismisses auto-handled recommendations and alerts
 // admins if Google has flagged anything that suggests our agents made a bad decision
 Schedule::job(new ReviewGoogleAdsRecommendations)->dailyAt('04:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ReviewGoogleAdsRecommendations'));

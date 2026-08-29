@@ -37,10 +37,31 @@ class MaintenanceSummaryNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        // The receipt header: one number for the whole run. This email is
+        // the recurring proof of work — the strongest answer to "what am I
+        // paying for" is the specific list of what would have gone unfixed.
+        $totalChanges = array_sum(array_column($this->changeSummary, 'total_changes'));
+        $totals = [
+            'healed' => 'delivery issue(s) resolved',
+            'keywords_added' => 'new keyword(s) mined from real searches',
+            'negatives_added' => 'wasted-spend term(s) blocked',
+            'budget_adjustments' => 'budget adjustment(s)',
+            'creative_adjustments' => 'new ad variation(s) generated',
+        ];
+
         $mail = $this->brandedMail()
-            ->subject('Your Campaign Optimisation Summary')
+            ->subject("{$totalChanges} improvement(s) made across your campaigns today")
             ->greeting('Hi '.$notifiable->name.',')
-            ->line("Our agents completed their daily optimisation run across {$this->campaignsProcessed} campaign(s). Here's what changed:");
+            ->line("While you slept, our agents made **{$totalChanges} change(s)** across {$this->campaignsProcessed} campaign(s):");
+
+        foreach ($totals as $key => $label) {
+            $count = array_sum(array_map(fn ($r) => (int) ($r[$key] ?? 0), $this->changeSummary));
+            if ($count > 0) {
+                $mail->line("- {$count} {$label}");
+            }
+        }
+
+        $mail->line('By campaign:');
 
         foreach ($this->changeSummary as $campaignName => $results) {
             if (($results['total_changes'] ?? 0) === 0) {

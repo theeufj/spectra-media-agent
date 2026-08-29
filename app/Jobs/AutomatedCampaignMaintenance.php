@@ -52,11 +52,13 @@ class AutomatedCampaignMaintenance implements ShouldQueue
 
         // Get all active campaigns (Google, Facebook, Microsoft, and LinkedIn)
         $campaigns = Campaign::with('customer')
-            // One-time setup customers bought a build, not management — the
-            // recurring agents never touch their campaigns. (Inline rather
-            // than Customer::managed(): larastan can't type a whereHas
-            // closure against the relation's model.)
-            ->whereHas('customer', fn ($q) => $q->where('service_type', '!=', 'setup_only'))
+            // One-time setup customers bought a build, not management, and a
+            // revoked BYO link means we CAN'T manage — either way the
+            // recurring agents stay away. (Inline rather than model scopes:
+            // larastan can't type a whereHas closure against the relation.)
+            ->whereHas('customer', fn ($q) => $q->where('service_type', '!=', 'setup_only')
+                ->where(fn ($qq) => $qq->whereNull('google_ads_link_status')
+                    ->orWhere('google_ads_link_status', '!=', 'revoked')))
             ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
             ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id')
