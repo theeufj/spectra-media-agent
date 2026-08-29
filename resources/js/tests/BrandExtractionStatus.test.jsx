@@ -81,6 +81,21 @@ describe('BrandExtractionStatus', () => {
         expect(onSettled).toHaveBeenCalledTimes(1);
     });
 
+    it('says the connection was lost when the status endpoint keeps failing', async () => {
+        // A dead session (logout, deleted user) must not leave the banner
+        // spinning forever.
+        fetchJson.mockRejectedValue(new Error('401'));
+
+        const { getByText } = render(
+            <BrandExtractionStatus watching baselineUpdatedAt={null} />
+        );
+
+        await act(() => vi.advanceTimersByTimeAsync(0));
+        await act(() => vi.advanceTimersByTimeAsync(20000));
+
+        expect(getByText('We lost the connection')).toBeInTheDocument();
+    });
+
     it('can be dismissed after failing', async () => {
         fetchJson.mockResolvedValue({ exists: false, failed: true, failure_reason: 'nope' });
 

@@ -31,6 +31,29 @@ class AutomatedCampaignMaintenance implements ShouldQueue
     /**
      * Execute the job.
      */
+    /**
+     * The campaigns the recurring agents are allowed to touch. One-time
+     * setup customers bought a build, not management; a revoked BYO link
+     * means we CAN'T manage. Either way the agents stay away. Public and
+     * static so the guarantee is testable as the exact query the job runs.
+     * (Conditions inline rather than model scopes: larastan can't type a
+     * whereHas closure against the relation's model.)
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Campaign>
+     */
+    public static function eligibleCampaigns()
+    {
+        return Campaign::with('customer')
+            ->whereHas('customer', fn ($q) => $q->where('service_type', '!=', 'setup_only')
+                ->where(fn ($qq) => $qq->whereNull('google_ads_link_status')
+                    ->orWhere('google_ads_link_status', '!=', 'revoked')))
+            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
+            ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
+                ->orWhereNotNull('facebook_ads_campaign_id')
+                ->orWhereNotNull('microsoft_ads_campaign_id')
+                ->orWhereNotNull('linkedin_campaign_id'));
+    }
+
     public function handle(
         SelfHealingAgent $selfHealingAgent,
         SearchTermMiningAgent $searchTermAgent,
@@ -51,20 +74,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
         $customerDigests = [];
 
         // Get all active campaigns (Google, Facebook, Microsoft, and LinkedIn)
-        $campaigns = Campaign::with('customer')
-            // One-time setup customers bought a build, not management, and a
-            // revoked BYO link means we CAN'T manage — either way the
-            // recurring agents stay away. (Inline rather than model scopes:
-            // larastan can't type a whereHas closure against the relation.)
-            ->whereHas('customer', fn ($q) => $q->where('service_type', '!=', 'setup_only')
-                ->where(fn ($qq) => $qq->whereNull('google_ads_link_status')
-                    ->orWhere('google_ads_link_status', '!=', 'revoked')))
-            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
-            ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
-                ->orWhereNotNull('facebook_ads_campaign_id')
-                ->orWhereNotNull('microsoft_ads_campaign_id')
-                ->orWhereNotNull('linkedin_campaign_id'))
-            ->get();
+        $campaigns = self::eligibleCampaigns()->get();
 
         $summary = [
             'campaigns_processed' => 0,

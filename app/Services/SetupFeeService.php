@@ -62,9 +62,7 @@ class SetupFeeService
             return true;
         }
 
-        $session = \Stripe\Checkout\Session::retrieve($sessionId, [
-            'api_key' => config('services.stripe.secret'),
-        ]);
+        $session = $this->retrieveSession($sessionId);
 
         $belongsHere = ($session->metadata['customer_id'] ?? null) === (string) $customer->id
             && $session->customer === $user->stripe_id;
@@ -85,5 +83,16 @@ class SetupFeeService
         ])->save();
 
         return true;
+    }
+
+    /**
+     * The one Stripe read in the confirm path, separated so tests can
+     * exercise the acceptance rules above without the network.
+     */
+    protected function retrieveSession(string $sessionId): object
+    {
+        return \Stripe\Checkout\Session::retrieve($sessionId, [
+            'api_key' => config('services.stripe.secret'),
+        ]);
     }
 }
