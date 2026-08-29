@@ -23,8 +23,11 @@ class GoogleAdsAccountProvisioningTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_a_new_customer_gets_an_account_provisioned(): void
+    public function test_signup_alone_provisions_nothing(): void
     {
+        // Provisioning at creation minted a REAL Google Ads sub-account for
+        // every tire-kicker and test signup — accounts that had to be
+        // cancelled by hand in the MCC UI. Signup is not deploy-intent.
         Queue::fake();
 
         Customer::factory()->create([
@@ -32,6 +35,25 @@ class GoogleAdsAccountProvisioningTest extends TestCase
             'google_ads_link_status' => null,
             'is_sandbox' => false,
         ]);
+
+        Queue::assertNotPushed(ProvisionGoogleAdsAccount::class);
+    }
+
+    public function test_budget_confirmation_is_the_deploy_intent_that_provisions(): void
+    {
+        Queue::fake();
+        $user = \App\Models\User::factory()->create();
+        $customer = Customer::factory()->create([
+            'google_ads_customer_id' => null,
+            'google_ads_link_status' => null,
+            'is_sandbox' => false,
+        ]);
+        $customer->users()->attach($user->id, ['role' => 'owner']);
+        $campaign = \App\Models\Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        $this->actingAs($user)
+            ->withSession(['active_customer_id' => $customer->id])
+            ->post(route('campaigns.confirm-budget', $campaign), ['daily_budget' => 45]);
 
         Queue::assertPushed(ProvisionGoogleAdsAccount::class);
     }
@@ -42,11 +64,11 @@ class GoogleAdsAccountProvisioningTest extends TestCase
         // they did not accept the invitation into.
         Queue::fake();
 
-        Customer::factory()->create([
+        ProvisionGoogleAdsAccount::dispatchIfNeeded(Customer::factory()->create([
             'google_ads_customer_id' => null,
             'google_ads_link_status' => 'pending',
             'is_sandbox' => false,
-        ]);
+        ]));
 
         Queue::assertNotPushed(ProvisionGoogleAdsAccount::class);
     }
@@ -55,10 +77,10 @@ class GoogleAdsAccountProvisioningTest extends TestCase
     {
         Queue::fake();
 
-        Customer::factory()->create([
+        ProvisionGoogleAdsAccount::dispatchIfNeeded(Customer::factory()->create([
             'google_ads_customer_id' => '1234567890',
             'is_sandbox' => false,
-        ]);
+        ]));
 
         Queue::assertNotPushed(ProvisionGoogleAdsAccount::class);
     }
@@ -69,10 +91,10 @@ class GoogleAdsAccountProvisioningTest extends TestCase
         // for one would put a real account under the MCC for nobody.
         Queue::fake();
 
-        Customer::factory()->create([
+        ProvisionGoogleAdsAccount::dispatchIfNeeded(Customer::factory()->create([
             'google_ads_customer_id' => null,
             'is_sandbox' => true,
-        ]);
+        ]));
 
         Queue::assertNotPushed(ProvisionGoogleAdsAccount::class);
     }

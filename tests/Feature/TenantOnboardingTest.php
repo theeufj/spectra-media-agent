@@ -80,6 +80,21 @@ class TenantOnboardingTest extends TestCase
         );
     }
 
+    public function test_the_funnel_is_closed_to_unverified_emails(): void
+    {
+        // An unproven address must not be able to start crawls, build
+        // campaigns, or deploy — registration's whole first step is the
+        // verification link.
+        $user = User::factory()->unverified()->create();
+
+        $this->actingAs($user)->get('/quick-start')
+            ->assertRedirect(route('verification.notice', absolute: false));
+        $this->actingAs($user)->post('/quick-start', ['website_url' => 'https://example.com'])
+            ->assertRedirect(route('verification.notice', absolute: false));
+        $this->actingAs($user)->post('/deployment/deploy', ['campaign_id' => 1])
+            ->assertRedirect(route('verification.notice', absolute: false));
+    }
+
     public function test_quick_start_on_a_skin_host_stamps_the_skin_even_for_a_tenantless_user(): void
     {
         // OAuth signups can arrive with a null or wrong tenant_key (the

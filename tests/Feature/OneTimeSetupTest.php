@@ -190,6 +190,52 @@ class OneTimeSetupTest extends TestCase
         Mail::assertSent(SetupFeeReceived::class, 1);
     }
 
+    public function test_setup_only_deploys_arrive_paused(): void
+    {
+        [, $customer] = $this->setupOnlyCustomer(paid: true);
+        $customer->forceFill(['google_ads_customer_id' => '111-222-3333'])->save();
+        $campaign = Campaign::factory()->create([
+            'customer_id' => $customer->id,
+            'google_ads_campaign_id' => '987654321',
+        ]);
+
+        $calls = new \ArrayObject;
+        $stub = new class($calls) extends \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus
+        {
+            public function __construct(private \ArrayObject $calls) {}
+
+            public function execute(string $customerId, string $campaignResourceName, string $status): array
+            {
+                $this->calls[] = [$customerId, $campaignResourceName, $status];
+
+                return ['success' => true, 'new_status' => $status];
+            }
+        };
+
+        $job = new class($campaign->fresh('customer'), $stub) extends \App\Jobs\DeployCampaign
+        {
+            public function __construct($campaign, private $stub)
+            {
+                parent::__construct($campaign);
+            }
+
+            public function exposePause(): void
+            {
+                $this->pauseForSetupOnly();
+            }
+
+            protected function campaignStatusService(\App\Models\Customer $customer): \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus
+            {
+                return $this->stub;
+            }
+        };
+
+        $job->exposePause();
+
+        $this->assertCount(1, $calls);
+        $this->assertSame(['1112223333', 'customers/1112223333/campaigns/987654321', 'PAUSED'], $calls[0]);
+    }
+
     public function test_recurring_management_never_sees_setup_only_customers(): void
     {
         [, $setupOnly] = $this->setupOnlyCustomer(paid: true);

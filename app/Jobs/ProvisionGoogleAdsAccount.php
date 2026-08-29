@@ -37,6 +37,29 @@ class ProvisionGoogleAdsAccount implements ShouldQueue
     public function __construct(public Customer $customer) {}
 
     /**
+     * Provision at deploy-intent, not at signup. Dispatching from customer
+     * creation minted a REAL Google Ads sub-account for every tire-kicker,
+     * test signup, and mid-cleanup orphan — accounts that then had to be
+     * cancelled by hand in the MCC UI. The moments that signal real intent:
+     * a confirmed budget, or a paid one-time setup fee.
+     */
+    public static function dispatchIfNeeded(Customer $customer): void
+    {
+        if ($customer->is_sandbox || $customer->google_ads_customer_id) {
+            return;
+        }
+
+        // Bringing their own account — the link invitation handles those.
+        if (in_array($customer->google_ads_link_status, ['pending', 'active'], true)) {
+            return;
+        }
+
+        Log::info('Dispatching Google Ads account provisioning', ['customer_id' => $customer->id]);
+
+        self::dispatch($customer)->delay(now()->addMinute());
+    }
+
+    /**
      * Is this a currency Google will accept?
      *
      * Deliberately a real check rather than a length test: "DOL" is three

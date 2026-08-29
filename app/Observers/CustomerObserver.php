@@ -2,7 +2,6 @@
 
 namespace App\Observers;
 
-use App\Jobs\ProvisionGoogleAdsAccount;
 use App\Jobs\ScrapeCustomerWebsite;
 use App\Jobs\SendGoogleAdsLinkInvitation;
 use App\Jobs\SetupConversionTracking;
@@ -40,7 +39,11 @@ class CustomerObserver
         // Outside the website check on purpose: a customer can arrive with an
         // existing Google Ads account before we know their site.
         $this->ensureGoogleAdsLink($customer);
-        $this->ensureGoogleAdsAccount($customer);
+        // Account provisioning deliberately does NOT happen here — creating a
+        // real Google Ads sub-account for every signup minted accounts for
+        // tire-kickers that had to be cancelled by hand. It fires at
+        // deploy-intent instead: ProvisionGoogleAdsAccount::dispatchIfNeeded
+        // on budget confirmation and setup-fee payment.
     }
 
     /**
@@ -66,35 +69,6 @@ class CustomerObserver
         }
 
         $this->ensureGoogleAdsLink($customer);
-        $this->ensureGoogleAdsAccount($customer);
-    }
-
-    /**
-     * Give a customer somewhere to advertise from.
-     *
-     * A fresh manager account cannot create client accounts until it has
-     * managed roughly US$1,000 of spend, so for months every signup arrived
-     * without one and nothing tried to fix it — conversion tracking simply
-     * failed on "Google Ads account not connected" and paged an admin. That
-     * gate has cleared, so creating the account is now the default and the
-     * customer never sees the gap.
-     *
-     * Customers bringing their own account are left alone; the link invitation
-     * handles those.
-     */
-    private function ensureGoogleAdsAccount(Customer $customer): void
-    {
-        if ($customer->is_sandbox || $customer->google_ads_customer_id) {
-            return;
-        }
-
-        if (in_array($customer->google_ads_link_status, ['pending', 'active'], true)) {
-            return;
-        }
-
-        Log::info('Dispatching Google Ads account provisioning', ['customer_id' => $customer->id]);
-
-        ProvisionGoogleAdsAccount::dispatch($customer)->delay(now()->addMinute());
     }
 
     /**

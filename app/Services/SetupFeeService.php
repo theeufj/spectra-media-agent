@@ -104,6 +104,9 @@ class SetupFeeService
         ActivityLogger::customer('setup_fee_paid', $customer);
         Log::info('Setup fee paid', ['customer_id' => $customer->id, 'user_id' => $user->id]);
 
+        // Paying the setup fee IS deploy-intent — start their account build.
+        \App\Jobs\ProvisionGoogleAdsAccount::dispatchIfNeeded($customer);
+
         Mail::to($user->email)->send(new \App\Mail\SetupFeeReceived($customer, $user->name));
         Mail::raw(
             "One-time setup fee paid (US$999)\n\nCustomer: {$customer->name} (#{$customer->id})\nWebsite: {$customer->website}\nUser: {$user->name} <{$user->email}>\n\nBuild their account, then mark the handover from the admin customer page.",

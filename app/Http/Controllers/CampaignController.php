@@ -168,6 +168,11 @@ class CampaignController extends Controller
 
         ActivityLogger::campaign('updated', $campaign, ['daily_budget' => $daily, 'budget_confirmed' => true]);
 
+        // Deploy-intent: this is the moment a real Google Ads sub-account is
+        // worth creating (provisioning at signup minted accounts for
+        // tire-kickers that had to be cancelled by hand).
+        \App\Jobs\ProvisionGoogleAdsAccount::dispatchIfNeeded($campaign->customer);
+
         return redirect()->back()->with('flash', [
             'type' => 'success',
             'message' => 'Budget confirmed. You can deploy whenever you\'re ready.',

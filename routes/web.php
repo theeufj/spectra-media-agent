@@ -171,7 +171,7 @@ Route::middleware(['auth'])->group(function () {
 | Routes for viewing and managing AI-extracted brand guidelines.
 |
 */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     // Route to display brand guidelines.
     // GET /brand-guidelines
     Route::get('/brand-guidelines', [App\Http\Controllers\BrandGuidelineController::class, 'index'])->name('brand-guidelines.index');
@@ -221,7 +221,7 @@ Route::middleware(['auth'])->group(function () {
  * also where the ad-spend credit account is created and the first seven days
  * are charged, so a customer meets one payment moment instead of two.
  */
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     // Route to display the campaign creation form.
     // GET /campaigns/create
     Route::get('/campaigns/create', [App\Http\Controllers\CampaignController::class, 'create'])->name('campaigns.create');
@@ -274,7 +274,7 @@ Route::middleware(['auth'])->group(function () {
  * indefinitely, and neither is needed to judge whether the first strategy is
  * any good.
  */
-Route::middleware(['auth', 'subscribed'])->group(function () {
+Route::middleware(['auth', 'verified', 'subscribed'])->group(function () {
     // Multi-touch attribution dashboard
     Route::get('/campaigns/{campaign}/attribution', [App\Http\Controllers\AttributionController::class, 'show'])->name('campaigns.attribution');
 
@@ -390,7 +390,7 @@ Route::post('/spectra/conversion', function (\Illuminate\Http\Request $r) {
     return response()->json(['ok' => true]);
 })->middleware('throttle:30,1')->name('spectra.conversion.log');
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/customers/switch/{customer}', [App\Http\Controllers\CustomerController::class, 'switch'])->name('customers.switch');
     Route::get('/customers/create', [App\Http\Controllers\CustomerController::class, 'create'])->name('customers.create');
     Route::post('/customers', [App\Http\Controllers\CustomerController::class, 'store'])->name('customers.store');

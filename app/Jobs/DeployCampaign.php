@@ -419,7 +419,13 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             $failureCount === 0 ? 'completed' : 'failed'
         );
 
-        if ($successCount > 0 && $this->campaign->status !== CampaignStatus::Active) {
+        if ($successCount > 0 && $this->campaign->customer->service_type === 'setup_only') {
+            // One-time setup: "everything arrives paused" is a promise in the
+            // receipt email — enforce it mechanically. The customer flips the
+            // switch themselves, on their own billing.
+            $this->pauseForSetupOnly();
+            $this->campaign->update(['status' => CampaignStatus::Paused]);
+        } elseif ($successCount > 0 && $this->campaign->status !== CampaignStatus::Active) {
             $this->campaign->update(['status' => CampaignStatus::Active]);
             RecordSiteConversion::dispatch($this->campaign->customer, 'campaign_live');
         }
@@ -472,5 +478,50 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
             report($e);
             Log::error('DeployCampaign::failed could not notify users: '.$e->getMessage());
         }
+    }
+
+    /**
+     * Pause the just-deployed Google campaign for a one-time setup customer.
+     * Best-effort: a pause failure must not fail the deployment — it is
+     * reported so an admin sees it before the handover.
+     */
+    protected function pauseForSetupOnly(): void
+    {
+        $customer = $this->campaign->customer;
+        $customerId = preg_replace('/[^0-9]/', '', (string) $customer->google_ads_customer_id);
+        $campaignId = preg_replace('/[^0-9]/', '', (string) $this->campaign->google_ads_campaign_id);
+
+        if ($customerId === '' || $campaignId === '') {
+            return;
+        }
+
+        try {
+            $result = $this->campaignStatusService($customer)->execute(
+                $customerId,
+                "customers/{$customerId}/campaigns/{$campaignId}",
+                'PAUSED'
+            );
+
+            AgentActivity::record(
+                'deployment',
+                'setup_only_paused',
+                "Paused \"{$this->campaign->name}\" after build — one-time setup customers launch it themselves.",
+                $this->campaign->customer_id,
+                $this->campaign->id,
+                $result
+            );
+        } catch (\Throwable $e) {
+            report($e);
+            Log::error('DeployCampaign: could not pause setup-only campaign', [
+                'campaign_id' => $this->campaign->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /** Separated so tests can stub the Google round-trip. */
+    protected function campaignStatusService(\App\Models\Customer $customer): \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus
+    {
+        return new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
     }
 }
