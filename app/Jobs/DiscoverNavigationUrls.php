@@ -18,6 +18,12 @@ use Symfony\Component\DomCrawler\Crawler;
 
 class DiscoverNavigationUrls implements ShouldQueue
 {
+    /**
+     * A soft-deleted customer/campaign mid-queue means the work is moot —
+     * discard quietly instead of filling failed_jobs with ModelNotFound.
+     */
+    public $deleteWhenMissingModels = true;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $tries = 2;

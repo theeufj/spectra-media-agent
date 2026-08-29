@@ -18,6 +18,12 @@ use Illuminate\Support\Facades\Log;
 
 class GenerateAdCopy implements ShouldQueue
 {
+    /**
+     * A soft-deleted customer/campaign mid-queue means the work is moot —
+     * discard quietly instead of filling failed_jobs with ModelNotFound.
+     */
+    public $deleteWhenMissingModels = true;
+
     use Batchable, Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**

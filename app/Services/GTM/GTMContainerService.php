@@ -110,7 +110,26 @@ class GTMContainerService
             ]);
 
             if (! $response['success']) {
-                return ['success' => false, 'error' => 'Failed to create GTM container: '.($response['error'] ?? 'Unknown error')];
+                // A container with this name already exists — a previous
+                // customer with the same business name (duplicate onboarding,
+                // deleted-and-recreated test accounts). Adopt it rather than
+                // failing the whole conversion setup: the alternative was
+                // three noisy retries and a customer with no tracking.
+                if (str_contains($response['error'] ?? '', 'duplicate name')) {
+                    $existing = $this->findContainerByName($accountId, $containerName, $accessToken);
+
+                    if ($existing) {
+                        Log::info('GTMContainerService: adopted existing container with the same name', [
+                            'customer_id' => $customer->id,
+                            'container_id' => $existing['publicId'] ?? null,
+                        ]);
+                        $response = ['success' => true, 'data' => $existing];
+                    }
+                }
+
+                if (! $response['success']) {
+                    return ['success' => false, 'error' => 'Failed to create GTM container: '.($response['error'] ?? 'Unknown error')];
+                }
             }
 
             $containerId = $response['data']['publicId'] ?? null;  // GTM-XXXXXXX
@@ -343,6 +362,26 @@ HTML;
         ]);
 
         return $response['data']['triggerId'] ?? null;
+    }
+
+    /**
+     * The container the duplicate-name error is complaining about.
+     */
+    private function findContainerByName(string $accountId, string $containerName, string $accessToken): ?array
+    {
+        $response = $this->makeApiCall('GET', "/accounts/{$accountId}/containers", $accessToken);
+
+        if (! $response['success']) {
+            return null;
+        }
+
+        foreach ($response['data']['container'] ?? [] as $container) {
+            if (($container['name'] ?? null) === $containerName) {
+                return $container;
+            }
+        }
+
+        return null;
     }
 
     private function findTagByName(string $workspacePath, string $tagName, string $accessToken): ?array

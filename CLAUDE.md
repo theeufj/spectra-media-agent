@@ -141,11 +141,12 @@ Don't add to `phpstan-baseline.neon` — it's there to freeze existing debt, not
 absorb new debt. Regenerate it only when a refactor moves existing errors between
 files.
 
-Note on the test suite: several tests make live outbound HTTP calls and hang
-indefinitely (`AdSpendCreditTest`, `GeminiServiceTest`, `ProductModelTest`,
-`ProductFeedModelTest`). This predates the current work. `DatabaseTransactions`
-works fine; it's `RefreshDatabase` plus unmocked HTTP that hangs — prefer the
-former in new tests, and fake HTTP.
+The full suite runs locally again (`php artisan test`, ~90s, integration
+suites self-skip without their RUN_*_INTEGRATION_TESTS flags). The old hang
+(live HTTP from `AdSpendCreditTest`/`GeminiServiceTest`/`ProductModelTest`/
+`ProductFeedModelTest`) was cured by the base TestCase's global
+`Queue::fake()` + `Http::preventStrayRequests()`. Keep new tests on
+`DatabaseTransactions` (the test DB is pre-migrated) and fake any HTTP.
 
 ## Deployment
 

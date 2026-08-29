@@ -19,6 +19,12 @@ use Illuminate\Support\Facades\Log;
 
 class FetchFacebookAdsPerformanceData implements ShouldQueue
 {
+    /**
+     * A soft-deleted customer/campaign mid-queue means the work is moot —
+     * discard quietly instead of filling failed_jobs with ModelNotFound.
+     */
+    public $deleteWhenMissingModels = true;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 5;

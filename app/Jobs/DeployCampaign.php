@@ -27,6 +27,12 @@ use Illuminate\Support\Facades\Mail;
 
 class DeployCampaign implements ShouldBeUnique, ShouldQueue
 {
+    /**
+     * A soft-deleted customer/campaign mid-queue means the work is moot —
+     * discard quietly instead of filling failed_jobs with ModelNotFound.
+     */
+    public $deleteWhenMissingModels = true;
+
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 1;
