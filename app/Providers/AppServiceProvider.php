@@ -11,7 +11,9 @@ use App\Models\Proposal;
 use App\Models\Scopes\CustomerScope;
 use App\Models\Strategy;
 use App\Models\SupportTicket;
+use App\Models\User;
 use App\Observers\CustomerObserver;
+use App\Observers\UserObserver;
 use App\Policies\AdSpendCreditPolicy;
 use App\Policies\BrandGuidelinePolicy;
 use App\Policies\CampaignPolicy;
@@ -163,6 +165,10 @@ class AppServiceProvider extends ServiceProvider
 
         // Register model observers
         Customer::observe(CustomerObserver::class);
+        // On the model, not in the two controllers that delete users: the
+        // pivot's ON DELETE CASCADE orphans the customer from any deletion
+        // path, including ones nobody has written yet.
+        User::observe(UserObserver::class);
 
         // Register authorization policies.
         //

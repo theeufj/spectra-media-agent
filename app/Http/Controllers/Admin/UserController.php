@@ -97,7 +97,9 @@ class UserController extends Controller
 
         ActivityLogger::log('user_deleted', "Deleted user: {$user->name} ({$user->email})");
         $user->roles()->detach();
-        $user->customers()->detach();
+        // No customers()->detach() here: UserObserver::deleting reads the pivot
+        // to decide each customer's fate, and detaching first left it looking at
+        // a user who owned nothing — silently orphaning every customer they had.
         $user->delete();
 
         return redirect()->back()->with('success', "User '{$user->name}' has been deleted.");
