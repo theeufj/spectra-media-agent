@@ -79,9 +79,12 @@ class FacebookAdsExecutionAgentTest extends TestCase
             ->once()
             ->andReturn(new ValidationResult(true));
 
-        $agent->shouldReceive('analyzeOptimizationOpportunities')
-            ->once()
-            ->andReturn(Mockery::mock('App\Services\Agents\OptimizationAnalysis'));
+        // The template method does not call this. Facebook's own execute() used
+        // to, and threw the result away; Google stopped calling it because the
+        // discarded analysis cost a conversions query plus several collateral
+        // counts on every deploy. Asserting never() keeps that cost from
+        // creeping back in.
+        $agent->shouldNotReceive('analyzeOptimizationOpportunities');
 
         $agent->shouldReceive('generateExecutionPlan')
             ->once()
@@ -165,9 +168,12 @@ class FacebookAdsExecutionAgentTest extends TestCase
             ->once()
             ->andReturn(new ValidationResult(true));
 
-        $agent->shouldReceive('analyzeOptimizationOpportunities')
-            ->once()
-            ->andReturn(Mockery::mock('App\Services\Agents\OptimizationAnalysis'));
+        // The template method does not call this. Facebook's own execute() used
+        // to, and threw the result away; Google stopped calling it because the
+        // discarded analysis cost a conversions query plus several collateral
+        // counts on every deploy. Asserting never() keeps that cost from
+        // creeping back in.
+        $agent->shouldNotReceive('analyzeOptimizationOpportunities');
 
         $agent->shouldReceive('generateExecutionPlan')
             ->once()
@@ -183,9 +189,9 @@ class FacebookAdsExecutionAgentTest extends TestCase
 
         $result = $agent->execute($context);
 
-        $this->assertTrue($result->failed());
+        $this->assertFalse($result->success);
         $this->assertNotEmpty($result->errors);
-        $this->assertStringContainsString('Campaign creation failed', $result->errors[0]);
+        $this->assertStringContainsString('Campaign creation failed', $result->errorMessage());
     }
 
     public function test_validation_fails_without_facebook_page(): void

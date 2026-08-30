@@ -85,7 +85,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $result = $agent->execute($context);
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('account ID not configured', $result->message);
+        $this->assertStringContainsString('account ID not configured', $result->errorMessage());
     }
 
     public function test_validation_fails_without_api_credentials(): void
@@ -101,7 +101,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $result = $agent->execute($context);
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('credentials not configured', $result->message);
+        $this->assertStringContainsString('credentials not configured', $result->errorMessage());
     }
 
     public function test_validation_fails_without_management_credential(): void
@@ -126,7 +126,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $result = $agent->execute($context);
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('management credential configured', $result->message);
+        $this->assertStringContainsString('management credential configured', $result->errorMessage());
     }
 
     public function test_validation_fails_without_ad_copies(): void
@@ -160,7 +160,7 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $result = $agent->execute($context);
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('ad copy is required', $result->message);
+        $this->assertStringContainsString('ad copy is required', $result->errorMessage());
     }
 
     // ──────────────────────────────────────────────
@@ -191,17 +191,15 @@ class LinkedInAdsExecutionAgentTest extends TestCase
 
         $agent->shouldReceive('executePlan')
             ->once()
-            ->andReturn(new ExecutionResult(
-                success: true,
-                message: 'LinkedIn campaign deployed successfully',
-                data: ['steps' => [['step' => 'create_campaign', 'status' => 'success']]],
+            ->andReturn(ExecutionResult::success(
+                platformIds: ['campaign_id' => 'urn:li:sponsoredCampaign:123'],
             ));
 
         Log::spy();
         $result = $agent->execute($context);
 
         $this->assertTrue($result->success);
-        $this->assertEquals('LinkedIn campaign deployed successfully', $result->message);
+        $this->assertSame('urn:li:sponsoredCampaign:123', $result->getPlatformId('campaign_id'));
         Log::shouldHaveReceived('info')->atLeast()->once();
     }
 
@@ -231,8 +229,8 @@ class LinkedInAdsExecutionAgentTest extends TestCase
         $result = $agent->execute($context);
 
         $this->assertFalse($result->success);
-        $this->assertStringContainsString('rate limit', $result->message);
-        $this->assertArrayHasKey('recovery_plan', $result->data ?? []);
+        $this->assertStringContainsString('rate limit', $result->errorMessage());
+        $this->assertArrayHasKey('recovery_plan', $result->metadata);
     }
 
     // ──────────────────────────────────────────────

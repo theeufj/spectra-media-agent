@@ -5,149 +5,78 @@ namespace App\Services\Agents;
 /**
  * Represents the result of prerequisite validation.
  *
- * Contains validation status, errors, and warnings about
- * platform prerequisites that must be met before deployment.
+ * `$passed` is the single accessor. This class used to expose `isValid()`,
+ * `passes()`, `failed()` and the public property — four ways to ask one
+ * question — and the four platform agents each picked a different one, which
+ * is how their `execute()` implementations drifted apart without anything
+ * failing. Errors and warnings are always {@see AgentIssue}, never the
+ * `string[]|array[]` union they used to be.
  */
 class ValidationResult
 {
     public bool $passed;
 
+    /** @var list<AgentIssue> */
     public array $errors;
 
+    /** @var list<AgentIssue> */
     public array $warnings;
 
     public function __construct(bool $passed, array $errors = [], array $warnings = [])
     {
         $this->passed = $passed;
-        $this->errors = $errors;
-        $this->warnings = $warnings;
+        $this->errors = AgentIssue::list($errors);
+        $this->warnings = AgentIssue::list($warnings);
     }
 
     /**
-     * Check if validation passed.
+     * Record an error. Fails the result.
      *
-     * @return bool True if validation passed
+     * @param  string  $codeOrMessage  Machine-readable code, or the message itself
+     * @param  string|null  $message  Human-readable explanation
      */
-    public function isValid(): bool
+    public function addError(string $codeOrMessage, ?string $message = null): self
     {
-        return $this->passed;
-    }
-
-    /**
-     * Check if validation passed (alias for isValid).
-     *
-     * @return bool True if validation passed
-     */
-    public function passes(): bool
-    {
-        return $this->passed;
-    }
-
-    /**
-     * Check if validation failed.
-     *
-     * @return bool True if validation failed
-     */
-    public function failed(): bool
-    {
-        return ! $this->passed;
-    }
-
-    /**
-     * Add an error to the validation result.
-     *
-     * @param  string  $code  Error code
-     * @param  string  $message  Error message
-     */
-    public function addError(string $code, string $message = ''): self
-    {
-        $this->errors[] = [
-            'code' => $code,
-            'message' => $message ?: $code,
-        ];
+        $this->errors[] = AgentIssue::make($codeOrMessage, $message);
         $this->passed = false;
 
         return $this;
     }
 
     /**
-     * Add a warning to the validation result.
+     * Record a warning. Does not fail the result.
      *
-     * @param  string  $code  Warning code
-     * @param  string  $message  Warning message
+     * @param  string  $codeOrMessage  Machine-readable code, or the message itself
+     * @param  string|null  $message  Human-readable explanation
      */
-    public function addWarning(string $code, string $message = ''): self
+    public function addWarning(string $codeOrMessage, ?string $message = null): self
     {
-        $this->warnings[] = [
-            'code' => $code,
-            'message' => $message ?: $code,
-        ];
+        $this->warnings[] = AgentIssue::make($codeOrMessage, $message);
 
         return $this;
     }
 
     /**
-     * Check if there are any errors.
+     * All error messages joined into one sentence.
      *
-     * @return bool True if errors exist
+     * Safe to call on any result: this used to `implode()` straight over
+     * `$errors`, which emitted "Array; Array" for anything built through
+     * `addError()`.
      */
-    public function hasErrors(): bool
+    public function errorMessage(string $separator = '; '): string
     {
-        return ! empty($this->errors);
-    }
-
-    /**
-     * Check if there are any warnings.
-     *
-     * @return bool True if warnings exist
-     */
-    public function hasWarnings(): bool
-    {
-        return ! empty($this->warnings);
-    }
-
-    /**
-     * Get all error messages.
-     *
-     * @return array Error messages
-     */
-    public function getErrors(): array
-    {
-        return $this->errors;
-    }
-
-    /**
-     * Get all warning messages.
-     *
-     * @return array Warning messages
-     */
-    public function getWarnings(): array
-    {
-        return $this->warnings;
-    }
-
-    /**
-     * Get error messages as a single string.
-     *
-     * @param  string  $separator  Separator between messages
-     * @return string Combined error message
-     */
-    public function getErrorsAsString(string $separator = '; '): string
-    {
-        return implode($separator, $this->errors);
+        return AgentIssue::toSentence($this->errors, $separator);
     }
 
     /**
      * Convert result to array for storage or logging.
-     *
-     * @return array Result as array
      */
     public function toArray(): array
     {
         return [
             'passed' => $this->passed,
-            'errors' => $this->errors,
-            'warnings' => $this->warnings,
+            'errors' => array_map(fn (AgentIssue $i) => $i->toArray(), $this->errors),
+            'warnings' => array_map(fn (AgentIssue $i) => $i->toArray(), $this->warnings),
             'error_count' => count($this->errors),
             'warning_count' => count($this->warnings),
         ];

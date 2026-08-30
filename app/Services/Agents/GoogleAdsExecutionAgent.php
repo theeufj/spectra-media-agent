@@ -55,67 +55,6 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
     protected string $platform = 'google';
 
     /**
-     * Execute the deployment with ExecutionContext
-     */
-    public function execute(ExecutionContext $context): ExecutionResult
-    {
-        Log::info('GoogleAdsExecutionAgent: Starting execution', [
-            'campaign_id' => $context->campaign->id,
-            'strategy_id' => $context->strategy->id,
-        ]);
-
-        try {
-            // Validate prerequisites
-            $validation = $this->validatePrerequisites($context);
-            if (! $validation->passes()) {
-                Log::error('GoogleAdsExecutionAgent: Prerequisites validation failed', [
-                    'errors' => $validation->errors,
-                ]);
-
-                return ExecutionResult::failure($validation->errors);
-            }
-
-            // NOTE: analyzeOptimizationOpportunities() used to be called here and its
-            // result discarded — it costs a Google Ads conversion query plus several
-            // collateral counts on every deploy for nothing. It is left in place
-            // because executePlan() independently re-derives PMax eligibility with a
-            // *different* rule set (>=3 valid-ratio images vs. images + video +
-            // conversion tracking + budget). Those two decisions should be unified and
-            // fed into generateExecutionPlan(); until then, don't pay for the analysis.
-
-            // Generate execution plan
-            $plan = $this->generateExecutionPlan($context);
-
-            // Execute the plan
-            $result = $this->executePlan($plan, $context);
-
-            Log::info('GoogleAdsExecutionAgent: Execution completed', [
-                'campaign_id' => $context->campaign->id,
-                'success' => $result->success,
-                'execution_time' => $result->executionTime,
-            ]);
-
-            return $result;
-        } catch (\Throwable $e) {
-            // Same omission as the Facebook agent: handleExecutionError was
-            // defined and never reached, so a failed deploy threw out of the
-            // agent with no recovery plan attached.
-            report($e);
-            Log::error('GoogleAdsExecutionAgent: Execution failed', [
-                'campaign_id' => $context->campaign->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            $recovery = $this->handleExecutionError($e, $context);
-
-            return ExecutionResult::failure(
-                ['Google Ads deployment failed: '.$e->getMessage()],
-                ['recovery_plan' => $recovery->toArray()]
-            );
-        }
-    }
-
-    /**
      * Validate prerequisites before deployment
      *
      * Checks:

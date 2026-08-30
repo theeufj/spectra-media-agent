@@ -21,6 +21,11 @@ use Tests\TestCase;
  * json, and simple() takes a throwable and one action string. Both agents called
  * them with the wrong arity and the wrong types, so even the fallback path would
  * have failed.
+ *
+ * Routing is now the template method's job, so it is asserted once on the base
+ * class rather than four times by grepping subclass source. What each subclass
+ * still owes is the handler itself — and, more importantly, that it has not
+ * grown its own execute() again.
  */
 class DeploymentRecoveryTest extends TestCase
 {
@@ -35,22 +40,47 @@ class DeploymentRecoveryTest extends TestCase
         ];
     }
 
+    public function test_execute_routes_failures_through_recovery(): void
+    {
+        // Reading the source is crude, but it is the property that actually
+        // matters and the one that was missing: the catch block has to reach
+        // handleExecutionError rather than let the throwable escape. There is
+        // now one catch block to check instead of four.
+        $source = file_get_contents((new \ReflectionClass(PlatformExecutionAgent::class))->getFileName());
+
+        $this->assertStringContainsString(
+            '$this->handleExecutionError(',
+            $source,
+            'the template method defines a recovery handler it never calls'
+        );
+        $this->assertStringContainsString(
+            'catch (\Throwable $e)',
+            $source,
+            'the template must catch \Throwable — \Exception lets a TypeError past'
+        );
+        $this->assertStringContainsString(
+            'report($e);',
+            $source,
+            'deploy failures must reach the admin exception dashboard'
+        );
+    }
+
     /**
      * @dataProvider agents
      *
      * @param  class-string  $agent
      */
-    public function test_execute_routes_failures_through_recovery(string $agent): void
+    public function test_the_agent_does_not_reimplement_the_execution_flow(string $agent): void
     {
-        // Reading the source is crude, but it is the property that actually
-        // matters and the one that was missing: the catch block has to reach
-        // handleExecutionError rather than let the throwable escape.
-        $source = file_get_contents((new \ReflectionClass($agent))->getFileName());
+        // The four copies of execute() drifted: two caught \Exception instead of
+        // \Throwable, two never called report(), and each read validation
+        // through a different accessor. The flow belongs to the base class.
+        $declaring = (new ReflectionMethod($agent, 'execute'))->getDeclaringClass()->getName();
 
-        $this->assertStringContainsString(
-            '$this->handleExecutionError(',
-            $source,
-            $agent.' defines a recovery handler it never calls'
+        $this->assertSame(
+            PlatformExecutionAgent::class,
+            $declaring,
+            $agent.' has its own execute() again — the drift this refactor removed'
         );
     }
 

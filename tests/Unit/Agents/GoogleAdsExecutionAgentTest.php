@@ -182,9 +182,9 @@ class GoogleAdsExecutionAgentTest extends TestCase
 
         $result = $agent->execute($context);
 
-        $this->assertTrue($result->failed());
+        $this->assertFalse($result->success);
         $this->assertNotEmpty($result->errors);
-        $this->assertStringContainsString('Campaign creation failed', $result->errors[0]);
+        $this->assertStringContainsString('Campaign creation failed', $result->errorMessage());
     }
 
     public function test_validation_fails_without_ad_copy(): void

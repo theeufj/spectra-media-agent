@@ -28,37 +28,6 @@ class LinkedInAdsExecutionAgent extends PlatformExecutionAgent
         return 'LinkedIn Ads';
     }
 
-    public function execute(ExecutionContext $context): ExecutionResult
-    {
-        $this->logExecution('Starting LinkedIn Ads execution', [
-            'campaign_id' => $context->campaign?->id,
-        ]);
-
-        try {
-            $validation = $this->validatePrerequisites($context);
-            if (! $validation->passed) {
-                return new ExecutionResult(
-                    success: false,
-                    message: 'Prerequisites not met: '.implode(', ', $validation->errors),
-                    data: ['validation' => $validation],
-                );
-            }
-
-            $plan = $this->generateExecutionPlan($context);
-
-            return $this->executePlan($plan, $context);
-        } catch (\Exception $e) {
-            $this->logError('Execution failed', ['error' => $e->getMessage()]);
-            $recovery = $this->handleExecutionError($e, $context);
-
-            return new ExecutionResult(
-                success: false,
-                message: 'Execution failed: '.$e->getMessage(),
-                data: ['recovery_plan' => $recovery],
-            );
-        }
-    }
-
     protected function validatePrerequisites(ExecutionContext $context): ValidationResult
     {
         $errors = [];
@@ -160,7 +129,11 @@ PROMPT;
                 };
 
                 $results[] = array_merge(['step' => $step->action ?? $step['action'] ?? ''], $result);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                // \Throwable, not \Exception: a TypeError from an SDK signature
+                // change is exactly the per-step failure this loop exists to
+                // contain, and \Exception does not catch \Error.
+                report($e);
                 $results[] = [
                     'step' => $step->action ?? $step['action'] ?? '',
                     'status' => 'failed',
@@ -171,10 +144,17 @@ PROMPT;
 
         $allSucceeded = collect($results)->every(fn ($r) => ($r['status'] ?? '') !== 'failed');
 
+        $failed = collect($results)->filter(fn ($r) => ($r['status'] ?? '') === 'failed');
+
         return new ExecutionResult(
             success: $allSucceeded,
-            message: $allSucceeded ? 'LinkedIn campaign deployed successfully' : 'Some steps failed',
-            data: ['steps' => $results, 'plan' => $plan],
+            errors: $failed->map(fn ($r, $i) => new AgentIssue(
+                'linkedin_step_failed',
+                ($r['step'] ?? "step {$i}").': '.($r['error'] ?? 'failed with no reason given'),
+            ))->values()->all(),
+            // This agent has never recorded platform IDs; the campaign URN is
+            // only in the step results. Left as-is rather than guessed at.
+            metadata: ['steps' => $results],
         );
     }
 

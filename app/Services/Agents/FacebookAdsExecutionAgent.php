@@ -49,62 +49,12 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
     /**
      * Initialize Facebook Ads API services
      */
-    protected function initializeServices(): void
+    protected function bootPlatformServices(ExecutionContext $context): void
     {
         $this->campaignService = new CampaignService($this->customer);
         $this->adSetService = new AdSetService($this->customer);
         $this->creativeService = new CreativeService($this->customer);
         $this->adService = new AdService($this->customer);
-    }
-
-    /**
-     * Execute the deployment with ExecutionContext
-     */
-    public function execute(ExecutionContext $context): ExecutionResult
-    {
-        Log::info('FacebookAdsExecutionAgent: Starting execution', [
-            'campaign_id' => $context->campaign->id,
-            'strategy_id' => $context->strategy->id,
-        ]);
-
-        try {
-            $this->initializeServices();
-
-            // Validate prerequisites
-            $validation = $this->validatePrerequisites($context);
-            if (! $validation->isValid()) {
-                return ExecutionResult::failure(
-                    $validation->getErrors(),
-                    $validation->getWarnings()
-                );
-            }
-
-            // Analyze optimization opportunities
-            $this->analyzeOptimizationOpportunities($context);
-
-            // Generate execution plan
-            $plan = $this->generateExecutionPlan($context);
-
-            // Execute the plan
-            return $this->executePlan($plan, $context);
-        } catch (\Throwable $e) {
-            // This agent defined handleExecutionError and never called it, so a
-            // failed Facebook deployment produced an uncaught throwable and no
-            // diagnosis — while Microsoft and LinkedIn, which have never
-            // deployed anything, both recovered properly.
-            report($e);
-            Log::error('FacebookAdsExecutionAgent: Execution failed', [
-                'campaign_id' => $context->campaign->id,
-                'error' => $e->getMessage(),
-            ]);
-
-            $recovery = $this->handleExecutionError($e, $context);
-
-            return ExecutionResult::failure(
-                ['Facebook deployment failed: '.$e->getMessage()],
-                ['recovery_plan' => $recovery->toArray()]
-            );
-        }
     }
 
     /**
@@ -344,8 +294,6 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
      */
     protected function executePlan(ExecutionPlan $plan, ExecutionContext $context): ExecutionResult
     {
-        $this->initializeServices();
-
         $startTime = microtime(true);
         $result = ExecutionResult::success(platformIds: [], executionTime: 0.0, plan: $plan);
         $accountId = str_replace('act_', '', $this->customer->facebook_ads_account_id);

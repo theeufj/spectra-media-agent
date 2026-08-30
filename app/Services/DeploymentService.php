@@ -93,7 +93,12 @@ class DeploymentService
             $strategy->execution_time = $result->executionTime;
             $strategy->execution_errors = $result->errors;
             $strategy->deployment_status = $result->success ? 'deployed' : 'failed';
-            $strategy->deployment_error = $result->success ? null : implode('; ', array_map(fn ($e) => is_string($e) ? $e : json_encode($e), $result->errors));
+            // One normaliser, on the result. This line and the caller's error
+            // string below used to build the message two different ways, so
+            // deployment_error held raw JSON for Google/Facebook failures while
+            // the API response held the sentence — and Microsoft/LinkedIn, which
+            // populated neither, stored an empty string for both.
+            $strategy->deployment_error = $result->success ? null : $result->errorMessage();
             $strategy->deployed_at = $result->success ? now() : null;
             $strategy->save();
 
@@ -115,23 +120,12 @@ class DeploymentService
                     'campaign_id' => $campaign->id,
                     'strategy_id' => $strategy->id,
                     'platform' => $strategy->platform,
-                    'errors' => $result->errors,
+                    'errors' => $result->errorMessage(),
                 ]);
-
-                $errorMessages = array_map(function ($error) {
-                    if (is_array($error)) {
-                        return $error['message'] ?? json_encode($error);
-                    }
-                    if (is_object($error)) {
-                        return method_exists($error, '__toString') ? (string) $error : get_class($error);
-                    }
-
-                    return (string) $error;
-                }, $result->errors);
 
                 return [
                     'success' => false,
-                    'error' => implode(', ', $errorMessages),
+                    'error' => $result->errorMessage(', '),
                     'result' => $result,
                 ];
             }

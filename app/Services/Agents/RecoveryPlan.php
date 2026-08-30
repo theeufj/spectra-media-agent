@@ -152,11 +152,17 @@ class RecoveryPlan
     public function toArray(): array
     {
         return [
-            'error' => [
+            // $error is nullable and a recovery plan built without one is legal.
+            // This used to dereference it unconditionally; it was only ever
+            // reached from Google and Facebook, which always pass the throwable.
+            // The template method now serialises every platform's recovery plan,
+            // so a null here would fatal inside the handler meant to contain the
+            // original failure.
+            'error' => $this->error ? [
                 'message' => $this->error->getMessage(),
                 'code' => $this->error->getCode(),
                 'type' => get_class($this->error),
-            ],
+            ] : null,
             'recovery_actions' => $this->recoveryActions,
             'reasoning' => $this->reasoning,
             'action_count' => $this->getActionCount(),

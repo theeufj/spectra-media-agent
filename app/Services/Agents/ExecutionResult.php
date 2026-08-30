@@ -5,15 +5,24 @@ namespace App\Services\Agents;
 /**
  * Represents the result of executing a deployment plan.
  *
- * Contains success/failure status, errors, warnings, created platform IDs,
- * and execution timing information.
+ * `$success` is the single accessor — `failed()` and `isSuccessful()` are gone.
+ *
+ * This class used to carry two incompatible conventions at once: Google and
+ * Facebook filled `errors`/`warnings`/`platformIds`/`metadata`, while Microsoft
+ * and LinkedIn filled `message`/`data`. `toArray()` serialised only the first
+ * set, and `DeploymentService` read only `$errors` — so a failed Microsoft or
+ * LinkedIn deploy recorded a blank `strategies.deployment_error` and returned an
+ * empty error string to its caller. `message` and `data` have been removed;
+ * everything goes through `errors`, `warnings` and `metadata`.
  */
 class ExecutionResult
 {
     public bool $success;
 
+    /** @var list<AgentIssue> */
     public array $errors;
 
+    /** @var list<AgentIssue> */
     public array $warnings;
 
     public array $platformIds;
@@ -24,10 +33,6 @@ class ExecutionResult
 
     public array $metadata;
 
-    public string $message;
-
-    public array $data;
-
     public function __construct(
         bool $success,
         array $errors = [],
@@ -36,34 +41,30 @@ class ExecutionResult
         float $executionTime = 0.0,
         ?ExecutionPlan $plan = null,
         array $metadata = [],
-        string $message = '',
-        array $data = [],
     ) {
         $this->success = $success;
-        $this->errors = $errors;
-        $this->warnings = $warnings;
+        $this->errors = AgentIssue::list($errors);
+        $this->warnings = AgentIssue::list($warnings);
         $this->platformIds = $platformIds;
         $this->executionTime = $executionTime;
         $this->plan = $plan;
         $this->metadata = $metadata;
-        $this->message = $message;
-        $this->data = $data;
     }
 
     /**
      * Create a failed execution result.
      *
-     * @param  array|string  $errors  Error message(s)
-     * @param  array  $context  Additional context
+     * @param  iterable<mixed>|string  $errors  Error message(s) or AgentIssue(s)
+     * @param  array  $metadata  Additional context (recovery plans, diagnostics)
+     * @param  iterable<mixed>  $warnings  Warnings raised before the failure
      */
-    public static function failure($errors, array $context = []): self
+    public static function failure($errors, array $metadata = [], iterable $warnings = []): self
     {
-        $errorArray = is_array($errors) ? $errors : [$errors];
-
         return new self(
             success: false,
-            errors: $errorArray,
-            metadata: $context
+            errors: is_iterable($errors) ? $errors : [$errors],
+            warnings: $warnings,
+            metadata: $metadata,
         );
     }
 
@@ -73,95 +74,52 @@ class ExecutionResult
      * @param  array  $platformIds  Created platform resource IDs
      * @param  float  $executionTime  Time taken to execute
      * @param  ExecutionPlan|null  $plan  The executed plan
-     * @param  array  $warnings  Any warnings during execution
+     * @param  iterable<mixed>  $warnings  Any warnings during execution
      */
     public static function success(
         array $platformIds = [],
         float $executionTime = 0.0,
         ?ExecutionPlan $plan = null,
-        array $warnings = []
+        iterable $warnings = []
     ): self {
         return new self(
             success: true,
-            errors: [],
             warnings: $warnings,
             platformIds: $platformIds,
             executionTime: $executionTime,
-            plan: $plan
+            plan: $plan,
         );
     }
 
     /**
-     * Check if the execution failed.
+     * Record an error. Fails the result.
      *
-     * @return bool True if execution failed
+     * @param  string  $codeOrMessage  Machine-readable code, or the message itself
+     * @param  string|null  $message  Human-readable explanation
      */
-    public function failed(): bool
+    public function addError(string $codeOrMessage, ?string $message = null): self
     {
-        return ! $this->success;
-    }
-
-    /**
-     * Check if the execution succeeded.
-     *
-     * @return bool True if execution succeeded
-     */
-    public function isSuccessful(): bool
-    {
-        return $this->success;
-    }
-
-    /**
-     * Check if there are any errors.
-     *
-     * @return bool True if errors exist
-     */
-    public function hasErrors(): bool
-    {
-        return ! empty($this->errors);
-    }
-
-    /**
-     * Check if there are any warnings.
-     *
-     * @return bool True if warnings exist
-     */
-    public function hasWarnings(): bool
-    {
-        return ! empty($this->warnings);
-    }
-
-    /**
-     * Add an error to the result.
-     *
-     * @param  string  $error  Error message
-     */
-    public function addError(string $error): self
-    {
-        $this->errors[] = $error;
+        $this->errors[] = AgentIssue::make($codeOrMessage, $message);
         $this->success = false;
 
         return $this;
     }
 
     /**
-     * Add a warning to the result.
+     * Record a warning. Does not fail the result.
      *
-     * @param  string  $warning  Warning message
-     */
-    /**
-     * Record a warning.
+     * Most callers pass (code, message); the Google executors raise incidental
+     * free-text warnings with a single argument. Both are accepted. This method
+     * once took one argument only, so PHP silently discarded the second and
+     * customers were shown the slug ("no_conversion_tracking") instead of the
+     * explanation.
      *
-     * Most callers pass (code, message) — matching ValidationResult::addWarning,
-     * which stores a keyed array. This method only ever accepted one argument, so
-     * PHP silently discarded the second and users were shown the slug
-     * ("no_conversion_tracking") instead of the explanation. The message now wins
-     * when supplied; the flat array-of-strings shape that DeploymentService
-     * consumes is unchanged.
+     * @param  string  $codeOrMessage  Machine-readable code, or the message itself
+     * @param  string|null  $message  Human-readable explanation
      */
-    public function addWarning(string $warning, ?string $message = null): self
+    public function addWarning(string $codeOrMessage, ?string $message = null): self
     {
-        $this->warnings[] = $message ?? $warning;
+        $this->warnings[] = AgentIssue::make($codeOrMessage, $message);
 
         return $this;
     }
@@ -204,16 +162,34 @@ class ExecutionResult
     }
 
     /**
-     * Convert result to array for storage or logging.
+     * All error messages joined into one sentence — what a customer should read.
      *
-     * @return array Result as array
+     * This is the single normaliser. `DeploymentService` used to carry two of
+     * them, forty-five lines apart, that disagreed: one stored raw JSON in
+     * `deployment_error`, the other returned the message text to the caller.
+     */
+    public function errorMessage(string $separator = '; '): string
+    {
+        return AgentIssue::toSentence($this->errors, $separator);
+    }
+
+    /**
+     * All warning messages joined into one sentence.
+     */
+    public function warningMessage(string $separator = '; '): string
+    {
+        return AgentIssue::toSentence($this->warnings, $separator);
+    }
+
+    /**
+     * Convert result to array for storage or logging.
      */
     public function toArray(): array
     {
         return [
             'success' => $this->success,
-            'errors' => $this->errors,
-            'warnings' => $this->warnings,
+            'errors' => array_map(fn (AgentIssue $i) => $i->toArray(), $this->errors),
+            'warnings' => array_map(fn (AgentIssue $i) => $i->toArray(), $this->warnings),
             'platform_ids' => $this->platformIds,
             'execution_time' => $this->executionTime,
             'plan_summary' => $this->plan ? [
@@ -226,23 +202,23 @@ class ExecutionResult
 
     /**
      * Get a summary message of the execution result.
-     *
-     * @return string Summary message
      */
     public function getSummary(): string
     {
-        if ($this->success) {
-            $message = 'Execution succeeded';
-            if ($this->executionTime > 0) {
-                $message .= sprintf(' in %.2f seconds', $this->executionTime);
-            }
-            if ($this->hasWarnings()) {
-                $message .= sprintf(' with %d warning(s)', count($this->warnings));
-            }
-
-            return $message;
-        } else {
-            return sprintf('Execution failed with %d error(s)', count($this->errors));
+        if (! $this->success) {
+            return sprintf('Execution failed with %d error(s): %s', count($this->errors), $this->errorMessage());
         }
+
+        $message = 'Execution succeeded';
+
+        if ($this->executionTime > 0) {
+            $message .= sprintf(' in %.2f seconds', $this->executionTime);
+        }
+
+        if ($this->warnings !== []) {
+            $message .= sprintf(' with %d warning(s)', count($this->warnings));
+        }
+
+        return $message;
     }
 }

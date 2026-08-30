@@ -24,40 +24,6 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
 {
     protected string $platform = 'microsoft';
 
-    public function execute(ExecutionContext $context): ExecutionResult
-    {
-        $this->logExecution('Starting Microsoft Ads execution', [
-            'campaign_id' => $context->campaign?->id,
-        ]);
-
-        try {
-            // Validate prerequisites
-            $validation = $this->validatePrerequisites($context);
-            if (! $validation->passed) {
-                return new ExecutionResult(
-                    success: false,
-                    message: 'Prerequisites not met: '.implode(', ', $validation->errors),
-                    data: ['validation' => $validation],
-                );
-            }
-
-            // Generate execution plan
-            $plan = $this->generateExecutionPlan($context);
-
-            // Execute the plan
-            return $this->executePlan($plan, $context);
-        } catch (\Exception $e) {
-            $this->logError('Execution failed', ['error' => $e->getMessage()]);
-            $recovery = $this->handleExecutionError($e, $context);
-
-            return new ExecutionResult(
-                success: false,
-                message: 'Execution failed: '.$e->getMessage(),
-                data: ['recovery_plan' => $recovery],
-            );
-        }
-    }
-
     protected function generateExecutionPlan(ExecutionContext $context): ExecutionPlan
     {
         $prompt = \App\Prompts\MicrosoftAdsExecutionPrompt::generate($context);
@@ -290,12 +256,32 @@ PROMPT;
         $anyRealWork = ! empty($results);
         $allSucceeded = $anyRealWork && collect($results)->every(fn ($r) => $r['success']);
 
+        $errors = [];
+
+        if (! $anyRealWork) {
+            $errors[] = new AgentIssue(
+                'no_steps_executed',
+                'No steps were executed — check plan generation',
+            );
+        } else {
+            foreach ($results as $i => $result) {
+                if ($result['success']) {
+                    continue;
+                }
+
+                $errors[] = new AgentIssue(
+                    'microsoft_step_failed',
+                    sprintf('step %s: %s', $i, $result['error']),
+                );
+            }
+        }
+
         return new ExecutionResult(
             success: $allSucceeded,
-            message: $allSucceeded ? 'Microsoft Ads campaign deployed' : ($anyRealWork ? 'Partial deployment' : 'No steps were executed — check plan generation'),
+            errors: $errors,
             platformIds: $platformIds,
             executionTime: $executionTime,
-            data: $results,
+            metadata: ['steps' => $results],
         );
     }
 
