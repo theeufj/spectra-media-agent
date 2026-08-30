@@ -51,6 +51,13 @@ Do:
 - Platform services: `app/Services/{Platform}/` with a `Base{Platform}Service.php`.
 - Execution agents: `app/Services/Agents/{Platform}ExecutionAgent.php`, extending
   `PlatformExecutionAgent` and returning `ExecutionResult` (never throwing for partial failure).
+  `PlatformExecutionAgent::execute()` is **final** — it is the template method that owns the
+  order (boot → validate → plan → execute), the `\Throwable` catch, the `report()` call and
+  the recovery-plan handoff. Subclasses supply the steps, never the flow; four divergent
+  copies of it is what this replaced. `DeploymentRecoveryTest` fails if one grows back.
+- Agent errors and warnings are always `AgentIssue` (a code plus a message), never a
+  `string[]|array[]` union. `ExecutionResult` has no `message`/`data` — use `errors`,
+  `warnings` and `metadata`, and `errorMessage()` for the single human-readable string.
 - Platform config: `config/{platform}.php`. Ad-copy rules: `config/platform_rules.php`.
 - New platforms must be registered in `config/platform_architecture.php` under `platforms`.
 - Cross-platform agents (HealthCheck, Optimization, SelfHealing, Creative, Audience) must
@@ -60,6 +67,16 @@ Do:
 
 Never hardcode a model string. Always read `config('ai.models.*')`, which is env-overridable
 via `AI_MODEL_*`. Cost-per-token tables and the fallback chain also live in `config/ai.php`.
+
+This includes the **second argument** to `config()`: `config('ai.models.image', 'gemini-2.5-flash-image')`
+reads as compliant and pins a two-generation-old model the moment the key is missing. That is
+how twelve of them accumulated. A model named in code but absent from the pricing table also
+has its spend recorded as zero.
+
+Embeddings carry their provenance: every stored vector records the model that produced it in
+`embedding_model`, because a 429 falls back to a model that embeds into a *different space* at
+the same 3072 dimensions. Vector search only compares within one space;
+`php artisan embeddings:refresh --mismatched` rebuilds the rest.
 
 Prefer the Gemini 3.x series for text. Creative generation defaults to Grok Imagine via
 OpenRouter (`ai.image_provider` / `ai.video_provider` = 'grok', chosen in a 2026-08-24
@@ -84,14 +101,26 @@ for them.
 ## Authorization
 
 Ownership is via the `customers` pivot on `User`, **not** a `customers.user_id` column
-(that column was dropped). The correct check is a policy; if you must inline it:
+(that column was dropped). It is enforced structurally, in two layers:
 
-```php
-$user->customers()->where('customers.id', $customer->id)->exists()
-```
+1. **`App\Models\Concerns\BelongsToCustomer`** puts `CustomerScope` on the model, so a query
+   for another tenant's rows returns nothing. The scope engages only when a non-admin user is
+   authenticated — queue workers and scheduled commands have no acting user, so the nightly
+   batch jobs that iterate every customer are unaffected, and admins read across tenants by
+   design. Deliberate cross-tenant reads say so: `Model::withoutCustomerScope()`.
+2. **A policy extending `App\Policies\CustomerOwnedPolicy`**, registered in
+   `AppServiceProvider`. Use `$this->authorize()` or `->middleware('can:...')`; do not
+   hand-roll the pivot query.
 
-Prefer `$this->authorize()` / `->middleware('can:...')` over hand-rolled checks. Policies live
-in `app/Policies`.
+`AuthorizationCoverageTest` fails if a customer-owned model has no policy, is missing the
+scope, or is bound from an unauthenticated route.
+
+A model whose `customer_id` is legitimately optional must **not** carry the trait — a NULL
+never matches `IN`, so the row would vanish for everyone. `SupportTicket` (owned by `user_id`)
+and `CreativeUsage` (which writes `customer_id` NULL mid-onboarding) are the two exceptions.
+
+Cross-tenant access returns **404, not 403**: route-model binding cannot find the row. That is
+the stronger answer — a 403 confirms the ID exists.
 
 ## Error handling
 
@@ -139,7 +168,19 @@ npm test                   # frontend (vitest) — resources/js/tests/
 
 Don't add to `phpstan-baseline.neon` — it's there to freeze existing debt, not to
 absorb new debt. Regenerate it only when a refactor moves existing errors between
-files.
+files. CI runs all four of the above plus `bin/check-fatal-classes` and
+`bin/check-baseline-growth`, on PHP 8.5 (matching production).
+
+Several rules in this file are now tests rather than requests. If one of these fails,
+the fix is the code, not the test:
+
+| Rule | Enforced by |
+|---|---|
+| No model name outside `config/ai.php` | `NoHardcodedModelsTest` |
+| Every customer-owned model is scoped and has a policy | `AuthorizationCoverageTest` |
+| No agent reimplements `execute()` | `DeploymentRecoveryTest` |
+| Nothing substantial runs in the scheduler tick | `ScheduledFanOutJobsTest` |
+| Every project env key is in `.env.example` | `EnvExampleCoverageTest` |
 
 The full suite runs locally again (`php artisan test`, ~90s, integration
 suites self-skip without their RUN_*_INTEGRATION_TESTS flags). The old hang

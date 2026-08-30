@@ -283,12 +283,6 @@ parameters:
 			path: app/Http/Controllers/Auth/FacebookController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\User\:\:\$customer\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/BrandGuidelineController.php
-
-		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 3 parameters, 1 required\.$#'
 			identifier: arguments.count
 			count: 1
@@ -469,18 +463,6 @@ parameters:
 			path: app/Http/Controllers/ImageCollateralController.php
 
 		-
-			message: '#^Access to an undefined property App\\Models\\ImageCollateral\:\:\$strategy\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/ImageCollateralController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>customer_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Http/Controllers/ImageCollateralController.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\Customer\:\:\$website_url\.$#'
 			identifier: property.notFound
 			count: 2
@@ -645,18 +627,6 @@ parameters:
 		-
 			message: '#^Access to an undefined property App\\Models\\VideoCollateral\:\:\$campaign\.$#'
 			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/VideoCollateralController.php
-
-		-
-			message: '#^Access to an undefined property App\\Models\\VideoCollateral\:\:\$strategy\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Http/Controllers/VideoCollateralController.php
-
-		-
-			message: '#^Using nullsafe property access "\?\-\>customer_id" on left side of \?\? is unnecessary\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Http/Controllers/VideoCollateralController.php
 
@@ -1207,12 +1177,6 @@ parameters:
 			path: app/Models/User.php
 
 		-
-			message: '#^Access to an undefined property Illuminate\\Database\\Eloquent\\Model\:\:\$customer_id\.$#'
-			identifier: property.notFound
-			count: 1
-			path: app/Policies/StrategyPolicy.php
-
-		-
 			message: '#^Property App\\Prompts\\AdCopyPrompt\:\:\$feedback \(array\|null\) is never assigned null so it can be removed from the property type\.$#'
 			identifier: property.unusedType
 			count: 1
@@ -1555,12 +1519,6 @@ parameters:
 			path: app/Services/Agents/LinkedInAdsExecutionAgent.php
 
 		-
-			message: '#^Using nullsafe property access on non\-nullable type App\\Models\\Campaign\. Use \-\> instead\.$#'
-			identifier: nullsafe.neverNull
-			count: 1
-			path: app/Services/Agents/LinkedInAdsExecutionAgent.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\MicrosoftAdsPerformanceData\:\:\$total_cost\.$#'
 			identifier: property.notFound
 			count: 1
@@ -1629,7 +1587,7 @@ parameters:
 		-
 			message: '#^Using nullsafe property access on non\-nullable type App\\Models\\Campaign\. Use \-\> instead\.$#'
 			identifier: nullsafe.neverNull
-			count: 2
+			count: 1
 			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php
 
 		-
@@ -2189,18 +2147,6 @@ parameters:
 			identifier: larastan.noEnvCallsOutsideOfConfig
 			count: 1
 			path: database/seeders/AdminUserSeeder.php
-
-		-
-			message: '#^Call to an undefined method Illuminate\\Database\\Eloquent\\Builder\<TRelatedModel of Illuminate\\Database\\Eloquent\\Model\>\:\:withDeployedPlatforms\(\)\.$#'
-			identifier: method.notFound
-			count: 3
-			path: routes/console.php
-
-		-
-			message: '#^Relation ''keywords'' is not found in App\\Models\\Customer model\.$#'
-			identifier: larastan.relationExistence
-			count: 1
-			path: routes/console.php
 
 		-
 			message: '#^Relation ''roles'' is not found in App\\Models\\User model\.$#'
@@ -2829,7 +2775,7 @@ parameters:
 		-
 			message: '#^Call to an undefined method Mockery\\ExpectationInterface\|Mockery\\HigherOrderMessage\:\:once\(\)\.$#'
 			identifier: method.notFound
-			count: 10
+			count: 8
 			path: tests/Unit/Agents/FacebookAdsExecutionAgentTest.php
 
 		-
@@ -2927,42 +2873,6 @@ parameters:
 			identifier: staticMethod.notFound
 			count: 1
 			path: tests/Unit/Agents/LinkedInAdsExecutionAgentTest.php
-
-		-
-			message: '#^Method App\\Services\\Agents\\PlatformExecutionAgent@anonymous/tests/Unit/Agents/PlatformExecutionAgentTest\.php\:33\:\:analyzeOptimizationOpportunities\(\) should return App\\Services\\Agents\\OptimizationAnalysis but returns Mockery\\MockInterface\.$#'
-			identifier: return.type
-			count: 1
-			path: tests/Unit/Agents/PlatformExecutionAgentTest.php
-
-		-
-			message: '#^Method App\\Services\\Agents\\PlatformExecutionAgent@anonymous/tests/Unit/Agents/PlatformExecutionAgentTest\.php\:33\:\:generateExecutionPlan\(\) should return App\\Services\\Agents\\ExecutionPlan but returns Mockery\\MockInterface\.$#'
-			identifier: return.type
-			count: 1
-			path: tests/Unit/Agents/PlatformExecutionAgentTest.php
-
-		-
-			message: '#^Method App\\Services\\Agents\\PlatformExecutionAgent@anonymous/tests/Unit/Agents/PlatformExecutionAgentTest\.php\:33\:\:handleExecutionError\(\) should return App\\Services\\Agents\\RecoveryPlan but returns Mockery\\MockInterface\.$#'
-			identifier: return.type
-			count: 1
-			path: tests/Unit/Agents/PlatformExecutionAgentTest.php
-
-		-
-			message: '#^Method App\\Services\\Agents\\PlatformExecutionAgent@anonymous/tests/Unit/Agents/PlatformExecutionAgentTest\.php\:89\:\:analyzeOptimizationOpportunities\(\) should return App\\Services\\Agents\\OptimizationAnalysis but returns Mockery\\MockInterface\.$#'
-			identifier: return.type
-			count: 1
-			path: tests/Unit/Agents/PlatformExecutionAgentTest.php
-
-		-
-			message: '#^Method App\\Services\\Agents\\PlatformExecutionAgent@anonymous/tests/Unit/Agents/PlatformExecutionAgentTest\.php\:89\:\:generateExecutionPlan\(\) should return App\\Services\\Agents\\ExecutionPlan but returns Mockery\\MockInterface\.$#'
-			identifier: return.type
-			count: 1
-			path: tests/Unit/Agents/PlatformExecutionAgentTest.php
-
-		-
-			message: '#^Method App\\Services\\Agents\\PlatformExecutionAgent@anonymous/tests/Unit/Agents/PlatformExecutionAgentTest\.php\:89\:\:handleExecutionError\(\) should return App\\Services\\Agents\\RecoveryPlan but returns Mockery\\MockInterface\.$#'
-			identifier: return.type
-			count: 1
-			path: tests/Unit/Agents/PlatformExecutionAgentTest.php
 
 		-
 			message: '#^Call to an undefined method Mockery\\ExpectationInterface\|Mockery\\HigherOrderMessage\:\:once\(\)\.$#'
