@@ -128,7 +128,12 @@ class ProductControllerTest extends TestCase
 
         $response = $this->authenticatedPost("/products/feeds/{$feed->id}/sync");
 
-        $response->assertForbidden();
+        // 404, not 403: the tenant scope removes other customers' rows from the
+        // query that route-model binding resolves, so the record is not found
+        // rather than found-and-refused. That is the stronger answer — a 403
+        // confirms the ID exists. The controller's own ownership check is still
+        // there behind it.
+        $response->assertNotFound();
     }
 
     public function test_delete_feed_removes_record(): void
@@ -148,7 +153,12 @@ class ProductControllerTest extends TestCase
 
         $response = $this->authenticatedDelete("/products/feeds/{$feed->id}");
 
-        $response->assertForbidden();
+        // 404, not 403: the tenant scope removes other customers' rows from the
+        // query that route-model binding resolves, so the record is not found
+        // rather than found-and-refused. That is the stronger answer — a 403
+        // confirms the ID exists. The controller's own ownership check is still
+        // there behind it.
+        $response->assertNotFound();
     }
 
     public function test_product_list_page(): void

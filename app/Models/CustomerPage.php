@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCustomer;
 use Illuminate\Database\Eloquent\Model;
 use Pgvector\Laravel\HasNeighbors;
 use Pgvector\Laravel\Vector;
 
 class CustomerPage extends Model
 {
+    use BelongsToCustomer;
     use HasNeighbors;
 
     protected $fillable = [
@@ -19,6 +21,7 @@ class CustomerPage extends Model
         'metadata',
         'content',
         'embedding',
+        'embedding_model',
     ];
 
     protected $casts = [

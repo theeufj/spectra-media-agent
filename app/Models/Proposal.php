@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCustomer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Proposal extends Model
 {
+    use BelongsToCustomer;
+
     const STATUS_GENERATING = 'generating';
 
     const STATUS_READY = 'ready';

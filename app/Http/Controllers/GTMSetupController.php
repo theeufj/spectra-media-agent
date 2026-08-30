@@ -12,19 +12,13 @@ use Inertia\Inertia;
 class GTMSetupController extends Controller
 {
     /** Ensure the acting user is scoped to the route-bound customer (matches app-wide pattern). */
-    private function authorizeCustomer(Request $request, Customer $customer): void
-    {
-        $active = $this->getActiveCustomer($request);
-        abort_unless($active && $active->id === $customer->id, 403);
-    }
-
     /**
      * Show the GTM setup page.
      * Passes the container ID (if provisioned) and snippet data to the view.
      */
     public function show(Request $request, Customer $customer, GTMContainerService $gtmService)
     {
-        $this->authorizeCustomer($request, $customer);
+        $this->authorize('update', $customer);
         $snippet = null;
         if ($customer->gtm_container_id) {
             $snippet = $gtmService->getSnippetHtml($customer->gtm_container_id);
@@ -54,7 +48,7 @@ class GTMSetupController extends Controller
      */
     public function provision(Request $request, Customer $customer, GTMContainerService $gtmService)
     {
-        $this->authorizeCustomer($request, $customer);
+        $this->authorize('update', $customer);
         if ($customer->gtm_container_id) {
             $snippet = $gtmService->getSnippetHtml($customer->gtm_container_id);
 
@@ -85,7 +79,7 @@ class GTMSetupController extends Controller
      */
     public function verifyInstalled(Request $request, Customer $customer, GTMContainerService $gtmService)
     {
-        $this->authorizeCustomer($request, $customer);
+        $this->authorize('update', $customer);
         if (! $customer->gtm_container_id) {
             return back()->with('error', 'No GTM container has been provisioned yet.');
         }
@@ -118,7 +112,7 @@ class GTMSetupController extends Controller
      */
     public function rescan(Request $request, Customer $customer, GTMDetectionService $gtmDetectionService)
     {
-        $this->authorizeCustomer($request, $customer);
+        $this->authorize('update', $customer);
         if (! $customer->website) {
             return back()->with('error', 'Customer does not have a website URL configured');
         }
@@ -161,7 +155,7 @@ class GTMSetupController extends Controller
      */
     public function getStatus(Request $request, Customer $customer, GTMContainerService $gtmService)
     {
-        $this->authorizeCustomer($request, $customer);
+        $this->authorize('update', $customer);
 
         return response()->json([
             'success' => true,

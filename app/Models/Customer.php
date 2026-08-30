@@ -296,7 +296,10 @@ class Customer extends Model
         return $this->hasMany(Campaign::class);
     }
 
-    public function keywords()
+    /**
+     * @return HasMany<Keyword, $this>
+     */
+    public function keywords(): HasMany
     {
         return $this->hasMany(Keyword::class);
     }

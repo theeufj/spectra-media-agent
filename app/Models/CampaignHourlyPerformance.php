@@ -2,11 +2,13 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCustomer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class CampaignHourlyPerformance extends Model
 {
+    use BelongsToCustomer;
     use HasFactory;
 
     protected $table = 'campaign_hourly_performance';

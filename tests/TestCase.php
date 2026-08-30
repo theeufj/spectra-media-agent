@@ -2,6 +2,7 @@
 
 namespace Tests;
 
+use App\Models\Scopes\CustomerScope;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -39,6 +40,11 @@ abstract class TestCase extends BaseTestCase
         if (! $this->integrationTestsEnabled()) {
             Http::preventStrayRequests();
         }
+
+        // The tenant scope memoises each user's customer list for the life of a
+        // request. A test process is one long "request", so without this a user
+        // created in one test would keep an earlier test's customer list.
+        CustomerScope::flush();
     }
 
     private function integrationTestsEnabled(): bool

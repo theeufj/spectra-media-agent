@@ -151,6 +151,11 @@ class KnowledgeBaseController extends Controller
             // Create knowledge base entry
             $knowledgeBase = KnowledgeBase::create([
                 'user_id' => $user->id,
+                // Every other read of this table filters on customer_id
+                // (BrandGuidelineController, SetupProgressController,
+                // CampaignController, CustomerPageController), so an upload that
+                // did not stamp one produced a row nothing could ever find.
+                'customer_id' => $this->getActiveCustomer($request)?->id,
                 'url' => $cloudFrontUrl, // Store CloudFront URL
                 'file_path' => $s3Path,
                 'source_type' => $sourceType,

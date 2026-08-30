@@ -415,7 +415,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/setup-fee/success', [App\Http\Controllers\SetupFeeController::class, 'success'])->name('setup-fee.success');
 });
 
-Route::middleware(['auth'])->group(function () {
+Route::middleware(['auth', 'can:update,customer'])->group(function () {
+    // The controller additionally requires the *owner* role; this only
+    // establishes that the customer in the URL is one of the caller's at all.
     Route::post('/customers/{customer}/invitations', [App\Http\Controllers\InvitationController::class, 'store'])->name('invitations.store');
 });
 
@@ -426,7 +428,12 @@ Route::get('/invitations/accept/{token}', [App\Http\Controllers\InvitationContro
 | Google Tag Manager (GTM) Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth'])->group(function () {
+// can:update,customer at the group rather than a check inside each action:
+// Customer is the one owned model the tenant scope cannot cover (it has no
+// customer_id — it *is* the customer), so route-model binding here resolves any
+// ID in the URL. CLAUDE.md asks for middleware over hand-rolled checks; this is
+// the group where that matters most.
+Route::middleware(['auth', 'can:update,customer'])->group(function () {
     // Show GTM setup page (snippet display + verification status)
     Route::get('/customers/{customer}/gtm/setup', [App\Http\Controllers\GTMSetupController::class, 'show'])->name('customers.gtm.setup');
 

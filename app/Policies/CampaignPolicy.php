@@ -5,45 +5,15 @@ namespace App\Policies;
 use App\Models\Campaign;
 use App\Models\User;
 
-class CampaignPolicy
+class CampaignPolicy extends CustomerOwnedPolicy
 {
     /**
-     * Determine if the user can view the campaign.
-     */
-    public function view(User $user, Campaign $campaign): bool
-    {
-        return $this->userOwnsCampaign($user, $campaign);
-    }
-
-    /**
-     * Determine if the user can update the campaign.
-     */
-    public function update(User $user, Campaign $campaign): bool
-    {
-        return $this->userOwnsCampaign($user, $campaign);
-    }
-
-    /**
-     * Determine if the user can delete the campaign.
-     */
-    public function delete(User $user, Campaign $campaign): bool
-    {
-        return $this->userOwnsCampaign($user, $campaign);
-    }
-
-    /**
-     * Determine if the user can deploy the campaign.
+     * Deploying is an ownership question like any other, but it is named
+     * separately so routes can declare `can:deploy,campaign` rather than
+     * borrowing `update`.
      */
     public function deploy(User $user, Campaign $campaign): bool
     {
-        return $this->userOwnsCampaign($user, $campaign);
-    }
-
-    /**
-     * Check if the user belongs to the customer that owns the campaign.
-     */
-    protected function userOwnsCampaign(User $user, Campaign $campaign): bool
-    {
-        return $user->customers()->where('customers.id', $campaign->customer_id)->exists();
+        return $this->owns($user, $campaign);
     }
 }

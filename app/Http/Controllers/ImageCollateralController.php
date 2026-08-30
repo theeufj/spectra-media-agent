@@ -209,11 +209,7 @@ class ImageCollateralController extends Controller
      */
     public function destroy(ImageCollateral $imageCollateral)
     {
-        $user = Auth::user();
-        $customerId = $imageCollateral->campaign?->customer_id ?? $imageCollateral->strategy?->campaign?->customer_id;
-        if (! $customerId || ! $user->customers()->where('customers.id', $customerId)->exists()) {
-            abort(403, 'Unauthorized action.');
-        }
+        $this->authorize('delete', $imageCollateral);
 
         if ($imageCollateral->s3_path) {
             StorageHelper::delete($imageCollateral->s3_path);

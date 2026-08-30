@@ -50,7 +50,10 @@ class ProposalController extends Controller
 
         $proposal = Proposal::create([
             'user_id' => $request->user()->id,
-            'customer_id' => session('active_customer_id'),
+            // Not session('active_customer_id') alone: that is null before a
+            // customer is selected, which orphans the proposal from the tenant
+            // that created it.
+            'customer_id' => $this->getActiveCustomer($request)?->id,
             'client_name' => $validated['client_name'],
             'industry' => $validated['industry'],
             'website_url' => $validated['website_url'],

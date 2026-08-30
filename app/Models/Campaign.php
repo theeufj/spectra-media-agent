@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use App\Enums\CampaignStatus;
+use App\Models\Concerns\BelongsToCustomer;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -11,6 +13,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Campaign extends Model
 {
+    use BelongsToCustomer;
     use HasFactory;
 
     /**
@@ -296,8 +299,11 @@ class Campaign extends Model
 
     /**
      * Scope campaigns that have been deployed to at least one ad platform.
+     *
+     * @param  Builder<Campaign>  $query
+     * @return Builder<Campaign>
      */
-    public function scopeWithDeployedPlatforms($query)
+    public function scopeWithDeployedPlatforms(Builder $query): Builder
     {
         return $query->where(function ($campaignQuery) {
             $campaignQuery

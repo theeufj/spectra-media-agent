@@ -8,15 +8,21 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Models\Proposal;
+use App\Models\Scopes\CustomerScope;
 use App\Models\Strategy;
+use App\Models\SupportTicket;
 use App\Observers\CustomerObserver;
 use App\Policies\AdSpendCreditPolicy;
 use App\Policies\BrandGuidelinePolicy;
 use App\Policies\CampaignPolicy;
 use App\Policies\CustomerPolicy;
+use App\Policies\GenericCustomerPolicy;
 use App\Policies\KnowledgeBasePolicy;
 use App\Policies\ProposalPolicy;
 use App\Policies\StrategyPolicy;
+use App\Policies\SupportTicketPolicy;
+use Illuminate\Auth\Events\Login;
+use Illuminate\Auth\Events\Logout;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Queue\Events\JobFailed;
@@ -30,6 +36,43 @@ use Stripe\StripeClient;
 
 class AppServiceProvider extends ServiceProvider
 {
+    /**
+     * Customer-owned models whose only authorization rule is ownership.
+     *
+     * Kept as an explicit list rather than discovered at boot: a filesystem
+     * scan on every request to save typing thirty lines is a bad trade, and an
+     * explicit list is greppable. AuthorizationCoverageTest fails when a model
+     * carrying BelongsToCustomer is missing from here.
+     *
+     * @var list<class-string>
+     */
+    private const GENERIC_CUSTOMER_OWNED_MODELS = [
+        \App\Models\AgentActivity::class,
+        \App\Models\AttributionConversion::class,
+        \App\Models\AttributionTouchpoint::class,
+        \App\Models\Audience::class,
+        \App\Models\CampaignConversation::class,
+        \App\Models\CampaignHourlyPerformance::class,
+        \App\Models\Competitor::class,
+        \App\Models\CreativeBrief::class,
+        \App\Models\CrmIntegration::class,
+        \App\Models\CrossChannelRebalanceLog::class,
+        \App\Models\CustomerPage::class,
+        \App\Models\EmailLog::class,
+        \App\Models\HarvestedAsset::class,
+        \App\Models\Keyword::class,
+        \App\Models\KeywordQualityScore::class,
+        \App\Models\LandingPageAudit::class,
+        \App\Models\NegativeKeywordList::class,
+        \App\Models\OfflineConversion::class,
+        \App\Models\Persona::class,
+        \App\Models\PlatformBudgetAllocation::class,
+        \App\Models\Product::class,
+        \App\Models\ProductFeed::class,
+        \App\Models\SeoAudit::class,
+        \App\Models\SeoRanking::class,
+    ];
+
     /**
      * Register any application services.
      */
@@ -69,6 +112,13 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         Vite::prefetch(concurrency: 3);
+
+        // CustomerScope memoises the acting user's customer list for the life of
+        // the request. Authentication changes who is acting, so the memo has to
+        // go with it — otherwise a login immediately after a logout in the same
+        // request would inherit the previous user's tenancy.
+        Event::listen(Login::class, fn () => CustomerScope::flush());
+        Event::listen(Logout::class, fn () => CustomerScope::flush());
 
         // Rate limiter for Resend's 5 req/s API limit — applied via RateLimited middleware on queued mailables.
         RateLimiter::for('resend', fn () => Limit::perSecond(4));
@@ -114,7 +164,13 @@ class AppServiceProvider extends ServiceProvider
         // Register model observers
         Customer::observe(CustomerObserver::class);
 
-        // Register authorization policies
+        // Register authorization policies.
+        //
+        // Models with rules of their own come first; everything else that
+        // belongs to a Customer gets the generic ownership policy. Registering
+        // all of them is the point — a model with no policy is a model whose
+        // authorization is whatever each controller happened to remember, which
+        // is how BrandGuidelinePolicy came to be registered and never invoked.
         Gate::policy(Campaign::class, CampaignPolicy::class);
         Gate::policy(Strategy::class, StrategyPolicy::class);
         Gate::policy(Customer::class, CustomerPolicy::class);
@@ -122,6 +178,13 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Proposal::class, ProposalPolicy::class);
         Gate::policy(BrandGuideline::class, BrandGuidelinePolicy::class);
         Gate::policy(KnowledgeBase::class, KnowledgeBasePolicy::class);
+        Gate::policy(SupportTicket::class, SupportTicketPolicy::class);
+        Gate::policy(\App\Models\ImageCollateral::class, \App\Policies\ImageCollateralPolicy::class);
+        Gate::policy(\App\Models\VideoCollateral::class, \App\Policies\VideoCollateralPolicy::class);
+
+        foreach (self::GENERIC_CUSTOMER_OWNED_MODELS as $model) {
+            Gate::policy($model, GenericCustomerPolicy::class);
+        }
 
         // Log queue job failures to runtime_exceptions table
         Queue::failing(function (JobFailed $event) {

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCustomer;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Pgvector\Laravel\HasNeighbors; // Corrected trait name
@@ -9,6 +10,8 @@ use Pgvector\Laravel\Vector; // Import the Vector class
 
 class KnowledgeBase extends Model
 {
+    use BelongsToCustomer;
+
     // use HasFactory; // We don't need factories for this model yet.
     use HasNeighbors; // Corrected trait name
 
@@ -27,6 +30,7 @@ class KnowledgeBase extends Model
         'content',
         'css_content',
         'embedding',
+        'embedding_model',
         'file_path',
         'source_type',
         'original_filename',

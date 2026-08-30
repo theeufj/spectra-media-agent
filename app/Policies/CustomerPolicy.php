@@ -4,46 +4,23 @@ namespace App\Policies;
 
 use App\Models\Customer;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 
-class CustomerPolicy
+class CustomerPolicy extends CustomerOwnedPolicy
 {
-    /**
-     * Determine if the user can view the customer.
-     */
-    public function view(User $user, Customer $customer): bool
-    {
-        return $this->userOwnsCustomer($user, $customer);
-    }
-
-    /**
-     * Determine if the user can update the customer.
-     */
-    public function update(User $user, Customer $customer): bool
-    {
-        return $this->userOwnsCustomer($user, $customer);
-    }
-
-    /**
-     * Determine if the user can delete the customer.
-     */
-    public function delete(User $user, Customer $customer): bool
-    {
-        return $this->userOwnsCustomer($user, $customer);
-    }
-
     /**
      * Determine if the user can switch to this customer context.
      */
     public function switchTo(User $user, Customer $customer): bool
     {
-        return $this->userOwnsCustomer($user, $customer);
+        return $this->owns($user, $customer);
     }
 
     /**
-     * Check if the user belongs to this customer via the pivot table.
+     * A Customer is its own owner — there is no customer_id column here.
      */
-    protected function userOwnsCustomer(User $user, Customer $customer): bool
+    protected function customerIdFor(Model $model): int|string|null
     {
-        return $user->customers()->where('customers.id', $customer->id)->exists();
+        return $model->getKey();
     }
 }

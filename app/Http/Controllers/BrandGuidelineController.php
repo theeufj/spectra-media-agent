@@ -42,15 +42,10 @@ class BrandGuidelineController extends Controller
      */
     public function update(Request $request, BrandGuideline $brandGuideline)
     {
-        $user = $request->user();
-        $activeCustomerId = session('active_customer_id');
-
-        // Authorization: Ensure user has access to this customer and owns this brand guideline
-        $customer = $user->customers()->findOrFail($activeCustomerId);
-
-        if ($customer->id !== $brandGuideline->customer_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
+        // BrandGuidelinePolicy has been registered since this feature shipped
+        // and was never once invoked; this controller hand-rolled the pivot
+        // query instead.
+        $this->authorize('update', $brandGuideline);
 
         $validated = $request->validate([
             'brand_voice' => 'nullable|array',
@@ -124,8 +119,11 @@ class BrandGuidelineController extends Controller
         $brandGuideline->update(['user_verified' => true]);
 
         Log::info('Brand guidelines updated by user', [
-            'user_id' => $user->id,
-            'customer_id' => $user->customer->id,
+            'user_id' => $request->user()->id,
+            // Off the guideline, not the user: User::$customer resolves the
+            // *primary* customer, which is not necessarily the one this
+            // guideline belongs to.
+            'customer_id' => $brandGuideline->customer_id,
             'brand_guideline_id' => $brandGuideline->id,
         ]);
 
@@ -137,15 +135,7 @@ class BrandGuidelineController extends Controller
      */
     public function verify(Request $request, BrandGuideline $brandGuideline)
     {
-        $user = $request->user();
-        $activeCustomerId = session('active_customer_id');
-
-        // Authorization
-        $customer = $user->customers()->findOrFail($activeCustomerId);
-
-        if ($customer->id !== $brandGuideline->customer_id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
+        $this->authorize('update', $brandGuideline);
 
         $brandGuideline->update(['user_verified' => true]);
 
@@ -153,7 +143,11 @@ class BrandGuidelineController extends Controller
         // campaign creation — to the auto-generated first campaign when one
         // exists, otherwise the wizard. Plain verifies stay on the page.
         if ($request->boolean('continue')) {
-            $autoCampaign = $customer->campaigns()
+            // Read the owner off the guideline rather than the session: the
+            // policy above has already established that it is the caller's.
+            /** @var \App\Models\Customer $owner */
+            $owner = $brandGuideline->customer;
+            $autoCampaign = $owner->campaigns()
                 ->whereNotNull('auto_generated_at')
                 ->orderBy('id')
                 ->first();

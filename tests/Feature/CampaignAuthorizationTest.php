@@ -60,7 +60,12 @@ class CampaignAuthorizationTest extends TestCase
             ->withSession(['active_customer_id' => $this->otherCustomer->id])
             ->get(route('campaigns.show', $this->campaign));
 
-        $response->assertStatus(403);
+        // 404, not 403: the tenant scope removes other customers' rows from the
+        // query that route-model binding resolves, so the record is not found
+        // rather than found-and-refused. That is the stronger answer — a 403
+        // confirms the ID exists. The controller's own ownership check is still
+        // there behind it.
+        $response->assertNotFound();
     }
 
     public function test_owner_can_delete_own_campaign(): void
@@ -79,7 +84,12 @@ class CampaignAuthorizationTest extends TestCase
             ->withSession(['active_customer_id' => $this->otherCustomer->id])
             ->delete(route('campaigns.destroy', $this->campaign));
 
-        $response->assertStatus(403);
+        // 404, not 403: the tenant scope removes other customers' rows from the
+        // query that route-model binding resolves, so the record is not found
+        // rather than found-and-refused. That is the stronger answer — a 403
+        // confirms the ID exists. The controller's own ownership check is still
+        // there behind it.
+        $response->assertNotFound();
         $this->assertDatabaseHas('campaigns', ['id' => $this->campaign->id]);
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\BelongsToCustomer;
 use App\Support\Tenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class EmailLog extends Model
 {
+    use BelongsToCustomer;
+
     /**
      * Internal headers stamped onto a message at build time so the listener
      * can file it under the right customer. They exist only between build
