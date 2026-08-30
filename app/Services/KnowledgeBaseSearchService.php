@@ -23,14 +23,16 @@ class KnowledgeBaseSearchService
     public function search(int $customerId, string $query, int $limit = 5): string
     {
         $embedding = $this->gemini->embedContent(
-            config('ai.models.embedding', 'gemini-embedding-2-preview'),
-            $query
+            config('ai.models.embedding'),
+            $query,
+            [],
+            $queryModel,
         );
 
         $results = [];
 
-        if ($embedding) {
-            $results = $this->vectorSearch($customerId, $embedding, $limit);
+        if ($embedding && $queryModel) {
+            $results = $this->vectorSearch($customerId, $embedding, $limit, $queryModel);
         }
 
         // Fall back to keyword search if vector search returned nothing
@@ -47,11 +49,23 @@ class KnowledgeBaseSearchService
         return implode("\n\n---\n\n", $results);
     }
 
-    private function vectorSearch(int $customerId, array $embedding, int $limit): array
+    /**
+     * Nearest neighbours, restricted to vectors from the same embedding space.
+     *
+     * Two embedding models produce vectors of the same 3072 dimensions but in
+     * different spaces, and GeminiService falls back between them on a 429.
+     * Cosine distance across the two is noise, so a row embedded by the other
+     * model is not a bad match — it is not a match at all, and ranking it
+     * against the query would push genuine results out of the top N. Excluded
+     * rows are still reachable through the ILIKE fallback below, and
+     * `embeddings:refresh --mismatched` re-embeds them.
+     */
+    private function vectorSearch(int $customerId, array $embedding, int $limit, string $queryModel): array
     {
         $results = [];
 
         $pages = CustomerPage::where('customer_id', $customerId)
+            ->where('embedding_model', $queryModel)
             ->nearestNeighbors('embedding', $embedding, Distance::Cosine)
             ->take($limit)
             ->get(['title', 'url', 'content', 'page_type', 'meta_description']);
@@ -64,6 +78,7 @@ class KnowledgeBaseSearchService
             }
         }
         $kbs = KnowledgeBase::where('customer_id', $customerId)
+            ->where('embedding_model', $queryModel)
             ->nearestNeighbors('embedding', $embedding, Distance::Cosine)
             ->take($limit)
             ->get(['url', 'content']);

@@ -599,9 +599,17 @@ class GeminiService
 
     /**
      * Generates embeddings for a given text using a specified Gemini embedding model.
+     *
+     * `$usedModel` reports which model actually produced the vector, which is
+     * not always `$model`: a 429 on the primary falls back to a different model
+     * on a separate quota pool. Those two models embed into different spaces,
+     * so cosine distance between their vectors is noise — a caller persisting
+     * the result has to record which space it is in. Callers that do not care
+     * can keep ignoring the parameter.
      */
-    public function embedContent(string $model, string $text, array $context = []): ?array
+    public function embedContent(string $model, string $text, array $context = [], ?string &$usedModel = null): ?array
     {
+        $usedModel = null;
         // Throttle all embedding calls to 4 RPM across all workers (safe margin below the 5 RPM regional quota).
         // Spin-wait in 500 ms increments until a slot is available. Shared via cache (Redis in production).
         $throttleKey = 'gemini_embedding_rpm';
@@ -618,9 +626,9 @@ class GeminiService
 
         $startTime = hrtime(true);
 
-        // gemini-embedding-2-preview: regional endpoint only (global returns 404).
-        // Older models (gemini-embedding-001, text-embedding-*) use predict on the global endpoint.
-        $isGeminiEmbedding2 = str_starts_with($model, 'gemini-embedding-2');
+        // Which endpoint a model needs is a property of the model, so it lives
+        // in config alongside the model names rather than as a literal here.
+        $isGeminiEmbedding2 = $this->usesRegionalEmbeddingEndpoint($model);
 
         try {
             if ($isGeminiEmbedding2) {
@@ -640,8 +648,9 @@ class GeminiService
 
                 // 429 on the primary embedding model — fall back to gemini-embedding-001
                 // which uses a separate quota pool and a different endpoint (predict on global).
-                if ($statusCode === 429 && $isGeminiEmbedding2) {
-                    $fallbackModel = 'gemini-embedding-001';
+                $fallbackModel = config('ai.models.embedding_fallback');
+
+                if ($statusCode === 429 && $isGeminiEmbedding2 && $fallbackModel && $fallbackModel !== $model) {
                     Log::warning("GeminiService: 429 on {$model}, falling back to {$fallbackModel}");
                     $fbUrl = "{$this->vertexBaseUrl}{$fallbackModel}:predict";
                     $fbPayload = ['instances' => [['content' => $text]]];
@@ -650,6 +659,7 @@ class GeminiService
                         $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
                         $approxTokens = (int) (strlen($text) / 4);
                         $this->recordCost($fallbackModel, 'embedContent', ['promptTokenCount' => $approxTokens], $durationMs, array_merge($context, ['fallback_from' => $model]));
+                        $usedModel = $fallbackModel;
 
                         return $fbResponse->json()['predictions'][0]['embeddings']['values'] ?? null;
                     }
@@ -666,6 +676,7 @@ class GeminiService
             $durationMs = (int) ((hrtime(true) - $startTime) / 1e6);
             $approxTokens = (int) (strlen($text) / 4);
             $this->recordCost($model, 'embedContent', ['promptTokenCount' => $approxTokens], $durationMs, $context);
+            $usedModel = $model;
 
             if ($isGeminiEmbedding2) {
                 // embedContent response: embedding.values
@@ -683,6 +694,24 @@ class GeminiService
         }
     }
 
+    /**
+     * Does this embedding model live on the regional :embedContent endpoint?
+     *
+     * Matched as a name prefix against config('ai.regional_embedding_models'),
+     * so adding a model that needs the regional host is a config line rather
+     * than an edit to this method.
+     */
+    private function usesRegionalEmbeddingEndpoint(string $model): bool
+    {
+        foreach ((array) config('ai.regional_embedding_models', []) as $prefix) {
+            if (str_starts_with($model, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // ─── Image generation ────────────────────────────────────────────────────
 
     /**
@@ -693,7 +722,7 @@ class GeminiService
         // config('ai.models.image') is the source of truth (env-overridable);
         // most callers pass nothing, and the old hardcoded default meant the
         // config was silently ignored on the main generation path.
-        $model ??= config('ai.models.image', 'gemini-2.5-flash-image');
+        $model ??= config('ai.models.image');
         $payload = [
             'contents' => [
                 [
@@ -720,7 +749,7 @@ class GeminiService
      */
     public function refineImage(string $prompt, array $contextImages, ?string $model = null, string $imageSize = '1K', array $context = []): ?array
     {
-        $model ??= config('ai.models.image', 'gemini-2.5-flash-image');
+        $model ??= config('ai.models.image');
         $parts = [['text' => $prompt]];
         foreach ($contextImages as $image) {
             if (isset($image['mime_type']) && isset($image['data'])) {
@@ -848,8 +877,10 @@ class GeminiService
      *
      * @return string|null The Vertex AI operation name, or null on failure.
      */
-    public function startVideoGeneration(string $prompt, string $model = 'veo-3.1-generate-001', array $parameters = [], array $context = []): ?string
+    public function startVideoGeneration(string $prompt, ?string $model = null, array $parameters = [], array $context = []): ?string
     {
+        $model ??= config('ai.models.video');
+
         try {
             $requestBody = [
                 'instances' => [['prompt' => $prompt]],
@@ -954,7 +985,7 @@ class GeminiService
      */
     public function synthesizeSpeech(string $text, ?string $voice = null, array $context = []): ?string
     {
-        $model = config('ai.models.tts', 'gemini-2.5-flash-preview-tts');
+        $model = config('ai.models.tts');
         $voice ??= config('ai.tts_voice', 'Charon');
 
         $payload = [
@@ -1094,6 +1125,7 @@ class GeminiService
      */
     public function extendVideo(string $videoUri, string $prompt, array $parameters = [], array $context = []): ?string
     {
+        $videoModel = config('ai.models.video');
         $requestBody = [
             'instances' => [
                 [
@@ -1119,12 +1151,12 @@ class GeminiService
             try {
                 $response = Http::withHeaders($this->authHeaders())
                     ->timeout(300)
-                    ->post("{$this->videoBaseUrl}veo-3.1-generate-001:predictLongRunning", $requestBody);
+                    ->post("{$this->videoBaseUrl}{$videoModel}:predictLongRunning", $requestBody);
 
                 if ($response->successful()) {
                     $operationName = $response->json()['name'] ?? null;
                     Log::info("GeminiService: Video extension started successfully. Operation: {$operationName}");
-                    $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, array_merge($context, ['cost_override' => round(8 * (float) config('ai.video_cost_per_second.veo-3.1-generate-001', 0.40), 6)]));
+                    $this->recordCost($videoModel, 'extendVideo', [], 0, array_merge($context, ['cost_override' => round(8 * (float) config("ai.video_cost_per_second.{$videoModel}", 0.40), 6)]));
 
                     return $operationName;
                 }
@@ -1180,6 +1212,7 @@ class GeminiService
      */
     public function extendVideoFromBytes(string $base64Video, string $mimeType, string $prompt, array $context = []): ?string
     {
+        $videoModel = config('ai.models.video');
         $requestBody = [
             'instances' => [[
                 'prompt' => $prompt,
@@ -1197,11 +1230,11 @@ class GeminiService
         try {
             $response = Http::withHeaders($this->authHeaders())
                 ->timeout(300)
-                ->post("{$this->videoBaseUrl}veo-3.1-generate-001:predictLongRunning", $requestBody);
+                ->post("{$this->videoBaseUrl}{$videoModel}:predictLongRunning", $requestBody);
 
             if ($response->successful()) {
                 $operationName = $response->json()['name'] ?? null;
-                $this->recordCost('veo-3.1-generate-001', 'extendVideo', [], 0, array_merge($context, ['cost_override' => round(8 * (float) config('ai.video_cost_per_second.veo-3.1-generate-001', 0.40), 6)]));
+                $this->recordCost($videoModel, 'extendVideo', [], 0, array_merge($context, ['cost_override' => round(8 * (float) config("ai.video_cost_per_second.{$videoModel}", 0.40), 6)]));
                 Log::info("GeminiService: Video extension (from bytes) started. Operation: {$operationName}");
 
                 return $operationName;

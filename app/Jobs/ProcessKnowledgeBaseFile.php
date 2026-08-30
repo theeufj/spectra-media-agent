@@ -116,6 +116,7 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                 }
 
                 $allEmbeddings = [];
+                $chunkModels = [];
                 $allChunkContents = [];
 
                 // Step 4: Generate embeddings for each individual chunk.
@@ -124,7 +125,8 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                         continue;
                     }
 
-                    $embedding = $geminiService->embedContent(config('ai.models.embedding'), $chunk);
+                    $embedding = $geminiService->embedContent(config('ai.models.embedding'), $chunk, [], $chunkModel);
+                    $chunkModels[] = $chunkModel;
 
                     if (is_null($embedding)) {
                         Log::warning("Failed to get embedding for a chunk from KB ID {$this->knowledgeBase->id}. Skipping chunk.", [
@@ -148,6 +150,13 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                 $this->knowledgeBase->update([
                     'content' => json_encode($allChunkContents),
                     'embedding' => new Vector($allEmbeddings),
+                    // Null when the chunks did not all come from one model — a
+                    // 429 mid-file falls back to a different embedding space,
+                    // and mixed rows are excluded from vector search rather
+                    // than compared against vectors they cannot be compared to.
+                    'embedding_model' => count(array_unique(array_filter($chunkModels))) === 1
+                        ? reset($chunkModels)
+                        : null,
                 ]);
 
                 Log::info("Successfully processed {$sourceType} file with generative chunking for knowledge base {$this->knowledgeBase->id}", [

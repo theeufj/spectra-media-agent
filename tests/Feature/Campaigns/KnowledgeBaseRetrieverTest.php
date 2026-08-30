@@ -63,10 +63,13 @@ class KnowledgeBaseRetrieverTest extends TestCase
         // nav bar or an error page, which is what test_chrome_is_skipped covers.
         $content = str_pad($content, 400, ' Further detail about this page.');
 
+        // embedding_model matters: the retriever only compares vectors from the
+        // same embedding space, because a 429 falls back to a model whose
+        // vectors are the same 3072 dimensions but not comparable.
         DB::statement(
-            'INSERT INTO knowledge_bases (customer_id, user_id, url, content, embedding, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?::vector, now(), now())',
-            [$customer->id, $this->user->id, $url, $content, $this->vector($lead)],
+            'INSERT INTO knowledge_bases (customer_id, user_id, url, content, embedding, embedding_model, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?::vector, ?, now(), now())',
+            [$customer->id, $this->user->id, $url, $content, $this->vector($lead), config('ai.models.embedding')],
         );
     }
 
@@ -79,8 +82,14 @@ class KnowledgeBaseRetrieverTest extends TestCase
         {
             public function __construct(private readonly array $embedding) {}
 
-            public function embedContent(string $model, string $text, array $context = []): array
-            {   // narrower than the parent's ?array: this stub always embeds
+            public function embedContent(string $model, string $text, array $context = [], ?string &$usedModel = null): array
+            {   // narrower than the parent's ?array: this stub always embeds.
+                // $usedModel reports the space the vector is in — the retriever
+                // now filters on it, so a stub that leaves it null returns
+                // nothing at all. Assigned unconditionally, hence the
+                // deliberately widened by-ref type to match the parent.
+                $usedModel = $model !== '' ? $model : null;
+
                 return $this->embedding;
             }
         });
@@ -168,7 +177,7 @@ class KnowledgeBaseRetrieverTest extends TestCase
         {
             public function __construct() {}
 
-            public function embedContent(string $model, string $text, array $context = []): ?array
+            public function embedContent(string $model, string $text, array $context = [], ?string &$usedModel = null): ?array
             {
                 return null;
             }

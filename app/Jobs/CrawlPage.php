@@ -262,7 +262,10 @@ class CrawlPage implements ShouldQueue
                 // Initialize Gemini Service for embedding
                 $geminiService = new GeminiService;
                 $embeddingText = substr($title."\n".$metaDescription."\n".$cleanedContent, 0, 8000); // Limit context
-                $embedding = $geminiService->embedContent(config('ai.models.embedding'), $embeddingText);
+                // $embeddingModel, not the configured one: a 429 falls back to a
+                // model that embeds into a different space, and a vector stored
+                // without recording its space cannot be compared or repaired.
+                $embedding = $geminiService->embedContent(config('ai.models.embedding'), $embeddingText, [], $embeddingModel);
 
                 CustomerPage::updateOrCreate(
                     [
@@ -276,6 +279,7 @@ class CrawlPage implements ShouldQueue
                         'metadata' => $metadata,
                         'content' => $cleanedContent,
                         'embedding' => $embedding ? new Vector($embedding) : null,
+                        'embedding_model' => $embedding ? $embeddingModel : null,
                     ]
                 );
 
@@ -295,6 +299,7 @@ class CrawlPage implements ShouldQueue
                         'content' => $cleanedContent,
                         'css_content' => '',
                         'embedding' => $embedding ? new Vector($embedding) : null,
+                        'embedding_model' => $embedding ? $embeddingModel : null,
                     ]
                 );
 
@@ -427,6 +432,7 @@ class CrawlPage implements ShouldQueue
             }
 
             $allEmbeddings = [];
+            $chunkModels = [];
             $allChunkContents = [];
 
             // Step 4: Generate embeddings for each individual chunk.
@@ -435,7 +441,8 @@ class CrawlPage implements ShouldQueue
                     continue;
                 }
 
-                $embedding = $geminiService->embedContent(config('ai.models.embedding'), $chunk);
+                $embedding = $geminiService->embedContent(config('ai.models.embedding'), $chunk, [], $chunkModel);
+                $chunkModels[] = $chunkModel;
 
                 if (is_null($embedding)) {
                     Log::warning("Failed to get embedding for a chunk from {$this->url}. Skipping chunk.", [
@@ -467,6 +474,13 @@ class CrawlPage implements ShouldQueue
                     'content' => $cleanedContent,
                     'css_content' => $cssContent, // Save the combined CSS content.
                     'embedding' => new Vector($embedding), // The pgvector package provides this handy Vector class.
+                    // Chunks are averaged into one vector, so the row is only
+                    // in a single space if every chunk came from one model. A
+                    // mixed row is recorded as such and skipped by vector
+                    // search until embeddings:refresh rebuilds it.
+                    'embedding_model' => count(array_unique(array_filter($chunkModels))) === 1
+                        ? reset($chunkModels)
+                        : null,
                 ]
             );
 

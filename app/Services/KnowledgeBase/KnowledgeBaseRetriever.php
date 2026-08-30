@@ -54,9 +54,10 @@ class KnowledgeBaseRetriever
                 config('ai.models.embedding'),
                 $question,
                 ['customer_id' => $customer->id],
+                $queryModel,
             );
 
-            if (! is_array($queryEmbedding) || $queryEmbedding === []) {
+            if (! is_array($queryEmbedding) || $queryEmbedding === [] || ! $queryModel) {
                 Log::warning('KnowledgeBaseRetriever: no query embedding', ['customer_id' => $customer->id]);
 
                 return [];
@@ -73,12 +74,13 @@ class KnowledgeBaseRetriever
                 FROM knowledge_bases
                 WHERE customer_id = ?
                   AND embedding IS NOT NULL
+                  AND embedding_model = ?
                   AND content IS NOT NULL
                   AND length(content) >= ?
                 ORDER BY embedding <=> ?::vector
                 LIMIT ?
                 SQL,
-                [$customer->id, self::MIN_CONTENT_CHARS, $vector, $limit],
+                [$customer->id, $queryModel, self::MIN_CONTENT_CHARS, $vector, $limit],
             );
 
             return array_map(fn ($row) => [
