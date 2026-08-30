@@ -6,6 +6,7 @@ import CollateralGenerationModal from '@/Components/CollateralGenerationModal';
 import ConfirmationModal from '@/Components/ConfirmationModal';
 import BudgetConfirmation from '@/Components/BudgetConfirmation';
 import CampaignCopilot from '@/Components/CampaignCopilot';
+import { useJobWatch } from '@/hooks/useJobWatch';
 
 // Collateral Summary Card Component
 const CollateralSummaryCard = ({ campaign }) => {
@@ -296,82 +297,56 @@ const StrategyGenerationLoader = ({ elapsedSeconds, campaignName }) => {
 
 export default function Show({ auth, campaign, canRegenerate = true, conversionTracking = null }) {
     const [campaigns, setCampaign] = useState(campaign);
+    // Whether generation is still running, as far as this page knows. Seeded
+    // from the server render, then driven by the watch below.
     const [isPolling, setIsPolling] = useState(
         campaign.is_generating_strategies ||
         (campaign.strategies.length === 0 && campaign.strategy_generation_started_at)
     );
     const [showGenerationModal, setShowGenerationModal] = useState(false);
-    const [pollingError, setPollingError] = useState(false);
     const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, isDestructive: false });
     const [elapsedSeconds, setElapsedSeconds] = useState(0);
     const [copilotOpen, setCopilotOpen] = useState(false);
     const { post, processing } = useForm();
 
-    useEffect(() => {
-        if (!isPolling) {
-            return;
+    // Watch strategy generation to completion.
+    //
+    // This was a hand-rolled setInterval + raw fetch whose only failure
+    // handling was console.error. Any non-OK response — an expired session, a
+    // deploy mid-poll, a 403 — left the spinner turning with nothing said,
+    // until a five-minute timeout finally showed "taking longer than expected".
+    // The user could not tell a slow generation from a dead page, and the only
+    // way out was to navigate in again from somewhere else.
+    //
+    // useJobWatch distinguishes those: `failed` (the server reported an error),
+    // `timeout` (took too long), and `disconnected` (the endpoint itself has
+    // been failing), so the page can say which.
+    const { phase: watchPhase, data: watchData } = useJobWatch(
+        route('api.campaigns.show', { campaign: campaigns.id }),
+        {
+            enabled: isPolling,
+            interval: 10000,
+            timeoutMs: 5 * 60 * 1000,
+            isFailed: (d) => Boolean(d?.strategy_generation_error),
+            isDone: (d) => Boolean(d?.strategies?.length) && !d?.is_generating_strategies,
         }
+    );
 
-        // Poll immediately on mount
-        const pollForStrategies = async () => {
-            try {
-                const apiResponse = await fetch(`/api/campaigns/${campaigns.id}`, {
-                    credentials: 'include',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                });
+    // Mirror each poll onto the rendered campaign so strategies appear the
+    // moment generation finishes.
+    useEffect(() => {
+        if (watchData) {
+            setCampaign(watchData);
+        }
+    }, [watchData]);
 
-                if (apiResponse.ok) {
-                    const data = await apiResponse.json();
-
-                    // Update campaign data
-                    setCampaign(data);
-
-                    // Check if generation failed
-                    if (data.strategy_generation_error) {
-                        setIsPolling(false);
-                        setPollingError(true);
-                        return true;
-                    }
-
-                    // Stop polling if strategies are available and generation is complete
-                    if (data.strategies && data.strategies.length > 0 && !data.is_generating_strategies) {
-                        setIsPolling(false);
-                        return true; // Signal to stop polling
-                    }
-
-                    // Continue polling if generation is still in progress
-                    if (data.is_generating_strategies) {
-                        return false;
-                    }
-                } else {
-                    console.error('Poll response not OK:', apiResponse.statusText);
-                }
-            } catch (error) {
-                console.error('Error polling for strategies:', error);
-            }
-            return false;
-        };
-
-        // Poll immediately
-        pollForStrategies();
-
-        // Then poll every 10 seconds
-        const pollInterval = setInterval(pollForStrategies, 10000);
-
-        // Stop polling after 5 minutes if no strategies are generated
-        const timeout = setTimeout(() => {
+    useEffect(() => {
+        if (['done', 'failed', 'timeout', 'disconnected'].includes(watchPhase)) {
             setIsPolling(false);
-            setPollingError(true);
-        }, 300000); // 5 minutes
+        }
+    }, [watchPhase]);
 
-        return () => {
-            clearInterval(pollInterval);
-            clearTimeout(timeout);
-        };
-    }, [isPolling, campaigns.id]);
+    const pollingError = ['failed', 'timeout', 'disconnected'].includes(watchPhase);
 
     // Elapsed time counter for generation loading state
     useEffect(() => {
@@ -441,8 +416,9 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                 router.post(route('campaigns.regenerate-strategies', { campaign: campaigns.id }), { force: force ? 1 : 0 }, {
                     preserveScroll: true,
                     onSuccess: () => {
+                        // Re-arming the watch resets its phase, and pollingError
+                        // is derived from that — nothing else to clear.
                         setIsPolling(true);
-                        setPollingError(false);
                         setElapsedSeconds(0);
                     }
                 });
@@ -536,16 +512,33 @@ export default function Show({ auth, campaign, canRegenerate = true, conversionT
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                 </svg>
                                 <div>
+                                    {/* Which of the three it is matters: a lost
+                                        connection is fixed by reloading, a slow
+                                        generation is fixed by waiting, and a
+                                        real failure is neither. The old panel
+                                        said "taking longer than expected" for
+                                        all of them. */}
                                     <p className="font-semibold">
-                                        {campaigns.strategy_generation_error
-                                            ? 'Strategy generation failed'
-                                            : 'Strategy generation is taking longer than expected'}
+                                        {watchPhase === 'disconnected'
+                                            ? 'Lost connection to the server'
+                                            : campaigns.strategy_generation_error
+                                                ? 'Strategy generation failed'
+                                                : 'Strategy generation is taking longer than expected'}
                                     </p>
                                     <p className="text-sm mt-1">
-                                        {campaigns.strategy_generation_error
-                                            ? campaigns.strategy_generation_error
-                                            : 'Please refresh the page in a moment or contact support if this persists.'}
+                                        {watchPhase === 'disconnected'
+                                            ? 'We stopped receiving updates — your session may have expired. Reload the page to pick up where this got to.'
+                                            : campaigns.strategy_generation_error
+                                                ? campaigns.strategy_generation_error
+                                                : 'Please refresh the page in a moment or contact support if this persists.'}
                                     </p>
+                                    <button
+                                        type="button"
+                                        onClick={() => router.reload()}
+                                        className="mt-3 px-4 py-2 bg-red-700 text-white text-sm rounded-md font-semibold hover:bg-red-800"
+                                    >
+                                        Reload
+                                    </button>
                                 </div>
                             </div>
                         </div>
