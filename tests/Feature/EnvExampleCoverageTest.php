@@ -62,13 +62,73 @@ class EnvExampleCoverageTest extends TestCase
         ]));
     }
 
+    public function test_no_optional_override_is_left_blank_and_uncommented(): void
+    {
+        // The failure this catches: a key that has a config default, written as
+        // `FOO=` rather than `# FOO=`. env() then returns "" instead of the
+        // default — feature flags read as off, model names come back empty, and
+        // numeric settings (including the GOOGLE_ADS_USD_RATE_* conversion
+        // rates) cast to 0. Secrets with no config default are legitimately
+        // blank, so only keys config/ supplies a default for are checked.
+        $withDefaults = [];
+
+        foreach (self::PROJECT_CONFIGS as $name) {
+            $path = config_path($name.'.php');
+
+            if (! file_exists($path)) {
+                continue;
+            }
+
+            // env('KEY', <literal>) — a two-argument call with a real value.
+            // A default that is itself an env() call is a fallback *name*, not
+            // a value: config/services.php reads
+            // env('STRIPE_SECRET_KEY', env('STRIPE_SECRET')), where both are
+            // secrets with no working default and blank is the correct entry.
+            preg_match_all(
+                "/env\('([A-Z0-9_]+)'\s*,\s*(.)/",
+                file_get_contents($path),
+                $matches,
+                PREG_SET_ORDER,
+            );
+
+            foreach ($matches as $match) {
+                if ($match[2] !== 'e') {
+                    $withDefaults[] = $match[1];
+                }
+            }
+        }
+
+        preg_match_all(
+            '/^([A-Z0-9_]+)=\s*$/m',
+            file_get_contents(base_path('.env.example')),
+            $blank,
+        );
+
+        $offenders = array_values(array_intersect($blank[1], $withDefaults));
+        sort($offenders);
+
+        $this->assertSame([], $offenders, implode("\n", [
+            'These keys have a default in config/ but are written blank in',
+            '.env.example, so they override that default with an empty string.',
+            'Comment them out instead: `# KEY=`.',
+            '',
+            ...$offenders,
+        ]));
+    }
+
     /**
      * @return list<string>
      */
     private function documentedKeys(): array
     {
+        // Commented lines count as documented. An optional override belongs in
+        // .env.example commented out: `FOO=` is not the same as an absent FOO —
+        // env() returns "" for the former, so a blank line overrides the config
+        // default with an empty string instead of deferring to it. CI does
+        // `cp .env.example .env`, which is how blanking these keys turned off
+        // every feature flag and emptied every model name in the build.
         preg_match_all(
-            '/^([A-Z0-9_]+)=/m',
+            '/^#?\s*([A-Z0-9_]+)=/m',
             file_get_contents(base_path('.env.example')),
             $matches,
         );
