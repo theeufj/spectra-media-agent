@@ -2,35 +2,23 @@
 
 use App\Jobs\AutomatedCampaignMaintenance;
 use App\Jobs\AutoStartABTests;
-use App\Jobs\CheckCampaignPolicyViolations;
 use App\Jobs\CheckPendingGoogleAdsLinks;
 use App\Jobs\DetectKeywordCannibalization;
 use App\Jobs\DetectNegativeKeywordConflicts;
-use App\Jobs\ExpandBroadMatchKeywords;
-use App\Jobs\FetchFacebookAdsPerformanceData;
-use App\Jobs\FetchGoogleAdsPerformanceData;
-use App\Jobs\FetchLinkedInAdsPerformanceData;
-use App\Jobs\FetchMicrosoftAdsPerformanceData;
-use App\Jobs\GenerateExecutiveReport;
-use App\Jobs\GenerateMonthlyReport;
-use App\Jobs\GetKeywordQualityScore;
 use App\Jobs\HourlyBudgetOptimization;
 use App\Jobs\MonitorCampaignStatus;
 use App\Jobs\OptimizeCampaigns;
 use App\Jobs\ProcessDailyAdSpendBilling;
 use App\Jobs\ReconcileStuckDeployments;
-use App\Jobs\RecordSiteConversion;
 use App\Jobs\ReviewGoogleAdsRecommendations;
-use App\Jobs\RunCompetitorIntelligence;
 use App\Jobs\RunHealthChecks;
 use App\Jobs\RunPerformanceAnomalyCheck;
 use App\Jobs\RunSelfHealingChecks;
 use App\Jobs\RunStrategicDiagnosis;
+use App\Jobs\Scheduled;
 use App\Jobs\SendDailyPerformanceReports;
 use App\Jobs\VerifyGtmInstallation;
 use App\Models\Campaign;
-use App\Models\Customer;
-use App\Models\EnabledPlatform;
 use App\Models\User;
 use App\Notifications\ScheduledJobFailed;
 use Illuminate\Foundation\Inspiring;
@@ -64,11 +52,7 @@ Artisan::command('inspire', function () {
 Schedule::command('billing:report-ad-spend')->daily()->withoutOverlapping();
 
 // Fire seven_day_return conversion for users who signed up via Google Ad exactly 7 days ago
-Schedule::call(function () {
-    Customer::whereHas('users', fn ($q) => $q->whereNotNull('gclid')
-        ->whereBetween('created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
-    )->each(fn (Customer $c) => RecordSiteConversion::dispatch($c, 'seven_day_return'));
-})->name('record-seven-day-return-conversions')->dailyAt('10:00')->withoutOverlapping();
+Schedule::job(new Scheduled\RecordSevenDayReturnConversions)->name('record-seven-day-return-conversions')->dailyAt('10:00')->withoutOverlapping();
 
 // ============================================================
 // HEALTH & MONITORING
@@ -93,45 +77,13 @@ Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 
 // Creative generation runs on prepaid OpenRouter credits; at $0 the pipeline
 // silently falls back to the Google stack. Tell admins before that happens.
-Schedule::call(function () {
-    $credits = app(\App\Services\OpenRouterService::class)->creditBalance();
-    $threshold = (float) config('services.openrouter.low_credit_alert', 10);
-
-    if ($credits && $credits['remaining'] < $threshold) {
-        \App\Notifications\CriticalAgentAlert::deliver(
-            'openrouter_credits_low',
-            sprintf('OpenRouter credits low: $%.2f remaining', $credits['remaining']),
-            sprintf('Creative generation (Grok images + video) runs on these credits — at $0 it falls back to Gemini/Veo. $%.2f used of $%.2f. Top up at openrouter.ai.', $credits['used'], $credits['total']),
-            $credits,
-            \App\Models\NotificationTemplate::RECIPIENTS_ADMINS
-        );
-    }
-})->name('openrouter-low-credit-check')->dailyAt('07:30');
+Schedule::job(new Scheduled\OpenRouterLowCreditCheck)->name('openrouter-low-credit-check')->dailyAt('07:30');
 
 // Campaigns queued for manual admin deployment promise the customer "within
 // 24 hours". This is what holds the admin team to it: a daily re-alert for
 // anything still waiting past that window (the original alert was a single
 // email — if it was missed, the campaign sat in the queue forever).
-Schedule::call(function () {
-    \App\Models\Campaign::where('status', \App\Enums\CampaignStatus::PendingAdminDeployment)
-        ->where('pending_admin_deployment_at', '<', now()->subDay())
-        ->with('customer')
-        ->get()
-        ->each(function ($campaign) {
-            \App\Notifications\CriticalAgentAlert::deliver(
-                'pending_admin_deployment_overdue',
-                "OVERDUE: \"{$campaign->name}\" still waiting for admin deployment",
-                'This campaign has been in the manual deployment queue for over 24 hours — the customer was promised launch within a day.',
-                [
-                    'campaign_id' => $campaign->id,
-                    'customer_id' => $campaign->customer_id,
-                    'queued_at' => (string) $campaign->pending_admin_deployment_at,
-                ],
-                \App\Models\NotificationTemplate::RECIPIENTS_ADMINS,
-                $campaign->customer
-            );
-        });
-})->name('pending-admin-deployment-overdue')->dailyAt('08:00');
+Schedule::job(new Scheduled\PendingAdminDeploymentOverdue)->name('pending-admin-deployment-overdue')->dailyAt('08:00');
 
 // Hourly budget optimization - applies learned per-account multipliers and snapshots performance
 Schedule::job(new HourlyBudgetOptimization)->hourly()->withoutOverlapping();
@@ -141,22 +93,7 @@ Schedule::job(new HourlyBudgetOptimization)->hourly()->withoutOverlapping();
 Schedule::job(new RunHealthChecks)->everySixHours()->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunHealthChecks'));
 
 // Performance data fetch - pull metrics from all ad platforms for active campaigns
-Schedule::call(function () {
-    Campaign::withDeployedPlatforms()->each(function ($campaign) {
-        if ($campaign->google_ads_campaign_id && EnabledPlatform::isEnabled('google')) {
-            FetchGoogleAdsPerformanceData::dispatch($campaign);
-        }
-        if ($campaign->facebook_ads_campaign_id && EnabledPlatform::isEnabled('facebook')) {
-            FetchFacebookAdsPerformanceData::dispatch($campaign);
-        }
-        if ($campaign->microsoft_ads_campaign_id && EnabledPlatform::isEnabled('microsoft')) {
-            FetchMicrosoftAdsPerformanceData::dispatch($campaign);
-        }
-        if ($campaign->linkedin_campaign_id && EnabledPlatform::isEnabled('linkedin')) {
-            FetchLinkedInAdsPerformanceData::dispatch($campaign);
-        }
-    });
-})->name('fetch-platform-performance-data')->hourly()->withoutOverlapping();
+Schedule::job(new Scheduled\FetchPlatformPerformanceData)->name('fetch-platform-performance-data')->hourly()->withoutOverlapping();
 
 // ============================================================
 // DAILY OPERATIONS
@@ -227,33 +164,17 @@ Schedule::job(new \App\Jobs\ReconcileAdSpend)->weeklyOn(1, '09:00')->withoutOver
 Schedule::job(new SendDailyPerformanceReports)->dailyAt('08:00')->withoutOverlapping();
 
 // Policy compliance checks - detects disapprovals and policy violations
-Schedule::call(function () {
-    \App\Models\Campaign::withDeployedPlatforms()->each(function ($campaign) {
-        CheckCampaignPolicyViolations::dispatch($campaign->id);
-    });
-})->name('check-campaign-policy-violations')->hourly()->withoutOverlapping();
+Schedule::job(new Scheduled\DispatchCampaignPolicyViolationChecks)->name('check-campaign-policy-violations')->hourly()->withoutOverlapping();
 
 // Keyword Quality Score tracking - captures daily QS snapshots for trending
-Schedule::call(function () {
-    Campaign::withDeployedPlatforms()
-        ->whereNotNull('google_ads_campaign_id')
-        ->each(function ($campaign) {
-            GetKeywordQualityScore::dispatch($campaign->id);
-        });
-})->name('get-keyword-quality-scores')->daily()->withoutOverlapping();
+Schedule::job(new Scheduled\GetKeywordQualityScores)->name('get-keyword-quality-scores')->daily()->withoutOverlapping();
 
 // ============================================================
 // WEEKLY OPERATIONS
 // ============================================================
 
 // Competitive intelligence - runs weekly for all customers with active campaigns
-Schedule::call(function () {
-    Customer::whereHas('campaigns', function ($q) {
-        $q->withDeployedPlatforms();
-    })->each(function ($customer) {
-        RunCompetitorIntelligence::dispatch($customer);
-    });
-})->name('run-competitor-intelligence')->weekly()->sundays()->at('02:00')->withoutOverlapping(); // Run Sunday nights
+Schedule::job(new Scheduled\DispatchCompetitorIntelligence)->name('run-competitor-intelligence')->weekly()->sundays()->at('02:00')->withoutOverlapping(); // Run Sunday nights
 
 // Audience intelligence - segment and sync customer match lists
 Schedule::job(new \App\Jobs\RunAudienceIntelligence)->weekly()->sundays()->at('03:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('RunAudienceIntelligence'));
@@ -265,113 +186,38 @@ Schedule::job(new DetectNegativeKeywordConflicts)->weekly()->mondays()->at('03:0
 Schedule::job(new DetectKeywordCannibalization)->weekly()->mondays()->at('03:30')->withoutOverlapping()->onFailure(notifyAdminOnFailure('DetectKeywordCannibalization'));
 
 // Weekly executive reports - AI-generated performance summaries per customer
-Schedule::call(function () {
-    Customer::whereHas('campaigns', function ($q) {
-        $q->withDeployedPlatforms();
-    })->each(function ($customer) {
-        GenerateExecutiveReport::dispatch($customer->id, 'weekly');
-    });
-})->name('generate-weekly-executive-reports')->weekly()->mondays()->at('07:00')->withoutOverlapping(); // Run Monday mornings
+Schedule::job(new Scheduled\GenerateWeeklyExecutiveReports)->name('generate-weekly-executive-reports')->weekly()->mondays()->at('07:00')->withoutOverlapping(); // Run Monday mornings
 
 // ============================================================
 // MONTHLY OPERATIONS
 // ============================================================
 
 // Monthly executive reports - detailed monthly performance summaries with PDF
-Schedule::call(function () {
-    Customer::whereHas('campaigns', function ($q) {
-        $q->withDeployedPlatforms();
-    })->each(function ($customer) {
-        GenerateMonthlyReport::dispatch($customer->id);
-    });
-})->name('generate-monthly-reports')->monthlyOn(1, '07:00')->withoutOverlapping(); // Run 1st of each month at 7am
+Schedule::job(new Scheduled\GenerateMonthlyReports)->name('generate-monthly-reports')->monthlyOn(1, '07:00')->withoutOverlapping(); // Run 1st of each month at 7am
 
 // Cross-channel budget rebalance - check all auto-rebalance allocations
 Schedule::job(new \App\Jobs\WeeklyBudgetRebalance)->weekly()->mondays()->at('06:00')->withoutOverlapping();
 
 // Quarterly executive reports — first day of each quarter at 08:00
-Schedule::call(function () {
-    Customer::whereHas('campaigns', fn ($q) => $q->where('status', 'active'))->each(function (Customer $customer) {
-        \App\Jobs\GenerateExecutiveReport::dispatch($customer->id, 'quarterly');
-    });
-})->name('generate-quarterly-executive-reports')->quarterly()->at('08:00')->withoutOverlapping();
+Schedule::job(new Scheduled\GenerateQuarterlyExecutiveReports)->name('generate-quarterly-executive-reports')->quarterly()->at('08:00')->withoutOverlapping();
 
 // Broad match keyword expansion — prunes poor performers, generates new keyword suggestions
-Schedule::call(function () {
-    Campaign::withDeployedPlatforms()
-        ->whereNotNull('google_ads_campaign_id')
-        ->each(function ($campaign) {
-            ExpandBroadMatchKeywords::dispatch($campaign);
-        });
-})->name('expand-broad-match-keywords')->monthlyOn(5, '04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ExpandBroadMatchKeywords'));
+Schedule::job(new Scheduled\DispatchBroadMatchKeywordExpansion)->name('expand-broad-match-keywords')->monthlyOn(5, '04:00')->withoutOverlapping()->onFailure(notifyAdminOnFailure('ExpandBroadMatchKeywords'));
 
 // Seasonal strategy shift — adjusts budgets and bidding for current season at the start of each month
-Schedule::call(function () {
-    $month = now()->month;
-    $season = match (true) {
-        in_array($month, [3, 4, 5]) => 'spring',
-        in_array($month, [6, 7, 8]) => 'summer',
-        in_array($month, [9, 10, 11]) => 'autumn',
-        default => 'winter',
-    };
-
-    \App\Models\Campaign::withDeployedPlatforms()->each(function ($campaign) use ($season) {
-        \App\Jobs\ApplySeasonalStrategyShift::dispatch($campaign->id, $season);
-    });
-})->name('apply-seasonal-strategy-shift')->monthly()->withoutOverlapping();
+Schedule::job(new Scheduled\DispatchSeasonalStrategyShift)->name('apply-seasonal-strategy-shift')->monthly()->withoutOverlapping();
 
 // CRM sync - sync offline conversions from connected CRMs.
 // Include 'error' so a transient failure self-heals, and 'syncing' only when stale
 // (>2h) so a crash-stranded run is retried without racing a genuinely in-flight sync.
-Schedule::call(function () {
-    \App\Models\CrmIntegration::query()
-        ->where(function ($q) {
-            $q->whereIn('status', ['connected', 'error'])
-                ->orWhere(function ($q) {
-                    $q->where('status', 'syncing')
-                        ->where('updated_at', '<', now()->subHours(2));
-                });
-        })
-        ->each(function ($integration) {
-            \App\Jobs\SyncCrmConversions::dispatch($integration->id);
-        });
-})->name('sync-crm-conversions')->everyFourHours()->withoutOverlapping();
+Schedule::job(new Scheduled\DispatchCrmConversionSyncs)->name('sync-crm-conversions')->everyFourHours()->withoutOverlapping();
 
 // Re-drive offline-conversion uploads: retries pending rows and previously-failed
 // rows with retries left. Without this, failed uploads were never re-attempted. (JOB-3)
-Schedule::call(function () {
-    \App\Models\OfflineConversion::query()
-        ->where(function ($q) {
-            $q->where('upload_status', 'pending')
-                ->orWhere(function ($q) {
-                    $q->where('upload_status', 'failed')
-                        ->where('upload_attempts', '<', \App\Jobs\UploadOfflineConversions::MAX_ATTEMPTS);
-                });
-        })
-        ->distinct()
-        ->pluck('customer_id')
-        ->each(function ($customerId) {
-            \App\Jobs\UploadOfflineConversions::dispatch($customerId);
-        });
-})->name('retry-offline-conversions')->hourly()->withoutOverlapping();
+Schedule::job(new Scheduled\RetryOfflineConversions)->name('retry-offline-conversions')->hourly()->withoutOverlapping();
 
 // Product feed sync - sync Merchant Center product feeds
-Schedule::call(function () {
-    \App\Models\ProductFeed::where('status', 'active')
-        ->where(function ($q) {
-            $q->where('sync_frequency', 'hourly')
-                ->orWhere(function ($q2) {
-                    $q2->where('sync_frequency', 'daily')
-                        ->where(function ($q3) {
-                            $q3->whereNull('last_synced_at')
-                                ->orWhere('last_synced_at', '<', now()->subHours(20));
-                        });
-                });
-        })
-        ->each(function ($feed) {
-            \App\Jobs\SyncProductFeed::dispatch($feed->id);
-        });
-})->name('sync-product-feeds')->hourly()->withoutOverlapping();
+Schedule::job(new Scheduled\SyncProductFeeds)->name('sync-product-feeds')->hourly()->withoutOverlapping();
 
 // ============================================================
 // PMAX ASSET OPTIMIZATION
@@ -386,12 +232,7 @@ Schedule::command('pmax:check-assets')->weekly()->withoutOverlapping();
 // ============================================================
 
 // Daily keyword rank tracking - tracks SEO positions for all customers with keywords
-Schedule::call(function () {
-    Customer::whereHas('keywords', fn ($q) => $q->where('status', 'active'))
-        ->each(function ($customer) {
-            \App\Jobs\TrackKeywordRankings::dispatch($customer->id);
-        });
-})->name('track-keyword-rankings')->dailyAt('05:00')->withoutOverlapping();
+Schedule::job(new Scheduled\DispatchKeywordRankingTracking)->name('track-keyword-rankings')->dailyAt('05:00')->withoutOverlapping();
 
 // Sitemap is maintained as a committed template in resources/sitemap.xml and
 // served per-tenant by TenantStaticController, which rewrites the host to the
