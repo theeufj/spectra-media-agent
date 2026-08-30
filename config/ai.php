@@ -42,10 +42,26 @@ return [
 
         /*
          * Embedding model for vector search and semantic similarity.
-         * gemini-embedding-2-preview is not available on Vertex AI global endpoint;
-         * gemini-embedding-001 returns 3072-dim vectors and works reliably.
+         *
+         * gemini-embedding-2-preview is served only from the regional
+         * :embedContent endpoint — the global one 404s. Older models
+         * (gemini-embedding-001, text-embedding-*) use :predict on the global
+         * endpoint. GeminiService picks the endpoint from 'regional_embedding_models'
+         * below rather than sniffing the model name.
          */
         'embedding' => env('AI_MODEL_EMBEDDING', 'gemini-embedding-2-preview'),
+
+        /*
+         * Where embedding calls go when the primary returns 429.
+         *
+         * This model has its own quota pool, which is the point — but it also
+         * embeds into a *different space* at the same 3072 dimensions, so its
+         * vectors are not comparable to the primary's. Rows record which model
+         * produced them (`embedding_model`) and vector search only compares
+         * within one space; `embeddings:refresh --mismatched` rebuilds the rest.
+         * Set to null to fail the embedding instead of falling back.
+         */
+        'embedding_fallback' => env('AI_MODEL_EMBEDDING_FALLBACK', 'gemini-embedding-001'),
 
         /*
          * Image generation model. gemini-3.1-flash-image (Nano Banana 2) —
@@ -80,6 +96,19 @@ return [
         'image_grok' => env('AI_MODEL_IMAGE_GROK', 'x-ai/grok-imagine-image-2.0'),
         'video_grok' => env('AI_MODEL_VIDEO_GROK', 'x-ai/grok-imagine-video-1.5'),
 
+    ],
+
+    /*
+     * Embedding models served only from the regional Vertex host, via
+     * :embedContent with a {content: {parts: []}} body. Everything else uses
+     * :predict on the global host with {instances: [{content: ""}]}.
+     *
+     * Matched as name prefixes. This was a `str_starts_with($model, 'gemini-embedding-2')`
+     * buried in the service, which meant the endpoint a new embedding model
+     * needed was a code change rather than a config line.
+     */
+    'regional_embedding_models' => [
+        'gemini-embedding-2',
     ],
 
     /*

@@ -32,7 +32,7 @@ class OpenRouterService
             return null;
         }
 
-        $model = config('ai.models.image_grok', 'x-ai/grok-imagine-image-2.0');
+        $model = config('ai.models.image_grok');
 
         try {
             $response = Http::withToken(config('services.openrouter.api_key'))
@@ -79,7 +79,7 @@ class OpenRouterService
             return null;
         }
 
-        $model = config('ai.models.video_grok', 'x-ai/grok-imagine-video-1.5');
+        $model = config('ai.models.video_grok');
         $duration = max(1, min(15, $durationSeconds));
 
         try {

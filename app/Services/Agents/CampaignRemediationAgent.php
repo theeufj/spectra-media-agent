@@ -713,7 +713,7 @@ PROMPT;
             try {
                 $result = $this->gemini->generateImage(
                     prompt: $prompt,
-                    model: config('ai.models.image', 'gemini-2.5-flash-image'),
+                    model: config('ai.models.image'),
                 );
 
                 if ($result && isset($result['data'])) {

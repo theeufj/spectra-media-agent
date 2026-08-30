@@ -229,7 +229,7 @@ HTML;
             $prompt = "Based on this website data, write 3 Google Search Ad headlines (max 30 chars each) and 2 descriptions (max 90 chars each). Keep it punchy and highlight the value proposition. Return strict JSON with the keys 'headlines' (array of strings) and 'descriptions' (array of strings).\n\nWebsite Data:\n".substr($textContent, 0, 1000);
 
             $aiResponse = $this->geminiService->generateContent(
-                config('ai.models.default', 'gemini-1.5-flash-latest'), // Adjust to your text model
+                config('ai.models.default'),
                 $prompt,
                 ['responseMimeType' => 'application/json']
             );
