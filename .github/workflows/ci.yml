@@ -35,7 +35,10 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          php-version: '8.4'
+          # Match production. CI ran 8.4 while CLAUDE.md, the dev machines and
+          # the Forge server were all on 8.5 — so the version that shipped was
+          # never the version that was tested.
+          php-version: '8.5'
           extensions: pgsql, pdo_pgsql, grpc, bcmath, intl
           coverage: none
 
@@ -73,6 +76,12 @@ jobs:
 
       - name: Baseline has not grown
         run: ./bin/check-baseline-growth origin/master
+
+      # CLAUDE.md's pre-commit checklist has always listed `npm test`; CI built
+      # the frontend and never ran its suite, so the nine vitest files only ran
+      # when someone remembered.
+      - name: Frontend tests
+        run: npm test
 
       - name: Tests
         env:
