@@ -35,10 +35,11 @@ jobs:
 
       - uses: shivammathur/setup-php@v2
         with:
-          # Match production. CI ran 8.4 while CLAUDE.md, the dev machines and
-          # the Forge server were all on 8.5 — so the version that shipped was
-          # never the version that was tested.
-          php-version: '8.5'
+          # Match production: the Forge server runs PHP 8.4 (8.2 and 8.4 are
+          # the only pools installed). CLAUDE.md claimed 8.5 and local dev is
+          # 8.5, but the box that serves traffic is not — so this tracks the
+          # box, not the doc. Raising it requires upgrading Forge first.
+          php-version: '8.4'
           extensions: pgsql, pdo_pgsql, grpc, bcmath, intl
           coverage: none
 
