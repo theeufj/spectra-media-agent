@@ -137,9 +137,13 @@ class CampaignForecastPreview
      */
     private function pick(array $ideas): array
     {
+        // A keyword Google quotes no bid for has no commercial demand behind
+        // it, and rendering "$0.00" next to it reads as a broken page rather
+        // than a cheap opportunity.
         $usable = array_filter(
             $ideas,
             fn ($i) => ($i['avg_monthly_searches'] ?? 0) >= self::MIN_MONTHLY_SEARCHES
+                && $this->topOfPageBid($i) > 0.0
         );
 
         usort($usable, function ($a, $b) {
@@ -159,8 +163,12 @@ class CampaignForecastPreview
         $volume = (int) ($idea['avg_monthly_searches'] ?? 0);
         $competition = (int) ($idea['competition_index'] ?? 50);
 
-        // Log scale on volume so one huge head term cannot drown the set.
-        return log10(max($volume, 1)) * 10 + (100 - $competition);
+        // Volume leads, competition breaks ties. Weighted evenly, a 10/month
+        // term with no competition outscored a 140/month one, and the panel
+        // filled with keywords nobody searches — technically the easiest to
+        // win, and worthless as evidence of a market. Log scale still keeps a
+        // single head term from drowning the set.
+        return log10(max($volume, 1)) * 25 + (100 - $competition) * 0.5;
     }
 
     /**

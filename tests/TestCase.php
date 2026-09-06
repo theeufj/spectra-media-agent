@@ -39,6 +39,19 @@ abstract class TestCase extends BaseTestCase
         // failure rather than a hang. A test that needs HTTP should Http::fake() it.
         if (! $this->integrationTestsEnabled()) {
             Http::preventStrayRequests();
+
+            // The Google Ads SDK speaks gRPC, which never passes through
+            // Laravel's HTTP client, so preventStrayRequests() cannot see it.
+            // With MCC credentials in a developer's .env, MccAccount::getActive()
+            // falls back to them and any test touching a Google Ads service
+            // authenticates and calls the live API — burning quota and making
+            // the suite depend on Google being up. Removing the credentials
+            // makes getActive() return null, which every service already
+            // handles as "not configured".
+            config([
+                'googleads.mcc_customer_id' => null,
+                'googleads.mcc_refresh_token' => null,
+            ]);
         }
 
         // The tenant scope memoises each user's customer list for the life of a
