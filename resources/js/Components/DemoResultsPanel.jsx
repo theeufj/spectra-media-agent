@@ -4,7 +4,10 @@ import { Link } from '@inertiajs/react';
 export default function DemoResultsPanel({ result }) {
     if (!result) return null;
 
-    const { url, ad_copy, visuals } = result;
+    const { url, ad_copy, visuals, forecast } = result;
+
+    const num = (n) => Number(n || 0).toLocaleString();
+    const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     return (
         <div className="w-full max-w-5xl mx-auto bg-white rounded-xl shadow-xl overflow-hidden mt-8 border border-gray-100">
@@ -78,6 +81,66 @@ export default function DemoResultsPanel({ result }) {
                         </div>
                     </div>
                 </div>
+
+                {/* Google's own numbers for this market. Everything here is measured
+                    by Google except the conversion rate, which is labelled as ours. */}
+                {forecast && (
+                    <div className="mt-12">
+                        <h3 className="text-xl font-bold text-gray-800 mb-1 flex items-center">
+                            <span className="text-2xl mr-2">📊</span> What this actually buys you
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">
+                            Google Keyword Planner forecast over {forecast.days} days, bidding{' '}
+                            {money(forecast.max_cpc)} max CPC on the {forecast.keywords.length} keywords below.
+                        </p>
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="bg-white p-5">
+                                <div className="text-3xl font-bold text-gray-900 tabular-nums">{num(forecast.clicks)}</div>
+                                <div className="text-xs uppercase tracking-wider text-gray-500 mt-1">Clicks</div>
+                            </div>
+                            <div className="bg-white p-5">
+                                <div className="text-3xl font-bold text-brand-dark tabular-nums">{num(forecast.conversions)}</div>
+                                <div className="text-xs uppercase tracking-wider text-gray-500 mt-1">Conversions</div>
+                            </div>
+                            <div className="bg-white p-5">
+                                <div className="text-3xl font-bold text-gray-900 tabular-nums">{money(forecast.cost)}</div>
+                                <div className="text-xs uppercase tracking-wider text-gray-500 mt-1">Ad spend</div>
+                            </div>
+                            <div className="bg-white p-5">
+                                <div className="text-3xl font-bold text-gray-900 tabular-nums">{num(forecast.impressions)}</div>
+                                <div className="text-xs uppercase tracking-wider text-gray-500 mt-1">Impressions</div>
+                            </div>
+                        </div>
+
+                        <div className="mt-4 overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="text-left text-xs uppercase tracking-wider text-gray-500 border-b border-gray-200">
+                                        <th className="py-2 pr-4 font-semibold">Keyword</th>
+                                        <th className="py-2 pr-4 font-semibold text-right">Searches / month</th>
+                                        <th className="py-2 font-semibold text-right">Top-of-page bid</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {forecast.keywords.map((k) => (
+                                        <tr key={k.keyword} className="border-b border-gray-100 last:border-0">
+                                            <td className="py-2 pr-4 text-gray-800">{k.keyword}</td>
+                                            <td className="py-2 pr-4 text-right text-gray-600 tabular-nums">{num(k.monthly_searches)}</td>
+                                            <td className="py-2 text-right text-gray-600 tabular-nums">{money(k.cpc)}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <p className="mt-4 text-xs text-gray-500 leading-relaxed">
+                            Search volume, bids, clicks and impressions are Google's own figures for your market.
+                            Conversions apply an assumed {(forecast.conversion_rate * 100).toFixed(1)}% conversion
+                            rate to those clicks — your real rate depends on your landing page and offer.
+                        </p>
+                    </div>
+                )}
 
                 <div className="mt-12 text-center bg-brand-primary/10 rounded-lg p-8 border border-brand-primary/20">
                     <h3 className="text-2xl font-bold text-gray-900 mb-2">Ready to deploy these campaigns?</h3>

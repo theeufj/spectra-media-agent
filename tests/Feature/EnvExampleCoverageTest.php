@@ -19,23 +19,41 @@ use Tests\TestCase;
 class EnvExampleCoverageTest extends TestCase
 {
     /**
-     * Config files this application wrote, as opposed to Laravel's stock ones.
+     * Laravel's own config files, published unmodified.
+     *
+     * Everything else in config/ is this application's and is checked. This was
+     * a hand-written list of *project* files instead, which meant a new config
+     * file was exempt until someone remembered to add it — config/demo.php was
+     * written, shipped and read four undocumented env keys without failing a
+     * thing. Naming the stock files instead makes the default "checked".
      */
-    private const PROJECT_CONFIGS = [
-        'activity', 'ai', 'billing', 'budget_rules', 'campaigns', 'conversions',
-        'crawl', 'email_sequences', 'feature_usage', 'first_campaign', 'googleads',
-        'linkedinads', 'microsoftads', 'notification_templates', 'optimization',
-        'platform_architecture', 'platform_rules', 'seasonal_strategies',
-        'support_chat', 'tenants', 'verticals', 'services', 'browsershot',
-        'filesystems', 'backup',
+    private const STOCK_CONFIGS = [
+        'app', 'auth', 'cache', 'cors', 'database', 'horizon', 'logging',
+        'mail', 'pennant', 'queue', 'session',
     ];
+
+    /**
+     * Config files this application wrote, as opposed to Laravel's stock ones.
+     *
+     * @return list<string>
+     */
+    private function projectConfigs(): array
+    {
+        return array_values(array_diff(
+            array_map(
+                fn ($path) => basename($path, '.php'),
+                glob(config_path('*.php')) ?: []
+            ),
+            self::STOCK_CONFIGS,
+        ));
+    }
 
     public function test_every_project_env_key_appears_in_env_example(): void
     {
         $documented = $this->documentedKeys();
         $undocumented = [];
 
-        foreach (self::PROJECT_CONFIGS as $name) {
+        foreach ($this->projectConfigs() as $name) {
             $path = config_path($name.'.php');
 
             if (! file_exists($path)) {
@@ -72,7 +90,7 @@ class EnvExampleCoverageTest extends TestCase
         // blank, so only keys config/ supplies a default for are checked.
         $withDefaults = [];
 
-        foreach (self::PROJECT_CONFIGS as $name) {
+        foreach ($this->projectConfigs() as $name) {
             $path = config_path($name.'.php');
 
             if (! file_exists($path)) {

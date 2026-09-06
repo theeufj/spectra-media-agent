@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\LandingLead;
 use App\Services\BrandGuidelineExtractorService;
+use App\Services\Demo\CampaignForecastPreview;
 use App\Services\GeminiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
@@ -268,11 +269,18 @@ HTML;
             $visuals['colors'] = $cssColors;
         }
 
+        // End on evidence rather than on a plan. Ad copy and brand colours are
+        // a claim the visitor cannot check; Google's own volume, bids and
+        // forecast for their market are numbers they can. Null when Keyword
+        // Planner is unavailable — the rest of the demo still returns.
+        $forecast = app(CampaignForecastPreview::class)->forUrl($url);
+
         return response()->json([
             'success' => true,
             'url' => $url,
             'ad_copy' => $adCopy,
             'visuals' => $visuals,
+            'forecast' => $forecast,
         ]);
     }
 
