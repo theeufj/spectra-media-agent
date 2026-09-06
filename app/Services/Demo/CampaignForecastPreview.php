@@ -105,15 +105,21 @@ class CampaignForecastPreview
                 return null;
             }
 
+            $frame = $this->frame($forecast);
+            $f = $frame['factor'];
+
             return [
                 'keywords' => $chosen,
                 'max_cpc' => round($maxCpc, 2),
                 'days' => (int) config('demo.forecast_days'),
                 'conversion_rate' => (float) config('demo.conversion_rate'),
-                'impressions' => (int) round($forecast['impressions'] ?? 0),
-                'clicks' => (int) round($forecast['clicks'] ?? 0),
-                'cost' => round((float) ($forecast['cost'] ?? 0), 2),
-                'conversions' => round((float) ($forecast['conversions'] ?? 0), 1),
+                'budget' => round($frame['budget'], 2),
+                'budget_capped' => $frame['scaled'],
+                'impressions' => (int) round(((float) ($forecast['impressions'] ?? 0)) * $f),
+                'clicks' => (int) round(((float) ($forecast['clicks'] ?? 0)) * $f),
+                'cost' => round(((float) ($forecast['cost'] ?? 0)) * $f, 2),
+                'conversions' => round(((float) ($forecast['conversions'] ?? 0)) * $f, 1),
+                // Per-click figures are ratios and do not scale with budget.
                 'average_cpc' => round((float) ($forecast['average_cpc'] ?? 0), 2),
                 'ctr' => round((float) ($forecast['ctr'] ?? 0), 4),
             ];
@@ -197,6 +203,10 @@ class CampaignForecastPreview
     /**
      * One bid for the whole forecast ad group, since Google forecasts per bid.
      *
+     * Median, not mean: sitetospend.com returned a keyword quoted at $968 a
+     * click beside others near $75, and the mean set the whole group's bid to
+     * $156 — a bid nobody would place, forecasting spend nobody would make.
+     *
      * @param  list<array{keyword: string, monthly_searches: int, cpc: float}>  $chosen
      */
     private function bid(array $chosen): float
@@ -207,9 +217,36 @@ class CampaignForecastPreview
             return 2.0;
         }
 
-        // Mean, not max: one expensive outlier should not set the bid for the
-        // whole group and inflate the forecast cost.
-        return array_sum($bids) / count($bids);
+        sort($bids);
+        $mid = intdiv(count($bids), 2);
+
+        return count($bids) % 2 === 1
+            ? $bids[$mid]
+            : ($bids[$mid - 1] + $bids[$mid]) / 2;
+    }
+
+    /**
+     * Google's forecast, framed against a budget someone would actually set.
+     *
+     * The forecast is unconstrained — it answers "what is all the demand at
+     * this bid", which for a competitive market is a six-figure monthly spend.
+     * Scaling it to a realistic budget keeps every underlying figure Google's
+     * (the bid, the volumes, the effective cost per click) and makes the
+     * headline one a visitor can act on. The page says which it is showing.
+     *
+     * @param  array<string, mixed>  $forecast
+     * @return array{scaled: bool, factor: float, budget: float}
+     */
+    private function frame(array $forecast): array
+    {
+        $budget = (float) config('demo.monthly_budget');
+        $cost = (float) ($forecast['cost'] ?? 0);
+
+        if ($budget <= 0 || $cost <= $budget) {
+            return ['scaled' => false, 'factor' => 1.0, 'budget' => $budget];
+        }
+
+        return ['scaled' => true, 'factor' => $budget / $cost, 'budget' => $budget];
     }
 
     /**

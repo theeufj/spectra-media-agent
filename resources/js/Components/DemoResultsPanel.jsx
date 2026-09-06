@@ -90,8 +90,9 @@ export default function DemoResultsPanel({ result }) {
                             <span className="text-2xl mr-2">📊</span> What this actually buys you
                         </h3>
                         <p className="text-sm text-gray-500 mb-4">
-                            Google Keyword Planner forecast over {forecast.days} days, bidding{' '}
-                            {money(forecast.max_cpc)} max CPC on the {forecast.keywords.length} keywords below.
+                            {forecast.budget_capped
+                                ? <>Google Keyword Planner forecast at <span className="font-semibold text-gray-700">{money(forecast.budget)}/month</span>, bidding {money(forecast.max_cpc)} max CPC on the {forecast.keywords.length} keywords below.</>
+                                : <>Google Keyword Planner forecast over {forecast.days} days, bidding {money(forecast.max_cpc)} max CPC on the {forecast.keywords.length} keywords below.</>}
                         </p>
 
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-gray-200 border border-gray-200 rounded-lg overflow-hidden">
@@ -135,8 +136,10 @@ export default function DemoResultsPanel({ result }) {
                         </div>
 
                         <p className="mt-4 text-xs text-gray-500 leading-relaxed">
-                            Search volume, bids, clicks and impressions are Google's own figures for your market.
-                            Conversions apply an assumed {(forecast.conversion_rate * 100).toFixed(1)}% conversion
+                            Search volume, bids and cost per click are Google's own figures for your market.
+                            {forecast.budget_capped && <> There is more demand here than {money(forecast.budget)}/month
+                            can buy, so clicks and impressions are scaled to that budget.</>}
+                            {' '}Conversions apply an assumed {(forecast.conversion_rate * 100).toFixed(1)}% conversion
                             rate to those clicks — your real rate depends on your landing page and offer.
                         </p>
                     </div>

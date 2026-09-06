@@ -89,8 +89,9 @@ class CampaignForecastPreviewTest extends TestCase
             ['keyword' => 'outlier', 'monthly_searches' => 100, 'cpc' => 40.00],
         ]]);
 
-        $this->assertLessThan(40.0, $bid, 'A max() here would inflate the whole forecast off one term.');
-        $this->assertEqualsWithDelta(14.0, $bid, 0.01);
+        // Median of [1.00, 1.00, 40.00]. A mean would give 14.00 and a max 40.00,
+        // both of them bids nobody would place.
+        $this->assertEqualsWithDelta(1.00, $bid, 0.01);
     }
 
     public function test_a_keyword_with_no_bid_data_falls_back_rather_than_quoting_zero(): void

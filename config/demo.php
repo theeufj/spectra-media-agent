@@ -36,6 +36,16 @@ return [
     'conversion_rate' => (float) env('DEMO_CONVERSION_RATE', 0.03),
 
     /*
+     * The monthly ad budget the forecast is framed against.
+     *
+     * Google forecasts unconstrained demand: for a competitive market it will
+     * happily project $911,000 of spend, which is true and useless — no
+     * visitor is going to spend that, and the number reads as a mistake. The
+     * panel scales Google's forecast down to this budget and says so.
+     */
+    'monthly_budget' => (float) env('DEMO_MONTHLY_BUDGET', 1500),
+
+    /*
      * Bid percentile across the chosen keywords, between the low and high
      * top-of-page bids Google reports. 1.0 bids to the top of the page for
      * every keyword — honest for "what it costs to actually show up", and the
