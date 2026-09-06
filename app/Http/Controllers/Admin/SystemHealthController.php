@@ -130,7 +130,7 @@ class SystemHealthController extends Controller
     private function checkGemini(): array
     {
         try {
-            $apiKey = config('services.gemini_api_key') ?: config('services.google.gemini_api_key');
+            $apiKey = config('services.google.gemini_api_key');
 
             if (! $apiKey) {
                 return [

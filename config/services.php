@@ -34,6 +34,12 @@ return [
         'api_key' => env('GEMINI_API_KEY'),
     ],
 
+    'openrouter' => [
+        'api_key' => env('OPENROUTER_API_KEY'),
+        // Admins are alerted when the prepaid credit balance drops below this.
+        'low_credit_alert' => env('OPENROUTER_LOW_CREDIT_ALERT', 10),
+    ],
+
     'runway' => [
         'api_key' => env('RUNWAY_API_KEY'),
     ],
