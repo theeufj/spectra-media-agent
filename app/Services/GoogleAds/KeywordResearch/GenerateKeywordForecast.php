@@ -32,6 +32,9 @@ use Google\Ads\GoogleAds\V22\Services\ManualCpcBiddingStrategy;
  */
 class GenerateKeywordForecast extends BaseGoogleAdsService
 {
+    /** One cent, in micros — Google's minimum bid granularity. */
+    private const MIN_BID_MICROS = 10_000;
+
     /**
      * Forecast a keyword set at a given max CPC.
      *
@@ -54,6 +57,14 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             return ['success' => false, 'error' => 'No keywords supplied to forecast'];
         }
 
+        // Google rejects a bid that is not a whole number of currency units'
+        // smallest denomination — "bid[11455000] must be a multiple of
+        // MinCpcBidMicros[10000] for Currency[AUD]". Any caller computing a bid
+        // from an average will produce fractions of a cent, so round here rather
+        // than asking every caller to know the rule. Floored at one cent so a
+        // very cheap keyword set cannot round down to a bid of zero.
+        $bidMicros = max(self::MIN_BID_MICROS, (int) (round($maxCpc * 100) * 10_000));
+
         try {
             $biddable = array_map(fn ($text) => new BiddableKeyword([
                 'keyword' => new KeywordInfo([
@@ -65,7 +76,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
             ]), $keywords);
 
             $adGroup = new ForecastAdGroup([
-                'max_cpc_bid_micros' => (int) round($maxCpc * 1_000_000),
+                'max_cpc_bid_micros' => $bidMicros,
                 'biddable_keywords' => $biddable,
             ]);
 
@@ -76,7 +87,7 @@ class GenerateKeywordForecast extends BaseGoogleAdsService
                 // to be the input rather than something Google chooses.
                 'bidding_strategy' => new CampaignBiddingStrategy([
                     'manual_cpc_bidding_strategy' => new ManualCpcBiddingStrategy([
-                        'max_cpc_bid_micros' => (int) round($maxCpc * 1_000_000),
+                        'max_cpc_bid_micros' => $bidMicros,
                     ]),
                 ]),
                 'ad_groups' => [$adGroup],
