@@ -29,9 +29,11 @@ class OptimizeCampaigns implements ShouldQueue
         $totalApplied = 0;
         $errors = 0;
 
-        // Find active campaigns that are 'ELIGIBLE' (primary status)
-        // This covers both Google (ENABLED/ELIGIBLE) and Facebook (ACTIVE)
-        $campaigns = Campaign::whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
+        // Campaigns the platform reports as actually delivering. Campaign::serving()
+        // owns that list: LIMITED counts alongside ELIGIBLE and LEARNING, and these
+        // queries used to spell out ['ELIGIBLE', 'LEARNING'] by hand and drop it —
+        // so a campaign limited by its budget was skipped by the budget optimiser.
+        $campaigns = Campaign::serving()
             ->where(function ($query) {
                 $query->whereNotNull('google_ads_campaign_id')
                     ->orWhereNotNull('facebook_ads_campaign_id')

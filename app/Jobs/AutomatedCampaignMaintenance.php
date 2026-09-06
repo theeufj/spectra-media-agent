@@ -47,7 +47,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             ->whereHas('customer', fn ($q) => $q->where('service_type', '!=', 'setup_only')
                 ->where(fn ($qq) => $qq->whereNull('google_ads_link_status')
                     ->orWhere('google_ads_link_status', '!=', 'revoked')))
-            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
+            ->serving()
             ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id')
                 ->orWhereNotNull('microsoft_ads_campaign_id')

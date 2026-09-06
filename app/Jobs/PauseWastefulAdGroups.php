@@ -39,7 +39,7 @@ class PauseWastefulAdGroups implements ShouldQueue
         $scanned = 0;
 
         $campaigns = Campaign::whereNotNull('google_ads_campaign_id')
-            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
+            ->serving()
             ->with('customer')
             ->get();
 

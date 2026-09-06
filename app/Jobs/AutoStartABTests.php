@@ -34,7 +34,7 @@ class AutoStartABTests implements ShouldQueue
         $runStart = $this->startRun();
 
         $campaigns = Campaign::with(['strategies.adCopies'])
-            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
+            ->serving()
             ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id'))
             ->get();

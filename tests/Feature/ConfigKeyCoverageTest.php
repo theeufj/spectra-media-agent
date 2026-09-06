@@ -29,13 +29,6 @@ class ConfigKeyCoverageTest extends TestCase
         // key by default and the inline default is the intended value.
         'auth.verification.expire' => 'inline default of 60 minutes',
 
-        // Metered ad-spend billing is an unreleased feature. The command reads
-        // config('billing.metered_ad_spend_enabled', false) and returns early,
-        // so billing:report-ad-spend is deliberately a no-op until the config
-        // block is added along with the rest of the feature.
-        'billing.metered_ad_spend_enabled' => 'unreleased feature, defaults false',
-        'billing.ad_spend_meter' => 'unreleased feature, only read when the flag above is on',
-
         // One candidate in a fallback list that is array_filter()ed, so a null
         // simply drops out and the search continues with the usual locations.
         'services.ffmpeg.path' => 'optional override in a filtered candidate list',

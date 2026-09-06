@@ -49,7 +49,7 @@ class RunSelfHealingChecks implements ShouldQueue
         $runStart = $this->startRun();
 
         $campaigns = Campaign::with('customer')
-            ->whereIn('primary_status', ['ELIGIBLE', 'LEARNING'])
+            ->serving()
             ->where(fn ($q) => $q->whereNotNull('google_ads_campaign_id')
                 ->orWhereNotNull('facebook_ads_campaign_id')
                 ->orWhereNotNull('microsoft_ads_campaign_id')
