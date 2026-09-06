@@ -269,14 +269,11 @@ Schedule::job(new \App\Jobs\RefreshFacebookTokens)
     ->withoutOverlapping()
     ->onFailure(notifyAdminOnFailure('RefreshFacebookTokens'));
 
-// MCC account-creation eligibility probe — a fresh manager account can't create client
-// accounts via the API until a linked account has spent > US$1,000. This runs a
-// validate_only createCustomerClient call (creates nothing) daily and emails admins the
-// moment the MCC becomes eligible, so automated sub-account provisioning can be switched on.
-Schedule::command('googleads:check-mcc-eligibility')
-    ->dailyAt('09:00')
-    ->withoutOverlapping()
-    ->onFailure(notifyAdminOnFailure('googleads:check-mcc-eligibility'));
+// The MCC account-creation eligibility probe is no longer scheduled. It existed to
+// watch for the moment a fresh manager account passed Google's US$1,000 spend gate
+// and could create client accounts via the API; that has happened and admins were
+// notified, so the daily run only alerted on its own failure. The command remains
+// for ad-hoc use: `php artisan googleads:check-mcc-eligibility`.
 
 // ============================================================
 // RETENTION
