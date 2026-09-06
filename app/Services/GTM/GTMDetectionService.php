@@ -42,7 +42,8 @@ class GTMDetectionService
             Log::debug('GTM not detected in HTML content');
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error detecting GTM container', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),

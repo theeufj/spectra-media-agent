@@ -189,7 +189,7 @@ class DeployCampaign implements ShouldBeUnique, ShouldQueue
                     // Fail the job with a message
                     throw new \Exception("Cannot deploy campaign: Payment issue. Status: {$credit->payment_status}");
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('Ad spend credit initialization failed', [
                     'customer_id' => $customer->id,
                     'error' => $e->getMessage(),

@@ -150,11 +150,11 @@ class AdSpendCredit extends Model
     /**
      * Deduct an amount from the credit balance.
      */
-    public function deduct(float $amount, ?string $description = null): bool
+    public function deduct(float $amount, ?string $description = null, ?string $billedFor = null): bool
     {
         // Lock the row for the read-modify-write so concurrent billing runs and
         // top-ups can't lose updates or overdraw the balance.
-        return DB::transaction(function () use ($amount, $description) {
+        return DB::transaction(function () use ($amount, $description, $billedFor) {
             $locked = static::whereKey($this->getKey())->lockForUpdate()->first();
 
             if (! $locked || $amount > $locked->current_balance) {
@@ -166,8 +166,9 @@ class AdSpendCredit extends Model
             $locked->save();
 
             $locked->transactions()->create([
-                'type' => 'deduction',
+                'type' => AdSpendTransaction::TYPE_DEDUCTION,
                 'amount' => -$amount,
+                'billed_for' => $billedFor,
                 'balance_after' => $locked->current_balance,
                 'description' => $description ?? 'Daily ad spend charge',
             ]);
@@ -193,7 +194,7 @@ class AdSpendCredit extends Model
             $locked->save();
 
             $locked->transactions()->create([
-                'type' => 'credit',
+                'type' => AdSpendTransaction::TYPE_CREDIT,
                 'amount' => $amount,
                 'balance_after' => $locked->current_balance,
                 'description' => $description ?? 'Credit added',
@@ -202,6 +203,50 @@ class AdSpendCredit extends Model
 
             $this->current_balance = $locked->current_balance;
             $this->status = $locked->status;
+        });
+    }
+
+    /**
+     * Apply a manual adjustment, positive or negative.
+     *
+     * Same discipline as deduct()/addCredit(): locked read-modify-write with
+     * the ledger row inside the transaction. The admin reconciliation path used
+     * to do this by hand with three unsynchronised statements, and lost any
+     * concurrent nightly deduction.
+     *
+     * A negative adjustment is capped at the available balance and the ledger
+     * records what was actually applied, not what was asked for — so the totals
+     * stay internally consistent and any remainder is still visible as
+     * unreconciled rather than being silently written off.
+     *
+     * Returns the amount actually applied (signed).
+     */
+    public function recordAdjustment(float $amount, string $description): float
+    {
+        return DB::transaction(function () use ($amount, $description) {
+            $locked = static::whereKey($this->getKey())->lockForUpdate()->first() ?? $this;
+
+            $before = (float) $locked->current_balance;
+            $applied = $amount < 0
+                ? -min(abs($amount), $before)
+                : $amount;
+            $applied = round($applied, 2);
+
+            $locked->current_balance = round($before + $applied, 2);
+            $locked->updateBalanceStatus();
+            $locked->save();
+
+            $locked->transactions()->create([
+                'type' => AdSpendTransaction::TYPE_ADJUSTMENT,
+                'amount' => $applied,
+                'balance_after' => $locked->current_balance,
+                'description' => $description,
+            ]);
+
+            $this->current_balance = $locked->current_balance;
+            $this->status = $locked->status;
+
+            return $applied;
         });
     }
 

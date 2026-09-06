@@ -311,7 +311,8 @@ class TestMicrosoftAds extends Command
                             $this->error('  ✗ Campaign creation failed');
                             $this->line('  Response: '.json_encode($result));
                         }
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
+                        report($e);
                         $this->error('  ✗ Exception: '.$e->getMessage());
                     }
                 }

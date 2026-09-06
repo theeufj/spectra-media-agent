@@ -294,7 +294,8 @@ PROMPT;
             if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
                 return array_slice($data, 0, 2);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('DSAManagementAgent: Description generation failed: '.$e->getMessage());
         }
 

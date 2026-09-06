@@ -69,7 +69,8 @@ class QualityScoreImprovementAgent
                     $paused,
                     $errors
                 );
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors[] = "Error processing keyword '{$keywordText}': ".$e->getMessage();
                 Log::error('QualityScoreImprovementAgent: '.$e->getMessage());
             }
@@ -281,7 +282,8 @@ PROMPT;
             if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
                 return $data;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('QualityScoreImprovementAgent: Ad copy generation failed: '.$e->getMessage());
         }
 
@@ -398,7 +400,8 @@ PROMPT;
                     $errors[] = "Could not update RSA {$ad['ad_id']} (no new assets or API error)";
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $errors[] = $e->getMessage();
             Log::warning("QualityScoreImprovementAgent: Ad strength check failed for campaign {$campaign->id}: ".$e->getMessage());
         }
@@ -455,7 +458,8 @@ PROMPT;
             if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
                 return $data;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('QualityScoreImprovementAgent: Ad strength copy generation failed: '.$e->getMessage());
         }
 

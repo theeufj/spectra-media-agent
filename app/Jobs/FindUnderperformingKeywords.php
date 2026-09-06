@@ -71,7 +71,8 @@ class FindUnderperformingKeywords implements ShouldQueue
                 $keyword = $googleAdsRow->getAdGroupCriterion()->getKeyword()->getText();
                 ($addNegativeKeywordService)($this->campaignId, $keyword);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error finding underperforming keywords for campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

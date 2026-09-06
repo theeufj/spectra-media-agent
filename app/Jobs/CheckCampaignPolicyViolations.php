@@ -50,7 +50,8 @@ class CheckCampaignPolicyViolations implements ShouldQueue
             if ($hasViolation) {
                 $selfHealingAgent->heal($campaign);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error checking for policy violations for campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

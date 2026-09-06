@@ -125,13 +125,19 @@ class StripeWebhookController extends CashierController
                 $purchaseId = $metadata['purchase_id'] ?? null;
                 $purchase = $purchaseId ? CreativeBoostPurchase::find($purchaseId) : null;
 
-                if ($purchase && $purchase->status === 'pending') {
-                    $purchase->update([
+                // Conditional update, not read-then-write: Stripe retries and can
+                // deliver concurrently, and two deliveries both reading 'pending'
+                // would both grant the boost. Whoever's UPDATE changes the row
+                // wins; everyone else gets 0 and does nothing.
+                $claimed = $purchase && CreativeBoostPurchase::whereKey($purchase->getKey())
+                    ->where('status', 'pending')
+                    ->update([
                         'stripe_checkout_session_id' => $session['id'],
                         'status' => 'completed',
-                    ]);
+                    ]) > 0;
 
-                    app(CreativeQuotaService::class)->applyBoost($user, $purchase);
+                if ($claimed) {
+                    app(CreativeQuotaService::class)->applyBoost($user, $purchase->refresh());
 
                     Log::info('🚀 Creative Boost applied', [
                         'user_id' => $user->id,

@@ -119,7 +119,8 @@ class ConversionSetupService
                 if (! ($tagResult['success'] ?? false)) {
                     $errors[] = 'GTM Google Ads tag creation failed: '.($tagResult['error'] ?? 'unknown');
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors[] = 'GTM Google Ads tag error: '.$e->getMessage();
                 Log::error('ConversionSetupService: GTM Google Ads tag error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
             }
@@ -142,7 +143,8 @@ class ConversionSetupService
                         $errors[] = 'GTM Meta conversion tag failed: '.($fbConversion['error'] ?? 'unknown');
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors[] = 'GTM Meta Pixel error: '.$e->getMessage();
                 Log::warning('ConversionSetupService: Meta Pixel GTM error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
             }
@@ -158,7 +160,8 @@ class ConversionSetupService
                         }
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors[] = 'GTM Microsoft UET error: '.$e->getMessage();
                 Log::warning('ConversionSetupService: Microsoft UET GTM error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
             }
@@ -172,7 +175,8 @@ class ConversionSetupService
                 if ($customer->microsoft_uet_tag_id) {
                     $this->gtm->addMicrosoftLeadEventTag($customer, $customer->microsoft_uet_tag_id);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('ConversionSetupService: Lead event tag error', ['error' => $e->getMessage(), 'customer_id' => $customer->id]);
             }
 
@@ -182,7 +186,8 @@ class ConversionSetupService
                 if (! ($publishResult['success'] ?? false)) {
                     $errors[] = 'GTM container publish failed: '.($publishResult['error'] ?? 'unknown');
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors[] = 'GTM publish error: '.$e->getMessage();
             }
 
@@ -190,7 +195,8 @@ class ConversionSetupService
             try {
                 $snippetResult = $this->gtm->getSnippetHtml($customer->gtm_container_id);
                 $snippet = $snippetResult['head'] ?? null;
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // Non-fatal
             }
         }
@@ -247,7 +253,8 @@ class ConversionSetupService
             if (preg_match('/GTM-[A-Z0-9]+/', $html, $matches)) {
                 return $matches[0];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('ConversionSetupService: Could not detect GTM container from site', [
                 'url' => $url,
                 'error' => $e->getMessage(),

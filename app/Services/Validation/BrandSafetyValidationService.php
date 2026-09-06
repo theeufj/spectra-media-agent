@@ -28,7 +28,8 @@ class BrandSafetyValidationService
             }
 
             return strtolower(trim($response['text'])) === 'true';
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error during brand safety validation: '.$e->getMessage(), [
                 'exception' => $e,
             ]);

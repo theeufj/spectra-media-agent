@@ -116,7 +116,7 @@ class RefineImage implements ShouldQueue
                 Storage::disk('local')->delete($this->contextImagePath);
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error in RefineImage job for ImageCollateral ID {$this->originalImage->id}: ".$e->getMessage());
             $this->fail($e);
         }

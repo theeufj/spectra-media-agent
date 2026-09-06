@@ -47,7 +47,8 @@ class CrawlCompetitorWebsite implements ShouldQueue
                 Log::warning("No sitemap found for competitor: {$this->url}. Crawling single page as fallback.");
                 CrawlPage::dispatch($this->user, $this->url, $this->customerId);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error crawling competitor website {$this->url}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -70,7 +71,8 @@ class CrawlCompetitorWebsite implements ShouldQueue
                     return trim($matches[1]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning("Could not fetch or parse robots.txt for {$this->url}: ".$e->getMessage());
         }
 
@@ -82,7 +84,8 @@ class CrawlCompetitorWebsite implements ShouldQueue
             if ($response->successful()) {
                 return $sitemapUrl;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning("Could not find sitemap at common location for {$this->url}: ".$e->getMessage());
         }
 

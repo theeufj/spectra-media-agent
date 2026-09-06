@@ -87,7 +87,8 @@ class SearchTermMiningAgent
                 $this->evaluateSearchTerm($customer, $customerId, $campaignResourceName, $term, $results, 'google');
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Failed to get google search terms: '.$e->getMessage();
             Log::error('SearchTermMiningAgent: Failed to mine google search terms', [
                 'campaign_id' => $campaign->id,
@@ -117,7 +118,8 @@ class SearchTermMiningAgent
                 $this->evaluateSearchTerm($customer, $customer->microsoft_ads_account_id, $campaign->microsoft_ads_campaign_id, $term, $results, 'microsoft');
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Failed to get microsoft search terms: '.$e->getMessage();
             Log::error('SearchTermMiningAgent: Failed to mine microsoft search terms', [
                 'campaign_id' => $campaign->id,
@@ -258,11 +260,13 @@ class SearchTermMiningAgent
                         ['customer_id' => $customer->id, 'keyword_text' => $keyword, 'ad_group_resource_name' => $adGroupResourceName],
                         ['match_type' => $matchTypeName, 'status' => 'active', 'source' => 'mined', 'criterion_resource_name' => $resourceName, 'added_by_agent' => 'SearchTermMiningAgent']
                     );
-                } catch (\Exception $trackingError) {
+                } catch (\Throwable $trackingError) {
+                    report($trackingError);
                     Log::debug('SearchTermMiningAgent: Could not track keyword in model', ['error' => $trackingError->getMessage()]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Might fail if keyword already exists, which is fine
             Log::debug('SearchTermMiningAgent: Could not add keyword (may already exist)', [
                 'keyword' => $keyword,
@@ -298,7 +302,8 @@ class SearchTermMiningAgent
                     ['match_type' => strtoupper($matchType), 'status' => 'active', 'source' => 'mined', 'criterion_resource_name' => $resourceName, 'added_by_agent' => 'SearchTermMiningAgent']
                 );
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('SearchTermMiningAgent: Could not add Microsoft keyword (may already exist)', [
                 'keyword' => $keyword,
                 'error' => $e->getMessage(),
@@ -328,7 +333,8 @@ class SearchTermMiningAgent
                     'reason' => $reason,
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('SearchTermMiningAgent: Could not add Microsoft negative keyword (may already exist)', [
                 'keyword' => $keyword,
                 'error' => $e->getMessage(),
@@ -364,7 +370,8 @@ class SearchTermMiningAgent
                     'campaign' => $campaignResourceName,
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Might fail if negative already exists
             Log::debug('SearchTermMiningAgent: Could not add negative (may already exist)', [
                 'keyword' => $keyword,

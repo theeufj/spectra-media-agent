@@ -93,7 +93,8 @@ class RunStrategicDiagnosis implements ShouldQueue
                         ]
                     );
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error('RunStrategicDiagnosis: Error on campaign '.$campaign->id.': '.$e->getMessage());
                 $errors++;
             } finally {

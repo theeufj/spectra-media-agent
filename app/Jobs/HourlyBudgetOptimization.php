@@ -91,7 +91,7 @@ class HourlyBudgetOptimization implements ShouldQueue
                 $summary['alerts_fired'] += count($alerts);
 
                 $summary['campaigns_processed']++;
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 $summary['errors']++;
@@ -179,7 +179,8 @@ class HourlyBudgetOptimization implements ShouldQueue
                         'conversion_value' => $metrics['conversion_value'] ?? 0,
                     ];
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // Fall through to return null
             }
         }
@@ -260,7 +261,8 @@ class HourlyBudgetOptimization implements ShouldQueue
                         'conversion_value' => $conversionValue,
                     ];
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // Fall through to return null
             }
         }

@@ -110,7 +110,8 @@ abstract class BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Exception during Facebook API GET request: '.$e->getMessage(), [
                 'exception' => $e,
                 'endpoint' => $endpoint,
@@ -155,7 +156,8 @@ abstract class BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Exception during Facebook API POST request: '.$e->getMessage(), [
                 'exception' => $e,
                 'endpoint' => $endpoint,
@@ -200,7 +202,8 @@ abstract class BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Exception during Facebook API PUT request: '.$e->getMessage(), [
                 'exception' => $e,
                 'endpoint' => $endpoint,

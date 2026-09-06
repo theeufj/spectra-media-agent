@@ -115,7 +115,8 @@ class CampaignController extends Controller
                 'daily_data' => [], // Could be expanded to include daily breakdown
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Admin failed to fetch performance for campaign {$campaign->id}: ".$e->getMessage());
 
             return response()->json([

@@ -94,7 +94,8 @@ class CustomAudienceService extends BaseFacebookAdsService
 
             return $audience;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating custom audience: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
@@ -138,7 +139,8 @@ class CustomAudienceService extends BaseFacebookAdsService
 
             return $results[0] ?? null;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error adding users to audience: '.$e->getMessage(), [
                 'audience_id' => $audienceId,
             ]);
@@ -170,7 +172,8 @@ class CustomAudienceService extends BaseFacebookAdsService
 
             return $response;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error removing users from audience: '.$e->getMessage(), [
                 'audience_id' => $audienceId,
             ]);
@@ -239,7 +242,8 @@ class CustomAudienceService extends BaseFacebookAdsService
 
             return null;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating website audience: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
@@ -290,7 +294,8 @@ class CustomAudienceService extends BaseFacebookAdsService
 
             return null;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating lookalike audience: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
@@ -312,7 +317,8 @@ class CustomAudienceService extends BaseFacebookAdsService
 
             return $response['data'] ?? [];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error listing custom audiences: '.$e->getMessage());
 
             return null;
@@ -328,7 +334,8 @@ class CustomAudienceService extends BaseFacebookAdsService
             return $this->get("/{$audienceId}", [
                 'fields' => 'id,name,description,subtype,approximate_count,delivery_status,operation_status,time_created,time_updated',
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting custom audience: '.$e->getMessage());
 
             return null;
@@ -344,7 +351,8 @@ class CustomAudienceService extends BaseFacebookAdsService
             $response = $this->delete("/{$audienceId}");
 
             return $response['success'] ?? false;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error deleting custom audience: '.$e->getMessage());
 
             return false;
@@ -393,7 +401,8 @@ class CustomAudienceService extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Exception during Facebook API DELETE request: '.$e->getMessage());
 
             return null;

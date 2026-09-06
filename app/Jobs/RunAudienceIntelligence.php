@@ -37,7 +37,8 @@ class RunAudienceIntelligence implements ShouldQueue
                 $audienceAgent->analyzeAudiencePerformance($customer);
                 $audienceAgent->refreshFacebookAudiences($customer);
                 $processed++;
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("RunAudienceIntelligence error on customer {$customer->id}: ".$e->getMessage());
             }

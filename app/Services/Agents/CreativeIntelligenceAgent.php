@@ -306,7 +306,8 @@ PROMPT;
             if ($response && isset($response['text'])) {
                 $facebookVariants = json_decode($response['text'], true) ?? [];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning("CreativeIntelligenceAgent: Cross-platform winner Gemini call failed for campaign {$campaign->id}: ".$e->getMessage());
         }
 
@@ -337,7 +338,8 @@ PROMPT;
                 'ai_brief' => $briefContent,
                 'context' => $context,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning("CreativeIntelligenceAgent: Failed to create creative brief for campaign {$campaign->id}: ".$e->getMessage());
         }
     }
@@ -386,7 +388,8 @@ PROMPT;
                 'headline_winners' => count($results['headlines']['winners']),
                 'description_winners' => count($results['descriptions']['winners']),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CreativeIntelligenceAgent: Google Ads analysis failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -510,7 +513,8 @@ PROMPT;
                             'ctr' => round($loser['ctr'] * 100, 2).'%',
                             'reason' => 'Auto-paused: 2000+ impressions with 0 conversions and CTR below 0.5%',
                         ];
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
+                        report($e);
                         Log::warning('CreativeIntelligenceAgent: Failed to auto-pause Facebook ad', [
                             'ad_id' => $loser['ad_id'],
                             'error' => $e->getMessage(),
@@ -532,7 +536,8 @@ PROMPT;
                 'ad_winners' => $adWinners,
                 'ad_losers' => $adLosers,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CreativeIntelligenceAgent: Facebook Ads analysis failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -723,7 +728,8 @@ PROMPT;
             if ($response && isset($response['text'])) {
                 return json_decode($response['text'], true) ?? [];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CreativeIntelligenceAgent: Failed to generate headlines', [
                 'error' => $e->getMessage(),
             ]);
@@ -778,7 +784,8 @@ PROMPT;
             if ($response && isset($response['text'])) {
                 return json_decode($response['text'], true) ?? [];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CreativeIntelligenceAgent: Failed to generate descriptions', [
                 'error' => $e->getMessage(),
             ]);
@@ -879,7 +886,8 @@ PROMPT;
                         'headlines' => isset($headlineResponse['text']) ? (json_decode($headlineResponse['text'], true) ?? []) : [],
                         'descriptions' => isset($descResponse['text']) ? (json_decode($descResponse['text'], true) ?? []) : [],
                     ];
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::debug('CreativeIntelligenceAgent: Gemini variation generation failed for Microsoft', ['error' => $e->getMessage()]);
                 }
             }
@@ -890,7 +898,8 @@ PROMPT;
                 'avg_ctr' => round($avgCtr, 2),
                 'days_analyzed' => $data->count(),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CreativeIntelligenceAgent: Microsoft Ads analysis failed', ['error' => $e->getMessage()]);
         }
     }
@@ -1001,7 +1010,8 @@ PROMPT;
                         'headlines' => isset($headlineResponse['text']) ? (json_decode($headlineResponse['text'], true) ?? []) : [],
                         'descriptions' => isset($descResponse['text']) ? (json_decode($descResponse['text'], true) ?? []) : [],
                     ];
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::debug('CreativeIntelligenceAgent: Gemini variation generation failed for LinkedIn', ['error' => $e->getMessage()]);
                 }
             }
@@ -1012,7 +1022,8 @@ PROMPT;
                 'avg_ctr' => round($avgCtr, 2),
                 'days_analyzed' => $data->count(),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CreativeIntelligenceAgent: LinkedIn Ads analysis failed', ['error' => $e->getMessage()]);
         }
     }

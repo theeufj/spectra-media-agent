@@ -65,7 +65,8 @@ class BillingHealthChecker
                 ];
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('BillingHealthChecker: Error checking billing health', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),

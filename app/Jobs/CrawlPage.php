@@ -176,7 +176,8 @@ class CrawlPage implements ShouldQueue
                     $response = Http::get($robotsUrl);
 
                     return $response->successful() ? $response->body() : '';
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning("CrawlPage: Could not fetch robots.txt for {$this->url}: ".$e->getMessage());
 
                     return '';
@@ -336,7 +337,8 @@ class CrawlPage implements ShouldQueue
                             'score' => $audit->overall_score,
                             'issues_count' => count($audit->issues ?? []),
                         ]);
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
+                        report($e);
                         Log::warning('CRO audit failed for page', [
                             'customer_id' => $this->customerId,
                             'url' => $this->url,
@@ -357,7 +359,8 @@ class CrawlPage implements ShouldQueue
                     if ($cssResponse->successful()) {
                         $cssContent .= $cssResponse->body()."\n\n";
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning("Failed to fetch CSS from {$stylesheetUrl}: ".$e->getMessage());
                 }
             });
@@ -417,7 +420,8 @@ class CrawlPage implements ShouldQueue
                 if (! is_array($chunks)) {
                     throw new \Exception('Gemini did not return a valid JSON array of chunks.');
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error("Failed to parse Gemini's chunking response for {$this->url}: ".$e->getMessage(), [
                     'generated_text' => $generatedText,
                 ]);
@@ -486,7 +490,8 @@ class CrawlPage implements ShouldQueue
 
             Log::info("Successfully crawled and embedded: {$this->url}");
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error processing page {$this->url}: ".$e->getMessage());
         }
     }
@@ -507,7 +512,8 @@ class CrawlPage implements ShouldQueue
                     return 'product';
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Ignore parsing errors
         }
 

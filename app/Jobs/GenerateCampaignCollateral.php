@@ -104,7 +104,7 @@ class GenerateCampaignCollateral implements ShouldQueue
 
             Log::info('Dispatched '.count($jobs)." collateral generation jobs as batch for Campaign ID: {$campaignId}");
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error in GenerateCampaignCollateral job for Campaign ID {$this->campaign->id}: ".$e->getMessage());
             $this->fail($e);
         }

@@ -284,7 +284,8 @@ class AdSpendBillingController extends Controller
                 'success' => true,
                 'message' => 'Payment method updated successfully',
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('AdSpendBilling: Failed to update payment method', [
                 'user_id' => $user->id,
                 'error' => $e->getMessage(),
@@ -440,7 +441,8 @@ class AdSpendBillingController extends Controller
                 'credit_amount' => $chargedAmount,
                 'new_balance' => $credit->current_balance,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('AdSpendBilling: Failed to setup for deployment', [
                 'user_id' => $user->id,
                 'customer_id' => $customer->id ?? null,

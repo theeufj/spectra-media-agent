@@ -93,7 +93,8 @@ class TestGoogleAdsConnection extends Command
         } catch (ApiException $e) {
             $this->error('Google Ads API request failed with status: '.$e->getStatus());
             $this->error('Failure message: '.$e);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('An error occurred: '.$e->getMessage());
         }
     }

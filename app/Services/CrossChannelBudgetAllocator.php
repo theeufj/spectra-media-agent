@@ -409,7 +409,8 @@ class CrossChannelBudgetAllocator
             }
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CrossChannelBudgetAllocator: AI reasoning failed', ['error' => $e->getMessage()]);
 
             return null;

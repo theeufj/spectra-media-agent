@@ -68,7 +68,8 @@ class FacebookAdsDeploymentStrategy implements DeploymentStrategy
 
             return true;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Facebook Ads deployment failed for Strategy ID {$strategy->id}: ".$e->getMessage());
 
             return false;

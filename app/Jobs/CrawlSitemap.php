@@ -122,7 +122,8 @@ class CrawlSitemap implements ShouldQueue
             libxml_use_internal_errors(true);
             try {
                 $xml = new \SimpleXMLElement($content);
-            } catch (\Exception $xmlException) {
+            } catch (\Throwable $xmlException) {
+                report($xmlException);
                 $errors = libxml_get_errors();
                 libxml_clear_errors();
                 $errorMessages = array_map(fn ($e) => trim($e->message), $errors);
@@ -319,7 +320,7 @@ class CrawlSitemap implements ShouldQueue
 
             Log::info("CrawlSitemap: Finished processing job for URL: {$this->sitemapUrl}");
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("CrawlSitemap: Error processing sitemap {$this->sitemapUrl}: ".$e->getMessage());
             $this->fail($e);
         }

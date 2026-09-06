@@ -113,6 +113,67 @@ class OpenRouterProviderTest extends TestCase
         $this->assertNull(app(OpenRouterService::class)->creditBalance());
     }
 
+    /**
+     * The prompt has to be chosen from the provider that actually ran, not
+     * from config. Reading config('ai.video_provider') meant a Grok start
+     * failure handed Veo the full 15s script for an 8s clip, and the
+     * extension chain then resumed at segment 1 — so segment 0 was rushed
+     * and every segment after it was misaligned.
+     */
+    public function test_a_grok_failure_falls_back_to_veo_with_a_veo_sized_prompt(): void
+    {
+        $this->fakeVertexAuth();
+
+        Http::fake([
+            'openrouter.ai/api/v1/videos' => Http::response(null, 500),
+            'aiplatform.googleapis.com/*' => Http::response(['name' => 'projects/p/operations/op-1']),
+        ]);
+
+        $result = app(VideoGenerationService::class)->startGeneration(
+            'PROMPT_FOR_openrouter',
+            [],
+            null,
+            'A voiceover script of about fifteen words used only to size the clip duration.',
+            promptForProvider: fn (string $provider) => "PROMPT_FOR_{$provider}",
+        );
+
+        $this->assertSame('veo', $result['provider']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), 'predictLongRunning')
+            && $request['instances'][0]['prompt'] === 'PROMPT_FOR_veo');
+    }
+
+    public function test_video_spend_is_attributed_to_the_customer_that_incurred_it(): void
+    {
+        $customer = Customer::factory()->create();
+        $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
+
+        Http::fake([
+            'openrouter.ai/api/v1/videos' => Http::response(['id' => 'job-42', 'status' => 'pending']),
+        ]);
+
+        app(VideoGenerationService::class)->startGeneration(
+            'a prompt',
+            [],
+            null,
+            'A voiceover script of about fifteen words used only to size the clip duration.',
+            context: ['campaign_id' => $campaign->id, 'customer_id' => $customer->id],
+        );
+
+        $cost = AiCost::withoutGlobalScopes()->latest('id')->first();
+        $this->assertSame($customer->id, $cost->customer_id);
+        $this->assertSame($campaign->id, $cost->campaign_id);
+    }
+
+    private function fakeVertexAuth(): void
+    {
+        config([
+            'services.google.project_id' => 'test-project',
+            'services.google.location' => 'us-central1',
+            'services.google.credentials_path' => '/dev/null',
+        ]);
+        \Illuminate\Support\Facades\Cache::put('gcp_vertex_access_token', 'test-token', 3000);
+    }
+
     public function test_grok_videos_skip_the_veo_only_extension_and_revoice_steps(): void
     {
         $customer = Customer::factory()->create();

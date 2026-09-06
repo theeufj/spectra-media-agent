@@ -60,14 +60,16 @@ class CompetitorIntelligenceAgent
         // Step 1: Discover competitors
         try {
             $results['discovery'] = $this->discoveryAgent->discover($customer);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Discovery failed: '.$e->getMessage();
         }
 
         // Step 2: Analyze all competitors
         try {
             $results['analysis'] = $this->analysisAgent->analyzeAll($customer);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Analysis failed: '.$e->getMessage();
         }
 
@@ -76,7 +78,8 @@ class CompetitorIntelligenceAgent
             try {
                 $results['auction_insights'] = $this->fetchAuctionInsights($customer);
                 $results['auction_trend_actions'] = $this->analyzeAuctionTrends($customer, $results['auction_insights']);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $results['errors'][] = 'Auction insights failed: '.$e->getMessage();
             }
         }
@@ -84,7 +87,8 @@ class CompetitorIntelligenceAgent
         // Step 4: Generate counter-strategy
         try {
             $results['counter_strategy'] = $this->generateCounterStrategy($customer);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Counter-strategy failed: '.$e->getMessage();
         }
 
@@ -179,7 +183,8 @@ class CompetitorIntelligenceAgent
                 $results['own_impression_share'] = round($avgOwnIs, 2);
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CompetitorIntelligenceAgent: Auction insights failed', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),

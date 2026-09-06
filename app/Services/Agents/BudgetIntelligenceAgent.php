@@ -152,7 +152,8 @@ class BudgetIntelligenceAgent
                     'multiplier' => $combinedMultiplier,
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Microsoft Ads budget update failed: '.$e->getMessage();
         }
     }
@@ -180,7 +181,8 @@ class BudgetIntelligenceAgent
                     'multiplier' => $combinedMultiplier,
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'LinkedIn Ads budget update failed: '.$e->getMessage();
         }
     }
@@ -225,7 +227,8 @@ class BudgetIntelligenceAgent
                     'multiplier' => $combinedMultiplier,
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Google Ads: Failed to update budget: '.$e->getMessage();
             Log::error('BudgetIntelligenceAgent: Failed to update Google Ads budget', [
                 'campaign_id' => $campaign->id,
@@ -302,7 +305,8 @@ class BudgetIntelligenceAgent
                     ]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Facebook Ads: Failed to update budget: '.$e->getMessage();
             Log::error('BudgetIntelligenceAgent: Failed to update Facebook Ads budget', [
                 'campaign_id' => $campaign->id,
@@ -461,7 +465,8 @@ class BudgetIntelligenceAgent
                 try {
                     $getPerformance = $this->ads()->campaignPerformance($customer);
                     $metrics = $getPerformance($customerId, $resourceName, 'LAST_30_DAYS');
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning('BudgetIntelligenceAgent: Could not analyze Google campaign', [
                         'campaign_id' => $campaign->id,
                         'error' => $e->getMessage(),
@@ -505,7 +510,8 @@ class BudgetIntelligenceAgent
                             'conversion_value' => $totalConversionValue,
                         ];
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning('BudgetIntelligenceAgent: Could not analyze Facebook campaign', [
                         'campaign_id' => $campaign->id,
                         'error' => $e->getMessage(),
@@ -633,7 +639,8 @@ class BudgetIntelligenceAgent
 
                 return true;
             });
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('BudgetIntelligenceAgent: Failed to execute reallocation', [
                 'from' => $fromCampaign->id,
                 'to' => $toCampaign->id,

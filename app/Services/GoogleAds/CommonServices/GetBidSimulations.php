@@ -99,7 +99,8 @@ WHERE campaign.resource_name = '{$campaignResourceName}'
                 'simulation_type' => $simulationType,
                 'error' => $e->getMessage(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GetBidSimulations: Unexpected error', [
                 'customer_id' => $customerId,
                 'campaign' => $campaignResourceName,

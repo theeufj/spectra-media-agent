@@ -140,7 +140,8 @@ class LinkedInCampaignOptimizationAgent
                 $service = new CampaignService($campaign->customer);
                 $service->updateStatus($campaign->linkedin_campaign_id, 'PAUSED');
                 $results['actions'][] = ['type' => 'campaign_paused', 'reason' => 'message_ad_open_rate_drop'];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning("LinkedInCampaignOptimizationAgent: pause failed for campaign {$campaign->id}: ".$e->getMessage());
             }
 

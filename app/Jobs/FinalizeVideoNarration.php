@@ -40,8 +40,8 @@ class FinalizeVideoNarration implements ShouldQueue
     {
         return $video
             && config('ai.video_narration_tts', true)
-            // Only the Veo chain suffers per-call narrator drift; Grok and
-            // Vidu produce one voice natively.
+            // Only the Veo chain suffers per-call narrator drift; Grok
+            // produces one voice natively.
             && ($video->provider ?? 'veo') === 'veo'
             && $video->status === 'completed'
             && filled($video->script)

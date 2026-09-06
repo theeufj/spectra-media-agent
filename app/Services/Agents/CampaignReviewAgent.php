@@ -95,7 +95,8 @@ class CampaignReviewAgent
 
             return $corrected;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('[CampaignReviewAgent] Review failed, using original plan', [
                 'platform' => $platform,
                 'customer_id' => $this->customer->id,

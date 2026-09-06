@@ -106,7 +106,8 @@ class RecordSiteFacebookConversion implements ShouldQueue
             } else {
                 Log::warning("RecordSiteFacebookConversion: CAPI returned null for '{$this->event}' user {$this->user->id}");
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("RecordSiteFacebookConversion: failed for '{$this->event}': ".$e->getMessage(), [
                 'user_id' => $this->user->id,
             ]);

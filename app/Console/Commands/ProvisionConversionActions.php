@@ -165,7 +165,8 @@ class ProvisionConversionActions extends Command
 
                 return $existing;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Fall through to create
         }
 
@@ -195,7 +196,8 @@ class ProvisionConversionActions extends Command
             );
 
             return $response->getResults()[0]->getResourceName();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    API error: '.$e->getMessage());
 
             return null;
@@ -234,7 +236,8 @@ class ProvisionConversionActions extends Command
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('    Tag extraction error: '.$e->getMessage());
         }
 
@@ -287,7 +290,8 @@ class ProvisionConversionActions extends Command
             $this->info("Archived \"{$name}\" — it will no longer appear in Google Ads conversion reporting.");
 
             return self::SUCCESS;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('Archive failed: '.$e->getMessage());
 
             return self::FAILURE;
@@ -323,7 +327,8 @@ class ProvisionConversionActions extends Command
                 ->withOAuth2Credential($oAuth2)
                 ->withLoginCustomerId($mcc->google_customer_id)
                 ->build();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('Failed to build Google Ads client: '.$e->getMessage());
 
             return null;

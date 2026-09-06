@@ -98,7 +98,8 @@ class FetchLinkedInAdsPerformanceData implements ShouldQueue
                         }
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $circuitBreaker->recordFailure();
                 Log::error("Error in FetchLinkedInAdsPerformanceData for campaign {$this->campaign->id}: ".$e->getMessage());
                 $this->release(60);

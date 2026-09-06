@@ -3,39 +3,54 @@
 namespace App\Services\VideoGeneration;
 
 use App\Services\GeminiService;
-use App\Services\ViduService;
 use Illuminate\Support\Facades\Log;
 
 class VideoGenerationService
 {
     public function __construct(
         private GeminiService $geminiService,
-        private ViduService $viduService,
         private \App\Services\OpenRouterService $openRouter,
     ) {}
 
     /**
-     * Start video generation, falling back to Vidu if Veo is unavailable.
+     * Start video generation, falling back to Veo if Grok is unavailable.
      *
-     * Returns ['provider' => 'veo'|'vidu', 'operation_name' => string]
+     * Returns ['provider' => 'openrouter'|'veo', 'operation_name' => string]
      * or null if both providers fail.
      *
      * @param  array  $parameters  Passed through to the provider (e.g. ['aspectRatio' => '9:16'])
-     * @param  string|null  $voiceoverScript  When provided, Vidu will structure its prompt around
-     *                                        narrating this script rather than using the generic wrapper.
+     * @param  string|null  $voiceoverScript  The narration, used to size the clip duration.
+     * @param  callable|null  $promptForProvider  Receives the provider about to run ('openrouter'
+     *                                            or 'veo') and returns the prompt for it. The
+     *                                            provider is only known here, after a fallback has
+     *                                            been taken — a caller that picks its prompt from
+     *                                            config instead hands Veo a script sized for Grok.
+     * @param  array  $context  Cost attribution (campaign_id, customer_id) for the provider's AiCost row.
      */
-    public function startGeneration(string $topic, array $parameters = [], ?string $model = null, ?string $voiceoverScript = null): ?array
-    {
+    public function startGeneration(
+        string $topic,
+        array $parameters = [],
+        ?string $model = null,
+        ?string $voiceoverScript = null,
+        ?callable $promptForProvider = null,
+        array $context = [],
+    ): ?array {
         // The caller (GenerateVideo) already builds a complete prompt via
         // VideoFromScriptPrompt. This used to be re-wrapped in a generic
         // "Create a short, engaging video about {topic}" sentence — nesting a
         // multi-paragraph brief inside a one-liner and duplicating its rules.
         $prompt = $topic;
 
+        // Each provider narrates a different amount of script in one pass, so
+        // the prompt cannot be settled until we know which one actually ran.
+        $promptFor = fn (string $provider): string => $promptForProvider
+            ? $promptForProvider($provider)
+            : $prompt;
+
         // ── Primary: Grok via OpenRouter (default after the 2026-08-24
         //    shootout: single-pass native audio = one narrator throughout,
         //    where Veo needed an extension chain plus a TTS re-voice) ───────
-        if (config('ai.video_provider', 'grok') === 'grok' && $this->openRouter->isConfigured()) {
+        if (config('ai.video_provider') === 'grok' && $this->openRouter->isConfigured()) {
             // One pass, capped at Grok's 15s — duration sized to the script.
             $seconds = $voiceoverScript
                 ? (int) min(15, max(6, ceil(str_word_count($voiceoverScript) / 2.4)))
@@ -46,7 +61,12 @@ class VideoGenerationService
                 $grokParams['aspect_ratio'] = '9:16';
             }
 
-            $jobId = $this->openRouter->startVideoGeneration($prompt, $seconds, $grokParams);
+            $jobId = $this->openRouter->startVideoGeneration(
+                $promptFor('openrouter'),
+                $seconds,
+                $grokParams,
+                $context,
+            );
 
             if ($jobId) {
                 Log::info("VideoGenerationService: Started via OpenRouter/Grok. Job: {$jobId}");
@@ -59,9 +79,10 @@ class VideoGenerationService
 
         // ── Fallback: Veo ───────────────────────────────────────────────────
         $operationName = $this->geminiService->startVideoGeneration(
-            $prompt,
+            $promptFor('veo'),
             $model ?? config('ai.models.video'),
-            $parameters
+            $parameters,
+            $context,
         );
 
         if ($operationName) {
@@ -70,63 +91,14 @@ class VideoGenerationService
             return ['provider' => 'veo', 'operation_name' => $operationName];
         }
 
-        // ── Fallback: Vidu ──────────────────────────────────────────────────
-        if (! config('services.vidu.api_key')) {
-            Log::warning('VideoGenerationService: Veo failed and VIDU_API_KEY is not set — no fallback available.');
-
-            return null;
-        }
-
-        Log::warning('VideoGenerationService: Veo failed, falling back to Vidu.');
-
-        // Vidu's audio AI works best with a concise, narration-focused prompt rather than the
-        // generic Veo wrapper. When a voiceover script is available, build a Vidu-specific prompt
-        // that explicitly instructs the model to narrate it — avoiding the conflicting "NO TEXT"
-        // instruction from VideoFromScriptPrompt that can suppress speech generation.
-        $viduPrompt = $voiceoverScript
-            ? $this->buildViduNarrationPrompt($voiceoverScript, $topic)
-            : $prompt;
-
-        $taskId = $this->viduService->generateVideo($viduPrompt, $parameters);
-
-        if ($taskId) {
-            Log::info("VideoGenerationService: Started via Vidu. Task ID: {$taskId}");
-
-            return ['provider' => 'vidu', 'operation_name' => $taskId];
-        }
-
-        Log::error('VideoGenerationService: Both Veo and Vidu failed to start video generation.');
+        Log::error('VideoGenerationService: both Grok and Veo failed to start video generation.');
 
         return null;
     }
 
     /**
-     * Build a Vidu-optimised prompt where audio narration of the script is the primary directive.
-     * Vidu's viduq3-pro audio layer responds to explicit voiceover instructions better than
-     * the generic Veo-style visual prompt.
-     */
-    private function buildViduNarrationPrompt(string $script, string $visualContext): string
-    {
-        // Extract a brief visual summary from the visual context (first 200 chars of strategy)
-        $briefVisual = mb_substr(strip_tags(trim($visualContext)), 0, 200);
-        if (strlen($visualContext) > 200) {
-            $briefVisual = rtrim($briefVisual, ' .,').'.';
-        }
-
-        return <<<PROMPT
-Professional advertising video. The narrator speaks this voiceover script in English:
-
-"{$script}"
-
-Visual setting: {$briefVisual}
-
-Requirements: No on-screen text or captions. The narration above must be spoken clearly as English voiceover audio accompanying the visuals.
-PROMPT;
-    }
-
-    /**
      * Check the status of a Veo long-running operation.
-     * Only used for Veo — Vidu polling is handled directly in CheckVideoStatus.
+     * OpenRouter jobs are polled directly in CheckVideoStatus.
      */
     public function checkGenerationStatus(string $operationName): ?array
     {
@@ -149,7 +121,7 @@ PROMPT;
 
             return $status;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("VideoGenerationService: Error checking status for {$operationName}: ".$e->getMessage());
 
             return null;

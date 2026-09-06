@@ -100,7 +100,8 @@ class TestMCCAutoCreation extends Command
             );
 
             return 0;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('Error: '.$e->getMessage());
             $this->error("\nStack trace:");
             $this->error($e->getTraceAsString());

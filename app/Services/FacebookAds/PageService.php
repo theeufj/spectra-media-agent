@@ -40,7 +40,8 @@ class PageService extends BaseFacebookAdsService
 
             return [];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error fetching Facebook pages: '.$e->getMessage(), [
                 'customer_id' => $this->customer->id,
             ]);
@@ -58,7 +59,8 @@ class PageService extends BaseFacebookAdsService
             return $this->get("/{$pageId}", [
                 'fields' => 'id,name,access_token,category,picture,fan_count,link,is_published,verification_status,about,description,website',
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error fetching Facebook page: '.$e->getMessage());
 
             return null;
@@ -84,7 +86,8 @@ class PageService extends BaseFacebookAdsService
 
             return true;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error setting Facebook page: '.$e->getMessage(), [
                 'customer_id' => $this->customer->id,
             ]);
@@ -129,7 +132,8 @@ class PageService extends BaseFacebookAdsService
 
             return true;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error clearing Facebook page: '.$e->getMessage());
 
             return false;

@@ -75,7 +75,8 @@ class AudienceTargeter
                     $result->addPlatformId('audience', $criterionResourceName);
                 }
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $result->addWarning("Failed to add audience targeting for '{$audienceKeyword}': ".$e->getMessage());
             }
         }

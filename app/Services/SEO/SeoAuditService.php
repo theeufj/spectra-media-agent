@@ -199,7 +199,8 @@ class SeoAuditService
                 Log::info('SEO Audit: fell back to unrendered HTML', ['url' => $url]);
 
                 return $response->body();
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('SEO Audit: Failed to fetch page', ['url' => $url, 'error' => $e->getMessage()]);
 
                 return null;
@@ -555,7 +556,9 @@ class SeoAuditService
                 // rendered as an em dash because nothing ever produced it.
                 'page_size_kb' => round(strlen($response->body()) / 1024),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['load_time_ms' => null, 'page_size_kb' => null];
         }
     }
@@ -664,7 +667,8 @@ PROMPT;
             }
 
             return $decoded;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('SEO Audit: AI recommendations failed', ['error' => $e->getMessage()]);
 
             return [];

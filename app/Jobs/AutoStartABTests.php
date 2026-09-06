@@ -126,7 +126,8 @@ class AutoStartABTests implements ShouldQueue
                     ]);
 
                     $started++;
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     $errors++;
                     Log::error('AutoStartABTests: Failed to create test for strategy '.$strategy->id.': '.$e->getMessage());
                 }

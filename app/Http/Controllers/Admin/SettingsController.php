@@ -36,8 +36,10 @@ class SettingsController extends Controller
 
         // What creative generation actually ran last — the configured model
         // can differ from what history shows if the env changed recently.
-        $lastImageGeneration = \App\Models\AiCost::where('operation', 'generateImage')
-            ->orWhere('model', 'like', '%image%')
+        // Match on the operation, not on '%image%' in the model name: the LIKE
+        // also caught unrelated models and, being an unparenthesised orWhere,
+        // was one added constraint away from ignoring the operation entirely.
+        $lastImageGeneration = \App\Models\AiCost::whereIn('operation', ['generateImage', 'refineImage'])
             ->latest()
             ->first(['model', 'created_at', 'cost']);
 
@@ -46,7 +48,7 @@ class SettingsController extends Controller
             'campaignModeDescription' => \App\Services\CampaignStatusHelper::getModeDescription(),
             'imagePromptDefault' => \App\Prompts\ImagePrompt::defaultTemplate(),
             'imagePromptCustom' => (string) Setting::get(\App\Prompts\ImagePrompt::TEMPLATE_SETTING, ''),
-            'imageModel' => config('ai.image_provider', 'grok') === 'grok'
+            'imageModel' => config('ai.image_provider') === 'grok'
                 ? config('ai.models.image_grok').' via OpenRouter (fallback: '.config('ai.models.image').')'
                 : config('ai.models.image'),
             'lastImageGeneration' => $lastImageGeneration,
@@ -55,7 +57,7 @@ class SettingsController extends Controller
             'adCopyModel' => config('ai.models.default'),
             'videoPromptDefault' => \App\Prompts\VideoFromScriptPrompt::defaultTemplate(),
             'videoPromptCustom' => (string) Setting::get(\App\Prompts\VideoFromScriptPrompt::TEMPLATE_SETTING, ''),
-            'videoModel' => config('ai.video_provider', 'grok') === 'grok'
+            'videoModel' => config('ai.video_provider') === 'grok'
                 ? config('ai.models.video_grok').' via OpenRouter (fallback: '.config('ai.models.video').')'
                 : config('ai.models.video'),
             'lastVideoGeneration' => \App\Models\AiCost::where('operation', 'startVideoGeneration')

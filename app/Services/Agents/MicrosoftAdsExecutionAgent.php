@@ -47,7 +47,8 @@ class MicrosoftAdsExecutionAgent extends PlatformExecutionAgent
             }
 
             return ExecutionPlan::fromJson($response['text']);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError('Failed to generate execution plan', ['error' => $e->getMessage()]);
 
             // Fallback plan if AI fails
@@ -187,7 +188,8 @@ PROMPT;
             if ($response && isset($response['text'])) {
                 return RecoveryPlan::fromJson($response['text']);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError('Failed to generate recovery plan via AI', ['error' => $e->getMessage()]);
         }
 
@@ -246,7 +248,8 @@ PROMPT;
                 }
 
                 $results[$action] = ['success' => true, 'data' => $stepResult];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $results[$action] = ['success' => false, 'error' => $e->getMessage()];
                 $this->logError("Step failed: {$action}", ['error' => $e->getMessage()]);
             }
@@ -564,7 +567,9 @@ PROMPT;
             }
 
             return ['status' => 'tracking_configured', 'uet_tag_id' => $tagId];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['status' => 'tracking_skipped', 'error' => $e->getMessage()];
         }
     }

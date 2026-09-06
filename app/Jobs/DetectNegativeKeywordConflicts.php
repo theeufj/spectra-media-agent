@@ -42,7 +42,8 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         foreach ($googleCustomers as $customer) {
             try {
                 $found += $this->scanCustomer($customer);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("DetectNegativeKeywordConflicts: Failed for customer {$customer->id}: ".$e->getMessage());
             }
@@ -56,7 +57,8 @@ class DetectNegativeKeywordConflicts implements ShouldQueue
         foreach ($microsoftCustomers as $customer) {
             try {
                 $found += $this->scanMicrosoftCustomer($customer);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("DetectNegativeKeywordConflicts: Failed (Microsoft) for customer {$customer->id}: ".$e->getMessage());
             }

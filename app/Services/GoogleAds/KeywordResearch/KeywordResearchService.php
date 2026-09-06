@@ -135,7 +135,8 @@ class KeywordResearchService
             $service = new GenerateKeywordIdeas($this->customer);
 
             return ($service)($customerId, $seedKeywords, $url, $language, $geoTargets, $maxResults);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('KeywordResearchService: Keyword Planner unavailable, using seeds only', [
                 'error' => $e->getMessage(),
             ]);

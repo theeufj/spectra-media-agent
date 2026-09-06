@@ -129,7 +129,8 @@ class ConversionsApiService
 
             return null;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CAPI: Exception sending events: '.$e->getMessage(), [
                 'pixel_id' => $pixelId,
             ]);
@@ -486,7 +487,8 @@ class ConversionsApiService
 
             return $response->successful() ? $response->json() : null;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CAPI: Test event failed: '.$e->getMessage());
 
             return null;

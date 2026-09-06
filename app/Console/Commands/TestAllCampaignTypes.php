@@ -373,7 +373,8 @@ class TestAllCampaignTypes extends Command
                 $this->warn('  Responsive Search Ad creation failed');
                 $this->logResult('Search Ad (RSA)', 'FAILED', 'Creation returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  Search campaign error: '.$this->extractErrorMessage($e));
             $this->logResult('Search Campaign', 'FAILED', $this->extractErrorMessage($e));
         }
@@ -392,7 +393,8 @@ class TestAllCampaignTypes extends Command
                 $research = $researchService->research($customerId, $this->businessName);
                 $keywords = $research['keywords'] ?? [];
                 $negativeKeywords = $research['negative_keywords'] ?? [];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $this->warn('  AI keyword research failed: '.substr($e->getMessage(), 0, 100));
             }
         }
@@ -520,7 +522,8 @@ class TestAllCampaignTypes extends Command
                 $this->warn('  Responsive Display Ad creation failed');
                 $this->logResult('Display Ad (RDA)', 'FAILED', 'Creation returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  Display campaign error: '.$this->extractErrorMessage($e));
             $this->logResult('Display Campaign', 'FAILED', $this->extractErrorMessage($e));
         }
@@ -636,7 +639,8 @@ class TestAllCampaignTypes extends Command
                 $this->warn('  PMax asset group creation failed');
                 $this->logResult('PMax Asset Group', 'FAILED', 'Creation returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  PMax campaign error: '.$this->extractErrorMessage($e));
             $this->logResult('PMax Campaign', 'FAILED', $this->extractErrorMessage($e));
         }
@@ -724,7 +728,8 @@ class TestAllCampaignTypes extends Command
                 $this->warn('  Demand Gen ad creation failed');
                 $this->logResult('DemandGen Ad', 'FAILED', 'Creation returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $errorMsg = $this->extractErrorMessage($e);
             if (str_contains($errorMsg, 'Conversion tracking')) {
                 $this->warn('  DemandGen requires conversion tracking — skipping (account needs conversion actions configured)');
@@ -791,7 +796,8 @@ class TestAllCampaignTypes extends Command
                 );
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  Verification query failed: '.$e->getMessage());
             $this->logResult('Verification', 'FAILED', $e->getMessage());
         }
@@ -833,7 +839,8 @@ class TestAllCampaignTypes extends Command
             }
 
             return $rows;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  Could not list campaigns: '.$e->getMessage());
 
             return [];
@@ -906,7 +913,8 @@ class TestAllCampaignTypes extends Command
                 ];
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  Could not list keywords: '.$e->getMessage());
         }
 

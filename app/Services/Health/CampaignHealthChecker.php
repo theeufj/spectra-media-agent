@@ -91,7 +91,8 @@ class CampaignHealthChecker
             $health['issues'] = array_merge($health['issues'], $approvalHealth['issues']);
             $health['warnings'] = array_merge($health['warnings'], $approvalHealth['warnings']);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CampaignHealthChecker: Error checking campaign health', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -154,7 +155,8 @@ class CampaignHealthChecker
                         ];
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('CampaignHealthChecker: Could not check Google campaign delivery status', [
                     'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
                 ]);
@@ -186,7 +188,8 @@ class CampaignHealthChecker
                         ];
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('CampaignHealthChecker: Could not check Facebook campaign delivery status', [
                     'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
                 ]);
@@ -359,7 +362,8 @@ class CampaignHealthChecker
                 }
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('CampaignHealthChecker: Could not detect performance anomalies', [
                 'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
             ]);
@@ -411,7 +415,8 @@ class CampaignHealthChecker
                     ];
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('CampaignHealthChecker: Could not check creative fatigue', [
                 'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
             ]);
@@ -458,7 +463,8 @@ class CampaignHealthChecker
                         'message' => "{$limited} Google ad(s) have limited approval",
                     ];
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('CampaignHealthChecker: Could not check Google ad status', [
                     'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
                 ]);
@@ -483,7 +489,8 @@ class CampaignHealthChecker
                         }
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('CampaignHealthChecker: Could not check Facebook ad status', [
                     'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
                 ]);
@@ -526,7 +533,8 @@ class CampaignHealthChecker
             };
 
             return $service->getMetrics($customer->cleanGoogleCustomerId(), (string) $campaignId);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('CampaignHealthChecker: Could not fetch Google campaign metrics', [
                 'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
             ]);
@@ -560,7 +568,8 @@ class CampaignHealthChecker
             }
 
             return $metrics;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('CampaignHealthChecker: Could not fetch Facebook campaign metrics', [
                 'campaign_id' => $campaign->id, 'error' => $e->getMessage(),
             ]);

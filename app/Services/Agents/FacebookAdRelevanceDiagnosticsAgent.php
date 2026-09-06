@@ -58,7 +58,8 @@ class FacebookAdRelevanceDiagnosticsAgent
             foreach ($ads as $ad) {
                 try {
                     $this->diagnoseAd($campaign, $customer, $ad, $actions, $paused, $flagged, $errors);
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     $errors[] = "Error processing ad '{$ad['name']}': ".$e->getMessage();
                     Log::warning('FacebookAdRelevanceDiagnosticsAgent: '.$e->getMessage());
                 }
@@ -216,7 +217,8 @@ PROMPT;
             $data = json_decode(trim($text), true);
 
             return (json_last_error() === JSON_ERROR_NONE && is_array($data)) ? $data : [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('FacebookAdRelevanceDiagnosticsAgent: Copy generation failed: '.$e->getMessage());
 
             return [];

@@ -67,7 +67,7 @@ class GenerateMonthlyReport implements ShouldQueue
                 'total_spend' => $report['summary']['total_cost'],
                 'pdf_generated' => ! empty($pdfPath),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Failed to generate monthly report for customer {$this->customerId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

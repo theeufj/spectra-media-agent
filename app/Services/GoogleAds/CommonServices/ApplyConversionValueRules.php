@@ -83,7 +83,8 @@ class ApplyConversionValueRules extends BaseGoogleAdsService
             ]);
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('ApplyConversionValueRules: Unexpected error', [
                 'customer_id' => $customerId,
                 'campaign' => $campaignResourceName,

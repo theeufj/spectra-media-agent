@@ -37,7 +37,8 @@ class BudgetAllocationService
             $this->allocateBudgetByPerformance($campaigns, $campaignPerformance, $totalWeightedPerformance, $totalBudget);
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error allocating budget for customer {$customer->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

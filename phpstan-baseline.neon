@@ -637,12 +637,6 @@ parameters:
 			path: app/Http/Controllers/WarRoomController.php
 
 		-
-			message: '#^Called ''env'' outside of the config directory which returns null when the config is cached, use ''config''\.$#'
-			identifier: larastan.noEnvCallsOutsideOfConfig
-			count: 2
-			path: app/Http/Middleware/DetectTenant.php
-
-		-
 			message: '#^Access to an undefined property App\\Models\\User\:\:\$customers\.$#'
 			identifier: property.notFound
 			count: 3
@@ -1251,12 +1245,6 @@ parameters:
 		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetAdPerformanceByAsset constructor invoked with 2 parameters, 1 required\.$#'
 			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/ABTestingAgent.php
-
-		-
-			message: '#^Dead catch \- Exception is never thrown in the try block\.$#'
-			identifier: catch.neverThrown
 			count: 1
 			path: app/Services/Agents/ABTestingAgent.php
 
@@ -2035,7 +2023,7 @@ parameters:
 			path: app/Services/Health/CampaignHealthChecker.php
 
 		-
-			message: '#^Method App\\Services\\GoogleAds\\BaseGoogleAdsService@anonymous/app/Services/Health/CampaignHealthChecker\.php\:507\:\:getMetrics\(\) never returns null so it can be removed from the return type\.$#'
+			message: '#^Method App\\Services\\GoogleAds\\BaseGoogleAdsService@anonymous/app/Services/Health/CampaignHealthChecker\.php\:514\:\:getMetrics\(\) never returns null so it can be removed from the return type\.$#'
 			identifier: return.unusedType
 			count: 1
 			path: app/Services/Health/CampaignHealthChecker.php

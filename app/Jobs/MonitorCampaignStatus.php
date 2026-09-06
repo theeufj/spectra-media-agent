@@ -71,7 +71,7 @@ class MonitorCampaignStatus implements ShouldQueue
                 $this->updateOverallStatus($campaign, $platformResults);
                 $processed++;
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 $errors++;
@@ -374,7 +374,7 @@ class MonitorCampaignStatus implements ShouldQueue
                     'primary_status_reasons' => null,
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             Log::warning("MonitorCampaignStatus: Microsoft Ads check failed for campaign {$campaign->id}: ".$e->getMessage());
@@ -403,7 +403,7 @@ class MonitorCampaignStatus implements ShouldQueue
                     'primary_status_reasons' => null,
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             Log::warning("MonitorCampaignStatus: LinkedIn Ads check failed for campaign {$campaign->id}: ".$e->getMessage());

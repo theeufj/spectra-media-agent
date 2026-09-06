@@ -588,7 +588,8 @@ class CampaignController extends Controller
                 'daily_data' => $this->formatDailyData($dailyData),
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             \Log::error("Failed to fetch performance for campaign {$campaign->id}: ".$e->getMessage());
 
             // Fall back to stored data on API error

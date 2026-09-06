@@ -104,7 +104,8 @@ class RunHealthChecks implements ShouldQueue
                 // Store results for dashboard display
                 $this->storeHealthResults($customer, $results);
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error("RunHealthChecks: Error checking customer {$customer->id}", [
                     'error' => $e->getMessage(),
                 ]);
@@ -189,7 +190,8 @@ class RunHealthChecks implements ShouldQueue
                 'recipients' => $customer->users->pluck('email')->filter()->values()->all(),
                 'issues_count' => count($results['issues'] ?? []),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('RunHealthChecks: Failed to send health alert', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),

@@ -179,7 +179,8 @@ class RunSelfHealingChecks implements ShouldQueue
                         ['actions' => $results['actions_taken']]
                     );
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error('RunSelfHealingChecks: Error processing campaign '.$campaign->id.': '.$e->getMessage());
                 $errors++;
             } finally {

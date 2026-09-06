@@ -81,7 +81,8 @@ class PauseWastefulAdGroups implements ShouldQueue
                         $adGroup
                     );
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("PauseWastefulAdGroups: failed for campaign {$campaign->id}: ".$e->getMessage());
             }

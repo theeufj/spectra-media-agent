@@ -42,7 +42,8 @@ class FacebookAdsHealthChecker
             $health['warnings'] = array_merge($health['warnings'], $pixelHealth['warnings']);
             $health['metrics']['pixel'] = $pixelHealth;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('FacebookAdsHealthChecker: Error checking Facebook Ads health', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -77,7 +78,9 @@ class FacebookAdsHealthChecker
             Cache::put($cacheKey, $result, now()->addMinutes(30));
 
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['connected' => false, 'error' => $e->getMessage()];
         }
     }
@@ -145,7 +148,8 @@ class FacebookAdsHealthChecker
                     $health['warnings'][] = $entry;
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('FacebookAdsHealthChecker: Could not check Facebook account restrictions', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),

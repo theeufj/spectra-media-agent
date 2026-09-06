@@ -44,7 +44,8 @@ class SearchAudience extends BaseGoogleAdsService
                     'type' => $googleAdsRow->getUserInterest()->getTaxonomyType(),
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Log error or just return empty array
             $this->logError('Failed to search audiences: '.$e->getMessage());
         }

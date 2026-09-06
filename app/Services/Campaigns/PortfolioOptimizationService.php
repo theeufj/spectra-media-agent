@@ -42,7 +42,8 @@ class PortfolioOptimizationService
 
             return true;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error optimizing portfolio for customer {$customer->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

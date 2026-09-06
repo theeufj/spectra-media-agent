@@ -76,7 +76,8 @@ class CreateAndLinkManagedAccount extends BaseGoogleAdsService
                 'resource_name' => $resourceName,
                 'customer_id' => $newCustomerId,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating and linking managed account: '.$e->getMessage(), [
                 'exception' => $e,
                 'manager_customer_id' => $managerCustomerId,

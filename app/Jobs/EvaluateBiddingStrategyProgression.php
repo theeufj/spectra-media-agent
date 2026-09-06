@@ -63,7 +63,8 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
                     $summary['graduated']++;
                     Log::info("EvaluateBiddingStrategyProgression: Graduated {$campaign->id}", $result);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $summary['errors']++;
                 Log::error("EvaluateBiddingStrategyProgression: Error for campaign {$campaign->id}: ".$e->getMessage());
             }
@@ -77,7 +78,8 @@ class EvaluateBiddingStrategyProgression implements ShouldQueue
                     $summary['reverted']++;
                     Log::info("EvaluateBiddingStrategyProgression: Reverted {$campaign->id}", $regressResult);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error("EvaluateBiddingStrategyProgression: Regression check error for campaign {$campaign->id}: ".$e->getMessage());
             }
         }

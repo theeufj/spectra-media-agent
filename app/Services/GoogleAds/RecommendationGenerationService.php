@@ -80,7 +80,8 @@ class RecommendationGenerationService
                     ]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error calling Gemini Service for recommendations: '.$e->getMessage(), [
                 'exception' => $e,
                 'performance_data_count' => count($performanceData),
@@ -129,7 +130,8 @@ class RecommendationGenerationService
                     'llm_response_text' => $llmResponseText,
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error parsing LLM response: '.$e->getMessage(), [
                 'exception' => $e,
                 'llm_response_text' => $llmResponseText,

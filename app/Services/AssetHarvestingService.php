@@ -101,12 +101,14 @@ class AssetHarvestingService
                 ->timeout(30)
                 ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
                 ->bodyHtml();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Fallback to HTTP fetch
             try {
                 $response = Http::timeout(15)->get($page->url);
                 $html = $response->successful() ? $response->body() : null;
-            } catch (\Exception $e2) {
+            } catch (\Throwable $e2) {
+                report($e2);
                 Log::warning('AssetHarvestingService: Failed to fetch page', [
                     'url' => $page->url,
                     'error' => $e2->getMessage(),
@@ -167,7 +169,8 @@ class AssetHarvestingService
                     return;
                 }
                 $this->extractSchemaImages($data, $urls);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // Skip malformed JSON-LD
             }
         });
@@ -282,7 +285,8 @@ class AssetHarvestingService
                 'height' => $height,
                 'file_size' => strlen($body),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('AssetHarvestingService: Download failed', [
                 'url' => $url,
                 'error' => $e->getMessage(),

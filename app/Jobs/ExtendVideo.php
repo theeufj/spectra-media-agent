@@ -116,7 +116,7 @@ class ExtendVideo implements ShouldQueue
             // Dispatch job to check the extension status
             CheckVideoStatus::dispatch($extendedVideo)->delay(now()->addMinutes(1));
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error in ExtendVideo job for VideoCollateral ID {$this->sourceVideo->id}: ".$e->getMessage());
             throw $e;
         }

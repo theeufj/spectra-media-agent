@@ -87,7 +87,8 @@ class CampaignOptimizationAgent
 
             return null;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("CampaignOptimizationAgent: Failed for campaign {$campaign->id}: ".$e->getMessage());
 
             return null;

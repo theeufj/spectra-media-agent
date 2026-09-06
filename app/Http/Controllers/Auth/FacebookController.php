@@ -63,7 +63,8 @@ class FacebookController extends Controller
             }
 
             return redirect()->route('dashboard');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             \Log::error('Facebook OAuth error: '.$e->getMessage());
 
             return redirect()->route('login')->with('error', 'Facebook authentication failed. Please try again.');

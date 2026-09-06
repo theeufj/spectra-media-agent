@@ -257,7 +257,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
                     AgentActivity::record('creative', 'creative_optimized', "Generated {$creativeGenCount} new ad variations based on performance data for \"{$campaign->name}\"", $campaign->customer_id, $campaign->id);
                 }
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 $summary['errors']++;
@@ -287,7 +287,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             // Check cross-platform budget reallocation opportunity (Google vs Facebook)
             try {
                 $budgetAgent->checkCrossPlatformReallocation($customer);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 Log::warning("AutomatedCampaignMaintenance: Cross-platform reallocation check failed for customer {$customerId}: ".$e->getMessage());
@@ -296,7 +296,7 @@ class AutomatedCampaignMaintenance implements ShouldQueue
             // Facebook audience refresh cycle (stale lookalikes + frequency expansion)
             try {
                 $audienceAgent->refreshFacebookAudiences($customer);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 Log::warning("AutomatedCampaignMaintenance: Audience refresh failed for customer {$customerId}: ".$e->getMessage());

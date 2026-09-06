@@ -191,7 +191,8 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
                         }
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $result->addWarning("Failed to upload/link image asset {$image->s3_path}: ".$e->getMessage());
             }
         }
@@ -224,7 +225,8 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
                 if ($assetResourceName) {
                     $videoAssetResourceNames[] = $assetResourceName;
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $result->addWarning("Failed to register video asset {$video->id}: ".$e->getMessage());
             }
         }
@@ -257,7 +259,8 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
                     'asset_group' => $assetGroupResourceName,
                     'video_asset' => $videoAssetResource,
                 ]);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('GoogleAdsExecutionAgent: Skipping video asset (rejected by Google): '.$e->getMessage(), [
                     'video_asset' => $videoAssetResource,
                 ]);
@@ -280,7 +283,8 @@ class PerformanceMaxCampaignExecutor implements CampaignTypeExecutor
         try {
             $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
             $applyValueRules($customerId, $campaignResourceName, $this->customer);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: '.$e->getMessage());
         }
     }

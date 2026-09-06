@@ -71,7 +71,8 @@ class CampaignCopilotController extends Controller
                 'message' => $assistantMessage,
                 'conversation_id' => $conversation->id,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CampaignCopilot: Failed to generate response', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),

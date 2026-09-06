@@ -41,7 +41,8 @@ class GoogleAdsHealthChecker
             $health['warnings'] = array_merge($health['warnings'], $conversionHealth['warnings']);
             $health['metrics']['conversion_tracking'] = $conversionHealth;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GoogleAdsHealthChecker: Error checking Google Ads health', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -81,7 +82,9 @@ class GoogleAdsHealthChecker
             Cache::put($cacheKey, $result, now()->addMinutes(30));
 
             return $result;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['connected' => false, 'error' => $e->getMessage()];
         }
     }
@@ -134,7 +137,8 @@ class GoogleAdsHealthChecker
                     $health['issues'][] = array_merge($info, ['severity' => 'critical']);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('GoogleAdsHealthChecker: Could not check Google account status', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),

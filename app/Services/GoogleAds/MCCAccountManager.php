@@ -58,7 +58,8 @@ class MCCAccountManager extends BaseGoogleAdsService
                 'time_zone' => $customer->getTimeZone(),
                 'currency_code' => $customer->getCurrencyCode(),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error fetching account info for {$accountId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -158,7 +159,8 @@ class MCCAccountManager extends BaseGoogleAdsService
             try {
                 $billingService = new BillingSetupService($this->customer);
                 $billingService->setupBillingForSubAccount($newAccountId);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // Non-fatal — campaigns can still be created, billing can be set up later
                 Log::warning('Could not set up billing for new sub-account', [
                     'sub_account_id' => $newAccountId,
@@ -178,7 +180,8 @@ class MCCAccountManager extends BaseGoogleAdsService
                 'resource_name' => $resourceName,
                 'mcc_account_id' => $mccAccountId,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating Standard account under MCC: '.$e->getMessage(), [
                 'exception' => $e,
                 'mcc_account_id' => $mccAccountId,
@@ -276,7 +279,8 @@ class MCCAccountManager extends BaseGoogleAdsService
             ]);
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error renaming account: '.$e->getMessage(), [
                 'account_id' => $accountId,
                 'exception' => $e,

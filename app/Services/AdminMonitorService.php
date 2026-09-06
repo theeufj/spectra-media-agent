@@ -104,14 +104,16 @@ class AdminMonitorService
                     if (! is_array($geminiFeedback) || ! isset($geminiFeedback['overall_score']) || ! isset($geminiFeedback['feedback'])) {
                         throw new \Exception('Gemini did not return a valid JSON object with overall_score and feedback.');
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::error("AdminMonitorService: Failed to parse Gemini's ad copy review response for AdCopy ID {$adCopy->id}: ".$e->getMessage(), [
                         'generated_review' => $generatedReview,
                     ]);
                     $geminiFeedback = ['overall_score' => 0, 'feedback' => ['general' => ['Failed to parse Gemini\'s response.']]];
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("AdminMonitorService: Exception during Gemini ad copy review for AdCopy ID {$adCopy->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

@@ -76,7 +76,8 @@ class CreativeBoostController extends Controller
             $purchase->update(['stripe_checkout_session_id' => $session->id]);
 
             return Inertia::location($session->url);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Creative Boost checkout failed: '.$e->getMessage());
             $purchase->update(['status' => 'failed']);
 

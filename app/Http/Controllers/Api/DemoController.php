@@ -129,7 +129,8 @@ HTML;
                 ->cc(['mattware75@gmail.com', 'james.ward@beyondd.com.au'])
                 ->subject($subject)
             );
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('DemoController: Failed to send Try Now notification: '.$e->getMessage());
         }
 
@@ -185,7 +186,8 @@ HTML;
                                 $cssColors = array_merge($cssColors, $cssFileColorMatches[0]);
                             }
                         }
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
+                        report($e);
                         Log::warning('Could not fetch CSS from: '.$cssPath);
                     }
                 }
@@ -218,7 +220,8 @@ HTML;
                     $cssColors = array_slice(array_keys($colorCounts), 0, 5);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('DemoController text scraping failed: '.$e->getMessage());
             $textContent = 'Domain: '.parse_url($url, PHP_URL_HOST);
         }
@@ -241,7 +244,8 @@ HTML;
                     $adCopy = $parsedAdCopy;
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('DemoController ad copy generation failed: '.$e->getMessage());
             $adCopy = [
                 'headlines' => ['Leading Industry Solution', 'Start Your Free Trial', 'Transform Your Business'],

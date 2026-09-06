@@ -212,7 +212,8 @@ class BrandGuidelineExtractorService
 
             return $brandGuideline;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error extracting brand guidelines', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -242,7 +243,9 @@ class BrandGuidelineExtractorService
                         $response = Http::timeout(5)->get($robotsUrl);
 
                         return $response->successful() ? $response->body() : '';
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
+                        report($e);
+
                         return '';
                     }
                 });
@@ -256,7 +259,8 @@ class BrandGuidelineExtractorService
                         return $this->getDefaultVisualAnalysis();
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::notice('Could not parse robots.txt, proceeding cautiously', ['error' => $e->getMessage()]);
             }
 
@@ -296,7 +300,8 @@ class BrandGuidelineExtractorService
                     }
                 }
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('Vision AI analysis failed, falling back to HTML scraping', [
                     'error' => $e->getMessage(),
                 ]);
@@ -310,7 +315,8 @@ class BrandGuidelineExtractorService
                     ->waitUntilDOMContentLoaded()
                     ->timeout(20)
                     ->bodyHtml();
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('Browsershot HTML fetch failed, falling back to HTTP', [
                     'error' => $e->getMessage(),
                 ]);
@@ -332,7 +338,8 @@ class BrandGuidelineExtractorService
                 'layout_style' => $this->detectLayoutStyle($html),
             ];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error analyzing visual style: '.$e->getMessage());
 
             return $this->getDefaultVisualAnalysis();

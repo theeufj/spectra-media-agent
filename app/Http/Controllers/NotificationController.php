@@ -91,7 +91,8 @@ class NotificationController extends Controller
                 'notifications' => $allNotifications->toArray(),
                 'unread_count' => $unreadCount,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             \Log::error('NotificationController error: '.$e->getMessage());
 
             return response()->json(['notifications' => [], 'unread_count' => 0]);
@@ -154,7 +155,8 @@ class NotificationController extends Controller
                     ]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             \Log::warning('Failed to fetch campaigns needing signoff: '.$e->getMessage());
         }
 
@@ -195,7 +197,8 @@ class NotificationController extends Controller
                     ]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             \Log::warning('Failed to fetch campaigns ready to deploy: '.$e->getMessage());
         }
 

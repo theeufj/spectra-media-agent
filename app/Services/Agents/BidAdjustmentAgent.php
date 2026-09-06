@@ -211,7 +211,8 @@ class BidAdjustmentAgent
             Log::info("BidAdjustmentAgent: Facebook daypart schedule applied for campaign {$campaign->id}", [
                 'exclusion_hours' => $exclusionHours,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $errors[] = 'Facebook daypart failed: '.$e->getMessage();
             Log::warning("BidAdjustmentAgent: Facebook daypart error for campaign {$campaign->id}: ".$e->getMessage());
         }

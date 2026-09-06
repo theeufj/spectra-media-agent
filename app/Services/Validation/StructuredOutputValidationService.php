@@ -27,7 +27,8 @@ class StructuredOutputValidationService
             }
 
             return $data;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error during structured output validation: '.$e->getMessage(), [
                 'exception' => $e,
             ]);

@@ -74,7 +74,8 @@ class GetAndLinkLocationAssets extends BaseGoogleAdsService
             }
 
             return $linked;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GetAndLinkLocationAssets: Query failed', [
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),

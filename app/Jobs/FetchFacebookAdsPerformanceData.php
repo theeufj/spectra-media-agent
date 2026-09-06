@@ -157,7 +157,7 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                 }
 
                 $lock->release();
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error("Error in FetchFacebookAdsPerformanceData job for campaign {$this->campaign->id}: ".$e->getMessage(), [
                     'exception' => $e,
                 ]);

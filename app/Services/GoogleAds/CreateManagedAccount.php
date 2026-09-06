@@ -66,7 +66,8 @@ class CreateManagedAccount extends BaseGoogleAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating managed account: '.$e->getMessage(), [
                 'exception' => $e,
                 'manager_customer_id' => $managerCustomerId,

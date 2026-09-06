@@ -39,7 +39,8 @@ class AdAccountService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error listing ad accounts: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
@@ -70,7 +71,8 @@ class AdAccountService extends BaseFacebookAdsService
             }
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting ad account details: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -113,7 +115,8 @@ class AdAccountService extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating ad account: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_name' => $accountName,
@@ -155,7 +158,8 @@ class AdAccountService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting spend insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -179,7 +183,8 @@ class AdAccountService extends BaseFacebookAdsService
             ]);
 
             return $response['data'] ?? [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting pixels: '.$e->getMessage(), [
                 'account_id' => $accountId,
             ]);
@@ -199,7 +204,8 @@ class AdAccountService extends BaseFacebookAdsService
             $response = $this->get("/{$pixelId}/stats");
 
             return $response['data'] ?? [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting pixel stats: '.$e->getMessage(), [
                 'pixel_id' => $pixelId,
             ]);

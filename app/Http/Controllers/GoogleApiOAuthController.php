@@ -187,7 +187,9 @@ class GoogleApiOAuthController extends Controller
                 'accounts' => array_map(fn ($n) => ['resource_name' => $n, 'id' => str_replace('customers/', '', $n)], $names),
                 'count' => count($names),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['error' => SafeError::message($e, "We couldn't load your Google Ads accounts."), 'accounts' => []];
         }
     }
@@ -212,7 +214,9 @@ class GoogleApiOAuthController extends Controller
                 ], $accounts),
                 'count' => count($accounts),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['error' => SafeError::message($e, "We couldn't load your Google Ads accounts."), 'accounts' => []];
         }
     }
@@ -238,7 +242,9 @@ class GoogleApiOAuthController extends Controller
                 ], $accounts),
                 'count' => count($accounts),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['error' => SafeError::message($e, "We couldn't load your Google Ads accounts."), 'accounts' => []];
         }
     }

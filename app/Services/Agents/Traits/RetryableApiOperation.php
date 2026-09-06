@@ -80,7 +80,7 @@ trait RetryableApiOperation
 
                 return $result;
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 $lastException = $e;
 
                 // Categorize the error
@@ -147,7 +147,8 @@ trait RetryableApiOperation
 
             try {
                 $results[$name] = $this->executeWithRetry($operation, $name, $context, $options);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $success = false;
                 $errors[$name] = $e->getMessage();
 
@@ -193,10 +194,10 @@ trait RetryableApiOperation
     /**
      * Categorize an error as retryable or fatal.
      *
-     * @param  \Exception  $e  The exception to categorize
+     * @param  \Throwable  $e  The error to categorize
      * @return string 'retryable' or 'fatal'
      */
-    protected function categorizeError(\Exception $e): string
+    protected function categorizeError(\Throwable $e): string
     {
         $message = strtolower($e->getMessage());
         $code = $e->getCode();

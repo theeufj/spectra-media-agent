@@ -136,7 +136,8 @@ class UploadPMaxVideoAssets implements ShouldQueue
                         'link_resource_name' => $linkResourceName,
                     ]);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // A video Google rejects as too short can never link — retire it so it
                 // stops being retried and the self-heal can generate a compliant one.
                 if (str_contains($e->getMessage(), 'YOUTUBE_VIDEO_TOO_SHORT')) {

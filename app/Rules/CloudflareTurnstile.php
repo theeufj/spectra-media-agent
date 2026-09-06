@@ -47,7 +47,8 @@ class CloudflareTurnstile implements ValidationRule
                 ]);
                 $fail('Security verification failed. Please try again.');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Cloudflare Turnstile verification error', [
                 'error' => $e->getMessage(),
             ]);

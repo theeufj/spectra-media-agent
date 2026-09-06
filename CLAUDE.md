@@ -171,7 +171,10 @@ npm test                   # frontend (vitest) — resources/js/tests/
 Don't add to `phpstan-baseline.neon` — it's there to freeze existing debt, not to
 absorb new debt. Regenerate it only when a refactor moves existing errors between
 files. CI runs all four of the above plus `bin/check-fatal-classes` and
-`bin/check-baseline-growth`, on PHP 8.4 (matching the Forge server).
+`bin/check-baseline-growth`, on PHP 8.4 (matching the Forge server). Both
+PHPStan configs analyse `bootstrap/` as well as `app/` — it was outside the
+paths, which is how the exception reporter spent months writing to a class that
+does not exist, failing silently every time.
 
 Several rules in this file are now tests rather than requests. If one of these fails,
 the fix is the code, not the test:
@@ -183,6 +186,7 @@ the fix is the code, not the test:
 | No agent reimplements `execute()` | `DeploymentRecoveryTest` |
 | Nothing substantial runs in the scheduler tick | `ScheduledFanOutJobsTest` |
 | Every project env key is in `.env.example` | `EnvExampleCoverageTest` |
+| `report()` actually reaches the admin dashboard | `ExceptionReportingTest` |
 
 The full suite runs locally again (`php artisan test`, ~90s, integration
 suites self-skip without their RUN_*_INTEGRATION_TESTS flags). The old hang

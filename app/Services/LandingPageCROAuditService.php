@@ -93,7 +93,7 @@ class LandingPageCROAuditService
 
             return $audit;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('CRO audit failed', [
                 'customer_id' => $customer->id,
                 'url' => $url,
@@ -231,7 +231,8 @@ class LandingPageCROAuditService
                         ];
                     }
                 });
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // Continue if selector fails
             }
         }
@@ -251,7 +252,8 @@ class LandingPageCROAuditService
                     ];
                 }
             });
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Continue
         }
 
@@ -271,7 +273,9 @@ class LandingPageCROAuditService
                             }
                         }
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
+
                     continue;
                 }
             }
@@ -350,7 +354,8 @@ class LandingPageCROAuditService
                 'keywords' => $this->extractKeywords($h1.' '.$metaDescription),
             ];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Message match analysis failed', ['error' => $e->getMessage()]);
 
             // Null, not 50. A score of 50 tripped the "< 60" check below, so an

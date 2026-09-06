@@ -85,7 +85,8 @@ class CreateConversionAction extends BaseGoogleAdsService
             foreach ($response->iterateAllElements() as $row) {
                 return $row->getConversionAction()->getResourceName();
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError('Failed to check existing conversion action: '.$e->getMessage());
         }
 

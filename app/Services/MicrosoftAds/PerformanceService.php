@@ -252,7 +252,8 @@ class PerformanceService extends BaseMicrosoftAdsService
             }
 
             return $this->parseCsvContent($content);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Microsoft Ads: Report download exception', ['error' => $e->getMessage()]);
 
             return [];
@@ -331,7 +332,9 @@ class PerformanceService extends BaseMicrosoftAdsService
             // Normalise date to Y-m-d
             try {
                 $date = Carbon::parse($rawDate)->format('Y-m-d');
-            } catch (\Exception) {
+            } catch (\Throwable $e) {
+                report($e);
+
                 continue;
             }
 

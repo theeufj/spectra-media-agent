@@ -90,7 +90,8 @@ class CampaignDiagnosticsAgent
             if ($finding = $this->checkMetaAdApprovals($campaign)) {
                 $findings[] = $finding;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CampaignDiagnosticsAgent: diagnoseMeta failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -245,7 +246,8 @@ class CampaignDiagnosticsAgent
                 'auto_fix_action' => null,
                 'recommended_action' => 'Review disapproved ads in Meta Ads Manager, correct policy violations, and resubmit for review',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('CampaignDiagnosticsAgent: Meta ad approval check failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -275,7 +277,8 @@ class CampaignDiagnosticsAgent
             if ($finding = $this->checkDisplayOnlyTraffic($campaign, $perf)) {
                 $findings[] = $finding;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CampaignDiagnosticsAgent: diagnoseGoogleAds failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -393,7 +396,8 @@ class CampaignDiagnosticsAgent
                     foreach ($resp->getIterator() as $_) {
                         $signalCount++;
                     }
-                } catch (\Exception) {
+                } catch (\Throwable $e) {
+                    report($e);
                 }
 
                 $landingUrls = [];
@@ -461,7 +465,8 @@ class CampaignDiagnosticsAgent
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CampaignDiagnosticsAgent: PMax inspection failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -502,7 +507,8 @@ class CampaignDiagnosticsAgent
                         foreach ($resp->getIterator() as $_) {
                             return true;
                         }
-                    } catch (\Exception) {
+                    } catch (\Throwable $e) {
+                        report($e);
                     }
 
                     return false;
@@ -531,7 +537,8 @@ class CampaignDiagnosticsAgent
                     'recommended_action' => 'Exclude non-converting app/display placements at account level; consider a companion Search campaign for sustained intent coverage',
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('CampaignDiagnosticsAgent: Traffic quality check failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -563,7 +570,9 @@ class CampaignDiagnosticsAgent
             };
 
             return $service->get($customerId, $campaignId);
-        } catch (\Exception) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [];
         }
     }

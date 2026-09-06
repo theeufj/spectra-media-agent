@@ -170,7 +170,8 @@ class CompetitorAnalysisAgent
                 'keywords_found' => count($analysis['keywords_themes']['primary_keywords'] ?? []),
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $result['error'] = $e->getMessage();
             Log::error('CompetitorAnalysisAgent: Exception', [
                 'competitor_id' => $competitor->id,
@@ -259,7 +260,8 @@ class CompetitorAnalysisAgent
             $textContent = $crawler->filter('body')->text('');
             $result['content'] = preg_replace('/\s+/', ' ', $textContent);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CompetitorAnalysisAgent: Scrape failed', [
                 'url' => $url,
                 'error' => $e->getMessage(),

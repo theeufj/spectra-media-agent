@@ -100,7 +100,8 @@ class RevenueController extends Controller
                     ? round(($paidUsers / $totalUsers) * 100, 1)
                     : 0,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Revenue metrics error: '.$e->getMessage());
 
             // Return fallback data from database
@@ -156,7 +157,8 @@ class RevenueController extends Controller
                     'receipt_url' => $charge->receipt_url,
                 ];
             })->toArray();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Recent transactions error: '.$e->getMessage());
 
             return [];
@@ -196,7 +198,8 @@ class RevenueController extends Controller
             }
 
             return array_values($breakdown);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Subscription breakdown error: '.$e->getMessage());
 
             return [];
@@ -237,7 +240,8 @@ class RevenueController extends Controller
             }
 
             return $monthlyData;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Monthly revenue error: '.$e->getMessage());
 
             // Return empty data for 12 months
@@ -294,7 +298,8 @@ class RevenueController extends Controller
                 'type' => 'success',
                 'message' => 'Refund processed successfully.',
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Refund error: '.$e->getMessage());
 
             return redirect()->back()->with('flash', [

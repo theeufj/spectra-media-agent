@@ -51,7 +51,8 @@ class GenerateExecutiveReport implements ShouldQueue
             try {
                 $pdfService = app(ReportPdfService::class);
                 $pdfPath = $pdfService->generate($customer, $report);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('PDF generation failed for weekly report, continuing: '.$e->getMessage());
             }
 
@@ -87,7 +88,7 @@ class GenerateExecutiveReport implements ShouldQueue
                 'campaigns' => $report['summary']['total_campaigns'],
                 'total_spend' => $report['summary']['total_cost'],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Failed to generate executive report for customer {$this->customerId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

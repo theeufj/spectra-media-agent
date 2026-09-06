@@ -41,7 +41,8 @@ class RunPerformanceAnomalyCheck implements ShouldQueue
             try {
                 $alerts = $agent->runForCustomer($customer);
                 $totalAlerts += count($alerts);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("RunPerformanceAnomalyCheck: Error for customer {$customer->id}: ".$e->getMessage());
             }

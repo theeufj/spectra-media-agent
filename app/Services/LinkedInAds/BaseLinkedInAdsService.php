@@ -77,7 +77,8 @@ abstract class BaseLinkedInAdsService
                     'body' => $response->body(),
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('LinkedIn Ads authentication error', ['error' => $e->getMessage()]);
         }
     }
@@ -128,7 +129,8 @@ abstract class BaseLinkedInAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('LinkedIn Ads API exception', [
                 'path' => $path,
                 'error' => $e->getMessage(),

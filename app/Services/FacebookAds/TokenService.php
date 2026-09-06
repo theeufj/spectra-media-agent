@@ -95,7 +95,8 @@ class TokenService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Exception debugging Facebook token: '.$e->getMessage());
 
             return null;

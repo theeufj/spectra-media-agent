@@ -121,7 +121,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
             // Optionally create a Google Ads BiddingSeasonalityAdjustment for Smart Bidding awareness
             $this->applySeasonalityAdjustment($campaign);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error applying seasonal strategy shift to campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -249,7 +249,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
 
                 $updateBudget($customerId, $resourceName, $budgetMicros);
                 Log::info("Applied seasonal budget to Google campaign {$campaign->id}: \${$newDailyBudget}/day");
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 Log::error("Failed to apply seasonal budget to Google campaign {$campaign->id}: ".$e->getMessage());
@@ -266,7 +266,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                     'daily_budget' => $budgetCents,
                 ]);
                 Log::info("Applied seasonal budget to Facebook campaign {$campaign->id}: \${$newDailyBudget}/day");
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 Log::error("Failed to apply seasonal budget to Facebook campaign {$campaign->id}: ".$e->getMessage());
@@ -337,7 +337,7 @@ class ApplySeasonalStrategyShift implements ShouldQueue
                     'modifier' => $modifier,
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             Log::warning("ApplySeasonalStrategyShift: Seasonality adjustment failed for campaign {$campaign->id} — skipping", [

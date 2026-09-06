@@ -38,7 +38,8 @@ class PromoteCampaignExperiment extends BaseGoogleAdsService
             ]);
 
             return false;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('PromoteCampaignExperiment: Unexpected error', [
                 'customer_id' => $customerId,
                 'experiment' => $experimentResourceName,

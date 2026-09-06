@@ -148,7 +148,7 @@ class OptimizeCampaigns implements ShouldQueue
                 if ($campaign->facebook_ads_campaign_id) {
                     try {
                         $fbDiagnostics->analyze($campaign);
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         // Surface in the admin exception dashboard; the batch continues.
                         report($e);
                         Log::warning("FacebookAdRelevanceDiagnosticsAgent failed for campaign {$campaign->id}: ".$e->getMessage());
@@ -159,7 +159,7 @@ class OptimizeCampaigns implements ShouldQueue
                 if ($campaign->linkedin_campaign_id) {
                     try {
                         (new LinkedInCampaignOptimizationAgent)->analyze($campaign);
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         // Surface in the admin exception dashboard; the batch continues.
                         report($e);
                         Log::warning("LinkedInCampaignOptimizationAgent failed for campaign {$campaign->id}: ".$e->getMessage());
@@ -170,14 +170,14 @@ class OptimizeCampaigns implements ShouldQueue
                 if ($campaign->microsoft_ads_campaign_id) {
                     try {
                         (new MicrosoftAdsCampaignOptimizationAgent)->analyze($campaign);
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         // Surface in the admin exception dashboard; the batch continues.
                         report($e);
                         Log::warning("MicrosoftAdsCampaignOptimizationAgent failed for campaign {$campaign->id}: ".$e->getMessage());
                     }
                 }
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 $errors++;

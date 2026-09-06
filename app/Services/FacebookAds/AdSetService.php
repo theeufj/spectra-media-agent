@@ -34,7 +34,8 @@ class AdSetService extends BaseFacebookAdsService
             }
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error listing ad sets: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
@@ -67,7 +68,8 @@ class AdSetService extends BaseFacebookAdsService
             $response = $this->get("/{$accountId}/adsets", $params);
 
             return $response['data'] ?? [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error listing ad sets by account: '.$e->getMessage(), [
                 'account_id' => $accountId,
             ]);
@@ -167,7 +169,8 @@ class AdSetService extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating ad set: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
@@ -205,7 +208,8 @@ class AdSetService extends BaseFacebookAdsService
             ]);
 
             return false;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error updating ad set: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,
@@ -242,7 +246,8 @@ class AdSetService extends BaseFacebookAdsService
             }
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting ad set insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,

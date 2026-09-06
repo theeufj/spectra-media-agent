@@ -69,7 +69,8 @@ class AddAudienceSignals extends BaseGoogleAdsService
             $this->logInfo("AddAudienceSignals: Added {$count} search-theme signal(s) to {$assetGroupResourceName}");
 
             return $count;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError("AddAudienceSignals: Failed to add search themes to {$assetGroupResourceName}: ".$e->getMessage());
 
             return 0;
@@ -119,7 +120,8 @@ class AddAudienceSignals extends BaseGoogleAdsService
             $this->logInfo("AddAudienceSignals: Added {$count} audience-interest signal(s) to {$assetGroupResourceName}");
 
             return $count;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Audience signals can fail if the audience has no qualifying members yet — log but don't fail
             Log::warning("AddAudienceSignals: Audience interest signal failed for {$assetGroupResourceName}: ".$e->getMessage());
 

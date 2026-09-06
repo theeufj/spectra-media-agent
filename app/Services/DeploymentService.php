@@ -204,7 +204,8 @@ class DeploymentService
                 ];
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('DeploymentService: Exception during legacy deployment: '.$e->getMessage(), [
                 'campaign_id' => $campaign->id,
                 'strategy_id' => $strategy->id,

@@ -91,7 +91,8 @@ class SendDailyPerformanceReports implements ShouldQueue
                     'users_notified' => $users->count(),
                     'combined_spend' => $summary['combined']['spend'],
                 ]);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error("Failed to send daily report for customer {$customer->id}: ".$e->getMessage());
             }
         }
@@ -211,7 +212,8 @@ class SendDailyPerformanceReports implements ShouldQueue
                     ['temperature' => 0.3, 'maxOutputTokens' => 60]
                 );
                 $rollup[$name]['summary'] = trim($response['text'] ?? '');
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::debug('SendDailyPerformanceReports: weekly rollup Gemini failed: '.$e->getMessage());
             }
         }

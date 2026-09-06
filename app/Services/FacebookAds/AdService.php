@@ -35,7 +35,8 @@ class AdService extends BaseFacebookAdsService
             }
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error listing ads: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,
@@ -68,7 +69,8 @@ class AdService extends BaseFacebookAdsService
             $response = $this->get("/{$accountId}/ads", $params);
 
             return $response['data'] ?? [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error listing ads by account: '.$e->getMessage(), [
                 'account_id' => $accountId,
             ]);
@@ -120,7 +122,8 @@ class AdService extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating ad: '.$e->getMessage(), [
                 'exception' => $e,
                 'adset_id' => $adSetId,
@@ -158,7 +161,8 @@ class AdService extends BaseFacebookAdsService
             ]);
 
             return false;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error updating ad: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_id' => $adId,
@@ -195,7 +199,8 @@ class AdService extends BaseFacebookAdsService
             }
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting ad insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_id' => $adId,
@@ -255,7 +260,8 @@ class AdService extends BaseFacebookAdsService
                     'conversion_rate_ranking' => $insights['conversion_rate_ranking'] ?? 'UNKNOWN',
                 ];
             }, $response['data']);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("AdService: Error fetching ads with diagnostics for ad set {$adSetId}: ".$e->getMessage(), [
                 'customer_id' => $this->customer->id,
             ]);

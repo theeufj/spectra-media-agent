@@ -121,7 +121,12 @@ class CustomerController extends Controller
         $googleSpend = GoogleAdsPerformanceData::whereIn('campaign_id', $campaignIds)->sum('cost');
         $facebookSpend = FacebookAdsPerformanceData::whereIn('campaign_id', $campaignIds)->sum('cost');
         $totalActualSpend = round($googleSpend + $facebookSpend, 2);
-        $totalDebited = $credit ? round($credit->transactions()->whereIn('type', [AdSpendTransaction::TYPE_DEDUCTION, AdSpendTransaction::TYPE_ADJUSTMENT])->sum('amount'), 2) : 0;
+        // Positive, and inclusive of the legacy 'debit' rows. Summing the raw
+        // amounts mixed negative deductions with positive adjustments and
+        // dropped 'debit' entirely, so this rendered as a negative "total
+        // debited" and an "unreconciled" figure inflated by twice the amount
+        // already billed — the number the Reconcile button then acted on.
+        $totalDebited = $credit ? AdSpendTransaction::totalDebited($credit->getKey()) : 0.0;
 
         // Everything we've emailed this customer: rows stamped with their id
         // at send time, plus unstamped framework mail (password resets,

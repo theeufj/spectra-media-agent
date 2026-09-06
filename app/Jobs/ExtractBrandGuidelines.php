@@ -159,7 +159,7 @@ class ExtractBrandGuidelines implements ShouldQueue
                 }
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('ExtractBrandGuidelines job failed', [
                 'customer_id' => $this->customer->id,
                 'error' => $e->getMessage(),

@@ -495,7 +495,8 @@ PROMPT;
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CampaignRemediationAgent: Search theme generation failed', ['error' => $e->getMessage()]);
         }
 
@@ -521,7 +522,8 @@ PROMPT;
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('CampaignRemediationAgent: Audience search failed', ['error' => $e->getMessage()]);
         }
 
@@ -655,7 +657,8 @@ PROMPT;
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CampaignRemediationAgent: Copy generation failed', ['error' => $e->getMessage()]);
         }
 
@@ -728,7 +731,8 @@ PROMPT;
                         $urls[] = $publicUrl;
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('CampaignRemediationAgent: Image generation failed', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
@@ -756,7 +760,8 @@ PROMPT;
                 ($linkAsset)($customerId, $assetGroupResource, $assetResource, AssetFieldType::MARKETING_IMAGE);
                 $summary[] = ['type' => 'image', 'url' => $imageUrl, 'asset' => $assetResource];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CampaignRemediationAgent: Image asset upload failed', [
                 'url' => $imageUrl,
                 'error' => $e->getMessage(),
@@ -789,7 +794,9 @@ PROMPT;
             };
 
             return $service->get($customerId, $campaignId);
-        } catch (\Exception) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [];
         }
     }
@@ -823,7 +830,9 @@ PROMPT;
             };
 
             return $service->get($customerId, $campaignId);
-        } catch (\Exception) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [];
         }
     }
@@ -934,7 +943,8 @@ PROMPT;
                     if ($service->updateFinalUrl($customerId, $ag['resource_name'], $bestUrl)) {
                         $updated++;
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning('CampaignRemediationAgent: Failed to update final URL for asset group', [
                         'asset_group' => $ag['resource_name'],
                         'url' => $bestUrl,
@@ -942,7 +952,8 @@ PROMPT;
                     ]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CampaignRemediationAgent: Landing page fix failed', ['error' => $e->getMessage()]);
             $this->alertCustomer($campaign, $finding, $results);
 
@@ -1038,7 +1049,8 @@ PROMPT;
                 if (! empty($urls)) {
                     break;
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::debug('CampaignRemediationAgent: Sitemap fetch failed', [
                     'url' => $sitemapUrl,
                     'error' => $e->getMessage(),
@@ -1102,7 +1114,8 @@ PROMPT;
                     return $url;
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CampaignRemediationAgent: Landing page selection failed', ['error' => $e->getMessage()]);
         }
 
@@ -1274,7 +1287,8 @@ PROMPT;
                 'headline' => mb_substr(trim($data['headline']), 0, 40),
                 'primary_text' => mb_substr(trim($data['primary_text']), 0, 125),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CampaignRemediationAgent: Meta copy generation failed', ['error' => $e->getMessage()]);
 
             return null;
@@ -1295,7 +1309,8 @@ PROMPT;
             Log::info('CampaignRemediationAgent: Conversion labels re-provisioned', [
                 'missing' => $finding['details']['missing'] ?? [],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'conversions:provision failed: '.$e->getMessage();
         }
     }

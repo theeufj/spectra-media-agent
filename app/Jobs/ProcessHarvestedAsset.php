@@ -68,7 +68,8 @@ class ProcessHarvestedAsset implements ShouldQueue
                     // Use bg-removed version for variant generation
                     $base64 = $bgRemoved['data'];
                     $mimeType = $bgRemoved['mimeType'] ?? 'image/png';
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning('ProcessHarvestedAsset: BG removal upload failed', [
                         'asset_id' => $this->asset->id,
                         'error' => $e->getMessage(),
@@ -111,7 +112,8 @@ class ProcessHarvestedAsset implements ShouldQueue
                         'url' => $varUrl,
                         'mime_type' => $variant['mimeType'] ?? 'image/jpeg',
                     ];
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning("ProcessHarvestedAsset: {$format} variant upload failed", [
                         'asset_id' => $this->asset->id,
                         'error' => $e->getMessage(),

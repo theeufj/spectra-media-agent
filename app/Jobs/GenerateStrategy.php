@@ -324,7 +324,7 @@ class GenerateStrategy implements ShouldQueue
                     }
 
                     Log::info("Successfully created strategy #{$index} for campaign {$this->campaign->id}");
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
                     Log::error("Failed to create strategy #{$index} for campaign {$this->campaign->id}: ".$e->getMessage());
                     throw $e;
                 }

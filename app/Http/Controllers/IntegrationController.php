@@ -70,7 +70,8 @@ class IntegrationController extends Controller
 
                 return back()->with('error', 'Could not connect. Check your credentials.');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $integration->update(['status' => 'error', 'last_error' => SafeError::capture($e, 'Integration connection failed')]);
 
             return back()->with('error', SafeError::message($e, "We couldn't connect that integration."));

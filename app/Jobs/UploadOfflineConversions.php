@@ -161,7 +161,7 @@ class UploadOfflineConversions implements ShouldQueue
                 'uploaded' => $uploaded,
                 'failed' => $failed,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             foreach ($conversions as $conversion) {
@@ -231,7 +231,7 @@ class UploadOfflineConversions implements ShouldQueue
                 'customer_id' => $customer->id,
                 'count' => $conversions->count(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             Log::error('UploadOfflineConversions: Facebook upload failed', ['error' => $e->getMessage()]);
@@ -291,7 +291,8 @@ class UploadOfflineConversions implements ShouldQueue
                         $results['microsoft'] = ['status' => 'failed', 'attempted_at' => now()->toDateTimeString()];
                         $conversion->update(['upload_status' => 'failed', 'upload_results' => $results, 'upload_attempts' => $conversion->upload_attempts + 1]);
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     $results['microsoft'] = ['status' => 'failed', 'error' => $e->getMessage()];
                     $conversion->update(['upload_status' => 'failed', 'upload_results' => $results, 'upload_attempts' => $conversion->upload_attempts + 1]);
                 }
@@ -301,7 +302,7 @@ class UploadOfflineConversions implements ShouldQueue
                 'customer_id' => $customer->id,
                 'count' => $conversions->count(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             Log::error('UploadOfflineConversions: Microsoft upload failed', ['error' => $e->getMessage()]);
@@ -357,7 +358,7 @@ class UploadOfflineConversions implements ShouldQueue
             }
 
             return $resourceName;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             Log::error('UploadOfflineConversions: Failed to resolve conversion action', ['error' => $e->getMessage()]);
@@ -391,7 +392,7 @@ class UploadOfflineConversions implements ShouldQueue
                 ->withOAuth2Credential($oAuth2Credential)
                 ->withLoginCustomerId($mccAccount->google_customer_id)
                 ->build();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // Surface in the admin exception dashboard; the batch continues.
             report($e);
             Log::error('UploadOfflineConversions: Failed to build client', ['error' => $e->getMessage()]);

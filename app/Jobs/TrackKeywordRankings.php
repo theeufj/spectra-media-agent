@@ -55,7 +55,8 @@ class TrackKeywordRankings implements ShouldQueue
                 'customer_id' => $this->customerId,
                 'keywords_tracked' => count($results),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('TrackKeywordRankings: Failed', [
                 'customer_id' => $this->customerId,
                 'error' => $e->getMessage(),

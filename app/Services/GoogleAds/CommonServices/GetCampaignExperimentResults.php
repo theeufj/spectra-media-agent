@@ -71,7 +71,8 @@ WHERE experiment.resource_name = '{$experimentResourceName}'";
                 'experiment' => $experimentResourceName,
                 'error' => $e->getMessage(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GetCampaignExperimentResults: Unexpected error', [
                 'customer_id' => $customerId,
                 'experiment' => $experimentResourceName,

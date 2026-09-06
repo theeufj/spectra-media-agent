@@ -38,7 +38,8 @@ class SummarizeCampaignHistoryService
             }
 
             return $response['text'];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error summarizing campaign history for campaign {$campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

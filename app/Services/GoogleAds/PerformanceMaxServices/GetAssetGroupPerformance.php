@@ -91,7 +91,8 @@ WHERE asset_group.campaign = '{$campaignResourceName}'
                 'campaign' => $campaignResourceName,
                 'error' => $e->getMessage(),
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GetAssetGroupPerformance: Unexpected error', [
                 'customer_id' => $customerId,
                 'campaign' => $campaignResourceName,

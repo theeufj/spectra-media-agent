@@ -83,7 +83,8 @@ class SyncCrmConversions implements ShouldQueue
             if ($created > 0) {
                 UploadOfflineConversions::dispatch($integration->customer_id);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $integration->update([
                 'status' => 'error',
                 'last_error' => $e->getMessage(),

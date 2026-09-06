@@ -40,7 +40,8 @@ class RunSeoAudit implements ShouldQueue
                 'url' => $this->url,
                 'score' => $audit->score,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('RunSeoAudit: Failed', [
                 'customer_id' => $this->customerId,
                 'url' => $this->url,

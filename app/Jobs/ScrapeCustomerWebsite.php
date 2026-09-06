@@ -116,7 +116,8 @@ class ScrapeCustomerWebsite implements ShouldQueue
             // after CrawlSitemap batch completes and populates the knowledge base.
             // See CrawlSitemap job for batch completion callback.
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error during website scrape and GTM detection', [
                 'customer_id' => $this->customer->id,
                 'error' => $e->getMessage(),
@@ -146,7 +147,8 @@ class ScrapeCustomerWebsite implements ShouldQueue
                     ->bodyHtml();
 
                 return $htmlContent;
-            } catch (\Exception $browserShotException) {
+            } catch (\Throwable $browserShotException) {
+                report($browserShotException);
                 Log::debug('Browsershot failed, falling back to HTTP', [
                     'url' => $url,
                     'error' => $browserShotException->getMessage(),
@@ -163,7 +165,8 @@ class ScrapeCustomerWebsite implements ShouldQueue
                     return $response->body();
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error fetching website content', [
                 'url' => $url,
                 'error' => $e->getMessage(),

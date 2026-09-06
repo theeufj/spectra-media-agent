@@ -75,7 +75,8 @@ class GoogleSearchService
 
             return ['error' => 'Search request failed', 'items' => []];
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GoogleSearchService: Exception', [
                 'query' => $query,
                 'error' => $e->getMessage(),

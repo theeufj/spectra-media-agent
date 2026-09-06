@@ -49,7 +49,8 @@ class GetExtensionPerformance extends BaseGoogleAdsService
                     'ctr' => $row->getMetrics()->getCtr(),
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError('GetExtensionPerformance failed: '.$e->getMessage());
         }
 
@@ -86,7 +87,8 @@ class GetExtensionPerformance extends BaseGoogleAdsService
             foreach ($stream->iterateAllElements() as $_) {
                 $count++;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError('GetExtensionPerformance::countByFieldType failed: '.$e->getMessage());
         }
 

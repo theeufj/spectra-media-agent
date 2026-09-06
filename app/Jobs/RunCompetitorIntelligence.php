@@ -102,7 +102,7 @@ class RunCompetitorIntelligence implements ShouldQueue
                 $this->notifyUser($results);
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('RunCompetitorIntelligence: Job failed', [
                 'customer_id' => $this->customer->id,
                 'error' => $e->getMessage(),
@@ -170,7 +170,8 @@ class RunCompetitorIntelligence implements ShouldQueue
                 foreach ($this->customer->users as $u) {
                     $u->notify(new \App\Notifications\CompetitorIntelligenceComplete($this->customer, $summary));
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('RunCompetitorIntelligence: Failed to send notification', [
                     'user_id' => $user->id,
                     'error' => $e->getMessage(),

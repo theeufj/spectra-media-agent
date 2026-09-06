@@ -109,7 +109,8 @@ class PreLaunchComplianceAgent
                     'message' => "Landing page returned HTTP {$response->status()}: {$url}",
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $failures[] = [
                 'type' => 'landing_page_unreachable',
                 'message' => "Landing page unreachable: {$url} ({$e->getMessage()})",

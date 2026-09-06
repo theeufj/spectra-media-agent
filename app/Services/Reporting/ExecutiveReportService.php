@@ -118,7 +118,8 @@ class ExecutiveReportService
                     $metrics['campaign_id'] = $campaign->id;
                     $results[] = $metrics;
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning("Failed to get performance for campaign {$campaign->id}: ".$e->getMessage());
             }
         }
@@ -302,7 +303,8 @@ class ExecutiveReportService
             }
 
             return $result['text'] ?? null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Failed to generate AI narrative: '.$e->getMessage());
 
             return null;
@@ -570,7 +572,8 @@ PROMPT;
                     $movers[$i]['insight'] = $bullets[$i] ?? null;
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('ExecutiveReportService: WoW insight generation failed: '.$e->getMessage());
         }
 
@@ -615,7 +618,8 @@ PROMPT;
             }
 
             return $summary;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('ExecutiveReportService: Attribution summary failed: '.$e->getMessage());
 
             return [];

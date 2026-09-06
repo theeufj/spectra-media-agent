@@ -201,7 +201,8 @@ class CopilotContextService
                     'historical' => $historical,
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CopilotContextService: Failed to fetch performance data', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),

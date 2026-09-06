@@ -113,7 +113,7 @@ class GenerateImage implements ShouldQueue
                     throw new \Exception('Failed to decode prompts from the splitter model.');
                 }
                 $prompts = $decoded['prompts'];
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 Log::error('Failed to parse prompts from ImagePromptSplitter: '.$e->getMessage(), ['response' => $splitterResponse['text'] ?? null]);
                 // Fallback to the original strategy if splitting fails
                 $prompts = [$strategyPrompt];
@@ -170,11 +170,21 @@ class GenerateImage implements ShouldQueue
                 }
             }
 
+            // Cost attribution for every creative call below. Gemini gets this
+            // as well as OpenRouter, which is what makes a provider fallback
+            // auditable: without it the Gemini rows land with a NULL
+            // customer_id and a per-customer cost view can only ever show Grok.
+            $creativeContext = [
+                'campaign_id' => $this->campaign->id,
+                'customer_id' => $this->campaign->customer_id,
+                'task_type' => 'image_generation',
+            ];
+
             foreach ($prompts as $index => $prompt) {
                 Log::info('Generating image '.($index + 1).'/'.count($prompts)." for Strategy ID: {$this->strategy->id}");
 
                 $imagePrompt = (new ImagePrompt($prompt, $brandGuidelines, $productContext, $adText))->getPrompt();
-                Log::info('Gemini Image Generation Prompt:', ['prompt' => $imagePrompt]);
+                Log::info('Image generation prompt:', ['prompt' => $imagePrompt]);
 
                 // Retry logic with exponential backoff
                 $maxRetries = 3;
@@ -191,27 +201,43 @@ class GenerateImage implements ShouldQueue
                     // support). Fresh generation goes to the configured
                     // provider — Grok via OpenRouter by default, chosen in the
                     // 2026-08-24 shootout — with Gemini as automatic fallback.
+                    $imageData = null;
+                    $usedProvider = 'gemini';
+
                     if (! empty($seedContextImages)) {
-                        Log::info('Generating image with '.count($seedContextImages).' seed image(s) as reference');
-                        $imageData = $geminiService->refineImage($imagePrompt, $seedContextImages);
+                        // Say so out loud: auto-seeding from harvested assets
+                        // routes this customer onto Gemini even though
+                        // ai.image_provider says grok, and that used to leave
+                        // no trace in the logs or the cost table.
+                        Log::info('Generating image on Gemini with '.count($seedContextImages).' seed image(s) as reference', [
+                            'configured_provider' => config('ai.image_provider'),
+                            'reason' => 'reference images require Gemini',
+                        ]);
+                        $imageData = $geminiService->refineImage($imagePrompt, $seedContextImages, context: $creativeContext);
                     } else {
-                        $imageData = null;
-                        if (config('ai.image_provider', 'grok') === 'grok') {
-                            $imageData = app(\App\Services\OpenRouterService::class)->generateImage($imagePrompt, [
-                                'campaign_id' => $this->campaign->id,
-                                'customer_id' => $this->campaign->customer_id,
-                                'task_type' => 'image_generation',
-                            ]);
+                        if (config('ai.image_provider') === 'grok') {
+                            $imageData = app(\App\Services\OpenRouterService::class)
+                                ->generateImage($imagePrompt, $creativeContext);
+
+                            if ($imageData) {
+                                $usedProvider = 'grok';
+                            } else {
+                                Log::warning('Grok image generation failed — falling back to Gemini.', [
+                                    'strategy_id' => $this->strategy->id,
+                                    'attempt' => $attempt,
+                                ]);
+                            }
                         }
-                        $imageData ??= $geminiService->generateImage($imagePrompt);
+
+                        $imageData ??= $geminiService->generateImage($imagePrompt, context: $creativeContext);
                     }
 
                     if ($imageData && isset($imageData['data']) && isset($imageData['mimeType'])) {
-                        Log::info("Successfully generated image on attempt {$attempt}");
+                        Log::info("Successfully generated image on attempt {$attempt} via {$usedProvider}");
                         break;
                     }
 
-                    Log::warning("Failed to generate image data from Gemini on attempt {$attempt}/{$maxRetries}");
+                    Log::warning("Failed to generate image data on attempt {$attempt}/{$maxRetries}");
                 }
 
                 if (! $imageData || ! isset($imageData['data']) || ! isset($imageData['mimeType'])) {
@@ -310,7 +336,7 @@ class GenerateImage implements ShouldQueue
                         }
 
                         $encoded = (string) $img->encode();
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
                         Log::warning("Failed to apply overlay for format {$format}: ".$e->getMessage());
                         $encoded = $decodedImage;
                     }
@@ -340,7 +366,7 @@ class GenerateImage implements ShouldQueue
             unset($existing['image']);
             $this->strategy->update(['collateral_errors' => empty($existing) ? null : $existing]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error in GenerateImage job for Strategy ID {$this->strategy->id}: ".$e->getMessage());
             $this->fail($e);
         }

@@ -128,7 +128,8 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
                         $imageAssetResourceNames[] = $assetResourceName;
                         $result->addPlatformId('image_asset', $assetResourceName);
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     $result->addWarning("Failed to upload image asset {$image->s3_path}: ".$e->getMessage());
                 }
             }
@@ -166,7 +167,8 @@ class DisplayCampaignExecutor implements CampaignTypeExecutor
         try {
             $applyValueRules = new \App\Services\GoogleAds\CommonServices\ApplyConversionValueRules($this->customer);
             $applyValueRules($customerId, $campaignResourceName, $this->customer);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Conversion value rules not applied: '.$e->getMessage());
         }
     }

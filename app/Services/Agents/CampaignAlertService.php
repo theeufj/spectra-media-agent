@@ -286,7 +286,8 @@ class CampaignAlertService
                 'campaign_id' => $campaign->id,
                 'severity' => $alert['severity'],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CampaignAlertService: Failed to send alert', [
                 'type' => $alert['type'],
                 'campaign_id' => $campaign->id,

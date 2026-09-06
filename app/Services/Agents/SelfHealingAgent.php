@@ -207,7 +207,8 @@ class SelfHealingAgent
                     $this->handleGoogleDisapprovedAd($customer, $customerId, $ad, $results);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Failed to check Google ad status: '.$e->getMessage();
             Log::error('SelfHealingAgent: Failed to check Google ad status', [
                 'campaign' => $campaignResourceName,
@@ -322,7 +323,8 @@ class SelfHealingAgent
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Failed to create compliant Google ad: '.$e->getMessage();
             Log::error('SelfHealingAgent: Failed to create compliant Google ad', [
                 'ad' => $ad['resource_name'],
@@ -382,7 +384,8 @@ class SelfHealingAgent
                 ];
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Failed to check Google budget health: '.$e->getMessage();
         }
     }
@@ -470,7 +473,8 @@ class SelfHealingAgent
                 }
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('SelfHealingAgent: Could not check Google delivery health', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -508,7 +512,8 @@ class SelfHealingAgent
                     $this->handleFacebookDisapprovedAd($campaign, $customer, $ad, $results);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Failed to check Facebook ad status: '.$e->getMessage();
             Log::error('SelfHealingAgent: Failed to check Facebook ad status', [
                 'campaign_id' => $campaign->id,
@@ -618,7 +623,8 @@ class SelfHealingAgent
                                 $linkUrl
                             );
                             $newCreativeId = $newCreative['id'] ?? null;
-                        } catch (\Exception $e) {
+                        } catch (\Throwable $e) {
+                            report($e);
                             Log::warning('SelfHealingAgent: Could not create Facebook creative', [
                                 'error' => $e->getMessage(),
                             ]);
@@ -651,7 +657,8 @@ class SelfHealingAgent
                                 'reason' => $violationReason,
                                 'changes' => $newCreativeData,
                             ];
-                        } catch (\Exception $e) {
+                        } catch (\Throwable $e) {
+                            report($e);
                             Log::warning('SelfHealingAgent: Could not deploy replacement Facebook ad', [
                                 'error' => $e->getMessage(),
                             ]);
@@ -681,7 +688,8 @@ class SelfHealingAgent
                     ]);
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Failed to generate compliant Facebook ad: '.$e->getMessage();
             Log::error('SelfHealingAgent: Failed to generate compliant Facebook ad', [
                 'ad' => $ad['id'] ?? 'unknown',
@@ -734,7 +742,8 @@ class SelfHealingAgent
                 ];
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Silently log - insights might not be available
             Log::debug('SelfHealingAgent: Could not check Facebook delivery health', [
                 'campaign_id' => $campaign->id,
@@ -787,7 +796,8 @@ class SelfHealingAgent
                 ];
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('SelfHealingAgent: Could not check Facebook creative health', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -894,7 +904,8 @@ class SelfHealingAgent
                             ];
                         }
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::debug('SelfHealingAgent: Could not remediate Microsoft campaign: '.$e->getMessage());
                 }
             }
@@ -930,11 +941,13 @@ class SelfHealingAgent
                         'platform' => 'microsoft_ads',
                         'suggestions' => $this->parseJson($response['text'] ?? ''),
                     ];
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::debug('SelfHealingAgent: Gemini suggestion failed: '.$e->getMessage());
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Microsoft Ads healing failed: '.$e->getMessage();
             Log::error('SelfHealingAgent: Microsoft Ads healing error', ['error' => $e->getMessage()]);
         }
@@ -1006,7 +1019,8 @@ class SelfHealingAgent
                             }
                         }
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::debug('SelfHealingAgent: Could not remediate LinkedIn campaign: '.$e->getMessage());
                 }
             }
@@ -1042,11 +1056,13 @@ class SelfHealingAgent
                         'platform' => 'linkedin_ads',
                         'suggestions' => $this->parseJson($response['text'] ?? ''),
                     ];
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::debug('SelfHealingAgent: Gemini suggestion failed: '.$e->getMessage());
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'LinkedIn Ads healing failed: '.$e->getMessage();
             Log::error('SelfHealingAgent: LinkedIn Ads healing error', ['error' => $e->getMessage()]);
         }

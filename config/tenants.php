@@ -2,7 +2,19 @@
 
 return [
 
-    'default' => env('TENANT_OVERRIDE', 'sitetospend.com'),
+    /*
+     * The skin served when the request host matches no tenant below. Fixed —
+     * it used to read TENANT_OVERRIDE, so setting that variable to preview one
+     * vertical would have re-skinned every unrecognised host to it as well.
+     */
+    'default' => 'sitetospend.com',
+
+    /*
+     * Local development only: forces DetectTenant to resolve this host instead
+     * of the real one. Null in production, where config:cache means env() is
+     * never consulted at request time anyway.
+     */
+    'override' => env('TENANT_OVERRIDE'),
 
     'sitetospend.com' => [
         'key' => 'sitetospend',

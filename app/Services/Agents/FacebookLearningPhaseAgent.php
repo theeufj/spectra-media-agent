@@ -119,7 +119,8 @@ class FacebookLearningPhaseAgent
                 );
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning("FacebookLearningPhaseAgent: Could not check learning phase for campaign {$campaign->id}: ".$e->getMessage());
         }
 

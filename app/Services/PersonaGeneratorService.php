@@ -106,7 +106,8 @@ class PersonaGeneratorService
             ]);
 
             return $created;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('PersonaGeneratorService: Generation failed', ['error' => $e->getMessage()]);
 
             return [];

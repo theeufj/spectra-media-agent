@@ -121,7 +121,9 @@ class BusinessManagerService
             }
 
             return ['success' => false, 'error' => $response->json('error.message', 'Cannot access this ad account. Ensure the System User is assigned as Admin on it.')];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -148,7 +150,9 @@ class BusinessManagerService
             }
 
             return ['success' => false, 'error' => $response->json('error.message', 'Unknown error')];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }

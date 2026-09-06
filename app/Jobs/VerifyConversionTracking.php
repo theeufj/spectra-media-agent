@@ -60,7 +60,8 @@ class VerifyConversionTracking implements ShouldQueue
                         'conversions_last_30d' => $count,
                     ]);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error('VerifyConversionTracking: Error for customer '.$customer->id.': '.$e->getMessage());
             }

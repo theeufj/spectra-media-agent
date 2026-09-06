@@ -169,7 +169,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
             }
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error provisioning Google Ads sub-account: '.$e->getMessage(), [
                 'customer_id' => $this->customer->id,
                 'exception' => $e,
@@ -330,7 +331,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
                 return $plan;
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $lastException = $e;
                 Log::warning("GoogleAdsExecutionAgent: Execution plan attempt {$attempt}/{$maxAttempts} failed: ".$e->getMessage());
                 if ($attempt < $maxAttempts) {
@@ -489,7 +491,8 @@ class GoogleAdsExecutionAgent extends PlatformExecutionAgent
 
             return $result;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GoogleAdsExecutionAgent: Plan execution failed: '.$e->getMessage());
 
             $result = ExecutionResult::failure([$e->getMessage()]);
@@ -646,7 +649,8 @@ PROMPT;
             $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($context->customer);
 
             return $conversionService->isConversionTrackingSetUp($customerId);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Failed to check conversion tracking: '.$e->getMessage());
 
             return false;
@@ -667,7 +671,8 @@ PROMPT;
             $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($context->customer);
 
             return $conversionService->getConversionCountLast30Days($customerId);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Failed to get conversion count: '.$e->getMessage());
 
             return 0;

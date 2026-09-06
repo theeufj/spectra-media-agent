@@ -88,7 +88,8 @@ class CreateGoogleAdsSubAccount extends Command
             $this->info("Updated customer record #{$customer->id}");
 
             return 0;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('Error: '.$e->getMessage());
             Log::error('Failed to create Google Ads sub-account', [
                 'customer_id' => $customerId,

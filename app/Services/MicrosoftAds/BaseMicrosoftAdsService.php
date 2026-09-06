@@ -103,7 +103,8 @@ abstract class BaseMicrosoftAdsService
                     'error_description' => $response->json('error_description'),
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Microsoft Ads authentication error', ['error' => $e->getMessage()]);
         }
     }
@@ -150,7 +151,7 @@ abstract class BaseMicrosoftAdsService
                 'message' => $e->getMessage(),
             ]);
             throw new \Exception("Microsoft Ads API error: {$operation} - ".$e->getMessage());
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Microsoft Ads API exception: {$operation}", ['error' => $e->getMessage()]);
             throw $e;
         }
@@ -183,7 +184,8 @@ abstract class BaseMicrosoftAdsService
             $response = $client->__soapCall($operation, [$body]);
 
             return json_decode(json_encode($response), true);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Microsoft Ads Reporting error: {$operation}", ['error' => $e->getMessage()]);
 
             return null;

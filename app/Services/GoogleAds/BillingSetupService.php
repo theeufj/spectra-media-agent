@@ -69,7 +69,8 @@ class BillingSetupService extends BaseGoogleAdsService
             ]);
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Failed to set up billing for sub-account: '.$e->getMessage(), [
                 'sub_account_id' => $subAccountId,
                 'exception' => $e,
@@ -97,7 +98,8 @@ class BillingSetupService extends BaseGoogleAdsService
             }
 
             return false;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Could not check billing setup status', [
                 'account_id' => $accountId,
                 'error' => $e->getMessage(),
@@ -131,7 +133,8 @@ class BillingSetupService extends BaseGoogleAdsService
             }
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Could not list payments accounts', [
                 'sub_account_id' => $subAccountId,
                 'error' => $e->getMessage(),

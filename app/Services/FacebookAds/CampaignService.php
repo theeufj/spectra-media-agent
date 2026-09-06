@@ -40,7 +40,8 @@ class CampaignService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error listing campaigns: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -120,7 +121,8 @@ class CampaignService extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating campaign: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -149,7 +151,8 @@ class CampaignService extends BaseFacebookAdsService
             }
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error getting campaign {$campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
@@ -186,7 +189,8 @@ class CampaignService extends BaseFacebookAdsService
             ]);
 
             return false;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error updating campaign: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
@@ -228,7 +232,8 @@ class CampaignService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting campaign insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,

@@ -281,7 +281,8 @@ class BrandGuidelineController extends Controller
             return response($pdf, 200)
                 ->header('Content-Type', 'application/pdf')
                 ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Failed to generate brand guidelines PDF', [
                 'error' => $e->getMessage(),
                 'customer_id' => $customer->id,

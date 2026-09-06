@@ -156,7 +156,8 @@ class CheckPMaxAssets extends Command
             $agent = new PMaxAssetOptimizationAgent($customer);
 
             return $agent->run($campaign);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("CheckPMaxAssets: Agent failed for campaign {$campaign->id}: ".$e->getMessage());
 
             return [

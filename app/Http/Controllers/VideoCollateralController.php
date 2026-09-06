@@ -81,7 +81,8 @@ class VideoCollateralController extends Controller
             Log::error('Validation failed for video generation request. Errors: '.json_encode($e->errors()));
             // Re-throw the validation exception to let Laravel handle the response.
             throw $e;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("An unexpected error occurred during video generation dispatch for Strategy ID: {$strategy->id}. Error: ".$e->getMessage());
 
             return redirect()->back()->with('flash', [
@@ -168,7 +169,8 @@ class VideoCollateralController extends Controller
         } catch (\Illuminate\Validation\ValidationException $e) {
             Log::error('Validation failed for video extension request. Errors: '.json_encode($e->errors()));
             throw $e;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("An unexpected error occurred during video extension for VideoCollateral ID: {$video->id}. Error: ".$e->getMessage());
 
             return redirect()->back()->with('flash', [

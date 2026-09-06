@@ -314,7 +314,8 @@ class GeminiService
 
                 return null;
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $attempt++;
                 if ($attempt < $maxRetries) {
                     $delayMs = $this->calculateBackoffDelay($attempt);
@@ -685,7 +686,8 @@ class GeminiService
 
             // predict response: predictions[0].embeddings.values
             return $response->json()['predictions'][0]['embeddings']['values'] ?? null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("GeminiService: Exception during embedding generation from model {$model}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -863,7 +865,8 @@ class GeminiService
 
             return $images;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("GeminiService: Exception during image generation from model {$model}: ".$e->getMessage(), ['exception' => $e]);
 
             return null;
@@ -922,7 +925,8 @@ class GeminiService
             ]));
 
             return $json['name'] ?? null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("GeminiService: Exception during video generation start from model {$model}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -966,7 +970,8 @@ class GeminiService
             }
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("GeminiService: Exception during operation status check for {$operationName}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -1053,7 +1058,8 @@ class GeminiService
             }
 
             return $response->body();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("GeminiService: Exception during video download from {$uri}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -1113,7 +1119,8 @@ class GeminiService
             Log::info('GeminiService: Video uploaded to Files API', ['uri' => $fileUri]);
 
             return $fileUri;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GeminiService: Exception during Files API upload: '.$e->getMessage());
 
             return null;
@@ -1184,7 +1191,8 @@ class GeminiService
 
                 return null;
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $attempt++;
                 if ($attempt < $maxRetries) {
                     $delayMs = $this->calculateBackoffDelay($attempt);
@@ -1243,7 +1251,8 @@ class GeminiService
             Log::error('GeminiService: Failed to extend video from bytes: '.$response->body());
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GeminiService: Exception extending video from bytes: '.$e->getMessage());
 
             return null;

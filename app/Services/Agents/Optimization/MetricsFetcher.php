@@ -98,7 +98,8 @@ class MetricsFetcher
             }
 
             return ($this->getGooglePerformance)($customerId, $resourceName);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('MetricsFetcher: Failed to get Google metrics: '.$e->getMessage());
 
             return null;
@@ -129,7 +130,9 @@ class MetricsFetcher
                 'average_cpc' => $data->clicks > 0 ? ($data->cost / $data->clicks) * 1_000_000 : 0,
                 'cost_per_conversion' => $data->conversions > 0 ? ($data->cost / $data->conversions) * 1_000_000 : 0,
             ];
-        } catch (\Exception) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return null;
         }
     }
@@ -160,7 +163,8 @@ class MetricsFetcher
                 'frequency' => (float) ($data['frequency'] ?? 0),
                 'reach' => (int) ($data['reach'] ?? 0),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("MetricsFetcher: Failed to get Facebook metrics for campaign {$campaign->id}: ".$e->getMessage());
 
             return null;
@@ -191,7 +195,9 @@ class MetricsFetcher
                 'average_cpc' => (float) ($data['cpc'] ?? 0) * 1_000_000,
                 'cost_per_conversion' => (float) ($data['cost_per_action_type'][0]['value'] ?? 0) * 1_000_000,
             ];
-        } catch (\Exception) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return null;
         }
     }

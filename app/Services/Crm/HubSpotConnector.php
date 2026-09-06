@@ -28,7 +28,8 @@ class HubSpotConnector implements CrmConnectorInterface
                 ->get("{$this->baseUrl}/crm/v3/objects/contacts", ['limit' => 1]);
 
             return $response->successful();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('HubSpot connection test failed', ['error' => $e->getMessage()]);
 
             return false;

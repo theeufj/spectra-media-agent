@@ -75,7 +75,8 @@ class GeoTargetResolver
                 if ($criterionResourceName) {
                     $result->addPlatformId('location_criterion', $criterionResourceName);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $result->addWarning("Failed to add location targeting for ID {$locationId}: ".$e->getMessage());
             }
         }

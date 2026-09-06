@@ -5,7 +5,6 @@ namespace App\Jobs;
 use App\Models\VideoCollateral;
 use App\Services\GeminiService;
 use App\Services\StorageHelper;
-use App\Services\ViduService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -23,7 +22,7 @@ class CheckVideoStatus implements ShouldQueue
 
     public function __construct(protected VideoCollateral $videoCollateral) {}
 
-    public function handle(GeminiService $geminiService, ViduService $viduService): void
+    public function handle(GeminiService $geminiService): void
     {
         Log::info('--- CheckVideoStatus Job Started ---');
         Log::info("Attempt #{$this->attempts()} for VideoCollateral ID: {$this->videoCollateral->id}", [
@@ -35,8 +34,6 @@ class CheckVideoStatus implements ShouldQueue
 
             if ($provider === 'openrouter') {
                 $this->handleOpenRouter();
-            } elseif ($provider === 'vidu') {
-                $this->handleVidu($viduService);
             } else {
                 $this->handleVeo($geminiService);
             }
@@ -131,35 +128,6 @@ class CheckVideoStatus implements ShouldQueue
 
         Log::info('CheckVideoStatus: OpenRouter video ready.');
         $this->storeAndComplete($result['bytes'], []);
-    }
-
-    // ─── Vidu ────────────────────────────────────────────────────────────────
-
-    private function handleVidu(ViduService $viduService): void
-    {
-        Log::info("CheckVideoStatus: Polling Vidu task: {$this->videoCollateral->operation_name}");
-
-        $result = $viduService->getTaskStatus($this->videoCollateral->operation_name);
-
-        if ($result === null) {
-            Log::info('CheckVideoStatus: Vidu not ready yet — releasing with 60s delay.');
-            $this->release(60);
-
-            return;
-        }
-
-        $videoUrl = $result['videoUrl'];
-        Log::info("CheckVideoStatus: Vidu video ready. Downloading from: {$videoUrl}");
-
-        $videoData = $viduService->downloadVideo($videoUrl);
-
-        if ($videoData === false) {
-            $this->videoCollateral->update(['status' => 'failed']);
-            throw new \Exception('Failed to download video from Vidu URL.');
-        }
-
-        // gemini_video_uri intentionally not set — Vidu videos cannot be extended via Veo
-        $this->storeAndComplete($videoData, []);
     }
 
     // ─── Shared: upload + notify ─────────────────────────────────────────────

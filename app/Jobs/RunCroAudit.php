@@ -63,7 +63,7 @@ class RunCroAudit implements ShouldQueue
             if ($user) {
                 Mail::to($user)->send(new CROAuditComplete($user, $audit, count($audit->issues ?? [])));
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('RunCroAudit: Failed', [
                 'customer_id' => $this->customerId,
                 'url' => $this->url,

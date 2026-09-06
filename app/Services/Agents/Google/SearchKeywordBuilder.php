@@ -81,7 +81,8 @@ class SearchKeywordBuilder
                 if ($criterionResourceName) {
                     $result->addPlatformId('keyword', $criterionResourceName);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $result->addWarning('Failed to add keyword: '.$e->getMessage());
             }
         }
@@ -168,7 +169,8 @@ class SearchKeywordBuilder
             $this->forecastViability($customerId, $final, $campaign, $ideaMap);
 
             return $final;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Keyword validation failed, using original keywords', [
                 'error' => $e->getMessage(),
             ]);
@@ -357,7 +359,8 @@ class SearchKeywordBuilder
             }
 
             return $keywords;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: AI keyword research failed', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -401,7 +404,8 @@ class SearchKeywordBuilder
                         $added++;
                         $result->addPlatformId('negative_keyword', $resourceName);
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     // May fail if negative already exists
                 }
             }
@@ -411,7 +415,8 @@ class SearchKeywordBuilder
                     'campaign_id' => $campaign->id,
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Failed to add initial negatives', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),

@@ -54,7 +54,8 @@ class WeeklyBudgetRebalance implements ShouldQueue
                     'customer_id' => $customer->id,
                     'status' => $result['status'] ?? 'unknown',
                 ]);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error('WeeklyBudgetRebalance: Failed for customer', [
                     'customer_id' => $allocation->customer_id,

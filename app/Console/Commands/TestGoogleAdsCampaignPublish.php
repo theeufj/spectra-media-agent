@@ -145,7 +145,8 @@ class TestGoogleAdsCampaignPublish extends Command
             }
 
             return 1;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('❌ Unexpected Error: '.$e->getMessage());
             $this->error('Stack trace: '.$e->getTraceAsString());
 

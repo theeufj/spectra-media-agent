@@ -85,7 +85,9 @@ class SystemHealthController extends Controller
                 'message' => $hasCredentials ? 'API credentials configured' : 'Missing API credentials',
                 'icon' => 'google',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'name' => 'Google Ads',
                 'status' => 'error',
@@ -110,7 +112,9 @@ class SystemHealthController extends Controller
                 'message' => $hasCredentials ? 'API credentials configured' : 'Missing API credentials',
                 'icon' => 'facebook',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'name' => 'Facebook/Meta',
                 'status' => 'error',
@@ -146,7 +150,9 @@ class SystemHealthController extends Controller
                 'message' => $response->successful() ? 'API responding' : 'API not responding',
                 'icon' => 'sparkles',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'name' => 'Gemini AI',
                 'status' => 'error',
@@ -183,7 +189,9 @@ class SystemHealthController extends Controller
                 'message' => 'API responding',
                 'icon' => 'credit-card',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'name' => 'Stripe',
                 'status' => 'error',
@@ -221,7 +229,9 @@ class SystemHealthController extends Controller
                 'message' => 'Connected to bucket',
                 'icon' => 'cloud',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'name' => 'AWS S3',
                 'status' => 'error',
@@ -256,7 +266,9 @@ class SystemHealthController extends Controller
                     'customers' => $customerCount,
                 ],
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'status' => 'error',
                 'latency' => null,
@@ -306,7 +318,9 @@ class SystemHealthController extends Controller
                 'recentFailed' => $recentFailed,
                 'driver' => config('queue.default'),
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'status' => 'error',
                 'pending' => 0,
@@ -335,7 +349,9 @@ class SystemHealthController extends Controller
                 'used' => $this->formatBytes($usedSpace),
                 'usedPercent' => $usedPercent,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'status' => 'error',
                 'message' => 'Could not check storage',
@@ -359,7 +375,9 @@ class SystemHealthController extends Controller
                 'driver' => config('cache.default'),
                 'message' => $value === 'test' ? 'Cache working' : 'Cache read/write failed',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'status' => 'error',
                 'driver' => config('cache.default'),
@@ -394,7 +412,9 @@ class SystemHealthController extends Controller
                 'type' => 'success',
                 'message' => 'Job queued for retry.',
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Failed to retry job: '.$e->getMessage(),
@@ -414,7 +434,9 @@ class SystemHealthController extends Controller
                 'type' => 'success',
                 'message' => 'Failed job deleted.',
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Failed to delete job: '.$e->getMessage(),
@@ -434,7 +456,9 @@ class SystemHealthController extends Controller
                 'type' => 'success',
                 'message' => 'All failed jobs cleared.',
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return redirect()->back()->with('flash', [
                 'type' => 'error',
                 'message' => 'Failed to flush jobs: '.$e->getMessage(),

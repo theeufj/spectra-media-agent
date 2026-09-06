@@ -295,7 +295,8 @@ class ABTestingAgent
             }
 
             return $variants;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('ABTestingAgent: Failed to refresh Google metrics', [
                 'test_id' => $test->id,
                 'error' => $e->getMessage(),
@@ -360,7 +361,8 @@ class ABTestingAgent
             }
 
             return $variants;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('ABTestingAgent: Failed to refresh Facebook metrics', [
                 'test_id' => $test->id,
                 'error' => $e->getMessage(),
@@ -641,7 +643,8 @@ class ABTestingAgent
             ]);
 
             return $experimentResult;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('ABTestingAgent: Failed to create Google native experiment', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
@@ -665,14 +668,9 @@ class ABTestingAgent
         $customer = $campaign->customer;
         $customerId = $customer?->google_ads_customer_id;
 
-        // Retrieve the experiment resource — check attribute directly to avoid errors
-        // if the column hasn't been added to the campaigns table yet.
-        $experimentResource = null;
-        try {
-            $experimentResource = $campaign->google_ads_experiment_id ?? null;
-        } catch (\Exception) {
-            // Column may not exist
-        }
+        // Reading an absent attribute yields null rather than throwing, so this
+        // needs no guard — the try/catch around it was dead code.
+        $experimentResource = $campaign->google_ads_experiment_id ?? null;
 
         if (! $experimentResource || ! $customerId) {
             Log::warning('ABTestingAgent: checkAndPromoteExperiment — missing experiment resource or customer ID', [
@@ -733,7 +731,8 @@ class ABTestingAgent
             }
 
             return 'running';
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('ABTestingAgent: checkAndPromoteExperiment failed', [
                 'campaign_id' => $campaign->id,
                 'experiment_resource' => $experimentResource,
@@ -799,7 +798,8 @@ Return ONLY a JSON array of strings, e.g.: [\"Variation 1\", \"Variation 2\"]";
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('ABTestingAgent: Failed to generate replacements', [
                 'test_id' => $test->id,
                 'error' => $e->getMessage(),

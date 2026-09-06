@@ -59,7 +59,8 @@ class RollbackCampaignService
             });
 
             return true;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error rolling back campaign {$campaign->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

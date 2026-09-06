@@ -128,7 +128,8 @@ class BacklinkAnalysisService
                     'domain_authority' => $link['source_domain_authority'] ?? null,
                     'first_seen' => $link['first_seen'] ?? null,
                 ])->toArray();
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::debug('BacklinkAnalysis: Moz API failed', ['error' => $e->getMessage()]);
 
                 return [];
@@ -190,7 +191,8 @@ class BacklinkAnalysisService
                 ->unique('source_url')
                 ->values()
                 ->toArray();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('BacklinkAnalysis: Firecrawl fallback failed', ['error' => $e->getMessage()]);
 
             return [];
@@ -279,7 +281,8 @@ PROMPT;
             $text = preg_replace('/```\s*$/', '', $text);
 
             return json_decode(trim($text), true) ?? [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('BacklinkAnalysis: AI opportunities failed', ['error' => $e->getMessage()]);
 
             return [];

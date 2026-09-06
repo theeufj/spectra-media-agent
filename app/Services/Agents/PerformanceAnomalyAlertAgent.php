@@ -254,7 +254,8 @@ class PerformanceAnomalyAlertAgent
                 $resourceName = $campaign->googleAdsResourceName();
                 $service = app(UpdateCampaignBudget::class, ['customer' => $customer]);
                 $service($customerId, $resourceName, $newBudget * 1_000_000);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error("PerformanceAnomalyAlertAgent: Failed to reduce Google budget for campaign {$campaign->id}: ".$e->getMessage());
 
                 return null;
@@ -267,7 +268,8 @@ class PerformanceAnomalyAlertAgent
                 $fbService->updateCampaign($campaign->facebook_ads_campaign_id, [
                     'daily_budget' => (int) round($newBudget * 100),
                 ]);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error("PerformanceAnomalyAlertAgent: Failed to reduce Facebook budget for campaign {$campaign->id}: ".$e->getMessage());
 
                 return null;
@@ -303,7 +305,8 @@ class PerformanceAnomalyAlertAgent
             );
 
             return trim($response['text'] ?? '');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('PerformanceAnomalyAlertAgent: Gemini explanation failed: '.$e->getMessage());
 
             return null;

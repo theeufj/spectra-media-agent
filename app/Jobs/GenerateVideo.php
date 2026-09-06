@@ -242,11 +242,21 @@ class GenerateVideo implements ShouldQueue
             // caps at 8 seconds, so its initial clip narrates only the first
             // segment and CheckVideoStatus chains extensions
             // (ExtendVideoForScript) until every segment has been spoken.
-            $promptScript = config('ai.video_provider', 'grok') === 'grok'
-                ? $script
-                : (ExtendVideoForScript::scriptSegments($script)[0] ?? $script);
+            //
+            // This is decided per provider rather than from config because a
+            // Grok start failure falls through to Veo: reading the config
+            // handed Veo the full 15s script for an 8s clip, and the extension
+            // chain then resumed at segment 1, so segment 0 was rushed and
+            // everything after it was misaligned.
+            $promptForProvider = function (string $provider) use ($actionableContent, $script, $endCardText): string {
+                $promptScript = $provider === 'veo'
+                    ? (ExtendVideoForScript::scriptSegments($script)[0] ?? $script)
+                    : $script;
 
-            $videoPrompt = (new VideoFromScriptPrompt($actionableContent, $promptScript, $endCardText))->getPrompt();
+                return (new VideoFromScriptPrompt($actionableContent, $promptScript, $endCardText))->getPrompt();
+            };
+
+            $videoPrompt = $promptForProvider('openrouter');
             Log::info("Combined video prompt: {$videoPrompt}");
 
             // Step 4: Start the video generation and get the operation name + provider
@@ -254,7 +264,18 @@ class GenerateVideo implements ShouldQueue
             // All other platforms default to 16:9 landscape.
             $isMobilePlatform = in_array(strtolower($this->platform), ['facebook', 'meta', 'instagram', 'facebook ads']);
             $videoParams = $isMobilePlatform ? ['aspectRatio' => '9:16'] : [];
-            $result = $videoGenerationService->startGeneration($videoPrompt, $videoParams, null, $script);
+            $result = $videoGenerationService->startGeneration(
+                $videoPrompt,
+                $videoParams,
+                null,
+                $script,
+                promptForProvider: $promptForProvider,
+                context: [
+                    'campaign_id' => $this->campaign->id,
+                    'customer_id' => $this->campaign->customer_id,
+                    'task_type' => 'video_generation',
+                ],
+            );
 
             if (! $result) {
                 // Don't hard-fail immediately — retry the job after a backoff delay
@@ -288,7 +309,7 @@ class GenerateVideo implements ShouldQueue
             // Step 6: Dispatch the job to check the video status.
             CheckVideoStatus::dispatch($videoCollateral)->delay(now()->addMinutes(1));
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             if ($videoCollateral) {
                 $videoCollateral->update(['status' => 'failed']);
             }

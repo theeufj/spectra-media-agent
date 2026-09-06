@@ -231,7 +231,8 @@ PROMPT;
 
                 return array_slice($data, 0, $count);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('AdExtensionAgent: Sitelink generation failed: '.$e->getMessage());
         }
 
@@ -262,7 +263,8 @@ PROMPT;
             if (json_last_error() === JSON_ERROR_NONE && is_array($data)) {
                 return array_values(array_filter(array_slice($data, 0, $count), 'is_string'));
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('AdExtensionAgent: Callout generation failed: '.$e->getMessage());
         }
 
@@ -291,7 +293,8 @@ PROMPT;
             if (json_last_error() === JSON_ERROR_NONE && isset($data['header'], $data['values'])) {
                 return $data;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('AdExtensionAgent: Structured snippet generation failed: '.$e->getMessage());
         }
 

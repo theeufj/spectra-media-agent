@@ -141,7 +141,8 @@ class RankTrackingService
             }
 
             return ['position' => null, 'url' => null]; // Not found in results
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('RankTracking: Search failed', ['keyword' => $keyword, 'error' => $e->getMessage()]);
 
             return ['position' => null, 'url' => null];

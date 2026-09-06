@@ -27,7 +27,8 @@ class AccountStructureService extends BaseGoogleAdsService
                 'campaigns' => $campaignCount,
                 'ad_groups' => $adGroupCount,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error fetching account structure limits for customer {$customerId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

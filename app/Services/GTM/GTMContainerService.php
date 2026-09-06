@@ -50,7 +50,8 @@ class GTMContainerService
             }
 
             return $response->json()['access_token'] ?? null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GTMContainerService: Failed to get platform access token', [
                 'error' => $e->getMessage(),
             ]);
@@ -181,7 +182,8 @@ class GTMContainerService
                 'container_id' => $containerId,
                 'workspace_id' => $workspaceId,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('GTMContainerService: Error provisioning container', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -292,7 +294,9 @@ HTML;
                 'tag_name' => $tagName,
                 'trigger_id' => $triggerId,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -467,7 +471,9 @@ JS;
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -843,7 +849,9 @@ JS;
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -876,7 +884,9 @@ JS;
                 'trigger_id' => $response['data']['triggerId'] ?? null,
                 'trigger_type' => $triggerType,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -945,7 +955,9 @@ JS;
             $this->refreshWorkspaceAfterPublish($customer, $accessToken);
 
             return ['success' => true, 'version_id' => $versionId, 'published_at' => now()];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1043,7 +1055,8 @@ JS;
                     ->timeout(20)
                     ->setOption('waitUntil', 'domcontentloaded')
                     ->bodyHtml();
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('GTMContainerService: Browsershot failed, falling back to HTTP', ['error' => $e->getMessage()]);
                 $htmlContent = @file_get_contents($customer->website);
             }
@@ -1072,7 +1085,9 @@ JS;
                 'detected' => $allDetected,
                 'expected' => $customer->gtm_container_id,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1126,7 +1141,9 @@ JS;
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1178,7 +1195,9 @@ JS;
             }
 
             return ['success' => true, 'tag_id' => $response['data']['tagId'] ?? null];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['success' => false, 'error' => $e->getMessage()];
         }
     }
@@ -1251,7 +1270,8 @@ JS;
 
                 return ['success' => false, 'error' => $lastError, 'status_code' => $response->status()];
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $lastError = $e->getMessage();
                 $attempt++;
                 if ($attempt < $this->maxRetries) {

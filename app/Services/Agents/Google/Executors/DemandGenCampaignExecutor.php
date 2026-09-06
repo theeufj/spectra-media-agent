@@ -114,7 +114,8 @@ class DemandGenCampaignExecutor implements CampaignTypeExecutor
                         }
                         $result->addPlatformId('image_asset', $assetResourceName);
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     $result->addWarning("Failed to upload image asset {$image->s3_path}: ".$e->getMessage());
                 }
             }

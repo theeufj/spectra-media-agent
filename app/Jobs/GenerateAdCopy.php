@@ -151,7 +151,8 @@ class GenerateAdCopy implements ShouldQueue
                     if (! is_array($adCopyData['headlines'] ?? null) || ! is_array($adCopyData['descriptions'] ?? null)) {
                         throw new \Exception('Gemini did not return a valid JSON object with headlines and descriptions arrays.');
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::error("Failed to parse Gemini's ad copy response on attempt {$attempt}: ".$e->getMessage(), ['generated_text' => $generatedText]);
                     $attemptFailures[] = 'unparseable_response';
 
@@ -234,7 +235,7 @@ class GenerateAdCopy implements ShouldQueue
             unset($existing['ad_copy']);
             $this->strategy->update(['collateral_errors' => empty($existing) ? null : $existing]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error in GenerateAdCopy job for Campaign {$this->campaign->id}: ".$e->getMessage());
             $this->fail($e);
         }

@@ -25,7 +25,8 @@ class ConversionTrackingService extends BaseGoogleAdsService
             ]));
 
             return count(iterator_to_array($response->getIterator())) > 0;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error checking conversion tracking setup for customer {$customerId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -51,7 +52,8 @@ class ConversionTrackingService extends BaseGoogleAdsService
             }
 
             return $total;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error getting conversion count for customer {$customerId}: ".$e->getMessage());
 
             return 0;

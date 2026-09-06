@@ -68,7 +68,8 @@ class DiscoverNavigationUrls implements ShouldQueue
                 ->waitUntilNetworkIdle(false) // networkidle2: tolerate ongoing analytics/ads connections
                 ->timeout(60)
                 ->bodyHtml();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('DiscoverNavigationUrls: Browsershot failed, trying HTTP fallback', [
                 'error' => $e->getMessage(),
             ]);
@@ -79,7 +80,8 @@ class DiscoverNavigationUrls implements ShouldQueue
                     ])
                     ->get($websiteUrl);
                 $html = $response->successful() ? $response->body() : '';
-            } catch (\Exception $e2) {
+            } catch (\Throwable $e2) {
+                report($e2);
                 Log::error('DiscoverNavigationUrls: All fetch methods failed', [
                     'error' => $e2->getMessage(),
                 ]);
@@ -259,7 +261,8 @@ class DiscoverNavigationUrls implements ShouldQueue
                         $urls[] = $resolved;
                     }
                 });
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 // Selector may not match — that's fine
             }
         }

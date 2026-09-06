@@ -66,7 +66,7 @@ class GenerateStrategyCollateral implements ShouldQueue
 
             Log::info("Collateral generation dispatched for Strategy ID: {$this->strategy->id}");
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error("Error in GenerateStrategyCollateral job for Strategy ID {$this->strategy->id}: ".$e->getMessage());
             $this->fail($e);
         }

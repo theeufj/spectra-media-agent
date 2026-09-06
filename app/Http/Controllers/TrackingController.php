@@ -34,7 +34,9 @@ class TrackingController extends Controller
             if ($requestTime->diffInMinutes(now(), absolute: true) > 5) {
                 return null;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return null;
         }
 

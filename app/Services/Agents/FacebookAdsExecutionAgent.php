@@ -283,7 +283,7 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
             return $plan;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             Log::error('FacebookAdsExecutionAgent: Failed to generate execution plan: '.$e->getMessage());
             throw $e;
         }
@@ -361,7 +361,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                         $adsCreated++;
                         Log::info("FacebookAdsExecutionAgent: Created image ad {$ad['id']} for image {$image->id}");
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning("FacebookAdsExecutionAgent: Image ad creation failed for image {$image->id}: ".$e->getMessage());
                 }
             }
@@ -405,7 +406,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
                         $adsCreated++;
                         Log::info("FacebookAdsExecutionAgent: Created video ad {$ad['id']} for video {$video->id}");
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning("FacebookAdsExecutionAgent: Video ad creation failed for video {$video->id}: ".$e->getMessage());
                 }
             }
@@ -424,7 +426,8 @@ class FacebookAdsExecutionAgent extends PlatformExecutionAgent
 
             return $result;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('FacebookAdsExecutionAgent: Plan execution failed: '.$e->getMessage());
 
             // failure() takes the errors, then context — the plan was being
@@ -981,7 +984,8 @@ PROMPT;
             $pixels = $adAccountService->getPixels('act_'.$adAccountId);
 
             return ! empty($pixels);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Failed to check Pixel installation: '.$e->getMessage());
 
             return false;
@@ -1015,7 +1019,8 @@ PROMPT;
             }
 
             return false;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Failed to check Pixel conversions: '.$e->getMessage());
 
             return false;

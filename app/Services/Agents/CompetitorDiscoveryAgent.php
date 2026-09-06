@@ -122,7 +122,8 @@ class CompetitorDiscoveryAgent
                 'methods' => $results['discovery_methods'],
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Discovery failed: '.$e->getMessage();
             Log::error('CompetitorDiscoveryAgent: Exception', [
                 'customer_id' => $customer->id,
@@ -247,7 +248,8 @@ class CompetitorDiscoveryAgent
                 'competitors_found' => count($competitors),
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CompetitorDiscoveryAgent: Gemini search failed', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -414,7 +416,8 @@ class CompetitorDiscoveryAgent
 
             return true;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('CompetitorDiscoveryAgent: Failed to save competitor', [
                 'error' => $e->getMessage(),
                 'data' => $data,
@@ -433,13 +436,16 @@ class CompetitorDiscoveryAgent
             $response = Http::timeout(5)->head($url);
 
             return $response->successful() || $response->status() < 500;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             // Try GET as fallback (some servers don't support HEAD)
             try {
                 $response = Http::timeout(5)->get($url);
 
                 return $response->successful() || $response->status() < 500;
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
+
                 return false;
             }
         }

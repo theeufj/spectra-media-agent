@@ -69,7 +69,12 @@ class AdSpendBillingService
             $initialCredit = AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
 
             // Charge the customer's card for the initial credit
-            $chargeResult = $this->chargeCustomer($customer, $initialCredit, 'Initial ad spend credit (7 days)');
+            $chargeResult = $this->chargeCustomer(
+                $customer,
+                $initialCredit,
+                'Initial ad spend credit (7 days)',
+                $this->idempotencyKey('initial', $customer, 'setup', $initialCredit)
+            );
 
             if (! $chargeResult['success']) {
                 throw new \Exception('Failed to charge initial ad spend credit: '.$chargeResult['error']);
@@ -168,35 +173,70 @@ class AdSpendBillingService
                 return $result;
             }
 
-            // Deduct from credit balance
-            if ($credit->current_balance >= $actualSpend) {
-                $credit->deduct($actualSpend, 'Daily ad spend - '.$this->billingDate($customer));
+            $billingDate = $this->billingDate($customer);
+
+            // deduct() re-reads the balance under lock and refuses rather than
+            // overdraw, so its return value is the only reliable statement that
+            // money moved. All three call sites here discarded it and reported
+            // success regardless — so a refusal logged "Deducted from credit
+            // balance" while taking nothing, and the day is never retried
+            // because the run is already claimed.
+            //
+            // Calling deduct() directly also removes the unlocked
+            // `current_balance >= $actualSpend` pre-check, which was reading a
+            // stale in-memory balance to decide whether the locked write would
+            // succeed.
+            if ($credit->deduct($actualSpend, 'Daily ad spend - '.$billingDate, $billingDate)) {
                 $result['success'] = true;
                 $result['action_taken'] = 'Deducted from credit balance';
 
                 // Check if we need to auto-replenish
                 $this->checkAndReplenish($customer, $credit);
             } else {
-                // Not enough credit, need to charge card
-                $shortfall = $actualSpend - $credit->current_balance;
+                // Not enough credit, need to charge card. Take what is actually
+                // there first, and measure the shortfall against what the
+                // locked deduction accepted.
+                $credit->refresh();
+                $available = (float) $credit->current_balance;
+                $deductedNow = 0.0;
 
-                // Deduct whatever is available
-                if ($credit->current_balance > 0) {
-                    $credit->deduct($credit->current_balance, 'Daily ad spend (partial) - '.$this->billingDate($customer));
+                if ($available > 0 && $credit->deduct($available, 'Daily ad spend (partial) - '.$billingDate, $billingDate)) {
+                    $deductedNow = $available;
                 }
+
+                $shortfall = round($actualSpend - $deductedNow, 2);
 
                 // Try to charge the shortfall plus replenishment
                 $replenishAmount = AdSpendCredit::calculateInitialCredit(
                     $this->getAverageDailyBudget($customer),
                     7
                 );
-                $totalToCharge = $shortfall + $replenishAmount;
+                $totalToCharge = round($shortfall + $replenishAmount, 2);
 
-                $chargeResult = $this->chargeCustomer($customer, $totalToCharge, 'Ad spend replenishment');
+                $chargeResult = $this->chargeCustomer(
+                    $customer,
+                    $totalToCharge,
+                    'Ad spend replenishment',
+                    $this->idempotencyKey('replenish', $customer, $billingDate, $totalToCharge)
+                );
 
                 if ($chargeResult['success']) {
                     $credit->addCredit($totalToCharge, 'Credit replenishment', $chargeResult['charge_id']);
-                    $credit->deduct($shortfall, 'Daily ad spend (remaining) - '.$this->billingDate($customer));
+
+                    if (! $credit->deduct($shortfall, 'Daily ad spend (remaining) - '.$billingDate, $billingDate)) {
+                        // The credit just added should cover this. If it does
+                        // not, say so rather than reporting a settled day.
+                        report(new \RuntimeException(
+                            "Ad spend deduction refused after replenishment for customer {$customer->id} on {$billingDate}"
+                        ));
+
+                        $result['success'] = false;
+                        $result['error'] = 'Card charged but the outstanding spend could not be deducted';
+                        $result['action_taken'] = 'Charged card; deduction refused';
+
+                        return $result;
+                    }
+
                     $credit->restoreAccount();
                     $result['success'] = true;
                     $result['action_taken'] = 'Charged card and replenished credit';
@@ -211,7 +251,10 @@ class AdSpendBillingService
 
             return $result;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not \Exception: a TypeError here used to sail past and
+            // abort the whole nightly run rather than this one customer.
+            report($e);
             Log::error('AdSpendBilling: Daily billing failed', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -288,7 +331,12 @@ class AdSpendBillingService
             7
         );
 
-        $chargeResult = $this->chargeCustomer($customer, $replenishAmount, 'Ad spend recovery');
+        $chargeResult = $this->chargeCustomer(
+            $customer,
+            $replenishAmount,
+            'Ad spend recovery',
+            $this->idempotencyKey('recovery', $customer, $this->billingDate($customer), $replenishAmount)
+        );
 
         if ($chargeResult['success']) {
             $credit->addCredit($replenishAmount, 'Credit recovery', $chargeResult['charge_id']);
@@ -341,7 +389,12 @@ class AdSpendBillingService
         if ($daysRemaining < 3 && $daysRemaining > 0) {
             $replenishAmount = AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
 
-            $chargeResult = $this->chargeCustomer($customer, $replenishAmount, 'Auto-replenishment');
+            $chargeResult = $this->chargeCustomer(
+                $customer,
+                $replenishAmount,
+                'Auto-replenishment',
+                $this->idempotencyKey('autoreplenish', $customer, $this->billingDate($customer), $replenishAmount)
+            );
 
             if ($chargeResult['success']) {
                 $credit->addCredit($replenishAmount, 'Auto-replenishment', $chargeResult['charge_id']);
@@ -362,10 +415,26 @@ class AdSpendBillingService
     }
 
     /**
+     * A stable key for one intended charge.
+     *
+     * Stripe replays the original response for a repeated key rather than
+     * charging again, so this must be derived only from what identifies the
+     * charge — never from the clock or a random value.
+     */
+    protected function idempotencyKey(string $purpose, Customer $customer, string $scope, float $amount): string
+    {
+        return sprintf('adspend:%s:%d:%s:%d', $purpose, $customer->id, $scope, (int) round($amount * 100));
+    }
+
+    /**
      * Charge the customer's card via Stripe.
      */
-    protected function chargeCustomer(Customer $customer, float $amount, string $description): array
-    {
+    protected function chargeCustomer(
+        Customer $customer,
+        float $amount,
+        string $description,
+        string $idempotencyKey,
+    ): array {
         try {
             // Prefer an owner who can actually pay, then anyone who can.
             //
@@ -392,15 +461,40 @@ class AdSpendBillingService
 
             // Charge in the customer's own currency (their ad-account currency) so we
             // never bill USD for AUD spend. Ad spend is deducted 1:1 in this currency.
-            $payment = $user->charge($amountCents, $user->defaultPaymentMethod()->id, [
+            //
+            // Built directly rather than through Cashier's charge(): an
+            // idempotency key is a request option, and charge() -> createPayment()
+            // calls paymentIntents->create($params) with no second argument, so
+            // there is no way to pass one through it. Without the key, a lost
+            // response or a retry bills the card again for the full amount.
+            $params = [
+                'amount' => $amountCents,
                 'currency' => strtolower($customer->billingCurrency()),
+                'payment_method' => $user->defaultPaymentMethod()->id,
+                'confirmation_method' => 'automatic',
+                'confirm' => true,
                 'description' => $description,
                 'metadata' => [
-                    'customer_id' => $customer->id,
+                    'customer_id' => (string) $customer->id,
                     'type' => 'ad_spend_credit',
                 ],
                 'payment_method_types' => ['card'],
-            ]);
+            ];
+
+            if ($user->hasStripeId()) {
+                $params['customer'] = $user->stripe_id;
+            }
+
+            $payment = new \Laravel\Cashier\Payment(
+                \Laravel\Cashier\Cashier::stripe()->paymentIntents->create(
+                    $params,
+                    ['idempotency_key' => $idempotencyKey],
+                )
+            );
+
+            // charge() did this for us; keep it so IncompletePayment still
+            // surfaces requires_action the way the callers below expect.
+            $payment->validate();
 
             return [
                 'success' => true,
@@ -418,7 +512,9 @@ class AdSpendBillingService
                 'success' => false,
                 'error' => 'Payment requires additional action',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return [
                 'success' => false,
                 'error' => $e->getMessage(),
@@ -453,8 +549,18 @@ class AdSpendBillingService
     protected function deductionsFor(AdSpendCredit $credit, string $billingDate): float
     {
         return abs((float) $credit->transactions()
-            ->where('type', 'deduction')
-            ->where('description', 'like', '%'.$billingDate)
+            ->where('type', AdSpendTransaction::TYPE_DEDUCTION)
+            ->where(function ($query) use ($billingDate) {
+                // billed_for is the real answer. The description match is kept
+                // only for rows written before that column existed and whose
+                // backfill did not resolve — a money guard should not depend on
+                // a human-readable string, but nor should it lose old rows.
+                $query->whereDate('billed_for', $billingDate)
+                    ->orWhere(function ($legacy) use ($billingDate) {
+                        $legacy->whereNull('billed_for')
+                            ->where('description', 'like', '%'.$billingDate);
+                    });
+            })
             ->sum('amount'));
     }
 
@@ -509,11 +615,17 @@ class AdSpendBillingService
                 }
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            // Returning the partial total billed the customer for however many
+            // campaigns happened to be read before the failure, and presented it
+            // as the whole day's spend.
+            report($e);
             Log::error('AdSpendBilling: Failed to get actual spend', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
             ]);
+
+            throw $e;
         }
 
         return $totalSpend;
@@ -530,13 +642,18 @@ class AdSpendBillingService
             return (float) \App\Models\GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
                 ->where('date', $this->billingDate($customer))
                 ->sum('cost');
-        } catch (\Exception $e) {
-            Log::warning('AdSpendBilling: Failed to get Google Ads spend', [
+        } catch (\Throwable $e) {
+            // Never resolve a failed lookup to zero. A zero here is
+            // indistinguishable from a genuine no-spend day, so the customer
+            // was under-billed, the run was marked settled, and Log::warning
+            // does not reach runtime_exceptions — the failure was invisible.
+            report($e);
+            Log::error('AdSpendBilling: Failed to get Google Ads spend', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
 
-            return 0;
+            throw $e;
         }
     }
 
@@ -582,14 +699,19 @@ class AdSpendBillingService
             }
 
             return 0;
-        } catch (\Exception $e) {
-            Log::warning('AdSpendBilling: Failed to get Facebook Ads spend', [
+        } catch (\Throwable $e) {
+            // Never resolve a failed lookup to zero. A zero here is
+            // indistinguishable from a genuine no-spend day, so the customer
+            // was under-billed, the run was marked settled, and Log::warning
+            // does not reach runtime_exceptions — the failure was invisible.
+            report($e);
+            Log::error('AdSpendBilling: Failed to get Facebook Ads spend', [
                 'campaign_id' => $campaign->id,
                 'facebook_campaign_id' => $campaign->facebook_ads_campaign_id,
                 'error' => $e->getMessage(),
             ]);
 
-            return 0;
+            throw $e;
         }
     }
 
@@ -609,13 +731,18 @@ class AdSpendBillingService
                 ->sum('cost');
 
             return (float) $spend;
-        } catch (\Exception $e) {
-            Log::warning('AdSpendBilling: Failed to get Microsoft Ads spend', [
+        } catch (\Throwable $e) {
+            // Never resolve a failed lookup to zero. A zero here is
+            // indistinguishable from a genuine no-spend day, so the customer
+            // was under-billed, the run was marked settled, and Log::warning
+            // does not reach runtime_exceptions — the failure was invisible.
+            report($e);
+            Log::error('AdSpendBilling: Failed to get Microsoft Ads spend', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
 
-            return 0;
+            throw $e;
         }
     }
 
@@ -635,13 +762,18 @@ class AdSpendBillingService
                 ->sum('cost');
 
             return (float) $spend;
-        } catch (\Exception $e) {
-            Log::warning('AdSpendBilling: Failed to get LinkedIn Ads spend', [
+        } catch (\Throwable $e) {
+            // Never resolve a failed lookup to zero. A zero here is
+            // indistinguishable from a genuine no-spend day, so the customer
+            // was under-billed, the run was marked settled, and Log::warning
+            // does not reach runtime_exceptions — the failure was invisible.
+            report($e);
+            Log::error('AdSpendBilling: Failed to get LinkedIn Ads spend', [
                 'campaign_id' => $campaign->id,
                 'error' => $e->getMessage(),
             ]);
 
-            return 0;
+            throw $e;
         }
     }
 
@@ -671,7 +803,8 @@ class AdSpendBillingService
                 }
                 $newBudget = round(($campaign->daily_budget ?? 0) * $multiplier, 2);
                 $this->budgetAgent->updateCampaignBudgetPublic($customer, $campaign, $newBudget);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error('AdSpendBilling: Failed to reduce budget', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
@@ -740,7 +873,8 @@ class AdSpendBillingService
                     'reason' => 'payment_failure',
                 ]);
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error('AdSpendBilling: Failed to pause campaign', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
@@ -805,7 +939,8 @@ class AdSpendBillingService
                     'facebook_ads_id' => $campaign->facebook_ads_campaign_id,
                 ]);
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error('AdSpendBilling: Failed to resume campaign', [
                     'campaign_id' => $campaign->id,
                     'error' => $e->getMessage(),
@@ -870,7 +1005,17 @@ class AdSpendBillingService
             ];
         }
 
-        $chargeResult = $this->chargeCustomer($customer, $amount, $description ?? 'Manual credit top-up');
+        // Scoped to the minute, not the day: an admin may legitimately top the
+        // same account up twice for the same amount, and a day-wide key would
+        // make Stripe silently replay the first charge instead of taking the
+        // second. A minute is wide enough to absorb a double-submit or an
+        // in-request retry, narrow enough not to swallow a deliberate repeat.
+        $chargeResult = $this->chargeCustomer(
+            $customer,
+            $amount,
+            $description ?? 'Manual credit top-up',
+            $this->idempotencyKey('manual', $customer, now()->format('Y-m-d\TH:i'), $amount)
+        );
 
         if ($chargeResult['success']) {
             $credit->addCredit($amount, $description ?? 'Manual credit top-up', $chargeResult['charge_id']);

@@ -113,7 +113,8 @@ class GetPerformanceBySegment extends BaseGoogleAdsService
                     $results[$key]['cpa_micros'] = $results[$key]['cost_micros'] / $results[$key]['conversions'];
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError('GetPerformanceBySegment failed: '.$e->getMessage());
         }
 

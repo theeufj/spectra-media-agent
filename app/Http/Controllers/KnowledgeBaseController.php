@@ -178,7 +178,8 @@ class KnowledgeBaseController extends Controller
             ]);
 
             return redirect()->route('dashboard')->with('success', 'File uploaded! We are processing your document and will extract the content shortly.');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             \Illuminate\Support\Facades\Log::error('File upload error: '.$e->getMessage());
 
             return redirect()->back()->withErrors(['document' => 'Failed to upload file. Please try again.']);
@@ -221,7 +222,8 @@ class KnowledgeBaseController extends Controller
             ]);
 
             return redirect()->route('knowledge-base.index')->with('success', 'Knowledge base entry deleted successfully.');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             \Log::error('Failed to delete knowledge base entry: '.$e->getMessage());
 
             return redirect()->back()->withErrors(['error' => 'Failed to delete knowledge base entry.']);
@@ -308,7 +310,8 @@ class KnowledgeBaseController extends Controller
             ]);
 
             return response()->json(['results' => $results]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Knowledge base semantic search error: '.$e->getMessage(), [
                 'exception' => $e,
             ]);

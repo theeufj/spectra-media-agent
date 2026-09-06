@@ -79,7 +79,8 @@ class HarvestWebsiteAssets implements ShouldQueue
                     $imageData['data'],
                     $imageData['mime_type']
                 );
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('HarvestWebsiteAssets: Upload failed', [
                     'url' => $entry['url'],
                     'error' => $e->getMessage(),

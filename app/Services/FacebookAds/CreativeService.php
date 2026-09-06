@@ -76,7 +76,8 @@ class CreativeService extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating image creative: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -163,7 +164,8 @@ class CreativeService extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating video creative: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -294,7 +296,8 @@ class CreativeService extends BaseFacebookAdsService
                 @unlink($tempPath);
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error uploading image to Facebook: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -382,7 +385,8 @@ class CreativeService extends BaseFacebookAdsService
                 @unlink($tempPath);
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error uploading video to Facebook: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -463,7 +467,8 @@ class CreativeService extends BaseFacebookAdsService
 
             return null;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error in resumable video upload: '.$e->getMessage());
 
             return null;
@@ -490,7 +495,8 @@ class CreativeService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting pages: '.$e->getMessage());
 
             return [];
@@ -567,7 +573,8 @@ class CreativeService extends BaseFacebookAdsService
             Log::error('Failed to create carousel creative', ['customer_id' => $this->customer->id, 'response' => $response]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating carousel creative: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,

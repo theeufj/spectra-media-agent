@@ -70,7 +70,8 @@ class InsightService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting campaign insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'campaign_id' => $campaignId,
@@ -135,7 +136,8 @@ class InsightService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting ad set insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_set_id' => $adSetId,
@@ -200,7 +202,8 @@ class InsightService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting ad insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'ad_id' => $adId,
@@ -265,7 +268,8 @@ class InsightService extends BaseFacebookAdsService
             ]);
 
             return [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting account insights: '.$e->getMessage(), [
                 'exception' => $e,
                 'account_id' => $accountId,
@@ -330,7 +334,8 @@ class InsightService extends BaseFacebookAdsService
             $response = $this->get("/{$accountId}/insights", $params);
 
             return $response['data'] ?? [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error getting account insights by level: '.$e->getMessage(), [
                 'account_id' => $accountId,
                 'level' => $level,

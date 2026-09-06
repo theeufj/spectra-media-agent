@@ -95,7 +95,8 @@ class AdGroupService extends BaseMicrosoftAdsService
             }
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Microsoft Ads: Failed to add keyword '{$text}'", ['error' => $e->getMessage()]);
 
             return null;
@@ -162,7 +163,8 @@ class AdGroupService extends BaseMicrosoftAdsService
             $response = $this->apiCall('AddNegativeKeywordsToEntities', $request);
 
             return 'added';
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Microsoft Ads: Failed to add negative keyword '{$text}'", ['error' => $e->getMessage()]);
 
             return null;

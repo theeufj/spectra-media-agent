@@ -87,7 +87,8 @@ class BiddingStrategyApplier
             $conversionService = new \App\Services\GoogleAds\ConversionTrackingService($this->customer);
 
             return $conversionService->getConversionCountLast30Days($customerId);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Could not fetch conversion count, assuming 0', [
                 'error' => $e->getMessage(),
             ]);

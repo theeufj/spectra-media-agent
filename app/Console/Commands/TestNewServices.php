@@ -226,7 +226,8 @@ class TestNewServices extends Command
                     'ad_group_resource' => $row->getAdGroup()->getResourceName(),
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  Error finding search campaign: '.$e->getMessage());
         }
 
@@ -253,7 +254,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ AddKeyword returned null');
                 $this->logResult('AddKeyword (test)', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('AddKeyword (test)', 'FAILED', $this->extractError($e));
         }
@@ -281,7 +283,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ UpdateKeywordBid returned false');
                 $this->logResult('UpdateKeywordBid', 'FAILED', 'Returned false');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('UpdateKeywordBid', 'FAILED', $this->extractError($e));
         }
@@ -308,7 +311,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Pause returned false');
                 $this->logResult('PauseKeyword', 'FAILED', 'Returned false');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('PauseKeyword', 'FAILED', $this->extractError($e));
         }
@@ -335,7 +339,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Enable returned false');
                 $this->logResult('EnableKeyword', 'FAILED', 'Returned false');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('EnableKeyword', 'FAILED', $this->extractError($e));
         }
@@ -363,7 +368,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Remove returned false');
                 $this->logResult('RemoveKeyword', 'FAILED', 'Returned false');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('RemoveKeyword', 'FAILED', $this->extractError($e));
         }
@@ -437,7 +443,8 @@ class TestNewServices extends Command
                 $this->warn('    ⚠ No QS records saved (keywords may have no impressions yet)');
                 $this->logResult('QS Persistence', 'OK', 'Job ran but no data (new campaign)');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('QS Persistence', 'FAILED', $this->extractError($e));
         }
@@ -461,7 +468,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Returned null');
                 $this->logResult('DeviceBidAdjustment', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('DeviceBidAdjustment', 'FAILED', $this->extractError($e));
         }
@@ -482,7 +490,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Returned null');
                 $this->logResult('LocationBidAdjustment', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('LocationBidAdjustment', 'FAILED', $this->extractError($e));
         }
@@ -503,7 +512,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Returned null');
                 $this->logResult('AdSchedule', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('AdSchedule', 'FAILED', $this->extractError($e));
         }
@@ -534,7 +544,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Returned null');
                 $this->logResult('StructuredSnippet', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('StructuredSnippet', 'FAILED', $this->extractError($e));
         }
@@ -556,7 +567,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Returned null');
                 $this->logResult('CallAsset', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('CallAsset', 'FAILED', $this->extractError($e));
         }
@@ -582,7 +594,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Returned null');
                 $this->logResult('PriceAsset', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('PriceAsset', 'FAILED', $this->extractError($e));
         }
@@ -609,7 +622,8 @@ class TestNewServices extends Command
                 $this->error('    ✗ Returned null');
                 $this->logResult('PromotionAsset', 'FAILED', 'Returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('PromotionAsset', 'FAILED', $this->extractError($e));
         }
@@ -636,7 +650,8 @@ class TestNewServices extends Command
                 $this->warn('    ⚠ Asset created but linking returned null');
                 $this->logResult("{$label} Link", 'FAILED', 'Link returned null');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('    ⚠ Asset created but linking failed: '.substr($e->getMessage(), 0, 100));
             $this->logResult("{$label} Link", 'FAILED', $this->extractError($e));
         }
@@ -659,7 +674,8 @@ class TestNewServices extends Command
             $this->info('    Best keywords: '.count($trends['best_keywords']));
             $this->info('    Worst keywords: '.count($trends['worst_keywords']));
             $this->logResult('QS Trending', 'OK', 'Avg QS: '.($trends['average_qs'] ?? 'N/A'));
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('QS Trending', 'FAILED', $this->extractError($e));
         }
@@ -688,7 +704,8 @@ class TestNewServices extends Command
             }
 
             $this->logResult('ExecutiveReport', 'OK', ($summary['total_campaigns'] ?? 0).' campaigns analyzed');
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('    ✗ '.$this->extractError($e));
             $this->logResult('ExecutiveReport', 'FAILED', $this->extractError($e));
         }
@@ -785,7 +802,8 @@ class TestNewServices extends Command
                 $this->logResult('Assets Verification', 'OK', 'No campaign assets (may be expected)');
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  Verification error: '.$this->extractError($e));
             $this->logResult('Verification', 'FAILED', $this->extractError($e));
         }

@@ -131,7 +131,8 @@ class PMaxAssetOptimizationAgent
                             }
                         }
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     $errorMsg = "Failed to replace {$fieldType} asset: ".$e->getMessage();
                     $result['errors'][] = $errorMsg;
                     Log::warning('PMaxAssetOptimizationAgent: '.$errorMsg, [

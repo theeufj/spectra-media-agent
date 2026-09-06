@@ -220,7 +220,7 @@ class MerchantCenterService
             return $token;
         } catch (\RuntimeException $e) {
             throw $e;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             throw new \RuntimeException('Merchant Center authentication failed: '.$e->getMessage(), 0, $e);
         }
     }

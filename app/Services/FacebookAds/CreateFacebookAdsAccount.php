@@ -69,7 +69,8 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error creating Facebook Ads account: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,
@@ -116,7 +117,8 @@ class CreateFacebookAdsAccount extends BaseFacebookAdsService
 
             // No existing accounts, create a new one
             return $this($accountName, $currency, $timezone);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error in getOrCreate: '.$e->getMessage(), [
                 'exception' => $e,
                 'customer_id' => $this->customer->id,

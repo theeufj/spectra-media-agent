@@ -101,7 +101,8 @@ class KeywordController extends Controller
                 'message' => 'Found '.count($results['keywords'] ?? []).' keywords.',
             ])->with('research_results', $results);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('KeywordController: Research failed', ['error' => $e->getMessage()]);
 
             return back()->with('flash', ['type' => 'error', 'message' => SafeError::message($e, "Keyword research didn't complete.")]);
@@ -379,7 +380,8 @@ class KeywordController extends Controller
             }
 
             return response()->json($results);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('KeywordController: Inline research failed', ['error' => $e->getMessage()]);
 
             return response()->json(['error' => SafeError::message($e, "Keyword research didn't complete.")], 500);

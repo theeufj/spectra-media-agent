@@ -107,7 +107,8 @@ class CreateDSACampaign extends BaseGoogleAdsService
             foreach ($response->getIterator() as $row) {
                 return $row->getCampaign()->getResourceName();
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->logError('CreateDSACampaign::findByName: '.$e->getMessage());
         }
 

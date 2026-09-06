@@ -127,7 +127,8 @@ class AudienceIntelligenceAgent
                 'list_name' => $listName,
                 'emails_uploaded' => $result['emails_uploaded'],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $result['error'] = $e->getMessage();
             Log::error('AudienceIntelligenceAgent: Failed to create Google audience', [
                 'customer_id' => $customer->id,
@@ -179,7 +180,8 @@ class AudienceIntelligenceAgent
             } else {
                 $result['error'] = 'Failed to create Facebook Custom Audience';
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $result['error'] = $e->getMessage();
             Log::error('AudienceIntelligenceAgent: Failed to create Facebook audience', [
                 'customer_id' => $customer->id,
@@ -206,7 +208,8 @@ class AudienceIntelligenceAgent
                     $audience['platform'] = 'google_ads';
                 }
                 $audiences = array_merge($audiences, $googleAudiences);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error('AudienceIntelligenceAgent: Failed to get Google audiences', [
                     'customer_id' => $customer->id,
                     'error' => $e->getMessage(),
@@ -233,7 +236,8 @@ class AudienceIntelligenceAgent
                         ];
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error('AudienceIntelligenceAgent: Failed to get Facebook audiences', [
                     'customer_id' => $customer->id,
                     'error' => $e->getMessage(),
@@ -317,7 +321,8 @@ PROMPT;
                 return $recommendations;
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('AudienceIntelligenceAgent: Failed to generate recommendations', [
                 'customer_id' => $customer->id,
                 'error' => $e->getMessage(),
@@ -632,7 +637,8 @@ PROMPT;
 
         try {
             $audiences = $audienceService->listAudiences($accountId) ?? [];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $results['errors'][] = 'Could not list audiences: '.$e->getMessage();
 
             return $results;
@@ -678,7 +684,8 @@ PROMPT;
                                 'age_days' => $ageInDays,
                             ]);
                         }
-                    } catch (\Exception $e) {
+                    } catch (\Throwable $e) {
+                        report($e);
                         $results['errors'][] = "Lookalike refresh failed for {$name}: ".$e->getMessage();
                     }
                 }
@@ -726,7 +733,8 @@ PROMPT;
                     'campaign_id' => $campaign->id,
                     'frequency' => round($avgFrequency, 1),
                 ]);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $results['errors'][] = "Frequency expansion failed for campaign {$campaign->id}: ".$e->getMessage();
             }
         }

@@ -101,7 +101,8 @@ class GetKeywordQualityScore implements ShouldQueue
                     'quality_score' => $qualityScore,
                 ]);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error getting keyword Quality Score for campaign {$this->campaignId}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);

@@ -101,7 +101,8 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
                     if (! is_array($chunks)) {
                         throw new \Exception('Gemini did not return a valid JSON array of chunks.');
                     }
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::error("Failed to parse Gemini's chunking response for KB ID {$this->knowledgeBase->id}: ".$e->getMessage(), [
                         'generated_text' => $generatedText,
                     ]);
@@ -166,7 +167,8 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
             } else {
                 Log::warning("No content extracted from {$sourceType} file for knowledge base {$this->knowledgeBase->id}");
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error processing knowledge base file {$this->knowledgeBase->id}: ".$e->getMessage(), [
                 'exception' => $e,
             ]);
@@ -219,7 +221,8 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
             ]);
 
             return $text;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Error extracting PDF content for {$filePath}: ".$e->getMessage(), [
                 'exception' => $e,
                 'kb_id' => $this->knowledgeBase->id,
@@ -255,7 +258,8 @@ class ProcessKnowledgeBaseFile implements ShouldQueue
             ]);
 
             return $content;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('Error extracting text file content: '.$e->getMessage(), [
                 'file_path' => $filePath,
                 'exception' => $e,

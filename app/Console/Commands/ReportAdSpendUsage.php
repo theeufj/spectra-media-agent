@@ -97,7 +97,8 @@ class ReportAdSpendUsage extends Command
                 } else {
                     $this->line("No ad spend to report for user {$user->id} for {$yesterday->toDateString()}.");
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $this->error("Failed to report ad spend for user {$user->id}: {$e->getMessage()}");
                 Log::error("Failed to report ad spend for user {$user->id}:", ['exception' => $e]);
             }

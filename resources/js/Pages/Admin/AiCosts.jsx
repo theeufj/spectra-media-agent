@@ -60,10 +60,14 @@ const PctBar = ({ pct, color = 'bg-brand-primary/70' }) => (
 );
 
 const ModelBadge = ({ model }) => {
-    const color = model.includes('pro')   ? 'bg-purple-100 text-purple-800'
-                : model.includes('lite')  ? 'bg-green-100 text-green-800'
-                : model.includes('veo')   ? 'bg-blue-100 text-blue-800'
-                : model.includes('embed') ? 'bg-gray-100 text-gray-700'
+    // The provider prefix is matched first: 'x-ai/grok-imagine-video-1.5'
+    // matches none of the Gemini tier keywords, so it used to fall through to
+    // the orange Gemini-flash bucket and Grok output read as Gemini output.
+    const color = model.startsWith('x-ai/') ? 'bg-slate-800 text-slate-100'
+                : model.includes('pro')     ? 'bg-purple-100 text-purple-800'
+                : model.includes('lite')    ? 'bg-green-100 text-green-800'
+                : model.includes('veo')     ? 'bg-blue-100 text-blue-800'
+                : model.includes('embed')   ? 'bg-gray-100 text-gray-700'
                 : 'bg-orange-100 text-orange-800';
     return (
         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
@@ -126,7 +130,7 @@ export default function AiCosts({ auth, summary, byModel, byOperation, byCustome
                     <div className="flex items-center justify-between mb-6">
                         <div>
                             <h1 className="text-2xl font-bold text-gray-900">AI Cost Dashboard</h1>
-                            <p className="text-sm text-gray-500 mt-1">Gemini API spend across all customers and agents</p>
+                            <p className="text-sm text-gray-500 mt-1">Gemini, Veo and OpenRouter/Grok spend across all customers and agents</p>
                         </div>
                         <div className="flex gap-2">
                             {periods.map(p => (

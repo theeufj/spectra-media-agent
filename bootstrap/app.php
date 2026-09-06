@@ -66,7 +66,15 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // Log all runtime exceptions to the database for the admin portal
+        // Log all runtime exceptions to the database for the admin portal.
+        //
+        // The model is ExceptionLog, not RuntimeException — a class named
+        // RuntimeException in App\Models would shadow SPL's for any unqualified
+        // `throw new RuntimeException` in that namespace. This referenced the
+        // non-existent name for months: the Error was swallowed by the catch
+        // below, so every report() in the codebase wrote nothing here and the
+        // dashboard only ever showed whole-job failures via Queue::failing.
+        // bootstrap/ was outside the PHPStan paths, which is why nothing caught it.
         $exceptions->report(function (\Throwable $e) {
             try {
                 $request = request();
@@ -93,25 +101,36 @@ return Application::configure(basePath: dirname(__DIR__))
                     }
                 }
 
-                \App\Models\RuntimeException::create([
+                \App\Models\ExceptionLog::create([
                     'type' => get_class($e),
                     'source' => $source,
                     'file' => $e->getFile(),
                     'line' => $e->getLine(),
                     'message' => mb_substr($e->getMessage(), 0, 65535),
                     'trace' => mb_substr($e->getTraceAsString(), 0, 65535),
-                    'url' => $source === 'http' ? $request?->fullUrl() : null,
-                    'method' => $source === 'http' ? $request?->method() : null,
+                    'url' => $source === 'http' ? $request->fullUrl() : null,
+                    'method' => $source === 'http' ? $request->method() : null,
                     'job_class' => $jobClass,
-                    'user_id' => $request?->user()?->id,
-                    'customer_id' => session('active_customer_id'),
+                    'user_id' => $request->user()?->id,
+                    // Queue workers and scheduled commands have no session, and
+                    // that is where most reports come from. Context is set by the
+                    // batch jobs that iterate tenants; the session is the
+                    // fallback for genuine HTTP requests.
+                    'customer_id' => \Illuminate\Support\Facades\Context::get('customer_id')
+                        ?? session('active_customer_id'),
                     'context' => [
-                        'input' => $source === 'http' ? $request?->except(['password', 'password_confirmation', 'token']) : null,
-                        'headers' => $source === 'http' ? collect($request?->headers?->all())->only(['user-agent', 'referer', 'accept'])->toArray() : null,
+                        'input' => $source === 'http' ? $request->except(['password', 'password_confirmation', 'token']) : null,
+                        'headers' => $source === 'http' ? collect($request->headers->all())->only(['user-agent', 'referer', 'accept'])->toArray() : null,
                     ],
                 ]);
             } catch (\Throwable $logException) {
-                // Silently fail — never let exception logging break the app
+                // Never let exception logging break the app — but never let it
+                // fail silently either. Swallowing this is what hid the broken
+                // class name. Log directly rather than via report(), which
+                // would re-enter this handler.
+                \Illuminate\Support\Facades\Log::warning(
+                    'Failed to write to runtime_exceptions: '.$logException->getMessage()
+                );
             }
 
             // Return false to allow Laravel's default logging to continue

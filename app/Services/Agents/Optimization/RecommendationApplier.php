@@ -68,7 +68,8 @@ class RecommendationApplier
                 'NETWORK_SETTINGS' => $this->applyNetworkSettings($campaign, $recommendation),
                 default => ['applied' => false, 'message' => "Auto-apply not yet supported for type: {$type}", 'recommendation' => $recommendation],
             };
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('RecommendationApplier: Failed to apply recommendation', [
                 'campaign_id' => $campaign->id,
                 'recommendation' => $recommendation,
@@ -98,7 +99,8 @@ class RecommendationApplier
                 $customerId = $customer->cleanGoogleCustomerId();
                 $resource = $campaign->googleAdsResourceName();
                 (new UpdateCampaignBudget($customer))($customerId, $resource, (int) ($newBudget * 1_000_000));
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('RecommendationApplier: Google budget API update failed: '.$e->getMessage());
             }
         } elseif ($campaign->facebook_ads_campaign_id && $customer) {
@@ -106,7 +108,8 @@ class RecommendationApplier
                 (new FacebookCampaignService($customer))->updateCampaign($campaign->facebook_ads_campaign_id, [
                     'daily_budget' => (int) ($newBudget * 100), // Facebook uses cents
                 ]);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('RecommendationApplier: Facebook budget API update failed: '.$e->getMessage());
             }
         } elseif ($campaign->microsoft_ads_campaign_id && $customer) {
@@ -115,7 +118,8 @@ class RecommendationApplier
                     (string) $campaign->microsoft_ads_campaign_id,
                     (float) $newBudget
                 );
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('RecommendationApplier: Microsoft budget API update failed: '.$e->getMessage());
             }
         }
@@ -460,7 +464,9 @@ class RecommendationApplier
             $linkResult = (new LinkCampaignAsset($customer))($customerId, $resource, $assetResource, $fieldType);
 
             return ['applied' => $linkResult !== null, 'message' => $linkResult ? "{$label} created and linked" : "{$label} created but link failed", 'recommendation' => $rec];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['applied' => false, 'message' => 'Error: '.substr($e->getMessage(), 0, 200), 'recommendation' => $rec];
         }
     }
@@ -538,7 +544,9 @@ class RecommendationApplier
                 'message' => $applied ? "Keyword '{$keyword}' ({$matchType}) added to Microsoft ad group" : 'Failed to add keyword',
                 'recommendation' => $rec,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['applied' => false, 'message' => 'Error: '.substr($e->getMessage(), 0, 200), 'recommendation' => $rec];
         }
     }
@@ -614,7 +622,9 @@ class RecommendationApplier
             );
 
             return ['applied' => true, 'message' => "Facebook {$subType} audience '{$audienceName}' created", 'recommendation' => $rec];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['applied' => false, 'message' => 'Error: '.substr($e->getMessage(), 0, 200), 'recommendation' => $rec];
         }
     }
@@ -668,7 +678,9 @@ class RecommendationApplier
             ]);
 
             return ['applied' => true, 'message' => "{$subType} audience '{$listName}' created", 'recommendation' => $rec];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
+
             return ['applied' => false, 'message' => 'Error: '.substr($e->getMessage(), 0, 200), 'recommendation' => $rec];
         }
     }

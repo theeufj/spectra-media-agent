@@ -144,7 +144,8 @@ class FetchGoogleAdsPerformanceData implements ShouldQueue
 
                 }
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $circuitBreaker->recordFailure();
                 Log::error("Error in FetchGoogleAdsPerformanceData job for campaign {$this->campaign->id}: ".$e->getMessage());
                 $this->release(60);

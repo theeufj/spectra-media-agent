@@ -126,7 +126,8 @@ class GTMSetupController extends Controller
                 ->timeout(20)
                 ->setOption('waitUntil', 'domcontentloaded')
                 ->bodyHtml();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GTMSetupController: Browsershot failed, falling back to HTTP', ['error' => $e->getMessage()]);
             $htmlContent = @file_get_contents($customer->website);
         }

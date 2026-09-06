@@ -141,7 +141,8 @@ class HealthCheckAgent
                     $score -= 12;
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('HealthCheckAgent: Could not fetch QS for score: '.$e->getMessage());
         }
 
@@ -166,7 +167,8 @@ class HealthCheckAgent
         foreach ($campaigns as $campaign) {
             try {
                 $this->checkMonthlyPacing($campaign);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning("HealthCheckAgent: Monthly pacing check failed for campaign {$campaign->id}: ".$e->getMessage());
             }
         }
@@ -295,7 +297,8 @@ class HealthCheckAgent
                     'details' => 'Performance data has not been received in the last 3 days',
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('HealthCheckAgent: Error checking Microsoft Ads health', ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
         }
 
@@ -333,7 +336,8 @@ class HealthCheckAgent
                     'details' => 'Performance data has not been received in the last 3 days',
                 ];
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('HealthCheckAgent: Error checking LinkedIn Ads health', ['customer_id' => $customer->id, 'error' => $e->getMessage()]);
         }
 
@@ -442,7 +446,8 @@ PROMPT;
                     }
                 }
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('HealthCheckAgent: Failed to generate recommendations', ['error' => $e->getMessage()]);
         }
 

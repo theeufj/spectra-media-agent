@@ -45,7 +45,8 @@ class ManageDSACampaigns implements ShouldQueue
                 } elseif ($result['success'] ?? false) {
                     $summary['created'] += count($result['created'] ?? []);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $summary['errors']++;
                 Log::error("ManageDSACampaigns: Error for customer {$customer->id}: ".$e->getMessage());
             }
@@ -53,7 +54,8 @@ class ManageDSACampaigns implements ShouldQueue
             // Promote high-performing DSA search terms to regular campaigns (independent of setup result)
             try {
                 $agent->promoteHighPerformingTerms($customer);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::error("ManageDSACampaigns: Promotion error for customer {$customer->id}: ".$e->getMessage());
             }
         }

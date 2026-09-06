@@ -102,7 +102,7 @@ class BillingPayerSelectionTest extends TestCase
         $method = new \ReflectionMethod(AdSpendBillingService::class, 'chargeCustomer');
         $method->setAccessible(true);
 
-        $result = $method->invoke(app(AdSpendBillingService::class), $customer, 10.0, 'test');
+        $result = $method->invoke(app(AdSpendBillingService::class), $customer, 10.0, 'test', 'test-key');
 
         $this->assertFalse($result['success']);
         $this->assertStringContainsString('No payment method', $result['error']);

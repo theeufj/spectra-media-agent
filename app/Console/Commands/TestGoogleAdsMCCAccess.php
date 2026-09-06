@@ -107,7 +107,8 @@ class TestGoogleAdsMCCAccess extends Command
 
             return 1;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->error('❌ Error: '.$e->getMessage());
             $this->error('Stack: '.$e->getTraceAsString());
 
@@ -207,7 +208,8 @@ class TestGoogleAdsMCCAccess extends Command
                 $this->displayChildAccounts($customerId);
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn("  ⚠️  Could not fetch details for {$customerId}: ".$e->getMessage());
         }
     }
@@ -253,7 +255,8 @@ class TestGoogleAdsMCCAccess extends Command
                 );
             }
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $this->warn('  ⚠️  Could not fetch child accounts: '.$e->getMessage());
         }
     }

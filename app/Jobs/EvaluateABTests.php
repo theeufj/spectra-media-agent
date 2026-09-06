@@ -85,7 +85,8 @@ class EvaluateABTests implements ShouldQueue
                         );
                     }
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error('EvaluateABTests: Failed to evaluate test', [
                     'test_id' => $test->id,

@@ -29,7 +29,8 @@ class SalesforceConnector implements CrmConnectorInterface
                 ->get("{$this->instanceUrl}/services/data/v59.0/sobjects/");
 
             return $response->successful();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::debug('Salesforce connection test failed', ['error' => $e->getMessage()]);
 
             return false;

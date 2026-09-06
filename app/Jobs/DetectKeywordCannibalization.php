@@ -43,7 +43,8 @@ class DetectKeywordCannibalization implements ShouldQueue
         foreach ($googleCustomers as $customer) {
             try {
                 $found += $this->scanCustomer($customer);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("DetectKeywordCannibalization: Failed for customer {$customer->id}: ".$e->getMessage());
             }
@@ -57,7 +58,8 @@ class DetectKeywordCannibalization implements ShouldQueue
         foreach ($microsoftCustomers as $customer) {
             try {
                 $found += $this->scanMicrosoftCustomer($customer);
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 $errors++;
                 Log::error("DetectKeywordCannibalization: Failed (Microsoft) for customer {$customer->id}: ".$e->getMessage());
             }

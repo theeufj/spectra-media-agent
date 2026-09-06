@@ -80,7 +80,7 @@ class VerifyDeployment implements ShouldQueue
                 }
 
                 Log::info("VerifyDeployment: Strategy {$strategy->id} ({$strategy->platform}): ".($verified ? 'verified' : 'unverified'));
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 Log::error("VerifyDeployment: Failed to verify strategy {$strategy->id}: ".$e->getMessage());

@@ -124,7 +124,8 @@ abstract class BaseGoogleAdsService
                 'user_id' => $user->id,
                 'connection_id' => $connection->id,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('[GoogleAds] Failed to build per-user client, retaining MCC credentials', [
                 'customer_id' => $this->customer->id,
                 'user_id' => $user->id,
@@ -169,7 +170,8 @@ abstract class BaseGoogleAdsService
                 ->withLoginCustomerId($mccCustomerId);
 
             return $builder->build();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Failed to build Google Ads client for customer {$this->customer->id}: ".$e->getMessage(), [
                 'customer_id' => $this->customer->id,
                 'error_type' => get_class($e),

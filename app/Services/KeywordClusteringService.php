@@ -73,7 +73,8 @@ PROMPT;
             }
 
             return $this->fallbackClusters($keywordTexts);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('KeywordClusteringService: AI clustering failed', ['error' => $e->getMessage()]);
 
             return $this->fallbackClusters($keywordTexts);

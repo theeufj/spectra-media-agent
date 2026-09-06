@@ -11,7 +11,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Context;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -69,14 +70,17 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
 
         // Idempotency: bill each customer at most once per calendar day. On a mid-run
         // crash + retry (tries=3) this stops already-charged customers being re-deducted
-        // and re-charged. Cache::add is atomic; the marker is cleared on failure so a
-        // failed customer is retried. (BILL-3)
+        // and re-charged. The claim is released on failure so a failed customer is
+        // retried. (BILL-3)
+        //
+        // This was a Cache::add() marker — the only thing standing between a
+        // customer and a second day's billing, held somewhere a Redis flush,
+        // failover, or an allkeys-lru eviction could silently drop it. The
+        // unique index on ad_spend_billing_runs cannot be evicted.
         $billingDate = now()->toDateString();
 
         foreach ($customers as $customer) {
-            $marker = "adspend_billed:{$customer->id}:{$billingDate}";
-
-            if (! Cache::add($marker, true, now()->addHours(47))) {
+            if (! $this->claimBilling($customer, $billingDate)) {
                 $results['skipped']++;
                 Log::info('ProcessDailyAdSpendBilling: Skipping already-billed customer', [
                     'customer_id' => $customer->id,
@@ -85,6 +89,11 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
 
                 continue;
             }
+
+            // Queue workers have no session, so the exception reporter cannot
+            // work out who a failure belongs to. Say so explicitly for the
+            // duration of this customer's billing.
+            Context::add('customer_id', $customer->id);
 
             try {
                 $result = $billingService->processDailyBilling($customer);
@@ -105,18 +114,25 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
                     'result' => $result,
                 ]);
 
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                // \Throwable, not \Exception. The claim is taken before this try,
+                // so an \Error escaping the guard aborted the rest of the run and
+                // left this customer claimed but unbilled — skipped on retry, and
+                // therefore never billed for that day at all.
+                //
                 // Surface in the admin exception dashboard; the batch continues.
                 report($e);
                 $results['failed']++;
 
-                // Unexpected failure — release the marker so a retry reprocesses this customer.
-                Cache::forget($marker);
+                // Unexpected failure — release the claim so a retry reprocesses this customer.
+                $this->releaseBilling($customer, $billingDate);
 
                 Log::error('ProcessDailyAdSpendBilling: Customer billing failed', [
                     'customer_id' => $customer->id,
                     'error' => $e->getMessage(),
                 ]);
+            } finally {
+                Context::forget('customer_id');
             }
         }
 
@@ -135,6 +151,33 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
         // as a run that deducts everything. The weekly reconciliation eventually
         // caught it; by then seven days had passed.
         $this->alertIfIdleWhileSpending($results);
+    }
+
+    /**
+     * Claim this customer's billing for the day. False if someone already holds it.
+     *
+     * insertOrIgnore leans on the unique index, so two workers racing for the
+     * same customer resolve in the database rather than in application code.
+     */
+    private function claimBilling(Customer $customer, string $billingDate): bool
+    {
+        return DB::table('ad_spend_billing_runs')->insertOrIgnore([
+            'customer_id' => $customer->id,
+            'billing_date' => $billingDate,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]) > 0;
+    }
+
+    /**
+     * Give the claim back so a retry can reprocess this customer.
+     */
+    private function releaseBilling(Customer $customer, string $billingDate): void
+    {
+        DB::table('ad_spend_billing_runs')
+            ->where('customer_id', $customer->id)
+            ->where('billing_date', $billingDate)
+            ->delete();
     }
 
     /**

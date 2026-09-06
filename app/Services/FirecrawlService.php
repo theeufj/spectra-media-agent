@@ -71,7 +71,8 @@ class FirecrawlService
                 'content_length' => strlen($result['markdown'] ?? ''),
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('FirecrawlService: Exception', [
                 'url' => $url,
                 'error' => $e->getMessage(),
@@ -124,7 +125,8 @@ class FirecrawlService
             ]);
 
             return ['results' => $webResults, 'success' => true];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('FirecrawlService: Search exception', [
                 'query' => $query,
                 'error' => $e->getMessage(),

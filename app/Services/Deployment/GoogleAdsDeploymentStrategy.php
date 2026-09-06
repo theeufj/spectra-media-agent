@@ -51,7 +51,8 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
 
             return true;
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error("Google Ads deployment failed for Strategy ID {$strategy->id}: ".$e->getMessage());
 
             return false;
@@ -219,7 +220,8 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
                         'type' => 'LOCATION',
                         'locationId' => $geoId,
                     ]);
-                } catch (\Exception $e) {
+                } catch (\Throwable $e) {
+                    report($e);
                     Log::warning("Failed to add location targeting (ID: {$geoId}): ".$e->getMessage());
                 }
             }
@@ -230,7 +232,8 @@ class GoogleAdsDeploymentStrategy implements DeploymentStrategy
                 'genders' => $targetingConfig->genders,
             ]);
 
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('Failed to apply targeting criteria: '.$e->getMessage());
             // Don't fail deployment if targeting application fails
         }

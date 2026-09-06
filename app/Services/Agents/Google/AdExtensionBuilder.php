@@ -101,7 +101,8 @@ class AdExtensionBuilder
                     ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::SITELINK);
                     $result->addPlatformId('sitelink_asset', $assetResourceName);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('GoogleAdsExecutionAgent: Failed to create/link sitelink: '.$e->getMessage());
             }
         }
@@ -122,7 +123,8 @@ class AdExtensionBuilder
                     ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::CALLOUT);
                     $result->addPlatformId('callout_asset', $assetResourceName);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('GoogleAdsExecutionAgent: Failed to create/link callout: '.$e->getMessage());
             }
         }
@@ -155,7 +157,8 @@ class AdExtensionBuilder
                     ($linkAssetService)($customerId, $campaignResourceName, $assetResourceName, AssetFieldType::STRUCTURED_SNIPPET);
                     $result->addPlatformId('structured_snippet_asset', $assetResourceName);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('GoogleAdsExecutionAgent: Failed to create/link structured snippet: '.$e->getMessage());
             }
         }
@@ -171,7 +174,8 @@ class AdExtensionBuilder
                     ($linkAssetService)($customerId, $campaignResourceName, $callAssetResourceName, AssetFieldType::CALL);
                     $result->addPlatformId('call_asset', $callAssetResourceName);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
+                report($e);
                 Log::warning('GoogleAdsExecutionAgent: Failed to create/link call asset: '.$e->getMessage());
             }
         }
@@ -240,7 +244,8 @@ class AdExtensionBuilder
                 $result->addPlatformId('promotion_asset', $assetResourceName);
                 Log::info("GoogleAdsExecutionAgent: Created promotion extension: {$target}");
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Failed to create/link promotion asset: '.$e->getMessage());
         }
     }
@@ -286,7 +291,8 @@ PROMPT;
             if ($response && isset($response['text'])) {
                 return json_decode($response['text'], true) ?: null;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: AI promotion generation failed', ['error' => $e->getMessage()]);
         }
 
@@ -344,7 +350,8 @@ PROMPT;
                 $result->addPlatformId('price_asset', $assetResourceName);
                 Log::info('GoogleAdsExecutionAgent: Created price extension with '.count($offerings).' tiers');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Failed to create/link price asset: '.$e->getMessage());
         }
     }
@@ -399,7 +406,8 @@ PROMPT;
             if ($response && isset($response['text'])) {
                 return json_decode($response['text'], true) ?: null;
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: AI pricing generation failed', ['error' => $e->getMessage()]);
         }
 
@@ -423,7 +431,8 @@ PROMPT;
             } else {
                 Log::info('GoogleAdsExecutionAgent: No Business Profile location assets found — connect Business Profile in Google Ads UI (Tools → Linked accounts → Business Profile) to enable location extensions');
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::warning('GoogleAdsExecutionAgent: Location extension setup failed: '.$e->getMessage());
         }
     }

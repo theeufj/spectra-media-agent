@@ -45,7 +45,8 @@ class SyncProductFeed implements ShouldQueue
                 'feed_id' => $feed->id,
                 'products_synced' => $synced,
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            report($e);
             $errorMsg = $e->getMessage();
             $feed->update([
                 'status' => 'error',
