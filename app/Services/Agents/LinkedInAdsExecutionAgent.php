@@ -105,6 +105,13 @@ Focus on B2B targeting capabilities that make LinkedIn unique.
 Return ONLY valid JSON.
 PROMPT;
 
+        // The prompt is built inline here rather than in app/Prompts, unlike the
+        // other three platforms. A LinkedInAdsExecutionPrompt class did exist but
+        // nothing referenced it, and it asked the model for "params" while this
+        // agent reads "parameters" — wiring it up as-is would have silently
+        // emptied every step's targeting and budget. It was removed rather than
+        // left as a trap; moving this prompt into app/Prompts is still worth
+        // doing, with executePlan()'s key as the contract.
         $result = $this->gemini->generateContent(config('ai.models.default'), $prompt, [
             'temperature' => 0.3,
             'maxOutputTokens' => 2048,
