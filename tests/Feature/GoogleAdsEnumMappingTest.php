@@ -6,6 +6,8 @@ use App\Jobs\MonitorCampaignStatus;
 use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusEnum\CampaignPrimaryStatus;
 use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusReasonEnum\CampaignPrimaryStatusReason;
 use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
+use Illuminate\Support\Facades\Log;
+use Microsoft\MsAds\Rest\Model\CampaignManagementService\CampaignStatus as MicrosoftCampaignStatus;
 use Tests\TestCase;
 
 /**
@@ -80,5 +82,58 @@ class GoogleAdsEnumMappingTest extends TestCase
         // Google adds enum values between SDK releases. name() throws on those;
         // an unmapped reason must not take down the status sweep.
         $this->assertSame('UNKNOWN', $this->map('mapPrimaryStatusReason', 9999));
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function everyMicrosoftStatus(): array
+    {
+        $cases = [];
+
+        foreach ((new \ReflectionClass(MicrosoftCampaignStatus::class))->getConstants() as $value) {
+            if (is_string($value)) {
+                $cases[$value] = [$value];
+            }
+        }
+
+        return $cases;
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('everyMicrosoftStatus')]
+    public function test_every_microsoft_status_the_sdk_defines_is_mapped(string $status): void
+    {
+        // 'budgetandmanuallypaused' was in this map and is not a Microsoft value;
+        // BudgetAndManualPaused is. A campaign paused by both budget and hand
+        // therefore read as UNKNOWN.
+        $this->assertNotSame('UNKNOWN', $this->mapString('mapMicrosoftStatus', $status));
+    }
+
+    public function test_microsoft_statuses_survive_a_change_of_casing(): void
+    {
+        // The value arrives as JSON, not through the SDK's serialiser.
+        $this->assertSame('PAUSED', $this->mapString('mapMicrosoftStatus', 'budgetandmanualpaused'));
+        $this->assertSame('LIMITED', $this->mapString('mapMicrosoftStatus', 'BUDGETPAUSED'));
+    }
+
+    public function test_an_unmapped_platform_status_is_logged_rather_than_quietly_unknown(): void
+    {
+        // Facebook and LinkedIn have no vendored SDK to check a list against, so
+        // the only way to learn a value is missing is for it to say so.
+        Log::shouldReceive('warning')
+            ->once()
+            ->with('MonitorCampaignStatus: unmapped platform status', \Mockery::on(
+                fn ($c) => $c['platform'] === 'facebook' && $c['status'] === 'SOMETHING_NEW'
+            ));
+
+        $this->assertSame('UNKNOWN', $this->mapString('mapFacebookEffectiveStatus', 'SOMETHING_NEW'));
+    }
+
+    private function mapString(string $method, string $value): string
+    {
+        $m = new \ReflectionMethod(MonitorCampaignStatus::class, $method);
+        $m->setAccessible(true);
+
+        return $m->invoke(new MonitorCampaignStatus, $value);
     }
 }

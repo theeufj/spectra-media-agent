@@ -18,6 +18,7 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Microsoft\MsAds\Rest\Model\CampaignManagementService\CampaignStatus as MicrosoftCampaignStatus;
 
 class MonitorCampaignStatus implements ShouldQueue
 {
@@ -307,7 +308,7 @@ class MonitorCampaignStatus implements ShouldQueue
             'DISAPPROVED' => 'MISCONFIGURED',
             'WITH_ISSUES' => 'LIMITED',
             'IN_PROCESS', 'PREAPPROVED' => 'PENDING',
-            default => 'UNKNOWN',
+            default => $this->unmapped('facebook', $effectiveStatus),
         };
     }
 
@@ -416,21 +417,56 @@ class MonitorCampaignStatus implements ShouldQueue
         return null;
     }
 
+    /**
+     * Microsoft's campaign statuses, keyed off the vendored SDK's own constants.
+     *
+     * This was a list of lowercase string literals, and one of them —
+     * 'budgetandmanuallypaused' — did not exist. The real value is
+     * BudgetAndManualPaused, so a campaign paused by both its budget and by hand
+     * fell through to UNKNOWN. Naming the constants means the API's spelling is
+     * the only spelling this file can hold.
+     */
+    private const MICROSOFT_STATUS_MAP = [
+        MicrosoftCampaignStatus::ACTIVE => 'ELIGIBLE',
+        MicrosoftCampaignStatus::PAUSED => 'PAUSED',
+        MicrosoftCampaignStatus::BUDGET_PAUSED => 'LIMITED',
+        MicrosoftCampaignStatus::BUDGET_AND_MANUAL_PAUSED => 'PAUSED',
+        MicrosoftCampaignStatus::DELETED => 'REMOVED',
+        MicrosoftCampaignStatus::SUSPENDED => 'MISCONFIGURED',
+    ];
+
     private function mapMicrosoftStatus(string $status): string
     {
-        return match (strtolower($status)) {
-            'active' => 'ELIGIBLE',
-            'paused' => 'PAUSED',
-            'budgetpaused' => 'LIMITED',
-            // Both spellings: Microsoft documents this value as
-            // BudgetAndManualPaused, and nothing else in this codebase pins the
-            // casing, so accepting either costs nothing and a miss here silently
-            // reports a paused campaign as UNKNOWN.
-            'budgetandmanualpaused', 'budgetandmanuallypaused' => 'PAUSED',
-            'deleted' => 'REMOVED',
-            'suspended' => 'MISCONFIGURED',
-            default => 'UNKNOWN',
-        };
+        foreach (self::MICROSOFT_STATUS_MAP as $microsoft => $ours) {
+            // Case-insensitive: the value arrives from JSON, not from the SDK's
+            // own serialiser, and casing there is not guaranteed.
+            if (strcasecmp((string) $microsoft, trim($status)) === 0) {
+                return $ours;
+            }
+        }
+
+        return $this->unmapped('microsoft', $status);
+    }
+
+    /**
+     * A platform status this file has no mapping for.
+     *
+     * Facebook and LinkedIn are hand-rolled HTTP with no vendored SDK, so unlike
+     * Google and Microsoft there is no enum to check the list against — the only
+     * honest way to know a value is missing is for the platform to send one and
+     * for that to be visible. Returning UNKNOWN silently is what let a
+     * misspelled Microsoft status sit unnoticed.
+     */
+    private function unmapped(string $platform, string $value): string
+    {
+        if (trim($value) !== '') {
+            Log::warning('MonitorCampaignStatus: unmapped platform status', [
+                'platform' => $platform,
+                'status' => $value,
+            ]);
+        }
+
+        return 'UNKNOWN';
     }
 
     private function mapLinkedInStatus(string $status): string
@@ -444,7 +480,7 @@ class MonitorCampaignStatus implements ShouldQueue
             'DRAFT' => 'PENDING',
             'PENDING_REVIEW' => 'PENDING',
             'PENDING_DELETION' => 'REMOVED',
-            default => 'UNKNOWN',
+            default => $this->unmapped('linkedin', $status),
         };
     }
 
