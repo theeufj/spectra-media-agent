@@ -29,8 +29,13 @@ class RecordSevenDayReturnConversions implements ShouldQueue
 
     public function handle(): void
     {
+        // users.created_at, qualified: the relation is a belongsToMany, so the
+        // generated query joins customer_user, and both tables carry created_at.
+        // Unqualified, Postgres rejected the whole query as ambiguous and this
+        // job failed every night — silently, until report() started reaching the
+        // admin dashboard.
         Customer::whereHas('users', fn ($q) => $q->whereNotNull('gclid')
-            ->whereBetween('created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
+            ->whereBetween('users.created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
         )->each(fn (Customer $c) => RecordSiteConversion::dispatch($c, 'seven_day_return'));
     }
 }
