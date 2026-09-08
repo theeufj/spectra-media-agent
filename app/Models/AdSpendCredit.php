@@ -220,10 +220,19 @@ class AdSpendCredit extends Model
      * unreconciled rather than being silently written off.
      *
      * Returns the amount actually applied (signed).
+     *
+     * $type lets a refund book itself as TYPE_REFUND while still getting the
+     * lock, the cap and the balance-status recalculation. A refund that empties
+     * an account has to leave it marked depleted, which a hand-rolled balance
+     * write does not do.
      */
-    public function recordAdjustment(float $amount, string $description): float
-    {
-        return DB::transaction(function () use ($amount, $description) {
+    public function recordAdjustment(
+        float $amount,
+        string $description,
+        string $type = AdSpendTransaction::TYPE_ADJUSTMENT,
+        ?string $stripeChargeId = null,
+    ): float {
+        return DB::transaction(function () use ($amount, $description, $type, $stripeChargeId) {
             $locked = static::whereKey($this->getKey())->lockForUpdate()->first() ?? $this;
 
             $before = (float) $locked->current_balance;
@@ -237,10 +246,11 @@ class AdSpendCredit extends Model
             $locked->save();
 
             $locked->transactions()->create([
-                'type' => AdSpendTransaction::TYPE_ADJUSTMENT,
+                'type' => $type,
                 'amount' => $applied,
                 'balance_after' => $locked->current_balance,
                 'description' => $description,
+                'stripe_charge_id' => $stripeChargeId,
             ]);
 
             $this->current_balance = $locked->current_balance;

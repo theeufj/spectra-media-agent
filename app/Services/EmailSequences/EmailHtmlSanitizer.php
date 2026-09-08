@@ -3,15 +3,16 @@
 namespace App\Services\EmailSequences;
 
 /**
- * Reduce admin-authored HTML to a subset that is safe to render and that email
+ * Reduce untrusted HTML to a subset that is safe to render and that email
  * clients actually support.
  *
  * Two separate jobs, and it is worth being explicit about both because only one
  * of them is obvious:
  *
- * 1. Safety. This HTML is written in the admin portal and then rendered
- *    unescaped in two places — the preview iframe and the email itself. An
- *    allowlist is the only defensible shape: a blocklist of `<script>` and
+ * 1. Safety. This HTML is written in the admin portal — or, for the shared
+ *    inbox, by whoever emailed the address — and then rendered unescaped: the
+ *    sequence preview iframe, the outgoing email, and the inbox thread pane.
+ *    An allowlist is the only defensible shape: a blocklist of `<script>` and
  *    `onclick` misses `javascript:` in an href, `data:text/html` in an image,
  *    `<style>` importing a remote sheet, and whatever the next bypass is.
  *    Everything not named here is removed.
@@ -63,12 +64,16 @@ class EmailHtmlSanitizer
      * `<style>` is here alongside the obvious ones because its *content* is the
      * payload — unwrapping it would paste raw CSS into the email as text.
      *
+     * `<head>` and `<title>` are the same argument, and they matter for
+     * inbound mail: a received message is usually a whole document, so
+     * unwrapping the head prints the title as a stray line above the message.
+     *
      * @var list<string>
      */
     private const DROP_ENTIRELY = [
         'script', 'style', 'iframe', 'object', 'embed', 'form', 'input',
         'button', 'select', 'textarea', 'link', 'meta', 'base', 'svg', 'math',
-        'audio', 'video', 'source', 'template', 'noscript',
+        'audio', 'video', 'source', 'template', 'noscript', 'head', 'title',
     ];
 
     /**

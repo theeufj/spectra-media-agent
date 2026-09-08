@@ -3,13 +3,14 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Enums\ExperimentTypeEnum\ExperimentType;
 use Google\Ads\GoogleAds\V22\Resources\Experiment;
 use Google\Ads\GoogleAds\V22\Resources\ExperimentArm;
 use Google\Ads\GoogleAds\V22\Services\ExperimentArmOperation;
 use Google\Ads\GoogleAds\V22\Services\ExperimentOperation;
-use Google\ApiCore\ApiException;
+use Google\Ads\GoogleAds\V22\Services\MutateExperimentArmsRequest;
+use Google\Ads\GoogleAds\V22\Services\MutateExperimentsRequest;
+use Google\Ads\GoogleAds\V22\Services\ScheduleExperimentRequest;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -56,7 +57,11 @@ class CreateCampaignExperiment extends BaseGoogleAdsService
             $experimentOperation->setCreate($experiment);
 
             $experimentServiceClient = $this->client->getExperimentServiceClient();
-            $experimentResponse = $experimentServiceClient->mutateExperiments($customerId, [$experimentOperation]);
+            $experimentResponse = $experimentServiceClient->mutateExperiments(new MutateExperimentsRequest([
+                'validate_only' => $this->dryRun,
+                'customer_id' => $customerId,
+                'operations' => [$experimentOperation],
+            ]));
             $experimentResource = $experimentResponse->getResults()[0]->getResourceName();
 
             Log::info("CreateCampaignExperiment: Created experiment {$experimentResource}");
@@ -85,10 +90,11 @@ class CreateCampaignExperiment extends BaseGoogleAdsService
             $treatmentArmOperation->setCreate($treatmentArm);
 
             $experimentArmServiceClient = $this->client->getExperimentArmServiceClient();
-            $armResponse = $experimentArmServiceClient->mutateExperimentArms(
-                $customerId,
-                [$controlArmOperation, $treatmentArmOperation]
-            );
+            $armResponse = $experimentArmServiceClient->mutateExperimentArms(new MutateExperimentArmsRequest([
+                'validate_only' => $this->dryRun,
+                'customer_id' => $customerId,
+                'operations' => [$controlArmOperation, $treatmentArmOperation],
+            ]));
 
             $treatmentArmResource = null;
             foreach ($armResponse->getResults() as $armResult) {
@@ -97,7 +103,10 @@ class CreateCampaignExperiment extends BaseGoogleAdsService
             }
 
             // 4. Schedule the experiment to start
-            $experimentServiceClient->scheduleExperiment($experimentResource);
+            $experimentServiceClient->scheduleExperiment(new ScheduleExperimentRequest([
+                'validate_only' => $this->dryRun,
+                'resource_name' => $experimentResource,
+            ]));
 
             Log::info("CreateCampaignExperiment: Scheduled experiment {$experimentResource}", [
                 'treatment_arm' => $treatmentArmResource,
@@ -110,7 +119,11 @@ class CreateCampaignExperiment extends BaseGoogleAdsService
                 'experiment_resource' => $experimentResource,
                 'treatment_arm_resource' => $treatmentArmResource,
             ];
-        } catch (GoogleAdsException|ApiException $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not GoogleAdsException|ApiException: a wrong call
+            // shape throws a TypeError, which is an \Error and sailed straight
+            // past the old catch as a fatal.
+            report($e);
             Log::error('CreateCampaignExperiment: Failed to create experiment', [
                 'customer_id' => $customerId,
                 'campaign' => $baseCampaignResourceName,

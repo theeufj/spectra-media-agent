@@ -18,6 +18,7 @@ use Google\Ads\GoogleAds\V22\Services\AddOfflineUserDataJobOperationsRequest;
 use Google\Ads\GoogleAds\V22\Services\CreateOfflineUserDataJobRequest;
 use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
 use Google\Ads\GoogleAds\V22\Services\OfflineUserDataJobOperation;
+use Google\Ads\GoogleAds\V22\Services\RunOfflineUserDataJobRequest;
 use Google\Ads\GoogleAds\V22\Services\UserListOperation;
 use Google\ApiCore\ApiException;
 
@@ -90,6 +91,7 @@ class CreateUserList extends BaseGoogleAdsService
             $jobServiceClient = $this->client->getOfflineUserDataJobServiceClient();
 
             $createResponse = $jobServiceClient->createOfflineUserDataJob(new CreateOfflineUserDataJobRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'job' => $job,
             ]));
@@ -138,6 +140,7 @@ class CreateUserList extends BaseGoogleAdsService
             // Upload in batches of 10000
             foreach (array_chunk($operations, 10000) as $batch) {
                 $jobServiceClient->addOfflineUserDataJobOperations(new AddOfflineUserDataJobOperationsRequest([
+                    'validate_only' => $this->dryRun,
                     'resource_name' => $jobResourceName,
                     'operations' => $batch,
                     'enable_partial_failure' => true,
@@ -145,12 +148,19 @@ class CreateUserList extends BaseGoogleAdsService
             }
 
             // Run the job
-            $jobServiceClient->runOfflineUserDataJob($jobResourceName);
+            $jobServiceClient->runOfflineUserDataJob(new RunOfflineUserDataJobRequest([
+                'validate_only' => $this->dryRun,
+                'resource_name' => $jobResourceName,
+            ]));
 
             $this->logInfo('Uploaded '.count($operations)." users to Customer Match list. Job: {$jobResourceName}");
 
             return true;
-        } catch (GoogleAdsException|ApiException $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not GoogleAdsException|ApiException: a wrong call
+            // shape throws a TypeError, which is an \Error and sailed straight
+            // past the old catch as a fatal.
+            report($e);
             $this->logError('Failed to upload users to Customer Match list: '.$e->getMessage());
 
             return false;

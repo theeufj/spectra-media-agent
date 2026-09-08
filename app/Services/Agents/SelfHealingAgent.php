@@ -6,6 +6,7 @@ use App\Contracts\Ads\AdsServiceFactory;
 use App\Contracts\Ads\FacebookAdManager;
 use App\Enums\CampaignStatus;
 use App\Features\AutoHealing;
+use App\Models\AgentActivity;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\EnabledPlatform;
@@ -60,6 +61,16 @@ class SelfHealingAgent
      */
     private ?AdsServiceFactory $ads = null;
 
+    /**
+     * Whether this run may change anything on the ad platforms.
+     *
+     * Set per campaign from the AutoHealing flag at the top of heal(). It used
+     * to be a local that only reached a log line and a result key, so a customer
+     * who turned auto-healing off still got ads rewritten, budgets raised and
+     * campaigns re-enabled — while the response told them diagnostics only.
+     */
+    private bool $autoHealingEnabled = true;
+
     /** Platform services for this run — synthetic for sandbox customers. */
     private function ads(): AdsServiceFactory
     {
@@ -91,13 +102,14 @@ class SelfHealingAgent
 
         $customer = $campaign->customer;
 
-        // Check feature flag - if disabled, only run diagnostics (no mutations)
-        $autoHealingEnabled = Feature::for($customer)->active(AutoHealing::class);
-        if (! $autoHealingEnabled) {
+        // Check feature flag - if disabled, only run diagnostics (no mutations).
+        // Every mutating branch below reads $this->autoHealingEnabled.
+        $this->autoHealingEnabled = Feature::for($customer)->active(AutoHealing::class);
+        if (! $this->autoHealingEnabled) {
             $results['feature_flag'] = 'auto_healing disabled - diagnostics only';
             Log::info("SelfHealingAgent: auto_healing feature disabled for customer {$customer->id}, running diagnostics only");
         }
-        $results['auto_healing_enabled'] = $autoHealingEnabled;
+        $results['auto_healing_enabled'] = $this->autoHealingEnabled;
 
         // Heal Google Ads campaign
         if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id && EnabledPlatform::isEnabled('google')) {
@@ -159,7 +171,7 @@ class SelfHealingAgent
         }
 
         // 1. Check for disapproved ads
-        $this->healGoogleDisapprovedAds($customer, $customerId, $campaignResourceName, $results);
+        $this->healGoogleDisapprovedAds($customer, $customerId, $campaignResourceName, $results, $campaign);
 
         // 2. Check for budget exhaustion
         $this->checkGoogleBudgetHealth($customer, $campaign, $customerId, $campaignResourceName, $results);
@@ -187,8 +199,12 @@ class SelfHealingAgent
 
     /**
      * Find and fix disapproved Google Ads.
+     *
+     * $campaign trails $results so the existing positional callers keep working;
+     * it is the campaign that owns these ads, and the healer needs it for the
+     * landing page, the escalation history and the approval follow-up.
      */
-    protected function healGoogleDisapprovedAds(Customer $customer, string $customerId, string $campaignResourceName, array &$results): void
+    protected function healGoogleDisapprovedAds(Customer $customer, string $customerId, string $campaignResourceName, array &$results, Campaign $campaign): void
     {
         try {
             $ads = $this->executeWithRetry(
@@ -204,7 +220,7 @@ class SelfHealingAgent
             foreach ($ads as $ad) {
                 // Check if ad is disapproved
                 if ($ad['approval_status'] === PolicyApprovalStatus::DISAPPROVED) {
-                    $this->handleGoogleDisapprovedAd($customer, $customerId, $ad, $results);
+                    $this->handleGoogleDisapprovedAd($campaign, $customer, $customerId, $ad, $results);
                 }
             }
         } catch (\Throwable $e) {
@@ -220,45 +236,70 @@ class SelfHealingAgent
     /**
      * Handle a disapproved Google ad by generating a compliant alternative.
      */
-    protected function handleGoogleDisapprovedAd(Customer $customer, string $customerId, array $ad, array &$results): void
+    protected function handleGoogleDisapprovedAd(Campaign $campaign, Customer $customer, string $customerId, array $ad, array &$results): void
     {
-        $maxAttempts = $this->config['max_fix_attempts'] ?? 3;
+        $maxAttempts = (int) ($this->config['max_fix_attempts'] ?? 3);
 
         // Get the policy violation reason
         $policyTopics = $ad['policy_topics'] ?? [];
         $violationReason = ! empty($policyTopics)
             ? implode(', ', array_column($policyTopics, 'topic'))
             : 'Unknown policy violation';
+        $primaryTopic = trim(explode(',', $violationReason)[0]);
 
-        // Check for recurring violation — if the same violation type was attempted 3+ times
-        // without resolution, escalate instead of burning another regeneration.
-        $campaign = $customer->campaigns()->whereNotNull('google_ads_campaign_id')->latest()->first();
-        if ($campaign) {
-            $healingActions = $campaign->healing_actions ?? [];
-            $recentSameViolation = array_filter($healingActions, fn ($a) => ($a['platform'] ?? '') === 'google_ads' &&
-                str_contains($a['reason'] ?? '', explode(',', $violationReason)[0])
-            );
-            if (count($recentSameViolation) >= 3) {
-                Log::warning('SelfHealingAgent: Recurring violation detected — escalating instead of regenerating', [
-                    'violation' => $violationReason,
-                    'past_count' => count($recentSameViolation),
-                ]);
-                $results['actions_taken'][] = [
-                    'type' => 'escalated_recurring_violation',
-                    'platform' => 'google_ads',
-                    'reason' => $violationReason,
-                    'message' => 'Same violation appeared 3+ times. Manual review required.',
-                ];
-                $customer->users()->each(fn ($user) => $user->notify(
-                    new \App\Notifications\CriticalAgentAlert(
-                        'self_healing',
-                        "Recurring policy violation on Google Ads: {$violationReason}. Auto-healing disabled — manual review required.",
-                        ['ad' => $ad['resource_name'], 'customer_id' => $customer->id]
-                    )
-                ));
+        // Check for recurring violation — if the same violation type was already
+        // regenerated $maxAttempts times without sticking, escalate instead of
+        // burning another Gemini call. Counted from AgentActivity: the
+        // campaigns.healing_actions attribute this used to read is cast but has no
+        // column behind it, so every read came back null and this never fired.
+        $pastAttempts = $this->googleRegenerationCount($campaign, $primaryTopic);
+        if ($pastAttempts >= $maxAttempts) {
+            Log::warning('SelfHealingAgent: Recurring violation detected — escalating instead of regenerating', [
+                'violation' => $violationReason,
+                'past_count' => $pastAttempts,
+                'campaign_id' => $campaign->id,
+            ]);
+            $results['actions_taken'][] = [
+                'type' => 'escalated_recurring_violation',
+                'platform' => 'google_ads',
+                'reason' => $violationReason,
+                'message' => "Same violation appeared {$pastAttempts} times. Manual review required.",
+            ];
+            $customer->users()->each(fn ($user) => $user->notify(
+                new \App\Notifications\CriticalAgentAlert(
+                    'self_healing',
+                    "Recurring policy violation on Google Ads: {$violationReason}. Auto-healing disabled — manual review required.",
+                    ['ad' => $ad['resource_name'], 'customer_id' => $customer->id, 'campaign_id' => $campaign->id]
+                )
+            ));
 
-                return;
-            }
+            return;
+        }
+
+        // Diagnostics-only mode: say what is wrong, change nothing.
+        if (! $this->autoHealingEnabled) {
+            $results['warnings'][] = [
+                'type' => 'disapproved_ad',
+                'platform' => 'google_ads',
+                'message' => "Ad {$ad['resource_name']} is disapproved ({$violationReason}) — auto-healing is off for this customer",
+                'severity' => 'high',
+            ];
+
+            return;
+        }
+
+        // A replacement RSA is rejected without a final URL, so bail before
+        // spending a Gemini call on copy that can never be submitted.
+        $finalUrl = $campaign->landing_page_url ?: $customer->website;
+        if (! $finalUrl) {
+            $results['warnings'][] = [
+                'type' => 'no_landing_page',
+                'platform' => 'google_ads',
+                'message' => 'Cannot rebuild the disapproved ad: campaign has no landing page URL and the customer has no website',
+                'severity' => 'high',
+            ];
+
+            return;
         }
 
         Log::info('SelfHealingAgent: Attempting to fix disapproved Google ad', [
@@ -287,16 +328,18 @@ class SelfHealingAgent
                 if ($newAdData && isset($newAdData['headlines'], $newAdData['descriptions'])) {
                     // Create new ad with compliant copy using retry logic
                     $newAdResourceName = $this->executeWithRetry(
-                        operation: function () use ($customer, $customerId, $ad, $newAdData) {
-                            $createAdService = new CreateResponsiveSearchAd($customer, true);
+                        operation: function () use ($customer, $customerId, $ad, $newAdData, $finalUrl) {
+                            $createAdService = new CreateResponsiveSearchAd($customer);
 
-                            return ($createAdService)(
-                                $customerId,
-                                $ad['ad_group_resource_name'],
-                                $newAdData['headlines'],
-                                $newAdData['descriptions'],
-                                $ad['headlines'][0] ?? 'Visit Us Today'
-                            );
+                            // One $adData array, not positional headline/description
+                            // lists: the old call handed the headlines straight in as
+                            // $adData, so every regeneration died on a null final_urls
+                            // before it ever reached Google.
+                            return ($createAdService)($customerId, $ad['ad_group_resource_name'], [
+                                'finalUrls' => [$finalUrl],
+                                'headlines' => $newAdData['headlines'],
+                                'descriptions' => $newAdData['descriptions'],
+                            ]);
                         },
                         operationName: 'create_compliant_google_ad',
                         context: ['ad' => $ad['resource_name']]
@@ -317,8 +360,25 @@ class SelfHealingAgent
                             'new' => $newAdResourceName,
                         ]);
 
+                        // The escalation check above counts these rows. Without one
+                        // written per regeneration the same violation is retried for
+                        // ever, one Gemini call at a time.
+                        AgentActivity::record(
+                            'self_healing',
+                            'google_ad_regenerated',
+                            "Rebuilt disapproved ad for policy violation: {$violationReason}",
+                            $customer->id,
+                            $campaign->id,
+                            [
+                                'violation_topic' => $primaryTopic,
+                                'violation' => $violationReason,
+                                'original_ad' => $ad['resource_name'],
+                                'new_ad' => $newAdResourceName,
+                            ]
+                        );
+
                         // Schedule approval verification 24h later to track healing success rate
-                        \App\Jobs\VerifyAdApproval::dispatch($customer, $newAdResourceName, $campaign->id ?? 0)
+                        \App\Jobs\VerifyAdApproval::dispatch($customer, $newAdResourceName, $campaign->id)
                             ->delay(now()->addHours(24));
                     }
                 }
@@ -331,6 +391,26 @@ class SelfHealingAgent
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * How many times this agent has already rebuilt an ad on this campaign for
+     * the same policy topic, inside the window a repeat still counts as the same
+     * fight (30 days). The activity feed is the record — nothing on the campaign
+     * row persists healing actions.
+     */
+    protected function googleRegenerationCount(Campaign $campaign, string $violationTopic): int
+    {
+        if ($violationTopic === '' || ! $campaign->exists) {
+            return 0;
+        }
+
+        return AgentActivity::where('campaign_id', $campaign->id)
+            ->where('agent_type', 'self_healing')
+            ->where('action', 'google_ad_regenerated')
+            ->where('details->violation_topic', $violationTopic)
+            ->where('created_at', '>=', now()->subDays(30))
+            ->count();
     }
 
     /**
@@ -395,6 +475,21 @@ class SelfHealingAgent
      */
     protected function checkGoogleDeliveryHealth(Customer $customer, Campaign $campaign, string $customerId, string $campaignResourceName, array &$results): void
     {
+        // GAQL filters on the numeric id. Every Google executor stores the full
+        // resource name in google_ads_campaign_id, so feeding the column straight
+        // in produced "campaign.id = customers/123/campaigns/456" — rejected by
+        // Google on every run, swallowed below, and an empty warnings list reads
+        // as a healthy campaign.
+        $campaignId = $campaign->googleCampaignNumericId();
+        if (! $campaignId) {
+            Log::debug('SelfHealingAgent: Skipping Google delivery check — no numeric campaign id', [
+                'campaign_id' => $campaign->id,
+                'stored_id' => $campaign->google_ads_campaign_id,
+            ]);
+
+            return;
+        }
+
         try {
             $service = new class($customer) extends \App\Services\GoogleAds\BaseGoogleAdsService
             {
@@ -429,7 +524,7 @@ class SelfHealingAgent
                 }
             };
 
-            $status = $service->getCampaignDeliveryStatus($customerId, $campaign->google_ads_campaign_id);
+            $status = $service->getCampaignDeliveryStatus($customerId, $campaignId);
 
             if (! $status) {
                 return;
@@ -559,6 +654,19 @@ class SelfHealingAgent
         $violationReason = is_array($reviewFeedback)
             ? implode(', ', array_values($reviewFeedback))
             : ($reviewFeedback ?: 'Unknown policy violation');
+
+        // Diagnostics-only mode: report the disapproval rather than replacing the
+        // creative and pausing the original ad behind the customer's back.
+        if (! $this->autoHealingEnabled) {
+            $results['warnings'][] = [
+                'type' => 'disapproved_ad',
+                'platform' => 'facebook_ads',
+                'message' => 'Ad '.($ad['id'] ?? 'unknown')." is disapproved ({$violationReason}) — auto-healing is off for this customer",
+                'severity' => 'high',
+            ];
+
+            return;
+        }
 
         Log::info('SelfHealingAgent: Attempting to fix disapproved Facebook ad', [
             'ad_id' => $ad['id'] ?? 'unknown',
@@ -872,27 +980,17 @@ class SelfHealingAgent
                     $service = new \App\Services\MicrosoftAds\CampaignService($customer);
                     $status = $service->getCampaignStatus($campaign->microsoft_ads_campaign_id);
 
-                    if ($status && strtolower($status) === 'budgetpaused') {
-                        // Attempt budget increase (20% bump)
-                        $currentBudget = $campaign->daily_budget ?? 0;
-                        if ($currentBudget > 0) {
-                            $newBudget = round($currentBudget * 1.2, 2);
-                            $updated = $service->updateBudget($campaign->microsoft_ads_campaign_id, $newBudget);
-                            if ($updated) {
-                                $results['actions_taken'][] = [
-                                    'type' => 'budget_increase',
-                                    'platform' => 'microsoft_ads',
-                                    'message' => "Increased daily budget from \${$currentBudget} to \${$newBudget} to restore delivery",
-                                ];
-                                $campaign->update(['daily_budget' => $newBudget]);
-                            }
-                        } else {
-                            $results['actions_taken'][] = [
-                                'type' => 'budget_alert',
-                                'platform' => 'microsoft_ads',
-                                'message' => 'Campaign is budget-paused - may need budget increase',
-                            ];
-                        }
+                    if (! $this->autoHealingEnabled) {
+                        // Diagnostics-only mode: report the state, raise no budget
+                        // and re-enable nothing.
+                        $results['warnings'][] = [
+                            'type' => 'delivery_remediation_skipped',
+                            'platform' => 'microsoft_ads',
+                            'message' => 'Campaign status is '.($status ?: 'unknown').' — auto-healing is off for this customer, so no budget or status change was made',
+                            'severity' => 'medium',
+                        ];
+                    } elseif ($status && strtolower($status) === 'budgetpaused') {
+                        $this->bumpMicrosoftBudget($campaign, $customer, $service, $results);
                     } elseif ($status && strtolower($status) === 'paused') {
                         // Re-enable paused campaign
                         $resumed = $service->updateStatus($campaign->microsoft_ads_campaign_id, 'Active');
@@ -954,6 +1052,88 @@ class SelfHealingAgent
     }
 
     /**
+     * Lift a budget-paused Microsoft campaign's daily budget by 20%, inside the
+     * ceilings that stop the lift running away.
+     *
+     * Each bump reads the value the previous bump wrote, and this check runs every
+     * four hours plus again at 04:00 — uncapped, that compounds a $50 budget past
+     * $170 in a day with nobody approving a cent of it, and the hourly budget agent
+     * then pushes the inflated figure to the live Google and Facebook campaigns on
+     * the same row. Two ceilings: a bounded number of bumps per campaign (counted
+     * from the activity feed, since nothing on the campaign row records them), and
+     * the prepaid credit actually on hand — a daily budget larger than the balance
+     * commits money that has not been collected.
+     */
+    protected function bumpMicrosoftBudget(Campaign $campaign, Customer $customer, \App\Services\MicrosoftAds\CampaignService $service, array &$results): void
+    {
+        $currentBudget = (float) ($campaign->daily_budget ?? 0);
+
+        if ($currentBudget <= 0) {
+            $results['actions_taken'][] = [
+                'type' => 'budget_alert',
+                'platform' => 'microsoft_ads',
+                'message' => 'Campaign is budget-paused - may need budget increase',
+            ];
+
+            return;
+        }
+
+        $maxBumps = (int) ($this->config['max_fix_attempts'] ?? 3);
+        $pastBumps = AgentActivity::where('campaign_id', $campaign->id)
+            ->where('agent_type', 'self_healing')
+            ->where('action', 'microsoft_budget_increase')
+            ->where('created_at', '>=', now()->subDays(7))
+            ->count();
+
+        if ($pastBumps >= $maxBumps) {
+            $results['warnings'][] = [
+                'type' => 'budget_bump_exhausted',
+                'platform' => 'microsoft_ads',
+                'message' => "Campaign is still budget-paused after {$pastBumps} automatic budget increases — the budget needs a human decision",
+                'severity' => 'high',
+            ];
+
+            return;
+        }
+
+        $newBudget = round($currentBudget * 1.2, 2);
+        /** @var \App\Models\AdSpendCredit|null $credit */
+        $credit = $customer->adSpendCredit()->first();
+
+        if ($credit && $newBudget > (float) $credit->current_balance) {
+            $results['warnings'][] = [
+                'type' => 'budget_bump_blocked',
+                'platform' => 'microsoft_ads',
+                'message' => "Not raising the daily budget to \${$newBudget}: only \${$credit->current_balance} of prepaid credit remains",
+                'severity' => 'high',
+            ];
+
+            return;
+        }
+
+        if (! $service->updateBudget($campaign->microsoft_ads_campaign_id, $newBudget)) {
+            return;
+        }
+
+        $results['actions_taken'][] = [
+            'type' => 'budget_increase',
+            'platform' => 'microsoft_ads',
+            'message' => "Increased daily budget from \${$currentBudget} to \${$newBudget} to restore delivery",
+        ];
+        $campaign->update(['daily_budget' => $newBudget]);
+
+        // The attempt count above is read back from these rows.
+        AgentActivity::record(
+            'self_healing',
+            'microsoft_budget_increase',
+            "Raised the Microsoft Ads daily budget from \${$currentBudget} to \${$newBudget} to clear a budget pause",
+            $customer->id,
+            $campaign->id,
+            ['from' => $currentBudget, 'to' => $newBudget, 'attempt' => $pastBumps + 1]
+        );
+    }
+
+    /**
      * Heal LinkedIn Ads campaign issues.
      * Checks for delivery problems and performance anomalies in stored data.
      */
@@ -989,8 +1169,15 @@ class SelfHealingAgent
                         $status = $campaignData['status'] ?? null;
 
                         if ($status === 'PAUSED') {
-                            $activated = $service->updateStatus($linkedInCampaignId, 'ACTIVE');
-                            if ($activated) {
+                            // Diagnostics-only mode reports the pause instead of lifting it.
+                            if (! $this->autoHealingEnabled) {
+                                $results['warnings'][] = [
+                                    'type' => 'campaign_paused',
+                                    'platform' => 'linkedin_ads',
+                                    'message' => 'LinkedIn campaign is paused — auto-healing is off for this customer, so it was left paused',
+                                    'severity' => 'high',
+                                ];
+                            } elseif ($service->updateStatus($linkedInCampaignId, 'ACTIVE')) {
                                 $results['actions_taken'][] = [
                                     'type' => 'campaign_resumed',
                                     'platform' => 'linkedin_ads',
@@ -1005,9 +1192,9 @@ class SelfHealingAgent
                             ];
                         }
 
-                        // Check budget adequacy
+                        // Check budget adequacy (a write, so it obeys the flag too)
                         $dailyBudget = $campaignData['dailyBudget']['amount'] ?? null;
-                        if ($dailyBudget && floatval($dailyBudget) < 10) {
+                        if ($this->autoHealingEnabled && $dailyBudget && floatval($dailyBudget) < 10) {
                             $newBudget = round(floatval($dailyBudget) * 1.5, 2);
                             $updated = $service->updateBudget($linkedInCampaignId, $newBudget);
                             if ($updated) {

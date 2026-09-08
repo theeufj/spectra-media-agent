@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\StripeWebhookController;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -270,7 +271,9 @@ class RevenueController extends Controller
         try {
             \Stripe\Stripe::setApiKey(config('services.stripe.secret'));
 
-            $refundParams = ['charge' => $chargeId];
+            // The charge comes back expanded so we can read its cumulative
+            // amount_refunded — the figure the ledger settles against below.
+            $refundParams = ['charge' => $chargeId, 'expand' => ['charge']];
 
             if ($request->amount) {
                 $refundParams['amount'] = $request->amount * 100; // Convert to cents
@@ -292,6 +295,25 @@ class RevenueController extends Controller
                     'refund_id' => $refund->id,
                     'amount' => $refund->amount / 100,
                 ]
+            );
+
+            // Take the money back out of the ad spend credit it bought. This
+            // used to stop at the Stripe call, so an admin could refund $800 of
+            // unused credit and the nightly billing run would carry on
+            // deducting live spend against the $800 the balance still showed.
+            //
+            // The charge.refunded webhook does the same thing for refunds
+            // issued from the Stripe dashboard; both settle against the
+            // charge's cumulative refunded total, so whichever arrives second
+            // writes nothing. It is done here too because the balance must not
+            // depend on that event being subscribed.
+            $charge = $refund->charge;
+
+            StripeWebhookController::recordAdSpendRefund(
+                $chargeId,
+                // If the expand did not come back, this refund alone is the
+                // safe under-estimate — the webhook settles any remainder.
+                ($charge instanceof \Stripe\Charge ? $charge->amount_refunded : $refund->amount) / 100
             );
 
             return redirect()->back()->with('flash', [

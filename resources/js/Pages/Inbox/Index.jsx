@@ -208,6 +208,15 @@ function MessageBubble({ message, inbox }) {
                     : 'bg-white border border-gray-200 text-gray-800 rounded-tl-sm'
             }`}>
                 {message.html_body ? (
+                    /*
+                     * html_body arrives already reduced to an allow-listed
+                     * subset — EmailInboxService sanitises inbound mail on the
+                     * way in, EmailInboxController::formatMessage() sanitises
+                     * every row again on the way out. This body is written by
+                     * whoever emailed the inbox, so anything rendered here runs
+                     * on the app origin in a signed-in staff session: never
+                     * feed this element a field the server has not sanitised.
+                     */
                     <div
                         className="prose prose-sm max-w-none"
                         style={{ color: isOutbound ? 'white' : undefined }}

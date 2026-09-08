@@ -21,6 +21,10 @@ class AdCopy extends Model
         'platform',
         'headlines',
         'descriptions',
+        // DeploymentController::toggleCollateral() flips this through update();
+        // without it here the toggle was accepted and discarded, and excluded
+        // ad copy deployed anyway. ImageCollateral/VideoCollateral already list it.
+        'should_deploy',
     ];
 
     /**
@@ -31,6 +35,7 @@ class AdCopy extends Model
     protected $casts = [
         'headlines' => 'array',
         'descriptions' => 'array',
+        'should_deploy' => 'boolean',
     ];
 
     /**

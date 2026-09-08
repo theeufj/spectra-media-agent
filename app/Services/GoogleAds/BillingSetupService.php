@@ -58,6 +58,20 @@ class BillingSetupService extends BaseGoogleAdsService
                 'create' => $billingSetup,
             ]);
 
+            // MutateBillingSetupRequest is the one mutate request in the v22 SDK
+            // with no validate_only field, so a dry run cannot be validated
+            // server-side — it can only be not sent. Without this,
+            // ->dryRun() would still link the sub-account to a live payments
+            // profile.
+            if ($this->isDryRun()) {
+                Log::info('Dry run: skipping billing setup mutate (the API offers no validate_only for it)', [
+                    'sub_account_id' => $subAccountId,
+                    'payments_account' => $paymentsAccount,
+                ]);
+
+                return true;
+            }
+
             $request = MutateBillingSetupRequest::build($subAccountId, $operation);
 
             $billingSetupServiceClient = $this->client->getBillingSetupServiceClient();

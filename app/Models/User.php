@@ -51,6 +51,13 @@ class User extends Authenticatable implements MustVerifyEmail
         'msclid',
         'demo_url',
         'tenant_key',
+        // Both of these are written through update()/fill() and were silently
+        // dropped for being absent here: banning a user (Admin\UserController)
+        // left banned_at NULL, so CheckForBannedUser never fired, and the
+        // profile form's platform choice never reached the column
+        // allowedPlatforms() reads.
+        'banned_at',
+        'starter_platform',
     ];
 
     /**
@@ -72,6 +79,7 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return [
             'email_verified_at' => 'datetime',
+            'banned_at' => 'datetime',
             'password' => 'hashed',
             'notification_preferences' => 'array',
             // Encrypted at rest: a database dump should not hand over the

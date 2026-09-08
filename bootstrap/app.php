@@ -40,10 +40,43 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\CheckForBannedUser::class,
         ]);
 
+        // X_FORWARDED_HOST is deliberately absent from this bitmask. Forge runs
+        // nginx → php-fpm on one box, so REMOTE_ADDR is the caller itself and
+        // at: '*' trusts every caller as its own proxy. With the header trusted,
+        // `POST /forgot-password` carrying `X-Forwarded-Host: evil.com` made
+        // $request->root() — and therefore the reset link in the mail the victim
+        // receives — attacker-controlled. Nothing in front of this app sets the
+        // header (nginx passes the real Host straight through), so dropping it
+        // costs nothing. trustHosts below is the second half of the same fix.
         $middleware->trustProxies(
             at: '*',
-            headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | \Illuminate\Http\Request::HEADER_X_FORWARDED_HOST | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO | \Illuminate\Http\Request::HEADER_X_FORWARDED_AWS_ELB
+            headers: \Illuminate\Http\Request::HEADER_X_FORWARDED_FOR | \Illuminate\Http\Request::HEADER_X_FORWARDED_PORT | \Illuminate\Http\Request::HEADER_X_FORWARDED_PROTO | \Illuminate\Http\Request::HEADER_X_FORWARDED_AWS_ELB
         );
+
+        // The hosts this application answers to: every tenant skin's domain
+        // (with or without www., which DetectTenant strips before matching),
+        // the Forge site's own hostname, and localhost for on-box health
+        // checks. Symfony answers any other Host with a 400, so a forged Host
+        // header cannot become the root of a password-reset or verification
+        // link either — the header itself is the whole attack, whichever way
+        // it arrives.
+        //
+        // Derived from config/tenants.php rather than listed twice: a skin
+        // added there must keep working, and a domain that is not a skin has
+        // no business reaching this app. Passed as a closure because this
+        // callback runs when the HTTP kernel is resolved, which is before
+        // config is loaded — an array built here would be empty.
+        $middleware->trustHosts(at: fn () => collect(config('tenants'))
+            ->filter(fn ($tenant) => is_array($tenant) && isset($tenant['key']))
+            ->keys()
+            ->push(config('tenants.forge_domain'))
+            ->push(parse_url((string) config('app.url'), PHP_URL_HOST))
+            ->push('localhost')
+            ->filter()
+            ->unique()
+            ->map(fn (string $host) => '^(www\.)?'.preg_quote($host).'$')
+            ->values()
+            ->all(), subdomains: false);
 
         // 'admin' is a group, not a single alias, so that every admin route is
         // audited by virtue of being an admin route. Doing this per controller

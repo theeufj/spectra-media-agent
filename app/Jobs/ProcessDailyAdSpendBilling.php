@@ -105,6 +105,17 @@ class ProcessDailyAdSpendBilling implements ShouldQueue
                     $results['total_spend'] += $result['actual_spend'];
                 } else {
                     $results['failed']++;
+
+                    if (($result['action_taken'] ?? null) === AdSpendBillingService::ACTION_ERROR) {
+                        // An exception inside processDailyBilling, not a decline.
+                        // That method catches \Throwable and returns, so the
+                        // catch below can never see one — and a spend read that
+                        // throws (Facebook Insights is a live call) deducted
+                        // nothing. Give the claim back or that day's spend is
+                        // never billed: the nightly run only ever looks at
+                        // yesterday, and ReconcileAdSpend is alert-only.
+                        $this->releaseBilling($customer, $billingDate);
+                    }
                     // A failed charge is an expected business outcome (grace/pause flow),
                     // not a reason to re-bill — keep the marker so we don't double-charge.
                 }

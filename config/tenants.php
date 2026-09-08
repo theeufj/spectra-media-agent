@@ -16,6 +16,18 @@ return [
      */
     'override' => env('TENANT_OVERRIDE'),
 
+    /*
+     * The Forge site's own hostname, which resolves to the same box as the
+     * tenant domains and is how the app is reached before DNS is pointed.
+     * A scalar, not an array, because everything that walks this file treats
+     * an array value as a tenant skin (Tenant::config, TenantCheck).
+     *
+     * Listed here because bootstrap/app.php trusts exactly the tenant domains
+     * plus this one and rejects every other Host header. Change it if the
+     * Forge site is renamed, or this box stops answering on its own name.
+     */
+    'forge_domain' => 'spectra-media-agent-akedulbe.on-forge.com',
+
     'sitetospend.com' => [
         'key' => 'sitetospend',
         'name' => 'Site to Spend',

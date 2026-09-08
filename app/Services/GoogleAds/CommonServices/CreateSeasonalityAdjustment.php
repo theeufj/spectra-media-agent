@@ -3,12 +3,11 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Enums\AdvertisingChannelTypeEnum\AdvertisingChannelType;
 use Google\Ads\GoogleAds\V22\Enums\SeasonalityEventScopeEnum\SeasonalityEventScope;
 use Google\Ads\GoogleAds\V22\Resources\BiddingSeasonalityAdjustment;
 use Google\Ads\GoogleAds\V22\Services\BiddingSeasonalityAdjustmentOperation;
-use Google\ApiCore\ApiException;
+use Google\Ads\GoogleAds\V22\Services\MutateBiddingSeasonalityAdjustmentsRequest;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -67,13 +66,23 @@ class CreateSeasonalityAdjustment extends BaseGoogleAdsService
             $operation->setCreate($adjustment);
 
             $serviceClient = $this->client->getBiddingSeasonalityAdjustmentServiceClient();
-            $response = $serviceClient->mutateBiddingSeasonalityAdjustments($customerId, [$operation]);
+            $response = $serviceClient->mutateBiddingSeasonalityAdjustments(
+                new MutateBiddingSeasonalityAdjustmentsRequest([
+                    'validate_only' => $this->dryRun,
+                    'customer_id' => $customerId,
+                    'operations' => [$operation],
+                ])
+            );
 
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("CreateSeasonalityAdjustment: Created adjustment {$resourceName}");
 
             return $resourceName;
-        } catch (GoogleAdsException|ApiException $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not GoogleAdsException|ApiException: a wrong call
+            // shape throws a TypeError, which is an \Error and sailed straight
+            // past the old catch as a fatal.
+            report($e);
             Log::error('CreateSeasonalityAdjustment: Failed to create adjustment', [
                 'customer_id' => $customerId,
                 'config' => $config,

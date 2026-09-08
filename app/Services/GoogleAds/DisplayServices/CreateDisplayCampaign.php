@@ -75,6 +75,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             $campaignServiceClient = $this->client->getCampaignServiceClient();
             // Fix: Use MutateCampaignsRequest object
             $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignOperation],
             ]);
@@ -113,6 +114,7 @@ class CreateDisplayCampaign extends BaseGoogleAdsService
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
             // Fix: Use MutateCampaignBudgetsRequest object
             $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignBudgetOperation],
             ]);

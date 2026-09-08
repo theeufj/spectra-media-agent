@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\EmailAttachment;
 use App\Models\EmailInbox;
 use App\Models\EmailMessage;
+use App\Services\EmailSequences\EmailHtmlSanitizer;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +14,8 @@ use Resend\Laravel\Facades\Resend;
 
 class EmailInboxService
 {
+    public function __construct(private readonly EmailHtmlSanitizer $sanitizer) {}
+
     public function processInboundWebhook(array $payload): void
     {
         $data = $payload['data'] ?? [];
@@ -56,7 +59,7 @@ class EmailInboxService
             'cc_addresses' => $email->cc ?? [],
             'bcc_addresses' => $email->bcc ?? [],
             'subject' => $email->subject ?? ($data['subject'] ?? '(no subject)'),
-            'html_body' => $email->html ?? null,
+            'html_body' => $this->sanitizeInboundHtml($email->html ?? null),
             'text_body' => $email->text ?? null,
             'message_id' => $email->message_id ?? ($data['message_id'] ?? null),
             'thread_id' => $threadId,
@@ -71,6 +74,30 @@ class EmailInboxService
         if ($inbox->forward_to) {
             $this->forwardMessage($inbox, $message, $email);
         }
+    }
+
+    /**
+     * Inbound HTML is written by whoever knows the address — it is the least
+     * trusted string in the application, and it is stored once and read in
+     * several places: the staff inbox renders it unescaped, forwardMessage()
+     * re-sends it verbatim, and the reply composer quotes it back. Sanitising
+     * on the way in means the stored row is the safe one, so no reader has to
+     * remember. An `onerror` handler here would run on the app origin in a
+     * signed-in staff session.
+     *
+     * A body that is nothing but payload sanitises down to nothing; storing
+     * NULL rather than an empty string makes the renderers fall through to
+     * text_body, which is the same shape as an email that never had HTML.
+     */
+    private function sanitizeInboundHtml(?string $html): ?string
+    {
+        if ($html === null) {
+            return null;
+        }
+
+        $clean = $this->sanitizer->sanitize($html);
+
+        return $clean === '' ? null : $clean;
     }
 
     private function forwardMessage(EmailInbox $inbox, EmailMessage $message, object $email): void

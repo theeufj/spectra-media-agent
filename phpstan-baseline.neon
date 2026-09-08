@@ -1201,18 +1201,6 @@ parameters:
 			path: app/Services/AdSpendBillingService.php
 
 		-
-			message: '#^Method App\\Services\\GoogleAds\\CommonServices\\UpdateCampaignStatus\:\:enable\(\) invoked with 1 parameter, 2 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/AdSpendBillingService.php
-
-		-
-			message: '#^Method App\\Services\\GoogleAds\\CommonServices\\UpdateCampaignStatus\:\:pause\(\) invoked with 1 parameter, 2 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/AdSpendBillingService.php
-
-		-
 			message: '#^Call to function is_string\(\) with array will always evaluate to false\.$#'
 			identifier: function.impossibleType
 			count: 2
@@ -1585,19 +1573,7 @@ parameters:
 			path: app/Services/Agents/PreLaunchComplianceAgent.php
 
 		-
-			message: '#^Callable App\\Services\\GoogleAds\\SearchServices\\CreateResponsiveSearchAd invoked with 5 parameters, 3 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/SelfHealingAgent.php
-
-		-
 			message: '#^Class App\\Services\\GoogleAds\\CommonServices\\GetCampaignPerformance constructor invoked with 2 parameters, 1 required\.$#'
-			identifier: arguments.count
-			count: 1
-			path: app/Services/Agents/SelfHealingAgent.php
-
-		-
-			message: '#^Class App\\Services\\GoogleAds\\SearchServices\\CreateResponsiveSearchAd constructor invoked with 2 parameters, 1 required\.$#'
 			identifier: arguments.count
 			count: 1
 			path: app/Services/Agents/SelfHealingAgent.php
@@ -1783,18 +1759,6 @@ parameters:
 			path: app/Services/GoogleAds/BaseGoogleAdsService.php
 
 		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\ExperimentArmServiceClient\:\:mutateExperimentArms\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\MutateExperimentArmsRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateCampaignExperiment.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\ExperimentServiceClient\:\:mutateExperiments\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\MutateExperimentsRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateCampaignExperiment.php
-
-		-
 			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\UserListLogicalRuleOperatorEnum\\UserListLogicalRuleOperator\:\:PBAND\.$#'
 			identifier: classConstant.notFound
 			count: 1
@@ -1831,64 +1795,10 @@ parameters:
 			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRule.php
 
 		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\ConversionValueRuleServiceClient\:\:mutateConversionValueRules\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\MutateConversionValueRulesRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRule.php
-
-		-
 			message: '#^Access to undefined constant Google\\Ads\\GoogleAds\\V22\\Enums\\ConversionValueRulePrimaryDimensionEnum\\ConversionValueRulePrimaryDimension\:\:NO_CONDITION\.$#'
 			identifier: classConstant.notFound
 			count: 1
 			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRuleSet.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\ConversionValueRuleSetServiceClient\:\:mutateConversionValueRuleSets\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\MutateConversionValueRuleSetsRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateConversionValueRuleSet.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\BiddingSeasonalityAdjustmentServiceClient\:\:mutateBiddingSeasonalityAdjustments\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\MutateBiddingSeasonalityAdjustmentsRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateSeasonalityAdjustment.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\OfflineUserDataJobServiceClient\:\:runOfflineUserDataJob\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\RunOfflineUserDataJobRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CreateUserList.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\OfflineUserDataJobServiceClient\:\:addOfflineUserDataJobOperations\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\AddOfflineUserDataJobOperationsRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CustomerMatchService.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\OfflineUserDataJobServiceClient\:\:createOfflineUserDataJob\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\CreateOfflineUserDataJobRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CustomerMatchService.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\OfflineUserDataJobServiceClient\:\:runOfflineUserDataJob\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\RunOfflineUserDataJobRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CustomerMatchService.php
-
-		-
-			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\UserListServiceClient\:\:mutateUserLists\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\MutateUserListsRequest, string given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CustomerMatchService.php
-
-		-
-			message: '#^Parameter \#2 \$callOptions of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\OfflineUserDataJobServiceClient\:\:createOfflineUserDataJob\(\) expects array, Google\\Ads\\GoogleAds\\V22\\Resources\\OfflineUserDataJob given\.$#'
-			identifier: argument.type
-			count: 1
-			path: app/Services/GoogleAds/CommonServices/CustomerMatchService.php
 
 		-
 			message: '#^Parameter \#1 \$request of method Google\\Ads\\GoogleAds\\V22\\Services\\Client\\ExperimentServiceClient\:\:promoteExperimentAsync\(\) expects Google\\Ads\\GoogleAds\\V22\\Services\\PromoteExperimentRequest, string given\.$#'

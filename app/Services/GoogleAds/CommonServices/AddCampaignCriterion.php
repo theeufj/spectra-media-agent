@@ -62,6 +62,7 @@ class AddCampaignCriterion extends BaseGoogleAdsService
         try {
             $campaignCriterionServiceClient = $this->client->getCampaignCriterionServiceClient();
             $request = new \Google\Ads\GoogleAds\V22\Services\MutateCampaignCriteriaRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$campaignCriterionOperation],
             ]);

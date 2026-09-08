@@ -50,6 +50,7 @@ class UpdateCampaignBudget extends BaseGoogleAdsService
             $campaignBudgetServiceClient = $this->client->getCampaignBudgetServiceClient();
             $response = $campaignBudgetServiceClient->mutateCampaignBudgets(
                 new \Google\Ads\GoogleAds\V22\Services\MutateCampaignBudgetsRequest([
+                    'validate_only' => $this->dryRun,
                     'customer_id' => $customerId,
                     'operations' => [$budgetOperation],
                 ])

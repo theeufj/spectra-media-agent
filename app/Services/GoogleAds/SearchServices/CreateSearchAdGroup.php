@@ -51,6 +51,7 @@ class CreateSearchAdGroup extends BaseGoogleAdsService
             $adGroupServiceClient = $this->client->getAdGroupServiceClient();
             // Fix: Use MutateAdGroupsRequest object
             $request = new \Google\Ads\GoogleAds\V22\Services\MutateAdGroupsRequest([
+                'validate_only' => $this->dryRun,
                 'customer_id' => $customerId,
                 'operations' => [$adGroupOperation],
             ]);

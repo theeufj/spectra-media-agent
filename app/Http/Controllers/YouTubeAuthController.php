@@ -5,7 +5,17 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
+/**
+ * One-time OAuth flow for the single YouTube channel every customer ad video
+ * is uploaded to. The token it writes is a platform credential, not a
+ * customer one — both routes are therefore admin-only, and the callback
+ * carries a state nonce so the code it exchanges can only be one an admin
+ * started the flow for. It used to sit outside the auth middleware, which
+ * meant anyone could hand it a code minted for their own Google account and
+ * redirect every customer's video uploads to their channel.
+ */
 class YouTubeAuthController extends Controller
 {
     private const SCOPE = 'https://www.googleapis.com/auth/youtube.upload';
@@ -14,14 +24,25 @@ class YouTubeAuthController extends Controller
 
     private const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-    public function redirect()
+    /** Session key holding the state nonce between the redirect and the callback. */
+    private const STATE_KEY = 'youtube_oauth_state';
+
+    public function redirect(Request $request)
     {
+        $this->requireFullAdmin($request);
+
         $clientId = config('services.youtube.client_id');
         $redirectUri = 'https://sitetospend.com/youtube/auth/callback';
 
         if (! $clientId) {
             abort(500, 'GOOGLE_YOUTUBE_CLIENT_ID is not set in .env');
         }
+
+        // Google echoes this back on the callback. Anything that arrives
+        // without the value this session just issued did not come from a flow
+        // this admin started, so it never reaches the token exchange.
+        $state = Str::random(40);
+        $request->session()->put(self::STATE_KEY, $state);
 
         Log::info('YouTubeAuthController: Redirecting to Google', ['redirect_uri' => $redirectUri]);
 
@@ -32,6 +53,7 @@ class YouTubeAuthController extends Controller
             'scope' => self::SCOPE,
             'access_type' => 'offline',
             'prompt' => 'consent', // Force consent so we always get a refresh_token
+            'state' => $state,
         ]);
 
         return redirect(self::AUTH_URL.'?'.$params);
@@ -39,11 +61,11 @@ class YouTubeAuthController extends Controller
 
     public function callback(Request $request)
     {
-        Log::info('YouTubeAuthController: Callback received', [
-            'full_url' => $request->fullUrl(),
-            'query' => $request->all(),
-            'query_string' => $request->server('QUERY_STRING'),
-        ]);
+        $this->requireFullAdmin($request);
+
+        // Deliberately no full_url and no $request->all(): the authorization
+        // code is a bearer credential and the log is not the place for it.
+        Log::info('YouTubeAuthController: Callback received');
 
         if ($request->has('error')) {
             $error = $request->get('error');
@@ -58,10 +80,18 @@ class YouTubeAuthController extends Controller
             abort(400, "Google OAuth error: {$error}{$hint}");
         }
 
+        $expectedState = $request->session()->pull(self::STATE_KEY);
+        $state = (string) $request->get('state');
+
+        if (! is_string($expectedState) || $expectedState === '' || ! hash_equals($expectedState, $state)) {
+            Log::warning('YouTubeAuthController: State did not match the one this session issued');
+            abort(403, 'OAuth state mismatch — start the flow again at /youtube/auth.');
+        }
+
         $code = $request->get('code');
 
         if (! $code) {
-            Log::error('YouTubeAuthController: No code in callback', $request->all());
+            Log::error('YouTubeAuthController: No code in callback');
             abort(400, 'No authorization code received. Visit /youtube/auth to start the flow.');
         }
 
@@ -99,9 +129,23 @@ class YouTubeAuthController extends Controller
 
         Log::info('YouTubeAuthController: Refresh token saved to .env');
 
+        // Fingerprint only. The page is rendered to a browser and lands in
+        // history, screenshots and screen shares; the token itself is already
+        // where it needs to be, and the last four characters are enough to
+        // tell one token from another.
         return view('youtube-auth-success', [
-            'refresh_token' => $refreshToken,
+            'refresh_token' => str_repeat('•', 8).substr($refreshToken, -4),
         ]);
+    }
+
+    /**
+     * AdminMiddleware waves GETs through for support staff, on the rule that a
+     * read is safe. Neither of these is a read: one starts the flow that
+     * replaces the platform's YouTube credential, the other completes it.
+     */
+    private function requireFullAdmin(Request $request): void
+    {
+        abort_unless($request->user()?->isFullAdmin() === true, 403, 'This action requires a full admin account.');
     }
 
     private function writeToEnv(string $key, string $value): void

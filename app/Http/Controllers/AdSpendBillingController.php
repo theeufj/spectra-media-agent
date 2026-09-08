@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\AddAdSpendCreditRequest;
 use App\Http\Requests\SetupAdSpendBillingRequest;
 use App\Models\ActivityLog;
+use App\Models\AdSpendCredit;
 use App\Models\Customer;
 use App\Services\ActivityLogger;
 use App\Services\AdSpendBillingService;
@@ -193,6 +194,11 @@ class AdSpendBillingController extends Controller
 
         $credit = $customer->adSpendCredit;
 
+        // Read before charging: addCredit() restores the account, which clears
+        // the paused state. Only a customer whose campaigns billing actually
+        // paused should have them switched back on by a top-up.
+        $campaignsWerePaused = $credit->payment_status === AdSpendCredit::PAYMENT_PAUSED;
+
         // Calculate amount needed to restore account
         $avgDailySpend = $credit->getAverageDailySpend();
         $replenishAmount = max(50, $avgDailySpend * 7); // At least $50, or 7 days of spend
@@ -207,7 +213,7 @@ class AdSpendBillingController extends Controller
             // Restore the account status AND actually resume the paused campaigns +
             // restore their budgets — restoreAccount() alone only clears ledger flags.
             $credit->restoreAccount();
-            $this->billingService->recoverCampaigns($customer);
+            $this->billingService->recoverCampaigns($customer, $campaignsWerePaused);
 
             Log::info('AdSpendBilling: Payment recovered via retry', [
                 'customer_id' => $customer->id,
@@ -253,6 +259,11 @@ class AdSpendBillingController extends Controller
 
                 if ($customer && $customer->adSpendCredit) {
                     $credit = $customer->adSpendCredit;
+
+                    // Before the charge — addCredit() restores the account and
+                    // clears the paused state.
+                    $campaignsWerePaused = $credit->payment_status === AdSpendCredit::PAYMENT_PAUSED;
+
                     $avgDailySpend = $credit->getAverageDailySpend();
                     $replenishAmount = max(50, $avgDailySpend * 7);
 
@@ -264,7 +275,7 @@ class AdSpendBillingController extends Controller
 
                     if ($result['success']) {
                         $credit->restoreAccount();
-                        $this->billingService->recoverCampaigns($customer);
+                        $this->billingService->recoverCampaigns($customer, $campaignsWerePaused);
 
                         return response()->json([
                             'success' => true,
@@ -366,7 +377,7 @@ class AdSpendBillingController extends Controller
             ]);
 
             $dailyBudget = $request->daily_budget;
-            $daysToCharge = $request->days_to_charge ?? 7;
+            $daysToCharge = (int) ($request->days_to_charge ?? 7);
             $topUpAmount = round($dailyBudget * $daysToCharge, 2);
 
             // Serialize the read-compute-charge sequence per customer. The
@@ -408,8 +419,12 @@ class AdSpendBillingController extends Controller
                         $logMessage = "Ad spend top-up for customer '{$customer->name}' — \${$chargedAmount} charged (shortfall to {$daysToCharge}-day runway)";
                     }
                 } else {
-                    // First campaign — initialize the account
-                    $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget);
+                    // First campaign — initialize the account for the same
+                    // number of days the modal quoted. Passing only the daily
+                    // budget took the method's 7-day default, so a 3-day
+                    // campaign shown "Initial Charge (3 days) $150" was charged
+                    // $350 and told so in the success payload.
+                    $credit = $this->billingService->initializeCreditAccount($customer, $dailyBudget, $daysToCharge);
 
                     ActivityLogger::adSpendBillingSetup($customer, (float) $dailyBudget);
                     $chargedAmount = $credit->initial_credit_amount;

@@ -11,6 +11,10 @@ use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobStatusEnum\OfflineUserDataJ
 use Google\Ads\GoogleAds\V22\Enums\OfflineUserDataJobTypeEnum\OfflineUserDataJobType;
 use Google\Ads\GoogleAds\V22\Resources\OfflineUserDataJob;
 use Google\Ads\GoogleAds\V22\Resources\UserList;
+use Google\Ads\GoogleAds\V22\Services\AddOfflineUserDataJobOperationsRequest;
+use Google\Ads\GoogleAds\V22\Services\CreateOfflineUserDataJobRequest;
+use Google\Ads\GoogleAds\V22\Services\MutateUserListsRequest;
+use Google\Ads\GoogleAds\V22\Services\RunOfflineUserDataJobRequest;
 use Google\Ads\GoogleAds\V22\Services\UserDataOperation;
 use Illuminate\Support\Facades\Log;
 
@@ -54,7 +58,11 @@ class CustomerMatchService extends BaseGoogleAdsService
             $userListOperation->setCreate($userList);
 
             // Execute
-            $response = $userListServiceClient->mutateUserLists($customerId, [$userListOperation]);
+            $response = $userListServiceClient->mutateUserLists(new MutateUserListsRequest([
+                'validate_only' => $this->dryRun,
+                'customer_id' => $customerId,
+                'operations' => [$userListOperation],
+            ]));
 
             $userListResourceName = $response->getResults()[0]->getResourceName();
 
@@ -66,7 +74,11 @@ class CustomerMatchService extends BaseGoogleAdsService
 
             return $userListResourceName;
 
-        } catch (GoogleAdsException $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not GoogleAdsException: a wrong call shape throws a
+            // TypeError, which is an \Error and sailed straight past the old
+            // catch as a fatal.
+            report($e);
             Log::error('CustomerMatchService: Failed to create user list', [
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
@@ -109,8 +121,11 @@ class CustomerMatchService extends BaseGoogleAdsService
 
             // Create the job
             $createJobResponse = $offlineUserDataJobServiceClient->createOfflineUserDataJob(
-                $customerId,
-                $offlineUserDataJob
+                new CreateOfflineUserDataJobRequest([
+                    'validate_only' => $this->dryRun,
+                    'customer_id' => $customerId,
+                    'job' => $offlineUserDataJob,
+                ])
             );
 
             $jobResourceName = $createJobResponse->getResourceName();
@@ -144,13 +159,21 @@ class CustomerMatchService extends BaseGoogleAdsService
             $batchSize = 10000;
             foreach (array_chunk($operations, $batchSize) as $batch) {
                 $offlineUserDataJobServiceClient->addOfflineUserDataJobOperations(
-                    $jobResourceName,
-                    $batch
+                    new AddOfflineUserDataJobOperationsRequest([
+                        'validate_only' => $this->dryRun,
+                        'resource_name' => $jobResourceName,
+                        'operations' => $batch,
+                    ])
                 );
             }
 
             // Run the job
-            $offlineUserDataJobServiceClient->runOfflineUserDataJob($jobResourceName);
+            $offlineUserDataJobServiceClient->runOfflineUserDataJob(
+                new RunOfflineUserDataJobRequest([
+                    'validate_only' => $this->dryRun,
+                    'resource_name' => $jobResourceName,
+                ])
+            );
 
             $result['success'] = true;
 
@@ -161,7 +184,8 @@ class CustomerMatchService extends BaseGoogleAdsService
                 'job' => $jobResourceName,
             ]);
 
-        } catch (GoogleAdsException $e) {
+        } catch (\Throwable $e) {
+            report($e);
             Log::error('CustomerMatchService: Upload failed', [
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),

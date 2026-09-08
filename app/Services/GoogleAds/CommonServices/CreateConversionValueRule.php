@@ -3,7 +3,6 @@
 namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
-use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleAction;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleAudienceCondition;
 use Google\Ads\GoogleAds\V22\Common\ValueRuleDeviceCondition;
@@ -11,7 +10,7 @@ use Google\Ads\GoogleAds\V22\Common\ValueRuleGeoLocationCondition;
 use Google\Ads\GoogleAds\V22\Enums\ValueRuleDeviceTypeEnum\ValueRuleDeviceType;
 use Google\Ads\GoogleAds\V22\Resources\ConversionValueRule;
 use Google\Ads\GoogleAds\V22\Services\ConversionValueRuleOperation;
-use Google\ApiCore\ApiException;
+use Google\Ads\GoogleAds\V22\Services\MutateConversionValueRulesRequest;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -76,13 +75,21 @@ class CreateConversionValueRule extends BaseGoogleAdsService
             $operation->setCreate($rule);
 
             $serviceClient = $this->client->getConversionValueRuleServiceClient();
-            $response = $serviceClient->mutateConversionValueRules($customerId, [$operation]);
+            $response = $serviceClient->mutateConversionValueRules(new MutateConversionValueRulesRequest([
+                'validate_only' => $this->dryRun,
+                'customer_id' => $customerId,
+                'operations' => [$operation],
+            ]));
 
             $resourceName = $response->getResults()[0]->getResourceName();
             $this->logInfo("CreateConversionValueRule: Created rule {$resourceName}");
 
             return $resourceName;
-        } catch (GoogleAdsException|ApiException $e) {
+        } catch (\Throwable $e) {
+            // \Throwable, not GoogleAdsException|ApiException: a wrong call
+            // shape throws a TypeError, which is an \Error and sailed straight
+            // past the old catch as a fatal.
+            report($e);
             Log::error('CreateConversionValueRule: Failed to create rule', [
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),

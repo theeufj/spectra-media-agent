@@ -6,6 +6,7 @@ use App\Models\EmailAttachment;
 use App\Models\EmailInbox;
 use App\Models\EmailMessage;
 use App\Services\EmailInboxService;
+use App\Services\EmailSequences\EmailHtmlSanitizer;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -13,7 +14,10 @@ use Inertia\Response;
 
 class EmailInboxController extends Controller
 {
-    public function __construct(private EmailInboxService $inboxService) {}
+    public function __construct(
+        private EmailInboxService $inboxService,
+        private EmailHtmlSanitizer $sanitizer,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -145,7 +149,14 @@ class EmailInboxController extends Controller
             'to' => $message->to_addresses,
             'cc' => $message->cc_addresses,
             'subject' => $message->subject,
-            'html_body' => $message->html_body,
+            // Sanitised again on the way out, not only on the way in. Rows
+            // stored before inbound sanitisation existed never went through it,
+            // and an outbound body is whatever the composer typed. The client
+            // hands this straight to dangerouslySetInnerHTML, so the guarantee
+            // has to hold for every row regardless of age or direction.
+            'html_body' => $message->html_body === null
+                ? null
+                : $this->sanitizer->sanitize($message->html_body),
             'text_body' => $message->text_body,
             'message_id' => $message->message_id,
             'thread_id' => $message->thread_id,

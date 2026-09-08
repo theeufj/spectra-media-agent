@@ -12,6 +12,7 @@ use App\Models\AdSpendTransaction;
 use App\Models\Campaign;
 use App\Models\Customer;
 use App\Services\Agents\BudgetIntelligenceAgent;
+use App\Services\Customers\DeactivateCustomerService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
@@ -46,9 +47,25 @@ class AdSpendBillingService
     }
 
     /**
-     * Initialize credit account for a customer when they create their first campaign.
+     * `action_taken` when the run ended in an exception rather than a declined
+     * card. The daily job releases its billing claim on this value.
+     *
+     * processDailyBilling() catches everything and returns, so a Facebook
+     * Insights timeout read as an ordinary success=false — indistinguishable
+     * from the grace/pause flow, which deliberately keeps the claim. That day's
+     * spend was then never deducted, and nothing re-bills a skipped day.
      */
-    public function initializeCreditAccount(Customer $customer, float $dailyBudget): AdSpendCredit
+    public const ACTION_ERROR = 'error';
+
+    /**
+     * Initialize credit account for a customer when they create their first campaign.
+     *
+     * $daysToCharge is what the setup modal showed the customer: a campaign
+     * that only runs three days is quoted three days of runway. This used to be
+     * hardcoded to 7 here while the caller read the posted value and used it
+     * only for top-ups, so a first-time customer shown $150 was charged $350.
+     */
+    public function initializeCreditAccount(Customer $customer, float $dailyBudget, int $daysToCharge = 7): AdSpendCredit
     {
         // Serialize per-customer: without a DB unique constraint, two concurrent calls
         // (racing deploys, a double-clicked deploy button) would both see "no account",
@@ -65,14 +82,14 @@ class AdSpendBillingService
                 return $existing;
             }
 
-            // Calculate initial credit (7 days of estimated spend)
-            $initialCredit = AdSpendCredit::calculateInitialCredit($dailyBudget, 7);
+            // Calculate initial credit (the quoted number of days of estimated spend)
+            $initialCredit = AdSpendCredit::calculateInitialCredit($dailyBudget, $daysToCharge);
 
             // Charge the customer's card for the initial credit
             $chargeResult = $this->chargeCustomer(
                 $customer,
                 $initialCredit,
-                'Initial ad spend credit (7 days)',
+                "Initial ad spend credit ({$daysToCharge} days)",
                 $this->idempotencyKey('initial', $customer, 'setup', $initialCredit)
             );
 
@@ -97,13 +114,14 @@ class AdSpendBillingService
                 'type' => AdSpendTransaction::TYPE_CREDIT,
                 'amount' => $initialCredit,
                 'balance_after' => $initialCredit,
-                'description' => 'Initial ad spend credit (7 days prepaid)',
+                'description' => "Initial ad spend credit ({$daysToCharge} days prepaid)",
                 'stripe_charge_id' => $chargeResult['charge_id'] ?? null,
             ]);
 
             Log::info('AdSpendBilling: Initialized credit account', [
                 'customer_id' => $customer->id,
                 'initial_credit' => $initialCredit,
+                'days_to_charge' => $daysToCharge,
             ]);
 
             return $credit;
@@ -261,6 +279,14 @@ class AdSpendBillingService
             ]);
             $result['error'] = $e->getMessage();
 
+            // Tell the caller this was an exception, not a declined card. The
+            // two are both success=false but want opposite handling: a decline
+            // keeps the day's billing claim (the grace/pause flow owns it from
+            // here), while an exception — a Facebook Insights timeout inside
+            // getActualAdSpend, say — deducted nothing and must be retried, or
+            // the day is silently never billed.
+            $result['action_taken'] = self::ACTION_ERROR;
+
             return $result;
         }
     }
@@ -342,8 +368,9 @@ class AdSpendBillingService
             $credit->addCredit($replenishAmount, 'Credit recovery', $chargeResult['charge_id']);
             $credit->restoreAccount();
 
-            // Resume campaigns and restore budgets to 100%.
-            $this->recoverCampaigns($customer);
+            // Resume campaigns and restore budgets to 100%. This branch is only
+            // reached from the PAYMENT_PAUSED state, so the pause sweep did run.
+            $this->recoverCampaigns($customer, true);
 
             $user = $customer->users()->wherePivot('role', 'owner')->first()
                 ?? $customer->users()->first();
@@ -815,6 +842,15 @@ class AdSpendBillingService
 
     /**
      * Pause all active campaigns for a customer.
+     *
+     * The platform calls live in DeactivateCustomerService — the same sweep the
+     * "stop this customer spending" path uses. This method had its own copy of
+     * them, and it called UpdateCampaignStatus::pause() with one of the two
+     * arguments that method requires. The resulting ArgumentCountError is an
+     * \Error thrown by the first statement inside the try, so the catch below
+     * swallowed it before Facebook, Microsoft or LinkedIn were touched and
+     * before the campaign was marked paused locally: on the third consecutive
+     * declined charge, every campaign with a Google id kept serving.
      */
     protected function pauseAllCampaigns(Customer $customer): void
     {
@@ -822,57 +858,33 @@ class AdSpendBillingService
             ->where('status', 'active')
             ->get();
 
+        $deactivator = app(DeactivateCustomerService::class);
+
         foreach ($campaigns as $campaign) {
             try {
-                // Pause Google Ads campaign
-                if (! empty($campaign->google_ads_campaign_id) && ! empty($customer->google_ads_customer_id)) {
-                    $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
-                    $resourceName = $campaign->googleAdsResourceName();
-                    $updateStatusService->pause($resourceName);
+                $result = $deactivator->pauseCampaign($customer, $campaign);
+
+                if (is_string($result)) {
+                    // A platform refused. Report it — the campaign is still
+                    // spending against a card that has declined three times,
+                    // and Log::error alone never reaches the exception dashboard.
+                    report(new \RuntimeException(
+                        "Ad spend pause refused for campaign {$campaign->id}: {$result}"
+                    ));
+                    Log::error('AdSpendBilling: Failed to pause campaign', [
+                        'campaign_id' => $campaign->id,
+                        'error' => $result,
+                    ]);
+
+                    continue;
                 }
 
-                // Pause Facebook Ads campaign
-                if (! empty($campaign->facebook_ads_campaign_id)) {
-                    $this->pauseFacebookCampaign($customer, $campaign->facebook_ads_campaign_id);
+                if ($result === true) {
+                    Log::info('AdSpendBilling: Paused campaign', [
+                        'campaign_id' => $campaign->id,
+                        'reason' => 'payment_failure',
+                    ]);
                 }
-
-                // Pause Microsoft Ads campaign
-                if (! empty($campaign->microsoft_ads_campaign_id) && ! empty($customer->microsoft_ads_account_id)) {
-                    try {
-                        $msService = new \App\Services\MicrosoftAds\CampaignService($customer);
-                        $msService->updateStatus($campaign->microsoft_ads_campaign_id, 'Paused');
-                    } catch (\Throwable $e) {
-                        Log::warning('AdSpendBilling: Failed to pause Microsoft campaign', ['error' => $e->getMessage()]);
-                    }
-                }
-
-                // Pause LinkedIn Ads campaign
-                if (! empty($campaign->linkedin_campaign_id) && ! empty($customer->linkedin_ads_account_id)) {
-                    try {
-                        $liService = new \App\Services\LinkedInAds\CampaignService($customer);
-                        $liService->updateStatus($campaign->linkedin_campaign_id, 'PAUSED');
-                    } catch (\Throwable $e) {
-                        // \Throwable: a wrong method name is an \Error, which
-                        // \Exception does not catch, so one bad platform call
-                        // aborted the entire pause loop and left every campaign
-                        // after it running on exhausted credit.
-                        report($e);
-                        Log::warning('AdSpendBilling: Failed to pause LinkedIn campaign', ['error' => $e->getMessage()]);
-                    }
-                }
-
-                // Mark as paused in our database
-                $campaign->update([
-                    'status' => 'paused',
-                    'paused_reason' => 'Payment failure',
-                    'paused_at' => now(),
-                ]);
-
-                Log::info('AdSpendBilling: Paused campaign', [
-                    'campaign_id' => $campaign->id,
-                    'reason' => 'payment_failure',
-                ]);
-
             } catch (\Throwable $e) {
                 report($e);
                 Log::error('AdSpendBilling: Failed to pause campaign', [
@@ -884,22 +896,55 @@ class AdSpendBillingService
     }
 
     /**
-     * Resume all paused campaigns for a customer.
+     * Resume the campaigns the payment-failure pause turned off.
+     *
+     * The filter here used to be `paused_reason = 'Payment failure'`, a column
+     * no migration has ever created: the read threw SQLSTATE 42703 *after*
+     * restoreAccount() had run, so a recovered account read as healthy while
+     * every campaign stayed paused and every budget stayed halved.
+     *
+     * There is no per-campaign reason column, so the set is inferred, and it is
+     * deliberately narrow: paused locally AND paused on the platform, which is
+     * exactly the pair applyPlatformStatus('PAUSED') writes. CheckCampaign-
+     * PolicyViolations only writes the local `status`, so a campaign parked for
+     * a disapproved ad is not swept back on by a credit top-up.
      */
     protected function resumeAllCampaigns(Customer $customer): void
     {
         $campaigns = $customer->campaigns()
             ->where('status', 'paused')
-            ->where('paused_reason', 'Payment failure')
+            ->where('platform_status', 'PAUSED')
+            ->where(function ($q) {
+                // A platform id, not withDeployedPlatforms(): that scope also
+                // matches on a deployed strategy, and a campaign with no id
+                // anywhere is one the pause sweep never touched.
+                $q->whereNotNull('google_ads_campaign_id')
+                    ->orWhereNotNull('facebook_ads_campaign_id')
+                    ->orWhereNotNull('microsoft_ads_campaign_id')
+                    ->orWhereNotNull('linkedin_campaign_id');
+            })
             ->get();
 
         foreach ($campaigns as $campaign) {
             try {
                 // Resume Google Ads campaign
                 if (! empty($campaign->google_ads_campaign_id) && ! empty($customer->google_ads_customer_id)) {
-                    $updateStatusService = new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer);
-                    $resourceName = $campaign->googleAdsResourceName();
-                    $updateStatusService->enable($resourceName);
+                    $result = (new \App\Services\GoogleAds\CommonServices\UpdateCampaignStatus($customer))
+                        ->enable($customer->cleanGoogleCustomerId(), $campaign->googleAdsResourceName());
+
+                    // enable() reports failure by return value, so a refusal is
+                    // silent. Don't mark the campaign active off the back of one.
+                    if (! ($result['success'] ?? false)) {
+                        report(new \RuntimeException(
+                            "Ad spend resume refused for campaign {$campaign->id}: ".($result['error'] ?? 'unknown')
+                        ));
+                        Log::error('AdSpendBilling: Failed to resume campaign', [
+                            'campaign_id' => $campaign->id,
+                            'error' => $result['error'] ?? 'unknown',
+                        ]);
+
+                        continue;
+                    }
                 }
 
                 // Resume Facebook Ads campaign
@@ -928,11 +973,10 @@ class AdSpendBillingService
                     }
                 }
 
-                $campaign->update([
-                    'status' => 'active',
-                    'paused_reason' => null,
-                    'paused_at' => null,
-                ]);
+                // Both columns together — billing and every serving check read
+                // one or the other, so writing only `status` leaves the campaign
+                // half-resumed.
+                $campaign->applyPlatformStatus('ENABLED');
 
                 Log::info('AdSpendBilling: Resumed campaign', [
                     'campaign_id' => $campaign->id,
@@ -952,34 +996,33 @@ class AdSpendBillingService
     /**
      * Resume payment-paused campaigns and restore their budgets to 100%.
      *
-     * Safe to call unconditionally: resumeAllCampaigns only touches campaigns that
-     * were paused with paused_reason='Payment failure', and the 1.0 budget multiplier
-     * re-pushes the stored daily_budget (a no-op when nothing was reduced). This is the
-     * single entry point used by the daily recovery job AND the user-facing retry /
-     * update-payment-method paths, so a successful recovery charge always actually
-     * brings the campaigns back — not just the credit ledger flags.
+     * The single entry point used by the daily recovery job AND the user-facing
+     * retry / update-payment-method paths, so a successful recovery charge
+     * always actually brings the campaigns back — not just the ledger flags.
+     * The 1.0 budget multiplier re-pushes the stored daily_budget and is a
+     * no-op when nothing was reduced, so it always runs.
+     *
+     * $campaignsWerePaused says whether the pause sweep had actually run for
+     * this account. It has to come from the caller: restoreAccount() clears
+     * campaigns_paused_at and every path here charges (and so restores) first,
+     * after which the credit row can no longer answer the question. A top-up on
+     * an account that only ever reached grace period must restore budgets
+     * without un-pausing campaigns nobody's billing paused.
      */
-    public function recoverCampaigns(Customer $customer): void
+    public function recoverCampaigns(Customer $customer, bool $campaignsWerePaused = true): void
     {
-        $this->resumeAllCampaigns($customer);
+        if ($campaignsWerePaused) {
+            $this->resumeAllCampaigns($customer);
+        }
+
         $this->reduceCampaignBudgets($customer, 1.0);
     }
 
     /**
-     * Pause a Facebook Ads campaign.
-     */
-    protected function pauseFacebookCampaign(Customer $customer, string $campaignId): void
-    {
-        if (empty($customer->facebook_ads_account_id)) {
-            return;
-        }
-
-        $campaignService = new \App\Services\FacebookAds\CampaignService($customer);
-        $campaignService->updateCampaign($campaignId, ['status' => 'PAUSED']);
-    }
-
-    /**
      * Resume a Facebook Ads campaign.
+     *
+     * (Pausing one now goes through DeactivateCustomerService::pauseCampaign,
+     * which is the only remaining copy of the per-platform pause calls.)
      */
     protected function resumeFacebookCampaign(Customer $customer, string $campaignId): void
     {

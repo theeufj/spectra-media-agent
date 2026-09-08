@@ -909,12 +909,16 @@ Route::middleware(['auth', 'admin'])->group(function () {
     Route::get('/sandbox/{customer}/results', [App\Http\Controllers\SandboxController::class, 'results'])->name('sandbox.results');
     Route::delete('/sandbox/{customer}', [App\Http\Controllers\SandboxController::class, 'destroy'])->name('sandbox.destroy');
 
-    // One-time YouTube OAuth flow — redirect is admin-only
+    // One-time YouTube OAuth flow. Both halves are admin-only: the callback
+    // writes GOOGLE_YOUTUBE_REFRESH_TOKEN, the single credential every
+    // customer's ad videos are uploaded with, so an unauthenticated caller
+    // could point the whole platform's uploads at their own channel. The
+    // session does carry over — Google's redirect is a top-level GET, which
+    // sends a SameSite=lax cookie — and the controller checks a state nonce
+    // against it as well.
     Route::get('/youtube/auth', [App\Http\Controllers\YouTubeAuthController::class, 'redirect'])->name('youtube.auth');
+    Route::get('/youtube/auth/callback', [App\Http\Controllers\YouTubeAuthController::class, 'callback'])->name('youtube.auth.callback');
 });
-
-// Callback must be outside auth middleware — Google redirects here and the session won't carry over
-Route::get('/youtube/auth/callback', [App\Http\Controllers\YouTubeAuthController::class, 'callback'])->name('youtube.auth.callback');
 
 // Follow-up sequence unsubscribe. Signed rather than authenticated: someone
 // stopping email they did not want should never be asked to log in first.

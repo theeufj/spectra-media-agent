@@ -180,13 +180,17 @@ class AdSetService extends BaseFacebookAdsService
     /**
      * Update an ad set.
      *
+     * A node update is a POST to the node — the Graph API has no PUT, so the
+     * PUT this used to send came back 400 and every ad-set mutation (dayparting,
+     * schedule and budget writes) silently returned false.
+     *
      * @param  string  $adSetId  Ad set ID
      * @param  array  $updateData  Data to update
      */
     public function updateAdSet(string $adSetId, array $updateData): bool
     {
         try {
-            $response = $this->put("/{$adSetId}", $updateData);
+            $response = $this->post("/{$adSetId}", $updateData);
 
             if ($response && isset($response['success']) && $response['success']) {
                 Log::info("Updated ad set {$adSetId}", [

@@ -74,8 +74,13 @@ class DeactivateCustomerService
      *
      * Returns true when something was paused, null when the campaign was not
      * live anywhere, and an error string when a platform refused.
+     *
+     * Public because this is now the only implementation: ad spend billing
+     * pauses on the third consecutive failed charge and kept its own copy,
+     * which called Google's UpdateCampaignStatus::pause() with one of its two
+     * required arguments and so pauses nothing.
      */
-    private function pauseCampaign(Customer $customer, Campaign $campaign): true|string|null
+    public function pauseCampaign(Customer $customer, Campaign $campaign): true|string|null
     {
         $touched = false;
         $problems = [];
@@ -87,24 +92,42 @@ class DeactivateCustomerService
             $result['success'] ? $touched = true : $problems[] = 'Google: '.($result['error'] ?? 'unknown');
         }
 
+        // Per platform, not per campaign: one platform throwing must not skip
+        // the platforms after it, or the campaign carries on spending on those.
+        // \Throwable, since a wrong method name is an \Error.
         if ($campaign->facebook_ads_campaign_id) {
-            // updateCampaign with a status payload — Facebook's service has no
-            // updateStatus method, unlike Microsoft's and LinkedIn's.
-            (new \App\Services\FacebookAds\CampaignService($customer))
-                ->updateCampaign($campaign->facebook_ads_campaign_id, ['status' => 'PAUSED']);
-            $touched = true;
+            try {
+                // updateCampaign with a status payload — Facebook's service has no
+                // updateStatus method, unlike Microsoft's and LinkedIn's.
+                (new \App\Services\FacebookAds\CampaignService($customer))
+                    ->updateCampaign($campaign->facebook_ads_campaign_id, ['status' => 'PAUSED']);
+                $touched = true;
+            } catch (\Throwable $e) {
+                report($e);
+                $problems[] = 'Facebook: '.$e->getMessage();
+            }
         }
 
         if ($campaign->microsoft_ads_campaign_id) {
-            (new \App\Services\MicrosoftAds\CampaignService($customer))
-                ->updateStatus($campaign->microsoft_ads_campaign_id, 'Paused');
-            $touched = true;
+            try {
+                (new \App\Services\MicrosoftAds\CampaignService($customer))
+                    ->updateStatus($campaign->microsoft_ads_campaign_id, 'Paused');
+                $touched = true;
+            } catch (\Throwable $e) {
+                report($e);
+                $problems[] = 'Microsoft: '.$e->getMessage();
+            }
         }
 
         if ($campaign->linkedin_campaign_id) {
-            (new \App\Services\LinkedInAds\CampaignService($customer))
-                ->updateStatus($campaign->linkedin_campaign_id, 'PAUSED');
-            $touched = true;
+            try {
+                (new \App\Services\LinkedInAds\CampaignService($customer))
+                    ->updateStatus($campaign->linkedin_campaign_id, 'PAUSED');
+                $touched = true;
+            } catch (\Throwable $e) {
+                report($e);
+                $problems[] = 'LinkedIn: '.$e->getMessage();
+            }
         }
 
         if ($problems !== []) {

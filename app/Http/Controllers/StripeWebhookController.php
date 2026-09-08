@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AdSpendCredit;
+use App\Models\AdSpendTransaction;
 use App\Models\CreativeBoostPurchase;
 use App\Models\User;
 use App\Services\CreativeQuotaService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Laravel\Cashier\Http\Controllers\WebhookController as CashierController;
 
@@ -224,5 +227,129 @@ class StripeWebhookController extends CashierController
         }
 
         return $this->successMethod(); // parent has no handleInvoicePaymentSucceeded either
+    }
+
+    /**
+     * Handle a refunded charge.
+     *
+     * Refunded ad-spend credit has to come back out of the balance. Nothing did
+     * that: the admin refund tool called \Stripe\Refund::create and stopped, so
+     * current_balance kept showing money that had already been given back and
+     * the nightly billing run kept deducting live spend against it.
+     *
+     * Handled here as well as in Admin\RevenueController so a refund issued from
+     * the Stripe dashboard settles exactly like one issued from the console.
+     *
+     * @return \Symfony\Component\HttpFoundation\Response
+     */
+    protected function handleChargeRefunded(array $payload)
+    {
+        $charge = $payload['data']['object'] ?? [];
+
+        if (! empty($charge['id'])) {
+            self::recordAdSpendRefund($charge['id'], (int) ($charge['amount_refunded'] ?? 0) / 100);
+        }
+
+        return $this->successMethod();
+    }
+
+    /**
+     * Take refunded money back out of the ad spend credit the charge bought.
+     *
+     * Settles against the charge's *cumulative* refunded total rather than
+     * against one refund, which is what makes it idempotent under everything
+     * Stripe does here: webhook redelivery, a second partial refund, and the
+     * admin console recording the refund it just created rather than waiting
+     * for the event. Whichever call runs second finds nothing outstanding.
+     *
+     * Charges that never bought ad spend credit — subscription invoices, setup
+     * fees — have no matching credit transaction and are left alone.
+     *
+     * The ledger row is TYPE_REFUND and not TYPE_ADJUSTMENT deliberately:
+     * adjustments count as spend already recovered in
+     * AdSpendTransaction::totalDebited(), so booking a refund as one would tell
+     * the admin reconciliation tool the platform had already been paid for that
+     * spend and let it go uncharged.
+     *
+     * @param  float  $refundedTotal  Everything refunded on this charge so far, in dollars.
+     */
+    public static function recordAdSpendRefund(string $chargeId, float $refundedTotal): void
+    {
+        $creditId = AdSpendTransaction::query()
+            ->where('stripe_charge_id', $chargeId)
+            ->where('type', AdSpendTransaction::TYPE_CREDIT)
+            ->value('ad_spend_credit_id');
+
+        if (! $creditId) {
+            return;
+        }
+
+        DB::transaction(function () use ($creditId, $chargeId, $refundedTotal) {
+            // Locked read-modify-write, like every other balance mutation on
+            // this model: two concurrent deliveries would otherwise both read
+            // the refund as unrecorded and take it out twice. No acting user in
+            // a webhook, an admin in the console — the tenant scope is inert
+            // either way, but say so rather than depend on it.
+            /** @var AdSpendCredit|null $credit */
+            $credit = AdSpendCredit::withoutCustomerScope()
+                ->whereKey($creditId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $credit) {
+                return;
+            }
+
+            $outstanding = round($refundedTotal - self::recordedRefundTotal($chargeId), 2);
+
+            if ($outstanding <= 0) {
+                return;
+            }
+
+            // Capped at the balance, as AdSpendCredit::recordAdjustment() caps:
+            // credit already spent on ads cannot be taken back out of an empty
+            // account, and the ledger records what was applied rather than what
+            // was asked for, so the totals stay internally consistent.
+            $applied = round(min($outstanding, (float) $credit->current_balance), 2);
+
+            if ($applied <= 0) {
+                Log::warning('Refund exceeds remaining ad spend credit — nothing left to take back', [
+                    'charge_id' => $chargeId,
+                    'ad_spend_credit_id' => $credit->id,
+                    'outstanding' => $outstanding,
+                ]);
+
+                return;
+            }
+
+            // Through recordAdjustment() rather than writing the balance here:
+            // it recalculates the balance status, so a refund that empties an
+            // account leaves it marked depleted rather than active-at-zero.
+            $credit->recordAdjustment(
+                -$applied,
+                'Stripe refund on charge '.$chargeId,
+                AdSpendTransaction::TYPE_REFUND,
+                $chargeId,
+            );
+
+            Log::info('Ad spend credit reduced by refund', [
+                'charge_id' => $chargeId,
+                'ad_spend_credit_id' => $credit->id,
+                'amount' => $applied,
+                'new_balance' => (float) $credit->current_balance,
+            ]);
+        });
+    }
+
+    /**
+     * What has already been taken back out of the ledger for this charge,
+     * always positive. Refund rows are stored negative, like every other debit.
+     */
+    private static function recordedRefundTotal(string $chargeId): float
+    {
+        return round((float) AdSpendTransaction::query()
+            ->where('stripe_charge_id', $chargeId)
+            ->where('type', AdSpendTransaction::TYPE_REFUND)
+            ->sum(DB::raw('ABS(amount)')), 2);
     }
 }
