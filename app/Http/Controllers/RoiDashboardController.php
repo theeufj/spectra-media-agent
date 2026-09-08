@@ -85,31 +85,12 @@ class RoiDashboardController extends Controller
     protected function buildCampaignBreakdown($campaigns, Carbon $since): array
     {
         $breakdown = [];
+        $totals = $this->campaignTotals($campaigns->pluck('id'), $since);
 
         foreach ($campaigns as $campaign) {
-            $models = [
-                GoogleAdsPerformanceData::class,
-                FacebookAdsPerformanceData::class,
-                MicrosoftAdsPerformanceData::class,
-                LinkedInAdsPerformanceData::class,
-            ];
-
-            $totalCost = 0;
-            $totalRevenue = 0;
-            $totalConversions = 0;
-
-            foreach ($models as $modelClass) {
-                $data = $modelClass::where('campaign_id', $campaign->id)
-                    ->where('date', '>=', $since->toDateString())
-                    ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as revenue')
-                    ->first();
-
-                if ($data) {
-                    $totalCost += (float) $data->cost;
-                    $totalRevenue += (float) $data->revenue;
-                    $totalConversions += (int) $data->conversions;
-                }
-            }
+            $totalCost = $totals[(int) $campaign->id]['cost'] ?? 0.0;
+            $totalRevenue = $totals[(int) $campaign->id]['revenue'] ?? 0.0;
+            $totalConversions = $totals[(int) $campaign->id]['conversions'] ?? 0;
 
             if ($totalCost > 0) {
                 $breakdown[] = [
@@ -132,6 +113,45 @@ class RoiDashboardController extends Controller
         usort($breakdown, fn ($a, $b) => $b['cost'] <=> $a['cost']);
 
         return $breakdown;
+    }
+
+    /**
+     * Spend, revenue and conversions per campaign, summed across all four platforms.
+     *
+     * One grouped query per platform table, not one per campaign per table:
+     * this was four queries for every campaign in the list, so a
+     * forty-campaign account paid 160 round trips to draw one table.
+     *
+     * @return array<int, array{cost: float, revenue: float, conversions: int}>
+     */
+    protected function campaignTotals($campaignIds, Carbon $since): array
+    {
+        $models = [
+            GoogleAdsPerformanceData::class,
+            FacebookAdsPerformanceData::class,
+            MicrosoftAdsPerformanceData::class,
+            LinkedInAdsPerformanceData::class,
+        ];
+
+        $totals = [];
+
+        foreach ($models as $modelClass) {
+            $rows = $modelClass::whereIn('campaign_id', $campaignIds)
+                ->where('date', '>=', $since->toDateString())
+                ->selectRaw('campaign_id, SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value')
+                ->groupBy('campaign_id')
+                ->get();
+
+            foreach ($rows as $row) {
+                $id = (int) $row->campaign_id;
+                $totals[$id] ??= ['cost' => 0.0, 'revenue' => 0.0, 'conversions' => 0];
+                $totals[$id]['cost'] += (float) $row->cost;
+                $totals[$id]['revenue'] += (float) $row->conversion_value;
+                $totals[$id]['conversions'] += (int) $row->conversions;
+            }
+        }
+
+        return $totals;
     }
 
     protected function buildDailyTrend($campaignIds, Carbon $since): array

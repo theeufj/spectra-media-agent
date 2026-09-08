@@ -6,6 +6,15 @@ use App\Models\Concerns\BelongsToCustomer;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * A generated pitch document for a prospective client.
+ *
+ * It carries {@see BelongsToCustomer}, which means customer_id has to be set on
+ * every row: a NULL never matches the scope's `IN`, so an orphaned proposal is
+ * invisible to the user who just generated it, and permanently. That is the
+ * invariant ProposalController::store() enforces by refusing to create one when
+ * there is no active customer, rather than writing a row nobody can read back.
+ */
 class Proposal extends Model
 {
     use BelongsToCustomer;

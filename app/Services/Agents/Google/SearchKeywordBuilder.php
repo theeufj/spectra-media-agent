@@ -10,6 +10,7 @@ use App\Services\Agents\ExecutionPlan;
 use App\Services\Agents\ExecutionResult;
 use App\Services\GoogleAds\CommonServices\AddAdGroupCriterion;
 use App\Services\GoogleAds\CommonServices\AddNegativeKeyword;
+use Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -399,7 +400,7 @@ class SearchKeywordBuilder
             $added = 0;
             foreach ($negatives as $negative) {
                 try {
-                    $resourceName = ($addNegativeService)($customerId, $campaignResourceName, $negative, \Google\Ads\GoogleAds\V22\Enums\KeywordMatchTypeEnum\KeywordMatchType::EXACT);
+                    $resourceName = ($addNegativeService)($customerId, $campaignResourceName, $negative, $this->negativeMatchType($negative));
                     if ($resourceName) {
                         $added++;
                         $result->addPlatformId('negative_keyword', $resourceName);
@@ -422,6 +423,28 @@ class SearchKeywordBuilder
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * Match type for an initial brand-protection negative.
+     *
+     * These are intent terms, never observed search terms, and the campaign's
+     * positives default to BROAD (see addKeywords()). At EXACT — which is what
+     * every one of them used to go in as — 'free' blocks only the literal query
+     * "free", so "free crm tutorial" kept being paid for while the log and the
+     * Google UI both showed the negative sitting there. A negative broad blocks
+     * any query containing all of its terms, which is the protection intended.
+     *
+     * Multi-word terms go in as PHRASE rather than BROAD: negative broad ignores
+     * word order, so "how to" would block anything containing both words
+     * separately. EXACT is reserved for negatives derived from a search term we
+     * actually saw, which none of these are.
+     */
+    protected function negativeMatchType(string $negative): int
+    {
+        return preg_match('/\s/', trim($negative))
+            ? KeywordMatchType::PHRASE
+            : KeywordMatchType::BROAD;
     }
 
     /**

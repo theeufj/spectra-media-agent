@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Modal from '@/Components/Modal';
+import { fetchJson } from '@/utils/http';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, CardElement, useStripe, useElements } from '@stripe/react-stripe-js';
 
@@ -128,20 +129,14 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
         setError(null);
 
         try {
-            const response = await fetch('/billing/ad-spend/setup-for-deployment', {
+            const result = await fetchJson('/billing/ad-spend/setup-for-deployment', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                },
-                body: JSON.stringify({
+                json: {
                     campaign_id: campaign?.id,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
-                }),
+                },
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 onSuccess(result);
@@ -149,7 +144,11 @@ const SavedCardForm = ({ campaign, onSuccess, onCancel }) => {
                 setError(result.error || 'Failed to set up ad spend billing');
             }
         } catch (err) {
-            setError('An error occurred. Please try again.');
+            // The refusals a payer needs to read — self-funded, unconfirmed
+            // budget, no card on file — arrive as 400/404/422 with the reason in
+            // the body. response.json() on a 419 HTML page threw before we could
+            // show any of them, so every one read "an error occurred".
+            setError(err?.body?.error || 'An error occurred. Please try again.');
         }
 
         setProcessing(false);
@@ -233,21 +232,15 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
         }
 
         try {
-            const response = await fetch('/billing/ad-spend/setup-for-deployment', {
+            const result = await fetchJson('/billing/ad-spend/setup-for-deployment', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                },
-                body: JSON.stringify({
+                json: {
                     payment_method_id: paymentMethod.id,
                     campaign_id: campaign?.id,
                     daily_budget: estimatedDailySpend,
                     days_to_charge: daysToCharge,
-                }),
+                },
             });
-
-            const result = await response.json();
 
             if (result.success) {
                 onSuccess(result);
@@ -255,7 +248,7 @@ const NewCardForm = ({ campaign, onSuccess, onCancel }) => {
                 setError(result.error || 'Failed to set up ad spend billing');
             }
         } catch (err) {
-            setError('An error occurred. Please try again.');
+            setError(err?.body?.error || 'An error occurred. Please try again.');
         }
 
         setProcessing(false);

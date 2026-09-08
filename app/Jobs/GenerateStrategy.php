@@ -27,6 +27,14 @@ class GenerateStrategy implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
+    /**
+     * The widest target CPA the bigint cpa_target column holds, in micros.
+     *
+     * Kept well inside PHP_INT_MAX so the float bounds check in
+     * cpaTargetMicros() cannot itself overflow on the way in.
+     */
+    private const MAX_CPA_TARGET_MICROS = 9_000_000_000_000_000_000;
+
     public $timeout = 720;
 
     /**
@@ -299,7 +307,7 @@ class GenerateStrategy implements ShouldQueue
                         'imagery_strategy' => is_array($strategy['imagery_strategy']) ? implode("\n\n", $strategy['imagery_strategy']) : ($strategy['imagery_strategy'] ?? ''),
                         'video_strategy' => is_array($strategy['video_strategy']) ? implode("\n\n", $strategy['video_strategy']) : ($strategy['video_strategy'] ?? ''),
                         'bidding_strategy' => $strategy['bidding_strategy'],
-                        'cpa_target' => $strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null,
+                        'cpa_target' => $this->cpaTargetMicros($strategy['bidding_strategy']['parameters']['targetCpaMicros'] ?? null),
                         'revenue_cpa_multiple' => $strategy['revenue_cpa_multiple'],
                         // Never for a campaign nobody asked for — see
                         // Campaign::allowsAutomaticVideo().
@@ -431,6 +439,35 @@ class GenerateStrategy implements ShouldQueue
         ]);
 
         return null;
+    }
+
+    /**
+     * Normalise the model's target CPA before it reaches the micros column.
+     *
+     * Whatever comes back here is model output: a float, a numeric string, or
+     * a figure wider than the column. An unstorable value used to surface as
+     * SQLSTATE 22003 partway through the strategy loop, which took down the
+     * whole generation and left the strategies already created for the earlier
+     * platforms behind. Drop the value instead — every reader treats a null
+     * cpa_target as "no target", which is the truth in that case.
+     */
+    private function cpaTargetMicros(mixed $value): ?int
+    {
+        if (! is_numeric($value)) {
+            return null;
+        }
+
+        $micros = (float) $value;
+
+        if (! is_finite($micros) || $micros < 0 || $micros > self::MAX_CPA_TARGET_MICROS) {
+            Log::warning("Discarding unusable targetCpaMicros for campaign {$this->campaign->id}", [
+                'value' => $value,
+            ]);
+
+            return null;
+        }
+
+        return (int) round($micros);
     }
 
     protected function failWithError(string $message): void

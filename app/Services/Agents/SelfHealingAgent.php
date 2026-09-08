@@ -421,7 +421,7 @@ class SelfHealingAgent
         try {
             $metrics = $this->executeWithRetry(
                 operation: function () use ($customer, $customerId, $campaignResourceName) {
-                    $getPerformance = new GetCampaignPerformance($customer, true);
+                    $getPerformance = new GetCampaignPerformance($customer);
 
                     return ($getPerformance)($customerId, $campaignResourceName, 'TODAY');
                 },

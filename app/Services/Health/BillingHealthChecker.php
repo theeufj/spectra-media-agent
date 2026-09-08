@@ -2,6 +2,7 @@
 
 namespace App\Services\Health;
 
+use App\Models\AdSpendTransaction;
 use App\Models\Customer;
 use Illuminate\Support\Facades\Log;
 
@@ -14,9 +15,17 @@ class BillingHealthChecker
         $health = ['status' => 'healthy', 'issues' => [], 'warnings' => [], 'metrics' => []];
 
         try {
-            if ($customer->subscription) {
-                $subscription = $customer->subscription;
+            // Through the owning user. Customer is not Billable and has no
+            // `subscription` relation, so `$customer->subscription` was simply
+            // null under non-strict mode and this whole block never ran — the
+            // one checker that exists to surface a past_due subscription never
+            // surfaced one.
+            $owner = $customer->users()->wherePivot('role', 'owner')->first()
+                ?? $customer->users()->first();
 
+            $subscription = $owner?->subscription('default');
+
+            if ($subscription) {
                 if ($subscription->stripe_status === 'past_due') {
                     $health['issues'][] = [
                         'type' => 'payment',
@@ -34,34 +43,42 @@ class BillingHealthChecker
                 }
             }
 
-            // adSpendCredit is a hasOne relation — read the balance directly from it.
+            // adSpendCredit is a hasOne relation — read the balance directly
+            // from it. This read `remaining_amount`, an attribute that exists
+            // nowhere on the model, so every customer resolved to $0 and a
+            // customer holding $5,000 warned about a low balance forever.
             $credit = $customer->adSpendCredit;
-            $adSpendCredits = $credit ? (float) $credit->remaining_amount : 0.0;
+            $adSpendCredits = $credit ? round((float) $credit->current_balance, 2) : 0.0;
 
             $health['metrics']['ad_spend_credits'] = $adSpendCredits;
 
-            if ($adSpendCredits < 10) {
+            // Only an account that prepays ad spend can have a low balance. A
+            // self-funded account (Google bills their card directly) has no
+            // credit row at all, and $0 is not something they can act on.
+            if ($credit && $adSpendCredits < 10) {
                 $health['warnings'][] = [
                     'type' => 'credits',
                     'severity' => 'medium',
                     'message' => 'Low ad spend credits balance',
-                    'details' => "Current balance: \${$adSpendCredits}. Consider adding more credits.",
+                    'details' => 'Current balance: $'.number_format($adSpendCredits, 2).'. Consider adding more credits.',
                 ];
             }
 
-            // ad_spend_transactions tracks debits/credits and has no status column;
-            // negative-amount rows represent reversals/refunds.
-            $recentDebits = $customer->adSpendTransactions()
+            // Refunds only. This counted every row with a negative amount, and
+            // deduct() writes -$amount for each ordinary daily charge — so a
+            // customer being billed perfectly normally collected one spurious
+            // high-severity "credit reversals detected" warning per run.
+            $recentReversals = $customer->adSpendTransactions()
+                ->where('ad_spend_transactions.type', AdSpendTransaction::TYPE_REFUND)
                 ->where('ad_spend_transactions.created_at', '>', now()->subDays(7))
-                ->where('ad_spend_transactions.amount', '<', 0)
                 ->count();
 
-            if ($recentDebits > 0) {
+            if ($recentReversals > 0) {
                 $health['warnings'][] = [
                     'type' => 'payment_failures',
                     'severity' => 'high',
                     'message' => 'Recent credit reversals detected',
-                    'details' => "{$recentDebits} reversal(s) in the last 7 days",
+                    'details' => "{$recentReversals} reversal(s) in the last 7 days",
                 ];
             }
 

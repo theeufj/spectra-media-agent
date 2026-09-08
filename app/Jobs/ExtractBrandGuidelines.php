@@ -23,9 +23,31 @@ class ExtractBrandGuidelines implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     /**
-     * The number of times the job may be attempted.
+     * Fail after three genuine errors, not after three attempts.
+     *
+     * The WithoutOverlapping middleware below releases a losing copy back to
+     * the queue, and a release counts as an attempt. With `tries = 3` a loser
+     * burned all three on 120s deferrals and died at ~T+360 — past the winner's
+     * own 300s timeout, so it failed *because* another copy was doing the work,
+     * and failed() then mailed every user "site scan failed" minutes after (or
+     * alongside) the winner's SiteScanCompleted. maxExceptions counts only
+     * attempts that threw. CrawlPage carries the same pairing for the same
+     * reason.
      */
-    public $tries = 3;
+    public int $maxExceptions = 3;
+
+    /**
+     * Paired with maxExceptions: bounds the deferrals without bounding retries.
+     * A retryUntil() also suppresses the worker's maxTries check outright, which
+     * is what stops a release from retiring the job.
+     *
+     * An hour comfortably covers the lock's 600s expireAfter plus the winner's
+     * run, which is all a loser is ever waiting on.
+     */
+    public function retryUntil(): \DateTimeInterface
+    {
+        return now()->addHour();
+    }
 
     /**
      * The number of seconds the job can run before timing out.
@@ -179,6 +201,18 @@ class ExtractBrandGuidelines implements ShouldQueue
             'customer_id' => $this->customer->id,
             'error' => $exception->getMessage(),
         ]);
+
+        // A racing copy may have finished the extraction while this one was
+        // failing. Mailing "our analysis kept failing" to a customer whose
+        // guideline is sitting in the table — very possibly right after the
+        // winner's SiteScanCompleted — is worse than saying nothing.
+        if ($this->customer->brandGuideline()->exists()) {
+            Log::info('ExtractBrandGuidelines: job failed but a guideline exists — not notifying', [
+                'customer_id' => $this->customer->id,
+            ]);
+
+            return;
+        }
 
         // Out of retries — the onboarding chain ends here, so the user must
         // hear about it from us rather than from silence.

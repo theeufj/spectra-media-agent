@@ -216,14 +216,17 @@ class DeploymentJourneyGuardsTest extends TestCase
         $campaign = Campaign::factory()->create(['customer_id' => $customer->id]);
         $strategy = Strategy::factory()->create([
             'campaign_id' => $campaign->id,
-            'platform' => 'LinkedIn Ads',
+            // Not LinkedIn any more: DeploymentVerifier covers all four real
+            // platforms now, so a genuinely unknown one is what still exercises
+            // this. The invariant is unchanged — "cannot check" must not become
+            // "unverified", because a strategy marked deploy_unverified is
+            // re-verified and eventually surfaced to the customer as a problem.
+            'platform' => 'TikTok Ads',
             'deployment_status' => 'deployed',
         ]);
 
         (new VerifyDeployment($campaign))->handle(new DeploymentVerifier);
 
-        // No verification path exists for LinkedIn: "can't check" must not
-        // become "unverified".
         $this->assertSame('deployed', $strategy->fresh()->deployment_status);
     }
 

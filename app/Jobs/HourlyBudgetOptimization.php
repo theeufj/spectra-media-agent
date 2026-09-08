@@ -110,6 +110,13 @@ class HourlyBudgetOptimization implements ShouldQueue
     /**
      * Record a performance snapshot for the current hour.
      * This data feeds the learned multiplier model.
+     *
+     * Every platform here reports day-to-date totals, so the hour's own figures
+     * are the difference against what has already been recorded for today. The
+     * row used to store the running total: averaging an accumulating series and
+     * multiplying by 24 (AdaptiveThresholds) overstated daily volume by roughly
+     * an order of magnitude, and the hour-of-day ROAS multipliers were computed
+     * from cumulative ratios that flatten out as the day goes on.
      */
     protected function recordHourlySnapshot(Campaign $campaign): void
     {
@@ -123,11 +130,35 @@ class HourlyBudgetOptimization implements ShouldQueue
         $date = $now->toDateString();
         $dayOfWeek = (int) $now->format('w'); // 0=Sunday
 
-        // Get current hour's performance from the platform
+        // Today's cumulative performance from the platform
         $metrics = $this->getHourlyMetrics($campaign, $customer);
         if (! $metrics) {
             return;
         }
+
+        // What today's earlier hours already account for. Summing the stored
+        // deltas (rather than reading the previous hour alone) keeps the maths
+        // right when a run is skipped: the next snapshot then covers both hours.
+        $recorded = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
+            ->where('date', $date)
+            ->where('platform', $metrics['platform'])
+            ->where('hour', '<', $hour)
+            ->selectRaw('
+                COALESCE(SUM(impressions), 0) as impressions,
+                COALESCE(SUM(clicks), 0) as clicks,
+                COALESCE(SUM(conversions), 0) as conversions,
+                COALESCE(SUM(spend), 0) as spend,
+                COALESCE(SUM(conversion_value), 0) as conversion_value
+            ')
+            ->first();
+
+        // A platform restating a figure downwards would otherwise write a
+        // negative hour and poison every average built on these rows.
+        $impressions = max(0, (int) ($metrics['impressions'] ?? 0) - (int) ($recorded->impressions ?? 0));
+        $clicks = max(0, (int) ($metrics['clicks'] ?? 0) - (int) ($recorded->clicks ?? 0));
+        $conversions = max(0, (float) ($metrics['conversions'] ?? 0) - (float) ($recorded->conversions ?? 0));
+        $spend = max(0, (float) ($metrics['spend'] ?? 0) - (float) ($recorded->spend ?? 0));
+        $conversionValue = max(0, (float) ($metrics['conversion_value'] ?? 0) - (float) ($recorded->conversion_value ?? 0));
 
         CampaignHourlyPerformance::updateOrCreate(
             [
@@ -139,17 +170,13 @@ class HourlyBudgetOptimization implements ShouldQueue
             [
                 'customer_id' => $customer->id,
                 'day_of_week' => $dayOfWeek,
-                'impressions' => $metrics['impressions'] ?? 0,
-                'clicks' => $metrics['clicks'] ?? 0,
-                'conversions' => $metrics['conversions'] ?? 0,
-                'spend' => $metrics['spend'] ?? 0,
-                'conversion_value' => $metrics['conversion_value'] ?? 0,
-                'ctr' => ($metrics['impressions'] ?? 0) > 0
-                    ? ($metrics['clicks'] ?? 0) / $metrics['impressions']
-                    : 0,
-                'roas' => ($metrics['spend'] ?? 0) > 0
-                    ? ($metrics['conversion_value'] ?? 0) / $metrics['spend']
-                    : 0,
+                'impressions' => $impressions,
+                'clicks' => $clicks,
+                'conversions' => $conversions,
+                'spend' => $spend,
+                'conversion_value' => $conversionValue,
+                'ctr' => $impressions > 0 ? $clicks / $impressions : 0,
+                'roas' => $spend > 0 ? $conversionValue / $spend : 0,
             ]
         );
     }
@@ -166,7 +193,7 @@ class HourlyBudgetOptimization implements ShouldQueue
             try {
                 $customerId = $customer->google_ads_customer_id;
                 $resourceName = $campaign->googleAdsResourceName();
-                $getPerformance = new GetCampaignPerformance($customer, true);
+                $getPerformance = new GetCampaignPerformance($customer);
                 $metrics = ($getPerformance)($customerId, $resourceName, 'TODAY');
 
                 if ($metrics) {
@@ -186,17 +213,15 @@ class HourlyBudgetOptimization implements ShouldQueue
         }
 
         // Microsoft Ads — SOAP API has no live intra-day endpoint; use today's stored
-        // performance data as the best available proxy. Falls back to yesterday if today
-        // has no records yet (e.g., early morning before the first fetch).
+        // performance data as the best available proxy. Today only: the caller reads
+        // these as day-to-date totals and subtracts what today's earlier hours already
+        // recorded, so yesterday's full day would land as one enormous hour and then
+        // sink every real reading behind it.
         if ($campaign->microsoft_ads_campaign_id && $customer->microsoft_ads_customer_id) {
             $msRow = MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
                 ->where('date', $today)
                 ->orderByDesc('updated_at')
-                ->first()
-                ?? MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
-                    ->where('date', now()->subDay()->toDateString())
-                    ->orderByDesc('updated_at')
-                    ->first();
+                ->first();
 
             if ($msRow) {
                 return [
@@ -210,16 +235,13 @@ class HourlyBudgetOptimization implements ShouldQueue
             }
         }
 
-        // LinkedIn Ads — use stored performance data (Marketing API is batch/async like Microsoft)
+        // LinkedIn Ads — use stored performance data (Marketing API is batch/async like
+        // Microsoft), today only, for the same reason.
         if ($campaign->linkedin_campaign_id && $customer->linkedin_ads_account_id) {
             $liRow = LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
                 ->where('date', $today)
                 ->orderByDesc('updated_at')
-                ->first()
-                ?? LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
-                    ->where('date', now()->subDay()->toDateString())
-                    ->orderByDesc('updated_at')
-                    ->first();
+                ->first();
 
             if ($liRow) {
                 return [

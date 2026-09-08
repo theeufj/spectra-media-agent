@@ -439,7 +439,7 @@ class CampaignHealthChecker
                     $resource = "customers/{$customerId}/campaigns/{$resource}";
                 }
 
-                $ads = (new GetAdStatus($customer, true))($customerId, $resource);
+                $ads = (new GetAdStatus($customer))($customerId, $resource);
                 $limited = 0;
 
                 foreach ($ads as $ad) {

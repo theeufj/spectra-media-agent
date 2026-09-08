@@ -4,6 +4,7 @@ namespace App\Services\GoogleAds\CommonServices;
 
 use App\Services\GoogleAds\BaseGoogleAdsService;
 use Google\Ads\GoogleAds\Lib\V22\GoogleAdsException;
+use Google\ApiCore\ApiException;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -11,6 +12,14 @@ use Illuminate\Support\Facades\Log;
  *
  * Fetches Auction Insights data from Google Ads to understand
  * competitive positioning: impression share, overlap rate, position above rate, etc.
+ *
+ * Auction Insights is not a resource. There is no `campaign_auction_insight_result`
+ * in V22 and no `GoogleAdsRow::getAuctionInsight()` — the report is the `campaign`
+ * resource segmented by `segments.auction_insight_domain`, with the figures on
+ * `metrics.auction_insight_search_*`. Querying the resource form failed with
+ * INVALID_ARGUMENT on every call, which the catch below then reported as
+ * "no auction data available yet", so CompetitorIntelligenceAgent saw an empty
+ * array forever and never discovered a competitor.
  */
 class GetAuctionInsights extends BaseGoogleAdsService
 {
@@ -29,18 +38,16 @@ class GetAuctionInsights extends BaseGoogleAdsService
     ): array {
         $this->ensureClient();
 
-        // Auction Insights query
         $query = 'SELECT '.
-                 'auction_insight.domain, '.
-                 'auction_insight.impression_share, '.
-                 'auction_insight.overlap_rate, '.
-                 'auction_insight.position_above_rate, '.
-                 'auction_insight.top_of_page_rate, '.
-                 'auction_insight.abs_top_of_page_rate, '.
-                 'auction_insight.outranking_share, '.
                  'campaign.name, '.
-                 'campaign.resource_name '.
-                 'FROM campaign_auction_insight_result '.
+                 'segments.auction_insight_domain, '.
+                 'metrics.auction_insight_search_impression_share, '.
+                 'metrics.auction_insight_search_overlap_rate, '.
+                 'metrics.auction_insight_search_position_above_rate, '.
+                 'metrics.auction_insight_search_top_impression_percentage, '.
+                 'metrics.auction_insight_search_absolute_top_impression_percentage, '.
+                 'metrics.auction_insight_search_outranking_share '.
+                 'FROM campaign '.
                  "WHERE campaign.resource_name = '$campaignResourceName' ".
                  "AND segments.date DURING $dateRange";
 
@@ -55,28 +62,33 @@ class GetAuctionInsights extends BaseGoogleAdsService
             ];
 
             foreach ($response->getIterator() as $googleAdsRow) {
-                $auctionInsight = $googleAdsRow->getAuctionInsight();
+                $segments = $googleAdsRow->getSegments();
+                $metrics = $googleAdsRow->getMetrics();
                 $campaign = $googleAdsRow->getCampaign();
 
-                $domain = $auctionInsight->getDomain();
+                $domain = $segments?->getAuctionInsightDomain() ?? '';
+
+                if ($domain === '') {
+                    continue;
+                }
 
                 // Campaign info (same for all rows)
                 if (! $insights['campaign_name']) {
-                    $insights['campaign_name'] = $campaign->getName();
+                    $insights['campaign_name'] = $campaign?->getName();
                 }
 
                 $metricsData = [
                     'domain' => $domain,
-                    'impression_share' => $this->formatPercentage($auctionInsight->getImpressionShare()),
-                    'overlap_rate' => $this->formatPercentage($auctionInsight->getOverlapRate()),
-                    'position_above_rate' => $this->formatPercentage($auctionInsight->getPositionAboveRate()),
-                    'top_of_page_rate' => $this->formatPercentage($auctionInsight->getTopOfPageRate()),
-                    'abs_top_of_page_rate' => $this->formatPercentage($auctionInsight->getAbsTopOfPageRate()),
-                    'outranking_share' => $this->formatPercentage($auctionInsight->getOutrankingShare()),
+                    'impression_share' => $this->formatPercentage($metrics?->getAuctionInsightSearchImpressionShare()),
+                    'overlap_rate' => $this->formatPercentage($metrics?->getAuctionInsightSearchOverlapRate()),
+                    'position_above_rate' => $this->formatPercentage($metrics?->getAuctionInsightSearchPositionAboveRate()),
+                    'top_of_page_rate' => $this->formatPercentage($metrics?->getAuctionInsightSearchTopImpressionPercentage()),
+                    'abs_top_of_page_rate' => $this->formatPercentage($metrics?->getAuctionInsightSearchAbsoluteTopImpressionPercentage()),
+                    'outranking_share' => $this->formatPercentage($metrics?->getAuctionInsightSearchOutrankingShare()),
                 ];
 
                 // Identify if this is our domain or a competitor
-                if ($this->isOurDomain($domain, $customerId)) {
+                if ($this->isOurDomain($domain)) {
                     $insights['our_metrics'] = $metricsData;
                 } else {
                     $insights['competitors'][] = $metricsData;
@@ -94,37 +106,22 @@ class GetAuctionInsights extends BaseGoogleAdsService
                 'competitor_count' => count($insights['competitors']),
             ]);
 
+            // No rows is the genuine "not enough auction data yet" answer, and it
+            // is a success: the caller counts the campaign as analysed rather
+            // than discarding it as an error.
             return $insights;
 
-        } catch (GoogleAdsException $e) {
-            $errorMessage = $e->getMessage();
-
-            // Check if it's a "no data" error (common for new campaigns)
-            if (str_contains($errorMessage, 'INVALID_ARGUMENT') ||
-                str_contains($errorMessage, 'insufficient data')) {
-                Log::info('GetAuctionInsights: No auction data available yet', [
-                    'customer_id' => $customerId,
-                    'campaign' => $campaignResourceName,
-                ]);
-
-                return [
-                    'campaign_name' => null,
-                    'date_range' => $dateRange,
-                    'our_metrics' => null,
-                    'competitors' => [],
-                    'error' => 'Insufficient data for auction insights',
-                ];
-            }
-
-            Log::error('GetAuctionInsights: Failed to fetch insights', [
-                'customer_id' => $customerId,
-                'campaign' => $campaignResourceName,
-                'error' => $errorMessage,
-            ]);
+        } catch (GoogleAdsException|ApiException $e) {
+            // INVALID_ARGUMENT is a malformed query, not thin data. Reporting it
+            // as "insufficient data" is what hid a report that never worked.
+            $this->logError('Failed to fetch auction insights: '.$e->getMessage(), $e);
 
             return [
-                'error' => $errorMessage,
+                'campaign_name' => null,
+                'date_range' => $dateRange,
+                'our_metrics' => null,
                 'competitors' => [],
+                'error' => $e->getMessage(),
             ];
         }
     }
@@ -158,7 +155,7 @@ class GetAuctionInsights extends BaseGoogleAdsService
 
             return $allInsights;
 
-        } catch (GoogleAdsException $e) {
+        } catch (GoogleAdsException|ApiException $e) {
             Log::error('GetAuctionInsights: Failed to get all campaigns', [
                 'customer_id' => $customerId,
                 'error' => $e->getMessage(),
@@ -181,13 +178,31 @@ class GetAuctionInsights extends BaseGoogleAdsService
     }
 
     /**
-     * Check if this is our domain (vs competitor).
-     * The auction insights API includes "You" as a special domain indicator.
+     * Is this row the advertiser's own line rather than a competitor's?
+     *
+     * The UI labels it "You"; the API reports the account's own display domain,
+     * so the customer's website host is the reliable test and the literal is
+     * kept as a fallback.
      */
-    protected function isOurDomain(string $domain, string $customerId): bool
+    protected function isOurDomain(string $domain): bool
     {
-        // Google Ads returns "You" or similar for the advertiser's own metrics
-        return strtolower($domain) === 'you' ||
-               strtolower($domain) === 'your domain';
+        $domain = strtolower(trim($domain));
+
+        if ($domain === 'you' || $domain === 'your domain') {
+            return true;
+        }
+
+        $website = strtolower(trim((string) $this->customer?->website));
+
+        if ($website === '') {
+            return false;
+        }
+
+        // A stored website is as often "example.com" as "https://example.com/",
+        // and parse_url returns no host for the first form.
+        $ourHost = parse_url($website, PHP_URL_HOST) ?: explode('/', $website)[0];
+        $ourHost = preg_replace('/^www\./', '', (string) $ourHost);
+
+        return $ourHost !== '' && $domain === $ourHost;
     }
 }

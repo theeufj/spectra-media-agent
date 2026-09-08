@@ -228,7 +228,11 @@ class Customer extends Model
         $quota = app(\App\Services\CreativeQuotaService::class);
 
         foreach ($this->users as $user) {
-            $summary = $quota->getUsageSummary($user);
+            // $this, explicitly: DeployCampaign runs this from the queue where
+            // there is no session, and without it the quota service falls back to
+            // whichever customer the user happens to be attached to first — so a
+            // multi-account owner's deploy was gated on another account's quota.
+            $summary = $quota->getUsageSummary($user, $this);
 
             if ($summary['is_unlimited']) {
                 return true;

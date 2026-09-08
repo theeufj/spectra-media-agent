@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\InvitationController;
 use App\Jobs\RecordSiteFacebookConversion;
 use App\Jobs\RecordSiteGoogleConversion;
 use App\Jobs\RecordSiteMicrosoftConversion;
@@ -46,6 +47,10 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            // Carried across by InvitationController::accept(). Validated here
+            // because it was read raw off the request and fed to a query: an
+            // array payload is a 500, and nothing bounded its length.
+            'invitation_token' => ['nullable', 'string', 'max:64'],
         ];
 
         // Add Turnstile validation if configured
@@ -73,16 +78,29 @@ class RegisteredUserController extends Controller
             ->whereNull('converted_at')
             ->update(['converted_user_id' => $user->id, 'converted_at' => now()]);
 
-        if ($request->invitation_token) {
-            $invitation = \App\Models\Invitation::where('token', $request->invitation_token)->first();
-            if ($invitation) {
-                $user->customers()->attach($invitation->customer_id, ['role' => $invitation->role]);
-                $invitation->delete();
+        $invitationToken = $request->input('invitation_token');
+
+        if ($invitationToken) {
+            // Redeemed through the same gate InvitationController::accept()
+            // uses — 7-day expiry, and the address the invite was sent to.
+            // This path used to skip both, so a leaked or stale token granted
+            // tenant access under an arbitrary email, forever.
+            $invitation = \App\Models\Invitation::where('token', $invitationToken)->first();
+
+            if (! $invitation || ! InvitationController::redeem($invitation, $user)) {
+                // Registration itself stands; they just don't join the tenant,
+                // and land on the create-a-customer prompt like anyone else.
+                // Logged because a refused token is the only trace of someone
+                // trying a leaked link.
+                \Illuminate\Support\Facades\Log::warning('Registration presented an invitation token that could not be redeemed', [
+                    'user_id' => $user->id,
+                    'found' => (bool) $invitation,
+                ]);
             }
-        } else {
-            // If the user is not coming from an invitation, they will be prompted to create a customer
-            // after email verification.
         }
+
+        // Without an invitation they are prompted to create a customer after
+        // email verification.
 
         // Capture any ad click IDs stored by CaptureClickIds middleware
         $clickIds = \App\Http\Middleware\CaptureClickIds::all();

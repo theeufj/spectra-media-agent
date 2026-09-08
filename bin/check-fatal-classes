@@ -2,19 +2,35 @@
 <?php
 
 /**
- * Fail on references to classes and methods that do not exist.
+ * Fail on calls that PHP will reject at the moment they run.
  *
- * These are the errors PHP cannot catch early: a name is resolved only when the
- * line executes, so the file parses, lints, passes the test suite and then dies
- * the first time that path is reached in production. Every instance found in
- * this codebase had been written into phpstan-baseline.neon as a known finding
- * rather than fixed — including 79 services whose entire error handling was a
- * catch clause for a class the SDK does not define.
+ * These are the errors PHP cannot catch early: a name is resolved, and an
+ * argument list is counted, only when the line executes — so the file parses,
+ * lints, passes the test suite and then dies the first time that path is
+ * reached in production. Every instance found in this codebase had been
+ * written into phpstan-baseline.neon as a known finding rather than fixed —
+ * including 79 services whose entire error handling was a catch clause for a
+ * class the SDK does not define.
  *
- * Run against phpstan-strict.neon, which excludes the baseline, so these two
+ * `arguments.count` is here for the same reason. Too few arguments is an
+ * ArgumentCountError the moment the line runs; too many is worse than an error,
+ * because PHP accepts it silently and the extra argument — a customer id, a
+ * dry-run flag — is simply discarded while the caller believes it was passed.
+ * Eighteen of these sat in the baseline when this check was written. One was
+ * `UpdateCampaignStatus::pause()` invoked with a single argument, which is why
+ * campaigns went on serving after a customer's card had declined three times.
+ * The static analyser had known about it for months.
+ *
+ * Run against phpstan-strict.neon, which excludes the baseline, so these
  * identifiers cannot be silenced by regenerating it.
  */
-$fatalIdentifiers = ['class.notFound', 'method.notFound', 'classConstant.notFound'];
+$fatalIdentifiers = [
+    'class.notFound',
+    'method.notFound',
+    'staticMethod.notFound',
+    'classConstant.notFound',
+    'arguments.count',
+];
 
 /** Mockery's expectation API, called on variables PHPStan types as the real class. */
 $mockeryMethods = [
@@ -47,7 +63,11 @@ foreach ($decoded['files'] as $file => $data) {
         // Ads SDK rely on, so those reports are noise — the methods do resolve at
         // runtime. A missing App\ class or method never resolves and is always a
         // real defect, which makes it the one thing worth failing a build over.
-        if (! preg_match('/\b(?:class|method|type) (App\\\\[A-Za-z0-9_\\\\]+)/', $message['message'])) {
+        // Case-insensitive because PHPStan capitalises the leading noun of an
+        // arity message — "Class App\Foo constructor invoked with 3 parameters,
+        // 2 required." and "Method App\Foo::bar() invoked with 1 parameter, 2
+        // required." A case-sensitive match silently dropped every one of them.
+        if (! preg_match('/\b(?:class|method|type) (App\\\\[A-Za-z0-9_\\\\]+)/i', $message['message'])) {
             continue;
         }
 
@@ -69,11 +89,11 @@ foreach ($decoded['files'] as $file => $data) {
 }
 
 if ($found === []) {
-    echo "check-fatal-classes: no references to missing classes or methods\n";
+    echo "check-fatal-classes: no missing classes or methods, no miscounted argument lists\n";
     exit(0);
 }
 
-fwrite(STDERR, "\ncheck-fatal-classes: found ".count($found)." reference(s) to something that does not exist.\n");
+fwrite(STDERR, "\ncheck-fatal-classes: found ".count($found)." call(s) PHP will reject when the line runs.\n");
 fwrite(STDERR, "These fail at runtime, not at parse time. Fix them — do not baseline them.\n\n");
 
 foreach ($found as $line) {

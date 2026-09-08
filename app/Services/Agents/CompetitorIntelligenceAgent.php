@@ -111,7 +111,7 @@ class CompetitorIntelligenceAgent
         ];
 
         try {
-            $auctionInsightsService = new GetAuctionInsights($customer, true);
+            $auctionInsightsService = new GetAuctionInsights($customer);
             $allInsights = $auctionInsightsService->getAllCampaigns($customer->google_ads_customer_id);
 
             $ownIsSum = 0;

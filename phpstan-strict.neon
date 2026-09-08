@@ -1,21 +1,28 @@
 # Analysis that deliberately does NOT include phpstan-baseline.neon.
 #
 # The baseline exists to freeze pre-existing debt, and most of what it holds is
-# harmless — Eloquent magic properties, Mockery calls in tests. But two error
-# identifiers are never harmless:
+# harmless — Eloquent magic properties, Mockery calls in tests. But a handful of
+# error identifiers are never harmless:
 #
-#   class.notFound   a named class does not exist
-#   method.notFound  a called method does not exist
+#   class.notFound         a named class does not exist
+#   method.notFound        a called method does not exist
+#   staticMethod.notFound  a called static method does not exist
+#   classConstant.notFound a referenced class constant does not exist
+#   arguments.count        a call's argument count does not match the signature
 #
-# PHP resolves both only at the moment the line runs, so the file parses, lints,
-# passes CI and dies in production the first time that path is reached. Every
-# such bug found in this codebase had been recorded in the baseline rather than
-# fixed: a catch clause for a class the SDK never defined (79 services), an enum
-# constant on a non-existent class, a plural request class, an undefined client
-# property.
+# PHP resolves names, and counts arguments, only at the moment the line runs, so
+# the file parses, lints, passes CI and dies in production the first time that
+# path is reached. Every such bug found in this codebase had been recorded in the
+# baseline rather than fixed: a catch clause for a class the SDK never defined
+# (79 services), an enum constant on a non-existent class, a plural request
+# class, an undefined client property — and eighteen miscounted argument lists,
+# one of which was the single-argument `UpdateCampaignStatus::pause()` that left
+# campaigns serving after a customer's card had declined three times.
 #
 # bin/check-fatal-classes runs this config and fails on those identifiers alone,
-# so they cannot be silenced by regenerating the baseline.
+# so they cannot be silenced by regenerating the baseline. Deliberately NOT on
+# the list: property.notFound and argument.type (84 and 33 baselined entries),
+# which in Laravel are overwhelmingly Eloquent magic and resolve fine at runtime.
 includes:
     - vendor/larastan/larastan/extension.neon
 

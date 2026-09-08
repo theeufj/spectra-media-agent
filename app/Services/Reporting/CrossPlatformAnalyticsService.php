@@ -18,9 +18,30 @@ use App\Models\MicrosoftAdsPerformanceData;
 class CrossPlatformAnalyticsService
 {
     /**
+     * Summaries already computed on this instance, keyed by customer and window.
+     *
+     * getPlatformComparison() and getFunnelAnalysis() are both derived views of
+     * getSummary(), and the dashboard renders both — so one page load ran the
+     * four platform aggregates twice over. Memoised on the instance rather than
+     * cached: the caller holds it for one request, and stale ad spend in an
+     * admin's face is worse than the four queries.
+     *
+     * @var array<string, array<string, mixed>>
+     */
+    private array $summaries = [];
+
+    /**
      * Get unified summary across all platforms for a customer.
      */
     public function getSummary(Customer $customer, int $days = 30): array
+    {
+        return $this->summaries[$customer->getKey().':'.$days] ??= $this->computeSummary($customer, $days);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function computeSummary(Customer $customer, int $days): array
     {
         $startDate = now()->subDays($days)->toDateString();
         $campaignIds = Campaign::where('customer_id', $customer->id)->pluck('id');
@@ -207,15 +228,23 @@ class CrossPlatformAnalyticsService
             return $this->emptyMetrics();
         }
 
+        // Summed in the database, not in PHP: this hydrated every performance
+        // row for every campaign on the platform — four platforms' worth of a
+        // month of daily rows — only to add five columns up.
         $data = $model::whereIn('campaign_id', $campaignIds)
             ->where('date', '>=', $startDate)
-            ->get();
+            ->selectRaw('SUM(impressions) as impressions, SUM(clicks) as clicks, SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value')
+            ->first();
 
-        $impressions = $data->sum('impressions');
-        $clicks = $data->sum('clicks');
-        $cost = round($data->sum('cost'), 2);
-        $conversions = $data->sum('conversions');
-        $conversionValue = round($data->sum('conversion_value'), 2);
+        if (! $data) {
+            return $this->emptyMetrics();
+        }
+
+        $impressions = (int) $data->impressions;
+        $clicks = (int) $data->clicks;
+        $cost = round((float) $data->cost, 2);
+        $conversions = (float) $data->conversions;
+        $conversionValue = round((float) $data->conversion_value, 2);
 
         return [
             'impressions' => $impressions,

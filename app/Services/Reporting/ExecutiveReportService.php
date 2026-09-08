@@ -108,7 +108,7 @@ class ExecutiveReportService
             }
 
             try {
-                $service = new GetCampaignPerformance($customer, true);
+                $service = new GetCampaignPerformance($customer);
                 $customerId = $customer->google_ads_customer_id;
                 $resourceName = $campaign->googleAdsResourceName();
 

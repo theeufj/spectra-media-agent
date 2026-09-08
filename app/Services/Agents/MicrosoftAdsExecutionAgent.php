@@ -186,7 +186,7 @@ PROMPT;
             );
 
             if ($response && isset($response['text'])) {
-                return RecoveryPlan::fromJson($response['text']);
+                return RecoveryPlan::fromJson($error, $response['text']);
             }
         } catch (\Throwable $e) {
             report($e);

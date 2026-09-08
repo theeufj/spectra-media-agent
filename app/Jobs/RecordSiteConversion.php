@@ -3,27 +3,25 @@
 namespace App\Jobs;
 
 use App\Models\Customer;
-use App\Models\Setting;
-use App\Models\SpectraConversionEvent;
-use App\Services\GoogleAds\DataManagerService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Log;
 
 /**
- * Uploads a server-side conversion to sitetospend.com's own Google Ads account
- * for users who arrived via a Google Ad (i.e. have a stored gclid).
+ * Fans a server-side own-site conversion (campaign_live, seven_day_return) out
+ * to one RecordSiteGoogleConversion per user who arrived from a Google Ad.
  *
- * Server-side events (campaign_live, seven_day_return) cannot fire in the browser
- * because there's no page load — this job uploads them via the Data Manager API
- * (the legacy UploadClickConversions endpoint is closed to new integrations).
+ * This job used to perform the upload itself, and it picked its users with
+ * `whereNotNull('gclid')` before calling the gclid-only Data Manager wrapper.
+ * Google sends gbraid or wbraid *instead of* a gclid wherever iOS ATT applies,
+ * so every iOS conversion on these two events was dropped — silently, and on
+ * exactly the bottom-of-funnel signals Maximize Conversions bids from.
  *
- * The conversion action resource name must be provisioned (conversions:provision)
- * and stored in Settings before uploads occur. While it is null the job exits
- * cleanly without error.
+ * RecordSiteGoogleConversion already walks gclid → gbraid → wbraid and is the
+ * job both signup paths use, so there is no second upload implementation here
+ * any more: this is the customer → user fan-out and nothing else.
  */
 class RecordSiteConversion implements ShouldQueue
 {
@@ -42,59 +40,22 @@ class RecordSiteConversion implements ShouldQueue
 
     public function handle(): void
     {
-        $resourceName = Setting::get("conversion_resource_name.{$this->event}");
-        if (! $resourceName) {
-            Log::debug("RecordSiteConversion: resource_name not in settings for '{$this->event}' — skipping");
+        // Fixed here rather than left to each child job: these events happen
+        // now, and Google attributes on the conversion timestamp, so a retry
+        // tomorrow must not record the conversion as happening tomorrow.
+        // (`signup` is the event that did not need this — it keeps
+        // RecordSiteGoogleConversion's default of the registration time.)
+        $occurredAt = now();
 
-            return;
-        }
-
-        // resource name format: customers/{operatingAccountId}/conversionActions/{conversionActionId}
-        $parts = explode('/', $resourceName);
-        $operatingAccountId = $parts[1] ?? null;
-        $conversionActionId = $parts[3] ?? null;
-        if (! $operatingAccountId || ! $conversionActionId) {
-            Log::error("RecordSiteConversion: could not parse resource_name '{$resourceName}' for '{$this->event}'");
-
-            return;
-        }
-
-        $config = config("conversions.events.{$this->event}", []);
-        $value = (float) ($config['value'] ?? 0);
-        $currency = $config['currency'] ?? 'USD';
-
-        $users = $this->customer->users()->whereNotNull('gclid')->get();
-        if ($users->isEmpty()) {
-            return;
-        }
-
-        $dataManager = new DataManagerService;
-
-        foreach ($users as $user) {
-            $result = $dataManager->ingestGclidConversion(
-                operatingAccountId: (string) $operatingAccountId,
-                conversionActionId: (string) $conversionActionId,
-                gclid: $user->gclid,
-                value: $value,
-                currency: $currency,
-                occurredAt: now(),
-                email: $user->email ?? null,
-            );
-
-            SpectraConversionEvent::record($this->event, $user->id, [
-                'gclid' => $user->gclid,
-                'mode' => 'server',
-                'uploaded' => $result['success'],
-            ]);
-
-            if ($result['success']) {
-                Log::info("RecordSiteConversion: uploaded '{$this->event}' for gclid {$user->gclid} (request ".($result['requestId'] ?? 'n/a').')');
-            } else {
-                Log::warning("RecordSiteConversion: upload failed for '{$this->event}': ".($result['error'] ?? 'unknown'), [
-                    'gclid' => $user->gclid,
-                    'customer' => $this->customer->id,
-                ]);
+        foreach ($this->customer->users as $user) {
+            // The child job returns early without an identifier anyway; this
+            // only keeps a no-op job off the queue for every teammate on the
+            // account who did not arrive from an ad.
+            if (! $user->hasGoogleClickId()) {
+                continue;
             }
+
+            RecordSiteGoogleConversion::dispatch($user, $this->event, $occurredAt);
         }
     }
 }

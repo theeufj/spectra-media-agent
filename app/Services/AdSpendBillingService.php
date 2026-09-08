@@ -402,7 +402,17 @@ class AdSpendBillingService
         // gets skewed by partial days and campaign ramp-up periods.
         $dailyBudget = $customer->campaigns()
             ->where('status', 'active')
-            ->whereNotIn('primary_status', ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED'])
+            ->where(function ($q) {
+                // whereNotIn alone is NULL-not-true, and primary_status is
+                // nullable: MonitorCampaignStatus is its only writer and it
+                // returns early when the platform lookup yields nothing. A
+                // campaign the monitor has not reached yet dropped out of the
+                // sum entirely, so an account whose campaigns are all NULL
+                // summed to 0 and fell through to the rolling average the
+                // comment above says must not be used.
+                $q->whereNull('primary_status')
+                    ->orWhereNotIn('primary_status', ['PAUSED', 'REMOVED', 'NOT_ELIGIBLE', 'ENDED']);
+            })
             ->sum('daily_budget');
 
         // Fall back to rolling average if no budgets are set

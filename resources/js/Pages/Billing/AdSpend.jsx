@@ -126,14 +126,11 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
     const handleRetryPayment = async () => {
         setRetrying(true);
         try {
-            const response = await fetch('/billing/ad-spend/retry', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                },
-            });
-            const result = await response.json();
+            // route() rather than a literal: the URI is /billing/ad-spend/retry-payment,
+            // and the hand-written '/billing/ad-spend/retry' 404'd — which the old
+            // response.json() then turned into a generic "an error occurred", so
+            // every retry on this page looked like a declined card.
+            const result = await fetchJson(route('billing.ad-spend.retry'), { method: 'POST' });
             if (result.success) {
                 router.reload();
             } else {
@@ -141,7 +138,9 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                 setShowPaymentForm(true);
             }
         } catch (err) {
-            toast.error('An error occurred. Please try again.');
+            // A declined retry comes back 400/404 with the reason in the body;
+            // HttpError keeps it rather than losing it to a JSON parse failure.
+            toast.error(err?.body?.error || 'An error occurred. Please try again.');
         }
         setRetrying(false);
     };
@@ -150,8 +149,15 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
             currency: 'USD',
-        }).format(amount);
+        }).format(Number(amount) || 0);
     };
+
+    // The stored sign is not consistent across types — deduct() writes a
+    // negative amount, the legacy 'debit' rows are positive, and an adjustment
+    // is signed either way (see AdSpendTransaction::DEBIT_TYPES). Read the
+    // direction once, here, rather than guessing it from the type at each site.
+    const isOutgoing = (transaction) =>
+        transaction.type === 'debit' || Number(transaction.amount) < 0;
 
     const formatDate = (dateString) => {
         return new Date(dateString).toLocaleDateString('en-US', {
@@ -176,17 +182,15 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
         }
     };
 
-    const getTransactionTypeColor = (type) => {
-        switch (type) {
-            case 'charge':
-                return 'text-green-600';
-            case 'deduction':
-                return 'text-red-600';
-            case 'refund':
-                return 'text-blue-600';
-            default:
-                return 'text-gray-600';
+    // The types are credit / deduction / refund / adjustment and the legacy
+    // debit. There is no 'charge', so branching on it left every credit and
+    // every adjustment the same grey as an unknown row.
+    const getTransactionTypeColor = (transaction) => {
+        if (transaction.type === 'refund') {
+            return 'text-blue-600';
         }
+
+        return isOutgoing(transaction) ? 'text-red-600' : 'text-green-600';
     };
 
     return (
@@ -387,15 +391,17 @@ const AdSpend = ({ auth, credit, transactions, paymentFailed }) => {
                                                         {formatDate(transaction.created_at)}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className={`text-sm font-medium capitalize ${getTransactionTypeColor(transaction.type)}`}>
+                                                        <span className={`text-sm font-medium capitalize ${getTransactionTypeColor(transaction)}`}>
                                                             {transaction.type}
                                                         </span>
                                                     </td>
                                                     <td className="px-6 py-4 text-sm text-gray-900">
                                                         {transaction.description}
                                                     </td>
-                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${getTransactionTypeColor(transaction.type)}`}>
-                                                        {transaction.type === 'deduction' ? '-' : '+'}{formatCurrency(transaction.amount)}
+                                                    <td className={`px-6 py-4 whitespace-nowrap text-sm text-right font-medium ${getTransactionTypeColor(transaction)}`}>
+                                                        {/* formatCurrency already renders the minus, so prefixing our own
+                                                            printed a deduction as "--$50.00". Sign here, magnitude there. */}
+                                                        {isOutgoing(transaction) ? '-' : '+'}{formatCurrency(Math.abs(Number(transaction.amount)))}
                                                     </td>
                                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900">
                                                         {formatCurrency(transaction.balance_after)}

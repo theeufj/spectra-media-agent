@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\Customer;
 use App\Models\KnowledgeBase;
 use App\Models\Proposal;
+use App\Models\Recommendation;
 use App\Models\Scopes\CustomerScope;
 use App\Models\Strategy;
 use App\Models\SupportTicket;
@@ -21,6 +22,7 @@ use App\Policies\CustomerPolicy;
 use App\Policies\GenericCustomerPolicy;
 use App\Policies\KnowledgeBasePolicy;
 use App\Policies\ProposalPolicy;
+use App\Policies\RecommendationPolicy;
 use App\Policies\StrategyPolicy;
 use App\Policies\SupportTicketPolicy;
 use Illuminate\Auth\Events\Login;
@@ -80,6 +82,15 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        // One per request. getPlatformComparison() and getFunnelAnalysis() are
+        // both derived from getSummary(), and the dashboard renders both — so
+        // the four platform aggregates ran twice for one page. The service
+        // memoises per instance, which does nothing while the container hands
+        // out a fresh one to every constructor that asks. Scoped rather than
+        // singleton so the memo cannot outlive the request and show an admin
+        // another customer's totals.
+        $this->app->scoped(\App\Services\Reporting\CrossPlatformAnalyticsService::class);
+
         // Routes agents to live or synthetic platform services per customer, so
         // the real agents can be run against sandbox data without touching an
         // ad account. Singleton so a sandbox run can retrieve the same recorder
@@ -182,6 +193,10 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Customer::class, CustomerPolicy::class);
         Gate::policy(AdSpendCredit::class, AdSpendCreditPolicy::class);
         Gate::policy(Proposal::class, ProposalPolicy::class);
+        // Recommendation has no customer_id, so it is invisible to both the
+        // tenant scope and AuthorizationCoverageTest's model sweep. It still
+        // belongs to a tenant, through its campaign — register it by hand.
+        Gate::policy(Recommendation::class, RecommendationPolicy::class);
         Gate::policy(BrandGuideline::class, BrandGuidelinePolicy::class);
         Gate::policy(KnowledgeBase::class, KnowledgeBasePolicy::class);
         Gate::policy(SupportTicket::class, SupportTicketPolicy::class);

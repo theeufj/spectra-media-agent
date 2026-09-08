@@ -41,11 +41,14 @@ class FacebookApiOAuthController extends Controller
 
     public function redirect()
     {
+        // Stateful on purpose: ->stateless() drops the `state` round-trip, and
+        // this is a session-backed GET callback with no CSRF token of its own.
+        // Without state, a victim following an attacker's callback link binds
+        // the attacker's Facebook account to their Connection row.
         return Socialite::driver('facebook')
             ->redirectUrl(route('facebook-api.callback'))
             ->setScopes(self::SCOPES)  // setScopes replaces defaults (avoids Socialite adding email)
             ->with(['config_id' => config('services.facebook.config_id')])
-            ->stateless()
             ->redirect();
     }
 
@@ -53,7 +56,6 @@ class FacebookApiOAuthController extends Controller
     {
         $fbUser = Socialite::driver('facebook')
             ->redirectUrl(route('facebook-api.callback'))
-            ->stateless()
             ->user();
 
         // Exchange short-lived for long-lived token (~60 days)

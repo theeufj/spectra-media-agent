@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 /**
  * AdSpendCredit
@@ -67,6 +68,25 @@ class AdSpendCredit extends Model
     const PAYMENT_FAILED = 'failed';
 
     const PAYMENT_PAUSED = 'paused';
+
+    /**
+     * Every platform performance table ad spend is billed from, by display label.
+     *
+     * One list, because the copies disagreed. AdSpendBillingService::getActualAdSpend()
+     * and ReconcileAdSpend::platformSpend() both cover all four platforms, while
+     * the admin reconciliation tool summed only Google and Facebook against an
+     * account-wide debit total — so a Microsoft or LinkedIn customer's
+     * "unreconciled" figure went negative and the tool reported "already
+     * reconciled" while genuinely unbilled Google spend sat there.
+     *
+     * @var array<string, class-string<Model>>
+     */
+    const PLATFORM_SPEND_MODELS = [
+        'Google Ads' => GoogleAdsPerformanceData::class,
+        'Facebook Ads' => FacebookAdsPerformanceData::class,
+        'Microsoft Ads' => MicrosoftAdsPerformanceData::class,
+        'LinkedIn Ads' => LinkedInAdsPerformanceData::class,
+    ];
 
     /**
      * The customer this credit belongs to.
@@ -183,23 +203,60 @@ class AdSpendCredit extends Model
 
     /**
      * Add credit to the account.
+     *
+     * Keyed on the Stripe charge whenever there is one. Stripe replays the
+     * original response for a repeated idempotency key rather than charging
+     * again, so a retried top-up comes back as a *success* carrying the same
+     * charge id — and this method used to write a second ledger row and a
+     * second balance increase for money that was only collected once. A $100
+     * top-up retried inside the minute became $200 of balance against $100
+     * taken, at Spectra's expense, and chargeCustomer() cannot tell the two
+     * apart because Stripe does not flag the replay.
+     *
+     * firstOrCreate under the row lock, plus the partial unique index on
+     * (stripe_charge_id) for credit rows, is the guard: whoever writes the
+     * ledger row moves the balance, and the replay finds it already there.
      */
     public function addCredit(float $amount, ?string $description = null, ?string $stripeChargeId = null): void
     {
         DB::transaction(function () use ($amount, $description, $stripeChargeId) {
             $locked = static::whereKey($this->getKey())->lockForUpdate()->first() ?? $this;
 
-            $locked->current_balance += $amount;
+            $newBalance = round((float) $locked->current_balance + $amount, 2);
+
+            $entry = [
+                'amount' => $amount,
+                'balance_after' => $newBalance,
+                'description' => $description ?? 'Credit added',
+            ];
+
+            if ($stripeChargeId) {
+                $transaction = $locked->transactions()->firstOrCreate(
+                    ['stripe_charge_id' => $stripeChargeId, 'type' => AdSpendTransaction::TYPE_CREDIT],
+                    $entry
+                );
+
+                if (! $transaction->wasRecentlyCreated) {
+                    // Already credited. Leave the balance alone — the money was
+                    // only collected once.
+                    Log::warning('AdSpendCredit: replayed Stripe charge not credited again', [
+                        'ad_spend_credit_id' => $locked->getKey(),
+                        'stripe_charge_id' => $stripeChargeId,
+                        'amount' => $amount,
+                    ]);
+
+                    return;
+                }
+            } else {
+                $locked->transactions()->create($entry + [
+                    'type' => AdSpendTransaction::TYPE_CREDIT,
+                    'stripe_charge_id' => null,
+                ]);
+            }
+
+            $locked->current_balance = $newBalance;
             $locked->updateBalanceStatus();
             $locked->save();
-
-            $locked->transactions()->create([
-                'type' => AdSpendTransaction::TYPE_CREDIT,
-                'amount' => $amount,
-                'balance_after' => $locked->current_balance,
-                'description' => $description ?? 'Credit added',
-                'stripe_charge_id' => $stripeChargeId,
-            ]);
 
             $this->current_balance = $locked->current_balance;
             $this->status = $locked->status;

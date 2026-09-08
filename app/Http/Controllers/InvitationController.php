@@ -36,12 +36,57 @@ class InvitationController extends Controller
         return redirect()->back()->with('error', 'You do not have permission to invite users to this customer.');
     }
 
+    /**
+     * Has this invitation aged out?
+     *
+     * Seven days, in one place. A token grants access to somebody else's
+     * tenant, so an unexpiring one is a standing key to their account.
+     */
+    public static function hasExpired(Invitation $invitation): bool
+    {
+        return $invitation->created_at !== null
+            && $invitation->created_at->lt(now()->subDays(7));
+    }
+
+    /**
+     * Consume an invitation on behalf of a user, if it is theirs to consume.
+     *
+     * Two rules, applied here rather than at each call site: the invitation is
+     * still inside its window, and it was addressed to this user's own email.
+     * Registration used to apply neither — it looked the token up and attached
+     * the pivot — so a leaked or stale link joined whoever held it to the
+     * tenant, under any address, indefinitely.
+     *
+     * Returns false without granting anything when the invitation is not
+     * redeemable. An expired one is deleted on sight so the link goes dead.
+     */
+    public static function redeem(Invitation $invitation, User $user): bool
+    {
+        if (self::hasExpired($invitation)) {
+            $invitation->delete();
+
+            return false;
+        }
+
+        if (strtolower($invitation->email) !== strtolower($user->email)) {
+            return false;
+        }
+
+        $user->customers()->syncWithoutDetaching([
+            $invitation->customer_id => ['role' => $invitation->role],
+        ]);
+        $invitation->delete();
+
+        return true;
+    }
+
     public function accept($token)
     {
         $invitation = Invitation::where('token', $token)->firstOrFail();
 
-        // Invitations expire after 7 days so a leaked link can't be redeemed indefinitely.
-        if ($invitation->created_at && $invitation->created_at->lt(now()->subDays(7))) {
+        // Checked here as well as inside redeem() so an expired link gets the
+        // 410 that explains itself, rather than a bare refusal.
+        if (self::hasExpired($invitation)) {
             $invitation->delete();
             abort(410, 'This invitation has expired. Please request a new one.');
         }
@@ -61,10 +106,9 @@ class InvitationController extends Controller
                 return redirect()->guest(route('login'));
             }
 
-            $existingUser->customers()->syncWithoutDetaching([
-                $invitation->customer_id => ['role' => $invitation->role],
-            ]);
-            $invitation->delete();
+            if (! self::redeem($invitation, $existingUser)) {
+                abort(403, 'This invitation can no longer be redeemed.');
+            }
 
             return redirect()->route('dashboard')->with('success', 'Invitation accepted.');
         }

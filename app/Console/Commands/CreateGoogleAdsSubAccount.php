@@ -4,7 +4,6 @@ namespace App\Console\Commands;
 
 use App\Models\Customer;
 use App\Services\GoogleAds\CreateAndLinkManagedAccount;
-use App\Services\GoogleAds\CreateCustomerClientLink;
 use App\Services\GoogleAds\CreateManagedAccount;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
@@ -58,8 +57,7 @@ class CreateGoogleAdsSubAccount extends Command
         try {
             $createService = new CreateAndLinkManagedAccount(
                 $customer,
-                app(CreateManagedAccount::class),
-                app(CreateCustomerClientLink::class)
+                app(CreateManagedAccount::class)
             );
 
             $result = $createService(

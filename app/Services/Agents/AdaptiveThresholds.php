@@ -52,9 +52,11 @@ class AdaptiveThresholds
      */
     protected static function computeBaselines(int $customerId): array
     {
-        $stats = CampaignHourlyPerformance::where('customer_id', $customerId)
+        $rows = CampaignHourlyPerformance::where('customer_id', $customerId)
             ->where('date', '>=', now()->subDays(60))
-            ->where('impressions', '>', 0)
+            ->where('impressions', '>', 0);
+
+        $stats = (clone $rows)
             ->selectRaw('
                 AVG(ctr) as avg_ctr,
                 STDDEV(ctr) as stddev_ctr,
@@ -83,17 +85,27 @@ class AdaptiveThresholds
             $computed['min_roas_threshold'] = round($stats->avg_roas * 0.8, 2);
         }
 
-        // Max spend before no-conversion pause = 2x avg hourly spend * 24 / expected conversions
-        // Simplified: scale the $50 default proportionally to their avg daily spend
+        // A row is one hour's activity, so a day is the sum of that day's rows
+        // divided by the days they span — never the hourly average × 24. Nothing
+        // guarantees 24 rows a day: a campaign that only serves business hours
+        // has ~8, and a skipped run drops one. Multiplying by 24 inflated every
+        // volume threshold on those accounts, and min_impressions_for_decision
+        // feeds CreativeIntelligenceAgent — an inflated bar means no creative is
+        // ever judged, rotated or paused.
+        $daysWithData = max(1, (clone $rows)->distinct()->count('date'));
+
+        // Max spend before no-conversion pause: scale the $50 default
+        // proportionally to their average daily spend. AVG(spend) × row count is
+        // the window's total spend.
         if ($stats->avg_hourly_spend > 0) {
-            $avgDailySpend = $stats->avg_hourly_spend * 24;
+            $avgDailySpend = $stats->avg_hourly_spend * $stats->data_points / $daysWithData;
             // Cap at 10% of daily spend or $50, whichever is higher
             $computed['max_spend_no_conversion'] = round(max(50, $avgDailySpend * 0.1), 2);
         }
 
         // Scale min impressions based on their traffic volume
         if ($stats->total_impressions > 0) {
-            $avgDailyImpressions = $stats->total_impressions / max(1, $stats->data_points) * 24;
+            $avgDailyImpressions = $stats->total_impressions / $daysWithData;
             // Decision threshold = ~10% of their daily impressions, minimum 500
             $computed['min_impressions_for_decision'] = (int) max(500, min(5000, $avgDailyImpressions * 0.1));
             $computed['auto_pause_min_impressions'] = $computed['min_impressions_for_decision'] * 2;

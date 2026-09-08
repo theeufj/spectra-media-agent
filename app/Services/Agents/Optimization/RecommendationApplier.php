@@ -37,6 +37,16 @@ use Laravel\Pennant\Feature;
  */
 class RecommendationApplier
 {
+    /**
+     * How far a single auto-applied BUDGET recommendation may move the campaign's
+     * daily budget. The model's number is not validated by anything upstream, and
+     * a hallucinated 500 on a $50/day campaign would drain a week of prepaid ad
+     * credit in an afternoon — a human reviews anything outside this band.
+     */
+    private const MIN_BUDGET_FACTOR = 0.5;
+
+    private const MAX_BUDGET_FACTOR = 2.0;
+
     public function apply(Campaign $campaign, array $recommendation): array
     {
         $customer = $campaign->customer;
@@ -49,17 +59,34 @@ class RecommendationApplier
             ];
         }
 
-        $type = $recommendation['type'] ?? null;
+        // Canonicalise through the scorer's alias table. The scorer already
+        // decided this was auto-appliable using those aliases; matching on the raw
+        // string here meant BUDGET_ADJUSTMENT fell to the default arm and was
+        // recorded 'failed'.
+        $type = RecommendationScorer::canonicalType($recommendation['type'] ?? '');
 
-        if (! $type) {
+        if ($type === '') {
             return ['applied' => false, 'message' => 'Recommendation type is missing', 'recommendation' => $recommendation];
+        }
+
+        // Second line of defence behind the scorer's own gate: a recommendation
+        // the model under-specified must not be attempted and filed as an error.
+        $blockers = RecommendationScorer::autoApplyBlockers($recommendation);
+
+        if ($blockers !== []) {
+            return [
+                'applied' => false,
+                'requires_review' => true,
+                'message' => 'Recommendation is missing required fields: '.implode(', ', $blockers),
+                'recommendation' => $recommendation,
+            ];
         }
 
         try {
             return match ($type) {
                 'BUDGET' => $this->applyBudget($campaign, $recommendation),
                 'KEYWORDS' => $this->applyKeyword($campaign, $recommendation),
-                'NEGATIVE_KEYWORDS', 'NEGATIVE_KEYWORD_ADDITION', 'SEARCH_TERM_REVIEW' => $this->applyNegativeKeywords($campaign, $recommendation),
+                'NEGATIVE_KEYWORDS' => $this->applyNegativeKeywords($campaign, $recommendation),
                 'BIDDING' => $this->applyBidding($campaign, $recommendation),
                 'TARGETING' => $this->applyTargeting($campaign, $recommendation),
                 'AD_EXTENSIONS' => $this->applyExtension($campaign, $recommendation),
@@ -80,51 +107,85 @@ class RecommendationApplier
         }
     }
 
+    /**
+     * Change the campaign's daily budget.
+     *
+     * The local row is written only after the platform has accepted the mutate.
+     * Persisting first and discarding the API's bool reported "Budget adjusted
+     * from 50 to 80" for a change the platform never received — and every later
+     * hourly push then anchored its multiplier on that phantom number.
+     */
     private function applyBudget(Campaign $campaign, array $rec): array
     {
-        $newBudget = $rec['suggested_value'] ?? null;
+        $requested = $rec['suggested_value'] ?? null;
 
-        if (! $newBudget || $newBudget <= 0) {
+        if (! is_numeric($requested) || (float) $requested <= 0) {
             return ['applied' => false, 'message' => 'Invalid budget value', 'recommendation' => $rec];
         }
 
-        $oldBudget = $campaign->daily_budget;
-        $campaign->daily_budget = $newBudget;
-        $campaign->save();
+        $oldBudget = (float) ($campaign->daily_budget ?? 0);
+        $newBudget = round((float) $requested, 2);
+
+        if ($oldBudget > 0) {
+            $newBudget = round(max(
+                $oldBudget * self::MIN_BUDGET_FACTOR,
+                min($oldBudget * self::MAX_BUDGET_FACTOR, $newBudget)
+            ), 2);
+        }
 
         $customer = $campaign->customer;
+        $pushed = null; // null = nothing deployed yet, so there is nothing to push
 
         if ($campaign->google_ads_campaign_id && $customer) {
+            $resource = $campaign->googleAdsResourceName();
             try {
-                $customerId = $customer->cleanGoogleCustomerId();
-                $resource = $campaign->googleAdsResourceName();
-                (new UpdateCampaignBudget($customer))($customerId, $resource, (int) ($newBudget * 1_000_000));
+                $pushed = $resource !== null && (new UpdateCampaignBudget($customer))(
+                    $customer->cleanGoogleCustomerId(),
+                    $resource,
+                    (int) round($newBudget * 1_000_000)
+                );
             } catch (\Throwable $e) {
                 report($e);
                 Log::warning('RecommendationApplier: Google budget API update failed: '.$e->getMessage());
+                $pushed = false;
             }
         } elseif ($campaign->facebook_ads_campaign_id && $customer) {
             try {
-                (new FacebookCampaignService($customer))->updateCampaign($campaign->facebook_ads_campaign_id, [
-                    'daily_budget' => (int) ($newBudget * 100), // Facebook uses cents
+                $pushed = (new FacebookCampaignService($customer))->updateCampaign($campaign->facebook_ads_campaign_id, [
+                    'daily_budget' => (int) round($newBudget * 100), // Facebook uses cents
                 ]);
             } catch (\Throwable $e) {
                 report($e);
                 Log::warning('RecommendationApplier: Facebook budget API update failed: '.$e->getMessage());
+                $pushed = false;
             }
         } elseif ($campaign->microsoft_ads_campaign_id && $customer) {
             try {
-                (new MicrosoftCampaignService($customer))->updateBudget(
+                $pushed = (new MicrosoftCampaignService($customer))->updateBudget(
                     (string) $campaign->microsoft_ads_campaign_id,
-                    (float) $newBudget
+                    $newBudget
                 );
             } catch (\Throwable $e) {
                 report($e);
                 Log::warning('RecommendationApplier: Microsoft budget API update failed: '.$e->getMessage());
+                $pushed = false;
             }
         }
 
-        return ['applied' => true, 'message' => "Budget adjusted from {$oldBudget} to {$newBudget}", 'recommendation' => $rec];
+        if ($pushed === false) {
+            return ['applied' => false, 'message' => "Platform rejected the budget change to {$newBudget}", 'recommendation' => $rec];
+        }
+
+        $campaign->daily_budget = $newBudget;
+        $campaign->save();
+
+        $message = "Budget adjusted from {$oldBudget} to {$newBudget}";
+
+        if ((float) $requested !== $newBudget) {
+            $message .= " (requested {$requested}, clamped to the allowed range)";
+        }
+
+        return ['applied' => true, 'message' => $message, 'recommendation' => $rec];
     }
 
     /**
@@ -324,7 +385,9 @@ class RecommendationApplier
     {
         $customer = $campaign->customer;
         $subType = $rec['sub_type'] ?? null;
-        $confidence = $rec['confidence'] ?? 0;
+        // The scorer writes confidence_score; reading 'confidence' meant this
+        // gate could never pass and every bidding auto-apply was recorded failed.
+        $confidence = $rec['confidence_score'] ?? $rec['confidence'] ?? 0;
 
         if ($subType === 'keyword_cpc' && $confidence >= 0.95 && $campaign->google_ads_campaign_id && $customer) {
             $kwResource = $rec['keyword_resource'] ?? null;

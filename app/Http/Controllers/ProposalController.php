@@ -48,12 +48,26 @@ class ProposalController extends Controller
             'platforms.*' => ['required', 'string', Rule::in(['Google Ads', 'Facebook & Instagram', 'Microsoft Ads', 'LinkedIn Ads', 'TikTok Ads'])],
         ]);
 
+        // Not session('active_customer_id') alone: that is null before a
+        // customer is selected, which orphans the proposal from the tenant that
+        // created it. Proposal is tenant-scoped, and a NULL customer_id matches
+        // no tenant's IN — the row would be unreadable to its own author the
+        // moment the redirect below landed, and unreachable forever after. The
+        // proposals routes carry no ensureUserHasCustomer, so a subscriber who
+        // has not onboarded yet reaches this. Refuse before anything is written
+        // or queued.
+        $customer = $this->getActiveCustomer($request);
+
+        if (! $customer) {
+            return back()->with('flash', [
+                'type' => 'error',
+                'message' => 'No active customer selected. Set up a customer account before generating a proposal.',
+            ]);
+        }
+
         $proposal = Proposal::create([
             'user_id' => $request->user()->id,
-            // Not session('active_customer_id') alone: that is null before a
-            // customer is selected, which orphans the proposal from the tenant
-            // that created it.
-            'customer_id' => $this->getActiveCustomer($request)?->id,
+            'customer_id' => $customer->id,
             'client_name' => $validated['client_name'],
             'industry' => $validated['industry'],
             'website_url' => $validated['website_url'],

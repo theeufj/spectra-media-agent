@@ -55,9 +55,14 @@ class CustomerScope implements Scope
     }
 
     /**
-     * Memoised pivot lookups, keyed by user id.
+     * Memoised answers, keyed by user id.
      *
-     * @var array<int|string, list<int>>
+     * `false` is the admin sentinel — "this user is not scoped at all" — and it
+     * is a value rather than an absence so that `??=` short-circuits on it. It
+     * cannot be null: `??=` treats null as "not resolved yet" and would redo
+     * the work every time.
+     *
+     * @var array<int|string, list<int>|false>
      */
     private static array $cache = [];
 
@@ -66,8 +71,14 @@ class CustomerScope implements Scope
      * not apply at all (no authenticated user, or an admin).
      *
      * Resolved once per user per request: this runs on every query against
-     * every customer-owned model, and the pivot lookup is the same answer each
-     * time.
+     * every customer-owned model — 31 of them carry the trait, and a dashboard
+     * render issues around fifteen such queries.
+     *
+     * The admin check is inside the memo, not in front of it. `canAccessAdmin()`
+     * is two `hasRole()` calls, each an `exists()` on a relation *builder*, so
+     * it re-queries even when `roles` is already loaded — and evaluating it
+     * before the memoised pluck charged every plain user two extra round trips
+     * per scoped query rather than two per request.
      *
      * @return list<int>|null
      */
@@ -79,22 +90,27 @@ class CustomerScope implements Scope
 
         $user = Auth::user();
 
-        if (! $user instanceof User || $user->canAccessAdmin()) {
+        if (! $user instanceof User) {
             return null;
         }
 
-        return self::$cache[$user->getKey()] ??= $user->customers()
-            ->pluck('customers.id')
-            ->map(fn ($id) => (int) $id)
-            ->all();
+        $visible = self::$cache[$user->getKey()] ??= $user->canAccessAdmin()
+            ? false
+            : $user->customers()
+                ->pluck('customers.id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+        return $visible === false ? null : $visible;
     }
 
     /**
-     * Forget the memoised pivot lookups.
+     * Forget the memoised answers.
      *
-     * Needed between tests, and after a user's customer list changes within a
-     * single request — accepting an invitation or provisioning a first customer
-     * would otherwise leave the user scoped to the list they had on arrival.
+     * Needed between tests, and after a user's customer list or roles change
+     * within a single request — accepting an invitation or provisioning a first
+     * customer would otherwise leave the user scoped to the list they had on
+     * arrival.
      */
     public static function flush(): void
     {

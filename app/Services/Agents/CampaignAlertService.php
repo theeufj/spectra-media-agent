@@ -16,10 +16,16 @@ use Illuminate\Support\Facades\Log;
  * Called from HourlyBudgetOptimization, AutomatedCampaignMaintenance, or standalone.
  *
  * Spend data design note:
- * The campaign_hourly_performance table stores CUMULATIVE daily spend snapshots —
- * each row contains "total spend from midnight to this hour", not just that hour's
- * spend. Callers must use MAX(spend) per day (the latest snapshot) to get the
- * actual daily total, never SUM(spend) across rows.
+ * Each campaign_hourly_performance row is ONE HOUR's spend, so a day's total is
+ * SUM(spend) across its rows.
+ *
+ * It used to be a cumulative day-to-date snapshot, and this class read it with
+ * MAX. HourlyBudgetOptimization now subtracts the hours already recorded before
+ * writing, because averaging a cumulative series and multiplying by 24 overstated
+ * daily volume by roughly an order of magnitude — which is what kept
+ * under-performing creatives above the rotation threshold. Left on MAX, this
+ * class would have read a single hour as the whole day and quietly stopped
+ * firing budget-exhaustion and spend-anomaly alerts.
  */
 class CampaignAlertService
 {
@@ -141,12 +147,12 @@ class CampaignAlertService
      */
     protected function checkSpendAnomaly(Campaign $campaign): array
     {
-        // 7-day average: for each past day, take the MAX cumulative snapshot (= actual day total),
-        // then average across days. This avoids summing cumulative rows which inflates the figure.
+        // 7-day average: sum each past day's hourly rows for that day's total, then
+        // average across days.
         $history = CampaignHourlyPerformance::where('campaign_id', $campaign->id)
             ->where('date', '>=', now()->subDays(7)->toDateString())
             ->where('date', '<', now()->toDateString())
-            ->selectRaw('date, MAX(spend) as daily_spend')
+            ->selectRaw('date, SUM(spend) as daily_spend')
             ->groupBy('date')
             ->get();
 
@@ -215,15 +221,13 @@ class CampaignAlertService
     /**
      * Get today's actual spend for a campaign.
      *
-     * Each hourly row is a CUMULATIVE snapshot ("spend from midnight to this hour"),
-     * so MAX gives the most recent snapshot = actual spend so far. SUM would count
-     * each snapshot repeatedly and inflate the figure by the number of hours elapsed.
+     * Each hourly row is one hour's spend, so the day so far is their sum.
      */
     protected function getTodaySpend(Campaign $campaign): float
     {
         return (float) CampaignHourlyPerformance::where('campaign_id', $campaign->id)
             ->where('date', now()->toDateString())
-            ->max('spend') ?? 0;
+            ->sum('spend');
     }
 
     /**

@@ -263,7 +263,7 @@ class ABTestingAgent
         try {
             $customerId = $customer->google_ads_customer_id;
             $campaignResourceName = $campaign->googleAdsResourceName();
-            $assetService = new GetAdPerformanceByAsset($customer, true);
+            $assetService = new GetAdPerformanceByAsset($customer);
 
             $fieldKey = match ($test->test_type) {
                 ABTest::TYPE_HEADLINE, ABTest::TYPE_DESCRIPTION => 'text',

@@ -21,23 +21,34 @@ class ResendInboundWebhookController extends Controller
     {
         $secret = config('resend.webhook.secret');
 
-        if ($secret) {
-            try {
-                $headers = [];
-                foreach ($request->headers->all() as $key => $value) {
-                    $headers[$key] = $value[0];
-                }
+        // Fail closed. This route is unauthenticated by necessity, and the
+        // signature is the only thing standing between a stranger and
+        // SequenceReplyRecorder — which writes a reply attributed to a real
+        // lead and mails every admin the body it was handed. Verifying only
+        // "if a secret happens to be set" made that forgeable on any box where
+        // RESEND_WEBHOOK_SECRET is missing, and it is commented out in
+        // .env.example, so missing is the default state rather than an edge.
+        if (! $secret) {
+            Log::error('Resend inbound webhook refused: RESEND_WEBHOOK_SECRET is not configured.');
 
-                WebhookSignature::verify(
-                    $request->getContent(),
-                    $headers,
-                    $secret
-                );
-            } catch (WebhookSignatureVerificationException $e) {
-                Log::warning('Resend inbound webhook signature failed: '.$e->getMessage());
+            return response('Unauthorized', 401);
+        }
 
-                return response('Unauthorized', 401);
+        try {
+            $headers = [];
+            foreach ($request->headers->all() as $key => $value) {
+                $headers[$key] = $value[0];
             }
+
+            WebhookSignature::verify(
+                $request->getContent(),
+                $headers,
+                $secret
+            );
+        } catch (WebhookSignatureVerificationException $e) {
+            Log::warning('Resend inbound webhook signature failed: '.$e->getMessage());
+
+            return response('Unauthorized', 401);
         }
 
         $payload = json_decode($request->getContent(), true);

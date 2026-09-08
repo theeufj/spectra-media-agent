@@ -11,8 +11,7 @@ use Pgvector\Laravel\Vector; // Import the Vector class
 class KnowledgeBase extends Model
 {
     use BelongsToCustomer;
-
-    // use HasFactory; // We don't need factories for this model yet.
+    use HasFactory;
     use HasNeighbors; // Corrected trait name
 
     /**

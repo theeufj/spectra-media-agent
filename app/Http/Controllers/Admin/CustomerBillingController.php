@@ -6,8 +6,6 @@ use App\Http\Controllers\Controller;
 use App\Models\AdSpendCredit;
 use App\Models\AdSpendTransaction;
 use App\Models\Customer;
-use App\Models\FacebookAdsPerformanceData;
-use App\Models\GoogleAdsPerformanceData;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
@@ -19,6 +17,14 @@ use Inertia\Inertia;
  */
 class CustomerBillingController extends Controller
 {
+    /**
+     * How many ledger rows the credit page renders.
+     *
+     * A daily deduction plus the occasional top-up means the ledger grows a
+     * row a day for the life of the account, and this page fetched all of them.
+     */
+    private const LEDGER_ROWS = 500;
+
     public function reconcileSpend(Customer $customer)
     {
         $credit = $customer->adSpendCredit;
@@ -89,15 +95,24 @@ class CustomerBillingController extends Controller
      * the debited total has to come from AdSpendTransaction::totalDebited()
      * rather than a raw SUM(). Subtracting a negative here is what turned
      * $723.70 of genuinely unbilled spend into a $3,369.90 charge.
+     *
+     * All four platforms, from the one shared list. This summed Google and
+     * Facebook only, against a debit total that is account-wide and a nightly
+     * deduction that bills all four — so for a Microsoft or LinkedIn customer
+     * the figure went negative and the button reported "already reconciled"
+     * while genuinely unbilled Google spend sat there.
      */
     private function unreconciledSpend(Customer $customer, AdSpendCredit $credit): float
     {
         $campaignIds = $customer->campaigns()->pluck('id');
 
-        $googleSpend = GoogleAdsPerformanceData::whereIn('campaign_id', $campaignIds)->sum('cost');
-        $facebookSpend = FacebookAdsPerformanceData::whereIn('campaign_id', $campaignIds)->sum('cost');
+        $totalActualSpend = 0.0;
 
-        $totalActualSpend = round((float) $googleSpend + (float) $facebookSpend, 2);
+        foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $model) {
+            $totalActualSpend += (float) $model::whereIn('campaign_id', $campaignIds)->sum('cost');
+        }
+
+        $totalActualSpend = round($totalActualSpend, 2);
         $totalDebited = AdSpendTransaction::totalDebited($credit->getKey());
 
         return round($totalActualSpend - $totalDebited, 2);
@@ -115,43 +130,57 @@ class CustomerBillingController extends Controller
 
         $campaignIds = $customer->campaigns()->pluck('id');
 
-        $transactions = $credit->transactions()
-            ->orderBy('created_at', 'asc')
+        // The most recent window rather than the whole account. This page had
+        // no bound at all, so it grew a row a day forever.
+        $transactionsTotal = $credit->transactions()->count();
+
+        $ledger = $credit->transactions()
+            ->orderBy('created_at', 'desc')
+            ->orderBy('id', 'desc')
+            ->limit(self::LEDGER_ROWS)
             ->get()
-            ->map(function ($tx) use ($campaignIds) {
-                $row = [
-                    'id' => $tx->id,
-                    'type' => $tx->type,
-                    'amount' => (float) $tx->amount,
-                    'balance_after' => (float) $tx->balance_after,
-                    'description' => $tx->description,
-                    'stripe_charge_id' => $tx->stripe_charge_id,
-                    'created_at' => $tx->created_at->toIso8601String(),
-                    'platform_breakdown' => null,
-                ];
+            ->reverse()
+            ->values();
 
-                if (in_array($tx->type, AdSpendTransaction::DEBIT_TYPES, true)) {
-                    // Deductions = daily billing for the previous day; adjustments = lump-sum reconciliation.
-                    // For deductions, scope to the specific date billed; for adjustments, show all-time totals.
-                    $isDeduction = $tx->type === AdSpendTransaction::TYPE_DEDUCTION;
-                    $billingDate = $tx->created_at->subDay()->toDateString();
+        [$dailySpend, $allTimeSpend] = $this->platformSpendForLedger($ledger, $campaignIds);
 
-                    $google = GoogleAdsPerformanceData::whereIn('campaign_id', $campaignIds)
-                        ->when($isDeduction, fn ($q) => $q->whereDate('date', $billingDate))
-                        ->sum('cost');
+        $transactions = $ledger->map(function ($tx) use ($dailySpend, $allTimeSpend) {
+            $row = [
+                'id' => $tx->id,
+                'type' => $tx->type,
+                'amount' => (float) $tx->amount,
+                'balance_after' => (float) $tx->balance_after,
+                'description' => $tx->description,
+                'stripe_charge_id' => $tx->stripe_charge_id,
+                'created_at' => $tx->created_at->toIso8601String(),
+                'platform_breakdown' => null,
+            ];
 
-                    $facebook = FacebookAdsPerformanceData::whereIn('campaign_id', $campaignIds)
-                        ->when($isDeduction, fn ($q) => $q->whereDate('date', $billingDate))
-                        ->sum('cost');
+            if (in_array($tx->type, AdSpendTransaction::DEBIT_TYPES, true)) {
+                // Deductions = daily billing for the previous day; adjustments = lump-sum reconciliation.
+                // For deductions, scope to the specific date billed; for adjustments, show all-time totals.
+                $isDeduction = $tx->type === AdSpendTransaction::TYPE_DEDUCTION;
+                $billingDate = $tx->created_at->copy()->subDay()->toDateString();
 
-                    $row['platform_breakdown'] = [
-                        ['platform' => 'Google Ads',   'spend' => round((float) $google, 2)],
-                        ['platform' => 'Facebook Ads', 'spend' => round((float) $facebook, 2)],
+                // Every platform the deduction actually billed for. Showing
+                // Google and Facebook alone left a Microsoft or LinkedIn
+                // customer's row reading $0.00 against a real charge.
+                $row['platform_breakdown'] = [];
+
+                foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $label => $model) {
+                    $spend = $isDeduction
+                        ? ($dailySpend[$label][$billingDate] ?? 0.0)
+                        : ($allTimeSpend[$label] ?? 0.0);
+
+                    $row['platform_breakdown'][] = [
+                        'platform' => $label,
+                        'spend' => round($spend, 2),
                     ];
                 }
+            }
 
-                return $row;
-            });
+            return $row;
+        });
 
         $totalCredits = $credit->transactions()
             ->whereIn('type', [AdSpendTransaction::TYPE_CREDIT, AdSpendTransaction::TYPE_REFUND])
@@ -169,6 +198,59 @@ class CustomerBillingController extends Controller
                 'total_debits' => $totalDebits,
             ],
             'transactions' => $transactions,
+            'transactionsTotal' => $transactionsTotal,
+            'transactionsShown' => $transactions->count(),
         ]);
+    }
+
+    /**
+     * Per-platform spend for a page of ledger rows, in two queries per platform.
+     *
+     * The breakdown used to be built inside the row map: a SUM per platform per
+     * debit row, so a year-old account issued well over a thousand aggregates
+     * to draw one table. The two shapes it needs are both fixed per page —
+     * deductions want the day they billed for, and adjustment/legacy-debit rows
+     * all want the same account-wide total — so each is fetched once here.
+     *
+     * @param  \Illuminate\Support\Collection<int, AdSpendTransaction>  $ledger
+     * @return array{0: array<string, array<string, float>>, 1: array<string, float>}
+     */
+    private function platformSpendForLedger($ledger, $campaignIds): array
+    {
+        $debits = $ledger->filter(
+            fn ($tx) => in_array($tx->type, AdSpendTransaction::DEBIT_TYPES, true)
+        );
+
+        $billingDates = $debits
+            ->filter(fn ($tx) => $tx->type === AdSpendTransaction::TYPE_DEDUCTION)
+            ->map(fn ($tx) => $tx->created_at->copy()->subDay()->toDateString())
+            ->unique()
+            ->values()
+            ->all();
+
+        $needsAllTime = $debits->contains(fn ($tx) => $tx->type !== AdSpendTransaction::TYPE_DEDUCTION);
+
+        $dailySpend = [];
+        $allTimeSpend = [];
+
+        foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $label => $model) {
+            if ($billingDates !== []) {
+                $dailySpend[$label] = $model::whereIn('campaign_id', $campaignIds)
+                    ->whereIn('date', $billingDates)
+                    ->selectRaw('date, SUM(cost) as spend')
+                    ->groupBy('date')
+                    ->get()
+                    ->mapWithKeys(fn ($row) => [
+                        $row->date->toDateString() => (float) $row->getAttribute('spend'),
+                    ])
+                    ->all();
+            }
+
+            if ($needsAllTime) {
+                $allTimeSpend[$label] = (float) $model::whereIn('campaign_id', $campaignIds)->sum('cost');
+            }
+        }
+
+        return [$dailySpend, $allTimeSpend];
     }
 }

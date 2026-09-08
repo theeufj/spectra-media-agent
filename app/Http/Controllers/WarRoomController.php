@@ -168,6 +168,11 @@ class WarRoomController extends Controller
 
     public function approveRecommendation(Request $request, Recommendation $recommendation)
     {
+        // The id comes off the URL and Recommendation carries no tenant scope
+        // (no customer_id column), so nothing before this filters by owner.
+        // RecommendationPolicy walks campaign->customer_id.
+        $this->authorize('update', $recommendation);
+
         $recommendation->update(['status' => 'approved']);
 
         return redirect()->back()->with('flash', [
@@ -178,6 +183,8 @@ class WarRoomController extends Controller
 
     public function rejectRecommendation(Request $request, Recommendation $recommendation)
     {
+        $this->authorize('update', $recommendation);
+
         $recommendation->update(['status' => 'rejected']);
 
         return redirect()->back()->with('flash', [

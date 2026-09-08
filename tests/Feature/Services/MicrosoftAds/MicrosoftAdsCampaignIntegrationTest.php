@@ -95,8 +95,11 @@ class MicrosoftAdsCampaignIntegrationTest extends TestCase
         $campaignId = $this->createTestCampaign();
 
         $service = new AdGroupService($this->customer);
-        $result = $service->createAdGroup([
-            'campaign_id' => $campaignId,
+        // createAdGroup(string $campaignId, array $params) — the campaign id is a
+        // separate first argument, not a key in the payload. Called with one
+        // argument this threw ArgumentCountError before the request was built, so
+        // this integration suite could not start.
+        $result = $service->createAdGroup($campaignId, [
             'name' => 'PHPUnit Ad Group '.now()->timestamp,
             'cpc_bid' => 1.50,
             'status' => 'Paused',

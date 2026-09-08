@@ -11,7 +11,8 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 
 /**
- * Upload the seven-day return conversion for customers whose signup click carried a gclid.
+ * Upload the seven-day return conversion for customers whose signup click
+ * carried a Google click identifier (gclid, or gbraid/wbraid under iOS ATT).
  *
  * Was a Schedule::call() closure. Those run inside the scheduler tick: the
  * query, the fan-out and any HTTP all happen synchronously in that one process,
@@ -34,7 +35,15 @@ class RecordSevenDayReturnConversions implements ShouldQueue
         // Unqualified, Postgres rejected the whole query as ambiguous and this
         // job failed every night — silently, until report() started reaching the
         // admin dashboard.
-        Customer::whereHas('users', fn ($q) => $q->whereNotNull('gclid')
+        Customer::whereHas('users', fn ($q) => $q
+            // gclid, gbraid or wbraid. Google substitutes the latter two
+            // wherever iOS ATT applies, so a gclid-only filter dropped every
+            // iOS signup from the sweep before the fan-out could see it.
+            // Qualified for the same reason created_at is: the belongsToMany
+            // joins customer_user, so an unqualified column is a coin toss.
+            ->where(fn ($q) => $q->whereNotNull('users.gclid')
+                ->orWhereNotNull('users.gbraid')
+                ->orWhereNotNull('users.wbraid'))
             ->whereBetween('users.created_at', [now()->subDays(7)->startOfDay(), now()->subDays(7)->endOfDay()])
         )->each(fn (Customer $c) => RecordSiteConversion::dispatch($c, 'seven_day_return'));
     }

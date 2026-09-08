@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\CreativeBoostPurchase;
 use App\Models\CreativeUsage;
+use App\Models\Customer;
 use App\Models\ImageCollateral;
 use App\Models\User;
 use App\Models\VideoCollateral;
@@ -20,13 +21,14 @@ class CreativeQuotaService
      * Keyed on user_id previously, so a customer with three users received
      * three separate quotas. Generation allowance is sold per account.
      *
-     * The customer is resolved from the user's current selection; user_id is
-     * still recorded so usage remains attributable to a person.
+     * The customer is resolved from the caller's explicit argument where there
+     * is one and from the user's current selection otherwise; user_id is still
+     * recorded so usage remains attributable to a person.
      */
-    public function getOrCreateUsage(User $user): CreativeUsage
+    public function getOrCreateUsage(User $user, ?Customer $customer = null): CreativeUsage
     {
         $period = $this->getCurrentPeriod();
-        $customerId = $this->customerIdFor($user);
+        $customerId = $this->customerIdFor($user, $customer);
 
         if (! $customerId) {
             // No customer yet (mid-onboarding). Fall back to per-user so the
@@ -61,20 +63,32 @@ class CreativeQuotaService
     /**
      * The customer this user's usage should count against.
      *
-     * The active customer lives in the session (set by CustomerController::switch),
-     * not on the user, so it is only available in a web request — a queued job
-     * has none. Ownership is re-checked rather than trusted: a stale session
-     * value must not let usage be booked against someone else's quota.
+     * Pass the customer explicitly wherever one is known. The active customer
+     * lives in the session (set by CustomerController::switch), not on the user,
+     * so it exists only inside a web request — the Stripe webhook and every
+     * queued job have none, and the last-resort lookup below then picks whatever
+     * row the database returns first. That is how a paid boost pack landed on an
+     * arbitrary customer of a multi-account user, with nothing recorded on
+     * creative_boost_purchases to correct it afterwards.
+     *
+     * Ownership is re-checked rather than trusted: neither a stale session value
+     * nor a caller's argument may book usage against someone else's quota.
      */
-    private function customerIdFor(User $user): ?int
+    private function customerIdFor(User $user, ?Customer $customer = null): ?int
     {
+        if ($customer?->getKey() && $user->customers()->where('customers.id', $customer->getKey())->exists()) {
+            return (int) $customer->getKey();
+        }
+
         $active = session('active_customer_id');
 
         if ($active && $user->customers()->where('customers.id', $active)->exists()) {
             return (int) $active;
         }
 
-        return $user->customers()->value('customers.id');
+        // Ordered, so a user with several customers at least resolves to the
+        // same one on every call instead of to whatever the planner returns.
+        return $user->customers()->orderBy('customers.id')->value('customers.id');
     }
 
     /**
@@ -82,7 +96,7 @@ class CreativeQuotaService
      *
      * @param  string  $type  'image', 'video', or 'refinement'
      */
-    public function canGenerate(User $user, string $type): bool
+    public function canGenerate(User $user, string $type, ?Customer $customer = null): bool
     {
         $limits = $this->getLimits($user);
 
@@ -107,7 +121,7 @@ class CreativeQuotaService
             return false;
         }
 
-        $usage = $this->getOrCreateUsage($user);
+        $usage = $this->getOrCreateUsage($user, $customer);
 
         $used = match ($type) {
             'image' => $usage->image_generations_used,
@@ -129,7 +143,7 @@ class CreativeQuotaService
      *
      * @param  string  $type  'image', 'video', or 'refinement'
      */
-    public function recordUsage(User $user, string $type, int $count = 1): void
+    public function recordUsage(User $user, string $type, int $count = 1, ?Customer $customer = null): void
     {
         $limits = $this->getLimits($user);
 
@@ -138,7 +152,7 @@ class CreativeQuotaService
             return;
         }
 
-        $usage = $this->getOrCreateUsage($user);
+        $usage = $this->getOrCreateUsage($user, $customer);
 
         $column = match ($type) {
             'image' => 'image_generations_used',
@@ -189,10 +203,10 @@ class CreativeQuotaService
     /**
      * Get the full usage summary for the frontend.
      */
-    public function getUsageSummary(User $user): array
+    public function getUsageSummary(User $user, ?Customer $customer = null): array
     {
         $limits = $this->getLimits($user);
-        $usage = $this->getOrCreateUsage($user);
+        $usage = $this->getOrCreateUsage($user, $customer);
         $plan = $user->resolveCurrentPlan();
         $isUnlimited = $limits === null;
 
@@ -225,10 +239,14 @@ class CreativeQuotaService
 
     /**
      * Apply a boost pack purchase to the user's current period.
+     *
+     * $customer must be supplied by the Stripe webhook: it runs without a
+     * session, so without it the boost is credited to whichever of the buyer's
+     * customers comes back first.
      */
-    public function applyBoost(User $user, CreativeBoostPurchase $purchase): void
+    public function applyBoost(User $user, CreativeBoostPurchase $purchase, ?Customer $customer = null): void
     {
-        $usage = $this->getOrCreateUsage($user);
+        $usage = $this->getOrCreateUsage($user, $customer);
 
         $usage->increment('bonus_image_generations', $purchase->image_generations);
         $usage->increment('bonus_video_generations', $purchase->video_generations);

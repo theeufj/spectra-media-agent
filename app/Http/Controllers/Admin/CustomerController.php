@@ -22,7 +22,10 @@ class CustomerController extends Controller
 {
     public function customersIndex()
     {
-        $customers = Customer::with(['users.assignedPlan', 'campaigns'])->withCount('campaigns')->get();
+        // withCount, not with: the table shows `campaigns_count` and nothing
+        // else off the relation, and eager-loading it here pulled every
+        // campaign row in the system into memory and then into the page props.
+        $customers = Customer::with(['users.assignedPlan'])->withCount('campaigns')->get();
         $plans = \App\Models\Plan::active()->ordered()->get();
 
         // Row-level coverage lights, same rules as the workspace page.

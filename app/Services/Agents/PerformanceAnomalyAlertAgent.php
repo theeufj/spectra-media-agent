@@ -33,6 +33,24 @@ use Illuminate\Support\Facades\Log;
  */
 class PerformanceAnomalyAlertAgent
 {
+    /**
+     * The most an automated anomaly response may take off a campaign's budget,
+     * measured against what it was before the first cut in the window.
+     *
+     * Cuts are rate-limited per anomaly type, so cpc_spike and cvr_drop can both
+     * fire in one day, each compounding on the value the last one left behind.
+     * Nothing anywhere restores a pre-anomaly budget, and the hourly budget agent
+     * multiplies from whatever is stored — so without this floor a run of alerts
+     * ratchets a campaign down to the $1 minimum and leaves it there.
+     */
+    private const MAX_CUMULATIVE_CUT = 0.50;
+
+    /**
+     * How far back to look for the pre-anomaly budget. Matches the detector's
+     * own same-weekday-last-week baseline, which takes a week to catch up.
+     */
+    private const CUT_WINDOW_DAYS = 7;
+
     public function __construct(private GeminiService $gemini) {}
 
     public function runForCustomer(Customer $customer): array
@@ -188,6 +206,7 @@ class PerformanceAnomalyAlertAgent
         }
 
         $action = null;
+        $actionDetails = [];
 
         switch ($type) {
             case 'ctr_drop':
@@ -202,12 +221,16 @@ class PerformanceAnomalyAlertAgent
 
             case 'cpc_spike':
                 // CPC spike burns budget quickly — pull back to limit exposure.
-                $action = $this->reduceDailyBudget($campaign, $thresholds['budget_cut_cpc'] ?? 0.20, 'CPC spike');
+                $cut = $this->reduceDailyBudget($campaign, $thresholds['budget_cut_cpc'] ?? 0.20, 'CPC spike');
+                $action = $cut['message'] ?? null;
+                $actionDetails = $cut['details'] ?? [];
                 break;
 
             case 'cvr_drop':
                 // CVR drop means clicks are wasted — pull back until investigated.
-                $action = $this->reduceDailyBudget($campaign, $thresholds['budget_cut_cvr'] ?? 0.25, 'conversion rate drop');
+                $cut = $this->reduceDailyBudget($campaign, $thresholds['budget_cut_cvr'] ?? 0.25, 'conversion rate drop');
+                $action = $cut['message'] ?? null;
+                $actionDetails = $cut['details'] ?? [];
                 break;
 
             case 'zero_delivery':
@@ -222,7 +245,7 @@ class PerformanceAnomalyAlertAgent
                 "{$action} for \"{$campaign->name}\"",
                 $campaign->customer_id,
                 $campaign->id,
-                ['anomaly_type' => $type, 'metrics' => $metrics]
+                array_merge(['anomaly_type' => $type, 'metrics' => $metrics], $actionDetails)
             );
 
             Log::info("PerformanceAnomalyAlertAgent: Auto-remediation applied for campaign {$campaign->id}", [
@@ -234,21 +257,33 @@ class PerformanceAnomalyAlertAgent
         Cache::put($responseKey, true, now()->addHours(24));
     }
 
-    private function reduceDailyBudget(Campaign $campaign, float $reductionFraction, string $reason): ?string
+    /**
+     * Cut the campaign's daily budget, never below MAX_CUMULATIVE_CUT of what it
+     * was before this window's first anomaly. The pre-cut value is recorded on
+     * the AgentActivity row so the next cut can find it — and so the original
+     * budget is recoverable by a human reading the activity feed.
+     *
+     * @return array{message: string, details: array<string, float>}|null
+     */
+    private function reduceDailyBudget(Campaign $campaign, float $reductionFraction, string $reason): ?array
     {
         $current = (float) ($campaign->daily_budget ?? 0);
         if ($current <= 0) {
             return null;
         }
 
-        $newBudget = round($current * (1 - $reductionFraction), 2);
-        if ($newBudget < 1.00) {
-            return null; // safety floor — never reduce below $1/day
+        $preAnomaly = $this->preAnomalyBudget($campaign, $current);
+        // safety floor — never below $1/day, and never past the cumulative cap
+        $floor = max(1.00, round($preAnomaly * (1 - self::MAX_CUMULATIVE_CUT), 2));
+
+        $newBudget = max($floor, round($current * (1 - $reductionFraction), 2));
+        if ($newBudget >= $current) {
+            return null; // already at the floor — a further cut would be the ratchet
         }
 
         $customer = $campaign->customer;
 
-        if ($campaign->google_ads_campaign_id && $customer->google_ads_customer_id) {
+        if ($campaign->google_ads_campaign_id && $customer?->google_ads_customer_id) {
             try {
                 $customerId = $customer->cleanGoogleCustomerId();
                 $resourceName = $campaign->googleAdsResourceName();
@@ -262,7 +297,7 @@ class PerformanceAnomalyAlertAgent
             }
         }
 
-        if ($campaign->facebook_ads_campaign_id && $customer->facebook_ads_account_id) {
+        if ($campaign->facebook_ads_campaign_id && $customer?->facebook_ads_account_id) {
             try {
                 $fbService = new FacebookCampaignService($customer);
                 $fbService->updateCampaign($campaign->facebook_ads_campaign_id, [
@@ -278,9 +313,36 @@ class PerformanceAnomalyAlertAgent
 
         $campaign->update(['daily_budget' => $newBudget]);
 
-        $pct = (int) ($reductionFraction * 100);
+        $pct = (int) round((1 - $newBudget / $current) * 100);
 
-        return "Reduced daily budget by {$pct}% (\${$current} → \${$newBudget}) due to {$reason}";
+        return [
+            'message' => "Reduced daily budget by {$pct}% (\${$current} → \${$newBudget}) due to {$reason}",
+            'details' => [
+                'budget_before' => $current,
+                'budget_after' => $newBudget,
+                'pre_anomaly_budget' => $preAnomaly,
+            ],
+        ];
+    }
+
+    /**
+     * What this campaign's daily budget was before automated anomaly response
+     * started cutting it. Reads the budget_before recorded on each cut inside the
+     * window; with no cut on record the current budget is itself pre-anomaly.
+     */
+    private function preAnomalyBudget(Campaign $campaign, float $current): float
+    {
+        $recorded = AgentActivity::where('campaign_id', $campaign->id)
+            ->where('agent_type', 'anomaly_response')
+            ->where('action', 'auto_remediation')
+            ->where('created_at', '>=', now()->subDays(self::CUT_WINDOW_DAYS))
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(fn (AgentActivity $activity) => (float) ($activity->details['budget_before'] ?? 0))
+            ->max();
+
+        return max($current, (float) ($recorded ?? 0));
     }
 
     private function explainAnomaly(Campaign $campaign, string $type, string $summary, array $metrics): ?string

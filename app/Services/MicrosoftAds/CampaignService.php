@@ -41,7 +41,19 @@ class CampaignService extends BaseMicrosoftAdsService
             return $result;
         }
 
-        return null;
+        // AddCampaigns answers 200 with a PartialErrors block when it rejects a
+        // campaign, and a rejection carries no CampaignIds element at all.
+        // Returning null here threw that block away, so the execution agent —
+        // which knows how to read PartialErrors — could only report "empty
+        // response from AddCampaigns" for every rejection Microsoft explained.
+        if ($result !== null) {
+            Log::warning('Microsoft Ads: AddCampaigns returned no campaign IDs', [
+                'customer_id' => $this->customer->id,
+                'partial_errors' => $result['PartialErrors'] ?? null,
+            ]);
+        }
+
+        return $result;
     }
 
     /**
@@ -91,7 +103,7 @@ class CampaignService extends BaseMicrosoftAdsService
             ]]],
         ]);
 
-        return $result !== null;
+        return $this->accepted('UpdateCampaigns', $result, ['campaign_id' => $campaignId]);
     }
 
     /**
@@ -107,6 +119,36 @@ class CampaignService extends BaseMicrosoftAdsService
             ]]],
         ]);
 
-        return $result !== null;
+        return $this->accepted('UpdateCampaigns', $result, [
+            'campaign_id' => $campaignId,
+            'status' => $status,
+        ]);
+    }
+
+    /**
+     * Did Microsoft actually apply the mutation?
+     *
+     * UpdateCampaigns answers 200 with a PartialErrors block when it rejects an
+     * entity, so a non-null response is not evidence that anything changed —
+     * `$result !== null` reported every rejected budget and status write as
+     * applied. Same trap MicrosoftAdsExecutionAgent documents for the Add*
+     * operations.
+     */
+    protected function accepted(string $operation, ?array $result, array $context = []): bool
+    {
+        if ($result === null) {
+            return false;
+        }
+
+        if (empty($result['PartialErrors'])) {
+            return true;
+        }
+
+        Log::warning("Microsoft Ads: {$operation} rejected", $context + [
+            'customer_id' => $this->customer->id,
+            'partial_errors' => $result['PartialErrors'],
+        ]);
+
+        return false;
     }
 }

@@ -75,6 +75,22 @@ Schedule::job(new VerifyGtmInstallation)->dailyAt('05:15')->withoutOverlapping()
 // Nothing else reconciles that state, so it is terminal without this.
 Schedule::job(new ReconcileStuckDeployments)->hourly()->withoutOverlapping();
 
+// Turns on campaigns that legitimately deployed paused. This command existed but
+// was never scheduled, so a paused deploy stayed paused until someone ran it by
+// hand: the customer was mailed "deployment completed" for ads that never served.
+// It only touches strategies settled past VerifyDeployment's window and skips any
+// campaign Spectra stood down on purpose, so it cannot resume unfunded spend.
+// runInBackground so a slow platform call cannot stall the scheduler tick.
+//
+// No onFailure hook: the command exits non-zero while testing mode is on and
+// for any strategy missing a platform id, both of which persist across runs —
+// admins would be mailed every hour forever. Real exceptions go to the admin
+// dashboard through the per-strategy report().
+Schedule::command('campaigns:activate')
+    ->hourly()
+    ->runInBackground()
+    ->withoutOverlapping();
+
 // Creative generation runs on prepaid OpenRouter credits; at $0 the pipeline
 // silently falls back to the Google stack. Tell admins before that happens.
 Schedule::job(new Scheduled\OpenRouterLowCreditCheck)->name('openrouter-low-credit-check')->dailyAt('07:30');

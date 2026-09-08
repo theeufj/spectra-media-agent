@@ -39,6 +39,10 @@ class GoogleApiOAuthController extends Controller
 
     public function redirect()
     {
+        // Stateful on purpose: ->stateless() drops the `state` round-trip, and
+        // this is a session-backed GET callback with no CSRF token of its own.
+        // Without state, a victim following an attacker's callback link binds
+        // the attacker's Google account to their Connection row.
         return Socialite::driver('google')
             ->redirectUrl(route('google-api.callback'))
             ->scopes(self::SCOPES)
@@ -46,7 +50,6 @@ class GoogleApiOAuthController extends Controller
                 'access_type' => 'offline',
                 'prompt' => 'consent',
             ])
-            ->stateless()
             ->redirect();
     }
 
@@ -54,7 +57,6 @@ class GoogleApiOAuthController extends Controller
     {
         $googleUser = Socialite::driver('google')
             ->redirectUrl(route('google-api.callback'))
-            ->stateless()
             ->user();
 
         Connection::updateOrCreate(

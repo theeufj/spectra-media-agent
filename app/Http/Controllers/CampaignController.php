@@ -550,10 +550,13 @@ class CampaignController extends Controller
         }
 
         try {
+            // The service authenticates from the platform MCC and takes the
+            // Customer; these three connection strings were a per-customer OAuth
+            // shape this platform does not use, and passing them where a Customer
+            // is required is a TypeError the moment a customer has a google_ads
+            // connection row. The account queried is unchanged.
             $service = new \App\Services\GoogleAds\CommonServices\GetCampaignPerformance(
-                $connection->platform_user_id,
-                $connection->access_token,
-                $connection->refresh_token
+                $campaign->customer
             );
 
             $resourceName = $campaign->googleAdsResourceName();

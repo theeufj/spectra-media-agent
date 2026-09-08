@@ -73,6 +73,36 @@ class CampaignStatusHelper
     }
 
     /**
+     * Get the appropriate Microsoft Advertising campaign status based on testing mode.
+     *
+     * Microsoft's vocabulary is title-case Active/Paused, which maps one-for-one
+     * onto Facebook's ACTIVE/PAUSED — so the testing-mode and
+     * `campaigns.default_status` decision stays in getFacebookAdsStatus() rather
+     * than growing a third copy of it. This exists because there was no Microsoft
+     * entry point at all: callers either hand-rolled the mapping inline or
+     * hardcoded 'Paused', which is how Microsoft campaigns deployed and stayed off.
+     *
+     * @param  string|null  $intendedStatus  The intended status ('ACTIVE', 'PAUSED'). Defaults to config.
+     */
+    public static function getMicrosoftAdsStatus(?string $intendedStatus = null): string
+    {
+        return self::getFacebookAdsStatus($intendedStatus) === 'PAUSED' ? 'Paused' : 'Active';
+    }
+
+    /**
+     * Get the appropriate LinkedIn Ads campaign status based on testing mode.
+     *
+     * LinkedIn's campaign status vocabulary is the same ACTIVE/PAUSED strings
+     * Facebook uses, so the decision is shared rather than duplicated.
+     *
+     * @param  string|null  $intendedStatus  The intended status ('ACTIVE', 'PAUSED'). Defaults to config.
+     */
+    public static function getLinkedInAdsStatus(?string $intendedStatus = null): string
+    {
+        return self::getFacebookAdsStatus($intendedStatus);
+    }
+
+    /**
      * Get a human-readable description of the current mode.
      */
     public static function getModeDescription(): string

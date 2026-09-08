@@ -5,10 +5,6 @@ namespace App\Jobs;
 use App\Models\AdSpendCredit;
 use App\Models\AdSpendTransaction;
 use App\Models\Customer;
-use App\Models\FacebookAdsPerformanceData;
-use App\Models\GoogleAdsPerformanceData;
-use App\Models\LinkedInAdsPerformanceData;
-use App\Models\MicrosoftAdsPerformanceData;
 use App\Models\User;
 use App\Notifications\AdSpendReconciliationAlert;
 use Illuminate\Bus\Queueable;
@@ -102,16 +98,18 @@ class ReconcileAdSpend implements ShouldQueue
         }
     }
 
-    /** Sum finalized cost across all platform performance tables for the window. */
+    /**
+     * Sum finalized cost across all platform performance tables for the window.
+     *
+     * The list is shared with the admin reconciliation tool, which had its own
+     * two-platform copy and therefore disagreed with this job about what the
+     * same customer owed.
+     */
     private function platformSpend($campaignIds, string $start, string $end): float
     {
         $total = 0.0;
-        foreach ([
-            GoogleAdsPerformanceData::class,
-            FacebookAdsPerformanceData::class,
-            MicrosoftAdsPerformanceData::class,
-            LinkedInAdsPerformanceData::class,
-        ] as $model) {
+
+        foreach (AdSpendCredit::PLATFORM_SPEND_MODELS as $model) {
             $total += (float) $model::whereIn('campaign_id', $campaignIds)
                 ->whereBetween('date', [$start, $end])
                 ->sum('cost');

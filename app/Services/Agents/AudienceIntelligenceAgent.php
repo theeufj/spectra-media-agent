@@ -94,7 +94,7 @@ class AudienceIntelligenceAgent
         ];
 
         try {
-            $customerMatchService = new CustomerMatchService($customer, true);
+            $customerMatchService = new CustomerMatchService($customer);
             $customerId = $customer->google_ads_customer_id;
 
             $userListResourceName = $customerMatchService->createUserList(
@@ -202,7 +202,7 @@ class AudienceIntelligenceAgent
         // Google Ads Customer Match audiences
         if ($customer->google_ads_customer_id) {
             try {
-                $customerMatchService = new CustomerMatchService($customer, true);
+                $customerMatchService = new CustomerMatchService($customer);
                 $googleAudiences = $customerMatchService->getUserLists($customer->google_ads_customer_id);
                 foreach ($googleAudiences as &$audience) {
                     $audience['platform'] = 'google_ads';

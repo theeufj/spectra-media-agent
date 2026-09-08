@@ -51,9 +51,19 @@ class RecordSiteGoogleConversion implements ShouldQueue
         'seven_day_return' => 'seven_day_return',
     ];
 
+    /**
+     * $occurredAt is when the conversion happened, not when the job runs.
+     *
+     * Google attributes on that timestamp, so it must not drift with a retry —
+     * hence a value fixed at dispatch rather than a `now()` inside handle(). It
+     * defaults to the user's registration, which is what `signup` means; the
+     * events that happen long afterwards (campaign_live, seven_day_return) pass
+     * their own, as RecordSiteConversion did before it handed them over.
+     */
     public function __construct(
         protected User $user,
-        protected string $event
+        protected string $event,
+        protected ?\DateTimeInterface $occurredAt = null,
     ) {}
 
     public function handle(DataManagerService $dataManager): void
@@ -98,9 +108,10 @@ class RecordSiteGoogleConversion implements ShouldQueue
             adIdentifiers: $adIdentifiers,
             value: (float) ($config['value'] ?? 0),
             currency: $config['currency'] ?? 'USD',
-            // The click, not "now" — Google attributes on the conversion
-            // timestamp and rejects anything outside the click lookback window.
-            occurredAt: $this->user->created_at ?? now(),
+            // Google attributes on the conversion timestamp and rejects
+            // anything outside the click lookback window, so this is the moment
+            // the event happened, never the moment the worker picked the job up.
+            occurredAt: $this->occurredAt ?? $this->user->created_at ?? now(),
             email: $this->user->email,
         );
 

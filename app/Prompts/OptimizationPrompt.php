@@ -64,6 +64,27 @@ NETWORK SETTINGS RULE — IMPORTANT:
 - Include "parameters": { "network_settings": { "target_search_network": false, "target_content_network": false } } to turn off Search Partners and Display expansion. Never set target_google_search to false.
 - Only use NETWORK_SETTINGS for Search campaigns — never for Display, Demand Gen, Video, Shopping or Performance Max.
 
+AUTO-APPLY FIELD REQUIREMENTS — IMPORTANT:
+A recommendation is only applied automatically when it carries the fields the system needs to
+execute it. Anything missing them is queued for a human instead, so include them or expect a delay:
+- BUDGET: "suggested_value" = the new daily budget as a plain number in the account's currency
+  (not micros, not cents). It must be between 0.5x and 2x the current daily budget — a larger
+  move is clamped into that range, so split a bigger change across runs.
+- BIDDING: "sub_type": "keyword_cpc", "keyword_resource" (the keyword's full resource name) and
+  "suggested_value" = the new bid in micros. Every other bidding change is reviewed by a human.
+- KEYWORDS on Google: "criterion_resource_name" plus "direction": "increase|decrease|pause|enable|remove",
+  and for increase/decrease a "suggested_value" bid in micros.
+- KEYWORDS on Microsoft: "ad_group_id", "keyword_text" and "match_type".
+- Only propose a keyword-level change when the resource name or ad group id appears in the data
+  above. If it does not, describe the change in the recommendation text instead of inventing an id.
+- TARGETING: "sub_type": "device" with "device_type", or "sub_type": "location" with
+  "geo_target_constant", plus "suggested_value" = the bid modifier as a multiplier (e.g. 1.2).
+- AD_EXTENSIONS: "sub_type" plus its own fields — structured_snippet needs "header" and "values",
+  call needs "phone_number", price needs "offerings", promotion needs "promotion_target" and
+  "promotion_data".
+- SCHEDULE: "sub_type": "business_hours" with "suggested_value" as the bid modifier, or
+  "day_of_week", "start_hour", "end_hour" and "suggested_value" for a specific window.
+
 AUDIENCE CREATION RULES — IMPORTANT:
 - Do NOT recommend AUDIENCE type unless the campaign has been running for at least 30 days AND has accumulated meaningful conversion data (30+ conversions).
 - When recommending AUDIENCE, set sub_type to "remarketing" (url-based visitors) or "customer_match" (email/phone list upload).
@@ -80,6 +101,8 @@ Return your response in the following JSON format:
         {
             "type": "BUDGET|BIDDING|KEYWORDS|NEGATIVE_KEYWORDS|ADS|TARGETING|CREATIVE|AD_EXTENSIONS|SCHEDULE|AUDIENCE|NETWORK_SETTINGS|OTHER",
             "action": "INCREASE|DECREASE|ADD|REMOVE|MODIFY|TEST",
+            "sub_type": "Type-specific variant — see AUTO-APPLY FIELD REQUIREMENTS (omit if not applicable)",
+            "suggested_value": "The new value this change should set — see AUTO-APPLY FIELD REQUIREMENTS for the unit (omit if not applicable)",
             "description": "Detailed description of the recommendation.",
             "reasoning": "Why this recommendation will help achieve the campaign goals, with supporting data points.",
             "impact": "HIGH|MEDIUM|LOW",

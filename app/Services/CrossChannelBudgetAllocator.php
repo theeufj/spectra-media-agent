@@ -122,78 +122,50 @@ class CrossChannelBudgetAllocator
             'period_days' => 30,
         ];
 
-        foreach ($campaigns as $campaign) {
-            // Google Ads performance
-            if ($campaign->google_ads_campaign_id) {
-                $googlePerf = GoogleAdsPerformanceData::where('campaign_id', $campaign->id)
-                    ->where('date', '>=', $since)
-                    ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value, SUM(clicks) as clicks, SUM(impressions) as impressions')
-                    ->first();
+        // The column that says "this campaign runs here". LinkedIn's is
+        // `linkedin_campaign_id` — every other platform uses
+        // `{platform}_ads_campaign_id`, and this one does not. Reading the
+        // consistent-looking name returned null for every campaign, so
+        // LinkedIn spend was silently dropped from every rebalance snapshot
+        // and its budget arm was rebalanced against zero performance.
+        $platforms = [
+            'google_ads' => ['column' => 'google_ads_campaign_id', 'model' => GoogleAdsPerformanceData::class],
+            'facebook_ads' => ['column' => 'facebook_ads_campaign_id', 'model' => FacebookAdsPerformanceData::class],
+            'microsoft_ads' => ['column' => 'microsoft_ads_campaign_id', 'model' => MicrosoftAdsPerformanceData::class],
+            'linkedin_ads' => ['column' => 'linkedin_campaign_id', 'model' => LinkedInAdsPerformanceData::class],
+        ];
 
-                if ($googlePerf) {
-                    $snapshot['google_ads']['spend'] += (float) $googlePerf->cost;
-                    $snapshot['google_ads']['conversions'] += (float) $googlePerf->conversions;
-                    $snapshot['google_ads']['conversion_value'] += (float) $googlePerf->conversion_value;
-                    $snapshot['google_ads']['clicks'] += (int) $googlePerf->clicks;
-                    $snapshot['google_ads']['impressions'] += (int) $googlePerf->impressions;
-                    $snapshot['google_ads']['campaigns']++;
-                }
+        // One aggregate per platform over that platform's campaigns, rather
+        // than one per campaign per platform. SUM() is additive, so the totals
+        // are unchanged, but a forty-campaign account no longer issues 160
+        // queries to build one snapshot.
+        //
+        // Writing the four arms once also restores Facebook's
+        // conversion_value: its copy of this block selected and accumulated
+        // every column except that one, so facebook_ads.roas was structurally
+        // 0 and the performance strategy scored the platform on CPA alone.
+        foreach ($platforms as $key => $platform) {
+            $campaignIds = $campaigns
+                ->filter(fn ($campaign) => (bool) $campaign->{$platform['column']})
+                ->pluck('id');
+
+            if ($campaignIds->isEmpty()) {
+                continue;
             }
 
-            // Facebook Ads performance
-            if ($campaign->facebook_ads_campaign_id) {
-                $fbPerf = FacebookAdsPerformanceData::where('campaign_id', $campaign->id)
-                    ->where('date', '>=', $since)
-                    ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(clicks) as clicks, SUM(impressions) as impressions')
-                    ->first();
+            $snapshot[$key]['campaigns'] = $campaignIds->count();
 
-                if ($fbPerf) {
-                    $snapshot['facebook_ads']['spend'] += (float) $fbPerf->cost;
-                    $snapshot['facebook_ads']['conversions'] += (float) $fbPerf->conversions;
-                    $snapshot['facebook_ads']['clicks'] += (int) $fbPerf->clicks;
-                    $snapshot['facebook_ads']['impressions'] += (int) $fbPerf->impressions;
-                    $snapshot['facebook_ads']['campaigns']++;
-                }
-            }
+            $perf = $platform['model']::whereIn('campaign_id', $campaignIds)
+                ->where('date', '>=', $since)
+                ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value, SUM(clicks) as clicks, SUM(impressions) as impressions')
+                ->first();
 
-            // Microsoft Ads performance
-            if ($campaign->microsoft_ads_campaign_id) {
-                $msPerf = MicrosoftAdsPerformanceData::where('campaign_id', $campaign->id)
-                    ->where('date', '>=', $since)
-                    ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value, SUM(clicks) as clicks, SUM(impressions) as impressions')
-                    ->first();
-
-                if ($msPerf) {
-                    $snapshot['microsoft_ads']['spend'] += (float) $msPerf->cost;
-                    $snapshot['microsoft_ads']['conversions'] += (float) $msPerf->conversions;
-                    $snapshot['microsoft_ads']['conversion_value'] += (float) $msPerf->conversion_value;
-                    $snapshot['microsoft_ads']['clicks'] += (int) $msPerf->clicks;
-                    $snapshot['microsoft_ads']['impressions'] += (int) $msPerf->impressions;
-                    $snapshot['microsoft_ads']['campaigns']++;
-                }
-            }
-
-            // LinkedIn Ads performance
-            //
-            // The column is `linkedin_campaign_id` — every other platform uses
-            // `{platform}_ads_campaign_id`, and this one does not. Reading the
-            // consistent-looking name returned null for every campaign, so
-            // LinkedIn spend was silently dropped from every rebalance snapshot
-            // and its budget arm was rebalanced against zero performance.
-            if ($campaign->linkedin_campaign_id) {
-                $liPerf = LinkedInAdsPerformanceData::where('campaign_id', $campaign->id)
-                    ->where('date', '>=', $since)
-                    ->selectRaw('SUM(cost) as cost, SUM(conversions) as conversions, SUM(conversion_value) as conversion_value, SUM(clicks) as clicks, SUM(impressions) as impressions')
-                    ->first();
-
-                if ($liPerf) {
-                    $snapshot['linkedin_ads']['spend'] += (float) $liPerf->cost;
-                    $snapshot['linkedin_ads']['conversions'] += (float) $liPerf->conversions;
-                    $snapshot['linkedin_ads']['conversion_value'] += (float) $liPerf->conversion_value;
-                    $snapshot['linkedin_ads']['clicks'] += (int) $liPerf->clicks;
-                    $snapshot['linkedin_ads']['impressions'] += (int) $liPerf->impressions;
-                    $snapshot['linkedin_ads']['campaigns']++;
-                }
+            if ($perf) {
+                $snapshot[$key]['spend'] = (float) $perf->cost;
+                $snapshot[$key]['conversions'] = (float) $perf->conversions;
+                $snapshot[$key]['conversion_value'] = (float) $perf->conversion_value;
+                $snapshot[$key]['clicks'] = (int) $perf->clicks;
+                $snapshot[$key]['impressions'] = (int) $perf->impressions;
             }
         }
 
