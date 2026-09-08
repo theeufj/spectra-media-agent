@@ -400,12 +400,20 @@ class CreativeService extends BaseFacebookAdsService
     /**
      * Upload large video using resumable upload.
      *
+     * Facebook chooses the chunk size itself: the start phase hands back the
+     * first [start_offset, end_offset) window, and every transfer answers with
+     * the next one. The upload is complete only when the two offsets meet.
+     * Sending a single window and going straight to finish uploaded the opening
+     * few MB of every video over 10MB and called it done.
+     *
      * @param  string  $accountId  Ad account ID
      * @param  string  $filePath  Path to video file
      * @return ?string Video ID
      */
     private function uploadLargeVideo(string $accountId, string $filePath): ?string
     {
+        $fileHandle = null;
+
         try {
             $fileSize = filesize($filePath);
 
@@ -422,31 +430,91 @@ class CreativeService extends BaseFacebookAdsService
             }
 
             $uploadSessionId = $initResponse['upload_session_id'];
-            $startOffset = $initResponse['start_offset'] ?? 0;
-            $endOffset = $initResponse['end_offset'] ?? $fileSize;
 
-            // Step 2: Upload video file
-            $fileHandle = fopen($filePath, 'rb');
-            fseek($fileHandle, $startOffset);
-            $videoChunk = fread($fileHandle, $endOffset - $startOffset);
-            fclose($fileHandle);
+            // The id is minted by the start phase; finish answers {"success": true}
+            // and carries no id at all, so reading it off the finalize response
+            // meant this method could not return one even after a full transfer.
+            $videoId = $initResponse['video_id'] ?? null;
 
-            $transferResponse = \Http::asMultipart()
-                ->attach('video_file_chunk', $videoChunk, basename($filePath))
-                ->post($this->getBaseUrl()."/act_{$accountId}/advideos", [
-                    'access_token' => $this->accessToken,
-                    'upload_phase' => 'transfer',
-                    'upload_session_id' => $uploadSessionId,
-                    'start_offset' => $startOffset,
-                ]);
-
-            if (! $transferResponse->successful()) {
-                Log::error('Failed to transfer video chunk', [
-                    'status' => $transferResponse->status(),
-                    'response' => $transferResponse->json(),
+            if (! $videoId) {
+                Log::error('Video upload session carried no video_id', [
+                    'account_id' => $accountId,
+                    'response' => $initResponse,
                 ]);
 
                 return null;
+            }
+
+            $startOffset = (int) ($initResponse['start_offset'] ?? 0);
+            $endOffset = (int) ($initResponse['end_offset'] ?? $fileSize);
+
+            // Step 2: Transfer the file one chunk at a time until the offsets meet.
+            $fileHandle = fopen($filePath, 'rb');
+
+            if ($fileHandle === false) {
+                Log::error('Failed to open video file for chunked upload', [
+                    'account_id' => $accountId,
+                    'file_path' => $filePath,
+                ]);
+
+                return null;
+            }
+
+            while ($startOffset < $endOffset) {
+                fseek($fileHandle, $startOffset);
+                $videoChunk = fread($fileHandle, $endOffset - $startOffset);
+
+                // Nothing left to read while Facebook still wants bytes: the
+                // offsets have run past the file, and attaching an empty chunk
+                // would loop here forever.
+                if ($videoChunk === false || $videoChunk === '') {
+                    Log::error('Video chunk read returned nothing before the upload completed', [
+                        'account_id' => $accountId,
+                        'start_offset' => $startOffset,
+                        'end_offset' => $endOffset,
+                        'file_size' => $fileSize,
+                    ]);
+
+                    return null;
+                }
+
+                $transferResponse = \Http::asMultipart()
+                    ->attach('video_file_chunk', $videoChunk, basename($filePath))
+                    ->post($this->getBaseUrl()."/act_{$accountId}/advideos", [
+                        'access_token' => $this->accessToken,
+                        'upload_phase' => 'transfer',
+                        'upload_session_id' => $uploadSessionId,
+                        'start_offset' => $startOffset,
+                    ]);
+
+                if (! $transferResponse->successful()) {
+                    Log::error('Failed to transfer video chunk', [
+                        'account_id' => $accountId,
+                        'status' => $transferResponse->status(),
+                        'response' => $transferResponse->json(),
+                        'start_offset' => $startOffset,
+                    ]);
+
+                    return null;
+                }
+
+                $transfer = $transferResponse->json();
+                $nextOffset = (int) ($transfer['start_offset'] ?? $endOffset);
+                $endOffset = (int) ($transfer['end_offset'] ?? $endOffset);
+
+                // The window must move. A response that repeats the offset it was
+                // given would spin here against the live API and hang the worker.
+                if ($nextOffset <= $startOffset) {
+                    Log::error('Video chunk transfer did not advance the offset', [
+                        'account_id' => $accountId,
+                        'start_offset' => $startOffset,
+                        'response' => $transfer,
+                    ]);
+
+                    return null;
+                }
+
+                $startOffset = $nextOffset;
             }
 
             // Step 3: Finalize upload
@@ -455,23 +523,33 @@ class CreativeService extends BaseFacebookAdsService
                 'upload_session_id' => $uploadSessionId,
             ]);
 
-            if ($finalizeResponse && isset($finalizeResponse['id'])) {
-                Log::info('Successfully uploaded large video', [
+            if (! $finalizeResponse || ! ($finalizeResponse['success'] ?? false)) {
+                Log::error('Failed to finalize large video upload', [
                     'account_id' => $accountId,
-                    'video_id' => $finalizeResponse['id'],
-                    'file_size' => $fileSize,
+                    'video_id' => $videoId,
+                    'response' => $finalizeResponse,
                 ]);
 
-                return $finalizeResponse['id'];
+                return null;
             }
 
-            return null;
+            Log::info('Successfully uploaded large video', [
+                'account_id' => $accountId,
+                'video_id' => $videoId,
+                'file_size' => $fileSize,
+            ]);
+
+            return $videoId;
 
         } catch (\Throwable $e) {
             report($e);
             Log::error('Error in resumable video upload: '.$e->getMessage());
 
             return null;
+        } finally {
+            if (is_resource($fileHandle)) {
+                fclose($fileHandle);
+            }
         }
     }
 

@@ -49,23 +49,74 @@ class AdGroupService extends BaseMicrosoftAdsService
 
     public function addExpandedTextAds(string $adGroupId, array $ads): ?array
     {
-        $adObjects = [];
-        foreach ($ads as $ad) {
-            $adObjects[] = [
-                'Type' => 'ResponsiveSearchAd',
-                'Headlines' => array_map(fn ($h) => ['Text' => $h], $ad['headlines'] ?? []),
-                'Descriptions' => array_map(fn ($d) => ['Text' => $d], $ad['descriptions'] ?? []),
-                'Path1' => $ad['path1'] ?? '',
-                'Path2' => $ad['path2'] ?? '',
-                'FinalUrls' => ['string' => [$ad['final_url'] ?? '']],
-                'Status' => 'Active',
-            ];
-        }
+        $adObjects = array_map(fn (array $ad) => $this->buildResponsiveSearchAd($ad), $ads);
 
         return $this->apiCall('AddAds', [
             'AdGroupId' => $adGroupId,
             'Ads' => ['Ad' => $adObjects],
         ]);
+    }
+
+    /**
+     * Build one ResponsiveSearchAd for AddAds.
+     *
+     * Two encoding traps, both of which used to silently empty the ad:
+     *
+     * 1. `Headlines` and `Descriptions` are `ArrayOfAssetLink`, and `AssetLink`
+     *    has exactly four members — Asset, PinnedField, AssetPerformanceLabel,
+     *    EditorialStatus (see the vendored SDK's AssetLink::$openAPITypes).
+     *    There is no `Text`. The text lives on the nested TextAsset, and the
+     *    array needs the `AssetLink` element name the same way `FinalUrls`
+     *    already needs `string`.
+     * 2. `Ad` and `Asset` are abstract in the SOAP schema; the concrete
+     *    ResponsiveSearchAd / TextAsset members exist only on the subtypes. A
+     *    WSDL-typed SoapClient encodes an associative array against the
+     *    *declared* element type and drops every key the base type does not
+     *    declare, so a plain array sent Headlines, Descriptions, Path1 and
+     *    Path2 nowhere. SoapVar names the concrete type, which puts the
+     *    xsi:type on the wire and keeps the subtype's fields.
+     *
+     * The visible symptom was an ad with no headlines and no descriptions,
+     * which AddAds rejects as a PartialError — not a SoapFault — so the caller
+     * saw a normal response and recorded the ad as created.
+     */
+    protected function buildResponsiveSearchAd(array $ad): \SoapVar
+    {
+        return $this->soapObject('ResponsiveSearchAd', [
+            'Type' => 'ResponsiveSearchAd',
+            'Headlines' => ['AssetLink' => array_map(
+                fn ($h) => ['Asset' => $this->textAsset((string) $h)],
+                array_values($ad['headlines'] ?? [])
+            )],
+            'Descriptions' => ['AssetLink' => array_map(
+                fn ($d) => ['Asset' => $this->textAsset((string) $d)],
+                array_values($ad['descriptions'] ?? [])
+            )],
+            'Path1' => $ad['path1'] ?? '',
+            'Path2' => $ad['path2'] ?? '',
+            'FinalUrls' => ['string' => [$ad['final_url'] ?? '']],
+            'Status' => 'Active',
+        ]);
+    }
+
+    /**
+     * A TextAsset carrying one headline or description.
+     */
+    protected function textAsset(string $text): \SoapVar
+    {
+        return $this->soapObject('TextAsset', [
+            'Type' => 'TextAsset',
+            'Text' => $text,
+        ]);
+    }
+
+    /**
+     * Tag a payload with its concrete Campaign Management type so SoapClient
+     * encodes the subtype rather than its abstract base.
+     */
+    protected function soapObject(string $type, array $value): \SoapVar
+    {
+        return new \SoapVar($value, SOAP_ENC_OBJECT, $type, $this->namespace);
     }
 
     /**

@@ -191,8 +191,10 @@ class WarRoomController extends Controller
      */
     public function addCompetitor(Request $request)
     {
-        $request->validate([
-            'url' => ['required', 'url', 'max:500'],
+        $validated = $request->validate([
+            // CrawlCompetitorWebsite fetches this from our servers, so a
+            // "competitor" could otherwise be an address on our own network.
+            'url' => ['required', 'url', 'max:500', new \App\Rules\SafePublicUrl],
         ]);
 
         $customer = $this->resolveCustomer($request);
@@ -209,7 +211,7 @@ class WarRoomController extends Controller
             ]);
         }
 
-        $url = $request->input('url');
+        $url = $validated['url'];
         $domain = Competitor::extractDomain($url);
 
         // Check for duplicate by domain

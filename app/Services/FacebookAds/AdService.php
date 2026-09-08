@@ -133,13 +133,18 @@ class AdService extends BaseFacebookAdsService
     /**
      * Update an ad.
      *
+     * A node update is a POST to the node — the Graph API has no PUT, so the
+     * PUT this used to send came back 400 and every ad mutation silently
+     * returned false: creative swaps, and pauseAd()/resumeAd(), which is how a
+     * disapproved or losing ad kept serving after the agents "paused" it.
+     *
      * @param  string  $adId  Ad ID
      * @param  array  $updateData  Data to update
      */
     public function updateAd(string $adId, array $updateData): bool
     {
         try {
-            $response = $this->put("/{$adId}", $updateData);
+            $response = $this->post("/{$adId}", $updateData);
 
             if ($response && isset($response['success']) && $response['success']) {
                 Log::info("Updated ad {$adId}", [

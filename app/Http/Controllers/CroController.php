@@ -56,8 +56,9 @@ class CroController extends Controller
 
     public function run(Request $request)
     {
-        $request->validate([
-            'url' => 'required|url|max:2048',
+        $validated = $request->validate([
+            // RunCroAudit renders this URL in Browsershot on the app box.
+            'url' => ['required', 'url', 'max:2048', new \App\Rules\SafePublicUrl],
         ]);
 
         $user = $request->user();
@@ -78,7 +79,7 @@ class CroController extends Controller
             ]);
         }
 
-        RunCroAudit::dispatch($customer->id, $request->input('url'));
+        RunCroAudit::dispatch($customer->id, $validated['url']);
 
         return redirect()->route('seo.cro')->with('success', 'CRO audit started! Results will appear below shortly.');
     }

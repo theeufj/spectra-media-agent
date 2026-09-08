@@ -144,10 +144,10 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
                     foreach ($recommendations as $rec) {
                         Recommendation::create([
                             'campaign_id' => $this->campaign->id,
-                            'type' => $rec['type'],
-                            'target_entity' => $rec['target_entity'],
-                            'parameters' => $rec['parameters'],
-                            'rationale' => $rec['rationale'],
+                            'type' => $rec['type'] ?? 'UNKNOWN',
+                            'target_entity' => $this->recommendationTarget($rec),
+                            'parameters' => $this->recommendationParameters($rec),
+                            'rationale' => $rec['rationale'] ?? '',
                             'status' => 'pending',
                             'platform' => 'facebook',
                         ]);
@@ -167,6 +167,52 @@ class FetchFacebookAdsPerformanceData implements ShouldQueue
         } else {
             Log::warning("Could not acquire lock or circuit breaker is open for campaign {$this->campaign->id}");
         }
+    }
+
+    /**
+     * What a recommendation acts on.
+     *
+     * RecommendationGenerationService emits target_campaign_id or keyword_text
+     * depending on the type, and the LLM path emits whatever the model returned.
+     * Reading 'target_entity' directly raised "Undefined array key", which
+     * HandleExceptions turns into an ErrorException — so every fetch that
+     * produced a deterministic budget recommendation threw, and no Facebook
+     * recommendation was ever stored. Same shape as the helper of the same name
+     * in FetchGoogleAdsPerformanceData.
+     *
+     * @param  array<string, mixed>  $rec
+     * @return array<string, mixed>
+     */
+    private function recommendationTarget(array $rec): array
+    {
+        foreach (['target_entity', 'target_campaign_id', 'keyword_text', 'target'] as $key) {
+            if (! empty($rec[$key])) {
+                return is_array($rec[$key]) ? $rec[$key] : [$key => $rec[$key]];
+            }
+        }
+
+        return ['campaign_id' => $this->campaign->facebook_ads_campaign_id];
+    }
+
+    /**
+     * The action payload, which is everything that is not narrative.
+     *
+     * Keeping the unrecognised keys matters more than naming them: a shape this
+     * job does not know about is still worth storing, and dropping it silently
+     * is how the original assumption survived.
+     *
+     * @param  array<string, mixed>  $rec
+     * @return array<string, mixed>
+     */
+    private function recommendationParameters(array $rec): array
+    {
+        if (! empty($rec['parameters']) && is_array($rec['parameters'])) {
+            return $rec['parameters'];
+        }
+
+        return collect($rec)
+            ->except(['type', 'rationale', 'target_entity', 'parameters'])
+            ->all();
     }
 
     /**

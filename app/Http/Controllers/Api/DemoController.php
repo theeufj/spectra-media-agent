@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\LandingLead;
+use App\Rules\SafePublicUrl;
 use App\Services\BrandGuidelineExtractorService;
 use App\Services\Demo\CampaignForecastPreview;
 use App\Services\GeminiService;
@@ -27,7 +28,11 @@ class DemoController extends Controller
     public function generateFull(Request $request)
     {
         $request->validate([
-            'url' => 'required|url|max:255',
+            // This endpoint is unauthenticated and fetches whatever it is given
+            // from the production box, so the host has to be a real public one:
+            // without SafePublicUrl the whole internal network, and the cloud
+            // metadata endpoint with it, is three requests a minute away.
+            'url' => ['required', 'url', 'max:255', new SafePublicUrl],
             'first_name' => 'nullable|string|max:100',
             'email' => 'nullable|email|max:255',
         ]);
@@ -140,8 +145,8 @@ HTML;
         $cssColors = [];
         $html = '';
         try {
-            $response = Http::timeout(10)->get($url);
-            if ($response->successful()) {
+            $response = $this->fetchPublicUrl($url, 10);
+            if ($response && $response->successful()) {
                 $html = $response->body();
                 // Extract title
                 preg_match('/<title>(.*?)<\/title>/is', $html, $titleMatch);
@@ -180,8 +185,11 @@ HTML;
                             $cssUrlToFetch = $cssPath;
                         }
 
-                        $cssResponse = Http::timeout(5)->get($cssUrlToFetch);
-                        if ($cssResponse->successful()) {
+                        // Second hop, second check: the stylesheet href comes
+                        // from the fetched page, so an attacker's public site
+                        // can point it anywhere it likes.
+                        $cssResponse = $this->fetchPublicUrl($cssUrlToFetch, 5);
+                        if ($cssResponse && $cssResponse->successful()) {
                             preg_match_all('/#([a-fA-F0-9]{6})\b/', $cssResponse->body(), $cssFileColorMatches);
                             if (! empty($cssFileColorMatches[0])) {
                                 $cssColors = array_merge($cssColors, $cssFileColorMatches[0]);
@@ -282,6 +290,37 @@ HTML;
             'visuals' => $visuals,
             'forecast' => $forecast,
         ]);
+    }
+
+    /**
+     * Fetch a URL a stranger typed, without it becoming a request into our own
+     * network.
+     *
+     * The validator already checked the host, but that was a DNS lookup ago,
+     * and Guzzle follows redirects by default — a perfectly public page that
+     * 302s to http://169.254.169.254/ is the standard way around a validated
+     * hostname. Every hop is re-checked and a bad one aborts the chain, which
+     * the caller's catch turns into "we couldn't read that site".
+     */
+    private function fetchPublicUrl(string $url, int $timeout): ?\Illuminate\Http\Client\Response
+    {
+        if (! SafePublicUrl::isSafe($url)) {
+            Log::warning('DemoController: refused to fetch a non-public URL', ['url' => $url]);
+
+            return null;
+        }
+
+        return Http::timeout($timeout)
+            ->withOptions(['allow_redirects' => [
+                'max' => 5,
+                'protocols' => ['http', 'https'],
+                'on_redirect' => function ($request, $response, $uri) {
+                    if (! SafePublicUrl::isSafe((string) $uri)) {
+                        throw new \RuntimeException("Refusing to follow a redirect to a non-public host: {$uri}");
+                    }
+                },
+            ]])
+            ->get($url);
     }
 
     /**

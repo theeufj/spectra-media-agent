@@ -71,7 +71,10 @@ class SeoController extends Controller
         }
 
         $validated = $request->validate([
-            'url' => 'required|url|max:500',
+            // RunSeoAudit drives Browsershot with --no-sandbox and parses the
+            // fetched HTML back into an audit the submitter reads, so an
+            // unchecked host here is a read of anything on our network.
+            'url' => ['required', 'url', 'max:500', new \App\Rules\SafePublicUrl],
         ]);
 
         RunSeoAudit::dispatch($customer->id, $validated['url']);

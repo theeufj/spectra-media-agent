@@ -55,10 +55,7 @@ class CampaignService extends BaseLinkedInAdsService
             'name' => $params['name'],
             'type' => 'SPONSORED_UPDATES',
             'costType' => $params['cost_type'] ?? 'CPM',
-            'dailyBudget' => [
-                'currencyCode' => $this->config['defaults']['currency'] ?? 'USD',
-                'amount' => (string) (($params['daily_budget'] ?? 50) * 100), // LinkedIn uses minor currency
-            ],
+            'dailyBudget' => $this->money($params['daily_budget'] ?? 50),
             'objectiveType' => $params['objective'] ?? 'WEBSITE_VISITS',
             'status' => $params['status'] ?? $this->config['defaults']['status'] ?? 'PAUSED',
             'locale' => [
@@ -109,10 +106,7 @@ class CampaignService extends BaseLinkedInAdsService
             'name' => $params['name'],
             'type' => 'SPONSORED_INMAILS',
             'costType' => 'CPS', // Cost per send
-            'dailyBudget' => [
-                'currencyCode' => $this->config['defaults']['currency'] ?? 'USD',
-                'amount' => (string) (($params['daily_budget'] ?? 50) * 100),
-            ],
+            'dailyBudget' => $this->money($params['daily_budget'] ?? 50),
             'objectiveType' => $params['objective'] ?? 'LEAD_GENERATION',
             'status' => $params['status'] ?? 'PAUSED',
         ];
@@ -142,13 +136,27 @@ class CampaignService extends BaseLinkedInAdsService
         return $this->apiCall("adCampaigns/{$campaignId}", 'PATCH', [
             'patch' => [
                 '$set' => [
-                    'dailyBudget' => [
-                        'currencyCode' => $this->config['defaults']['currency'] ?? 'USD',
-                        'amount' => (string) ($dailyBudget * 100),
-                    ],
+                    'dailyBudget' => $this->money($dailyBudget),
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Build a LinkedIn `AdBudget` for an amount of whole currency.
+     *
+     * LinkedIn's `amount` is a *decimal string in the account currency* — "50"
+     * is fifty dollars. Only Facebook takes minor units. All three budget
+     * writes used to multiply by 100 (and PerformanceService divided spend back
+     * by 100), so a $50/day campaign went up asking for $5,000/day while its
+     * spend was billed back to the customer at a hundredth of what it cost.
+     */
+    protected function money(float|int|string $amount): array
+    {
+        return [
+            'currencyCode' => $this->config['defaults']['currency'] ?? 'USD',
+            'amount' => number_format((float) $amount, 2, '.', ''),
+        ];
     }
 
     /**

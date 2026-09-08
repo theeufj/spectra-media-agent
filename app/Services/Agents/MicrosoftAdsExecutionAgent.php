@@ -2,7 +2,7 @@
 
 namespace App\Services\Agents;
 
-use App\Models\Campaign;
+use App\Services\CampaignStatusHelper;
 use App\Services\MicrosoftAds\AdGroupService;
 use App\Services\MicrosoftAds\AssetService;
 use App\Services\MicrosoftAds\CampaignService;
@@ -235,7 +235,7 @@ PROMPT;
                     'create_ads' => $this->executeCreateAdGroups($context),
                     'configure_tracking',
                     'setup_tracking' => $this->executeConfigureTracking(),
-                    'create_extensions' => ['status' => 'skipped', 'reason' => 'Extensions added during ad group creation'],
+                    'create_extensions' => ['status' => 'not_required', 'reason' => 'Extensions added during ad group creation'],
                     default => throw new \RuntimeException("Unhandled plan action: {$action}"),
                 };
 
@@ -245,6 +245,18 @@ PROMPT;
                 }
                 if (isset($stepResult['ad_group_id'])) {
                     $platformIds['ad_group'] = $stepResult['ad_group_id'];
+                }
+                if (isset($stepResult['import_job_id'])) {
+                    $platformIds['import_job'] = $stepResult['import_job_id'];
+                }
+
+                $failure = $this->stepFailureReason($stepResult);
+
+                if ($failure !== null) {
+                    $results[$action] = ['success' => false, 'error' => $failure, 'data' => $stepResult];
+                    $this->logError("Step reported no work done: {$action}", ['reason' => $failure]);
+
+                    continue;
                 }
 
                 $results[$action] = ['success' => true, 'data' => $stepResult];
@@ -257,7 +269,6 @@ PROMPT;
 
         $executionTime = microtime(true) - $startTime;
         $anyRealWork = ! empty($results);
-        $allSucceeded = $anyRealWork && collect($results)->every(fn ($r) => $r['success']);
 
         $errors = [];
 
@@ -279,13 +290,109 @@ PROMPT;
             }
         }
 
+        // Every step can pass and still leave nothing behind — an import that
+        // came back without a job id, a campaign that was created without an
+        // id being read off the response. Downstream (MonitorCampaignStatus,
+        // the performance fetch, AdSpendBillingService) keys off
+        // microsoft_ads_campaign_id, so no identifier means no deployment,
+        // whatever the steps said.
+        if ($errors === [] && $platformIds === []) {
+            $errors[] = new AgentIssue(
+                'no_platform_ids',
+                'No Microsoft Ads identifiers were recorded — nothing was created on the platform',
+            );
+        }
+
         return new ExecutionResult(
-            success: $allSucceeded,
+            success: $errors === [],
             errors: $errors,
             platformIds: $platformIds,
             executionTime: $executionTime,
             metadata: ['steps' => $results],
         );
+    }
+
+    /**
+     * Why a step's payload means nothing landed on Microsoft, or null if it did.
+     *
+     * The step implementations report trouble by return value —
+     * `['error' => 'Campaign creation returned null']`, `['skipped' => …]`,
+     * `['status' => 'import_failed']`, `['status' => 'tracking_skipped']` — and
+     * this loop used to record `['success' => true]` for anything that returned
+     * without throwing. A run could therefore skip the Google import, create
+     * nothing, and still be written back as `deployment_status='deployed'`
+     * with a "deployment completed" email. Nothing retries a success, so those
+     * campaigns stayed non-existent forever.
+     *
+     * Only top-level keys count. Nested best-effort results — image extensions,
+     * keyword additions — carry their own 'skipped' and are enhancements to a
+     * campaign that does exist, not the campaign itself.
+     */
+    protected function stepFailureReason(array $payload): ?string
+    {
+        if (isset($payload['error']) && $payload['error'] !== '') {
+            return is_string($payload['error']) ? $payload['error'] : json_encode($payload['error']);
+        }
+
+        if (isset($payload['skipped'])) {
+            return is_string($payload['skipped']) ? $payload['skipped'] : 'step skipped';
+        }
+
+        $status = (string) ($payload['status'] ?? '');
+
+        if ($status === 'failed' || $status === 'skipped'
+            || str_ends_with($status, '_failed') || str_ends_with($status, '_skipped')) {
+            return $payload['reason'] ?? $status;
+        }
+
+        return null;
+    }
+
+    /**
+     * Status a freshly created Microsoft campaign should launch with.
+     *
+     * This was hardcoded 'Paused'. Nothing ever turned those campaigns on:
+     * ActivateCampaigns::handle() dispatches for google and facebook and
+     * `continue`s otherwise, and SelfHealingAgent's zero-impressions branch
+     * needs performance rows a paused campaign never produces. Meanwhile
+     * DeployCampaign flipped the local row to Active and mailed "deployment
+     * completed". The ENABLED/PAUSED decision (testing mode plus
+     * `campaigns.default_status`) is the one CampaignStatusHelper already makes
+     * for Facebook, whose ACTIVE/PAUSED vocabulary maps one-for-one onto
+     * Microsoft's title-case Active/Paused — reuse it rather than growing a
+     * fourth copy of the rule.
+     */
+    protected function deployStatus(): string
+    {
+        return CampaignStatusHelper::getFacebookAdsStatus() === 'PAUSED' ? 'Paused' : 'Active';
+    }
+
+    /**
+     * The messages in a Microsoft `PartialErrors` block, if there are any.
+     *
+     * Add* operations answer 200 with PartialErrors rather than a SoapFault
+     * when an entity is rejected, so a non-null response is not evidence that
+     * anything was created — which is how ads with no headlines were recorded
+     * as `'ad_created' => 'yes'`.
+     */
+    protected function partialErrorMessage(?array $response): ?string
+    {
+        $errors = $response['PartialErrors']['BatchError'] ?? $response['PartialErrors'] ?? null;
+
+        if (empty($errors)) {
+            return null;
+        }
+
+        if (! array_is_list($errors)) {
+            $errors = [$errors];
+        }
+
+        $messages = array_filter(array_map(
+            fn ($e) => is_array($e) ? trim(($e['Code'] ?? '').' '.($e['Message'] ?? '')) : (string) $e,
+            $errors,
+        ));
+
+        return $messages === [] ? 'Microsoft rejected the request' : implode('; ', $messages);
     }
 
     protected function getPlatformName(): string
@@ -351,17 +458,25 @@ PROMPT;
         $result = $campaignService->createSearchCampaign([
             'name' => $name,
             'daily_budget' => (float) $dailyBudget,
-            'status' => 'Paused',
+            'status' => $this->deployStatus(),
         ]);
 
-        if ($result && isset($result['CampaignIds'])) {
-            $msId = $result['CampaignIds']['long'][0] ?? $result['CampaignIds'][0] ?? null;
-            if ($msId && $context->campaign) {
-                $context->campaign->update(['microsoft_ads_campaign_id' => $msId]);
-            }
+        // `isset($result['CampaignIds'])` was the whole check, and AddCampaigns
+        // returns that element whether or not the campaign was accepted — a
+        // rejected one comes back as a null id alongside a PartialErrors block.
+        // Require the id itself.
+        $msId = $result['CampaignIds']['long'][0] ?? $result['CampaignIds'][0] ?? null;
+
+        if (! $msId) {
+            return [
+                'error' => 'Microsoft Ads returned no campaign ID: '
+                    .($this->partialErrorMessage($result) ?? 'empty response from AddCampaigns'),
+            ];
         }
 
-        return $result ?? ['error' => 'Campaign creation returned null'];
+        $context->campaign->update(['microsoft_ads_campaign_id' => $msId]);
+
+        return ['status' => 'created', 'microsoft_ads_campaign_id' => $msId];
     }
 
     protected function executeCreateAdGroups(ExecutionContext $context): array
@@ -423,12 +538,19 @@ PROMPT;
         $headlines = $adCopy?->headlines ?? [];
         $descriptions = $adCopy?->descriptions ?? [];
 
+        // An ad group with no ad in it serves nothing, so these are deploy
+        // failures rather than notes — they used to be recorded as successful
+        // steps and the strategy was marked deployed.
         if (empty($headlines)) {
             Log::warning('[MicrosoftAdsExecutionAgent] No ad copy found in strategy, skipping ad creation', [
                 'strategy_id' => $context->strategy->id,
             ]);
 
-            return ['ad_group_id' => $adGroupId, 'keywords_added' => $kwResult, 'ad_created' => 'skipped_no_copy'];
+            return [
+                'ad_group_id' => $adGroupId,
+                'keywords_added' => $kwResult,
+                'error' => 'Ad group created but no ad — the strategy has no ad copy',
+            ];
         }
 
         $finalUrl = $biddingStrategy['landing_page_url']
@@ -440,7 +562,11 @@ PROMPT;
                 'strategy_id' => $context->strategy->id,
             ]);
 
-            return ['ad_group_id' => $adGroupId, 'keywords_added' => $kwResult, 'ad_created' => 'skipped_no_url'];
+            return [
+                'ad_group_id' => $adGroupId,
+                'keywords_added' => $kwResult,
+                'error' => 'Ad group created but no ad — no landing page URL on the campaign, strategy or customer',
+            ];
         }
 
         $adResult = $adGroupService->addExpandedTextAds($adGroupId, [[
@@ -451,6 +577,20 @@ PROMPT;
             'final_url' => $finalUrl,
         ]]);
 
+        // AddAds answers 200 with a PartialErrors block when it rejects an ad,
+        // so `$adResult ? 'yes' : 'failed'` called every rejection a success.
+        $adError = $adResult === null
+            ? 'AddAds returned nothing'
+            : $this->partialErrorMessage($adResult);
+
+        if ($adError !== null) {
+            return [
+                'ad_group_id' => $adGroupId,
+                'keywords_added' => $kwResult,
+                'error' => 'Ad group created but the ad was rejected: '.$adError,
+            ];
+        }
+
         // Microsoft was the one platform that deployed no customer media at
         // all — AssetService's image upload existed with no caller. Best
         // effort: extensions are an enhancement, never a reason to fail the
@@ -460,7 +600,7 @@ PROMPT;
         return [
             'ad_group_id' => $adGroupId,
             'keywords_added' => $kwResult,
-            'ad_created' => $adResult ? 'yes' : 'failed',
+            'ad_created' => 'yes',
             'image_extensions' => $imageExtensions,
         ];
     }
@@ -550,20 +690,25 @@ PROMPT;
             // always produced null and the id was never stored on the customer.
             $tagId = $trackingService->resolveUetTagId();
 
-            if ($tagId) {
-                $goals = $trackingService->getConversionGoals();
-                if (empty($goals)) {
-                    $trackingService->createUrlConversionGoal([
-                        'name' => 'Website Conversion',
-                        'uet_tag_id' => $tagId,
-                        // createUrlConversionGoal() reads 'url_contains' and
-                        // 'conversion_window_minutes'. The old 'url_expression'
-                        // and 'conversion_window' keys were silently ignored,
-                        // so UrlExpression went up null and matched nothing.
-                        'url_contains' => '/thank-you',
-                        'conversion_window_minutes' => 43200,
-                    ]);
-                }
+            if (! $tagId) {
+                return [
+                    'status' => 'tracking_failed',
+                    'error' => 'No UET tag could be found or created — conversions cannot be tracked or billed',
+                ];
+            }
+
+            $goals = $trackingService->getConversionGoals();
+            if (empty($goals)) {
+                $trackingService->createUrlConversionGoal([
+                    'name' => 'Website Conversion',
+                    'uet_tag_id' => $tagId,
+                    // createUrlConversionGoal() reads 'url_contains' and
+                    // 'conversion_window_minutes'. The old 'url_expression'
+                    // and 'conversion_window' keys were silently ignored,
+                    // so UrlExpression went up null and matched nothing.
+                    'url_contains' => '/thank-you',
+                    'conversion_window_minutes' => 43200,
+                ]);
             }
 
             return ['status' => 'tracking_configured', 'uet_tag_id' => $tagId];

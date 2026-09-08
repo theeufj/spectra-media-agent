@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\CollateralGenerated;
 use App\Models\Campaign;
 use App\Models\Strategy;
+use Illuminate\Bus\Batch;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -61,11 +62,35 @@ class GenerateCampaignCollateral implements ShouldQueue
             $campaignId = $this->campaign->id;
             $userId = $this->userId;
 
-            // Dispatch as a batch so the email only sends after ALL jobs complete
+            // Dispatch as a batch so the email only sends after every job has run.
+            //
+            // finally(), not then(): then() fires only when pending_jobs reaches
+            // zero, and DatabaseBatchRepository::incrementFailedJobs() writes
+            // pending_jobs back unchanged — so one permanently failed member pins
+            // it above zero forever. The members do fail permanently: GenerateAdCopy,
+            // GenerateImage and GenerateVideo all end handle() with fail(), which
+            // bypasses $tries. A single Gemini/Veo error therefore meant the
+            // customer never got CollateralGenerated and an unsubscribed trial user
+            // never got the AdsReadyToDeploy upsell, though the other eleven assets
+            // generated fine. finally() is the callback an allowFailures() batch
+            // actually reaches — it fires once pending_jobs - failed_jobs === 0.
             Bus::batch($jobs)
                 ->name("Campaign {$campaignId} Collateral")
                 ->allowFailures()
-                ->then(function () use ($campaignId, $userId) {
+                ->finally(function (Batch $batch) use ($campaignId, $userId) {
+                    if ($batch->failedJobs >= $batch->totalJobs) {
+                        // Nothing generated at all. catch() has already stamped the
+                        // error onto the strategies for the polling endpoint, and
+                        // telling the customer their ads are ready would be a lie.
+                        Log::error("All {$batch->totalJobs} collateral jobs failed for Campaign ID: {$campaignId} — no completion email sent");
+
+                        return;
+                    }
+
+                    if ($batch->hasFailures()) {
+                        Log::warning("Collateral generation for Campaign ID {$campaignId} finished with {$batch->failedJobs} of {$batch->totalJobs} jobs failed — emailing what did generate");
+                    }
+
                     // ad_copies_count & friends are withCount() virtuals — a
                     // plain find() leaves them null and the upsell email told
                     // every trial user we'd generated "0 assets" for them.

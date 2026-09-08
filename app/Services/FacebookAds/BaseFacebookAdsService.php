@@ -224,51 +224,15 @@ abstract class BaseFacebookAdsService
         }
     }
 
-    /**
-     * Make an HTTP PUT request to the Facebook Graph API.
-     *
-     * @param  string  $endpoint  The API endpoint
-     * @param  array  $data  Request body data
+    /*
+     * There is deliberately no put() helper here. The Graph API exposes
+     * GET/POST/DELETE only — a node update is a POST to the node — and every
+     * caller this class ever had was updating a node. The PUTs came back 400,
+     * this class logged and returned null, and each caller read that as "the
+     * update failed" and returned false, so ad-set and ad mutations were a
+     * silent no-op for as long as the helper existed. Removing it is what
+     * stops the next caller reaching for it.
      */
-    protected function put(string $endpoint, array $data = []): ?array
-    {
-        try {
-            if (! $this->accessToken) {
-                Log::error('No access token available for Facebook API request', [
-                    'customer_id' => $this->customer->id,
-                ]);
-
-                return null;
-            }
-
-            $data['access_token'] = $this->accessToken;
-            $url = $this->graphApiUrl.'/'.$this->apiVersion.$endpoint;
-
-            $response = \Http::put($url, $data);
-
-            if ($response->successful()) {
-                return $response->json();
-            }
-
-            Log::error('Facebook API PUT request failed', [
-                'endpoint' => $endpoint,
-                'status' => $response->status(),
-                'response' => $response->body(),
-                'customer_id' => $this->customer->id,
-            ]);
-
-            return null;
-        } catch (\Throwable $e) {
-            report($e);
-            Log::error('Exception during Facebook API PUT request: '.$e->getMessage(), [
-                'exception' => $e,
-                'endpoint' => $endpoint,
-                'customer_id' => $this->customer->id,
-            ]);
-
-            return null;
-        }
-    }
 
     /**
      * Get the base URL for API requests.

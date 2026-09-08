@@ -2,7 +2,7 @@
 
 namespace App\Services\Agents;
 
-use App\Models\Campaign;
+use App\Services\CampaignStatusHelper;
 use App\Services\LinkedInAds\CampaignService;
 use Illuminate\Support\Facades\Log;
 
@@ -21,6 +21,19 @@ use Illuminate\Support\Facades\Log;
  */
 class LinkedInAdsExecutionAgent extends PlatformExecutionAgent
 {
+    /**
+     * Statuses a step may report and still count as work landing on LinkedIn.
+     *
+     * Everything else — 'skipped' very much included — means nothing was
+     * created. `$allSucceeded` used to be `status !== 'failed'`, so a run whose
+     * every step returned 'skipped' ("No LinkedIn campaign ID", "No ad copy
+     * available", "No landing page URL") was reported as a successful deploy:
+     * DeploymentService wrote deployment_status='deployed', DeployCampaign
+     * mailed "deployment completed", and because nothing retries a success the
+     * campaign never existed and was never monitored, billed or paused.
+     */
+    private const SUCCESSFUL_STEP_STATUSES = ['success', 'already_deployed'];
+
     protected string $platform = 'linkedin';
 
     protected function getPlatformName(): string
@@ -122,52 +135,126 @@ PROMPT;
 
     protected function executePlan(ExecutionPlan $plan, ExecutionContext $context): ExecutionResult
     {
-        $campaignService = new CampaignService($this->customer);
+        $campaignService = $this->campaignService();
         $results = [];
 
+        // LinkedIn has no separate targeting endpoint — targetingCriteria goes
+        // up with the campaign — so the set_targeting step has to be read
+        // before create_campaign runs, whatever order the planner emitted them
+        // in. It was previously ignored outright: $createParams carried only
+        // name/budget/objective/status, `createSponsoredContentCampaign()`'s
+        // `if (! empty($params['targeting']))` never fired, buildTargetingCriteria()
+        // was dead code, and every B2B campaign went up untargeted while this
+        // agent logged that targeting had been applied.
+        $targeting = $this->collectTargeting($plan);
+
         foreach ($plan->steps as $step) {
+            $action = $this->stepAction($step);
+
             try {
-                $result = match ($step->action ?? $step['action'] ?? '') {
-                    'create_campaign' => $this->executeCreateCampaign($campaignService, $step, $context),
-                    'set_targeting' => $this->executeSetTargeting($campaignService, $step, $context),
+                $result = match ($action) {
+                    'create_campaign' => $this->executeCreateCampaign($campaignService, $step, $context, $targeting),
+                    'set_targeting' => $this->executeSetTargeting($targeting),
                     'create_creatives' => $this->executeCreateCreatives($campaignService, $step, $context),
                     'setup_conversion_tracking' => $this->executeSetupTracking($campaignService),
                     default => ['status' => 'skipped', 'reason' => 'Unknown action'],
                 };
 
-                $results[] = array_merge(['step' => $step->action ?? $step['action'] ?? ''], $result);
+                $results[] = array_merge(['step' => $action], $result);
             } catch (\Throwable $e) {
                 // \Throwable, not \Exception: a TypeError from an SDK signature
                 // change is exactly the per-step failure this loop exists to
                 // contain, and \Exception does not catch \Error.
                 report($e);
                 $results[] = [
-                    'step' => $step->action ?? $step['action'] ?? '',
+                    'step' => $action,
                     'status' => 'failed',
                     'error' => $e->getMessage(),
                 ];
             }
         }
 
-        $allSucceeded = collect($results)->every(fn ($r) => ($r['status'] ?? '') !== 'failed');
+        $failed = collect($results)->reject(
+            fn ($r) => in_array($r['status'] ?? '', self::SUCCESSFUL_STEP_STATUSES, true)
+        );
 
-        $failed = collect($results)->filter(fn ($r) => ($r['status'] ?? '') === 'failed');
+        $platformIds = [];
+        if ($context->campaign->linkedin_campaign_id) {
+            $platformIds['campaign'] = (string) $context->campaign->linkedin_campaign_id;
+        }
+
+        $errors = $failed->map(fn ($r, $i) => new AgentIssue(
+            'linkedin_step_failed',
+            ($r['step'] ?? "step {$i}").': '.($r['error'] ?? $r['reason'] ?? 'failed with no reason given'),
+        ))->values()->all();
+
+        // A plan whose steps all "succeeded" but left no campaign URN behind is
+        // the same silent failure in a different disguise — every downstream
+        // consumer (MonitorCampaignStatus, FetchLinkedInAdsPerformanceData,
+        // AdSpendBillingService, DeactivateCustomerService) keys off
+        // linkedin_campaign_id.
+        if ($errors === [] && $platformIds === []) {
+            $errors[] = new AgentIssue(
+                'no_platform_ids',
+                'No LinkedIn campaign ID was recorded — nothing was created on the platform',
+            );
+        }
 
         return new ExecutionResult(
-            success: $allSucceeded,
-            errors: $failed->map(fn ($r, $i) => new AgentIssue(
-                'linkedin_step_failed',
-                ($r['step'] ?? "step {$i}").': '.($r['error'] ?? 'failed with no reason given'),
-            ))->values()->all(),
-            // This agent has never recorded platform IDs; the campaign URN is
-            // only in the step results. Left as-is rather than guessed at.
+            success: $errors === [],
+            errors: $errors,
+            platformIds: $platformIds,
             metadata: ['steps' => $results],
         );
     }
 
-    protected function executeCreateCampaign(CampaignService $service, $step, ExecutionContext $context): array
+    /**
+     * Build the LinkedIn service the plan runs against.
+     *
+     * A seam, not indirection for its own sake: executePlan() is the only
+     * behaviour worth testing here and it cannot be exercised without one.
+     */
+    protected function campaignService(): CampaignService
     {
-        $params = (array) ($step->parameters ?? $step['parameters'] ?? []);
+        return new CampaignService($this->customer);
+    }
+
+    /**
+     * The set_targeting step's parameters, if the planner emitted one.
+     */
+    protected function collectTargeting(ExecutionPlan $plan): array
+    {
+        foreach ($plan->steps as $step) {
+            if ($this->stepAction($step) === 'set_targeting') {
+                return $this->stepParams($step);
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Steps arrive as plain arrays from the planner and as ExecutionStep
+     * objects from a fallback plan. Reading both shapes with `??` alone is not
+     * safe — `$object['key']` is a fatal Error, not a suppressible notice.
+     */
+    protected function stepAction(mixed $step): string
+    {
+        return (string) (is_array($step) ? ($step['action'] ?? '') : ($step->action ?? ''));
+    }
+
+    protected function stepParams(mixed $step): array
+    {
+        if (is_array($step)) {
+            return (array) ($step['parameters'] ?? $step['params'] ?? []);
+        }
+
+        return (array) ($step->parameters ?? $step->params ?? []);
+    }
+
+    protected function executeCreateCampaign(CampaignService $service, $step, ExecutionContext $context, array $targeting = []): array
+    {
+        $params = $this->stepParams($step);
         $campaign = $context->campaign;
 
         // Idempotency: skip if this campaign was already deployed to LinkedIn
@@ -186,7 +273,8 @@ PROMPT;
             'name' => $campaign?->name ?? 'New LinkedIn Campaign',
             'daily_budget' => $params['daily_budget'] ?? $context->strategy->daily_budget ?? 50,
             'objective' => $params['objective'] ?? 'WEBSITE_VISITS',
-            'status' => 'PAUSED',
+            'status' => $this->deployStatus(),
+            'targeting' => $targeting,
         ];
 
         $result = match ($campaignType) {
@@ -194,24 +282,63 @@ PROMPT;
             default => $service->createSponsoredContentCampaign($createParams),
         };
 
-        if ($result && $campaign) {
-            $campaignId = $result['id'] ?? null;
-            if ($campaignId) {
-                $campaign->update(['linkedin_campaign_id' => $campaignId]);
-            }
+        // The campaign URN is the whole point of this step. LinkedIn's REST
+        // CREATE answers 201 with an empty body and the id in the `x-restli-id`
+        // header, which BaseLinkedInAdsService::apiCall() discards — so a
+        // truthy `['success' => true]` came back, `$result['id']` was null,
+        // linkedin_campaign_id stayed null, and the step still reported
+        // success. Nothing downstream can find a campaign without the URN, so
+        // no id means the step failed.
+        $campaignId = $result['id'] ?? null;
+
+        if (! $campaignId) {
+            return [
+                'status' => 'failed',
+                'error' => 'LinkedIn did not return a campaign ID',
+                'result' => $result,
+            ];
         }
 
-        return ['status' => $result ? 'success' : 'failed', 'result' => $result];
+        $campaign->update(['linkedin_campaign_id' => $campaignId]);
+
+        return ['status' => 'success', 'linkedin_campaign_id' => $campaignId, 'result' => $result];
     }
 
-    protected function executeSetTargeting(CampaignService $service, $step, ExecutionContext $context): array
+    protected function executeSetTargeting(array $targeting): array
     {
-        // Targeting is applied inside createSponsoredContentCampaign() via targetingCriteria.
-        Log::info('[LinkedInAdsExecutionAgent] Targeting applied during campaign creation — no separate API call required', [
-            'campaign_id' => $context->campaign->id,
+        // Targeting is applied inside createSponsoredContentCampaign() via
+        // targetingCriteria — there is genuinely no separate call — but this
+        // step used to log that unconditionally while the parameters it was
+        // reporting on were being thrown away.
+        if ($targeting === []) {
+            return ['status' => 'skipped', 'reason' => 'Plan carried no targeting facets to send with the campaign'];
+        }
+
+        Log::info('[LinkedInAdsExecutionAgent] Targeting sent with the campaign as targetingCriteria', [
+            'customer_id' => $this->customer->id,
+            'facets' => array_keys($targeting),
         ]);
 
-        return ['status' => 'success', 'reason' => 'Targeting applied during campaign creation'];
+        return ['status' => 'success', 'facets' => array_keys($targeting)];
+    }
+
+    /**
+     * Status a freshly created LinkedIn campaign should launch with.
+     *
+     * This was hardcoded 'PAUSED'. Nothing ever turned those campaigns on:
+     * ActivateCampaigns::handle() dispatches for google and facebook and
+     * `continue`s otherwise, and SelfHealingAgent's zero-impressions branch
+     * needs performance rows a paused campaign never produces. Meanwhile
+     * DeployCampaign flipped the local row to Active and mailed "deployment
+     * completed". CampaignStatusHelper is where testing mode and
+     * `campaigns.default_status` are resolved for the other platforms;
+     * LinkedIn's campaign status vocabulary is ACTIVE/PAUSED, the same strings
+     * it already resolves for Facebook, so this reuses that decision rather
+     * than growing a third copy of it.
+     */
+    protected function deployStatus(): string
+    {
+        return CampaignStatusHelper::getFacebookAdsStatus();
     }
 
     protected function executeCreateCreatives(CampaignService $service, $step, ExecutionContext $context): array
@@ -269,7 +396,14 @@ PROMPT;
     {
         $tag = $service->getInsightTag();
 
-        return ['status' => $tag ? 'success' : 'skipped', 'insight_tag' => $tag];
+        if (! $tag) {
+            return [
+                'status' => 'skipped',
+                'reason' => 'LinkedIn returned no Insight Tag for the ad account — conversions cannot be tracked or billed',
+            ];
+        }
+
+        return ['status' => 'success', 'insight_tag' => $tag];
     }
 
     protected function analyzeOptimizationOpportunities(ExecutionContext $context): OptimizationAnalysis

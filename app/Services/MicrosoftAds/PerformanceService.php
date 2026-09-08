@@ -323,23 +323,32 @@ class PerformanceService extends BaseMicrosoftAdsService
 
             $row = array_combine($headers, array_map(fn ($v) => trim($v, '"'), $cols));
 
-            // Campaign performance rows have a date in TimePeriod (YYYY-MM-DD or MM/DD/YYYY)
-            $rawDate = $row['timeperiod'] ?? '';
-            if (! $rawDate) {
-                continue;
+            $date = null;
+
+            // Only Aggregation=Daily reports carry a TimePeriod column. The
+            // search-terms report is submitted with Aggregation=Summary, which
+            // omits it entirely — so requiring a date on every row skipped
+            // every row of it, and SearchTermMiningAgent::mineMicrosoft() has
+            // never seen a single term. An empty list there is indistinguishable
+            // from a clean account, which is why nobody noticed.
+            if (in_array('timeperiod', $headers, true)) {
+                // Campaign performance rows have a date in TimePeriod (YYYY-MM-DD or MM/DD/YYYY)
+                $rawDate = $row['timeperiod'] ?? '';
+                if (! $rawDate) {
+                    continue;
+                }
+
+                // Normalise date to Y-m-d
+                try {
+                    $date = Carbon::parse($rawDate)->format('Y-m-d');
+                } catch (\Throwable $e) {
+                    report($e);
+
+                    continue;
+                }
             }
 
-            // Normalise date to Y-m-d
-            try {
-                $date = Carbon::parse($rawDate)->format('Y-m-d');
-            } catch (\Throwable $e) {
-                report($e);
-
-                continue;
-            }
-
-            $rows[] = [
-                'date' => $date,
+            $parsed = [
                 'impressions' => (int) str_replace(',', '', $row['impressions'] ?? 0),
                 'clicks' => (int) str_replace(',', '', $row['clicks'] ?? 0),
                 'cost' => (float) str_replace(',', '', $row['spend'] ?? 0),
@@ -348,7 +357,15 @@ class PerformanceService extends BaseMicrosoftAdsService
                 'ctr' => (float) str_replace(['%', ','], '', $row['ctr'] ?? 0),
                 'cpc' => (float) str_replace(',', '', $row['averagecpc'] ?? 0),
                 'cpa' => (float) str_replace(',', '', $row['costperconversion'] ?? 0),
-            ] + $row; // keep raw row for search-terms callers that need extra cols
+            ];
+
+            // storePerformanceData() keys updateOrCreate on 'date', so only
+            // dated reports may carry the key at all.
+            if ($date !== null) {
+                $parsed['date'] = $date;
+            }
+
+            $rows[] = $parsed + $row; // keep raw row for search-terms callers that need extra cols
         }
 
         return $rows;

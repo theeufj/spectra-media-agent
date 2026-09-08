@@ -1477,12 +1477,6 @@ parameters:
 			path: app/Services/Agents/LinkedInAdsExecutionAgent.php
 
 		-
-			message: '#^Right side of && is always true\.$#'
-			identifier: booleanAnd.rightAlwaysTrue
-			count: 1
-			path: app/Services/Agents/LinkedInAdsExecutionAgent.php
-
-		-
 			message: '#^Unknown parameter \$estimatedImpact in call to App\\Services\\Agents\\OptimizationAnalysis constructor\.$#'
 			identifier: argument.unknown
 			count: 1
@@ -1521,12 +1515,6 @@ parameters:
 		-
 			message: '#^Negated boolean expression is always false\.$#'
 			identifier: booleanNot.alwaysFalse
-			count: 1
-			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php
-
-		-
-			message: '#^Right side of && is always true\.$#'
-			identifier: booleanAnd.rightAlwaysTrue
 			count: 1
 			path: app/Services/Agents/MicrosoftAdsExecutionAgent.php
 

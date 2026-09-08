@@ -119,7 +119,22 @@ abstract class BaseLinkedInAdsService
             };
 
             if ($response->successful()) {
-                return $response->json() ?: ['success' => true];
+                $decoded = $response->json();
+
+                if (is_array($decoded) && $decoded !== []) {
+                    return $decoded;
+                }
+
+                // A LinkedIn REST create answers 201 with an empty body and puts
+                // the new entity's id in x-restli-id. Collapsing that to
+                // ['success' => true] meant no create could ever report an id:
+                // every caller reading $result['id'] got null, and the execution
+                // agent read a campaign that was never made as one that was.
+                $restliId = $response->header('x-restli-id');
+
+                return $restliId === ''
+                    ? ['success' => true]
+                    : ['id' => $restliId, 'success' => true];
             }
 
             Log::warning('LinkedIn Ads API error', [

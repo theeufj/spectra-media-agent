@@ -60,7 +60,11 @@ class PerformanceService extends BaseLinkedInAdsService
 
             $impressions = (int) ($row['impressions'] ?? 0);
             $clicks = (int) ($row['clicks'] ?? 0);
-            $cost = (float) ($row['costInLocalCurrency'] ?? 0) / 100; // LinkedIn reports in minor currency
+            // costInLocalCurrency is a decimal string in the account currency, not
+            // minor units — dividing by 100 under-reported every LinkedIn cost
+            // by 100x, and AdSpendBillingService::getLinkedInAdsSpend() bills
+            // this column as dollars.
+            $cost = (float) ($row['costInLocalCurrency'] ?? 0);
             $conversions = (float) ($row['externalWebsiteConversions'] ?? 0);
 
             LinkedInAdsPerformanceData::updateOrCreate(

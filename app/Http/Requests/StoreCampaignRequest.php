@@ -48,7 +48,15 @@ class StoreCampaignRequest extends FormRequest
             'landing_page_url' => 'nullable|url',
             'exclusions' => 'nullable|string',
             'selected_pages' => 'nullable|array',
-            'selected_pages.*' => 'exists:customer_pages,id',
+            // Scoped to this customer, not just to the table. `exists` runs
+            // through the presence verifier, which bypasses CustomerScope
+            // entirely — a bare `exists:customer_pages,id` accepts any tenant's
+            // page id, and a queue worker (no acting user, scope inert) then
+            // renders that page's url, title and price into this campaign's
+            // strategy and ad copy.
+            'selected_pages.*' => [
+                Rule::exists('customer_pages', 'id')->where('customer_id', session('active_customer_id')),
+            ],
             'keywords' => 'nullable|array|max:100',
             'keywords.*.text' => 'required_with:keywords|string|max:200',
             'keywords.*.match_type' => 'required_with:keywords|string|in:BROAD,PHRASE,EXACT',
