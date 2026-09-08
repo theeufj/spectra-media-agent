@@ -21,20 +21,17 @@ class AdService extends BaseFacebookAdsService
     public function listAds(string $adSetId): ?array
     {
         try {
-            $response = $this->get("/{$adSetId}/ads", [
+            $ads = $this->getAllPages("/{$adSetId}/ads", [
                 'fields' => 'id,name,status,creative,adset_id,created_time,updated_time',
+                'limit' => 100,
             ]);
 
-            if ($response && isset($response['data'])) {
-                Log::info("Retrieved ads for ad set {$adSetId}", [
-                    'customer_id' => $this->customer->id,
-                    'ad_count' => count($response['data']),
-                ]);
+            Log::info("Retrieved ads for ad set {$adSetId}", [
+                'customer_id' => $this->customer->id,
+                'ad_count' => count($ads),
+            ]);
 
-                return $response['data'];
-            }
-
-            return [];
+            return $ads;
         } catch (\Throwable $e) {
             report($e);
             Log::error('Error listing ads: '.$e->getMessage(), [
@@ -66,9 +63,7 @@ class AdService extends BaseFacebookAdsService
                 $params['filtering'] = json_encode($filters);
             }
 
-            $response = $this->get("/{$accountId}/ads", $params);
-
-            return $response['data'] ?? [];
+            return $this->getAllPages("/{$accountId}/ads", $params);
         } catch (\Throwable $e) {
             report($e);
             Log::error('Error listing ads by account: '.$e->getMessage(), [

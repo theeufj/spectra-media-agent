@@ -8,6 +8,9 @@ use App\Models\Campaign;
 use App\Notifications\CampaignStatusUpdated;
 use App\Services\FacebookAds\CampaignService as FacebookCampaignService;
 use App\Services\GoogleAds\CommonServices\GetCampaignStatus;
+use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusEnum\CampaignPrimaryStatus;
+use Google\Ads\GoogleAds\V22\Enums\CampaignPrimaryStatusReasonEnum\CampaignPrimaryStatusReason;
+use Google\Ads\GoogleAds\V22\Enums\CampaignStatusEnum\CampaignStatus as GoogleCampaignStatus;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -303,57 +306,58 @@ class MonitorCampaignStatus implements ShouldQueue
             'PENDING_REVIEW', 'PENDING_BILLING_INFO' => 'PENDING',
             'DISAPPROVED' => 'MISCONFIGURED',
             'WITH_ISSUES' => 'LIMITED',
-            'IN_PROCESS' => 'PENDING',
+            'IN_PROCESS', 'PREAPPROVED' => 'PENDING',
             default => 'UNKNOWN',
         };
     }
 
+    /**
+     * Google Ads enums, translated by the SDK's own table rather than by hand.
+     *
+     * Every one of the eleven values mapPrimaryStatusReason() spelled out was
+     * wrong — the list was shifted against the real enum, so a BUDGET_CONSTRAINED
+     * campaign was reported as AD_GROUP_NOT_ELIGIBLE_SERVING and a paused one as
+     * removed. Twenty-seven of the forty reasons were not mapped at all and came
+     * back UNKNOWN, including the actionable ones: HAS_ADS_DISAPPROVED,
+     * NO_KEYWORDS, MISSING_LOCATION_TARGETING. Those strings reach the customer's
+     * dashboard as the explanation for why their campaign is not running.
+     *
+     * Reading the SDK's table means the mapping cannot drift from the API version
+     * the client is built against.
+     */
     private function mapStatus(int $status): string
     {
-        // Map Google Ads Enum to string
-        // 2 = ENABLED, 3 = PAUSED, 4 = REMOVED
-        return match ($status) {
-            2 => 'ENABLED',
-            3 => 'PAUSED',
-            4 => 'REMOVED',
-            default => 'UNKNOWN',
-        };
+        return $this->enumName(GoogleCampaignStatus::class, $status);
     }
 
     private function mapPrimaryStatus(int $status): string
     {
-        // Google Ads API V22 CampaignPrimaryStatus enum
-        return match ($status) {
-            2 => 'ELIGIBLE',
-            3 => 'PAUSED',
-            4 => 'REMOVED',
-            5 => 'ENDED',
-            6 => 'PENDING',
-            7 => 'MISCONFIGURED',
-            8 => 'LIMITED',
-            9 => 'LEARNING',
-            10 => 'NOT_ELIGIBLE',
-            default => 'UNKNOWN',
-        };
+        return $this->enumName(CampaignPrimaryStatus::class, $status);
     }
 
     private function mapPrimaryStatusReason(int $reason): string
     {
-        // Google Ads API V22 CampaignPrimaryStatusReason enum
-        return match ($reason) {
-            2 => 'CAMPAIGN_SERVING_STATUS_RESTRICTED',
-            3 => 'CAMPAIGN_STATUS_REMOVED',
-            4 => 'CAMPAIGN_STATUS_PAUSED',
-            5 => 'CAMPAIGN_BUDGET_UNDERFUNDED',
-            6 => 'CAMPAIGN_BUDGET_MISCONFIGURED',
-            7 => 'CAMPAIGN_PENDING_SCHEDULED_START',
-            8 => 'CAMPAIGN_PENDING_BUDGET_APPROVAL',
-            9 => 'CAMPAIGN_LEARNING_PERIOD',
-            10 => 'AD_GROUP_AD_NOT_ELIGIBLE_SERVING',
-            11 => 'AD_GROUP_NOT_ELIGIBLE_SERVING',
-            12 => 'AD_GROUP_STATUS_PAUSED',
-            default => 'UNKNOWN',
-        };
+        return $this->enumName(CampaignPrimaryStatusReason::class, $reason);
+    }
+
+    /**
+     * @param  class-string  $enum
+     */
+    private function enumName(string $enum, int $value): string
+    {
+        // 0 (UNSPECIFIED) and 1 (UNKNOWN) both mean Google did not tell us, and
+        // callers already read 'UNKNOWN' as that case — notably the silent-status
+        // list that decides whether a status change is worth a notification.
+        if ($value <= 1) {
+            return 'UNKNOWN';
+        }
+
+        try {
+            return $enum::name($value);
+        } catch (\UnexpectedValueException) {
+            // A value newer than the SDK build. Better unknown than wrong.
+            return 'UNKNOWN';
+        }
     }
 
     private function getMicrosoftAdsStatus(Campaign $campaign): ?array
@@ -418,7 +422,11 @@ class MonitorCampaignStatus implements ShouldQueue
             'active' => 'ELIGIBLE',
             'paused' => 'PAUSED',
             'budgetpaused' => 'LIMITED',
-            'budgetandmanuallypaused' => 'PAUSED',
+            // Both spellings: Microsoft documents this value as
+            // BudgetAndManualPaused, and nothing else in this codebase pins the
+            // casing, so accepting either costs nothing and a miss here silently
+            // reports a paused campaign as UNKNOWN.
+            'budgetandmanualpaused', 'budgetandmanuallypaused' => 'PAUSED',
             'deleted' => 'REMOVED',
             'suspended' => 'MISCONFIGURED',
             default => 'UNKNOWN',
@@ -435,6 +443,7 @@ class MonitorCampaignStatus implements ShouldQueue
             'CANCELED' => 'REMOVED',
             'DRAFT' => 'PENDING',
             'PENDING_REVIEW' => 'PENDING',
+            'PENDING_DELETION' => 'REMOVED',
             default => 'UNKNOWN',
         };
     }

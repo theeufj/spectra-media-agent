@@ -20,20 +20,17 @@ class AdSetService extends BaseFacebookAdsService
     public function listAdSets(string $campaignId): ?array
     {
         try {
-            $response = $this->get("/{$campaignId}/adsets", [
+            $adSets = $this->getAllPages("/{$campaignId}/adsets", [
                 'fields' => 'id,name,status,daily_budget,lifetime_budget,start_time,end_time,targeting,billing_event,optimization_goal',
+                'limit' => 100,
             ]);
 
-            if ($response && isset($response['data'])) {
-                Log::info("Retrieved ad sets for campaign {$campaignId}", [
-                    'customer_id' => $this->customer->id,
-                    'adset_count' => count($response['data']),
-                ]);
+            Log::info("Retrieved ad sets for campaign {$campaignId}", [
+                'customer_id' => $this->customer->id,
+                'adset_count' => count($adSets),
+            ]);
 
-                return $response['data'];
-            }
-
-            return [];
+            return $adSets;
         } catch (\Throwable $e) {
             report($e);
             Log::error('Error listing ad sets: '.$e->getMessage(), [
@@ -65,9 +62,7 @@ class AdSetService extends BaseFacebookAdsService
                 $params['filtering'] = json_encode($filters);
             }
 
-            $response = $this->get("/{$accountId}/adsets", $params);
-
-            return $response['data'] ?? [];
+            return $this->getAllPages("/{$accountId}/adsets", $params);
         } catch (\Throwable $e) {
             report($e);
             Log::error('Error listing ad sets by account: '.$e->getMessage(), [

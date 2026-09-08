@@ -123,6 +123,62 @@ abstract class BaseFacebookAdsService
     }
 
     /**
+     * Every row of a paged edge, not just the first page.
+     *
+     * The Graph API returns 25 rows by default and hands back a cursor for the
+     * rest. Callers that read $response['data'] see only that first page, and a
+     * short list looks exactly like a complete one — so an account's 40th ad set
+     * simply did not exist as far as this platform was concerned. That reached
+     * billing: FetchFacebookAdsPerformanceData sums spend per ad set, so spend
+     * on anything past the first page was never collected and never charged.
+     *
+     * @param  array<string, mixed>  $params
+     * @return list<array<string, mixed>>
+     */
+    protected function getAllPages(string $endpoint, array $params = [], int $maxPages = 25): array
+    {
+        $rows = [];
+        $after = null;
+
+        for ($page = 0; $page < $maxPages; $page++) {
+            $pageParams = $params;
+
+            if ($after !== null) {
+                $pageParams['after'] = $after;
+            }
+
+            $response = $this->get($endpoint, $pageParams);
+
+            if (! is_array($response) || ! isset($response['data']) || ! is_array($response['data'])) {
+                break;
+            }
+
+            foreach ($response['data'] as $row) {
+                $rows[] = $row;
+            }
+
+            // A next link is the only reliable "there is more": the cursor is
+            // present on the last page too.
+            $after = isset($response['paging']['next'])
+                ? ($response['paging']['cursors']['after'] ?? null)
+                : null;
+
+            if ($after === null) {
+                return $rows;
+            }
+        }
+
+        Log::warning('Facebook paging stopped at the page cap — results may be incomplete', [
+            'endpoint' => $endpoint,
+            'pages' => $maxPages,
+            'rows' => count($rows),
+            'customer_id' => $this->customer->id,
+        ]);
+
+        return $rows;
+    }
+
+    /**
      * Make an HTTP POST request to the Facebook Graph API.
      *
      * @param  string  $endpoint  The API endpoint
