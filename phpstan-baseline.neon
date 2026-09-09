@@ -253,12 +253,6 @@ parameters:
 			path: app/Http/Controllers/Api/DemoController.php
 
 		-
-			message: '#^Call to an undefined method Laravel\\Socialite\\Contracts\\Provider\:\:with\(\)\.$#'
-			identifier: method.notFound
-			count: 1
-			path: app/Http/Controllers/Auth/FacebookController.php
-
-		-
 			message: '#^Method App\\Http\\Controllers\\CampaignController\:\:formatDailyData\(\) should return array but returns stdClass\.$#'
 			identifier: return.type
 			count: 1
@@ -1517,12 +1511,6 @@ parameters:
 			identifier: nullsafe.neverNull
 			count: 1
 			path: app/Services/BrandGuidelineExtractorService.php
-
-		-
-			message: '#^Constant Log not found\.$#'
-			identifier: constant.notFound
-			count: 1
-			path: app/Services/Campaigns/RollbackCampaignService.php
 
 		-
 			message: '#^Expression on left side of \?\? is not nullable\.$#'
